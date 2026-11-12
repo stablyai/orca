@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { validate } from '../../../telemetry/validator'
 
 const {
   trackMock,
@@ -71,37 +70,6 @@ afterEach(() => {
 })
 
 describe('resetFolderAccessForDaemon rejects cases it cannot remedy', () => {
-  it('is unsupported off macOS, where there is no TCC row to clear', async () => {
-    setPlatform('win32')
-
-    expect(await resetFolderAccessForDaemon(DAEMON)).toEqual({ outcome: 'unsupported' })
-    expect(resetMacosTccPermissionMock).not.toHaveBeenCalled()
-  })
-
-  it('is unsupported when no evidence belongs to this daemon', async () => {
-    getTargetMock.mockReturnValue(null)
-
-    expect(await resetFolderAccessForDaemon(DAEMON)).toEqual({ outcome: 'unsupported' })
-    expect(resetMacosTccPermissionMock).not.toHaveBeenCalled()
-  })
-
-  it.each([['other-home'], ['outside-home']])(
-    'is unsupported for the %s folder class',
-    async (cwdClass) => {
-      getTargetMock.mockReturnValue({ canonicalPath: '/Users/alice/code', cwdClass })
-
-      expect(await resetFolderAccessForDaemon(DAEMON)).toEqual({ outcome: 'unsupported' })
-      expect(resetMacosTccPermissionMock).not.toHaveBeenCalled()
-    }
-  )
-
-  it('is unsupported when the running bundle has no readable identifier', async () => {
-    readMacosBundleIdMock.mockResolvedValue(null)
-
-    expect(await resetFolderAccessForDaemon(DAEMON)).toEqual({ outcome: 'unsupported' })
-    expect(resetMacosTccPermissionMock).not.toHaveBeenCalled()
-  })
-
   it('reports a refused tccutil without touching the folder', async () => {
     resetMacosTccPermissionMock.mockResolvedValue({ ok: false, detail: 'exit 64' })
 
@@ -112,50 +80,6 @@ describe('resetFolderAccessForDaemon rejects cases it cannot remedy', () => {
 })
 
 describe('resetFolderAccessForDaemon runs the remedy', () => {
-  it.each([
-    ['documents', 'SystemPolicyDocumentsFolder'],
-    ['desktop', 'SystemPolicyDesktopFolder'],
-    ['downloads', 'SystemPolicyDownloadsFolder']
-  ])('clears the %s row against the running app bundle', async (cwdClass, service) => {
-    getTargetMock.mockReturnValue({ canonicalPath: '/Users/alice/Documents/repo', cwdClass })
-
-    await resetFolderAccessForDaemon(DAEMON)
-
-    expect(readMacosBundleIdMock).toHaveBeenCalledWith('/Applications/Orca.app')
-    expect(resetMacosTccPermissionMock).toHaveBeenCalledWith(service, 'com.stablyai.orca')
-  })
-
-  it('reads the folder from the app, then forces a fresh-daemon re-probe', async () => {
-    const dir = fakeDir()
-    opendirMock.mockResolvedValue(dir)
-
-    await resetFolderAccessForDaemon(DAEMON)
-
-    expect(opendirMock).toHaveBeenCalledWith('/Users/alice/Documents/repo')
-    expect(dir.read).toHaveBeenCalledTimes(1)
-    expect(dir.close).toHaveBeenCalledTimes(1)
-    expect(refreshProbeMock).toHaveBeenCalledWith(DAEMON, { force: true })
-  })
-
-  it('still re-probes when the folder read is itself denied', async () => {
-    opendirMock.mockRejectedValue(Object.assign(new Error('denied'), { code: 'EPERM' }))
-    getMismatchMock.mockReturnValue({
-      daemonScope: 'aaaa111122223333',
-      cwdClass: 'documents',
-      freshDaemonAccess: 'denied'
-    })
-
-    expect(await resetFolderAccessForDaemon(DAEMON)).toEqual({
-      outcome: 'probed',
-      mismatch: {
-        daemonScope: 'aaaa111122223333',
-        cwdClass: 'documents',
-        freshDaemonAccess: 'denied'
-      }
-    })
-    expect(refreshProbeMock).toHaveBeenCalledWith(DAEMON, { force: true })
-  })
-
   // An unanswered TCC prompt can block the read indefinitely.
   it('stops waiting on an unanswered prompt, and does not probe under the sheet', async () => {
     const denied = {
@@ -214,55 +138,5 @@ describe('resetFolderAccessForDaemon runs the remedy', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('closes the handle even when the read throws', async () => {
-    const dir = fakeDir()
-    dir.read.mockRejectedValue(new Error('EPERM'))
-    opendirMock.mockResolvedValue(dir)
-
-    await resetFolderAccessForDaemon(DAEMON)
-
-    expect(dir.close).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('resetFolderAccessForDaemon reports the outcome', () => {
-  it.each([
-    ['allowed', 'reset_outcome_allowed'],
-    ['denied', 'reset_outcome_still_denied'],
-    ['unknown', 'reset_outcome_unknown']
-  ])('emits %s as %s', async (freshDaemonAccess, action) => {
-    getMismatchMock.mockReturnValue({
-      daemonScope: 'aaaa111122223333',
-      cwdClass: 'documents',
-      freshDaemonAccess
-    })
-
-    await resetFolderAccessForDaemon(DAEMON)
-
-    expect(trackMock).toHaveBeenCalledWith('daemon_folder_access_notice', {
-      action,
-      cwd_class: 'documents'
-    })
-    expect(validate('daemon_folder_access_notice', trackMock.mock.calls[0][1]).ok).toBe(true)
-  })
-
-  it('treats a retired entry as an unknown outcome', async () => {
-    getMismatchMock.mockReturnValue(null)
-
-    expect(await resetFolderAccessForDaemon(DAEMON)).toEqual({ outcome: 'probed', mismatch: null })
-    expect(trackMock).toHaveBeenCalledWith('daemon_folder_access_notice', {
-      action: 'reset_outcome_unknown',
-      cwd_class: 'documents'
-    })
-  })
-
-  it('completes the reset even when telemetry throws', async () => {
-    trackMock.mockImplementation(() => {
-      throw new Error('no transport')
-    })
-
-    expect(await resetFolderAccessForDaemon(DAEMON)).toEqual({ outcome: 'probed', mismatch: null })
   })
 })

@@ -54,6 +54,7 @@ export function BrowserPageViewportOverlays({
   markupControlsContainer,
   browserOverlayViewport,
   worktreeId,
+  importProfileId,
   grab,
   annotationSend,
   grabAnnotations
@@ -79,6 +80,7 @@ export function BrowserPageViewportOverlays({
   markupControlsContainer: HTMLDivElement | null
   browserOverlayViewport: BrowserOverlayViewport
   worktreeId: string
+  importProfileId: string | null
   grab: GrabModeHook
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
@@ -107,7 +109,12 @@ export function BrowserPageViewportOverlays({
         containerRef={containerRef}
         webviewRef={webviewRef}
       />
-      <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
+      <BrowserFind
+        browserPageId={browserTab.id}
+        isOpen={findOpen}
+        onClose={() => setFindOpen(false)}
+        webviewRef={webviewRef}
+      />
       <BrowserLinkStatusBubble browserPageId={browserTab.id} />
       {showFailureOverlay && browserTab.loadError ? (
         <BrowserPageLoadFailure
@@ -132,7 +139,13 @@ export function BrowserPageViewportOverlays({
           }}
         />
       ) : null}
-      {isBlankTab ? <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} /> : null}
+      {isBlankTab ? (
+        <BrowserNewTabPage
+          worktreeId={worktreeId}
+          onOpenUrl={navigateToUrl}
+          importProfileId={importProfileId}
+        />
+      ) : null}
     </>
   )
 }

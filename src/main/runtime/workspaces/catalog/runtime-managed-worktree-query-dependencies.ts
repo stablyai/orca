@@ -1,4 +1,4 @@
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'

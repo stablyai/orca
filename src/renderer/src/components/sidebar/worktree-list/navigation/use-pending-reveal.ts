@@ -5,7 +5,11 @@ import { translate } from '@/i18n/i18n'
 import { getWorktreeOptionId } from '../rows/option-dom'
 import { getRenderRowOptionId } from './active-descendant-option'
 import { getRenderRowSidebarKey, rowKeyMatchesRenderRow } from './render-row-lookup'
-import { revealMountedSidebarRowElement, revealMountedWorktreeElement } from './mounted-row-reveal'
+import {
+  findOnScreenWorktreeOption,
+  revealMountedSidebarRowElement,
+  revealMountedWorktreeElement
+} from './mounted-row-reveal'
 import { getSidebarRowRevealAncestorKeys } from './reveal-ancestors'
 import {
   expandGroupsForWorktreeReveal,
@@ -96,18 +100,17 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
       }
       const targetRow = currentRows[targetIndex]
       const container = argsRef.current.scrollRef.current
+      const { worktreeId, executionHostId } = pendingRevealWorktree
+      const targetOptionId = getRenderRowOptionId(targetRow, worktreeId, executionHostId)
       const revealedOption = container
         ? revealMountedWorktreeElement(
             container,
-            pendingRevealWorktree.worktreeId,
+            worktreeId,
             pendingRevealWorktree.behavior,
             rowKey
               ? getWorktreeOptionId(rowKey)
-              : getRenderRowOptionId(
-                  targetRow,
-                  pendingRevealWorktree.worktreeId,
-                  pendingRevealWorktree.executionHostId
-                ),
+              : (findOnScreenWorktreeOption(container, worktreeId, executionHostId, targetOptionId)
+                  ?.id ?? targetOptionId),
             markRevealScroll
           )
         : null
@@ -162,6 +165,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
     args.repoMap,
     args.prCache,
     args.worktreeLineageById,
+    args.lineageParentIdentities,
     args.occurrencePlan,
     args.worktreeMap,
     renderRows,

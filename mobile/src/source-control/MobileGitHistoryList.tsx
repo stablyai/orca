@@ -13,10 +13,10 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { ConnectionState } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
-import { useForceReconnect } from '../transport/host-client-hooks'
-import { connectionRetryAction } from '../transport/connection-retry-action'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
+import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import { resolveMobileBranchBaseRefs } from './mobile-branch-base-ref'
 import {
   appendMobileGitHistoryPage,
@@ -330,7 +330,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
           />
         }
         ListHeaderComponent={
-          ranHere && actionError ? <Text style={styles.actionError}>{actionError}</Text> : null
+          ranHere && actionError ? <Text style={styles.actionError}>{actionError}</Text> : undefined
         }
         ListFooterComponent={
           moreState === 'loading' ? (
@@ -345,7 +345,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
                 {t('sourceControl.commits.loadMoreFailed', 'Couldn’t load more commits. Retry')}
               </Text>
             </Pressable>
-          ) : null
+          ) : undefined
         }
         contentContainerStyle={{ paddingBottom: spacing.lg + bottomInset }}
       />

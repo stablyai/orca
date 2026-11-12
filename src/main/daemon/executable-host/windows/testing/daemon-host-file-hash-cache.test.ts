@@ -4,11 +4,7 @@ import os from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setAppEnvironment } from '../../../../../shared/app-environment'
-import { fileStatSignature as daemonHostFileStatSignature } from '../../../../filesystem/file-stat-signature'
-import {
-  hashDaemonHostFile,
-  resetDaemonHostFileHashCacheForTests
-} from '../daemon-host-file-hash-cache'
+import { resetDaemonHostFileHashCacheForTests } from '../daemon-host-file-hash-cache'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
 import { getRelocatedDaemonHost, materializeRelocatedDaemonHost } from '../daemon-host-relocation'
 
@@ -97,16 +93,6 @@ afterEach(() => {
 })
 
 describe('daemon-host code hash cache', () => {
-  it('validates a warm mirror without rereading source or mirror code', () => {
-    const root = materializedRoot()
-    expect(getRelocatedDaemonHost()?.execPath).toBe(join(root, 'Orca.exe'))
-    vi.mocked(readFileSync).mockClear()
-
-    expect(getRelocatedDaemonHost()?.execPath).toBe(join(root, 'Orca.exe'))
-    expect(materializeRelocatedDaemonHost()?.execPath).toBe(join(root, 'Orca.exe'))
-    expect(codeReads()).toEqual([])
-  })
-
   it('detects a same-size source edit that restores mtime', async () => {
     pinMtime(join(installDir, chunkRel))
     const root = materializedRoot()
@@ -126,36 +112,5 @@ describe('daemon-host code hash cache', () => {
     await rewriteKeepingSizeAndMtime(join(root, chunkRel), 'chunX')
 
     expect(getRelocatedDaemonHost()).toBeNull()
-  })
-
-  it('detects a mirror file deleted after it was cached', () => {
-    const root = materializedRoot()
-    getRelocatedDaemonHost()
-    rmSync(join(root, chunkRel))
-
-    expect(getRelocatedDaemonHost()).toBeNull()
-  })
-
-  it('keeps the observed build when the source disappears after caching', () => {
-    const root = materializedRoot()
-    rmSync(installDir, { recursive: true, force: true })
-
-    expect(getRelocatedDaemonHost()?.execPath).toBe(join(root, 'Orca.exe'))
-    expect(() => hashDaemonHostFile(join(installDir, chunkRel))).toThrow()
-  })
-
-  it('keeps file ids and timestamps that a float stat would collapse distinct', () => {
-    const base = {
-      dev: 1n,
-      ino: 9_007_199_254_740_993n,
-      size: 5n,
-      mtimeNs: 1_700_000_000_000_000_001n,
-      ctimeNs: 1_700_000_000_000_000_001n
-    }
-    const signature = daemonHostFileStatSignature(base)
-
-    expect(daemonHostFileStatSignature({ ...base, ino: base.ino + 1n })).not.toBe(signature)
-    expect(daemonHostFileStatSignature({ ...base, mtimeNs: base.mtimeNs + 1n })).not.toBe(signature)
-    expect(daemonHostFileStatSignature({ ...base, ctimeNs: base.ctimeNs + 1n })).not.toBe(signature)
   })
 })

@@ -26,7 +26,10 @@ import {
 } from '../opencode-session-registry'
 import { claudeRowHasUnlistedLiveWork } from '../providers/claude-pane-hold-evidence'
 import { readString } from '../tool-input-preview'
+import { readClaudeBatchSettledRequests } from '../claude-settled-permission-requests'
+import { withClaudeToolRequestId } from '../claude-tool-request-identity'
 import { hasSeparateHookSessionAdmission, readPaneSessionContext } from '../pane-provider-session'
+import { routeJcodeHelperHook } from '../providers/jcode-helper-permission-wait'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 
 export function normalizeHookPayload(
@@ -64,6 +67,11 @@ export function normalizeHookPayload(
   }
   const sessions = readPaneSessionContext(state, source, envelope, eventName)
   const { providerSession, statusAdmissionSession } = sessions
+  // Before prompt and tool caches: a helper's turn must not reset the root turn's caches either.
+  const helper = routeJcodeHelperHook(state, source, envelope, options.bindingStatusByPaneKey)
+  if (helper !== undefined) {
+    return helper
+  }
   if (source === 'opencode' && record.opencodeTui === 1 && !providerSession) {
     return null
   }
@@ -218,13 +226,18 @@ export function normalizeHookPayload(
   }
 
   const promptText = extractedPrompt.text
+  // Name a Claude PermissionRequest's request once, so the listener and every receiver settle the same one.
+  const providerHookPayload =
+    source === 'claude'
+      ? withClaudeToolRequestId(state, paneKey, eventName, hookPayloadRecord)
+      : hookPayloadRecord
   const dispatched = normalizeProviderEvent({
     state,
     source,
     eventName,
     promptText,
     paneKey,
-    hookPayload: hookPayloadRecord,
+    hookPayload: providerHookPayload,
     envelope: record,
     extractedPrompt,
     previousOpenCodeMainAgent: options.previousOpenCodeMainAgent
@@ -245,6 +258,10 @@ export function normalizeHookPayload(
     return null
   }
   const grokActiveTurn = source === 'grok' ? state.grokActiveTurnByPaneKey.get(paneKey) : undefined
+  const claudeBatchSettledRequests =
+    source === 'claude' && eventName === 'PostToolBatch'
+      ? readClaudeBatchSettledRequests(hookPayloadRecord)
+      : undefined
 
   return {
     paneKey,
@@ -274,7 +291,7 @@ export function normalizeHookPayload(
       source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,
     grokPromptBoundary: grokActiveTurn ? true : undefined,
     compactTrigger,
-    toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
+    toolUseId: readFirstString(providerHookPayload, ['tool_use_id', 'toolUseId']),
     toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
     teammateName:
       source === 'claude' && eventName === 'TeammateIdle'
@@ -286,10 +303,12 @@ export function normalizeHookPayload(
           claudeRunningNonAgentTask: claudeRowHasUnlistedLiveWork(state, paneKey)
         }
       : {}),
+    ...(claudeBatchSettledRequests ? { claudeSettledRequests: claudeBatchSettledRequests } : {}),
     ...(providerSession ? { providerSession } : {}),
     ...(statusAdmissionSession ? { statusAdmissionSession } : {}),
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...dispatched.hostTurnSignals,
+    ...(dispatched.replyCandidate ? { replyCandidate: dispatched.replyCandidate } : {}),
     payload: transportPayload
   }
 }

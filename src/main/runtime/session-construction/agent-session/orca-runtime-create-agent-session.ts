@@ -15,7 +15,7 @@ import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-
 import type {
   AgentSessionCreateOperation,
   AgentSessionCreateReclaimIdentity
-} from '../../runtime-terminal-contracts'
+} from './agent-session-create-operation'
 import {
   deterministicAgentSessionUuid,
   isAgentSessionOperationOutcomeUnknown
@@ -78,6 +78,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
             : Object.entries(request.sessionOptions).sort(),
           request.extraAgentArgs ?? null,
           request.startupCwd ?? null,
+          ...(request.trustWorktreeId ? [request.trustWorktreeId] : []),
           request.presentation ?? null,
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
@@ -148,6 +149,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
               : Object.entries(request.sessionOptions).sort(),
             request.extraAgentArgs ?? null,
             startupCwd ?? null,
+            ...(request.trustWorktreeId ? [request.trustWorktreeId] : []),
             request.presentation ?? null,
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
@@ -203,6 +205,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           terminalImageViewerSupported: caller.terminalImageViewerSupported,
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
           cwd: startupCwd,
+          ...(request.trustWorktreeId ? { trustWorktreeId: request.trustWorktreeId } : {}),
           presentation: request.presentation ?? 'background',
           tabId: operationTabId,
           leafId: operationLeafId,

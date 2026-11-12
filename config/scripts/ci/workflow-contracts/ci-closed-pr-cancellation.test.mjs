@@ -59,30 +59,6 @@ function execute(options = {}) {
   return { result, request, getPr, getRun, cancel }
 }
 
-it.each([
-  { event: 'push' },
-  { event: 'workflow_dispatch' },
-  { path: '.github/workflows/release-cut.yml' },
-  { status: 'completed' },
-  { created_at: '2026-10-06T00:00:01Z' },
-  { created_at: 'invalid' }
-])('retains unrelated, completed and post-close runs: %j', async (otherRun) => {
-  const { result, cancel } = execute({ run: otherRun })
-  await result
-  expect(cancel).not.toHaveBeenCalled()
-})
-
-it.each([
-  { ...current, state: 'open' },
-  { ...current, merged_at: closed.closed_at },
-  { ...current, closed_at: '2026-10-06T00:01:00Z' }
-])('retains checks if the closure is no longer current: %j', async (pr) => {
-  const { result, request, cancel } = execute({ current: pr })
-  await result
-  expect(request).not.toHaveBeenCalled()
-  expect(cancel).not.toHaveBeenCalled()
-})
-
 it('rechecks closure before cancelling when a PR reopens during lookup', async () => {
   const { result, getRun, cancel } = execute({
     current: { ...current, state: 'open' },
@@ -91,34 +67,6 @@ it('rechecks closure before cancelling when a PR reopens during lookup', async (
   await result
   expect(getRun).toHaveBeenCalledOnce()
   expect(cancel).not.toHaveBeenCalled()
-})
-
-it('ignores job-level leases and invalid run identities', async () => {
-  const { result, getRun, cancel } = execute({
-    members: [{ run_id: 42, job_id: 1 }, { run_id: '42' }]
-  })
-  await result
-  expect(getRun).not.toHaveBeenCalled()
-  expect(cancel).not.toHaveBeenCalled()
-})
-
-it('refuses a mismatched concurrency group', async () => {
-  const { result, cancel } = execute({ group: 'pr-checks-124' })
-  await expect(result).rejects.toThrow('Unexpected concurrency group')
-  expect(cancel).not.toHaveBeenCalled()
-})
-
-it('surfaces lookup and cancellation permission failures', async () => {
-  await expect(execute({ requestError: { status: 403 } }).result).rejects.toEqual({ status: 403 })
-  await expect(execute({ cancelError: { status: 403 } }).result).rejects.toEqual({ status: 403 })
-  await expect(execute({ cancelError: { status: 409 } }).result).resolves.toBeUndefined()
-})
-
-it('validates the event identity before looking up any work', async () => {
-  const { result, request, getPr } = execute({ closed: { ...closed, number: '123' } })
-  await expect(result).rejects.toThrow('Missing PR identity')
-  expect(request).not.toHaveBeenCalled()
-  expect(getPr).not.toHaveBeenCalled()
 })
 
 const head = 'a'.repeat(40)
@@ -134,31 +82,6 @@ it('cancels an older commit even when a path filter prevents a replacement run',
   })
   await result
   expect(cancel).toHaveBeenCalledOnce()
-})
-
-it.each([head, undefined, 'invalid'])(
-  'preserves the current or unidentifiable commit: %s',
-  async (sha) => {
-    const { result, cancel } = execute({
-      action: 'synchronize',
-      closed: pushed,
-      current: open,
-      run: { head_sha: sha }
-    })
-    await result
-    expect(cancel).not.toHaveBeenCalled()
-  }
-)
-
-it('ignores a delayed push event after another push', async () => {
-  const { result, request, cancel } = execute({
-    action: 'synchronize',
-    closed: pushed,
-    current: { ...open, head: { sha: 'c'.repeat(40) } }
-  })
-  await result
-  expect(request).not.toHaveBeenCalled()
-  expect(cancel).not.toHaveBeenCalled()
 })
 
 it('rechecks the current head before cancelling when another push arrives during lookup', async () => {

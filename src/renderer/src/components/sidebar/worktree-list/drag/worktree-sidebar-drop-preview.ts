@@ -17,7 +17,7 @@ export type WorktreeSidebarDropPreview = {
   previewOffsetsByWorktreeId: ReadonlyMap<string, number>
   // Hold the destination unit’s identity across card resizing instead of deciding again from moved geometry.
   dropAnchorId: string | null
-  lineageParentId?: string
+  lineageParentIdentity?: string
 }
 
 export type WorktreeSidebarStatusDropTarget = {
@@ -26,7 +26,7 @@ export type WorktreeSidebarStatusDropTarget = {
 }
 
 export type WorktreeSidebarTrackedStatusDropTarget = {
-  target: WorktreeSidebarStatusDropTarget & { lineageParentId: string | null }
+  target: WorktreeSidebarStatusDropTarget & { lineageParentIdentity: string | null }
   preview: WorktreeSidebarDropPreview | null
   x: number
   y: number
@@ -72,19 +72,21 @@ function getWorktreeSidebarDragUnitRects(args: {
 }
 
 function hasWorktreeSidebarStatusDropTarget(
-  target: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
+  target: WorktreeSidebarStatusDropTarget & { lineageParentIdentity?: string | null }
 ): boolean {
-  return target.isPinDrop || target.status !== null || (target.lineageParentId ?? null) !== null
+  return (
+    target.isPinDrop || target.status !== null || (target.lineageParentIdentity ?? null) !== null
+  )
 }
 
 export function resolveWorktreeSidebarStatusDropCommitTarget(args: {
-  currentTarget: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
+  currentTarget: WorktreeSidebarStatusDropTarget & { lineageParentIdentity?: string | null }
   currentPreview: WorktreeSidebarDropPreview | null
   latestTrackedTarget: WorktreeSidebarTrackedStatusDropTarget | null
   x: number
   y: number
 }): {
-  target: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
+  target: WorktreeSidebarStatusDropTarget & { lineageParentIdentity?: string | null }
   preview: WorktreeSidebarDropPreview | null
 } {
   if (hasWorktreeSidebarStatusDropTarget(args.currentTarget)) {

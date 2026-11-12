@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,

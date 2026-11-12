@@ -1,6 +1,5 @@
 import {
   addEnvironmentFromPairingCode as addEnvironmentFromPairingCodeInStore,
-  markEnvironmentUsed as markEnvironmentUsedInStore,
   removeEnvironment as removeEnvironmentFromStore,
   resolveEnvironment as resolveEnvironmentFromStore,
   resolveEnvironmentPairingOffer as resolveEnvironmentPairingOfferFromStore
@@ -47,14 +46,6 @@ export function resolveEnvironmentPairingOffer(
   selector: string
 ): PairingOffer {
   return translateStoreError(() => resolveEnvironmentPairingOfferFromStore(userDataPath, selector))
-}
-
-export function markEnvironmentUsed(
-  userDataPath: string,
-  selector: string,
-  args: { runtimeId?: string | null; now?: number } = {}
-): void {
-  translateStoreError(() => markEnvironmentUsedInStore(userDataPath, selector, args))
 }
 
 function translateStoreError<TResult>(fn: () => TResult): TResult {

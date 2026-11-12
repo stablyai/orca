@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import {
   HostAccountLaunchEnvParams,
   type HostAccountLaunchEnv
-} from '../../shared/host-account-launch-env'
+} from '../../shared/agent-launch/startup/host-account-launch-env'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
 import { createWslHostClaudeProfileRefresh } from './orcad-wsl-host-claude-profile-refresh'

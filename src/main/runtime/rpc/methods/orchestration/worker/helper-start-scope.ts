@@ -1,5 +1,8 @@
-import type { DispatchContextRow, TaskRow } from '../../../../orchestration/types'
-import type { OrchestrationAdmission } from '../../../../orchestration/orchestration-admission'
+import type {
+  DispatchContextRow,
+  TaskRow
+} from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationAdmission } from '../../../../orchestration/addressing/orchestration-admission'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
   createPreviousCustodianLookup,

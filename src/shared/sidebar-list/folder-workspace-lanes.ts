@@ -1,5 +1,7 @@
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
+import { getFolderWorkspaceHostId } from '../folder-workspaces/folder-workspace-host-id'
 import type { WorkspaceStatusDefinition } from '../worktree/types'
 import { getWorkspaceStatus, getWorkspaceStatusGroupKey } from '../workspace-statuses'
 import { ALL_GROUP_KEY, getPRLaneKey } from './group-keys'
@@ -25,7 +27,18 @@ export function getRenderableFolderWorkspaces(
     if (!projectGroup?.parentPath) {
       continue
     }
-    renderable.push({ folderWorkspace, projectGroup })
+    // Stamp an unstamped folder the way catalog adoption does, so its card, label and section name
+    // the host it runs on (folder-workspace-execution-host.ts).
+    const hostId = folderWorkspace.executionHostId
+      ? null
+      : getFolderWorkspaceHostId(folderWorkspace, projectGroups)
+    renderable.push({
+      folderWorkspace:
+        hostId && hostId !== LOCAL_EXECUTION_HOST_ID
+          ? { ...folderWorkspace, executionHostId: hostId }
+          : folderWorkspace,
+      projectGroup
+    })
   }
   return renderable
 }

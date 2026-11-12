@@ -1,8 +1,8 @@
-import type { CodexRenameInvocationDeps } from './codex-provider-session-rename'
+import type { CodexProviderInvocationDeps } from './codex-provider-session-rename'
 import type { CodexAppliedSettings } from '../catalog/codex-structured-applied-settings'
-import type { StructuredAgentSessionChildWorkProducer } from '../../../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
-import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { StructuredAgentSessionAtRestCommands } from '../../../native-chat/agent-session-wire/structured-agent-session-at-rest-commands'
+import type { StructuredAgentSessionChildWorkProducer } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
+import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import type { StructuredAgentSessionAtRestCommands } from '../../../native-chat/agent-session-wire/options/structured-agent-session-at-rest-commands'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import type { AgentJournalAnsweredTurnIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -12,7 +12,7 @@ import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acqu
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
 import { CodexAcquisitionWindow } from '../acquisition/codex-structured-acquisition-window'
-import { AgentSessionStartEndings } from '../../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import { AgentSessionStartEndings } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import {
   createCodexTurnOpenWaits,
   type CodexTurnOpenWaits
@@ -22,16 +22,16 @@ import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/chi
 import type { CodexBackgroundTaskTracker } from '../background-work/codex-background-task-tracker'
 import type { CodexSkillReport } from '../catalog/codex-structured-skill-report'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
-import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { CodexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
 import type { StructuredLaunchRequest } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentModelCatalogSessionAccess } from '../../../native-chat/agent-model-catalog/agent-model-catalog-lister'
-import type { StructuredAgentSessionProviderOpen } from '../../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { StructuredAgentSessionProviderOpen } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { NativeChatVisualsLaunch } from '../../../native-chat/native-chat-visuals-delivery'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { CodexSandboxPolicy } from '../launch/codex-structured-sandbox-policy'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 
 export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
   read?: (verifiedOnly?: boolean) => ReturnType<AgentModelCatalogStore['get']>
@@ -94,7 +94,7 @@ export type CodexStructuredSessionEvent =
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
-  renameInvocation?: CodexRenameInvocationDeps
+  providerInvocation?: CodexProviderInvocationDeps
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   atRestCommands?: StructuredAgentSessionAtRestCommands
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<CodexStructuredLaunch>
@@ -136,6 +136,8 @@ export type CodexStructuredSessionAdapterDeps = {
 export type CodexSession = {
   events?: StructuredAgentSessionEventSink
   account?: AgentSessionAccountKind
+  /** CODEX_HOME this app-server launched under. */
+  codexHome?: string | null
   connection: CodexAppServerConnection
   ended: boolean
   /** First observed child exit survives rejected settlement admission. */

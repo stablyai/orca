@@ -1,6 +1,6 @@
 import type { JSX, ReactNode } from 'react'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { ClaudeIcon, OpenAIIcon } from '../status-bar/icons'
 import type {
   WORKBENCH_RUN_QUEUE,
@@ -61,19 +61,20 @@ function PlaywrightPane(props: {
   running: (typeof WORKBENCH_RUN_QUEUE)[number]
   reducedMotion: boolean
 }): JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <TermLine>
         <Prompt>$</Prompt>
         <span className="text-foreground">
-          {translate(
+          {t(
             'auto.components.feature.wall.WorkbenchAnimatedVisual.4371cc9931',
             'pnpm playwright test'
           )}
         </span>
       </TermLine>
       <TermLine muted>
-        {translate(
+        {t(
           'auto.components.feature.wall.WorkbenchAnimatedVisual.0b20782e0f',
           'Running 12 tests using 4 workers'
         )}
@@ -81,37 +82,28 @@ function PlaywrightPane(props: {
       <TermLine>
         <PassedCheck />
         <PlaywrightIndex>1</PlaywrightIndex>
-        {translate(
-          'auto.components.feature.wall.WorkbenchAnimatedVisual.defe550fe2',
-          'login.spec.ts'
-        )}
+        {t('auto.components.feature.wall.WorkbenchAnimatedVisual.defe550fe2', 'login.spec.ts')}
         <PlaywrightName>
           {' '}
-          {translate(
-            'auto.components.feature.wall.WorkbenchAnimatedVisual.3261c6853b',
-            '› can sign in'
-          )}
+          {t('auto.components.feature.wall.WorkbenchAnimatedVisual.3261c6853b', '› can sign in')}
         </PlaywrightName>
         <PlaywrightDuration>
-          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.5c5cbd783f', '(1.2s)')}
+          {t('auto.components.feature.wall.WorkbenchAnimatedVisual.5c5cbd783f', '(1.2s)')}
         </PlaywrightDuration>
       </TermLine>
       <TermLine>
         <PassedCheck />
         <PlaywrightIndex>2</PlaywrightIndex>
-        {translate(
-          'auto.components.feature.wall.WorkbenchAnimatedVisual.623881d72e',
-          'checkout.spec.ts'
-        )}
+        {t('auto.components.feature.wall.WorkbenchAnimatedVisual.623881d72e', 'checkout.spec.ts')}
         <PlaywrightName>
           {' '}
-          {translate(
+          {t(
             'auto.components.feature.wall.WorkbenchAnimatedVisual.944199e54a',
             '› cart total updates'
           )}
         </PlaywrightName>
         <PlaywrightDuration>
-          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.7d9f1d5f7d', '(0.8s)')}
+          {t('auto.components.feature.wall.WorkbenchAnimatedVisual.7d9f1d5f7d', '(0.8s)')}
         </PlaywrightDuration>
       </TermLine>
       <TermLine>
@@ -125,28 +117,29 @@ function PlaywrightPane(props: {
 }
 
 function ClaudeChecklistPane(props: { reducedMotion: boolean }): JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <TermLine>
         <Prompt>$</Prompt>
         <span className="text-foreground">
-          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.000106adfe', 'claude')}
+          {t('auto.components.feature.wall.WorkbenchAnimatedVisual.000106adfe', 'claude')}
         </span>
       </TermLine>
       <TermLine muted>
         <span className="mr-1.5 inline-flex align-[-2px]">
           <ClaudeIcon size={12} />
         </span>
-        {translate(
+        {t(
           'auto.components.feature.wall.WorkbenchAnimatedVisual.431ca9842a',
           'Claude Code session started'
         )}
       </TermLine>
       <TermLine wrap>
         <span className="mr-1.5 text-amber-600">
-          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.932c4b3a97', '>')}
+          {t('auto.components.feature.wall.WorkbenchAnimatedVisual.932c4b3a97', '>')}
         </span>
-        {translate(
+        {t(
           'auto.components.feature.wall.WorkbenchAnimatedVisual.c0eb94125e',
           'review auth edge cases'
         )}
@@ -156,10 +149,10 @@ function ClaudeChecklistPane(props: { reducedMotion: boolean }): JSX.Element {
       <TermLine>
         <RunSpinner reducedMotion={props.reducedMotion} />
         <span className="text-foreground">
-          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.99f5224f1e', 'Edit')}
+          {t('auto.components.feature.wall.WorkbenchAnimatedVisual.99f5224f1e', 'Edit')}
         </span>
         <span className="ml-1.5 truncate text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.feature.wall.WorkbenchAnimatedVisual.b85eab49dd',
             'src/auth/session.ts'
           )}
@@ -170,20 +163,15 @@ function ClaudeChecklistPane(props: { reducedMotion: boolean }): JSX.Element {
 }
 
 function AgentAction(props: { action: 'Read' | 'Grep' }): JSX.Element {
+  const t = useTranslate()
   const action =
     props.action === 'Read'
-      ? translate('auto.components.feature.wall.WorkbenchAnimatedVisual.9923847785', 'Read')
-      : translate('auto.components.feature.wall.WorkbenchAnimatedVisual.17cfdc3344', 'Grep')
+      ? t('auto.components.feature.wall.WorkbenchAnimatedVisual.9923847785', 'Read')
+      : t('auto.components.feature.wall.WorkbenchAnimatedVisual.17cfdc3344', 'Grep')
   const target =
     props.action === 'Read'
-      ? translate(
-          'auto.components.feature.wall.WorkbenchAnimatedVisual.b85eab49dd',
-          'src/auth/session.ts'
-        )
-      : translate(
-          'auto.components.feature.wall.WorkbenchAnimatedVisual.0d93c298a7',
-          'throw src/auth'
-        )
+      ? t('auto.components.feature.wall.WorkbenchAnimatedVisual.b85eab49dd', 'src/auth/session.ts')
+      : t('auto.components.feature.wall.WorkbenchAnimatedVisual.0d93c298a7', 'throw src/auth')
   return (
     <TermLine>
       <PassedCheck />
@@ -198,6 +186,7 @@ function RightPaneScrollback(props: {
   isCodex?: boolean
   promptAccentClass?: string
 }): JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {props.lines.map((line) => {
@@ -221,11 +210,11 @@ function RightPaneScrollback(props: {
                 <span className="mr-1.5 text-foreground">●</span>
               )}
               {props.isCodex
-                ? translate(
+                ? t(
                     'auto.components.feature.wall.WorkbenchAnimatedVisual.fc84f17fe7',
                     'Codex session started'
                   )
-                : translate(
+                : t(
                     'auto.components.feature.wall.WorkbenchAnimatedVisual.431ca9842a',
                     'Claude Code session started'
                   )}
@@ -236,7 +225,7 @@ function RightPaneScrollback(props: {
           return (
             <TermLine key={key} wrap>
               <span className={cn('mr-1.5', props.promptAccentClass ?? 'text-amber-600')}>
-                {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.932c4b3a97', '>')}
+                {t('auto.components.feature.wall.WorkbenchAnimatedVisual.932c4b3a97', '>')}
               </span>
               {line.text}
             </TermLine>
@@ -247,10 +236,7 @@ function RightPaneScrollback(props: {
             <TermLine key={key}>
               <RunSpinner />
               <span className="text-muted-foreground">
-                {translate(
-                  'auto.components.feature.wall.WorkbenchAnimatedVisual.633a91e358',
-                  'Thinking…'
-                )}
+                {t('auto.components.feature.wall.WorkbenchAnimatedVisual.633a91e358', 'Thinking…')}
               </span>
             </TermLine>
           )

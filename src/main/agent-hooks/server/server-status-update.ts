@@ -6,10 +6,8 @@ import {
   needsHookRootEvidence,
   readHookProcessVerdict
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
-import {
-  reconcileCodexStatusEvent,
-  markCodexLeadTurnInterrupted
-} from '../../../shared/agent-hook-listener/providers/codex-state'
+import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex-state'
+import { reconcileCodexStatusEvent } from '../../../shared/agent-hook-listener/providers/codex-session-start'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
@@ -160,10 +158,6 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    // Any submitted prompt (incl. a replayed Codex start) opens a new turn; OSC must not inherit the old stamp.
-    if (payload.hookEventName === 'UserPromptSubmit' || payload.hasExplicitPrompt === true) {
-      this.activeHookTurnCompletedAtByPaneKey.delete(payload.paneKey)
-    }
     if (terminalOwnedPayload.connectionId) {
       this.connectionTimestampWatermarkById.set(terminalOwnedPayload.connectionId, now)
     }
@@ -194,9 +188,15 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     const stateReconciledPayload = reconcileCodexStatusEvent(
       this.state,
       terminalOwnedPayload,
-      previous?.payload,
+      previous,
       codexRosterAuthority
     )
+    if (!stateReconciledPayload) {
+      return undefined
+    }
+    if (previous && stateReconciledPayload === previous) {
+      return previous
+    }
     // Relay restart loses root context; child hooks must not erase persisted resume/model identity.
     const rootContextPreservingPayload = retainHookRootContext(
       stateReconciledPayload,

@@ -6,7 +6,7 @@ import type {
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
-} from '../../shared/runtime-types'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
 import { browserUnavailableError } from '../runtime/browser/installation/runtime-browser-commands-factory'
 import { browserTabCreateClientPageStartsActive } from '../runtime/browser/tabs/browser-tab-create-publication'
 import {
@@ -15,6 +15,7 @@ import {
   retireRuntimeBrowserClientPage
 } from '../runtime/browser/client-pages/browser-client-page-close'
 import {
+  canPlacePairedPage,
   createBrowserClientPage,
   createBrowserPageOnPairedHost,
   DEFAULT_BROWSER_PROFILE_ID,
@@ -26,6 +27,11 @@ import {
   yieldClientPageSelection,
   type BrowserEngineTabs
 } from '../runtime/browser/client-pages/browser-client-page-queries'
+
+import {
+  findListedBrowserTab,
+  readBrowserTabAnnotations
+} from '../runtime/browser/tabs/browser-tab-annotations'
 
 type Forward = (args: unknown[], name?: string) => unknown
 
@@ -69,6 +75,16 @@ export function orcadClientPageCommand(
         : closeBrowserPageWithoutEngine(host, params, browserUnavailableError)
     }
   }
+  if (name === 'browserTabAnnotations') {
+    return async (...args: Parameters<RuntimeBrowserCommands['browserTabAnnotations']>) => {
+      const { page, worktree } = args[0] ?? {}
+      // The engine's active flags are global, so a worktree's current tab needs its own query.
+      const tab = page
+        ? findListedBrowserTab((await logicalTabs().browserTabList({ worktree })).tabs, page)
+        : (await logicalTabs().browserTabCurrent({ worktree })).tab
+      return readBrowserTabAnnotations(host, tab)
+    }
+  }
   const query = LOGICAL_TAB_QUERIES.find((candidate) => candidate === name)
   if (query) {
     return (...args: unknown[]) => {
@@ -106,7 +122,7 @@ function createTab(
     !params?.placement &&
     !caller?.pairedDeviceId &&
     !engineAvailable() &&
-    hasPairedPageHost(host)
+    canPlacePairedPage(host)
   ) {
     return createBrowserPageOnPairedHost(
       host,

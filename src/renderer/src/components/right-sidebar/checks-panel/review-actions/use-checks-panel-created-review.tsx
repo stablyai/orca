@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
+import { refreshHostedReviewCard } from '@/store/slices/hosted-review/hosted-review-card-refresh'
 import { resolveCreatedHostedReviewLink } from '../../source-control/review/source-control-created-review-link'
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'

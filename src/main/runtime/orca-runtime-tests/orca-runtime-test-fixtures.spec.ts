@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, vi } from 'vitest'
 import {
   forgetInstalledPaneSession,
   announceSessionWrites
-} from '../profile-session-store.test-fixture'
+} from '../terminal/layout/profile-session-store.test-fixture'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { createHash } from 'node:crypto'
@@ -17,9 +17,9 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../../persistence/terminal-topology/terminal-pane-admission'
-import { resolveHostId } from '../../persistence/loading-store/session-host-partitions'
+import { resolveHostId } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { toComparableRelaySshPtyId } from '../../../shared/ssh-pty-id'
-import '../spawned-pty-env-fixtures'
+import '../terminal/launch/spawned-pty-env-fixtures'
 import './runtime-test-module-registration.spec'
 import {
   computeWorktreePathMock,
@@ -32,8 +32,8 @@ import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/te
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import '../orca-runtime-test-orchestration-messages.spec'
-import type { InMemoryOrchestrationMessages } from '../orca-runtime-test-orchestration-messages.spec'
+import '../orchestration/mailbox/terminal-pointer/in-memory-orchestration-messages.spec'
+import type { InMemoryOrchestrationMessages } from '../orchestration/mailbox/terminal-pointer/in-memory-orchestration-messages.spec'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { Store } from '../../persistence/loading-store/store'
@@ -79,16 +79,6 @@ function makeDeferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve }
 }
 
-function makeStatusFrame(index: number, first: boolean): string {
-  const pad = '·'.repeat(60)
-  const rows = [
-    `✻ 执行任务中… (esc to interrupt) [${index}] ${pad}`,
-    `  ⎿ 正在分析代码库结构与依赖关系，请稍候… ${pad}`,
-    `  ⎿ tokens: ${1000 + index * 137} · elapsed: ${index}s ${pad}`
-  ]
-  return `${first ? '' : '\x1b[2A'}\r${rows.map((row) => `\x1b[K${row}`).join('\r\n')}\r`
-}
-
 async function writeHeadless(emulator: HeadlessTerminal, data: string): Promise<void> {
   await emulator.write(data)
 }
@@ -109,23 +99,6 @@ async function parseHeadlessSnapshotLines(
     return visibleNonEmptyLines(restored)
   } finally {
     restored.dispose()
-  }
-}
-
-async function referenceStatusFrameLines(
-  spawn: { cols: number; rows: number },
-  resized: { cols: number; rows: number }
-): Promise<string[]> {
-  const truth = new HeadlessEmulator({ cols: spawn.cols, rows: spawn.rows })
-  try {
-    await writeHeadless(truth, 'user@host % claude\r\n')
-    truth.resize(resized.cols, resized.rows)
-    for (let index = 0; index < 5; index += 1) {
-      await writeHeadless(truth, makeStatusFrame(index, index === 0))
-    }
-    return visibleNonEmptyLines(truth)
-  } finally {
-    truth.dispose()
   }
 }
 
@@ -323,7 +296,8 @@ function createFolderWorkspaceRuntimeStore(
   return {
     ...store,
     getProjectGroups: () => [projectGroup],
-    getFolderWorkspaces: () => [folderWorkspace]
+    getFolderWorkspaces: () => [folderWorkspace],
+    getFolderWorkspace: (id: string) => (id === folderWorkspace.id ? folderWorkspace : undefined)
   }
 }
 
@@ -729,8 +703,8 @@ export { createRuntimeWithSshLease, createStaleRuntimeWorktreeStore, cursorBusyS
 export { cursorReadyScreen, deferred, expectStablePaneKeyEnv, isOriginMainBaseRefProbe }
 export { isLocalBranchCatalogQuery }
 export { makeDeferred, makeFolderProjectGroup, makeFolderWorkspace, makeHeadlessTerminalLayout }
-export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession, makeStatusFrame }
+export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession }
 export { makeWorkspaceSessionWithHeadlessTerminal, makeWorktreeInfo, makeWorktreeMeta }
-export { parseHeadlessSnapshotLines, pendingMailPointerRepoints, referenceStatusFrameLines }
+export { parseHeadlessSnapshotLines, pendingMailPointerRepoints }
 export { renderGateCapMs, setInMemoryOrchestrationMessages, store, syncSinglePty }
 export { visibleNonEmptyLines, withPlatform, writeHeadless }

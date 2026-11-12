@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithAgentPromptRequestCorrelation } from '../../orca-runtime-agent-prompt-request-correlation'
+import { OrcaRuntimeWithAgentPromptRequestCorrelation } from '../input/orca-runtime-agent-prompt-request-correlation'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
@@ -13,7 +13,7 @@ import type {
   RuntimePtyWorktreeRecord,
   RuntimeVisibleTerminalState
 } from '../records/runtime-terminal-state-records'
-import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../runtime-mobile-agent-status-projection'
+import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../session-lifecycle/projection/runtime-mobile-agent-status-projection'
 import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import { createTerminalInputReservation } from '../input/terminal-input-admission'
 import type { RuntimeTerminalWriteOptions } from '../input/runtime-terminal-writer'
@@ -29,7 +29,7 @@ import {
   type TuiIdleHookTurn
 } from './tui-idle-hook-lane'
 import { selectFreshExplicitAgentStatusRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
-import { isClaudeDialogHoldingPane } from '../../claude-open-dialog-hold'
+import { isClaudeDialogHoldingPane } from './claude-open-dialog-hold'
 
 import type { OrcaRuntimeWithStopExactTerminalsForWorktree } from '../stop/worktree-terminal-stop-targets'
 
@@ -102,7 +102,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       ptyId,
       observed ? screen.lines.join('\n') : undefined
     )
-    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
+    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle, ptyId)
     return {
       terminal,
       explicitStatus,

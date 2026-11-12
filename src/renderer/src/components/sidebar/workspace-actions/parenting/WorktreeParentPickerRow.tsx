@@ -1,27 +1,34 @@
 import React from 'react'
 import { GitBranch, Server } from 'lucide-react'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
-import { translate } from '@/i18n/i18n'
+import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
+import type { WorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import '../../workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '../../workspace-card/identity/worktree-branch-display'
 import StatusIndicator from '../../workspace-card/surface/StatusIndicator'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { ParentMachineBadge } from './ParentMachineBadge'
 
 // The picker batches status reads once; memoized rows keep no store subscriptions.
 export const WorktreeParentPickerRow = React.memo(function WorktreeParentPickerRow({
   candidate,
   repo,
   status,
-  isCurrent
+  isCurrent,
+  machineHostId
 }: {
   candidate: Worktree
   repo: Pick<Repo, 'badgeColor' | 'connectionId' | 'displayName'> | undefined
   status: WorktreeStatus
   isCurrent: boolean
+  /** Set for a parent on another machine. */
+  machineHostId?: ExecutionHostId
 }): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   const branch = branchDisplayName(candidate.branch)
 
@@ -34,7 +41,7 @@ export const WorktreeParentPickerRow = React.memo(function WorktreeParentPickerR
           <span className="truncate text-[13px] font-medium">{candidate.displayName}</span>
           {isCurrent ? (
             <span className="shrink-0 rounded border border-border bg-muted px-1.5 py-px text-[9px] font-medium leading-none text-muted-foreground">
-              {translate('auto.components.sidebar.WorktreeParentPickerPopover.current', 'Current')}
+              {t('auto.components.sidebar.WorktreeParentPickerPopover.current', 'Current')}
             </span>
           ) : null}
         </div>
@@ -45,6 +52,7 @@ export const WorktreeParentPickerRow = React.memo(function WorktreeParentPickerR
               <span className="truncate lowercase">{repo.displayName}</span>
             </span>
           ) : null}
+          {machineHostId ? <ParentMachineBadge hostId={machineHostId} /> : null}
           {repo?.connectionId ? <Server className="size-3 shrink-0" /> : null}
           <GitBranch className="size-3 shrink-0" />
           <span className="truncate">{branch}</span>

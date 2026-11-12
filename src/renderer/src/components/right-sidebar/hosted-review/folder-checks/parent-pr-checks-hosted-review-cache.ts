@@ -7,11 +7,13 @@ import {
   isCachedMergedBranchPRCurrentForWorktree
 } from '@/components/sidebar/workspace-card/review/worktree-card-pr-display'
 import type { ParentPrChecksCacheEntry } from './parent-pr-checks-row-types'
+import type { Translate } from '@/i18n/use-translate'
 
 export function canUseParentPrChecksHostedReviewCacheEntry(
   worktree: Worktree,
   review: HostedReviewInfo,
-  entry: ParentPrChecksCacheEntry<HostedReviewInfo>
+  entry: ParentPrChecksCacheEntry<HostedReviewInfo>,
+  t?: Translate
 ): boolean {
   if (review.provider === 'github' && isGitHubPRSuppressed(worktree, review.number)) {
     return false
@@ -36,7 +38,8 @@ export function canUseParentPrChecksHostedReviewCacheEntry(
     {
       reviewHintKey: entry.linkedReviewHintKey,
       suppressedGitHubPR: worktree.suppressedGitHubPR ?? null
-    }
+    },
+    t
   )
   return display?.provider === review.provider && display.number === review.number
 }

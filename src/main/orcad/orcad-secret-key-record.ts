@@ -16,8 +16,8 @@ import {
   bestEffortFsyncDirectorySync,
   hardenExistingSecureFile,
   writeSecureFile
-} from '../../shared/secure-file'
-import { restrictWindowsFile } from '../../shared/secure-path-windows-acl'
+} from '../../shared/secure-storage/secure-file'
+import { restrictWindowsFile } from '../../shared/secure-storage/secure-path-windows-acl'
 import { ORCAD_MASTER_KEY_BYTES } from './orcad-secret-sealing'
 import { hasErrorCode, isProcessAlive } from '../daemon/endpoint/identity/daemon-process-inspection'
 import { errorMessage } from '../../shared/error-message'

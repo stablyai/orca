@@ -1,6 +1,6 @@
 // Share provider boundary predicates so visible interruption rows and lifecycle settlement agree.
 
-import { extractString } from '../ai-vault/session-scanner-values'
+import { extractString } from '../../shared/trimmed-string'
 
 export function claudeInterruptedMessageId(record: Record<string, unknown>): string | undefined {
   if (record.type !== 'user') {

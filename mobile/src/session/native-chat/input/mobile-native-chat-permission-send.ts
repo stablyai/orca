@@ -1,19 +1,20 @@
 import { useCallback, type MutableRefObject } from 'react'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
   sendMobileNativeChatMessageWithOutcome,
   type MobileNativeChatSendOutcome
-} from '../mobile-native-chat-send'
+} from '../composer/mobile-native-chat-send'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from '../mobile-native-chat-terminal-write-lock'
+} from '../composer/mobile-native-chat-terminal-write-lock'
 
 export function sendMobileNativeChatPermissionResponse(args: {
   client: RpcClient
   terminal: string
   deviceToken: string | null
   text: string
+  requireStartupDialog?: string
 }): Promise<MobileNativeChatSendOutcome> {
   // Why: approval choices are already complete terminal control sequences;
   // appending Return changes both numbered choices and Escape denial.
@@ -23,6 +24,9 @@ export function sendMobileNativeChatPermissionResponse(args: {
     text: args.text,
     enter: false,
     requireWriteSettlement: true,
+    ...(args.requireStartupDialog !== undefined
+      ? { requireStartupDialog: args.requireStartupDialog }
+      : {}),
     ...(args.deviceToken ? { mobileClient: { id: args.deviceToken, type: 'mobile' as const } } : {})
   })
 }
@@ -33,9 +37,9 @@ export function useMobileNativeChatPermissionSend(args: {
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   onSendError: (message: string) => void
-}): (text: string) => Promise<boolean> {
+}): (text: string, requireStartupDialog?: string) => Promise<boolean> {
   return useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string, requireStartupDialog?: string): Promise<boolean> => {
       const terminal = args.handleRef.current
       if (!args.client || !terminal || !args.enabled) {
         args.onSendError('Response not sent (disconnected)')
@@ -54,7 +58,8 @@ export function useMobileNativeChatPermissionSend(args: {
           client: args.client,
           terminal,
           deviceToken: args.deviceTokenRef.current,
-          text
+          text,
+          ...(requireStartupDialog !== undefined ? { requireStartupDialog } : {})
         })
       } finally {
         releaseMobileNativeChatTerminalWrite(terminal)

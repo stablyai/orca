@@ -1,12 +1,18 @@
 import type {
+  BrowserTabAnnotationsResult,
   BrowserTabCurrentResult,
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
-} from '../../shared/runtime-browser-contracts'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
-import { formatTabList, formatTabListWithProfiles, formatTabShow } from './browser-format'
-import { printResult } from '../format'
+import {
+  formatTabAnnotations,
+  formatTabList,
+  formatTabListWithProfiles,
+  formatTabShow
+} from './browser-format'
+import { printResult } from '../command-result-output'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
@@ -41,6 +47,11 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserTabShowResult>('browser.tabShow', target)
     printResult(result, json, formatTabShow)
+  },
+  'tab annotations': async ({ flags, client, cwd, json }) => {
+    const target = await getBrowserCommandTarget(flags, cwd, client)
+    const result = await client.call<BrowserTabAnnotationsResult>('browser.tabAnnotations', target)
+    printResult(result, json, formatTabAnnotations)
   },
   'tab current': async ({ flags, client, cwd, json }) => {
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)

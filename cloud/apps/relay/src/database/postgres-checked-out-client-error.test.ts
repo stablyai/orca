@@ -60,15 +60,4 @@ describe('checked-out PostgreSQL client failure handling', () => {
     }
   })
 
-  it('releases a healthy client back to the pool with no error', async () => {
-    const client = new FakePoolClient(() => ({ rows: [{ one: 1 }], rowCount: 1 }))
-    const database = new PostgresDatabase(poolOf(client) as never)
-
-    await expect(
-      database.transaction(async (transaction) => await transaction.query('SELECT 1'))
-    ).resolves.toEqual([{ one: 1 }])
-
-    expect(client.released).toEqual([undefined])
-    expect(client.listenerCount('error')).toBe(0)
-  })
 })

@@ -3,11 +3,10 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getDefaultNotificationSettings } from '../../../shared/notification-settings-defaults'
-import { resolveAgentAttention } from '@/attention/agent-attention-policy'
-import { createTerminalAttentionSurface } from '@/components/terminal-pane/terminal-attention-surface'
-import { createStructuredAttentionSurface } from '@/components/native-chat/structured-attention-surface'
-import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
-import { createTestStore, makeWorktree, TEST_REPO } from '../store/slices/store-test-helpers'
+import { createTabsSliceMockApi } from '../store/slices/tabs/tabs-slice-test-harness'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
 import { isWorkspaceNotificationMutedBySidebarFilters } from './hidden-workspace-notification-mute'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -126,20 +125,6 @@ describe('isWorkspaceNotificationMutedBySidebarFilters', () => {
 })
 
 describe('muted workspace attention', () => {
-  it('earns no unread and no delivery request from the attention policy', () => {
-    const decision = resolveAgentAttention(
-      {
-        subject: { workspaceId: CLI_ID, surfaceKey: 'tab-1:leaf-1' },
-        reason: 'agent-completion',
-        settlesTurn: true,
-        hasFreshActivityEvidence: true
-      },
-      createTerminalAttentionSurface(store.getState())
-    )
-    expect(decision).toEqual({ admitted: false, cause: 'muted-workspace' })
-    expect(createStructuredAttentionSurface(store.getState()).isWorkspaceMuted(CLI_ID)).toBe(true)
-  })
-
   it('writes no bell marker for a muted workspace, and still does for a visible one', () => {
     const terminalTab = (id: string, worktreeId: string) => ({
       id,

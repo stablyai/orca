@@ -3,7 +3,7 @@ import { checkDispatchAuthority } from './codex-structured-dispatch-authority'
 import {
   StructuredAgentSessionInputNotAdmitted,
   type StructuredAgentSessionAdmitFreshInput
-} from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
+} from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import { turnInputFor } from './codex-structured-message-options'
 import { reportedCodexPermissionMode } from '../threads/codex-structured-thread-open'
 import { admitCodexTurnPermission } from './codex-structured-turn-permission'
@@ -17,7 +17,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalTurnJoin
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionDispatchOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { AgentSessionDispatchOutcome } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import { isCodexAppServerUnsupportedError } from '../../app-server/codex-app-server-session'
@@ -117,7 +117,17 @@ export async function startCodexTurn(
         host.options.set(key, value)
       }
     }
-    requested = codexTurnRequestOptions(host)
+    requested = { interactionMode: 'default', ...codexTurnRequestOptions(host) }
+    const { interactionMode, ...nativeOptions } = requested
+    const collaborationMode = {
+      mode: interactionMode,
+      settings: {
+        model: nativeOptions.model ?? previousApplied?.model ?? host.reportedOptions?.model,
+        reasoning_effort:
+          nativeOptions.effort ?? previousApplied?.effort ?? host.reportedOptions?.effort ?? null,
+        developer_instructions: null
+      }
+    }
     const known = { ...previousApplied }
     for (const key of Object.keys(requested)) {
       delete known[key]
@@ -145,7 +155,8 @@ export async function startCodexTurn(
             clientUserMessageId: input.clientMessageId,
             input: turnInputFor(host, body),
             ...permission,
-            ...requested
+            ...nativeOptions,
+            collaborationMode
           },
           {
             timeoutMs: input.timeoutMs,

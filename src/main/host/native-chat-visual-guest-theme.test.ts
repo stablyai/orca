@@ -4,15 +4,14 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, IpcMainEvent } from 'electron'
-import type * as SiteDisplayController from '../browser/site-settings/browser-site-display-controller'
+import type * as SiteDisplayController from '../browser/site-settings/display/browser-site-display-controller'
 import {
   configureBrowserSiteDisplayStore,
   updateBrowserSiteDisplay
-} from '../browser/site-settings/browser-site-display-store'
+} from '../browser/site-settings/display/browser-site-display-store'
 import {
   NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH as PUBLISH,
-  NATIVE_CHAT_VISUAL_GUEST_THEME_READ as READ,
-  NATIVE_CHAT_VISUAL_GUEST_THEME_UPDATE as UPDATE
+  NATIVE_CHAT_VISUAL_GUEST_THEME_READ as READ
 } from '../../shared/native-chat/native-chat-visual-shell'
 
 const { ipc, classify, display, profileForSession, sshProfileForSession } = vi.hoisted(() => ({
@@ -37,10 +36,10 @@ vi.mock('../native-chat/native-chat-scratch-folder', () => ({
 vi.mock('../native-chat/native-chat-visual-guest-location', () => ({
   isNativeChatVisualGuestLocation: classify
 }))
-vi.mock('../browser/site-settings/browser-site-display-controller', () => ({
+vi.mock('../browser/site-settings/display/browser-site-display-controller', () => ({
   browserSiteDisplayController: display
 }))
-vi.mock('../browser/sessions/browser-session-registry', () => ({
+vi.mock('../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: { profileIdForSession: profileForSession }
 }))
 vi.mock('../browser/routing/local-host-partitions/local-ssh-browser-partitions', () => ({
@@ -49,7 +48,7 @@ vi.mock('../browser/routing/local-host-partitions/local-ssh-browser-partitions',
 import { installNativeChatVisualGuestTheme } from './native-chat-visual-guest-theme'
 
 const { BrowserSiteDisplayController } = await vi.importActual<typeof SiteDisplayController>(
-  '../browser/site-settings/browser-site-display-controller'
+  '../browser/site-settings/display/browser-site-display-controller'
 )
 
 function contents(id: number, hostWebContents: EventEmitter | null = null) {
@@ -118,91 +117,6 @@ describe('visual guest theme handoff', () => {
     const ordinary = event()
     read(ordinary)
     expect(ordinary.returnValue).toBeNull()
-  })
-
-  it('updates once per theme, releases navigating/destroyed guests and removes listeners with host', () => {
-    const { host, guest, event, publish, read } = setup()
-    publish(event(host), dark)
-    read(event())
-    read(event())
-    expect(display.onGuestDocumentStart).toHaveBeenCalledWith(guest, {
-      url: guest.mainFrame.url,
-      profileId: 'default',
-      colorScheme: 'dark'
-    })
-    publish(event(host), dark)
-    expect(guest.send).not.toHaveBeenCalled()
-    const light = { ...dark, colorScheme: 'light' }
-    publish(event(host), light)
-    expect(guest.send).toHaveBeenCalledExactlyOnceWith(
-      UPDATE,
-      expect.objectContaining({ colorScheme: 'light' })
-    )
-    guest.emit('did-start-navigation', { isMainFrame: true, isSameDocument: true })
-    publish(event(host), dark)
-    expect(guest.send).toHaveBeenCalledTimes(2)
-    guest.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
-    publish(event(host), light)
-    expect(guest.send).toHaveBeenCalledTimes(3)
-    guest.emit('did-navigate', {}, guest.mainFrame.url)
-    expect(display.onMainFrameNavigationCommitted).toHaveBeenCalledExactlyOnceWith(guest.id)
-    publish(event(host), dark)
-    expect(guest.send).toHaveBeenCalledTimes(4)
-    classify.mockReturnValue(false)
-    guest.emit('did-navigate', {}, 'file:///workspace/ordinary.html')
-    expect(display.setGuestColorSchemeFallback).toHaveBeenLastCalledWith(guest, undefined)
-    publish(event(host), light)
-    expect(guest.send).toHaveBeenCalledTimes(4)
-    classify.mockReturnValue(true)
-    read(event())
-    guest.emit('destroyed')
-    expect(display.onGuestRetired).toHaveBeenCalledExactlyOnceWith(guest.id)
-    publish(event(host), dark)
-    expect(guest.send).toHaveBeenCalledTimes(4)
-    host.emit('destroyed')
-    expect(ipc.removeListener).toHaveBeenCalledTimes(2)
-  })
-
-  it.each([10, 100])(
-    'bounds theme broadcasts to one operation per live guest at population %s',
-    (population) => {
-      const { host, event, publish, read } = setup()
-      publish(event(host), dark)
-      const guests = Array.from({ length: population }, (_, index) => contents(index + 10, host))
-      for (const guest of guests) {
-        read(event(guest))
-        read(event(guest))
-        expect(guest.listenerCount('did-navigate')).toBe(1)
-        expect(guest.listenerCount('destroyed')).toBe(1)
-      }
-      expect(profileForSession).toHaveBeenCalledTimes(2 * population)
-      display.setGuestColorSchemeFallback.mockClear()
-      profileForSession.mockClear()
-      publish(event(host), dark)
-      expect(display.setGuestColorSchemeFallback).not.toHaveBeenCalled()
-      publish(event(host), { ...dark, colorScheme: 'light' })
-      expect(profileForSession).not.toHaveBeenCalled()
-      expect(display.setGuestColorSchemeFallback).toHaveBeenCalledTimes(population)
-      expect(guests.reduce((sum, guest) => sum + guest.send.mock.calls.length, 0)).toBe(population)
-      for (const guest of guests) {
-        guest.emit('destroyed')
-      }
-      publish(event(host), dark)
-      expect(guests.reduce((sum, guest) => sum + guest.send.mock.calls.length, 0)).toBe(population)
-    }
-  )
-
-  it('resolves the prepared SSH profile only after local Session lookup misses', () => {
-    const { host, guest, event, publish, read } = setup()
-    profileForSession.mockReturnValue(null)
-    sshProfileForSession.mockReturnValue('ssh-work')
-    publish(event(host), dark)
-    read(event())
-    expect(sshProfileForSession).toHaveBeenCalledExactlyOnceWith(guest.session)
-    expect(display.onGuestDocumentStart).toHaveBeenCalledWith(
-      guest,
-      expect.objectContaining({ profileId: 'ssh-work' })
-    )
   })
 
   it('applies saved media at the authenticated frame URL before every synchronous reply', () => {

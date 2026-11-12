@@ -30,6 +30,7 @@ export const mobileApi = {
         endpoint: string | null
         deviceId: string
         connectionMode: MobilePairingConnectionMode
+        expiresAt: number | null
       }
   > => ipcRenderer.invoke('mobile:getPairingQR', args),
 
@@ -53,11 +54,19 @@ export const mobileApi = {
         webClientUrl: string | null
         endpoint: string
         deviceId: string
+        expiresAt: number | null
       }
   > => ipcRenderer.invoke('mobile:getRuntimePairingUrl', args),
 
   listDevices: (): Promise<{
-    devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]
+    devices: {
+      deviceId: string
+      name: string
+      pairedAt: number
+      lastSeenAt: number
+      usesLegacyEncryption?: boolean
+      olderPairingMethod?: true
+    }[]
   }> => ipcRenderer.invoke('mobile:listDevices'),
 
   revokeDevice: (args: { deviceId: string }): Promise<{ revoked: boolean }> =>

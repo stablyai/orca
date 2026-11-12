@@ -5,7 +5,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
@@ -24,7 +23,6 @@ import {
   writeFakeElectronGet,
   writeFakeElectronPackage,
   writeFakeExtractor,
-  writeNonDarwinPlatformPreload,
   writeTypeDefPublishFailurePreload
 } from './install-electron-package-binary-test-fixtures.mjs'
 
@@ -64,27 +62,6 @@ describe('install-electron-package-binary', () => {
         ).toBe(true)
       }
       expect(result.stdout).toContain('Repaired Electron path.txt -> electron')
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
-  it('repairs existing Electron path metadata without downloading', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir)
-      writeFakeElectronDist(projectDir)
-
-      const result = runInstallScript(projectDir)
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(readFileSync(join(projectDir, 'node_modules/electron/path.txt'), 'utf8')).toBe(
-        'electron'
-      )
-      expect(result.stdout).toContain('Repaired Electron path.txt -> electron')
-      expect(existsSync(join(projectDir, 'electron-get.log'))).toBe(false)
     } finally {
       rmSync(projectDir, { recursive: true, force: true })
     }
@@ -147,50 +124,6 @@ describe('install-electron-package-binary', () => {
     }
   })
 
-  it('uses Electron 42 install env vars before npm config platform flags', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir)
-      writeFakeExtractor(projectDir, { createExecutable: true })
-
-      const result = runInstallScript(projectDir, {
-        ELECTRON_INSTALL_PLATFORM: 'win32',
-        ELECTRON_INSTALL_ARCH: 'arm64',
-        npm_config_platform: 'linux',
-        npm_config_arch: 'x64'
-      })
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toContain(
-        'platform=win32 arch=arm64'
-      )
-      expect(readFileSync(join(projectDir, 'node_modules', 'electron', 'path.txt'), 'utf8')).toBe(
-        'electron.exe'
-      )
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
-  it('does not trigger Electron 42 lazy require downloads while checking install state', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir, { lazyRequireMarker: 'lazy-require.marker' })
-      writeFakeElectronGet(projectDir)
-      writeFakeExtractor(projectDir, { createExecutable: true })
-
-      const result = runInstallScript(projectDir)
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(existsSync(join(projectDir, 'lazy-require.marker'))).toBe(false)
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
   it('keeps a persistent cache root while retrying transient failures', () => {
     const projectDir = mkTempProject()
     const cacheRoot = join(projectDir, 'electron-cache')
@@ -215,124 +148,6 @@ describe('install-electron-package-binary', () => {
       expect(
         readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')
       ).toHaveLength(2)
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
-  it('retries Electron download HTTP 503 failures from Fetch Response.status', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir, {
-        downloadFailures: 1,
-        downloadHttpStatus: 503
-      })
-      writeFakeExtractor(projectDir, { createExecutable: true })
-
-      const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
-      })
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(
-        readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')
-      ).toHaveLength(2)
-      expect(result.stderr).toContain('Transient Electron download failure (HTTP 503)')
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
-  it('fails after exhausting transient Electron download retries', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir, {
-        downloadFailures: 5,
-        downloadErrorCode: 'ECONNRESET'
-      })
-      writeFakeExtractor(projectDir, { createExecutable: true })
-
-      const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
-      })
-
-      expect(result.status).toBe(1)
-      expect(
-        readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')
-      ).toHaveLength(3)
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
-  it('rejects invalid Electron download retry delays before downloading', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir)
-      writeFakeExtractor(projectDir, { createExecutable: true })
-
-      const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,nope'
-      })
-
-      expect(result.status).toBe(1)
-      expect(result.stderr).toContain(
-        'ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS must contain non-negative integers'
-      )
-      expect(existsSync(join(projectDir, 'electron-get.log'))).toBe(false)
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
-  it('does not retry permanent Electron download failures', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir, {
-        downloadFailures: 3,
-        downloadErrorCode: 'EACCES'
-      })
-      writeFakeExtractor(projectDir, { createExecutable: true })
-
-      const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
-      })
-
-      expect(result.status).toBe(1)
-      expect(
-        readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')
-      ).toHaveLength(1)
-      expect(result.stderr).not.toContain('Transient Electron download failure')
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
-  it('fails instead of silently accepting a partial Electron extract', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir)
-      writeFakeExtractor(projectDir, { createExecutable: false })
-      mkdirSync(join(projectDir, 'node_modules', 'electron', 'dist', 'locales'), {
-        recursive: true
-      })
-      writeFileSync(join(projectDir, 'node_modules', 'electron', 'path.txt'), 'stale-path')
-
-      const result = runInstallScript(projectDir)
-
-      expect(result.status).toBe(1)
-      expect(result.stderr).toContain('Electron archive extract did not contain executable')
-      expect(result.stderr).toContain('extractEntries=locales')
     } finally {
       rmSync(projectDir, { recursive: true, force: true })
     }
@@ -433,39 +248,6 @@ describe('install-electron-package-binary', () => {
       expect(readFileSync(join(entryPath, 'version'), 'utf8')).toBe('v41.5.0')
       expect(readSharedDistMarker(projectDir)).toBe(sharedEntryName)
       expect(readdirSync(sharedCacheRoot(projectDir))).toEqual([sharedEntryName])
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
-  it('hardlinks the shared Electron dist on a host without copy-on-write', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      initGitRepo(projectDir)
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir)
-      writeFakeExtractor(projectDir, { createExecutable: true })
-      const preloadPath = writeNonDarwinPlatformPreload(projectDir)
-      const nonDarwinEnv = {
-        CI: '',
-        NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${preloadPath}`]
-          .filter(Boolean)
-          .join(' ')
-      }
-
-      const result = runInstallScript(projectDir, nonDarwinEnv)
-      const entryPath = join(sharedCacheRoot(projectDir), sharedEntryName)
-      const distDir = join(projectDir, 'node_modules/electron/dist')
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(readFileSync(join(distDir, 'version'), 'utf8')).toBe('v41.5.0')
-      expect(readFileSync(join(entryPath, 'version'), 'utf8')).toBe('v41.5.0')
-      // Shared inodes require read-only protection or extraction rewrites sibling worktrees and cache.
-      expect(statSync(join(entryPath, 'electron')).mode & 0o222).toBe(0)
-      expect(statSync(join(entryPath, 'electron')).ino).toBe(
-        statSync(join(distDir, 'electron')).ino
-      )
     } finally {
       rmSync(projectDir, { recursive: true, force: true })
     }

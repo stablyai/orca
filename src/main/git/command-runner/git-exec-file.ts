@@ -3,11 +3,12 @@ import {
   resolveGitFetchHeadCommand,
   runWithGitFetchHeadLock
 } from '../../../shared/git/fetch/git-fetch-head-lock'
-import { pendingWslDriveCheckoutGitRouting } from '../wsl-drive-checkout-git-routing'
-import type { ResolvedCommand } from './wsl-command-resolution'
-import { annotateWslHostFailure, isTransientWslFailure } from './wsl-host-failure'
-import type { GitAdmissionTier, GitExecOptions } from './git-exec-options'
-import { execFileCapture, execFileCaptureToTermination } from './exec-file-capture'
+import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
+import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
+import { annotateWslHostFailure, isTransientWslFailure } from './host-routing/wsl-host-failure'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitExecOptions } from './git-exec-options'
+import { execFileCapture, execFileCaptureToTermination } from './process-capture/exec-file-capture'
 import {
   pendingWslDirectGitReadEnvironment,
   directWslGitExitCode,
@@ -15,22 +16,22 @@ import {
   disableDirectWslGitAfterSuccessfulFallback,
   invalidateMissingDirectWslGit,
   resolveGitCommand
-} from './git-command-resolution'
-import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment'
-import { buildNetworkSshPolicyEnv } from './git-ssh-policy-env'
-import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-process-env'
-import { acquireGitAdmission } from './git-subprocess-admission'
+} from './host-routing/git-command-resolution'
+import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
+import { buildNetworkSshPolicyEnv } from './git-environment/git-ssh-policy-env'
+import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environment/git-process-env'
+import { acquireGitAdmission } from './admission/git-subprocess-admission'
 import {
   GitCommandTimeoutError,
   gitCommandTimeoutMs
 } from '../../../shared/git/commands/git-command-timeout'
 import { classifyGitCommand } from '../../../shared/git/commands/git-command-classification'
-import { createAbortError } from './abort-error'
-import { readCapturedGitBuffer, readCapturedGitString } from './captured-git-output'
-import { runUnlessGitCwdKnownMissing } from './missing-git-spawn-cwd'
+import { createAbortError } from './process-capture/abort-error'
+import { readCapturedGitBuffer, readCapturedGitString } from './process-capture/captured-git-output'
+import { runUnlessGitCwdKnownMissing } from './host-routing/missing-git-spawn-cwd'
 import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
-import { routeLocalGitOptions, runAdmittedWslGit } from './local-git-runtime-route'
-import { gitRunsIn } from './git-runs-in'
+import { routeLocalGitOptions, runAdmittedWslGit } from './host-routing/local-git-runtime-route'
+import { gitRunsIn } from './host-routing/git-runs-in'
 
 async function gitExecFileAsyncUnlocked(
   args: string[],
@@ -86,6 +87,10 @@ async function gitExecFileAsyncUnlocked(
         terminationState.current = new Promise<void>((resolve) => {
           reportTerminated = resolve
         })
+        options.observeChildTermination?.(
+          terminationState.current,
+          classifyGitCommand(args) !== 'read'
+        )
         const captureOptions = {
           cwd: command.cwd,
           encoding: (options.encoding ?? 'utf-8') as BufferEncoding,

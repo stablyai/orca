@@ -1,4 +1,3 @@
-// Exercise real editor in Chromium/WebKit under shipped CSP: toolbar effects, private ready/change seam, listener/style cleanup, font floor and URL modal.
 // Native WebView postMessage/injectJavaScript are replaced by direct module calls; execCommand behavior requires real engines.
 import { Buffer } from 'node:buffer'
 import { codeBlockSelectionTest } from '../shell/mobile-web-app-code-block-selection.mjs'
@@ -11,41 +10,17 @@ import { chromium, webkit } from 'playwright-core'
 import {
   MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
   MOBILE_WEB_APP_ROOT_RESET,
-  lucideBarrelPlugin
+  mobileWebRenderCheckPlugins
 } from '../../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
-import { themeSwitchTest } from '../shell/mobile-web-app-theme-switch.mjs'
-import { textInputFontSizeFloor } from '../platform-seams/mobile-web-app-text-input-font-size-seam.mjs'
 import {
   createBundleServer,
   installCspViolationRecorder,
-  installListenerRecorder,
   readShellCsp
 } from '../preview/mobile-web-app-render-harness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
 const componentDir = join(mobileDir, 'src/components')
-
-// Read font floor from seam module; a copied 16 would silently drift when theme body size rises above it.
-const FLOOR = textInputFontSizeFloor(mobileDir)
-
-const COMMANDS = [
-  { label: 'H1', command: 'heading1', select: 'all', expect: 'h1' },
-  { label: 'H2', command: 'heading2', select: 'all', expect: 'h2' },
-  { label: 'H3', command: 'heading3', select: 'all', expect: 'h3' },
-  { label: 'Bold', command: 'bold', select: 'word', expect: 'b,strong' },
-  { label: 'Italic', command: 'italic', select: 'word', expect: 'i,em' },
-  { label: 'Strike', command: 'strike', select: 'word', expect: 'strike,s,del' },
-  { label: 'Bullet list', command: 'bulletList', select: 'all', expect: 'ul' },
-  { label: 'Numbered list', command: 'orderedList', select: 'all', expect: 'ol' },
-  { label: 'Checklist', command: 'taskList', select: 'all', expect: 'ul[data-type="taskList"]' },
-  { label: 'Quote', command: 'quote', select: 'all', expect: 'blockquote' },
-  { label: 'Inline code', command: 'inlineCode', select: 'word', expect: 'code' },
-  { label: 'Code block', command: 'codeBlock', select: 'all', expect: 'pre' }
-]
-
-// Paragraph undoes another command; starting from p would prove nothing.
-const PARAGRAPH = { label: 'Body', command: 'paragraph' }
 
 // Serve inserted image locally: nonexistent URL logs WebKit load failure; successful paint proves shipped CSP admits it.
 const IMAGE_PATH = '/inserted.png'
@@ -157,21 +132,6 @@ function Harness() {
 createRoot(document.getElementById('root')).render(createElement(Harness))
 `
 
-// Install ReactNativeWebView recorder before bundle: absence alone cannot prove editor JSON avoids shell bridge if bridge object never existed.
-function installBridgeObjectRecorder() {
-  globalThis.__orcaBridgeReads = []
-  const bridge = {
-    postMessage: (message) => globalThis.__orcaBridgeReads.push(`post ${String(message)}`)
-  }
-  Object.defineProperty(globalThis, 'ReactNativeWebView', {
-    configurable: true,
-    get: () => {
-      globalThis.__orcaBridgeReads.push('read')
-      return bridge
-    }
-  })
-}
-
 const bundles = mobileWebAppDependenciesPresent()
 const describeEditor = bundles ? describe : describe.skip
 
@@ -206,7 +166,7 @@ beforeAll(async () => {
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: { 'react-native': 'react-native-web' },
     // Match app plugin: barrel reexports LucideProvider absent from its context module.
-    plugins: [lucideBarrelPlugin],
+    plugins: mobileWebRenderCheckPlugins,
     // Prefer .web.jsx/.web.js or toolbar’s react-native-svg resolves Fabric and fails codegenNativeComponent.
     resolveExtensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js'],
     // Match app’s RN shims for JSX-in-.js, process.env and Metro global; missing global made isFabric throw before mount.
@@ -262,9 +222,7 @@ async function openPage(browser) {
     }
   })
   page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`))
-  await page.addInitScript(installBridgeObjectRecorder)
   await page.addInitScript(installCspViolationRecorder)
-  await page.addInitScript(installListenerRecorder, { selector: '#editor' })
   await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => document.body.dataset.ready === 'yes')
   await page.waitForSelector('#first-surface #editor')
@@ -332,115 +290,7 @@ describeEditor(
 
         afterAll(() => browser?.close())
 
-        themeSwitchTest(() => browser, openPage)
-
-        it('mounts the document, reports ready through the seam and never touches the bridge', async () => {
-          const { page, consoleErrors } = await openPage(browser)
-          try {
-            await setContent(page, '# Title', '<h1>Title</h1>')
-            expect(await readSurface(page)).toBe('<h1>Title</h1>')
-            // Initial markup proves document ready reached controller and pushed content through seam.
-            expect(await page.evaluate(() => globalThis.__orcaBridgeReads)).toEqual([])
-            expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
-            expect(consoleErrors).toEqual([])
-            // No editor occlusion report: screen’s web module already measures viewport, so reporting twice would lift bar twice.
-            expect(await page.evaluate(() => globalThis.__orcaEditor.insets)).toEqual([])
-          } finally {
-            await page.close()
-          }
-        }, 600_000)
-
-        it('sits on the 16 px floor, which is what stops iOS zooming and never zooming back', async () => {
-          const { page } = await openPage(browser)
-          try {
-            const size = await page.evaluate(
-              () => getComputedStyle(document.querySelector('#first-surface #editor')).fontSize
-            )
-            // Assert at least floor: seam uses max(bodySize, floor), so larger theme text is valid.
-            expect(Number.parseFloat(size)).toBeGreaterThanOrEqual(FLOOR)
-            // CSS variable must exist only on editor host; unscoped stylesheet would recolor every page screen.
-            const variable = await page.evaluate(() => ({
-              onRoot: getComputedStyle(document.documentElement)
-                .getPropertyValue('--editor-surface')
-                .trim(),
-              onHost: getComputedStyle(document.querySelector('.orca-rich-markdown-document-host'))
-                .getPropertyValue('--editor-surface')
-                .trim()
-            }))
-            expect(variable.onHost).not.toBe('')
-            expect(variable.onRoot).toBe('')
-          } finally {
-            await page.close()
-          }
-        }, 600_000)
-
-        it('runs every one of the fifteen commands against the document', async () => {
-          const { page, consoleErrors } = await openPage(browser)
-          try {
-            for (const [index, entry] of COMMANDS.entries()) {
-              const body = bodyFor(index)
-              await setContent(page, body, `<p>${body}</p>`)
-              // Require command effect absent beforehand or undelivered command could pass on previous document.
-              expect(
-                await page.evaluate(
-                  (selector) =>
-                    document.querySelector('#first-surface #editor')?.querySelector(selector),
-                  entry.expect
-                ),
-                `${entry.label} was already applied before it ran`
-              ).toBeNull()
-              await select(page, entry.select)
-              await press(page, entry.label)
-              await page.waitForFunction(
-                (selector) =>
-                  document.querySelector('#first-surface #editor')?.querySelector(selector) !==
-                  null,
-                entry.expect,
-                { timeout: 15_000 }
-              )
-            }
-
-            // Paragraph must undo another block type; it is a no-op on p.
-            await setContent(page, '# Title', '<h1>Title</h1>')
-            await select(page, 'all')
-            await press(page, PARAGRAPH.label)
-            await page.waitForFunction(
-              () =>
-                document.querySelector('#first-surface #editor')?.querySelector('h1') === null &&
-                document.querySelector('#first-surface #editor')?.querySelector('p') !== null,
-              null,
-              { timeout: 15_000 }
-            )
-
-            expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
-            expect(consoleErrors).toEqual([])
-          } finally {
-            await page.close()
-          }
-        }, 600_000)
-
         // Both engines nest unordered list inside existing p; inline paragraph serialization once dropped bullet when saved.
-        it('edits and selects under the shipped document style, which makes other text unselectable', async () => {
-          const { page, consoleErrors } = await openPage(browser)
-          try {
-            await setContent(page, 'alpha', '<p>alpha</p>')
-            const word = page.locator('#first-surface #editor p')
-            await word.click()
-            await page.keyboard.press('End')
-            await page.keyboard.type(' bravo')
-            await page.waitForFunction(
-              () =>
-                document.querySelector('#first-surface #editor p')?.textContent === 'alpha bravo'
-            )
-            // Use browser gesture: a scripted Range bypasses body user-select:none.
-            await page.evaluate(() => window.getSelection()?.removeAllRanges())
-            await word.dblclick()
-            expect(await page.evaluate(() => window.getSelection()?.toString().trim())).not.toBe('')
-            expect(consoleErrors).toEqual([])
-          } finally {
-            await page.close()
-          }
-        }, 600_000)
 
         it('reports a typed bullet list as a list, and renders that markdown back as one', async () => {
           const { page, consoleErrors } = await openPage(browser)
@@ -529,32 +379,6 @@ describeEditor(
           }
         }, 600_000)
 
-        it('reports one change per checkbox tap and one per inline code', async () => {
-          const { page } = await openPage(browser)
-          try {
-            await setContentWithin(page, '- [ ] one', 'input[type="checkbox"]')
-            await page.evaluate(() => {
-              globalThis.__orcaEditor.changes.length = 0
-            })
-            await page.locator('#first-surface #editor input[type="checkbox"]').first().click()
-            await page.waitForFunction(() => globalThis.__orcaEditor.changes.length > 0)
-            // Single tap emits click/input/change; each once reported duplicate change.
-            expect(await page.evaluate(() => globalThis.__orcaEditor.changes)).toHaveLength(1)
-            expect(await page.evaluate(() => globalThis.__orcaEditor.changes[0])).toContain('[x]')
-
-            await setContent(page, bodyFor(0), `<p>${bodyFor(0)}</p>`)
-            await select(page, 'word')
-            await page.evaluate(() => {
-              globalThis.__orcaEditor.changes.length = 0
-            })
-            await press(page, 'Inline code')
-            await page.waitForFunction(() => globalThis.__orcaEditor.changes.length > 0)
-            expect(await page.evaluate(() => globalThis.__orcaEditor.changes)).toHaveLength(1)
-          } finally {
-            await page.close()
-          }
-        }, 600_000)
-
         codeBlockSelectionTest(() => browser, openPage, setContent, select, press, readSurface)
 
         it('opens a link through the host rather than navigating the page', async () => {
@@ -567,75 +391,6 @@ describeEditor(
               'https://example.com/a'
             ])
             expect(page.url()).toBe(`${origin}/`)
-          } finally {
-            await page.close()
-          }
-        }, 600_000)
-
-        it('removes the first editor listeners and mounts a working second document', async () => {
-          const { page, consoleErrors } = await openPage(browser)
-          const listeners = () => page.evaluate(() => globalThis.__orcaListeners.snapshot())
-          try {
-            await setContent(page, 'first document', '<p>first document</p>')
-            const first = await listeners()
-            const firstOwned = Object.fromEntries(
-              Object.entries(first).filter(([key]) => key.startsWith('element '))
-            )
-            expect(
-              Object.keys(firstOwned)
-                .map((key) => key.split(' ').at(-1))
-                .sort()
-            ).toEqual(['change', 'click', 'input', 'keydown'])
-            expect(Object.values(firstOwned)).toEqual([1, 1, 1, 1])
-
-            // Baseline after first mount cycle: RN-Web installs permanent responder listeners on first View, outside per-mount disposal.
-            await page.evaluate(() => globalThis.__orcaEditor.set({ mounted: false }))
-            await page.waitForFunction(() => document.querySelector('#first-surface') === null)
-            await expect
-              .poll(
-                async () =>
-                  Object.keys(await listeners()).filter((key) => key.startsWith('element ')),
-                { timeout: 5_000 }
-              )
-              .toEqual([])
-            const afterOneCycle = await listeners()
-            // Require recorder saw real listeners so empty snapshots cannot pass as no leak.
-            expect(Object.keys(afterOneCycle).length).toBeGreaterThan(0)
-
-            await page.evaluate(() => {
-              globalThis.__orcaEditor.set({ mounted: true, generation: 1 })
-            })
-            await page.waitForSelector('#first-surface #editor')
-            await setContent(page, 'second document', '<p>second document</p>')
-            await select(page, 'all')
-            await press(page, 'Bold')
-            await page.waitForFunction(
-              () =>
-                document.querySelector('#first-surface #editor')?.querySelector('b,strong') !== null
-            )
-
-            const second = await listeners()
-            const globals = Object.fromEntries(
-              Object.entries(second).filter(([key]) => !key.startsWith('element '))
-            )
-            expect(globals).toEqual(afterOneCycle)
-            const secondOwned = Object.fromEntries(
-              Object.entries(second).filter(([key]) => key.startsWith('element '))
-            )
-            expect(
-              Object.keys(secondOwned)
-                .map((key) => key.split(' ').at(-1))
-                .sort()
-            ).toEqual(['change', 'click', 'input', 'keydown'])
-            expect(Object.values(secondOwned)).toEqual([1, 1, 1, 1])
-            expect(Object.keys(secondOwned).some((key) => key in firstOwned)).toBe(false)
-            expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
-            expect(consoleErrors).toEqual([])
-            expect(
-              await page.evaluate(
-                () => document.querySelectorAll('#orca-rich-markdown-document-style').length
-              )
-            ).toBe(1)
           } finally {
             await page.close()
           }

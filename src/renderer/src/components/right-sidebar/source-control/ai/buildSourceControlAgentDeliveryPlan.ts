@@ -1,5 +1,5 @@
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
-import { checkSourceControlAgentActionLaunch } from '@/lib/source-control-agent-action-launch-check'
+import { checkSourceControlAgentActionLaunch } from '@/lib/source-control/ai/source-control-agent-action-launch-check'
 import { useAppStore } from '@/store/index'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'

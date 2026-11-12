@@ -9,7 +9,7 @@ import {
   type ProcessTableIndexOf
 } from '../../shared/process-table-index'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import { parseLinuxStartTicks } from '../agent-hooks/managed-hook-owner-identity'
+import { parseLinuxStartTicks } from '../agent-hooks/installation/locking/managed-hook-owner-identity'
 import { DaemonEndpointOwnershipError } from '../daemon/launch/daemon-endpoint-adoption'
 import { parseLinuxProcessState } from '../daemon/endpoint/identity/daemon-incarnation-evidence'
 import { readDaemonPidRecord } from '../daemon/endpoint/identity/daemon-endpoint-incarnation'

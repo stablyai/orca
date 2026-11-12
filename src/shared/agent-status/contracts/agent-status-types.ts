@@ -5,7 +5,7 @@ import type { AgentProviderSessionMetadata } from '../../agent-session/lifecycle
 import type { AgentMainAgentStatus } from '../lifecycle/main-agent-status'
 import type { AgentStateHistoryEntry } from '../lifecycle/agent-state-history'
 import { isAgentTurnOutcome } from '../lifecycle/agent-turn-outcome'
-import type { OrchestrationFleetAttention } from '../../orchestration-fleet-attention'
+import type { OrchestrationFleetAttention } from '../../orchestration/fleet/orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
 import type { AgentChildWorkView } from '../child-work/agent-status-child-work-view'
 import type { TerminalAgent } from '../identity/terminal-agent'
@@ -19,7 +19,7 @@ import {
   normalizePromptField,
   normalizeTurnCompletedAtField
 } from './agent-status-field-normalization'
-import { assertJsonTextStructureWithinLimits } from '../../json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
 
 import {
   normalizeAgentSubagentsField,
@@ -125,6 +125,8 @@ export type AgentStatusEntry = {
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
+  /** The launch owner's last word: its admitted launch runs (true) or none (false); absent from older hosts. */
+  launchAttested?: boolean
   /** False when the status belongs to a non-terminal owner that restores itself. */
   terminalResumeEligible?: false
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */

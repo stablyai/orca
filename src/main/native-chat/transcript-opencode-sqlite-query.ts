@@ -8,7 +8,9 @@ import {
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
-import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import { extractString } from '../../shared/trimmed-string'
+import { parseJsonObject } from '../ai-vault/parsing/session-json-object'
 import type SyncDatabase from '../sqlite/sync-database'
 import { rowsOf, rowsWithinBudget } from './transcript-opencode-row-budget'
 import {
@@ -23,7 +25,10 @@ export type OpenCodeTranscriptItem = {
   message: NativeChatMessage
 }
 
+export type OpenCodeForkTipEvent = { id: string; role: string; terminal: boolean }
+
 export type OpenCodeTranscriptPage = {
+  forkTip?: OpenCodeForkTipEvent[]
   items: OpenCodeTranscriptItem[]
   hasMore: boolean
   beforeMessageRowId: number | null
@@ -152,6 +157,7 @@ export function readOpenCodeTranscriptPage(args: {
          LIMIT ?`
     )
     const collected: OpenCodeTranscriptItem[] = []
+    const forkTip: OpenCodeForkTipEvent[] = []
     let scannedRows = 0
     let pageBytes = 0
     const rawBudget = { bytes: 0 }
@@ -176,6 +182,17 @@ export function readOpenCodeTranscriptPage(args: {
       hasMore = rows.length > limit
       const selected = hasMore ? rows.slice(0, limit) : rows
       cursor = selected.at(-1)!.message_rowid
+      for (const row of selected) {
+        const record = row.data === null ? null : parseJsonObject(row.data)
+        forkTip.push({
+          id: row.id,
+          role: String(record?.role),
+          terminal:
+            record?.role === 'assistant' &&
+            typeof asRecord(record.time)?.completed === 'number' &&
+            record.finish !== 'tool-calls'
+        })
+      }
       const mapped = mapMessageRows(db, args.sessionId, selected, rawBudget, args.agent)
       pageBytes += Buffer.byteLength(JSON.stringify(mapped))
       if (pageBytes > 16 * 1024 * 1024) {
@@ -199,6 +216,7 @@ export function readOpenCodeTranscriptPage(args: {
     const items = trimmed.toReversed()
     return {
       items,
+      forkTip: forkTip.toReversed(),
       hasMore: hasMore || overshot,
       beforeMessageRowId: overshot ? items[0]!.rowid : (cursor ?? null)
     }

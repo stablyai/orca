@@ -4,8 +4,8 @@ import type { AgentSessionJournalIdentity } from '../../../../shared/agent-sessi
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { isNativeLocalLocation } from '../../../../shared/execution-host'
-import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/structured-agent-definition'
-import { agentDrivesSession } from '../../../native-chat/agent-session-wire/structured-agent-session-provider-support'
+import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
+import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import type { StructuredAgentCommandSettings } from '../../../native-chat/structured-agent-command-resolution'
 import {
   createNativeChatVisualsDelivery,
@@ -15,7 +15,10 @@ import {
 import { resolveAgentSessionLaunchDirectory } from '../agent-session-launch-directory'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import type { StructuredAgentAdapterContext } from '../installation/structured-agent-runtime-registration-types'
-import { sealStructuredSessionChild } from '../environment/structured-session-child-env'
+import {
+  sealStructuredSessionChild,
+  STRUCTURED_CHILD_ENV_TO_DELETE
+} from '../environment/structured-session-child-env'
 
 /** Where a launch's shared inputs come from. */
 export type StructuredAgentLaunchSources = {
@@ -69,7 +72,7 @@ export type StructuredAgentLaunchPart<L> = {
   launch: Omit<L, ComposedLaunchFields>
   /** The agent's environment, before the seal names the child. */
   env: Record<string, string>
-  /** Inherited keys this agent's child must not keep; required, so an agent states even none. */
+  /** Agent-specific inherited keys to strip; composition adds the shared pane-identity keys. */
   inheritedEnvToDelete: readonly string[]
   /** See `sealStructuredSessionChild`. */
   cliRuntimeCommand?: string
@@ -167,7 +170,12 @@ async function composedPart<L>(
     ...(permissionMode ? { permissionMode } : {})
   }
   const composed = await part(basis, identity)
-  return { ...composed, cwd: await basis.launchDirectory() }
+  return {
+    ...composed,
+    // Why: applied once here so no agent can opt out of stripping the launching pane's identity.
+    inheritedEnvToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...composed.inheritedEnvToDelete],
+    cwd: await basis.launchDirectory()
+  }
 }
 
 export function composeStructuredLaunch<L>(

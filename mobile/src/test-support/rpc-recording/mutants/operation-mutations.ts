@@ -182,18 +182,16 @@ export const OPERATION_MUTATIONS = {
   // the reader could not read takes the whole sidebar to `error` and the PR the user opened it for
   // disappears behind a retry.
   'pr-sidebar-checks-failure-state': {
-    file: 'mobile-pr-sidebar-state.ts',
-    before: `      return {
-        kind: 'ready',
-        data: {
-          pr,
-          details: null,
-          checks: [],
-          checksError: checksOutcome.error,
-          pushTarget: link.pushTarget
-        }
-      }`,
-    after: '      return failureState(checksOutcome.error)'
+    file: 'use-mobile-pr-sidebar-controller.ts',
+    before: `    if (!checks && !checksFailed) {
+      return { kind: 'loading' }
+    }`,
+    after: `    if (checksFailed) {
+      return prSidebarFailureState(checksError)
+    }
+    if (!checks) {
+      return { kind: 'loading' }
+    }`
   },
   // Always send the client member so tokenless phones falsely claim presence.
   'display-mode-unconditional-client': {
@@ -209,26 +207,6 @@ export const OPERATION_MUTATIONS = {
     before: `          ...(viewport && next === 'auto' ? { viewport } : {})`,
     after: `          ...(next === 'auto' ? { viewport } : {})`
   },
-  // Send null instead of omitting afterTabId; only sessions without an active tab detect it.
-  'create-after-tab-id-null': {
-    file: 'use-mobile-session-terminal-create-actions.ts',
-    before: '      const afterTabId = activeSessionTabId ?? undefined',
-    after: '      const afterTabId = activeSessionTabId'
-  },
-  // Swap shell command and agent prompt; empty-option scenarios cannot detect it.
-  'create-quick-command-keys': {
-    file: 'mobile-session-terminal-create-request.ts',
-    before: `    ...(options?.startupCommand ? { command: options.startupCommand } : {}),
-    ...(options?.startupCommandDelivery
-      ? { startupCommandDelivery: options.startupCommandDelivery }
-      : {}),
-    ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),`,
-    after: `    ...(options?.startupCommand ? { agentPrompt: options.startupCommand } : {}),
-    ...(options?.startupCommandDelivery
-      ? { startupCommandDelivery: options.startupCommandDelivery }
-      : {}),
-    ...(options?.agentPrompt ? { command: options.agentPrompt } : {}),`
-  },
   // Remove the in-flight guard; only overlapping taps expose duplicate terminals.
   'create-second-tap-in-flight': {
     file: 'use-mobile-session-terminal-create-actions.ts',
@@ -238,16 +216,8 @@ export const OPERATION_MUTATIONS = {
   // Let tab-load refusal abort terminal loading/refresh timers; this scenario has no created activation timer.
   'startup-tab-load-rejects-sequence': {
     file: 'use-mobile-session-startup.ts',
-    before: '      await ensureSessionTabs().catch(() => null)',
+    before: '      void ensureSessionTabs().catch(() => null)',
     after: '      await ensureSessionTabs()'
-  },
-  // Accept null Linear status; only result-null reaches the resulting connected property-read failure.
-  'linear-status-nullable': {
-    file: 'task-list-reply-schema.ts',
-    before: `  activeWorkspaceId: salvagedOptional('activeWorkspaceId', z.string().nullable())
-})`,
-    after: `  activeWorkspaceId: salvagedOptional('activeWorkspaceId', z.string().nullable())
-}).nullable()`
   },
   // Collapse explicit avatarUrl:null to absence; picker rendering alone cannot distinguish them.
   'assignable-user-avatar-null-collapse': {

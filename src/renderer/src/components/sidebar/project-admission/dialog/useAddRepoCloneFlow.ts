@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { getCloneDestinationAutoFill } from '../create/clone-defaults'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-store-upsert'
 import {
   resolveAddRepoRuntimeTarget,
   worktreeRefreshOptions
 } from '../host-selection/add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  useCloneFolderOverride,
+  type CloneFolderOverride
+} from '../clone-folder/use-clone-folder-override'
 
 export function useAddRepoCloneFlow({
   step,
@@ -43,10 +47,12 @@ export function useAddRepoCloneFlow({
   cloneUrl: string
   cloneDestination: string
   cloneError: string | null
+  cloneFolder: CloneFolderOverride | null
   cloneProgress: { phase: string; percent: number } | null
   isCloning: boolean
-  setCloneUrl: Dispatch<SetStateAction<string>>
-  setCloneDestination: Dispatch<SetStateAction<string>>
+  changeCloneUrl: (url: string) => void
+  changeCloneDestination: (destination: string) => void
+  changeCloneFolderName: (name: string) => void
   setCloneError: Dispatch<SetStateAction<string | null>>
   resetCloneFlow: () => void
   handlePickDestination: () => Promise<void>
@@ -56,6 +62,8 @@ export function useAddRepoCloneFlow({
   const [cloneDestination, setCloneDestination] = useState('')
   const [isCloning, setIsCloning] = useState(false)
   const [cloneError, setCloneError] = useState<string | null>(null)
+  const { cloneFolder, cloneArgs, setCloneFolderName, resetCloneFolder, checkCloneFolderTaken } =
+    useCloneFolderOverride(cloneUrl, cloneDestination)
   const [cloneProgress, setCloneProgress] = useState<{
     phase: string
     percent: number
@@ -98,8 +106,26 @@ export function useAddRepoCloneFlow({
     setCloneDestination('')
     setIsCloning(false)
     setCloneError(null)
+    resetCloneFolder()
     setCloneProgress(null)
+  }, [resetCloneFolder])
+
+  // Each edit clears the last clone failure, which no longer describes these inputs.
+  const changeCloneUrl = useCallback((url: string): void => {
+    setCloneUrl(url)
+    setCloneError(null)
   }, [])
+  const changeCloneDestination = useCallback((destination: string): void => {
+    setCloneDestination(destination)
+    setCloneError(null)
+  }, [])
+  const changeCloneFolderName = useCallback(
+    (name: string): void => {
+      setCloneFolderName(name)
+      setCloneError(null)
+    },
+    [setCloneFolderName]
+  )
 
   const handlePickDestination = useCallback(async (): Promise<void> => {
     if (activeRuntimeEnvironmentId?.trim()) {
@@ -121,9 +147,8 @@ export function useAddRepoCloneFlow({
   }, [activeRuntimeEnvironmentId])
 
   const handleClone = useCallback(async (): Promise<void> => {
-    const trimmedUrl = cloneUrl.trim()
     // Why: without a resolved host the clone below would land on this computer.
-    if (!trimmedUrl || !cloneDestination.trim() || hostId === null) {
+    if (!cloneArgs.url || !cloneArgs.destination || hostId === null) {
       return
     }
     const requestHostToken = hostTokenRef.current
@@ -135,23 +160,17 @@ export function useAddRepoCloneFlow({
     setCloneProgress(null)
     try {
       const target = resolveAddRepoRuntimeTarget(activeRuntimeEnvironmentId)
+      if (await checkCloneFolderTaken(target, isCurrent)) {
+        return
+      }
       const repo =
         target.kind === 'environment'
           ? (
-              await callRuntimeRpc<{ repo: Repo }>(
-                target,
-                'repo.clone',
-                {
-                  url: trimmedUrl,
-                  destination: cloneDestination.trim()
-                },
-                { timeoutMs: 10 * 60_000 }
-              )
+              await callRuntimeRpc<{ repo: Repo }>(target, 'repo.clone', cloneArgs, {
+                timeoutMs: 10 * 60_000
+              })
             ).repo
-          : ((await window.api.repos.clone({
-              url: trimmedUrl,
-              destination: cloneDestination.trim()
-            })) as Repo)
+          : await window.api.repos.clone(cloneArgs)
       if (!isCurrent()) {
         return
       }
@@ -182,8 +201,8 @@ export function useAddRepoCloneFlow({
     }
   }, [
     activeRuntimeEnvironmentId,
-    cloneUrl,
-    cloneDestination,
+    checkCloneFolderTaken,
+    cloneArgs,
     fetchWorktrees,
     hostId,
     onGitRepoReady
@@ -193,10 +212,12 @@ export function useAddRepoCloneFlow({
     cloneUrl,
     cloneDestination,
     cloneError,
+    cloneFolder,
     cloneProgress,
     isCloning,
-    setCloneUrl,
-    setCloneDestination,
+    changeCloneUrl,
+    changeCloneDestination,
+    changeCloneFolderName,
     setCloneError,
     resetCloneFlow,
     handlePickDestination,

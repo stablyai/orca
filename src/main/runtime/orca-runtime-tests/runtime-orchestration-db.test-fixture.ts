@@ -1,7 +1,11 @@
 import { afterEach, vi } from 'vitest'
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import type { TaskRuntimeLineageRow } from '../orchestration/db/run-list-page'
-import type { CoordinatorRun, DispatchContextRow, RunRow } from '../orchestration/types'
+import type {
+  CoordinatorRun,
+  DispatchContextRow,
+  RunRow
+} from '../orchestration/db/orchestration-records'
 
 const databases = new Set<OrchestrationDb>()
 const createdAt = '2026-10-27T12:00:00Z'

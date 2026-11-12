@@ -1,13 +1,11 @@
-import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
-import { OrcaRuntimeWithRemoveManagedWorktree } from './removal/workspace-removal'
 import type {
   RemoveManagedWorktreeOptions,
   RuntimeWorktreeRemovalTarget
 } from './catalog/runtime-worktree-selection'
 import { resolveRuntimeWorktreeRemovalTarget } from './removal/runtime-worktree-removal-target'
 import type { LocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { splitWorktreeId, worktreeIdsEqual } from '../../../shared/worktree/id'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../workspaces/removal/worktree-removal-repo-owner'
 import {
@@ -22,39 +20,33 @@ import type {
   ForceDeleteWorktreeBranchResult,
   RemoveWorktreeResult
 } from '../../../shared/worktree/create-types'
-import type {
-  RuntimeTerminalRename,
-  RuntimeTerminalSetPaneTitle
-} from '../../../shared/runtime-types'
-import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import type { TerminalCreateOptions } from '../runtime-terminal-contracts'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
+import { dropOrcaCreatedAgentTrustForRemovedWorktree } from './removal/worktree-removal-agent-trust-cleanup'
 import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,
   waitForPendingWorktreeRemoval
 } from '../../workspaces/removal/worktree-background-removal'
 import { interruptedLocalWorktreeRemovalJob } from './removal/runtime-interrupted-local-worktree-removal'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { retryFailedRemovalUnlessRegistered } from '../../workspaces/removal/worktree-removal-leftover'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import {
-  resolveAgentTerminalCreateOptions,
-  prepareHostAgentTerminalLaunch
-} from '../terminal/launch/runtime-agent-terminal-startup'
 import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
+import { RuntimeAgentLaunchPreparation } from '../terminal/launch/runtime-agent-launch-preparation'
+import { worktreeHostIdentity } from '../../persistence/worktree-meta-host-identity'
 
-export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
+export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends RuntimeAgentLaunchPreparation {
   protected abstract resolveExplicitWorktreeIdScoped(
     worktreeId: string,
     requiredHostId?: ExecutionHostId
   ): Promise<ResolvedWorktree | null>
+
   protected abstract cancelScheduledMobileSessionTabsChanged(worktreeId: string): void
+
   protected abstract notifyMobileSessionTabsRemoved(worktreeId: string): void
 
   protected async resolveWorktreeRemovalTarget(
@@ -126,38 +118,58 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
   }
 
   protected localRemovalJobHost(store: RuntimeStore) {
+    // `removed` is heard after the purge drops the row, so its identity is read first.
+    const purgedIdentities = new Map<string, ReturnType<typeof worktreeHostIdentity>>()
     return {
       store,
       acquireWatcherRemoval: this.acquireFileWatcherRemoval,
       closeWatchers: (path) => this.closeFileWatchersForRemoval(path),
       preservedBranchCleanup: this.preservedBranchCleanup,
-      purge: ({ worktreeId, repoId }) =>
-        this.purgeRemovedWorktree(store, worktreeId, repoId, LOCAL_EXECUTION_HOST_ID),
-      onRemoved: ({ worktreeId, worktreePath }) =>
-        this.emitWorktreeLifecycle({ kind: 'removed', worktreeId, path: worktreePath }),
+      purge: ({ worktreeId, repoId }) => {
+        purgedIdentities.set(
+          worktreeId,
+          worktreeHostIdentity(store, worktreeId, LOCAL_EXECUTION_HOST_ID)
+        )
+        return this.purgeRemovedWorktree(store, worktreeId, repoId, LOCAL_EXECUTION_HOST_ID)
+      },
+      onRemoved: ({ worktreeId, worktreePath }) => {
+        const identity = purgedIdentities.get(worktreeId)
+        purgedIdentities.delete(worktreeId)
+        this.emitWorktreeLifecycle({ kind: 'removed', worktreeId, path: worktreePath, ...identity })
+      },
       publish: (repoId) => this.publishWorktreeRemovalChange(repoId)
     }
   }
 
   // Host state every removal path drops once Git has let go of the checkout.
-  protected purgeRemovedWorktree(
+  // Resolves after the pretrust deletion so a removal ack cannot precede it.
+  protected async purgeRemovedWorktree(
     store: RuntimeStore,
     worktreeId: string,
     repoId: string,
     removalHostId?: ExecutionHostId
-  ): void {
+  ): Promise<void> {
     this.clearOptimisticReconcileToken(worktreeId)
-    this.removeWorktreeMetadataAndHistory(store, worktreeId, removalHostId)
+    // Only checkout-deleting paths purge here, so the directory itself is gone.
+    const metadataAndHistory = this.removeWorktreeMetadataAndHistory(
+      store,
+      worktreeId,
+      removalHostId,
+      { dropAgentTrust: true }
+    )
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repoId)
     invalidateAuthorizedRootsCacheForRepo(store, repoId)
+    await metadataAndHistory
   }
 
-  removeWorktreeMetadataAndHistory(
+  async removeWorktreeMetadataAndHistory(
     store: RuntimeStore,
     worktreeId: string,
-    hostId?: ExecutionHostId
-  ): void {
+    hostId?: ExecutionHostId,
+    // Why: folder sessions and forgotten orphans keep the directory on disk for siblings.
+    options: { dropAgentTrust?: boolean } = {}
+  ): Promise<void> {
     // Purge history/caches before path-derived ids can name a recreated workspace.
     const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
     const repoId = splitWorktreeId(worktreeId)?.repoId
@@ -172,6 +184,10 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     // Retire only this host's panes even when a same-id owner survives.
     this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, hostId ?? persistedHostId)
     if (!preservesSameIdOwner) {
+      // Why: path-derived ids are reused; a stale pretrust entry would pre-trust the next occupant.
+      const pretrustDrop = options.dropAgentTrust
+        ? dropOrcaCreatedAgentTrustForRemovedWorktree(worktreeId)
+        : undefined
       // Do not rescue surviving paired PTYs into a recreated occupant of the same path-derived id.
       for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
         const ptyWorktreeId = this.ptysById.get(ptyId)?.worktreeId
@@ -195,6 +211,8 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
       this.notifyMobileSessionTabsRemoved(worktreeId)
       dropRemovedWorktreeProcessState(worktreeId)
       this.releaseRemovedWorktreeHostSessions(worktreeId, 'worktree-removal')
+      // Awaited last so the in-memory invalidations above stay synchronous.
+      await pretrustDrop
     }
     const snapshotDirectory = store.getProfileStorageDirectory?.()
     if (snapshotDirectory) {
@@ -233,93 +251,5 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
       expectedHead,
       hostId
     )
-  }
-
-  async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
-    // Switch point: a terminal main owns is renamed in main's layout, with or without a window.
-    const mainRename = ORCA_LAYOUT_OWNER_IS_MAIN
-      ? await this.renameTerminalInMainLayout(handle, title)
-      : null
-    if (mainRename) {
-      return mainRename
-    }
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      // Keep manual names out of process-title evidence or they read as the shell reclaiming the pane (#20626).
-      pty.pty.manualTitle = title?.trim() || null
-      const recordedTabId = (): string | null => this.paneOfPty(pty.pty).tabId
-      this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
-      // Persist headless custom titles so restart cannot lose a rename.
-      const tabIdForTitle = !this.notifier?.renameTerminal ? recordedTabId() : null
-      if (tabIdForTitle) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabIdForTitle, title)
-        // Publish manual titles: paired desktops prefer saved-session names over live titles (#29975).
-        const customTitle = title?.trim() || null
-        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, tabIdForTitle, {
-          customTitle,
-          // Reset must also drop a name saved while sleeping.
-          ...(customTitle === null
-            ? {
-                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, tabIdForTitle)
-              }
-            : {})
-        })
-      }
-      for (const leaf of this.leaves.values()) {
-        if (leaf.ptyId === pty.pty.ptyId) {
-          this.notifier?.renameTerminal(leaf.tabId, title)
-          return { handle, tabId: leaf.tabId, title }
-        }
-      }
-      const tabId = recordedTabId() ?? pty.record.tabId
-      // A notifier can exist before its pane graph; retain the rename on the known tab.
-      if (this.notifier?.renameTerminal && tabId) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, title)
-        this.notifier.renameTerminal(tabId, title)
-      }
-      return { handle, tabId, title }
-    }
-    this.assertGraphReady()
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    this.notifier?.renameTerminal(leaf.tabId, title)
-    return { handle, tabId: leaf.tabId, title }
-  }
-
-  /** Names one pane of a split; the tab's own name is untouched. */
-  async setPaneTitle(handle: string, title: string | null): Promise<RuntimeTerminalSetPaneTitle> {
-    // Switch point: a pane main owns is named in main's layout, with or without a window.
-    const mainTitle = ORCA_LAYOUT_OWNER_IS_MAIN
-      ? await this.setPaneTitleInMainLayout(handle, title)
-      : null
-    if (mainTitle) {
-      return mainTitle
-    }
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (!this.getAvailableAuthoritativeWindow() || !this.notifier?.setPaneTitle) {
-      throw new Error('Pane titles require a running Orca desktop with set-pane-title support')
-    }
-    const normalizedTitle = title?.trim() || null
-    if (!this.notifier.setPaneTitle(leaf.tabId, leaf.leafId, normalizedTitle)) {
-      throw new Error('runtime_unavailable')
-    }
-    return { handle, tabId: leaf.tabId, leafId: leaf.leafId, title: normalizedTitle }
-  }
-
-  async resolveAgentTerminalCreateOptions(
-    workspace: TerminalWorkspaceLaunchScope,
-    opts: TerminalCreateOptions,
-    sessionOptions: Readonly<Record<string, SessionOptionValue>> | undefined = opts.sessionOptions
-  ): Promise<TerminalCreateOptions> {
-    const resolvedLaunch = await resolveAgentTerminalCreateOptions(
-      workspace,
-      opts,
-      {
-        store: this.store,
-        hostIdentity: this.runtimeId,
-        toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
-      },
-      sessionOptions
-    )
-    return prepareHostAgentTerminalLaunch(workspace, opts, resolvedLaunch, this.accounts)
   }
 }

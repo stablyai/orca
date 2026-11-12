@@ -23,6 +23,7 @@ import {
 import { commandRefusedByReason } from './agent-session-command-refusal-words'
 import { agent, attachmentProblemSentence } from './agent-session-attachment-failure-words'
 import { joinSentences } from '../../sentence-joining'
+import { modelUnavailableSentence } from './agent-session-model-failure-words'
 import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
 import { requestTimeoutSeconds } from '../agent-session-request-timeout'
 import {
@@ -31,6 +32,7 @@ import {
   DISPATCH_REJECTED_QUEUE_FULL,
   DISPATCH_REJECTED_WRITE_FAILED
 } from '../requests/structured-agent-session-dispatch-rejection'
+
 // Build legacy text/reason/error and newer typed facts together. Quote provider text only when authored for a person; shared sentence pieces let desktop translate the same fact.
 
 declare const failureSentence: unique symbol
@@ -196,8 +198,11 @@ const FAILURE_SENTENCES = {
     ),
   restartFailed: couldNot('couldNotRestart'),
   claudeEffortInvalid: (_context, _fact, _surface, say) => say('claudeEffortInvalid'),
-  modelUnavailable: (context, fact, _surface, say) =>
-    say('modelUnavailable', { ...agent(say, context), detail: fact.detail?.text ?? 'this model' }),
+  modelUnavailable: modelUnavailableSentence,
+  modelNotSelected: (context, _fact, _surface, say) => say('modelNotSelected', agent(say, context)),
+  providerUnavailable: namingAgent('providerUnavailable'),
+  providerSafetyStopped: namingAgent('providerSafetyStopped'),
+  providerResponseFailed: namingAgent('providerResponseFailed'),
   providerRejected: (context, fact, _surface, say) =>
     quotingPersonDetail(
       say,
@@ -206,6 +211,11 @@ const FAILURE_SENTENCES = {
       fact.detail,
       agent(say, context)
     ),
+  pluginInputRequired: (context, fact, _surface, say) =>
+    say('pluginInputRequired', {
+      ...agent(say, context),
+      plugin: fact.detail?.text ?? 'unnamed'
+    }),
   attachmentInvalid: (context, fact, _surface, say) =>
     fact.attachment
       ? attachmentProblemSentence(say, context, fact.attachment)
@@ -276,7 +286,7 @@ export function agentSessionFailureSentence(
   fact: AgentSessionFailureFact,
   surface: AgentSessionFailureSurface,
   context: AgentSessionFailureWordsContext = {},
-  /** Desktop passes its translations; the host and the phone keep English. */
+  /** Desktop and phone pass their translations; the host keeps English. */
   say: AgentSessionFailureSay = sayAgentSessionFailureEnglish
 ): string {
   const sentence: Sentence = FAILURE_SENTENCES[fact.kind]

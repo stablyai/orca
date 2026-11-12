@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** The X on a history row: shown when cmdk marks the row selected (hover or arrows), like Chrome's. */
 export default function BrowserHistoryRowRemoveButton({
@@ -9,7 +9,8 @@ export default function BrowserHistoryRowRemoveButton({
 }: {
   onRemove: () => void
 }): React.JSX.Element {
-  const label = translate('browser.history.remove', 'Remove from history')
+  const t = useTranslate()
+  const label = t('browser.history.remove', 'Remove from history')
   return (
     <span className="shrink-0 text-muted-foreground opacity-0 [[data-selected=true]_&]:opacity-100">
       <Tooltip>

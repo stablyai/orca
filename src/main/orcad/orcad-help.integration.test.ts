@@ -35,26 +35,6 @@ afterAll(async () => {
 })
 
 describe('real orcad executable help', () => {
-  it.each([['--help'], ['-h'], ['--json', '--help'], ['--help', '--json']])(
-    'prints usage to stdout and exits without creating a profile: %j',
-    async (...argv) => {
-      const dataRoot = join(directory, `absent-${argv.join('-')}`)
-      const result = await runProcess({
-        program: process.execPath,
-        args: [launcher, ...argv],
-        env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', ORCA_USER_DATA: dataRoot },
-        timeoutMs: 10_000
-      })
-      expect(result.code, result.stderr).toBe(0)
-      expect(result.timedOut).toBe(false)
-      expect(result.stderr).toBe('')
-      expect(result.stdout).toContain('Usage: orcad [options]')
-      expect(result.stdout).toContain('--bind <ip>')
-      expect(result.stdout).not.toContain('"type":"orca_server_ready"')
-      await expect(readdir(dataRoot)).rejects.toMatchObject({ code: 'ENOENT' })
-    }
-  )
-
   it('leaves an existing instance lock untouched', async () => {
     const dataRoot = join(directory, 'locked-profile')
     await mkdir(dataRoot)

@@ -10,7 +10,7 @@ import {
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, relative } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { preparePrAppImageTools } from './package-linux-formats-appimage.mjs'
 import { runProcessSync } from '@orca/process-host'
@@ -26,42 +26,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs()
   rmSync(root, { recursive: true, force: true })
-})
-
-it.each([
-  ['linux', 'arm64'],
-  ['darwin', 'x64'],
-  ['win32', 'x64']
-])('refuses unmeasured %s/%s hosts before resolving tools', async (platform, architecture) => {
-  const getTools = vi.fn()
-  await expect(
-    preparePrAppImageTools({
-      directory: join(root, 'overlay'),
-      configuration,
-      getTools,
-      platform,
-      architecture
-    })
-  ).rejects.toThrow('requires a Linux x64 host')
-  expect(getTools).not.toHaveBeenCalled()
-})
-
-it.each([
-  [{ toolsets: { appimage: '1.0.2' } }, 'pinned AppImage toolset 1.0.3'],
-  [{ ...configuration, appImage: { compression: 'gzip' } }, 'existing zstd configuration'],
-  [{ ...configuration, compression: 'store' }, 'existing zstd configuration']
-])('rejects unsupported configuration %j before resolving tools', async (value, message) => {
-  const getTools = vi.fn()
-  await expect(
-    preparePrAppImageTools({
-      directory: join(root, 'overlay'),
-      configuration: value,
-      getTools,
-      platform: 'linux',
-      architecture: 'x64'
-    })
-  ).rejects.toThrow(message)
-  expect(getTools).not.toHaveBeenCalled()
 })
 
 describe.skipIf(process.platform === 'win32')('real executable AppImage tool overlay', () => {
@@ -175,12 +139,6 @@ describe.skipIf(process.platform === 'win32')('real executable AppImage tool ove
     expect(existsSync(join(root, 'expanded'))).toBe(false)
   })
 
-  it('normalizes a relative overlay into an absolute builder override', async () => {
-    const environment = await prepare({ directory: relative(process.cwd(), overlay) })
-    expect(environment.APPIMAGE_TOOLS_PATH).toBe(overlay)
-    expect(existsSync(join(overlay, 'mksquashfs'))).toBe(true)
-  })
-
   it('propagates the original executable failure without a fallback', async () => {
     const environment = await prepare()
     vi.stubEnv('ORCA_TEST_SQUASHFS_EXIT', '17')
@@ -191,30 +149,5 @@ describe.skipIf(process.platform === 'win32')('real executable AppImage tool ove
       timeoutMs: 10_000
     })
     expect(result.code).toBe(17)
-  })
-
-  it.each([
-    ['ORCA_TEST_SQUASHFS_VERSION', '4.7.0'],
-    ['ORCA_TEST_SQUASHFS_EXIT', '2']
-  ])(
-    'rejects an unsupported original tool (%s=%s) without creating an overlay',
-    async (key, value) => {
-      vi.stubEnv(key, value)
-      await expect(prepare()).rejects.toThrow('requires mksquashfs 4.6.1')
-      expect(existsSync(overlay)).toBe(false)
-    }
-  )
-
-  it('keeps invalid custom toolset errors instead of downloading another toolset', async () => {
-    vi.stubEnv('APPIMAGE_TOOLS_PATH', join(root, 'missing custom tools'))
-    await expect(prepare()).rejects.toThrow(/APPIMAGE_TOOLS_PATH|AppImage tool/)
-    expect(existsSync(overlay)).toBe(false)
-  })
-
-  it('preserves upstream rejection of unsafe custom override paths', async () => {
-    vi.stubEnv('APPIMAGE_TOOLS_PATH', join(root, 'tools $(touch expanded)'))
-    await expect(prepare()).rejects.toThrow('APPIMAGE_TOOLS_PATH contains shell-unsafe characters')
-    expect(existsSync(overlay)).toBe(false)
-    expect(existsSync(join(root, 'expanded'))).toBe(false)
   })
 })

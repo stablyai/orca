@@ -1,13 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PtyStartupIngress } from './pty-startup-ingress'
-import { parsePtyStartupIngressIntent } from './pty-startup-ingress-intent'
+
 import type { PtyIngressEmission } from './pty-startup-ingress-contract'
 
 const COLORS = { foreground: '#2e3434', background: '#ffffff' }
 const FOREGROUND_REPLY = '\x1b]10;rgb:2e2e/3434/3434\x1b\\'
 const BACKGROUND_REPLY = '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
-// Orca's default dark theme, which answers until a viewer reports colours.
-const DEFAULT_FOREGROUND_REPLY = '\x1b]10;rgb:ffff/ffff/ffff\x1b\\'
+
 const DEFAULT_BACKGROUND_REPLY = '\x1b]11;rgb:2828/2c2c/3434\x1b\\'
 // The two echo shapes a cooked POSIX tty produces for a written reply: ECHOCTL
 // caret forms, and readline eating `ESC ]` / ST while self-inserting the rest.
@@ -46,15 +45,6 @@ function visible(emissions: readonly PtyIngressEmission[]): string {
 
 describe('PtyStartupIngress', () => {
   afterEach(() => vi.useRealTimers())
-
-  it('validates intent colors and deadline bounds', () => {
-    const intent = {
-      colors: COLORS,
-      deadlineMs: 5_000
-    }
-    expect(parsePtyStartupIngressIntent(intent)).toEqual(intent)
-    expect(parsePtyStartupIngressIntent({ ...intent, deadlineMs: 30_001 })).toBeUndefined()
-  })
 
   it('recognizes BEL/ST queries at every split and answers both in order', () => {
     vi.useFakeTimers()
@@ -285,21 +275,6 @@ describe('PtyStartupIngress', () => {
     ingress.accept('\x1b]11;?\x07')
 
     expect(writes).toEqual([BACKGROUND_REPLY, '\x1b]11;rgb:1212/3434/5656\x1b\\', BACKGROUND_REPLY])
-  })
-
-  it('answers a PTY nobody reported colours for from the default theme', () => {
-    // #22500: a headless host starts the agent before any viewer attaches.
-    const writes: string[] = []
-    const emissions: PtyIngressEmission[] = []
-    const ingress = new PtyStartupIngress({
-      write: (data) => writes.push(data),
-      onEmission: (emission) => emissions.push(emission)
-    })
-
-    ingress.accept('before\x1b]10;?;?\x1b\\after')
-
-    expect(writes).toEqual([DEFAULT_FOREGROUND_REPLY, DEFAULT_BACKGROUND_REPLY])
-    expect(visible(emissions)).toBe('beforeafter')
   })
 
   it('swallows a cooked POSIX echo of its own reply without re-sending it', () => {

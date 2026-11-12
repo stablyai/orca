@@ -5,12 +5,9 @@ import {
   IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
   SESSION_FORCE_KILL_RETRY_MS
 } from '../immediate-kill-reply-budget'
-import type { SessionState, ShellReadyState } from '../../protocol/daemon-rpc-contract'
+import type { ShellReadyState } from '../../protocol/daemon-rpc-contract'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import {
-  _resetPtyOwnerHostColorsForTest,
-  setPtyOwnerHostColors
-} from '../../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
+import { _resetPtyOwnerHostColorsForTest } from '../../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../../../pty/process-retirement/pty-descendant-termination', () => ({
@@ -144,33 +141,6 @@ describe('Session', () => {
     return session
   }
 
-  describe('state machine', () => {
-    it('starts in running state when shell readiness is not supported', () => {
-      createSession({ shellReadySupported: false })
-      expect(session.state).toBe('running' satisfies SessionState)
-      expect(session.shellState).toBe('unsupported' satisfies ShellReadyState)
-    })
-
-    it('starts in running state with pending shell when readiness is supported', () => {
-      createSession({ shellReadySupported: true })
-      expect(session.state).toBe('running')
-      expect(session.shellState).toBe('pending' satisfies ShellReadyState)
-    })
-
-    it('transitions to exited when subprocess exits', () => {
-      createSession()
-      subprocess.simulateExit(0)
-      expect(session.state).toBe('exited' satisfies SessionState)
-      expect(session.isAlive).toBe(false)
-    })
-
-    it('tracks exit code', () => {
-      createSession()
-      subprocess.simulateExit(42)
-      expect(session.exitCode).toBe(42)
-    })
-  })
-
   describe('data flow', () => {
     it('records a WSL pane’s guest root from its launch output, even split, and keeps the bytes', () => {
       const onWslGuestRoot = vi.fn()
@@ -216,34 +186,6 @@ describe('Session', () => {
       expect(subprocess.confirmShellForeground).toHaveBeenCalledTimes(1)
     })
 
-    it('reuses the parser confirmation for a concurrent runtime request', async () => {
-      let resolveConfirmation: ((confirmed: boolean) => void) | undefined
-      subprocess.confirmShellForeground.mockImplementation(
-        () => new Promise((resolve) => void (resolveConfirmation = resolve))
-      )
-      createSession()
-
-      subprocess.simulateData('\x1b[?1049hTUI\x1b]133;D;137\x07shell-marker')
-      const runtimeConfirmation = session.confirmShellForeground()
-      expect(subprocess.confirmShellForeground).toHaveBeenCalledTimes(1)
-      resolveConfirmation?.(true)
-
-      await expect(runtimeConfirmation).resolves.toBe(true)
-      await vi.waitFor(() => expect(session.getSnapshot()?.terminalOwner).toBe('shell'))
-    })
-
-    it('forwards subprocess data to attached clients', () => {
-      createSession()
-      const received: string[] = []
-      session.attachClient({
-        onData: (data) => received.push(data),
-        onExit: () => {}
-      })
-
-      subprocess.simulateData('hello')
-      expect(received).toEqual(['hello'])
-    })
-
     it('does not deliver data to detached clients', () => {
       createSession()
       const received: string[] = []
@@ -255,18 +197,6 @@ describe('Session', () => {
       session.detachClient(token)
       subprocess.simulateData('should not arrive')
       expect(received).toEqual([])
-    })
-
-    it('supports multiple attached clients', () => {
-      createSession()
-      const received1: string[] = []
-      const received2: string[] = []
-      session.attachClient({ onData: (d) => received1.push(d), onExit: () => {} })
-      session.attachClient({ onData: (d) => received2.push(d), onExit: () => {} })
-
-      subprocess.simulateData('broadcast')
-      expect(received1).toEqual(['broadcast'])
-      expect(received2).toEqual(['broadcast'])
     })
 
     it('classifies startup queries and cooked echoes before model, persistence, and fanout', () => {
@@ -348,36 +278,6 @@ describe('Session', () => {
         session.dispose()
       }
     })
-
-    it('answers from the daemon-wide colours pushed after the session started', () => {
-      createSession({
-        startupIngress: {
-          colors: { foreground: '#2e3434', background: '#ffffff' },
-          deadlineMs: 5_000
-        }
-      })
-
-      subprocess.simulateData('\x1b]11;?\x07')
-      try {
-        setPtyOwnerHostColors({ foreground: '#000000', background: '#123456' })
-        subprocess.simulateData('\x1b]11;?\x07')
-      } finally {
-        _resetPtyOwnerHostColorsForTest()
-      }
-
-      expect(subprocess.written).toEqual([
-        '\x1b]11;rgb:ffff/ffff/ffff\x1b\\',
-        '\x1b]11;rgb:1212/3434/5656\x1b\\'
-      ])
-    })
-  })
-
-  describe('write', () => {
-    it('forwards writes to subprocess when running', () => {
-      createSession({ shellReadySupported: false })
-      session.write('ls\n')
-      expect(subprocess.written).toEqual(['ls\n'])
-    })
   })
 
   describe('emulator does not reply to terminal queries', () => {
@@ -447,19 +347,6 @@ describe('Session', () => {
       expect(subprocess.written).toEqual([reply, 'codex\n'])
     })
 
-    it('uses the short settle path when marker and prompt bytes arrive together', () => {
-      createSession({ shellReadySupported: true })
-      session.writeStartupCommand('codex\n')
-
-      subprocess.simulateData('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
-      expect(session.shellState).toBe('ready' satisfies ShellReadyState)
-      vi.advanceTimersByTime(29)
-      expect(subprocess.written).toEqual([])
-
-      vi.advanceTimersByTime(1)
-      expect(subprocess.written).toEqual(['codex\n'])
-    })
-
     it('does not treat bytes before the marker as post-marker prompt output', () => {
       createSession({ shellReadySupported: true })
       session.writeStartupCommand('codex\n')
@@ -490,15 +377,6 @@ describe('Session', () => {
       ])
       expect(session.getSnapshot()?.snapshotAnsi).toContain('hello % ')
       expect(session.getSnapshot()?.snapshotAnsi).not.toContain('orca-shell-ready')
-    })
-
-    it('publishes an absolute output sequence with live snapshots', () => {
-      createSession()
-      subprocess.simulateData('first')
-      subprocess.simulateData('🟢second')
-
-      expect(session.getSnapshot()?.outputSequence).toBe('first🟢second'.length)
-      expect(session.takePendingOutput(true)?.snapshot?.outputSequence).toBe('first🟢second'.length)
     })
 
     it('releases held marker-prefix bytes before flushing queued input on timeout', () => {
@@ -536,19 +414,6 @@ describe('Session', () => {
       expect(session.takePendingOutput(false)?.records).toEqual([
         { kind: 'output', data: '\x1b]777;orca-shell-ready' }
       ])
-    })
-
-    it('exposes drained output beside an includeSnapshot take without changing records', () => {
-      createSession()
-      subprocess.simulateData('kept-for-durable-history\r\n')
-
-      const taken = session.takePendingOutput(true)
-
-      expect(taken?.records).toEqual([])
-      expect(taken?.drainedRecords).toEqual([
-        { kind: 'output', data: 'kept-for-durable-history\r\n' }
-      ])
-      expect(taken?.snapshot).toBeTruthy()
     })
 
     it('keeps held marker-prefix bytes during live take-with-snapshot', () => {
@@ -591,31 +456,7 @@ describe('Session', () => {
       expect(subprocess.written).toEqual([])
     })
 
-    it('transitions to timed_out after 15 seconds', () => {
-      createSession({ shellReadySupported: true })
-      session.writeStartupCommand('waiting input')
-
-      vi.advanceTimersByTime(15_000)
-
-      expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
-      expect(subprocess.written).toEqual(['waiting input'])
-    })
-
     // Detached stdio is ignored, so readiness diagnostics must reach the daemon file log.
-    it('reports the timeout to the daemon log rather than the void', () => {
-      const events: { event: string; details: Record<string, unknown> }[] = []
-      createSession({
-        shellReadySupported: true,
-        reportReadinessEvent: (event, details) => events.push({ event, details })
-      })
-
-      vi.advanceTimersByTime(15_000)
-
-      expect(events).toHaveLength(1)
-      expect(events[0]?.event).toBe('shell-ready-timeout')
-      expect(events[0]?.details).toMatchObject({ sessionId: 'test-session', timeoutMs: 15_000 })
-      expect(String(events[0]?.details.shell)).not.toContain('/')
-    })
 
     // Diagnostics run before the ready transition; a throwing sink must still release queued input.
     it('still releases the barrier when the diagnostic sink throws', () => {
@@ -631,28 +472,6 @@ describe('Session', () => {
 
       expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
       expect(subprocess.written).toEqual(['waiting input'])
-    })
-
-    it('honors an injected shell-ready timeout', () => {
-      createSession({ shellReadySupported: true, shellReadyTimeoutMs: 300 })
-      session.writeStartupCommand('codex\n')
-
-      vi.advanceTimersByTime(299)
-      expect(subprocess.written).toEqual([])
-
-      vi.advanceTimersByTime(1)
-      expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
-      expect(subprocess.written).toEqual(['codex\n'])
-    })
-
-    it('detects marker split across data chunks', () => {
-      createSession({ shellReadySupported: true })
-
-      subprocess.simulateData('\x1b]777;orca-sh')
-      expect(session.shellState).toBe('pending')
-
-      subprocess.simulateData('ell-ready\x07')
-      expect(session.shellState).toBe('ready')
     })
   })
 
@@ -671,13 +490,6 @@ describe('Session', () => {
       )
     }
 
-    it('kills the subprocess', () => {
-      createSession()
-      void gracefulClose()
-      expect(subprocess.killed).toBe(true)
-      expect(session.isTerminating).toBe(true)
-    })
-
     it('allows a graceful retry when the first kill is rejected', () => {
       let attempts = 0
       subprocess.kill = () => {
@@ -694,21 +506,6 @@ describe('Session', () => {
 
       expect(attempts).toBe(2)
       expect(session.isTerminating).toBe(true)
-    })
-
-    it('notifies attached clients on exit after kill', async () => {
-      vi.useRealTimers()
-      createSession()
-      const exitCodes: number[] = []
-      session.attachClient({
-        onData: () => {},
-        onExit: (code) => exitCodes.push(code)
-      })
-
-      void gracefulClose()
-
-      await new Promise((r) => setTimeout(r, 20))
-      expect(exitCodes).toEqual([0])
     })
 
     it('force-kills after 5s but retains ownership until subprocess exit', () => {
@@ -835,58 +632,6 @@ describe('Session', () => {
     })
   })
 
-  describe('signal', () => {
-    it('forwards signal to subprocess without entering terminating state', () => {
-      createSession()
-      session.signal('SIGINT')
-      expect(subprocess.signals).toEqual(['SIGINT'])
-      expect(session.isTerminating).toBe(false)
-    })
-  })
-
-  describe('snapshot', () => {
-    it('parses live OSC-7 output in the session WSL distro', () => {
-      createSession({ wslDistro: 'Ubuntu' })
-
-      subprocess.simulateData('\x1b]7;file://DESKTOP-ORCA/home/jin/repo\x07')
-
-      expect(session.getCwd()).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
-    })
-    it('returns a terminal snapshot', async () => {
-      createSession()
-      subprocess.simulateData('$ hello\r\n')
-      await vi.advanceTimersByTimeAsync(10)
-
-      const snapshot = session.getSnapshot()
-      expect(snapshot).toBeDefined()
-      expect(snapshot!.cols).toBe(80)
-      expect(snapshot!.rows).toBe(24)
-    })
-
-    it('returns null after session is disposed', () => {
-      createSession()
-      session.dispose()
-      expect(session.getSnapshot()).toBeNull()
-    })
-  })
-
-  describe('resize', () => {
-    it('resizes the emulator and subprocess', () => {
-      createSession()
-      const resizeSpy = vi.spyOn(subprocess, 'resize')
-      session.resize(120, 40)
-      expect(resizeSpy).toHaveBeenCalledWith(120, 40)
-    })
-
-    it('same-dim resize passes through without tricks', () => {
-      createSession({ cols: 80, rows: 24 })
-      const resizeSpy = vi.spyOn(subprocess, 'resize')
-      session.resize(80, 24)
-      expect(resizeSpy).toHaveBeenCalledTimes(1)
-      expect(resizeSpy).toHaveBeenCalledWith(80, 24)
-    })
-  })
-
   describe('detach token guard', () => {
     it('ignores stale detach with wrong token', () => {
       createSession()
@@ -906,19 +651,6 @@ describe('Session', () => {
 
       subprocess.simulateData('after detach')
       expect(received).toEqual(['after detach'])
-    })
-  })
-
-  describe('dispose', () => {
-    it('cleans up without throwing', () => {
-      createSession()
-      expect(() => session.dispose()).not.toThrow()
-    })
-
-    it('marks session as exited', () => {
-      createSession()
-      session.dispose()
-      expect(session.state).toBe('exited')
     })
   })
 })

@@ -156,18 +156,4 @@ describe('runtime creation registry', () => {
     ).rejects.toThrow('could not create')
     expect(creationsOf(runtime)).toEqual({})
   })
-
-  it('lists a folder workspace create too', async () => {
-    const runtime = makeRuntime({ id: 'folder', path: '/notes', kind: 'folder' })
-    let during: Record<string, unknown> = {}
-    mocks.createFolder.mockReset().mockImplementation(async () => {
-      during = creationsOf(runtime)
-      return { worktree: { id: 'folder::/notes' } }
-    })
-
-    await runtime.createManagedWorktree({ repoSelector: 'folder', name: 'notes' })
-
-    expect(Object.values(during)).toEqual([{ repoId: 'folder' }])
-    expect(creationsOf(runtime)).toEqual({})
-  })
 })

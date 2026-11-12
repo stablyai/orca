@@ -3,6 +3,11 @@ const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'extension reload': {
+    'extension-id':
+      '--extension-id <id>   Installed unpacked extension ID; also accepted positionally',
+    path: '--path <folder>        Source folder of exactly one installed unpacked extension'
+  },
   'reference add': {
     url: '--url <url-or-jira-key> Full review/issue URL or Jira key; use positionals or repeated --url',
     'reference-site': '--reference-site <id> Jira site for bare keys; see orca jira connection'

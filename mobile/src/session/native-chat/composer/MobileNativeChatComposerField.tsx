@@ -15,6 +15,7 @@ export function MobileNativeChatComposerField({
   placeholder,
   ref,
   onKeyboardSubmit: _onKeyboardSubmit,
+  onWebPaste: _onWebPaste,
   ...props
 }: MobileNativeChatComposerFieldProps) {
   useMobileColorScheme()

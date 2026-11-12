@@ -4,10 +4,10 @@ import type {
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab
 } from '../../runtime-mobile-session-tab-contracts'
-import type { LayoutEditorView } from '../layout-editor-view'
-import { editorRowHost } from '../../session-tab-file-host'
-import type { DesktopLayoutView } from '../workspace-layout-beside'
-import { editorFileKey, editorTabFile } from '../workspace-layout-editor-tab-file'
+import type { LayoutEditorView } from '../editor-tabs/layout-editor-view'
+import { editorRowHost } from '../../workspace-session/session-tab-file-host'
+import type { DesktopLayoutView } from '../persistence/workspace-layout-beside'
+import { editorFileKey, editorTabFile } from '../editor-tabs/workspace-layout-editor-tab-file'
 import type { LayoutContentTab, LayoutEditorFile, WorkspaceLayout } from '../workspace-layout-model'
 
 export type EditorRowScope = {

@@ -17,8 +17,10 @@ import type { Repo } from '../../../../../shared/repo-types'
 import { ConversationTab } from './tab'
 
 const io = vi.hoisted(() => ({ rpc: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: io.rpc,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: io.rpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-cache', () => ({
   clearRuntimeCompatibilityCache: vi.fn(),
   clearRecentRuntimeCompatibilityFailure: vi.fn()
 }))

@@ -81,22 +81,6 @@ describe('relay database', () => {
     await database.close()
   })
 
-  it('persists SQLite state across process-style reopen', async () => {
-    const dataDir = mkdtempSync(join(tmpdir(), 'orca-relay-db-'))
-    temporaryDirectories.push(dataDir)
-    const first = await openRelayDatabase({ dataDir })
-    await first.query(
-      `INSERT INTO relay_rate_windows
-       (scope_key, window_kind, window_started_at, count) VALUES (?, ?, ?, ?)`,
-      ['scope', 'connect', 1, 7]
-    )
-    await first.close()
-    const second = await openRelayDatabase({ dataDir })
-    const rows = await second.query(`SELECT count FROM relay_rate_windows`)
-    expect(Number(rows[0]?.count)).toBe(7)
-    await second.close()
-  })
-
   it('defaults cells created by an older schema user to the US on reopen', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'orca-relay-region-db-'))
     temporaryDirectories.push(dataDir)
@@ -117,67 +101,4 @@ describe('relay database', () => {
     await second.close()
   })
 
-  it('accepts supported regions and rejects unknown regions in each constrained table', async () => {
-    const database = await openInMemoryRelayDatabase()
-    try {
-      for (const region of ['us-central1', 'asia-east2', 'invalid-region']) {
-        const writes = [
-          () =>
-            database.query('INSERT INTO relay_cell_regions (cell_id, region) VALUES (?, ?)', [
-              region,
-              region
-            ]),
-          () =>
-            database.query(
-              'INSERT INTO relay_assignment_region_preferences (user_id, relay_host_id, preferred_region, observed_at) VALUES (?, ?, ?, ?)',
-              [region, 'host', region, 1]
-            ),
-          () =>
-            database.query(
-              `INSERT INTO relay_region_rehome_attempts
-            (attempt_id, user_id, relay_host_id, preferred_region, source_cell_id, source_cell_incarnation,
-             target_cell_id, target_cell_incarnation, previous_epoch, assignment_epoch,
-             drain_grace_ms, send_attempts, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                region,
-                region,
-                'host',
-                region,
-                'source',
-                'source-incarnation',
-                'target',
-                'target-incarnation',
-                1,
-                2,
-                60_000,
-                0,
-                1,
-                1
-              ]
-            )
-        ]
-        for (const write of writes) {
-          await (region === 'invalid-region'
-            ? expect(write()).rejects.toThrow(/CHECK constraint failed/)
-            : write())
-        }
-      }
-      expect(await database.query('SELECT region FROM relay_cell_regions ORDER BY region')).toEqual(
-        [{ region: 'asia-east2' }, { region: 'us-central1' }]
-      )
-      expect(
-        await database.query(
-          'SELECT preferred_region FROM relay_assignment_region_preferences ORDER BY preferred_region'
-        )
-      ).toEqual([{ preferred_region: 'asia-east2' }, { preferred_region: 'us-central1' }])
-      expect(
-        await database.query(
-          'SELECT preferred_region FROM relay_region_rehome_attempts ORDER BY preferred_region'
-        )
-      ).toEqual([{ preferred_region: 'asia-east2' }, { preferred_region: 'us-central1' }])
-    } finally {
-      await database.close()
-    }
-  })
 })

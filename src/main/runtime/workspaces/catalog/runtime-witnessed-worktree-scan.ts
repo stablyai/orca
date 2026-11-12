@@ -7,7 +7,7 @@ import {
 } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 
 export type WitnessedRuntimeWorktreeScan = RuntimeWorktreeScanResult & {

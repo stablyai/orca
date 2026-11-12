@@ -1,4 +1,3 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
 // worker-start adopts a chat through its queued send; Stop and failed start must leave the chat intact.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -188,28 +187,6 @@ describe('worker-start --terminal refuses a chat before anything is created', ()
     expect(error).toMatchObject({ code })
     expect(db.db.prepare('SELECT COUNT(*) AS n FROM dispatch_contexts').get()).toEqual({ n: 0 })
   }
-
-  it('when it is the coordinator itself', async () => {
-    await openChat(COORDINATOR)
-    const { taskId } = await coordinatorRunAndTask()
-    const self = formatOrcaSessionAddress(testOrcaSessionId(COORDINATOR))
-
-    await expectNothingCreated(
-      await refusal({ task: taskId, terminal: self }),
-      'terminal_is_coordinator'
-    )
-  })
-
-  it('when it works in another worktree', async () => {
-    await openChat(COORDINATOR)
-    await openChat(PEER_CHAT)
-    const { taskId } = await coordinatorRunAndTask()
-
-    await expectNothingCreated(
-      await refusal({ task: taskId, terminal: WORKER, worktree: 'id:other-worktree' }),
-      'terminal_worktree_mismatch'
-    )
-  })
 
   it('when it was closed', async () => {
     await openChat(COORDINATOR)

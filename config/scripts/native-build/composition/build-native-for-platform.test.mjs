@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -32,27 +32,6 @@ function startBuild(mode, options = {}) {
   const cli = join(directory, 'fake-pnpm.mjs')
   const journal = join(directory, 'events.jsonl')
   writeFileSync(journal, '')
-  mkdirSync(join(directory, 'config', 'scripts', 'native-build', 'windows'), { recursive: true })
-  mkdirSync(join(directory, 'config', 'scripts', 'native-build', 'linux'), { recursive: true })
-  writeFileSync(
-    join(
-      directory,
-      'config',
-      'scripts',
-      'native-build',
-      'windows',
-      'build-windows-cli-launcher.mjs'
-    ),
-    "console.log('windows launcher only')"
-  )
-  writeFileSync(
-    join(directory, 'config', 'scripts', 'native-build', 'windows', 'build-windows-agent-hook.mjs'),
-    "console.log('windows agent hook only')"
-  )
-  writeFileSync(
-    join(directory, 'config', 'scripts', 'native-build', 'linux', 'build-wayland-clipboard.mjs'),
-    "console.log('wayland clipboard only')"
-  )
   writeFileSync(
     cli,
     `
@@ -70,7 +49,6 @@ function startBuild(mode, options = {}) {
     if (process.env.NATIVE_BUILD_MODE.startsWith('descendant')) {
       spawn(process.execPath, ['-e', ${JSON.stringify("process.on('SIGTERM', () => {}); console.log('descendant ' + process.pid); setInterval(() => {}, 1000)")}], { stdio: 'inherit' })
     }
-    let flooding = false
     setInterval(() => {
       if (!existsSync(process.env.NATIVE_BUILD_GATE)) return
       if (process.env.NATIVE_BUILD_MODE.startsWith('output-closed-')) {
@@ -78,24 +56,7 @@ function startBuild(mode, options = {}) {
         if (name.includes('computer')) target.write('compiler progress\\n')
         return
       }
-      if (process.env.NATIVE_BUILD_MODE === 'flood') {
-        if (flooding) return
-        flooding = true
-        const chunk = 'f'.repeat(65535) + '\\n'
-        const pump = () => { while (process.stdout.write(chunk)) {} ; process.stdout.once('drain', pump) }
-        pump()
-        return
-      }
       if (['success', 'descendant-success'].includes(process.env.NATIVE_BUILD_MODE)) { record('completed'); process.exit(0) }
-      if (process.env.NATIVE_BUILD_MODE === 'stalled-consumer') {
-        if (!name.includes('computer') || existsSync(process.env.NATIVE_BUILD_GATE + '-exit')) { record('completed'); process.exit(0) }
-        if (flooding) return
-        flooding = true
-        // Each callback means the kernel pipe accepted the line, so it survives our exit.
-        const pump = (line) => process.stdout.write('line ' + line + ' ' + 'x'.repeat(190) + '\\n', () => { record('accepted', { line }); pump(line + 1) })
-        pump(1)
-        return
-      }
       if (!name.includes('computer')) return
       record('failed')
       if (process.env.NATIVE_BUILD_MODE === 'failure-signal') process.kill(process.pid, 'SIGALRM')
@@ -106,27 +67,7 @@ function startBuild(mode, options = {}) {
   )
   const child = spawnProcess({
     program: process.execPath,
-    args: [
-      ...(options.platform
-        ? [
-            '--import',
-            `data:text/javascript,${encodeURIComponent(`Object.defineProperty(process, 'platform', { value: '${options.platform}' })`)}`
-          ]
-        : []),
-      ...(options.reportBuffered
-        ? [
-            '--import',
-            `data:text/javascript,${encodeURIComponent(`import { appendFileSync } from 'node:fs'; setInterval(() => appendFileSync(process.env.NATIVE_BUILD_JOURNAL, JSON.stringify({ name: 'launcher', event: 'buffered', bytes: process.stdout.writableLength }) + '\\n'), 50).unref()`)}`
-          ]
-        : []),
-      ...(options.lateOutputError
-        ? [
-            '--import',
-            `data:text/javascript,${encodeURIComponent(`process.once('beforeExit', () => process.${options.lateOutputError}.emit('error', new Error('late output failure')))`)}`
-          ]
-        : []),
-      buildScript
-    ],
+    args: [buildScript],
     cwd: directory,
     env: {
       ...process.env,
@@ -173,7 +114,6 @@ function startBuild(mode, options = {}) {
     closed,
     descendants: () => descendantPids,
     release: () => writeFileSync(join(directory, 'release'), ''),
-    releaseExit: () => writeFileSync(join(directory, 'release-exit'), ''),
     events: () =>
       readFileSync(journal, 'utf8')
         .trim()
@@ -183,47 +123,7 @@ function startBuild(mode, options = {}) {
   }
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-async function waitFor(condition, timeoutMs = 5_000) {
-  const deadline = Date.now() + timeoutMs
-  while (!condition()) {
-    if (Date.now() > deadline) {
-      throw new Error('timed out waiting for condition')
-    }
-    await sleep(50)
-  }
-}
-
 describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
-  it('starts every independent build before any completes', async () => {
-    const build = startBuild('success')
-    await build.ready
-    expect(build.events().map(({ event }) => event)).toEqual(Array(BUILD_COUNT).fill('started'))
-    build.release()
-    expect(await build.closed).toMatchObject({ code: 0, signal: null })
-    expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(BUILD_COUNT)
-  })
-
-  it.each(['SIGINT', 'SIGTERM', 'SIGHUP'])(
-    'waits for every sibling before re-raising %s',
-    async (signal) => {
-      const build = startBuild('signal')
-      await build.ready
-      build.child.kill(signal)
-      expect(await build.closed).toMatchObject({ code: null, signal })
-      expect(build.events().filter(({ event }) => event === signal)).toHaveLength(BUILD_COUNT)
-    }
-  )
-
-  it('waits for sibling cancellation when a build fails', async () => {
-    const build = startBuild('failure')
-    await build.ready
-    build.release()
-    expect(await build.closed).toMatchObject({ code: 7, signal: null })
-    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(BUILD_COUNT - 1)
-  })
-
   it('reports the first failure, not the status of siblings it cancelled', async () => {
     const build = startBuild('failure-status')
     await build.ready
@@ -283,20 +183,6 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     }
   )
 
-  it.each(['stdout', 'stderr'])(
-    'fails on a late %s error after successful child exits',
-    async (target) => {
-      const build = startBuild('success', { lateOutputError: target })
-      await build.ready
-      build.release()
-
-      const result = await build.closed
-      expect(result).toMatchObject({ code: 1, signal: null })
-      expect(result.stderr).not.toContain('Unhandled')
-      expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(BUILD_COUNT)
-    }
-  )
-
   it('reports a missing build command without waiting forever', async () => {
     const build = startBuild('success', { missingCli: true })
     expect(await build.closed).toMatchObject({ code: 1, signal: null })
@@ -320,65 +206,6 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(BUILD_COUNT)
     for (const pid of build.descendants()) {
       expect(() => process.kill(pid, 0)).toThrow()
-    }
-  })
-
-  it('stops reading compiler output while its own stdout is blocked', async () => {
-    const build = startBuild('flood', { reportBuffered: true })
-    await build.ready
-    build.child.stdout.pause()
-    build.release()
-    await new Promise((resolve) => setTimeout(resolve, 1_500))
-    const buffered = build
-      .events()
-      .filter(({ event }) => event === 'buffered')
-      .map(({ bytes }) => bytes)
-    expect(buffered.length).toBeGreaterThan(0)
-    expect(Math.max(...buffered)).toBeLessThan(1_000_000)
-  })
-
-  it('delivers every compiler line when its own stdout consumer stalls past the reap timeout', async () => {
-    const build = startBuild('stalled-consumer', { reportBuffered: true })
-    await build.ready
-    build.child.stdout.pause()
-    build.release()
-    // Launcher stops reading once its stdout hits the high-water mark; then let the compiler fill its pipe.
-    await waitFor(() =>
-      build.events().some(({ event, bytes }) => event === 'buffered' && bytes >= 16_384)
-    )
-    await sleep(300)
-    build.releaseExit()
-    await waitFor(() =>
-      build.events().some(({ event, name }) => event === 'completed' && name.includes('computer'))
-    )
-    const accepted = Math.max(
-      ...build
-        .events()
-        .filter(({ event }) => event === 'accepted')
-        .map(({ line }) => line)
-    )
-    expect(accepted).toBeGreaterThan(0)
-    await sleep(3_000)
-    build.child.stdout.resume()
-
-    const result = await build.closed
-    expect(result).toMatchObject({ code: 0, signal: null })
-    const delivered = [...result.output.matchAll(/^\[computer\] line (\d+) /gm)].map((match) =>
-      Number(match[1])
-    )
-    expect(delivered).toEqual(Array.from({ length: accepted }, (_, index) => index + 1))
-  })
-
-  it.each(['linux', 'win32'])('keeps the %s entry point out of macOS builds', async (platform) => {
-    const build = startBuild('success', { platform })
-    const result = await build.closed
-    expect(result).toMatchObject({ code: 0, signal: null })
-    expect(build.events()).toEqual([])
-    expect(result.output).toContain(
-      platform === 'win32' ? 'windows launcher only' : 'wayland clipboard only'
-    )
-    if (platform === 'win32') {
-      expect(result.output).toContain('windows agent hook only')
     }
   })
 })

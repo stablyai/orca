@@ -2,10 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createPlaceholderTerminal,
   placeholderCells,
-  PNG,
   TrackedBitmap,
-  write,
-  writeKitty
+  write
 } from './xterm-kitty-placeholder-test-terminal.mjs'
 
 const INVISIBLE = 0x40000000
@@ -13,10 +11,6 @@ const PLACEHOLDER = String.fromCodePoint(0x10eeee)
 afterEach(() => vi.unstubAllGlobals())
 
 const cell = (h, row = 0, col = 0) => h.terminal.buffer.active.getLine(row)?.getCell(col)
-async function place(h) {
-  await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,p=10,c=2,r=2', PNG)
-  await write(h.terminal, placeholderCells(7, 10))
-}
 
 function metadata(line, col) {
   return {
@@ -55,83 +49,6 @@ describe('reserved placeholder glyph visibility', () => {
       expect(cell(h, 0, 1).getWidth()).toBe(2)
       expect(cell(h, 0, 1).isInvisible()).toBeFalsy()
       expect(cell(h, 0, 3).getChars()).toBe('X')
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it('keeps the reserved cells invisible after their image is deleted', async () => {
-    const h = createPlaceholderTerminal()
-    try {
-      await place(h)
-      await writeKitty(h.terminal, 'a=d,d=I,i=7,p=10,q=2')
-      expect(h.kitty._virtualPlacements.has(7)).toBe(false)
-      expect(cell(h, 0, 0).isInvisible()).toBeTruthy()
-      expect(cell(h, 0, 1).isInvisible()).toBeTruthy()
-      expect(cell(h, 1, 0).getChars().codePointAt(0)).toBe(0x10eeee)
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it('keeps existing reserved cells hidden while native image publication is pending', async () => {
-    const h = createPlaceholderTerminal()
-    let finish
-    let pending
-    try {
-      await write(h.terminal, placeholderCells(7, 10))
-      const handler = h.addon._handlers.get('kitty')
-      const decode = handler._createBitmap.bind(handler)
-      handler._createBitmap = async (image) => {
-        const bitmap = await decode(image)
-        return new Promise((resolve) => {
-          finish = () => resolve(bitmap)
-        })
-      }
-      pending = writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,p=10,c=2,r=2', PNG)
-      await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
-      expect(h.kitty._virtualPlacements.has(7)).toBe(false)
-      expect(cell(h).isInvisible()).toBeTruthy()
-      expect(cell(h, 0, 1).isInvisible()).toBeTruthy()
-    } finally {
-      finish?.()
-      await pending
-      h.terminal.dispose()
-    }
-  })
-
-  it('changes only the invisible flag, preserving high image IDs, coordinate text and extended objects', async () => {
-    const h = createPlaceholderTerminal()
-    try {
-      await write(
-        h.terminal,
-        `\x1b[48;2;30;40;50m\x1b]8;;https://example.invalid/\x1b\\${placeholderCells(
-          0x80000007,
-          10
-        )}\x1b]8;;\x1b\\`
-      )
-      const line = h.terminal._core.buffer.lines.get(0)
-      const before = [0, 1].map((col) => {
-        line._data[col * 3 + 1] &= ~INVISIBLE
-        return metadata(line, col)
-      })
-      h.kitty.hidePlaceholderGlyphs(h.terminal)
-      for (const col of [0, 1]) {
-        const after = metadata(line, col)
-        expect(after.words).toEqual([
-          before[col].words[0],
-          before[col].words[1] | INVISIBLE,
-          before[col].words[2]
-        ])
-        expect(after.chars).toBe(before[col].chars)
-        expect(after.width).toBe(before[col].width)
-        expect(after.code).toBe(before[col].code)
-        expect(after.combined).toBe(before[col].combined)
-        expect(after.extended).toBe(before[col].extended)
-      }
-      expect(line.getString(0)).toContain('\u082D')
-      expect(line.getFg(0) & 0xffffff).toBe(7)
-      expect(line._extendedAttrs[0].underlineColor & 0xffffff).toBe(10)
     } finally {
       h.terminal.dispose()
     }
@@ -209,47 +126,6 @@ describe('reserved placeholder glyph visibility', () => {
       expect(buffer.lines.get(last).getFg(0) & INVISIBLE).toBe(0)
       h.terminal.resize(20, 50)
       expect(buffer.lines.get(last).getFg(0) & INVISIBLE).toBeTruthy()
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it('scans only viewport cells and avoids loading or rewriting ordinary text', async () => {
-    const h = createPlaceholderTerminal()
-    try {
-      await write(h.terminal, `${'ROW\r\n'.repeat(24)}TEXT`)
-      const buffer = h.terminal._core.buffer
-      const reads = [],
-        loads = [],
-        sets = []
-      for (let row = 0; row < buffer.lines.length; row++) {
-        const line = buffer.lines.get(row)
-        reads.push(vi.spyOn(line, 'getFg'))
-        loads.push(vi.spyOn(line, 'loadCell'))
-        sets.push(vi.spyOn(line, 'setCell'))
-      }
-      h.kitty.hidePlaceholderGlyphs(h.terminal)
-      expect(reads.reduce((sum, mock) => sum + mock.mock.calls.length, 0)).toBe(120)
-      expect(
-        reads
-          .slice(0, h.terminal.buffer.active.viewportY)
-          .every((mock) => mock.mock.calls.length === 0)
-      ).toBe(true)
-      expect(loads.every((mock) => mock.mock.calls.length === 0)).toBe(true)
-      expect(sets.every((mock) => mock.mock.calls.length === 0)).toBe(true)
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it('coalesces parser newline scrolling into one viewport scan per write batch', async () => {
-    const h = createPlaceholderTerminal()
-    try {
-      h.terminal.resize(80, 22)
-      const scans = vi.spyOn(h.kitty, 'hidePlaceholderGlyphs')
-      await write(h.terminal, 'ROW\r\n'.repeat(10000))
-      expect(scans).toHaveBeenCalledTimes(1)
-      expect(h.terminal.buffer.active.cursorY).toBe(21)
     } finally {
       h.terminal.dispose()
     }

@@ -23,7 +23,7 @@ const webviewRef = { current: document.createElement('webview') as Electron.Webv
 beforeEach(() => {
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { browserPasswords: { fillLogin: fill } }
+    value: { browserPasswords: { fillLogin: fill }, browser: { onGuestEscape: () => () => {} } }
   })
   focusedField = {
     browserPageId: 'page',

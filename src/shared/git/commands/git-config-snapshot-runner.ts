@@ -1,6 +1,10 @@
 type GitCommandRunner = (args: string[]) => Promise<{ stdout: string }>
 
-type GitConfigSnapshot = Map<string, string[]>
+export type GitConfigSnapshot = Map<string, string[]>
+
+export async function readGitConfigSnapshot(runGit: GitCommandRunner): Promise<GitConfigSnapshot> {
+  return parseGitConfigListSnapshot((await runGit(['config', '--list', '-z'])).stdout)
+}
 
 // Mirror config --get exit 1 for absent keys; empty success changes caller behavior.
 export class GitConfigSnapshotKeyNotFoundError extends Error {
@@ -54,9 +58,9 @@ export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitComm
     if (!snapshotPromise) {
       // Publish the shared promise before any await so parallel resolvers coalesce.
       try {
-        snapshotPromise = runGit(['config', '--list', '-z'])
-          .then(({ stdout }) => {
-            snapshot = parseGitConfigListSnapshot(stdout)
+        snapshotPromise = readGitConfigSnapshot(runGit)
+          .then((loaded) => {
+            snapshot = loaded
             return snapshot
           })
           .catch(() => {

@@ -1,6 +1,6 @@
 import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environments/orchestration-environment-transport'
 import type { RuntimeConstructionDependencies } from '../runtime/construction/runtime-construction-dependencies'
-import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 
 type PairedEnvironmentRuntimeOptions = Required<
   Pick<RuntimeConstructionDependencies, 'orchestrationEnvironmentTransport' | 'getPairedDeviceName'>

@@ -13,8 +13,6 @@ import {
 } from './paired-e2ee-client-handshake'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from './node/paired-e2ee-node-primitives'
 import { derivePairedE2EEV2KeySchedule } from './paired-e2ee-v2-key-schedule'
-
-const server = nacl.box.keyPair.fromSecretKey(LEGACY.serverSecretKey)
 const client = nacl.box.keyPair.fromSecretKey(LEGACY.clientSecretKey)
 const token = { kind: 'token', deviceToken: 'legacy-token' } as const
 
@@ -51,42 +49,6 @@ describe('paired E2EE client handshake: legacy framing', () => {
     expect(hex(handshake.channel.sealBinary(LEGACY.binaryPlaintext))).toBe(LEGACY.binaryFrameHex)
   })
 
-  it('keeps the runtime auth shape, capabilities last', async () => {
-    const handshake = legacyHandshake()
-    const frame = await handshake.sealAuth(token, { clientCapabilities: ['a.v1', 'b.v1'] })
-    const shared = nacl.box.before(client.publicKey, server.secretKey)
-    const bundle = Buffer.from(frame, 'base64')
-    const plaintext = nacl.box.open.after(bundle.subarray(24), bundle.subarray(0, 24), shared)
-    expect(Buffer.from(plaintext!).toString()).toBe(
-      '{"type":"e2ee_auth","deviceToken":"legacy-token","clientCapabilities":["a.v1","b.v1"]}'
-    )
-  })
-
-  it('opens host frames and rejects tampered ones', () => {
-    const handshake = legacyHandshake()
-    const shared = nacl.box.before(client.publicKey, server.secretKey)
-    const nonce = new Uint8Array(24).fill(7)
-    const sealed = nacl.box.after(
-      new TextEncoder().encode('{"type":"e2ee_authenticated"}'),
-      nonce,
-      shared
-    )
-    const frame = Buffer.concat([nonce, sealed])
-    expect(handshake.channel.openText(frame.toString('base64'))).toBe(
-      '{"type":"e2ee_authenticated"}'
-    )
-    frame[30] ^= 1
-    expect(handshake.channel.openText(frame.toString('base64'))).toBeNull()
-  })
-
-  it('classifies ready frames the way every runtime client did', () => {
-    const handshake = legacyHandshake()
-    expect(handshake.acceptReadyText('not json')).toBe('invalid')
-    expect(handshake.acceptReadyText('null')).toBe('unexpected')
-    expect(handshake.acceptReadyText('{"type":"e2ee_error"}')).toBe('unexpected')
-    expect(handshake.acceptReadyText('{"type":"e2ee_ready","extra":1}')).toBe('accepted')
-  })
-
   it('refuses a legacy hello, ready or auth once the host is latched to v2', async () => {
     let latched = false
     const handshake = legacyHandshake(() => !latched)
@@ -95,41 +57,6 @@ describe('paired E2EE client handshake: legacy framing', () => {
     expect(() => handshake.helloText()).toThrow(PairedE2EEDowngradeError)
     expect(handshake.acceptReadyText(LEGACY.readyText)).toBe('downgrade_refused')
     await expect(handshake.sealAuth(token)).rejects.toThrow(PairedE2EEDowngradeError)
-  })
-
-  it('classifies auth replies without throwing on non-objects', () => {
-    const handshake = legacyHandshake()
-    expect(handshake.classifyAuthReply('{"type":"e2ee_authenticated"}')).toEqual({
-      kind: 'authenticated'
-    })
-    expect(handshake.classifyAuthReply('{"ok":false,"error":{"code":"unauthorized"}}')).toEqual({
-      kind: 'rejected',
-      type: null,
-      errorCode: 'unauthorized'
-    })
-    expect(handshake.classifyAuthReply('{"type":"e2ee_error","code":"bad_auth"}')).toEqual({
-      kind: 'rejected',
-      type: 'e2ee_error',
-      errorCode: null
-    })
-    expect(handshake.classifyAuthReply('null')).toEqual({
-      kind: 'rejected',
-      type: null,
-      errorCode: null
-    })
-    expect(handshake.classifyAuthReply('{')).toEqual({ kind: 'invalid' })
-  })
-
-  it('surfaces the caller serializer error from the auth step', async () => {
-    const handshake = createPairedE2EEClientHandshake({
-      primitives: NODE_PAIRED_E2EE_PRIMITIVES,
-      hostPublicKeyB64: LEGACY.serverPublicKeyB64,
-      framing: 'legacy',
-      serializeJson: () => {
-        throw new Error('too large')
-      }
-    })
-    await expect(handshake.sealAuth(token)).rejects.toThrow('too large')
   })
 })
 

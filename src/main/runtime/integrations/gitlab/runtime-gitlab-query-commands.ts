@@ -1,21 +1,29 @@
-import type { GitLabProjectRef, GitLabWorkItem, MRListState } from '../../../../shared/gitlab-types'
+import type {
+  GitLabMRInvolvement,
+  GitLabProjectRef,
+  GitLabWorkItem,
+  MRListState
+} from '../../../../shared/gitlab-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { diagnoseAuth, getRateLimit } from '../../../gitlab/gitlab-auth-and-rate-limit'
+import { diagnoseAuth, getRateLimit } from '../../../gitlab/requests/gitlab-auth-and-rate-limit'
 import {
   getWorkItemByProjectRef,
   listTodos,
   listWorkItems
-} from '../../../gitlab/work-item-queries'
-import { listAssignableUsers, listLabels } from '../../../gitlab/project-label-and-member-lookup'
-import { listIssues } from '../../../gitlab/issues'
-import { listMergeRequests } from '../../../gitlab/merge-request-list'
+} from '../../../gitlab/work-items/work-item-queries'
+import {
+  listAssignableUsers,
+  listLabels
+} from '../../../gitlab/projects/project-label-and-member-lookup'
+import { listIssues } from '../../../gitlab/issues/gitlab-issue-queries'
+import { listMergeRequests } from '../../../gitlab/merge-requests/merge-request-list'
 import {
   normalizeGitLabIssueListArgs,
   normalizeGitLabMRListState,
   normalizeGitLabPositiveInteger,
   type GitLabIssueListState
-} from '../../../gitlab/gitlab-preload-args'
-import { getWorkItemDetails } from '../../../gitlab/work-item-details'
+} from '../../../gitlab/requests/gitlab-preload-args'
+import { getWorkItemDetails } from '../../../gitlab/work-items/work-item-details'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
@@ -54,7 +62,8 @@ export class RuntimeGitLabQueryCommands {
     state?: MRListState,
     page?: number,
     perPage?: number,
-    query?: string
+    query?: string,
+    involvement?: GitLabMRInvolvement
   ): Promise<Awaited<ReturnType<typeof listMergeRequests>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return listMergeRequests(
@@ -65,7 +74,8 @@ export class RuntimeGitLabQueryCommands {
       repo.issueSourcePreference,
       query,
       getRepoRoutingConnectionId(repo),
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0] ?? {},
+      { involvement }
     )
   }
 
@@ -162,7 +172,8 @@ export class RuntimeGitLabQueryCommands {
     iid: number,
     type: 'issue' | 'mr',
     projectRef?: GitLabProjectRef | null,
-    includeReviewDetails?: boolean
+    includeReviewDetails?: boolean,
+    markViewerComments?: boolean
   ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getWorkItemDetails(
@@ -173,7 +184,7 @@ export class RuntimeGitLabQueryCommands {
       getRepoRoutingConnectionId(repo),
       projectRef,
       this.deps.getLocalGitArgs(repo)[0] ?? {},
-      { includeReviewDetails }
+      { includeReviewDetails, markViewerComments }
     )
   }
 

@@ -231,7 +231,7 @@ export function createPtyShellLaunchPlan(
   ) {
     addWslEnvKeys(env, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
   }
-  finalizeDaemonPtyEnvironment(env, opts.env)
+  finalizeDaemonPtyEnvironment(env, opts.env, opts.envToDelete)
 
   return {
     shellPath,

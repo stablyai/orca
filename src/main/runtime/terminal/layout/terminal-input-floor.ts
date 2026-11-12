@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithOnPtyExit } from '../lifecycle/pty-exit-lifecycle'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
-import type { DriverState } from '../../orca-runtime-core'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 import {
   isDrivingInputKind,
   type TerminalInputKind
@@ -158,11 +158,11 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
   }
 
-  getDriver(ptyId: string): DriverState {
+  getDriver(ptyId: string): RuntimeTerminalDriverState {
     return this.terminalDrivers.get(ptyId)
   }
 
-  protected setDriver(ptyId: string, next: DriverState): void {
+  protected setDriver(ptyId: string, next: RuntimeTerminalDriverState): void {
     this.terminalDrivers.set(ptyId, next)
   }
 

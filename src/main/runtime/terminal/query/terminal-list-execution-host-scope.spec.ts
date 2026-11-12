@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import '../../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { type ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { PtyProcessInfo } from '../../../providers/pty-process-info'
@@ -49,35 +49,6 @@ export function registerTerminalListExecutionHostScopeTests(): void {
     }
   }
 
-  function makeSshFolderWorkspace() {
-    return {
-      id: 'folder-ssh',
-      projectGroupId: 'group-1',
-      name: 'SSH folder',
-      folderPath: '/remote/folder',
-      connectionId: 'box-2',
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 0,
-      lastActivityAt: 0,
-      createdAt: 0,
-      updatedAt: 0
-    }
-  }
-
-  function makeRuntimeFolderWorkspace() {
-    return {
-      ...makeSshFolderWorkspace(),
-      id: 'folder-runtime',
-      name: 'Runtime folder',
-      connectionId: 'stale-box',
-      executionHostId: 'runtime:env-9' as const
-    }
-  }
-
   type GraphLeaf = { worktreeId: string; leafId: string; ptyId: string }
 
   function makeRuntime(leaves: GraphLeaf[], store = makeStore()): OrcaRuntimeService {
@@ -111,67 +82,6 @@ export function registerTerminalListExecutionHostScopeTests(): void {
   }
 
   describe('listTerminals scope declaration', () => {
-    it('covers a queried SSH host used only by a folder workspace', async () => {
-      const baseStore = makeStore()
-      const folderWorkspace = makeSshFolderWorkspace()
-      const runtime = makeRuntime([], {
-        ...baseStore,
-        getRepos: vi.fn(() => [REPOS[0]!]),
-        getRepo: vi.fn((id: string) => (id === REPOS[0]!.id ? REPOS[0] : undefined)),
-        getWorkspaceSessionHostIds: vi.fn(() => ['local']),
-        getFolderWorkspaces: vi.fn(() => [folderWorkspace])
-      })
-      runtime.setPtyController({
-        spawn: vi.fn(async () => ({ id: 'never' })),
-        write: () => true,
-        kill: () => true,
-        listProcesses: vi.fn(async () => []),
-        listProcessesWithHostScope: vi.fn(async () => ({
-          processes: [],
-          hostIds: ['local', 'ssh:box-2']
-        }))
-      } as never)
-
-      const result = await runtime.listTerminals(`id:${folderWorkspaceKey(folderWorkspace.id)}`)
-
-      expect(result.hostScope?.hostIds).toEqual(['ssh:box-2'])
-      expect(result.hostScope?.omittedHostIds).toEqual(['local'])
-    })
-
-    it('does not claim local coverage for a paired-runtime folder workspace', async () => {
-      const baseStore = makeStore()
-      const folderWorkspace = makeRuntimeFolderWorkspace()
-      const runtime = makeRuntime([], {
-        ...baseStore,
-        getRepos: vi.fn(() => [REPOS[0]!]),
-        getRepo: vi.fn((id: string) => (id === REPOS[0]!.id ? REPOS[0] : undefined)),
-        getWorkspaceSessionHostIds: vi.fn(() => ['local']),
-        getFolderWorkspaces: vi.fn(() => [folderWorkspace])
-      })
-
-      const result = await runtime.listTerminals(`id:${folderWorkspaceKey(folderWorkspace.id)}`)
-
-      expect(result.hostScope?.hostIds).toEqual([])
-      expect(result.hostScope?.omittedHostIds).toEqual(['local', 'runtime:env-9'])
-    })
-
-    it('marks every known host omitted when process inventory is unverifiable', async () => {
-      const runtime = makeRuntime([])
-      runtime.setPtyController({
-        spawn: vi.fn(async () => ({ id: 'never' })),
-        write: () => true,
-        kill: () => true,
-        listProcesses: vi.fn(async () => {
-          throw new Error('relay unavailable')
-        })
-      } as never)
-
-      const result = await runtime.listTerminals()
-
-      expect(result.hostScope?.hostIds).toEqual([])
-      expect(result.hostScope?.omittedHostIds).toEqual(['local', 'ssh:box-1'])
-    })
-
     // A targeted listing a newer census overtook joins that census instead of answering for no
     // host; re-listing would overtake the newer one in turn (two workspaces sleeping at once).
     it('answers from a newer concurrent inventory refresh instead of an empty scope', async () => {

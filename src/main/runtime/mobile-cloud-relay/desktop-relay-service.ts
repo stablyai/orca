@@ -1,6 +1,6 @@
-import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
-import type { MobilePairingConnectionContext } from '../runtime-rpc/runtime-rpc-pairing-types'
-import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import type { OrcaCloudAuthConfig } from '../../orca-profiles/cloud-auth/profile-cloud-auth-config'
+import type { MobilePairingConnectionContext } from '../rpc/server/runtime-rpc-pairing-types'
+import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,

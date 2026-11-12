@@ -1,6 +1,10 @@
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { wslGatedReaddir, wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
@@ -9,17 +13,13 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent, addPreviewMessage } from '../../session-scanner-messages'
-import { asRecord } from '../../session-scanner-record-value'
-import {
-  extractString,
-  findOpenCodeStorageRoot,
-  timeObjectValue,
-  timestampMs
-} from '../../session-scanner-values'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
-import { tokenTotal } from '../../session-scanner-token-values'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent, addPreviewMessage } from '../../parsing/session-scanner-messages'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import { timeObjectValue, timestampMs } from '../../parsing/session-record-time'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
+import { tokenTotal } from '../../parsing/session-scanner-token-values'
 
 /** Scope discovery reads cwd without opening message files. */
 export function openCodeSessionCwd(record: Record<string, unknown>): string | null {
@@ -29,9 +29,13 @@ export function openCodeSessionCwd(record: Record<string, unknown>): string | nu
 export async function parseOpenCodeSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  const record = asRecord(JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown)
+  const parsed: unknown = JSON.parse(
+    await waitForAiVaultScan(wslGatedReadFile(file.path, 'utf-8', 'scan', signal), signal)
+  )
+  const record = asRecord(parsed)
   if (!record) {
     return null
   }
@@ -41,16 +45,20 @@ export async function parseOpenCodeSessionFile(
   accumulator.cwd = openCodeSessionCwd(record)
   updateTimeline(accumulator, timeObjectValue(record.time, 'created'))
   updateTimeline(accumulator, timeObjectValue(record.time, 'updated'))
-  await consumeOpenCodeMessages(accumulator, findOpenCodeStorageRoot(file.path), sessionId)
+  await consumeOpenCodeMessages(accumulator, findOpenCodeStorageRoot(file.path), sessionId, signal)
   return finalizeSession(accumulator, platform)
 }
 
 // Rebuild arbitrary directory order by creation time; undated files sort last so they cannot displace the first prompt.
-async function readOpenCodeMessagesInOrder(messageDir: string): Promise<Record<string, unknown>[]> {
+async function readOpenCodeMessagesInOrder(
+  messageDir: string,
+  signal?: AbortSignal
+): Promise<Record<string, unknown>[]> {
   let entries
   try {
-    entries = await wslGatedReaddir(messageDir, 'scan')
+    entries = await waitForAiVaultScan(wslGatedReaddir(messageDir, 'scan', signal), signal)
   } catch (error) {
+    throwIfAiVaultScanCancelled(signal)
     // Propagate WSL refusal so an unreachable message directory is not cached as an empty transcript.
     if (error instanceof WslTranscriptFsError) {
       throw error
@@ -64,10 +72,15 @@ async function readOpenCodeMessagesInOrder(messageDir: string): Promise<Record<s
     }
     let message: Record<string, unknown> | null = null
     try {
-      message = asRecord(
-        JSON.parse(await wslGatedReadFile(join(messageDir, entry.name), 'utf-8', 'scan')) as unknown
+      const parsed: unknown = JSON.parse(
+        await waitForAiVaultScan(
+          wslGatedReadFile(join(messageDir, entry.name), 'utf-8', 'scan', signal),
+          signal
+        )
       )
+      message = asRecord(parsed)
     } catch (error) {
+      throwIfAiVaultScanCancelled(signal)
       // Skip malformed live writes, but propagate WSL refusal so incomplete transcripts remain retryable.
       if (error instanceof WslTranscriptFsError) {
         throw error
@@ -92,14 +105,17 @@ async function readOpenCodeMessagesInOrder(messageDir: string): Promise<Record<s
 export async function consumeOpenCodeMessages(
   accumulator: SessionAccumulator,
   storageRoot: string | null,
-  sessionId: string
+  sessionId: string,
+  signal?: AbortSignal
 ): Promise<void> {
   if (!storageRoot) {
     return
   }
   for (const message of await readOpenCodeMessagesInOrder(
-    join(storageRoot, 'message', sessionId)
+    join(storageRoot, 'message', sessionId),
+    signal
   )) {
+    await waitForAiVaultScan(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
     const role = extractString(message.role)
     if (role === 'user' || role === 'assistant') {
       accumulator.messageCount++
@@ -124,4 +140,13 @@ export async function consumeOpenCodeMessages(
       accumulator.totalTokens += tokenTotal(message.tokens)
     }
   }
+}
+
+function findOpenCodeStorageRoot(filePath: string): string | null {
+  const sessionDir = dirname(filePath)
+  const sessionRoot = dirname(sessionDir)
+  if (basename(sessionRoot) !== 'session') {
+    return null
+  }
+  return dirname(sessionRoot)
 }

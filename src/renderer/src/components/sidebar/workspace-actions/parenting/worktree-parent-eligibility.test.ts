@@ -161,14 +161,14 @@ describe('canAssignWorktreeParent', () => {
     ).toBe(false)
   })
 
-  it('excludes same-repo candidates owned by a different runtime host', () => {
+  it('lists candidates on another machine after the child machine candidates', () => {
     const child = makeWorktree('child', 'repo-a')
     const sameHost = makeWorktree('same-host', 'repo-a')
     const otherHost = makeWorktree('other-host', 'repo-a')
     child.hostId = 'runtime:env-a'
     sameHost.hostId = 'runtime:env-a'
     otherHost.hostId = 'runtime:env-b'
-    const worktrees = [child, sameHost, otherHost]
+    const worktrees = [otherHost, child, sameHost]
 
     expect(
       getEligibleWorktreeParents({
@@ -180,7 +180,35 @@ describe('canAssignWorktreeParent', () => {
           { id: 'repo-a', connectionId: null, executionHostId: 'runtime:env-a' }
         ])
       }).map((worktree) => worktree.id)
-    ).toEqual([sameHost.id])
+    ).toEqual(['same-host', 'other-host'])
+  })
+
+  it('offers a chain across three machines but hides one nested under the child', () => {
+    const child = makeWorktree('child', 'repo-a')
+    const chained = makeWorktree('chained', 'repo-a')
+    const nestedUnderChild = makeWorktree('nested', 'repo-a')
+    const third = makeWorktree('third', 'repo-a')
+    child.hostId = 'runtime:env-a'
+    chained.hostId = 'runtime:env-b'
+    nestedUnderChild.hostId = 'runtime:env-b'
+    third.hostId = 'runtime:env-c'
+    const worktrees = [child, chained, nestedUnderChild, third]
+
+    expect(
+      getEligibleWorktreeParents({
+        child,
+        worktrees,
+        lineageById: {},
+        worktreeMap: makeMap(worktrees),
+        repoMap: makeRepoMap([
+          { id: 'repo-a', connectionId: null, executionHostId: 'runtime:env-a' }
+        ]),
+        parentIdentities: new Map([
+          ['runtime:env-b|chained', 'runtime:env-c|third'],
+          ['runtime:env-b|nested', 'runtime:env-a|child']
+        ])
+      }).map((worktree) => worktree.id)
+    ).toEqual(['chained', 'third'])
   })
 
   it('excludes archived worktrees from picker candidates', () => {

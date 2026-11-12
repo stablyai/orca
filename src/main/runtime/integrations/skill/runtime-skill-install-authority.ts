@@ -11,14 +11,14 @@ import {
 } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { SkillInstallDestinationAuthority } from '../../../skills/skill-install-destinations'
+import type { SkillInstallDestinationAuthority } from '../../../skills/install/skill-install-destinations'
 import {
   resolveEnvironmentSkillProviderRoots,
   resolveWslSkillProviderRoots,
   withClaudeSkillProviderRoot
-} from '../../../skills/skill-provider-runtime-roots'
+} from '../../../skills/providers/skill-provider-runtime-roots'
 import type { SkillInstallRequest } from '../../../../shared/skill-install-contract'
-import type { SkillProviderRootOverrides } from '../../../skills/skill-provider-destinations'
+import type { SkillProviderRootOverrides } from '../../../skills/providers/skill-provider-destinations'
 import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 
 /** Whether the destination lives on an SSH target; a workspace that cannot be placed throws. */

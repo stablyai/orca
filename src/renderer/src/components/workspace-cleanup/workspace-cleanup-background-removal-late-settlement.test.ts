@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import type { WorkspaceCleanupRemoveResult } from '@/store/slices/workspace-cleanup'
+import type { WorkspaceCleanupRemoveResult } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { startWorkspaceCleanupBackgroundRemoval } from './workspace-cleanup-background-removal'
 import { makeCandidate } from './workspace-cleanup-presentation-fixtures'
 

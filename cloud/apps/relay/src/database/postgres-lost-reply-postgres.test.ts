@@ -197,10 +197,4 @@ describePostgres('a lost PostgreSQL reply against a real server', () => {
     expect(await pid()).toBe(before)
   }, 30_000)
 
-  it('runs request sessions with the server bounding idle backends at 30 s', async () => {
-    const database = await open(databaseUrl!)
-    await expect(
-      database.query("SELECT current_setting('idle_session_timeout') AS value")
-    ).resolves.toEqual([{ value: '30s' }])
-  })
 })

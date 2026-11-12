@@ -1,3 +1,7 @@
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -7,8 +11,8 @@ import {
   wslGatedStat
 } from '../../../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractString } from '../../session-scanner-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
 import { KimiSessionIndexCache } from './session-scanner-kimi-index-cache'
 
 export function resolveKimiSessionsDir(override?: string): string {
@@ -63,33 +67,40 @@ export function hasKimiSessionIndexCacheEntryForTests(indexPath: string): boolea
   return workDirCacheByIndexPath.has(indexPath)
 }
 
-export async function readKimiWorkDirBySessionId(indexPath: string): Promise<Map<string, string>> {
+export async function readKimiWorkDirBySessionId(
+  indexPath: string,
+  signal?: AbortSignal
+): Promise<Map<string, string>> {
   const generation = workDirCacheByIndexPath.beginRead()
   let identity: Awaited<ReturnType<typeof wslGatedStat>>
   try {
-    identity = await wslGatedStat(indexPath, 'scan')
+    identity = await waitForAiVaultScan(wslGatedStat(indexPath, 'scan', signal), signal)
   } catch {
+    throwIfAiVaultScanCancelled(signal)
     // Failed index stats leave sessions listed without cwd; discard cached enrichment for retry.
     workDirCacheByIndexPath.delete(indexPath, generation)
     return new Map()
   }
 
-  return workDirCacheByIndexPath.get(
-    indexPath,
-    {
-      changeTimeMs: identity.ctimeMs,
-      mtimeMs: identity.mtimeMs,
-      sizeBytes: identity.size
-    },
-    generation,
-    () =>
-      parseKimiSessionIndex(indexPath).then(({ map, refused }) => {
-        // Evict inside the shared loader so every concurrent caller retries refused reads without a signature change.
-        if (refused) {
-          workDirCacheByIndexPath.delete(indexPath, generation)
-        }
-        return map
-      })
+  return waitForAiVaultScan(
+    workDirCacheByIndexPath.get(
+      indexPath,
+      {
+        changeTimeMs: identity.ctimeMs,
+        mtimeMs: identity.mtimeMs,
+        sizeBytes: identity.size
+      },
+      generation,
+      () =>
+        parseKimiSessionIndex(indexPath).then(({ map, refused }) => {
+          // Evict inside the shared loader so every concurrent caller retries refused reads without a signature change.
+          if (refused) {
+            workDirCacheByIndexPath.delete(indexPath, generation)
+          }
+          return map
+        })
+    ),
+    signal
   )
 }
 

@@ -2,12 +2,12 @@ import React from 'react'
 import { LoaderCircle, MessageSquare, Plus, SendHorizontal, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getPRCommentAudienceEmptyLabel,
   getPrCommentAudienceFilters
-} from '@/lib/pr-comment-audience-labels'
-import { translate } from '@/i18n/i18n'
+} from '@/lib/source-control/review/comments/pr-comment-audience-labels'
+import { useTranslate } from '@/i18n/use-translate'
 import { ResolvedCommentGroupsSection } from './comment-group'
 import { PRCommentOptionsMenu } from './comment-options-menu'
 import { type PRCommentsListProps, useCommentsListState } from './use-comments-list-state'
@@ -19,10 +19,11 @@ function HiddenResolvedThreadsNote({
   count: number
   onShow: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="mx-3 mb-2 flex items-center justify-between gap-2 rounded-md border border-dashed border-border px-2.5 py-1.5 text-2xs text-muted-foreground">
       <span>
-        {translate(
+        {t(
           'auto.components.right.sidebar.checks.panel.commentOptions.hiddenResolved',
           '{{count}} resolved threads hidden',
           { count, defaultValue_one: '{{count}} resolved thread hidden' }
@@ -33,16 +34,14 @@ function HiddenResolvedThreadsNote({
         className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
         onClick={onShow}
       >
-        {translate(
-          'auto.components.right.sidebar.checks.panel.commentOptions.showResolved',
-          'Show'
-        )}
+        {t('auto.components.right.sidebar.checks.panel.commentOptions.showResolved', 'Show')}
       </button>
     </div>
   )
 }
 
 export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
+  const t = useTranslate()
   const {
     comments,
     commentsError,
@@ -101,7 +100,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="size-3.5 text-muted-foreground" />
           <span className={presentation.sectionHeaderLabel}>
-            {translate('auto.components.right.sidebar.checks.panel.content.94557d68e2', 'Comments')}
+            {t('auto.components.right.sidebar.checks.panel.content.94557d68e2', 'Comments')}
           </span>
           {comments.length > 0 && (
             <span className={presentation.sectionCount}>{commentCounts.all}</span>
@@ -116,7 +115,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                       variant="ghost"
                       size="icon-xs"
                       className="text-muted-foreground hover:text-foreground"
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.right.sidebar.checks.panel.content.d7a2f9c401',
                         'Send unresolved {{value0}} comments',
                         { value0: reviewKind }
@@ -135,7 +134,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                   <TooltipContent side="top" sideOffset={4}>
                     {resolveCommentsWithAIDisabled && resolveCommentsWithAIDisabledReason
                       ? resolveCommentsWithAIDisabledReason
-                      : translate(
+                      : t(
                           'auto.components.right.sidebar.checks.panel.content.d7a2f9c401',
                           'Send unresolved {{value0}} comments',
                           { value0: reviewKind }
@@ -151,7 +150,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                           variant="default"
                           size="icon-xs"
                           className="relative"
-                          aria-label={translate(
+                          aria-label={t(
                             'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi',
                             'Send {{count}} queued comments to AI',
                             {
@@ -180,7 +179,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                       <TooltipContent side="top" sideOffset={4}>
                         {resolveCommentsWithAIDisabled && resolveCommentsWithAIDisabledReason
                           ? resolveCommentsWithAIDisabledReason
-                          : translate(
+                          : t(
                               'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi',
                               'Send {{count}} queued comments to AI',
                               {
@@ -197,7 +196,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                           variant="ghost"
                           size="icon-xs"
                           className="text-muted-foreground hover:text-foreground"
-                          aria-label={translate(
+                          aria-label={t(
                             'auto.components.right.sidebar.checks.panel.content.a6de3e5a20',
                             'Clear queued comments'
                           )}
@@ -207,7 +206,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="top" sideOffset={4}>
-                        {translate(
+                        {t(
                           'auto.components.right.sidebar.checks.panel.content.a6de3e5a20',
                           'Clear queued comments'
                         )}
@@ -234,11 +233,11 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                     size="icon-xs"
                     aria-label={
                       comments.length === 0
-                        ? translate(
+                        ? t(
                             'auto.components.right.sidebar.checks.panel.content.7440d09d2c',
                             'Start conversation'
                           )
-                        : translate(
+                        : t(
                             'auto.components.right.sidebar.checks.panel.content.2b2be92919',
                             'Add comment'
                           )
@@ -255,11 +254,11 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                   {commentsDisabled && commentsDisabledReason
                     ? commentsDisabledReason
                     : comments.length === 0
-                      ? translate(
+                      ? t(
                           'auto.components.right.sidebar.checks.panel.content.7440d09d2c',
                           'Start conversation'
                         )
-                      : translate(
+                      : t(
                           'auto.components.right.sidebar.checks.panel.content.2b2be92919',
                           'Add comment'
                         )}
@@ -292,7 +291,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
         )}
         {comments.length >= 100 && (
           <div className="mt-1.5 text-[10px] text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.right.sidebar.checks.panel.content.751f7c6e5c',
               'Showing first 100 comments per source'
             )}
@@ -313,15 +312,12 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
       ) : comments.length === 0 ? (
         !onAddComment && (
           <div className="flex items-center justify-center py-5 text-[11px] text-muted-foreground">
-            {translate(
-              'auto.components.right.sidebar.checks.panel.content.755be805f6',
-              'No comments'
-            )}
+            {t('auto.components.right.sidebar.checks.panel.content.755be805f6', 'No comments')}
           </div>
         )
       ) : visibleComments.length === 0 ? (
         <div className="flex items-center justify-center py-5 text-[11px] text-muted-foreground">
-          {getPRCommentAudienceEmptyLabel(commentFilter)}
+          {getPRCommentAudienceEmptyLabel(commentFilter, t)}
         </div>
       ) : (
         <div className={presentation.list}>
@@ -332,7 +328,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
               {triageGroups.open.length > 0 ? (
                 <>
                   <div className={presentation.sectionTriageLabel}>
-                    {translate(
+                    {t(
                       'auto.components.right.sidebar.checks.panel.content.c3a8e5d710',
                       'Needs review · {{value0}}',
                       { value0: triageGroups.open.length }
@@ -343,6 +339,8 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
               ) : null}
               {triageGroups.conversation.map(renderCommentGroup)}
               <ResolvedCommentGroupsSection
+                imageUploadAddress={props.imageUploadAddress}
+                editImageUploadAddress={props.editImageUploadAddress}
                 groups={triageGroups.resolved}
                 botAuthorOverrides={botAuthorOverrides}
                 replyingCommentId={replyingCommentId}

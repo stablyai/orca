@@ -8,25 +8,23 @@ import {
   MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS,
   normalizeBrowserDownloadFilename
 } from '../../../../shared/browser-download-filename'
+import type { RuntimeFileMutationExpectation } from '../../files/file-mutation-expectation'
 
 // Remote downloads need an in-workspace home reachable through containment-checked transfers.
 export const BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY = '.orca/browser-downloads'
 
+type TransferMutation = { workspaceId: string; expectation: RuntimeFileMutationExpectation }
 export type BrowserClientDownloadTransferDependencies = {
-  writeChunk(input: {
-    workspaceId: string
-    relativePath: string
-    contentBase64: string
-    append: boolean
-  }): Promise<void>
-  commit(input: {
-    workspaceId: string
-    tempRelativePath: string
-    finalRelativePath: string
-  }): Promise<void>
-  remove(input: { workspaceId: string; relativePath: string }): Promise<void>
+  /** Pins the workspace's current host and creates the directory there. */
+  prepareDirectory(workspaceId: string, directory: string): Promise<RuntimeFileMutationExpectation>
+  writeChunk(
+    input: TransferMutation & { relativePath: string; contentBase64: string; append: boolean }
+  ): Promise<void>
+  commit(
+    input: TransferMutation & { tempRelativePath: string; finalRelativePath: string }
+  ): Promise<void>
+  remove(input: TransferMutation & { relativePath: string }): Promise<void>
   exists(input: { workspaceId: string; relativePath: string }): Promise<boolean>
-  ensureDirectory(input: { workspaceId: string; relativePath: string }): Promise<void>
 }
 
 type TransferSession = {
@@ -35,6 +33,7 @@ type TransferSession = {
   pageHostGeneration: number
   workspaceId: string
   tempRelativePath: string
+  pinnedExpectation: RuntimeFileMutationExpectation | null
   bytesWritten: number
   /** Set synchronously before queued cleanup. */
   canceled: boolean
@@ -166,16 +165,19 @@ export class BrowserClientDownloadTransferStore {
       await this.release(session)
       throw new Error('browser_client_download_transfer_too_large')
     }
+    let expectation = session.pinnedExpectation
     try {
-      if (session.bytesWritten === 0) {
-        await this.dependencies.ensureDirectory({
-          workspaceId: session.workspaceId,
-          relativePath: BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY
-        })
+      if (!expectation) {
+        expectation = await this.dependencies.prepareDirectory(
+          session.workspaceId,
+          BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY
+        )
+        session.pinnedExpectation = expectation
         this.assertLive(session)
       }
       await this.dependencies.writeChunk({
         workspaceId: session.workspaceId,
+        expectation,
         relativePath: session.tempRelativePath,
         contentBase64: input.contentBase64,
         append: session.bytesWritten > 0
@@ -191,7 +193,7 @@ export class BrowserClientDownloadTransferStore {
       return null
     }
     try {
-      return await this.commit(session, input.filename, input.platform)
+      return await this.commit(session, expectation, input.filename, input.platform)
     } catch (error) {
       await this.release(session)
       throw error
@@ -235,6 +237,7 @@ export class BrowserClientDownloadTransferStore {
       pageHostGeneration: input.pageHostGeneration,
       workspaceId: input.workspaceId,
       tempRelativePath: `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/.incoming-${input.transferId}`,
+      pinnedExpectation: null,
       bytesWritten: 0,
       canceled: false,
       operations: Promise.resolve(),
@@ -246,6 +249,7 @@ export class BrowserClientDownloadTransferStore {
 
   private async commit(
     session: TransferSession,
+    expectation: RuntimeFileMutationExpectation,
     filename: string,
     platform: NodeJS.Platform
   ): Promise<BrowserClientDownloadCommit> {
@@ -265,6 +269,7 @@ export class BrowserClientDownloadTransferStore {
       try {
         await this.dependencies.commit({
           workspaceId: session.workspaceId,
+          expectation,
           tempRelativePath: session.tempRelativePath,
           finalRelativePath
         })
@@ -284,12 +289,14 @@ export class BrowserClientDownloadTransferStore {
   private async release(session: TransferSession): Promise<void> {
     const owned = this.sessions.get(session.key) === session
     this.settle(session)
-    if (!owned) {
+    // Nothing reached the workspace before an expectation was pinned.
+    if (!owned || !session.pinnedExpectation) {
       return
     }
     try {
       await this.dependencies.remove({
         workspaceId: session.workspaceId,
+        expectation: session.pinnedExpectation,
         relativePath: session.tempRelativePath
       })
     } catch {

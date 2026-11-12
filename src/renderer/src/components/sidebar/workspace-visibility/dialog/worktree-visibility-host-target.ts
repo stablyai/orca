@@ -1,12 +1,13 @@
 import { useCallback } from 'react'
 import type { AppState } from '@/store/types'
-import { findRepoForHost, getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
 import {
   getWorktreeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function resolveWorktreeVisibilityHostTarget(
   state: Pick<AppState, 'repos' | 'settings' | 'detectedWorktreesByRepo'>,

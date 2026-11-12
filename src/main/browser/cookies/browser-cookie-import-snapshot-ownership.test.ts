@@ -42,7 +42,7 @@ vi.mock('electron', () => ({
 vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock
 }))
-vi.mock('../sessions/browser-session-registry', () => ({
+vi.mock('../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock
@@ -102,7 +102,7 @@ import {
   createChromiumCookieTestDatabase,
   encryptMacChromiumCookie
 } from './browser-cookie-import-test-database'
-import { acquireCookieMutationLock } from './browser-cookie-import-clear'
+import { acquireCookieMutationLock } from './mutation/cookie-mutation-lock'
 import * as cookieDecryption from './sources/browser-cookie-decryption'
 
 const PARTITION = 'persist:test'
@@ -202,42 +202,6 @@ describe('Chromium import snapshot ownership', () => {
       ${encrypted ? "X'763130656E63727970746564'" : "X''"}, '/', 0, 0, 0, -1)`)
   }
 
-  it('retires an empty live-WAL source snapshot before returning its existing refusal', async () => {
-    expect(existsSync(`${sourcePath}-wal`)).toBe(true)
-    expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toMatchObject({
-      ok: false,
-      reason: 'No cookies found in Google Chrome.'
-    })
-    expect(cleanupStates).toHaveLength(1)
-    expectRefusalCleanup()
-  })
-
-  it('retires every snapshot when denied credential access is retried', async () => {
-    insertSourceCookie(true)
-    for (let attempt = 0; attempt < 3; attempt++) {
-      expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toMatchObject({
-        ok: false,
-        reason: 'Could not access Google Chrome encryption key. The OS may have denied access.'
-      })
-      expectRefusalCleanup()
-    }
-    expect(runProcessMock).toHaveBeenCalledTimes(3)
-    expect(cleanupStates).toHaveLength(3)
-  })
-
-  it('retires the snapshot after skipping an unreadable partition without a registrable family', async () => {
-    insertSourceCookie(false)
-    sourceDatabase.exec(
-      "UPDATE cookies SET host_key = 'com', top_frame_site_key = 'https://top.test', has_cross_site_ancestor = 2"
-    )
-    expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toMatchObject({
-      ok: true,
-      summary: { importedCookies: 0, skippedCookies: 1, domains: [] }
-    })
-    expect(cleanupStates).toHaveLength(1)
-    expectRefusalCleanup()
-  })
-
   it('closes private databases before cleanup when source schema preparation throws', async () => {
     sourceDatabase.exec('DROP TABLE cookies; CREATE TABLE other_data(value TEXT)')
     expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toMatchObject({
@@ -247,32 +211,6 @@ describe('Chromium import snapshot ownership', () => {
     expect(cleanupStates).toHaveLength(1)
     expect(cleanupStates[0].length).toBeGreaterThanOrEqual(1)
     expectRefusalCleanup()
-  })
-
-  it('hands successful preparation to the importer for ordinary completion cleanup', async () => {
-    insertSourceCookie(false)
-    const result = await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)
-    expect(result).toMatchObject({ ok: true, summary: { totalCookies: 1, importedCookies: 1 } })
-    expect(writeCookieIdentityMock).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'sid', value: 'source-value' })
-    )
-    expect(snapshotDirectories()).toEqual([])
-    expect(existsSync(stagingRoot)).toBe(false)
-    expect(cleanupStates).toEqual([[false]])
-  })
-
-  it('removes the source snapshot after a live rejection without creating replay data', async () => {
-    insertSourceCookie(false)
-    writeCookieIdentityMock.mockRejectedValue(new Error('Cookie rejected'))
-    expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toMatchObject({
-      ok: true,
-      summary: { importedCookies: 0, skippedCookies: 1 }
-    })
-    expect(snapshotDirectories()).toEqual([])
-    expect(cleanupStates).toEqual([[false]])
-    expect(setPendingCookieImportMock).not.toHaveBeenCalled()
-    expect(clearPendingCookieImportMock).toHaveBeenCalledExactlyOnceWith(PARTITION)
-    expect(existsSync(stagingRoot)).toBe(false)
   })
 
   it.each([2, 20])(

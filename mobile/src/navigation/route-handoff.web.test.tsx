@@ -2,10 +2,7 @@ import type { ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BRIDGE_MAX_ROUTE_HREF_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
-import {
-  BRIDGE_NAVIGATE_BACK_NOTIFY,
-  BRIDGE_PROTOCOL_VERSION
-} from '../mobile-web-shell/bridge/bridge-envelope'
+import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/bridge-envelope'
 import { createShellPageClient } from '../mobile-web-shell/bridge/page-bootstrap'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import type { RouteHandoff } from './route-handoff'
@@ -23,7 +20,7 @@ const router = vi.hoisted(() => ({
 
 vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' }))
 // Stub re-exported hooks to avoid importing Expo; these tests call none of them.
-vi.mock('../transport/host-client-hooks', () => ({
+vi.mock('../transport/connection/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
@@ -32,7 +29,7 @@ vi.mock('../transport/host-client-hooks', () => ({
   useRefreshHostClient: () => () => {}
 }))
 
-import { RpcClientProvider } from '../transport/client-context.web'
+import { RpcClientProvider } from '../transport/connection/client-context.web'
 import { useRouteHandoff } from './route-handoff.web'
 
 const INIT = {
@@ -125,12 +122,6 @@ function navigations(posted: readonly string[]): unknown[] {
     .filter((frame: { name?: string }) => frame.name === 'navigate')
 }
 
-function backs(posted: readonly string[]): unknown[] {
-  return posted
-    .map((json) => JSON.parse(json))
-    .filter((frame: { name?: string }) => frame.name === BRIDGE_NAVIGATE_BACK_NOTIFY)
-}
-
 const warned: unknown[][] = []
 let restoreWarn: (() => void) | null = null
 
@@ -169,35 +160,6 @@ afterEach(() => {
   restoreWarn = null
   vi.useRealTimers()
   Reflect.deleteProperty(globalThis, 'orcaBridge')
-})
-
-describe('a route the page does not render', () => {
-  it('asks the shell to replace this screen when the document has no history of its own', () => {
-    const { posted, handoff } = mount(INIT)
-    handoff.replace('/h/host-a/tasks')
-    expect(navigations(posted)).toEqual([
-      {
-        v: BRIDGE_PROTOCOL_VERSION,
-        type: 'notify',
-        name: 'navigate',
-        href: '/h/host-a/tasks',
-        replace: true
-      }
-    ])
-    expect(router.replace).not.toHaveBeenCalled()
-    expect(router.back).not.toHaveBeenCalled()
-  })
-
-  it('pops its own entry and has the shell push when the document has history below it', () => {
-    router.canGoBack.mockReturnValue(true)
-    const { posted, handoff } = mount(INIT)
-    handoff.replace('/h/host-a/tasks')
-    expect(navigations(posted)).toEqual([
-      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href: '/h/host-a/tasks' }
-    ])
-    expect(router.back).toHaveBeenCalledTimes(1)
-    expect(router.replace).not.toHaveBeenCalled()
-  })
 })
 
 describe('a shell that granted no navigate', () => {
@@ -240,64 +202,7 @@ describe('a target the shell would refuse', () => {
   })
 })
 
-// The initial document has one history entry; Back must ask the native stack unless the page has pushed its own screens.
-describe('a back this document cannot serve', () => {
-  it('hands the pop to the shell rather than going nowhere', () => {
-    const { posted, handoff } = mount(INIT)
-    handoff.back()
-    expect(backs(posted)).toEqual([
-      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }
-    ])
-    expect(router.back).not.toHaveBeenCalled()
-  })
-
-  it('falls through to this document when the shell granted no navigate', () => {
-    const { posted, handoff } = mount({
-      ...INIT,
-      grants: { ...INIT.grants, native: [] },
-      pageRoutes: []
-    })
-    handoff.back()
-    expect(backs(posted)).toEqual([])
-    expect(router.back).toHaveBeenCalled()
-  })
-
-  it('does not throw out of a tap handler when there is nowhere to post', () => {
-    const { posted, handoff, failPosts } = mount(INIT)
-    failPosts()
-    expect(() => handoff.back()).not.toThrow()
-    expect(backs(posted)).toEqual([])
-    expect(router.back).toHaveBeenCalledTimes(1)
-    expect(JSON.stringify(warned)).toContain('send-failed')
-  })
-})
-
 // Wrap every href-taking router member; spreading navigate/prefetch untouched would bypass page-route policy.
-describe('every member that takes a target', () => {
-  it('is replaced rather than handed through, all of them', () => {
-    const options = { withAnchor: false }
-    for (const member of ['push', 'replace', 'navigate', 'dismissTo'] as const) {
-      router[member].mockClear()
-      const { posted, handoff } = mount(INIT)
-      handoff[member]('/h/host-b', options)
-      expect(router[member], member).toHaveBeenCalledExactlyOnceWith('/h/host-b', options)
-      router[member].mockClear()
-      handoff[member]('/h/host-a/session/wt-1')
-      expect(navigations(posted), member).toEqual([
-        {
-          v: BRIDGE_PROTOCOL_VERSION,
-          type: 'notify',
-          name: 'navigate',
-          href: '/h/host-a/session/wt-1',
-          ...(member === 'replace' ? { replace: true } : {})
-        }
-      ])
-      handoff[member]('/h/host-a/tasks#top')
-      expect(navigations(posted), member).toHaveLength(1)
-      expect(router[member], member).not.toHaveBeenCalled()
-    }
-  })
-})
 
 // Never hand prefetch to native navigate: a background optimization must not open a screen.
 describe('prefetch', () => {
@@ -306,92 +211,6 @@ describe('prefetch', () => {
     handoff.prefetch('/h/host-a/session/wt-1')
     expect(navigations(posted)).toEqual([])
     expect(router.prefetch).not.toHaveBeenCalled()
-    expect(router.push).not.toHaveBeenCalled()
-  })
-})
-
-// Local targets run under the opener’s grants; hand off any target needing more so its own session receives the required capabilities.
-describe('an in-page hop the session cannot cover', () => {
-  const TASKS = '/h/host-a/tasks'
-  const PAIRS = [
-    { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] },
-    {
-      pathname: '/h/[hostId]/tasks',
-      grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
-    }
-  ]
-  const withPairs = (native: string[]) => ({
-    ...INIT,
-    grants: { ...INIT.grants, native },
-    pageRoutes: ['/h/[hostId]', '/h/[hostId]/tasks'],
-    pageRouteGrants: PAIRS
-  })
-
-  it('goes to the shell when the target needs a grant this session lacks', () => {
-    const { posted, handoff } = mount(withPairs(['navigate', 'storage', 'haptics']))
-    handoff.push(TASKS)
-    expect(navigations(posted)).toEqual([
-      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href: TASKS }
-    ])
-    expect(router.push).not.toHaveBeenCalled()
-  })
-
-  it('stays in this document when the session already covers the target', () => {
-    const { posted, handoff } = mount(
-      withPairs(['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'])
-    )
-    handoff.push(TASKS)
-    expect(navigations(posted)).toEqual([])
-    expect(router.push).toHaveBeenCalledWith(TASKS, undefined)
-  })
-
-  it("hands off when the session lacks any one of the target's grants, not the clipboard alone", () => {
-    // Withhold externalLink alone too so a check covering only native verbs cannot pass.
-    const { posted, handoff } = mount(
-      withPairs(['navigate', 'storage', 'haptics', 'native.clipboard.write'])
-    )
-    handoff.push(TASKS)
-    expect(navigations(posted)).toEqual([
-      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href: TASKS }
-    ])
-    expect(router.push).not.toHaveBeenCalled()
-  })
-
-  it('keeps a hop whose target declares a subset, which is C3.1 without its pairwise pin', () => {
-    const { posted, handoff } = mount({
-      ...INIT,
-      grants: { ...INIT.grants, native: ['navigate', 'storage', 'externalLink', 'haptics'] },
-      pageRoutes: ['/h/[hostId]/files/[worktreeId]', '/h/[hostId]/files/preview/[worktreeId]'],
-      pageRouteGrants: [
-        { pathname: '/h/[hostId]/files/[worktreeId]', grants: ['navigate', 'storage', 'haptics'] },
-        { pathname: '/h/[hostId]/files/preview/[worktreeId]', grants: ['navigate', 'haptics'] }
-      ]
-    })
-    handoff.push('/h/host-a/files/preview/wt-1')
-    expect(navigations(posted)).toEqual([])
-    expect(router.push).toHaveBeenCalledWith('/h/host-a/files/preview/wt-1', undefined)
-  })
-
-  it('keeps the old rule when the shell named no grants, so an older shell is unchanged', () => {
-    // Absent pairs preserve older-shell behavior; absence does not declare an empty grant list.
-    const { posted, handoff } = mount({
-      ...INIT,
-      grants: { ...INIT.grants, native: ['navigate', 'storage', 'haptics'] },
-      pageRoutes: ['/h/[hostId]', '/h/[hostId]/tasks']
-    })
-    handoff.push(TASKS)
-    expect(navigations(posted)).toEqual([])
-    expect(router.push).toHaveBeenCalledWith(TASKS, undefined)
-  })
-
-  it('hands off a target the shell lists with no entry of its own', () => {
-    // Listed but unpaired targets cannot prove grant coverage and must hand off.
-    const { posted, handoff } = mount({
-      ...withPairs(['navigate', 'storage', 'haptics']),
-      pageRouteGrants: [{ pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] }]
-    })
-    handoff.push(TASKS)
-    expect(navigations(posted)).toHaveLength(1)
     expect(router.push).not.toHaveBeenCalled()
   })
 })

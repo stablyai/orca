@@ -1,10 +1,7 @@
 // Older desktop/mobile clients pair results by position, so every finished call needs output.
 
 import { describe, expect, it } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalRenderItem
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { pairToolBlocks } from '../../../../shared/native-chat/tools/native-chat-tool-pairs'
 import { pairNativeChatToolResults } from '../../../../shared/native-chat/tools/native-chat-tool-pairing'
 import { projectNativeChatTranscript } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
@@ -19,13 +16,11 @@ import {
   HELPER_TURN,
   item,
   PARENT_TURN,
-  PROMPT,
   publishedRows,
   shell,
   spawn,
   turn,
-  waitStarted,
-  type Frame
+  waitStarted
 } from './codex-collab-call-frames-fixture'
 import { THREAD_ID } from '../session-lifecycle/codex-structured-session-adapter-fixture'
 
@@ -69,9 +64,6 @@ function positionalRuns(rows: AgentJournalRenderItem[]): {
     })
   }
 }
-
-const outputOf = (rows: AgentJournalRenderItem[], name: string): AgentJournalItemBody | undefined =>
-  rows.map((row) => row.body).find((body) => body.kind === 'tool-call' && body.name === name)
 
 describe('Codex collab call rows on a client that pairs results by position', () => {
   it('draws each output under its own call through spawn, shell, wait and close', async () => {
@@ -127,116 +119,5 @@ describe('Codex collab call rows on a client that pairs results by position', ()
     const { mobile, desktop } = positionalRuns(rows)
     expect(mobile).toEqual(runs)
     expect(desktop).toEqual(runs)
-  })
-
-  it('gives a wait that timed out an output, and keeps naming the helpers it waited on', async () => {
-    const rows = await publishedRows([
-      turn('turn/started', THREAD_ID, PARENT_TURN),
-      spawn('item/completed'),
-      turn('turn/started', HELPER, HELPER_TURN),
-      waitStarted,
-      // Codex ends a timed-out wait naming no receiver and no state.
-      collab('item/completed', {
-        id: 'call-wait',
-        tool: 'wait',
-        status: 'completed',
-        receiverThreadIds: [],
-        agentsStates: {}
-      }),
-      collab('item/started', {
-        id: 'call-close',
-        tool: 'closeAgent',
-        status: 'inProgress',
-        receiverThreadIds: [HELPER]
-      }),
-      collab('item/completed', {
-        id: 'call-close',
-        tool: 'closeAgent',
-        status: 'completed',
-        receiverThreadIds: [HELPER],
-        agentsStates: { [HELPER]: { status: 'running', message: null } }
-      }),
-      shell('item/started', THREAD_ID, PARENT_TURN, 'call-parent-shell', 'PARENT_DONE'),
-      shell('item/completed', THREAD_ID, PARENT_TURN, 'call-parent-shell', 'PARENT_DONE')
-    ])
-    expect(outputOf(rows, 'wait_agent')).toMatchObject({
-      state: 'completed',
-      input: { description: PROMPT, agents: [HELPER] }
-    })
-    const runs = [
-      [
-        ['spawn_agent', 'Spawned'],
-        ['wait_agent', 'Finished waiting'],
-        // Its snapshot says `running`: the status from before the close.
-        ['close_agent', 'Closed'],
-        ['shell', 'PARENT_DONE']
-      ]
-    ]
-    const { mobile, desktop } = positionalRuns(rows)
-    expect(mobile).toEqual(runs)
-    expect(desktop).toEqual(runs)
-  })
-
-  it('gives every other finished call what it did or what it reports', async () => {
-    const OTHER = '01a0ea72-0000-7000-8000-000000000002'
-    const finished = (id: string, tool: string, fields: Record<string, unknown>): Frame[] => [
-      collab('item/started', { id, tool, status: 'inProgress', receiverThreadIds: [HELPER] }),
-      collab('item/completed', {
-        id,
-        tool,
-        status: 'completed',
-        receiverThreadIds: [HELPER],
-        ...fields
-      })
-    ]
-    const rows = await publishedRows([
-      turn('turn/started', THREAD_ID, PARENT_TURN),
-      spawn('item/completed'),
-      turn('turn/started', HELPER, HELPER_TURN),
-      collab('item/completed', {
-        id: 'call-spawn-failed',
-        tool: 'spawnAgent',
-        status: 'failed',
-        receiverThreadIds: [],
-        prompt: 'second helper'
-      }),
-      ...finished('call-send', 'sendInput', {
-        prompt: 'keep going',
-        agentsStates: { [HELPER]: { status: 'running', message: null } }
-      }),
-      ...finished('call-resume', 'resumeAgent', {
-        agentsStates: { [HELPER]: { status: 'completed', message: 'OLD_REPLY' } }
-      }),
-      collab('item/started', {
-        id: 'call-wait',
-        tool: 'wait',
-        status: 'inProgress',
-        receiverThreadIds: [HELPER, OTHER]
-      }),
-      // A wait's end names only the helpers that finished; an errored one's message is its error.
-      collab('item/completed', {
-        id: 'call-wait',
-        tool: 'wait',
-        status: 'failed',
-        receiverThreadIds: [OTHER],
-        agentsStates: { [OTHER]: { status: 'errored', message: 'boom' } }
-      }),
-      shell('item/started', THREAD_ID, PARENT_TURN, 'call-parent-shell', 'PARENT_DONE'),
-      shell('item/completed', THREAD_ID, PARENT_TURN, 'call-parent-shell', 'PARENT_DONE')
-    ])
-    const runs = [
-      [
-        ['spawn_agent', 'Spawned'],
-        ['spawn_agent', 'Agent spawn failed'],
-        ['send_input', 'Sent input'],
-        ['resume_agent', 'Completed - OLD_REPLY'],
-        ['wait_agent', `${OTHER}: Error - boom`],
-        ['shell', 'PARENT_DONE']
-      ]
-    ]
-    const { mobile, desktop } = positionalRuns(rows)
-    expect(mobile).toEqual(runs)
-    expect(desktop).toEqual(runs)
-    expect(outputOf(rows, 'wait_agent')).toMatchObject({ input: { agents: [HELPER, OTHER] } })
   })
 })

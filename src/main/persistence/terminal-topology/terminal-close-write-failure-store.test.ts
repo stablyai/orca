@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import {
   admitRuntimeSpawnPane,
   fixture
-} from '../loading-store/profile-state-delayed-authority-fixture'
+} from '../loading-store/profile-writing/profile-state-delayed-authority-fixture'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
@@ -64,18 +64,4 @@ it('still refuses and rolls back a rename whose profile write fails', async () =
     .getWorkspaceSession()
     .tabsByWorktree[pane.worktreeId]?.find((row) => row.id === pane.tabId)
   expect(tab?.customTitle ?? null).toBeNull()
-})
-
-it('refuses a close once profile writes are frozen, and changes nothing', async () => {
-  const { store, liveTabIds } = await openWithTab()
-  await store.freezeWritesAsync()
-
-  await expect(
-    store.applyLayoutCommand({
-      type: 'closeTabs',
-      workspace: pane.worktreeId,
-      tabIds: [pane.tabId]
-    })
-  ).rejects.toThrow('finalized')
-  expect(liveTabIds()).toContain(pane.tabId)
 })

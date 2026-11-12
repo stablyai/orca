@@ -4,13 +4,16 @@
   "family": "transport.pairing-race",
   "namedDeltas": [],
   "values": {
-    "1329c4d27ca9": {
+    "21aad1a43c83": {
+      "outcome": "failed: desktop rejected the pairing code"
+    },
+    "8a29dfde9b97": {
       "status": "rejected",
       "startedAt": 0,
       "settledAt": 0,
       "error": {
-        "category": "Error",
-        "message": "direct and relay pairing paths both failed",
+        "category": "PairingCodeRejectedError",
+        "message": "desktop rejected the pairing code",
         "isRpcDeliveryUnknown": false
       }
     },
@@ -48,9 +51,6 @@
           "ok": false
         }
       }
-    },
-    "d25369399414": {
-      "outcome": "failed: direct and relay pairing paths both failed"
     },
     "e7b5d7d57a61": {
       "name": "status.get#1",
@@ -107,9 +107,9 @@
           "sender": ["d00f14d72061", "ef9375cc97a1"],
           "payloads": ["e7b5d7d57a61", "f1834177e593"],
           "settlements": {
-            "race": "1329c4d27ca9"
+            "race": "8a29dfde9b97"
           },
-          "state": "d25369399414",
+          "state": "21aad1a43c83",
           "effects": []
         }
       }

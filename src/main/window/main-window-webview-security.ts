@@ -1,9 +1,9 @@
 import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
+import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
-import { browserManager } from '../browser/browser-manager'
-import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import {
   enforceLocalSshWebRtcPolicyForGuest,
   isLocalSshBrowserPartition
@@ -12,8 +12,12 @@ import {
   browserRouteSessionRegistry,
   browserRouteWebContentsRegistry
 } from '../browser/routing/sessions/browser-route-session-runtime'
-import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
-import { DOC_PREVIEW_PARTITION, parseDocPreviewUrl } from '../../shared/doc-preview-scheme'
+import '../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../shared/browser/browser-blank-page'
+import {
+  DOC_PREVIEW_PARTITION,
+  parseDocPreviewUrl
+} from '../../shared/document-preview/doc-preview-scheme'
 import { setDocPreviewFailureSink } from '../browser/document-preview/doc-preview-failure-notice'
 import {
   getDocPreviewGrant,
@@ -31,7 +35,7 @@ import {
   attachPluginFrameGuest,
   isPluginFramePartition,
   PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS
-} from '../plugins/panels/plugin-frame-guest-registry'
+} from '../plugins/panels/guest-isolation/plugin-frame-guest-registry'
 import { attachBrowserPasswordGuest } from '../browser-passwords/browser-password-guest-service'
 
 /** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
@@ -126,11 +130,8 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     // Electron 43 omits inherited arguments; clear defensively so future inheritance cannot leak browser-host identity.
     delete webPreferences.additionalArguments
     webPreferences.nodeIntegration = false
-    // Why every local profile: a framed extension page needs Orca's extension preload, and
-    // extensions can be switched on after the tab opens. Sandboxed and without Node, the flag only
-    // runs the same preloads per frame; the close guard keeps to the top frame and the extension
-    // preload, registered only while extensions run, acts only in chrome-extension:// frames.
-    webPreferences.nodeIntegrationInSubFrames = isProfilePartition
+    // Iframes need the passkey watch and framed extension pages; sandboxed, it only runs the preloads per frame.
+    webPreferences.nodeIntegrationInSubFrames = !isDocPreviewAttach
     webPreferences.enableBlinkFeatures = ''
     webPreferences.disableBlinkFeatures = ''
     webPreferences.webSecurity = true

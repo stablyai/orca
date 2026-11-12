@@ -4,7 +4,7 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
-import { writeFileAtomically } from '../../../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import { streamCodexSessionLedgerRecords } from '../rollouts/codex-session-ledger-stream'
 
 // Bump after semantics changes to retry outcomes recorded under older versions.

@@ -50,6 +50,7 @@ function device(blockAt?: 'permission' | 'open') {
         holds--
       }
     },
+    feedSpeech: () => {},
     onMicrophoneData: (listener) => {
       listeners.add(listener)
       return {

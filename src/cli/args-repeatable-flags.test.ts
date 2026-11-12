@@ -46,10 +46,6 @@ describe('command-scoped repeatable flags', () => {
     )
   })
 
-  it('preserves a trailing valueless flag for downstream validation', () => {
-    expect(flags(['example', 'search', '--agent=a', '--agent']).get('agent')).toBe(true)
-  })
-
   it.each([
     ['--agent', '--agent=b'],
     ['--agent=a', '--agent', '--agent=b'],

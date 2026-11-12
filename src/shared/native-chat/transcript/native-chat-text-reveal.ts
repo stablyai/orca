@@ -68,12 +68,13 @@ export function arriveNativeChatText(
 /** Each arrival has its own deadline; later arrivals can only bring earlier text forward. */
 export function advanceNativeChatText(
   previous: NativeChatTextReveal,
-  now: number
+  now: number,
+  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
   let position = previous.arrivals[0]?.from ?? previous.shown
   let due = previous.shown
   for (const arrival of previous.arrivals) {
-    const fraction = Math.min(1, Math.max(0, (now - arrival.at) / NATIVE_CHAT_TEXT_REVEAL_DELAY_MS))
+    const fraction = Math.min(1, Math.max(0, (now - arrival.at) / revealMs))
     position += (arrival.to - arrival.from) * fraction
     if (fraction === 1) {
       due = Math.max(due, arrival.to)
@@ -83,9 +84,7 @@ export function advanceNativeChatText(
   return {
     ...previous,
     shown: Math.max(previous.shown, shown),
-    arrivals: previous.arrivals.filter(
-      (arrival) => arrival.at + NATIVE_CHAT_TEXT_REVEAL_DELAY_MS > now
-    )
+    arrivals: previous.arrivals.filter((arrival) => arrival.at + revealMs > now)
   }
 }
 
@@ -95,11 +94,12 @@ export function startNativeChatTextReveal(
   streaming: boolean,
   remembered: NativeChatTextReveal | undefined,
   begun: boolean,
-  now: number
+  now: number,
+  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
   // Text received while unmounted has no arrival timestamp: show it without adding latency.
   if (remembered?.source === text && streaming) {
-    return advanceNativeChatText(remembered, now)
+    return advanceNativeChatText(remembered, now, revealMs)
   }
   const shown = streaming && !remembered && begun ? 0 : text.length
   return arriveNativeChatText({ source: text.slice(0, shown), shown, arrivals: [] }, text, now)
@@ -115,7 +115,8 @@ export function receiveNativeChatText(
   text: string,
   streaming: boolean,
   reducedMotion: boolean,
-  now: number
+  now: number,
+  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
   const immediate =
     reducedMotion ||
@@ -124,14 +125,15 @@ export function receiveNativeChatText(
       previous.shown === previous.source.length)
   return immediate
     ? { source: text, shown: text.length, arrivals: [] }
-    : advanceNativeChatText(arriveNativeChatText(previous, text, now), now)
+    : advanceNativeChatText(arriveNativeChatText(previous, text, now), now, revealMs)
 }
 
 /** Step each frame until complete and return cancellation. Deadline timers keep hidden windows on time when animation frames stop. */
 export function playNativeChatTextReveal(
   current: () => NativeChatTextReveal,
   step: (next: NativeChatTextReveal) => void,
-  frames: NativeChatTextRevealFrames
+  frames: NativeChatTextRevealFrames,
+  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): () => void {
   let frame = 0
   let deadline: ReturnType<typeof setTimeout> | undefined
@@ -139,15 +141,13 @@ export function playNativeChatTextReveal(
     frames.cancel(frame)
     clearTimeout(deadline)
     const now = frames.now()
-    const next = advanceNativeChatText(current(), now)
+    const next = advanceNativeChatText(current(), now, revealMs)
     step(next)
     if (next.shown >= next.source.length) {
       return
     }
     frame = frames.request(tick)
-    const earliest = Math.min(
-      ...next.arrivals.map((arrival) => arrival.at + NATIVE_CHAT_TEXT_REVEAL_DELAY_MS)
-    )
+    const earliest = Math.min(...next.arrivals.map((arrival) => arrival.at + revealMs))
     deadline = setTimeout(tick, Math.max(0, earliest - now))
   }
   tick()

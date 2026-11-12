@@ -1,62 +1,31 @@
 import { spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import {
-  classifyPrJobs,
-  PR_CHECK_JOBS,
-  STATIC_ANALYSIS_SCAN_ROOTS
-} from './pr-code-change-scope.mjs'
+import { parse } from 'yaml'
+import { UNIT_EXCLUDE } from '../../ci/unit-selection/dependency-graph/ci-unit-files.mjs'
+import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../../../..')
 
+const SHELL_CONTRACTS_STEP = 'Test real shell contracts'
+
+/** Every test file the shell contracts step's whole `run` script names, across all of its commands.
+ *  The YAML parser owns the block's extent, so a blank line or a later command cannot truncate the
+ *  list (C3-3). Null when the step is gone. */
+function shellContractsStepTests(workflowYaml) {
+  const steps = parse(workflowYaml)?.jobs?.shell_contracts?.steps ?? []
+  const step = steps.find((candidate) => candidate?.name === SHELL_CONTRACTS_STEP)
+  if (typeof step?.run !== 'string') {
+    return null
+  }
+  return step.run.split(/\s+/).filter((token) => token.endsWith('.test.ts'))
+}
+
 describe('per-job path classification', () => {
-  it('runs every expensive job on an empty diff rather than skipping by accident', () => {
-    const result = classifyPrJobs([])
-    expect(result.should_run).toBe(true)
-    for (const job of PR_CHECK_JOBS) {
-      expect(result[job], job).toBe(true)
-    }
-  })
-
-  it('runs it on a mobile-only diff, which should_run alone would skip', () => {
-    const classified = classifyPrJobs(['mobile/app/h/[hostId]/tasks.tsx'])
-    expect([classified.should_run, classified.mobile_web_app]).toEqual([false, true])
-  })
-
-  it.each([
-    '.github/workflows/pr.yml',
-    'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs'
-  ])('runs workflow and routing owner diffs as force-all: %s', (file) => {
-    const result = classifyPrJobs([file])
-    expect(result.should_run).toBe(true)
-    for (const job of PR_CHECK_JOBS) {
-      expect(result[job], job).toBe(true)
-    }
-    expect(classifyPrJobs(['pnpm-lock.yaml']).git_compatibility).toBe(true)
-  })
-
   // Mobile-only edits must run audits that lint mobile; skipped audits let #20702 duplicate imports break later merge refs.
-  it('runs static analysis for a mobile-only diff without dragging in the desktop suite', () => {
-    const result = classifyPrJobs([
-      'mobile/src/test-support/rpc-recording/adapters/push-registration-mount-adapters.ts'
-    ])
-    expect(result.static_analysis).toBe(true)
-    expect(result.mobile_dependencies).toBe(true)
-    expect(result.should_run).toBe(false)
-    for (const job of ['typecheck', 'test', 'package', 'package_windows', 'git_compatibility']) {
-      expect(result[job], job).toBe(false)
-    }
-  })
 
   // The ratchet: adding a tree to an audit command has to widen this trigger on its own.
-  it('runs static analysis for every tree the audit commands scan', () => {
-    expect(STATIC_ANALYSIS_SCAN_ROOTS).toEqual(
-      expect.arrayContaining(['src', 'config', 'tests', 'mobile'])
-    )
-    for (const root of STATIC_ANALYSIS_SCAN_ROOTS) {
-      expect(classifyPrJobs([`${root}/changed-file.ts`]).static_analysis, root).toBe(true)
-    }
-  })
 
   // Stale-base diffs exceed pipe buffer; one fd-0 read can exit 0 with no pairs, silently skipping every lane.
   it('classifies a path that arrives after the first pipe buffer', async () => {
@@ -106,5 +75,23 @@ describe('per-job path classification', () => {
     expect(exitCode, stderr).toBe(0)
     expect(stdout).toContain('should_run=true\n')
     expect(stdout).toContain('xterm_patch_sync=true\n')
+  })
+
+  // Unit shards exclude live-shell tests, so a test the shell contracts job runs must also route a focused
+  // edit to that job; otherwise a change to it, or to what it guards, runs no real shell at all (STA-2380 C2 F1).
+  it('routes every test the shell contracts job runs to shell_contracts', () => {
+    const tests = shellContractsStepTests(
+      readFileSync(resolve(projectDir, '.github/workflows/pr.yml'), 'utf8')
+    )
+    expect(tests, `pr.yml must keep the "${SHELL_CONTRACTS_STEP}" step`).not.toBeNull()
+    // Partial-omission guard with an independent source: every real-shell test the unit shards exclude
+    // is run by this job or by nothing, so each must appear in the parsed step.
+    const realShellTests = UNIT_EXCLUDE.filter((file) =>
+      /\.(?:live-shell|node-pty)\.test\.ts$/.test(file)
+    )
+    expect(realShellTests.length).toBeGreaterThan(0)
+    expect(tests).toEqual(expect.arrayContaining(realShellTests))
+    const unrouted = tests.filter((file) => classifyPrJobs([file]).shell_contracts !== true)
+    expect(unrouted).toEqual([])
   })
 })

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { RpcDispatcher, type DispatcherOptions } from '../runtime/rpc/dispatcher'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { PluginRuntimeRpc } from './workers/plugin-host-workspace-method-bindings'
+import type { PluginRuntimeRpc } from './workers/host-api/plugin-host-runtime-call'
 
 /** An error the runtime answered, with its code (`selector_not_found`, ...). */
 export class PluginRuntimeRpcError extends Error {
@@ -19,11 +19,11 @@ export class PluginRuntimeRpcError extends Error {
  */
 export function pluginRuntimeRpc(
   runtime: OrcaRuntimeService,
-  methods?: DispatcherOptions['methods']
+  methods: DispatcherOptions['methods']
 ): PluginRuntimeRpc {
   let dispatcher: RpcDispatcher | null = null
   return async (method, params, options = {}) => {
-    dispatcher ??= new RpcDispatcher({ runtime, ...(methods ? { methods } : {}) })
+    dispatcher ??= new RpcDispatcher({ runtime, methods })
     // The dispatcher maps a throw to an error answer; keep the original so its code reaches the plugin.
     let refusal: unknown = null
     const response = await dispatcher.dispatch(

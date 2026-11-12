@@ -3,20 +3,17 @@ import { installBrowserRoutePartitionPolicies } from './browser-session-route-po
 import { session, webContents } from 'electron'
 import { setBrowserClientRouteWebContentsProbe } from '../../client-hosts/file-transfers/browser-client-download-routing'
 import type { BrowserRoutePartitionBindingStore } from '../partitions/browser-route-partition-binding-store'
-import {
-  configureBrowserRoutePartitionBindingsForOrcaProfile,
-  currentBrowserRoutePartitionBindingStore
-} from '../partitions/browser-route-partition-binding-runtime'
+import { currentBrowserRoutePartitionBindingStore } from '../partitions/browser-route-partition-binding-runtime'
 import { releaseEvictedBrowserRoutePartitionStorage } from '../partitions/browser-route-partition-storage-dependencies'
 import { isBrowserRouteGuestPopup } from '../guest-authority/browser-route-guest-popup-ownership'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import {
   isBrowserRoutePartitionRetainedByAnyOwner,
   registerBrowserRoutePartitionRetentionProbe
 } from '../partitions/browser-route-partition-retention'
 import { BrowserRouteSessionRegistry } from './browser-route-session-registry'
 import { BrowserRouteWebContentsRegistry } from '../guest-authority/browser-route-webcontents-registry'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 
 const routeWebContentsRegistryRef: {
   current: BrowserRouteWebContentsRegistry | null
@@ -107,10 +104,3 @@ setBrowserClientRouteWebContentsProbe((webContentsId) => {
     browserRouteSessionRegistry.getPartitionForSession(contents.session) !== null
   )
 })
-
-export function configureRouteSessionsForOrcaProfile(options: {
-  orcaProfileId: string
-  profileDirectory: string
-}): void {
-  configureBrowserRoutePartitionBindingsForOrcaProfile(options)
-}

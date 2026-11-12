@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { OptionsFilterCountBadge } from '../../../sidebar/worktree-list/controls/options-filter-count-badge'
 import {
   getPRCommentsListDisplayModeLabel,
@@ -31,14 +31,15 @@ export function PRCommentOptionsMenu({
   onDisplayModeChange: (mode: PRCommentsListDisplayMode) => void
   onHideResolvedChange: (hide: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const activeFilterCount = hideResolved ? 1 : 0
-  const title = translate(
+  const title = t(
     'auto.components.right.sidebar.checks.panel.content.f5cf324efa',
     'Comment display options'
   )
   const label =
     activeFilterCount > 0
-      ? translate(
+      ? t(
           'auto.components.right.sidebar.checks.panel.commentOptions.triggerActive',
           'Comment display options ({{count}} filters)',
           {
@@ -72,7 +73,7 @@ export function PRCommentOptionsMenu({
         <div className="px-2 pt-1.5 text-sm font-semibold text-foreground">{title}</div>
         {/* Menu-native items: Radix menus block Tab and arrow-key only between items. */}
         <DropdownMenuLabel>
-          {translate('auto.components.right.sidebar.checks.panel.content.5e6e5a13fa', 'View')}
+          {t('auto.components.right.sidebar.checks.panel.content.5e6e5a13fa', 'View')}
         </DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={displayMode}
@@ -89,20 +90,20 @@ export function PRCommentOptionsMenu({
               value={mode}
               onSelect={(event) => event.preventDefault()}
             >
-              {getPRCommentsListDisplayModeLabel(mode)}
+              {getPRCommentsListDisplayModeLabel(mode, t)}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>
-          {translate('auto.components.sidebar.SidebarWorkspaceFilterSection.82594419ba', 'Filters')}
+          {t('auto.components.sidebar.SidebarWorkspaceFilterSection.82594419ba', 'Filters')}
         </DropdownMenuLabel>
         <DropdownMenuCheckboxItem
           checked={hideResolved}
           onCheckedChange={(checked) => onHideResolvedChange(checked === true)}
           onSelect={(event) => event.preventDefault()}
         >
-          {translate(
+          {t(
             'auto.components.right.sidebar.checks.panel.commentOptions.hideResolved',
             'Hide resolved threads'
           )}

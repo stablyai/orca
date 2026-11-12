@@ -1,11 +1,11 @@
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { blockRemovalForUnsavedFiles } from './removal-unsaved-files'
-import { getExecutionHostIdForFolderWorkspace } from '@/lib/folder-workspace-runtime-owner'
+import { getExecutionHostIdForFolderWorkspace } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** Mirrors deleteFolderWorkspace: its tabs close only when no same-id folder survives elsewhere. */
 export function folderWorkspaceDeleteClosesTabs(

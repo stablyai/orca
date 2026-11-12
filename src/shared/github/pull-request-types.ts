@@ -75,6 +75,12 @@ export type PRInfo = {
   baseRefName?: string
   /** PR branch name detects worktrees switching branches and stale durable links. */
   headRefName?: string
+  baseSha?: string
+  /** The whole rollup was read, within the page bound. */
+  checksReadComplete?: boolean
+  /** Complete, non-empty, nothing pending and no check waiting for approval. */
+  checksFinal?: boolean
+  failingCheckNames?: string[]
   prRepo?: GitHubRepositoryIdentity
   headRepo?: GitHubRepositoryIdentity
   conflictSummary?: PRConflictSummary

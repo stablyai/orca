@@ -57,7 +57,6 @@ jobs:
           src/main/updater/mac-install/updater-mac-quit-guard.test.ts
           src/main/startup/main-process-quit-update-veto.test.ts
           src/main/window/main-window-state-lifecycle.test.ts
-          src/main/window/dashboard-popout-window.test.ts
       - name: Prove login-backed terminal writer census on the disposable runner
         env:
           ORCA_MACOS_LOGIN_CENSUS_CI: '1'

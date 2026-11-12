@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithPickMostRecentActor } from './terminal-layout-queue'
-import type { ApplyLayoutResult, PtyLayoutState, PtyLayoutTarget } from '../../orca-runtime-core'
+import type { ApplyLayoutResult, PtyLayoutState, PtyLayoutTarget } from './terminal-layout-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from './runtime-layout-apply'
@@ -32,7 +32,13 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
   }
   protected abstract notifyTerminalResize(
     ptyId: string,
-    event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
+    event: {
+      cols: number
+      rows: number
+      displayMode: string
+      reason: string
+      seq?: number
+    }
   ): void
 
   protected async applyLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult> {
@@ -148,7 +154,7 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
   }
 
   setMobileDisplayMode(ptyId: string, mode: 'auto' | 'desktop'): void {
-    if (mode === 'auto') {
+    if (mode === this.getDefaultMobileDisplayMode()) {
       this.mobileDisplayModes.delete(ptyId)
     } else {
       this.mobileDisplayModes.set(ptyId, mode)
@@ -156,7 +162,28 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
   }
 
   getMobileDisplayMode(ptyId: string): 'auto' | 'desktop' {
-    return this.mobileDisplayModes.get(ptyId) ?? 'auto'
+    return this.mobileDisplayModes.get(ptyId) ?? this.getDefaultMobileDisplayMode()
+  }
+
+  // Why: a headless runtime (orca serve, orcad) serves several clients at once, so a phone that
+  // only views a terminal must not shrink it for all of them. Phone input or an explicit
+  // phone-mode request still claims the size. servesHeadlessGraph is fixed for the process, so
+  // a desktop host keeps fitting phones on open and no PTY's mode flips mid-session.
+  protected getDefaultMobileDisplayMode(): 'auto' | 'desktop' {
+    return this.servesHeadlessGraph ? 'desktop' : 'auto'
+  }
+
+  // A phone opening a terminal no phone is on (or holding at phone size) starts passive again.
+  // Phones still present or in their leave grace keep the earlier claim, as before.
+  protected resetMobileDisplayModeForFreshViewer(ptyId: string): void {
+    if (
+      this.getDefaultMobileDisplayMode() === 'desktop' &&
+      !this.mobileSubscribers.get(ptyId)?.size &&
+      !this.pendingSoftLeavers.has(ptyId) &&
+      !this.terminalFitOverrides.has(ptyId)
+    ) {
+      this.mobileDisplayModes.delete(ptyId)
+    }
   }
 
   isMobileSubscriberActive(ptyId: string): boolean {

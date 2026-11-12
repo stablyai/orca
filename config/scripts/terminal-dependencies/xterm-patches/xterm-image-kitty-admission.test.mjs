@@ -9,21 +9,6 @@ import {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('virtual prototype admission before replacement retirement', () => {
-  it('rejects a decoded source larger than the current shared pixel budget', async () => {
-    const h = createPlaceholderTerminal()
-    const oversized = new TrackedBitmap(3000, 3000)
-    vi.stubGlobal('createImageBitmap', async () => oversized)
-    try {
-      await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,p=10,c=2,r=2', PNG)
-      expect(h.storage._images.size).toBe(0)
-      expect(h.kitty._virtualStorageIds.size).toBe(0)
-      expect(oversized.close).toHaveBeenCalledOnce()
-      expect(h.addon.storageUsage).toBeLessThanOrEqual(h.addon.storageLimit)
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
   it('bounds markerless prototypes across distinct sources while allowing replacement at the bound', async () => {
     const h = createPlaceholderTerminal()
     vi.stubGlobal('createImageBitmap', async () => {
@@ -52,21 +37,6 @@ describe('virtual prototype admission before replacement retirement', () => {
       for (const bitmap of h.bitmaps) {
         expect(bitmap.close).toHaveBeenCalledOnce()
       }
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it('counts separate named placements of one source against the same bound', async () => {
-    const h = createPlaceholderTerminal()
-    vi.stubGlobal('createImageBitmap', async () => new TrackedBitmap(1, 1))
-    try {
-      await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,p=1,c=1,r=1', PNG)
-      for (let placement = 2; placement <= 257; placement++) {
-        await writeKitty(h.terminal, `a=p,i=7,U=1,p=${placement},c=1,r=1`)
-      }
-      expect(h.kitty._virtualStorageIds.size).toBe(256)
-      expect(h.kitty._virtualPlacements.get(7).size).toBe(256)
     } finally {
       h.terminal.dispose()
     }

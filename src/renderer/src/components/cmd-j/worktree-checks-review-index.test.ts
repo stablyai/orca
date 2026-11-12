@@ -3,7 +3,7 @@ import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
-import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { buildWorktreeChecksReviewIndex } from './worktree-checks-review-index'
 
 const repo: Repo = {

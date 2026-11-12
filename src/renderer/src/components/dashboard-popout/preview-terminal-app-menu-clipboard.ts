@@ -1,11 +1,11 @@
 import type { Terminal } from '@xterm/xterm'
-import { isEditableTarget } from '@/lib/editable-target'
-import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
 import {
   APP_MENU_SELECTION_ACTION_EVENT,
   type AppMenuSelectionAction
-} from '@/lib/app-menu-selection-actions'
-import { copyTerminalSelection } from '@/components/terminal-pane/terminal-selection-copy'
+} from '@/lib/app-commands/app-menu-selection-actions'
+import { copyTerminalSelection } from '@/components/terminal-pane/clipboard/terminal-selection-copy'
 import type { PreviewTerminalPasteSource } from './preview-terminal-paste'
 
 type PreviewTerminalSelection = Pick<Terminal, 'getSelection' | 'selectAll' | 'clearSelection'>

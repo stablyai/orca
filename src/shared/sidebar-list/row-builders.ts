@@ -5,6 +5,7 @@ import { getFolderWorkspaceHostIdentity } from '../folder-workspaces/folder-work
 import { getWorktreeLineageGroupKey } from './group-keys'
 import {
   getExpandedWorktreeOccurrences,
+  type WorktreeOccurrence,
   type WorktreeOccurrencePlan
 } from '../worktree-occurrence-plan'
 import type { NoticeHostContext } from './host-labels'
@@ -74,6 +75,8 @@ export function appendWorktreeRows(
     sectionKey: string
     hostContextLabelByRepoId?: ReadonlyMap<string, string>
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
+    /** Occurrences that are folder workspaces render as folder rows. */
+    folderPairByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
   }
 ): void {
   const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
@@ -90,6 +93,19 @@ export function appendWorktreeRows(
   )
   for (const occurrence of occurrences) {
     const worktree = occurrence.row
+    const folderPair = options.folderPairByIdentity?.get(getWorktreeHostIdentity(worktree))
+    if (folderPair) {
+      result.push(
+        buildFolderWorkspaceRow(folderPair, options.groupDepth, occurrence, {
+          collapsedGroups: options.collapsedGroups,
+          childWorktreeIds: childIdsByParent.get(occurrence.key),
+          hostContextLabel: options.hostContextLabelByWorktreeIdentity?.get(
+            getWorktreeHostIdentity(worktree)
+          )
+        })
+      )
+      continue
+    }
     result.push({
       type: 'item',
       occurrence,
@@ -119,14 +135,31 @@ export function appendWorktreeRows(
 /** One host-keyed folder row constructor for all emitters; IDs can collide across hosts. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
-  groupDepth: number
+  groupDepth: number,
+  occurrence?: WorktreeOccurrence<Worktree>,
+  options?: {
+    collapsedGroups: ReadonlySet<string>
+    childWorktreeIds?: readonly string[]
+    hostContextLabel?: string
+  }
 ): FolderWorkspaceRow {
+  const lineageGroupKey =
+    occurrence && occurrence.childCount > 0 ? getWorktreeLineageGroupKey(occurrence.row) : undefined
   return {
     type: 'folder-workspace',
     key: `folder-workspace:${getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
-    depth: 0,
-    groupDepth
+    depth: occurrence?.depth ?? 0,
+    groupDepth,
+    ...(options?.hostContextLabel ? { hostContextLabel: options.hostContextLabel } : {}),
+    ...(occurrence && occurrence.childCount > 0 && lineageGroupKey
+      ? {
+          lineageChildCount: occurrence.childCount,
+          lineageChildWorktreeIds: options?.childWorktreeIds,
+          lineageGroupKey,
+          lineageCollapsed: options?.collapsedGroups.has(lineageGroupKey) === true
+        }
+      : {})
   }
 }

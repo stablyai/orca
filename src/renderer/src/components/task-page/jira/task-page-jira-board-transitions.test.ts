@@ -6,10 +6,10 @@ const mocks = vi.hoisted(() => ({
   jiraListTransitionsForTarget: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-jira-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => ({
   jiraListTransitionsForTarget: mocks.jiraListTransitionsForTarget
 }))
-vi.mock('@/runtime/runtime-jira-detail-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => ({
   jiraListTransitionsForTarget: mocks.jiraListTransitionsForTarget
 }))
 

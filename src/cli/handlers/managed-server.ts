@@ -9,10 +9,10 @@ import type {
 } from '../../shared/orcad-managed-runtime'
 import { ORCAD_RECOVERY_CHANGED_STATE_CODE } from '../../shared/orcad-managed-runtime'
 import { MANAGED_SERVER_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getRequiredStringFlag } from '../flags'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 import { formatManagedServerStatus } from './managed-server-format'
 import { reportAfterClosedConnection } from './managed-server-reconnect'
@@ -196,7 +196,8 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
       response,
       context.json,
       ['unlinked'],
-      () => `Stopped ${params.selector} and unlinked it from this machine.`
+      () =>
+        `Stopped ${params.selector}, unlinked it from this machine and disconnected its SSH host.`
     )
   },
   'environment forget': async (context) => {
@@ -217,7 +218,7 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
       context.json,
       ['forgotten'],
       () =>
-        `Unlinked ${params.selector} from this machine. Its host was not contacted, so orcad may still be running there.`
+        `Unlinked ${params.selector} from this machine and disconnected its SSH host. The host was not contacted, so orcad may still be running there; connect the host to set its server up again.`
     )
   },
   'environment cancel-stop': async (context) => {

@@ -3,7 +3,14 @@ import type {
   NativeChatImageRefBlock,
   NativeChatToolResultBlock
 } from '../../shared/native-chat/native-chat-types'
-import { asRecord, extractString } from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import { extractString } from '../../shared/trimmed-string'
+import {
+  isClaudeToolUseContent,
+  isClaudeToolResultContent,
+  claudeToolResultText,
+  claudeToolResultFailed
+} from '../../shared/claude-tool-content'
 
 export function toolResultOutput(value: unknown): string {
   if (typeof value === 'string') {
@@ -82,8 +89,25 @@ function claudeContentBlock(record: Record<string, unknown>): NativeChatBlock | 
       return toolResultBlock(record)
     case 'image':
       return imageRefBlock(record)
-    default:
+    default: {
+      if (isClaudeToolUseContent(record)) {
+        return {
+          type: 'tool-call',
+          name: String(record.name),
+          input: record.input,
+          callId: String(record.id)
+        }
+      }
+      if (isClaudeToolResultContent(record)) {
+        return {
+          type: 'tool-result',
+          callId: String(record.tool_use_id),
+          output: claudeToolResultText(record.content),
+          ...(claudeToolResultFailed(record) ? { isError: true } : {})
+        }
+      }
       return null
+    }
   }
 }
 

@@ -20,9 +20,9 @@ import {
   formatProjectHostSetupList,
   formatProjectHostSetupResult,
   formatProjectHostSetupUpdateResult,
-  formatProjectList,
-  printResult
-} from '../format'
+  formatProjectList
+} from '../project-format'
+import { printResult } from '../command-result-output'
 import {
   hostFilterMatchesHostId,
   parseHostFlag,
@@ -156,6 +156,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
         client.isRemote,
         'Project setup clone'
       ),
+      folderName: getOptionalStringFlag(flags, 'folder-name'),
       displayName: getOptionalStringFlag(flags, 'display-name'),
       projectId: await resolveProjectIdSelector(client, getRequiredStringFlag(flags, 'project'))
     }

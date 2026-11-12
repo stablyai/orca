@@ -1,5 +1,5 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import { EMULATOR_LOCAL_SHUTDOWN_EVENT } from './use-emulator-pane-session-events'
 import { emulatorShutdownErrorText } from './emulator-pane-error-copy'

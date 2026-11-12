@@ -1,24 +1,28 @@
 // Keep Electron imports out: both desktop and orcad bundle these account services.
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
 import type { Store } from '../../persistence/loading-store/store'
-import { RateLimitService } from '../../rate-limits/service'
+import { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import { CodexRuntimeHomeService } from '../../codex-accounts/runtime-home-service'
 import { CodexAccountService } from '../../codex-accounts/service'
 import { ClaudeRuntimeAuthService } from '../../claude-accounts/runtime-auth-service'
 import { ClaudeAccountService } from '../../claude-accounts/service'
-import { getInitialCodexRateLimitTarget } from '../../rate-limits/codex-rate-limit-target'
-import { getInitialClaudeRateLimitTarget } from '../../rate-limits/claude-rate-limit-target'
-import { getKimiRuntimeTarget, resolveKimiHome } from '../../kimi/kimi-runtime-home'
-import { resolveCodexRateLimitHomeUnlessStopped } from '../../rate-limits/codex-rate-limit-wsl-home-gate'
+import { getInitialCodexRateLimitTarget } from '../../rate-limits/providers/codex/codex-rate-limit-target'
+import { getInitialClaudeRateLimitTarget } from '../../rate-limits/providers/claude/claude-rate-limit-target'
+import { resolveKimiHome } from '../../kimi/kimi-runtime-home'
+import { resolveLocalAccountUsageTarget } from '../../../shared/local-account-runtime'
+import { resolveCodexRateLimitHomeUnlessStopped } from '../../rate-limits/providers/codex/codex-rate-limit-wsl-home-gate'
 import { inactiveCodexHomeUnlessStopped } from '../../rate-limits/inactive-codex-home'
 import { readMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { readZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
-import { readOpenCodeGoApiKey } from '../../opencode/opencode-go-api-key-store'
-import { setAntigravityNativeCredentialChangeListener } from '../../antigravity/native-account-host'
-import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/account-runtime-target-sync'
-import { normalizeCodexRuntimeSelection } from '../../codex-accounts/runtime-selection'
-import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/runtime-selection'
+import { readOpenCodeGoApiKey } from '../../opencode/accounts/opencode-go-api-key-store'
+import {
+  getAntigravityAccountService,
+  setAntigravityNativeCredentialChangeListener
+} from '../../antigravity/native-account-host'
+import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
+import { normalizeCodexRuntimeSelection } from '../../codex-accounts/account-management/runtime-selection'
+import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 
 export type ProviderAccountServices = {
@@ -54,7 +58,10 @@ export function createProviderAccountServices(
   )
   rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
   // Read credentials where Kimi’s CLI refreshes its token, including WSL (#12370).
-  rateLimits.setKimiHomeResolver(() => resolveKimiHome(getKimiRuntimeTarget(store.getSettings())))
+  rateLimits.setKimiHomeResolver(() =>
+    resolveKimiHome(resolveLocalAccountUsageTarget(store.getSettings()))
+  )
+  rateLimits.setAntigravityFetchTarget(resolveLocalAccountUsageTarget(store.getSettings()))
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,
@@ -134,9 +141,17 @@ export function createProviderAccountServices(
   rateLimits.setAntigravityUsageEnabledResolver(() =>
     store.getUI().statusBarItems.includes('antigravity')
   )
+  // Hidden Muse meters must not spawn the Muse CLI.
+  rateLimits.setMuseUsageEnabledResolver(() => store.getUI().statusBarItems.includes('muse'))
   setAntigravityNativeCredentialChangeListener(() =>
     rateLimits.invalidateAntigravityCredentialState()
   )
+  // agy has one shared login: attribute readings to saved accounts instead of switching to read others.
+  rateLimits.setAntigravityAccountUsageRecorder({
+    begin: async (target) => (await getAntigravityAccountService(target)).beginUsageRead(),
+    finish: async (target, login, limits) =>
+      (await getAntigravityAccountService(target)).finishUsageRead(login, limits)
+  })
   rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store.getSettings()

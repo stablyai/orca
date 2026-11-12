@@ -77,6 +77,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     const display = getFolderWorkspaceCardPrDisplay({
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      crossStoreChildren: [],
       worktreeLineageById: {},
       worktreeMap: new Map([
         [parent.id, parent],
@@ -98,6 +99,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     const display = getFolderWorkspaceCardPrDisplay({
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      crossStoreChildren: [],
       worktreeLineageById: {
         [nested.id]: {
           ...makeWorktreeLineage(nested, parent),

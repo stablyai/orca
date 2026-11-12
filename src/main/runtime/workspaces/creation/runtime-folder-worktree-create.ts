@@ -1,12 +1,12 @@
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/wsl-distro-stopped-hold'
+import { RuntimeLineageError } from '../lineage/runtime-lineage-error'
 import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree-first-surface'
 import { randomUUID } from 'node:crypto'
 import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'
 import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktree-display-name'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -17,28 +17,26 @@ import {
   mergeRuntimeFolderWorkspace
 } from '../catalog/runtime-folder-workspace'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
-import type { RuntimeStore } from '../../runtime-store-contract'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
 } from '../startup/runtime-worktree-agent-startup'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
+import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
+import {
+  isPreparedFolderSetup,
+  prepareFolderWorktreeSetup,
+  startRuntimeFolderWorktreeSetupTerminals,
+  type RuntimeFolderWorktreeSetupDeps
+} from './runtime-folder-worktree-setup'
+import { buildRuntimeSetupReceipt } from './runtime-local-worktree-setup'
+import { createdWorktreeLifecycleIdentity } from '../lifecycle/worktree-lifecycle-event'
 
 type RuntimeFolderWorktreeCreateDeps = {
   store: RuntimeStore
-  ptySpawnAvailable: boolean
-  provisionInBackground?: () => boolean
-  createTerminal: (
-    selector: string,
-    options: TerminalCreateOptions
-  ) => Promise<RuntimeTerminalCreate>
-  pasteDraft: (handle: string, draft: WorktreeStartupDraftPaste) => void
-  sendFollowup: (
-    handle: string,
-    followup: WorktreeStartupFollowup,
-    terminal: RuntimeTerminalCreate
-  ) => void
+  /** The same terminal operations a worktree create uses; folder startup and setup share them. */
+  terminals: RuntimeLocalWorktreeTerminalPorts
   invalidateResolvedWorktrees: () => void
   notifyWorktreesChanged: (repoId: string) => void
   emitCreated: (event: {
@@ -54,6 +52,8 @@ type RuntimeFolderWorktreeCreateDeps = {
     startup?: WorktreeStartupLaunch,
     providesInitialSurface?: boolean
   ) => void
+  /** Absent where this host can't run the folder's setup script. */
+  setup?: RuntimeFolderWorktreeSetupDeps
 }
 
 export async function createRuntimeFolderWorktree(args: {
@@ -70,6 +70,13 @@ export async function createRuntimeFolderWorktree(args: {
   deps: RuntimeFolderWorktreeCreateDeps
 }): Promise<CreateWorktreeResult> {
   const { request, repo, deps } = args
+  // Inferred parents fall away here, as same-machine folder creates record none.
+  if (request.lineage?.crossStoreParent && !request.lineage.crossStoreParentInferredFrom) {
+    throw new RuntimeLineageError(
+      'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      "A folder workspace can't have a parent on another machine yet."
+    )
+  }
   const now = Date.now()
   const settings = deps.store.getSettings()
   const instanceId = randomUUID()
@@ -140,20 +147,50 @@ export async function createRuntimeFolderWorktree(args: {
     kind: 'created',
     worktreeId: worktree.id,
     path: worktree.path,
-    branch: worktree.branch
+    branch: worktree.branch,
+    ...createdWorktreeLifecycleIdentity(worktree)
   })
+  const setupResult = deps.setup
+    ? await prepareFolderWorktreeSetup({
+        request,
+        repo,
+        worktree,
+        settings,
+        runtimeTarget: deps.setup.runtimeTarget,
+        shouldUseSetupRunner: deps.setup.shouldUseSetupRunner
+      })
+    : undefined
+  const preparedSetup = isPreparedFolderSetup(setupResult) ? setupResult : undefined
+  if (preparedSetup?.setup && deps.setup) {
+    return {
+      worktree: folderCreateResultWorktree(worktree),
+      ...(await startRuntimeFolderWorktreeSetupTerminals({
+        request,
+        repo,
+        worktree,
+        prepared: preparedSetup,
+        startup: args.startup,
+        startupFollowup: args.startupFollowup,
+        startupLaunchRuntime: args.startupLaunchRuntime,
+        createdWithAgent: args.createdWithAgent,
+        promisedAgentChat: args.promisedAgentChat,
+        draftPaste: args.draftPaste,
+        terminals: deps.terminals
+      }))
+    }
+  }
   const shouldActivate = request.activate === true || request.runHooks === true
-  let warning: string | undefined
+  let warning: string | undefined = setupResult?.warning
   let didSpawnStartup = false
   let startupTerminal: CreateWorktreeResult['startupTerminal']
   // Main owns failed agent startup too, so its pane can show the reason without a terminal service.
-  if (args.startup && (deps.ptySpawnAvailable || ORCA_LAYOUT_OWNER_IS_MAIN)) {
+  if (args.startup && (deps.terminals.canSpawn || ORCA_LAYOUT_OWNER_IS_MAIN)) {
     try {
       const launchRuntime = args.startupLaunchRuntime
       if (launchRuntime instanceof Error && !ORCA_LAYOUT_OWNER_IS_MAIN) {
         throw launchRuntime
       }
-      const terminal = await deps.createTerminal(`id:${worktree.id}`, {
+      const terminal = await deps.terminals.createTerminal(`id:${worktree.id}`, {
         command: args.startup.command,
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...paneIdentity(request.startupPaneKey),
@@ -174,10 +211,10 @@ export async function createRuntimeFolderWorktree(args: {
       })
       request.onStartupTerminalCreated?.(terminal)
       if (args.draftPaste) {
-        deps.pasteDraft(terminal.handle, args.draftPaste)
+        deps.terminals.pasteDraft(terminal.handle, args.draftPaste)
       }
       if (args.startupFollowup) {
-        deps.sendFollowup(terminal.handle, args.startupFollowup, terminal)
+        deps.terminals.sendFollowup(terminal.handle, args.startupFollowup, terminal)
       }
       didSpawnStartup = true
       startupTerminal = {
@@ -212,8 +249,8 @@ export async function createRuntimeFolderWorktree(args: {
     )
   }
   if (
-    (!shouldActivate || deps.provisionInBackground?.() === true) &&
-    deps.ptySpawnAvailable &&
+    (!shouldActivate || deps.terminals.provisionInBackground?.() === true) &&
+    deps.terminals.canSpawn &&
     shouldSeedWorktreePrimaryTerminal({
       // Failed agents retain their panes; do not seed a shell beside them.
       hasPrimarySurface: didSpawnStartup || (ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(args.startup)),
@@ -222,7 +259,7 @@ export async function createRuntimeFolderWorktree(args: {
     })
   ) {
     try {
-      await deps.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
+      await deps.terminals.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
     } catch (error) {
       const message = readableWslDistroHoldText(
         formatTerminalStartFailure(error) ??
@@ -236,20 +273,33 @@ export async function createRuntimeFolderWorktree(args: {
     }
   }
   return {
-    worktree: {
-      ...worktree,
-      parentWorktreeId: null,
-      childWorktreeIds: [],
-      lineage: null,
-      git: {
-        path: worktree.path,
-        head: worktree.head,
-        branch: worktree.branch,
-        isBare: worktree.isBare,
-        isMainWorktree: worktree.isMainWorktree
-      }
-    },
+    worktree: folderCreateResultWorktree(worktree),
     ...(startupTerminal ? { startupTerminal } : {}),
+    ...(preparedSetup && request.awaitTerminalProvisioning
+      ? { setupReceipt: buildRuntimeSetupReceipt(preparedSetup, false, null) }
+      : {}),
+    // The window re-asks with this content, then runs the approved setup.
+    ...(preparedSetup?.setupTrustMismatch
+      ? { setupTrustMismatch: preparedSetup.setupTrustMismatch }
+      : {}),
     ...(warning ? { warning } : {})
+  }
+}
+
+function folderCreateResultWorktree(
+  worktree: ReturnType<typeof mergeRuntimeFolderWorkspace>
+): CreateWorktreeResult['worktree'] {
+  return {
+    ...worktree,
+    parentWorktreeId: null,
+    childWorktreeIds: [],
+    lineage: null,
+    git: {
+      path: worktree.path,
+      head: worktree.head,
+      branch: worktree.branch,
+      isBare: worktree.isBare,
+      isMainWorktree: worktree.isMainWorktree
+    }
   }
 }

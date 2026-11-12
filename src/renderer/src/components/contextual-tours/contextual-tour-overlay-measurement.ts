@@ -48,9 +48,37 @@ export function getContextualTourDisplayProgress(args: {
     return { current: args.stepIndex + 1, total: args.tour.steps.length }
   }
   return getContextualTourStepProgress({
-    visibleStepIndexes: args.visibleStepIndexes,
+    visibleStepIndexes: withPassedSplitLesson(args.tour, args.visibleStepIndexes, args.stepIndex),
     stepIndex: args.stepIndex
   })
+}
+
+// Why: a chat split focuses its landing, which has no split target; the lesson already shown keeps its slot.
+function withPassedSplitLesson(
+  tour: ContextualTour,
+  visibleStepIndexes: readonly number[],
+  stepIndex: number
+): readonly number[] {
+  if (tour.id !== 'workspace-agent-sessions') {
+    return visibleStepIndexes
+  }
+  const splitIndexes = tour.steps.flatMap((step, index) =>
+    step.primaryAction?.kind === 'split-chat-pane' ||
+    step.primaryAction?.kind === 'split-terminal-pane'
+      ? [index]
+      : []
+  )
+  const firstSplit = splitIndexes.at(0)
+  const lastSplit = splitIndexes.at(-1)
+  if (
+    firstSplit === undefined ||
+    lastSplit === undefined ||
+    stepIndex <= lastSplit ||
+    visibleStepIndexes.some((index) => splitIndexes.includes(index))
+  ) {
+    return visibleStepIndexes
+  }
+  return [...visibleStepIndexes, firstSplit].sort((a, b) => a - b)
 }
 
 export function getContextualTourMeasurementAction(args: {
@@ -169,6 +197,7 @@ export function measureContextualTourOverlayRenderState(args: {
       targetElement: target.element,
       progress,
       title: localizedCopy?.title ?? activeStep.title,
+      badge: activeStep.badge,
       body: formatContextualTourStepCopy(
         localizedCopy?.body ?? getContextualTourStepCopy(activeStep),
         args.keybindings,
@@ -264,18 +293,28 @@ function withLocalizedLabel(
   return action && label ? { ...action, label } : action
 }
 
+const STEP_COPY_SHORTCUT_ACTIONS = [
+  'terminal.splitRight',
+  'sidebar.projects.toggleCollapse'
+] as const satisfies readonly Parameters<typeof formatOptionalShortcutLabel>[0][]
+
 function formatContextualTourStepCopy(
   copy: string,
   keybindings: Parameters<typeof formatOptionalShortcutLabel>[1],
   copyWithoutShortcut?: string
 ): string {
-  if (!copy.includes('{terminal.splitRight}')) {
-    return copy
+  let formatted = copy
+  for (const actionId of STEP_COPY_SHORTCUT_ACTIONS) {
+    const token = `{${actionId}}`
+    if (!formatted.includes(token)) {
+      continue
+    }
+    const shortcut = formatOptionalShortcutLabel(actionId, keybindings)
+    // An unbound shortcut would leave "Press , or …"; name only the click path instead.
+    if (!shortcut && copyWithoutShortcut) {
+      return copyWithoutShortcut
+    }
+    formatted = formatted.replace(token, shortcut ?? '')
   }
-  const shortcut = formatOptionalShortcutLabel('terminal.splitRight', keybindings)
-  // An unbound shortcut would leave "Press , or …"; name only the click path instead.
-  if (!shortcut && copyWithoutShortcut) {
-    return copyWithoutShortcut
-  }
-  return copy.replace('{terminal.splitRight}', shortcut ?? '')
+  return formatted
 }

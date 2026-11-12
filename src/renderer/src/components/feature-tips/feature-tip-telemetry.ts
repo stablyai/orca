@@ -1,5 +1,5 @@
 import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -75,7 +75,7 @@ export function isChatUiLaunchTipHeldOut(
   settings: Pick<GlobalSettings, 'telemetry'> | null
 ): boolean {
   const telemetry = settings?.telemetry
-  const cohort = telemetry?.chatUiLaunchTipCohort
+  const cohort = telemetry?.chatUiLaunchTipRolloutCohort ?? telemetry?.chatUiLaunchTipCohort
   return (
     cohort === 'control' ||
     ((cohort === 'treatment' ||
@@ -91,10 +91,11 @@ export function isChatUiLaunchTipHeldOut(
 export function shouldSuppressAutomaticChatUiLaunchTip(
   settings: Pick<GlobalSettings, 'telemetry' | 'agentDefaultSurface'> | null
 ): boolean {
-  return (
-    normalizeAgentDefaultSurface(settings?.agentDefaultSurface) === 'chat' ||
-    isChatUiLaunchTipHeldOut(settings)
-  )
+  const telemetry = settings?.telemetry
+  if (telemetry?.chatUiLaunchTipRolloutCohort ?? telemetry?.chatUiLaunchTipCohort) {
+    return isChatUiLaunchTipHeldOut(settings)
+  }
+  return normalizeAgentDefaultSurface(settings?.agentDefaultSurface) === 'chat'
 }
 
 export function trackChatUiFeatureTipExposure(
@@ -105,7 +106,10 @@ export function trackChatUiFeatureTipExposure(
     track('chat_ui_feature_tip_exposure', {
       launch_tip_experiment_version: CHAT_UI_LAUNCH_TIP_EXPERIMENT_VERSION,
       variant: CHAT_UI_TIP_TELEMETRY_VARIANT[variant],
-      launch_tip_cohort: settings?.telemetry?.chatUiLaunchTipCohort ?? 'unassigned',
+      launch_tip_cohort:
+        settings?.telemetry?.chatUiLaunchTipRolloutCohort ??
+        settings?.telemetry?.chatUiLaunchTipCohort ??
+        'unassigned',
       shown: !shouldSuppressAutomaticChatUiLaunchTip(settings),
       ...(settings?.telemetry?.chatUiLaunchTipTargeting
         ? { targeting: settings.telemetry.chatUiLaunchTipTargeting.mode }

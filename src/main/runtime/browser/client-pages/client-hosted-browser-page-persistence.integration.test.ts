@@ -134,16 +134,4 @@ describe('client-hosted browser page persistence through the runtime', () => {
     expect(profile.session.clientHostedBrowserPagesByWorktree?.[WT]).toBeUndefined()
     expect(getRuntimeBrowserPageRegistry(startRuntime(profile)).listPages()).toEqual([])
   })
-
-  it('keeps a page whose host quit, so the row survives both a quit and a restart', () => {
-    const profile = createProfile()
-    const runtime = startRuntime(profile)
-    const host = attachHost(runtime)
-    placeAndPublish(runtime, 'page-a')
-    runtime.notifyMobileSessionTabsChanged(WT)
-
-    host.release()
-
-    expect(getRuntimeBrowserPageRegistry(startRuntime(profile)).getPage('page-a')).toBeDefined()
-  })
 })

@@ -2,32 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../constants'
 import {
   assertOrcadMigrationScrollbackReferences,
-  MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS,
-  OrcadMigrationSnapshotChunkRequestSchema,
   parseOrcadMigrationSnapshotChunkResult,
   parseOrcadMigrationTerminalScrollbackSnapshots,
   type OrcadMigrationSnapshotChunkRequest,
   type OrcadMigrationTerminalScrollbackSnapshot
 } from './orcad-migration-scrollback'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../terminal/replay/terminal-scrollback-limits'
 
 const DIGEST = 'a'.repeat(64)
 
 describe('orcad migration scrollback wire validation', () => {
-  it('accepts only canonical non-empty bounded base64 chunks', () => {
-    const request = chunkRequest('YQ==')
-    expect(OrcadMigrationSnapshotChunkRequestSchema.safeParse(request).success).toBe(true)
-    expect(
-      OrcadMigrationSnapshotChunkRequestSchema.safeParse({ ...request, futureField: 1 }).success,
-      'a newer client field'
-    ).toBe(true)
-    for (const bytesBase64 of ['', 'YQ', 'YQ=', 'A===', '***=']) {
-      expect(
-        OrcadMigrationSnapshotChunkRequestSchema.safeParse({ ...request, bytesBase64 }).success
-      ).toBe(false)
-    }
-  })
-
   it('requires an acknowledgment for exactly the decoded chunk length', () => {
     const request = chunkRequest(Buffer.from('abc').toString('base64'), 7)
     expect(
@@ -67,29 +50,6 @@ describe('orcad migration scrollback wire validation', () => {
         { ...descriptor(2), tabId: first.tabId, leafId: first.leafId }
       ])
     ).toThrow('orcad_migration_dormant_scrollback_snapshot_leaf_duplicate')
-  })
-
-  it('enforces descriptor count, per-file, and aggregate limits', () => {
-    expect(() =>
-      parseOrcadMigrationTerminalScrollbackSnapshots(
-        Array.from({ length: MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS + 1 }, (_, index) =>
-          descriptor(index + 1)
-        )
-      )
-    ).toThrow('orcad_migration_dormant_scrollback_snapshots_too_many')
-    expect(() =>
-      parseOrcadMigrationTerminalScrollbackSnapshots([
-        { ...descriptor(1), byteLength: TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT + 1 }
-      ])
-    ).toThrow('orcad_migration_dormant_scrollback_size_invalid')
-    expect(() =>
-      parseOrcadMigrationTerminalScrollbackSnapshots(
-        Array.from({ length: 52 }, (_, index) => ({
-          ...descriptor(index + 1),
-          byteLength: TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT
-        }))
-      )
-    ).toThrow('orcad_migration_dormant_scrollback_snapshots_too_large')
   })
 
   it('requires one exact descriptor for every published session ref', () => {

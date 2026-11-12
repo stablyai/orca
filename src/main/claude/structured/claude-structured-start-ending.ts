@@ -1,15 +1,15 @@
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { withObservedProviderExit } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { withObservedProviderExit } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import type {
   AgentSessionStartEndings,
   AgentSessionStartFailure
-} from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+} from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import type {
   StructuredAgentSessionProviderOpenInput,
   StructuredAgentSessionProviderOpenResult
-} from '../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+} from '../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { openClaudeStructuredSession } from './claude-structured-session-open'
-import { claudeStartFailure } from '../claude-startup-failure'
+import { claudeStartFailure } from '../sdk-transport/claude-startup-failure'
 import type { ClaudeSession, ClaudeSessionExit } from './claude-structured-session-state'
 
 /** Publishes an acquisition's session with its start ending admitted first, so its exit is never

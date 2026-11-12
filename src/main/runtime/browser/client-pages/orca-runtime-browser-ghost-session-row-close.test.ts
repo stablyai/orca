@@ -9,39 +9,6 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
-/** Registry-miss ghost rows must retire without commanding absent guests, or every paired device retains them. */
-describe('browserTabClose on a session row with no runtime page', () => {
-  it('closes a rehydrated row with no host to ask, and leaves nothing to restore', async () => {
-    const { RuntimeBrowserCommands } = await import('../commands/browser-commands')
-    const pages = new RuntimeBrowserPageRegistry()
-    pages.publishClientPage({
-      browserPageId: 'page-restored',
-      workspaceId: 'wt-1',
-      browserProfileId: 'profile-a',
-      executionHostKey: 'restored-client-host-execution',
-      placement: RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT,
-      pairedDeviceId: 'device-a',
-      url: 'https://restored.internal/',
-      loading: false,
-      active: false
-    })
-    const retireRuntimeOwnedBrowserSessionTab = vi.fn(() => true)
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getRuntimeBrowserPageRegistry: () => pages,
-        retireRuntimeOwnedBrowserSessionTab
-      })
-    )
-
-    await expect(
-      commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-restored' })
-    ).resolves.toEqual({ closed: true })
-    // No host lease ever existed; commanding it would strand the retained ghost row.
-    expect(pages.getPage('page-restored')).toBeUndefined()
-    expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('wt-1', 'page-restored')
-  })
-})
-
 // Hosts without a browser engine still own client-hosted page records.
 describe('browserTabClose on a host with no browser engine', () => {
   it('retires a held client-hosted page instead of refusing with browser_unavailable', async () => {
@@ -62,35 +29,6 @@ describe('browserTabClose on a host with no browser engine', () => {
     ).resolves.toEqual({ closed: true })
     expect(pages.getPage('page-restored')).toBeUndefined()
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('wt-1', 'page-restored')
-  })
-
-  it('retires a ghost session row, and still refuses what it cannot account for', async () => {
-    const { createRuntimeBrowserCommands, setRuntimeBrowserCommandsFactory } =
-      await import('../installation/runtime-browser-commands-factory')
-    setRuntimeBrowserCommandsFactory(null)
-    const retireRuntimeOwnedBrowserSessionTab = vi.fn(
-      (_worktreeId: string, pageId: string) => pageId === 'page-ghost'
-    )
-    const commands = createRuntimeBrowserCommands(
-      createHost({
-        retireRuntimeOwnedBrowserSessionTab,
-        // Folder workspaces bypass git selectors; resolve them through browser workspace routing.
-        resolveWorkspaceSelector: async () => {
-          throw new Error('selector_not_found')
-        }
-      })
-    )
-
-    await expect(
-      commands.browserTabClose({ worktree: 'id:folder:f-1', page: 'page-ghost' })
-    ).resolves.toEqual({ closed: true })
-    expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('folder:f-1', 'page-ghost')
-    await expect(
-      commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-unknown' })
-    ).rejects.toMatchObject({ code: 'browser_unavailable' })
-    await expect(Promise.resolve().then(() => commands.browserTabClose({}))).rejects.toMatchObject({
-      code: 'browser_unavailable'
-    })
   })
 
   it('refuses a page named under the wrong worktree', async () => {

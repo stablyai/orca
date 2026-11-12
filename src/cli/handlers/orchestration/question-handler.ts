@@ -1,17 +1,17 @@
 import type { CommandHandler } from '../../dispatch'
 import { getOptionalStringFlag } from '../../flags'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import { renderCommand } from '../../orchestration-mutation-recovery'
 import { RuntimeClientError, type RuntimeClient } from '../../runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import { ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 import {
   clampOrchestrationAskTimeoutMs,
   ORCHESTRATION_ASK_MAX_TIMEOUT_MS,
   resolveOrchestrationAskClientTimeoutMs
-} from '../../../shared/orchestration-ask-timeout'
-import type { LegacyCompatibilityResult } from '../../../shared/orchestration-check-output'
+} from '../../../shared/orchestration/mailbox/orchestration-ask-timeout'
+import type { LegacyCompatibilityResult } from '../../../shared/orchestration/mailbox/orchestration-check-output'
 import { callOrchestrationMutation } from './mutation-request'
 import { withReceiptNext } from './receipt-next-text'
 import { askView, type AskResult } from './ask-agent-view'

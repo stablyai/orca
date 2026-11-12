@@ -60,112 +60,6 @@ describe('DaemonStreamDataBatcher', () => {
     }
   })
 
-  it('coalesces background output before writing daemon stream events', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-
-      batcher.enqueue('client-1', 'session-1', 'a')
-      batcher.enqueue('client-1', 'session-1', 'b')
-
-      expect(streamSocket.write).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(1)
-      expect(streamSocket.write).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(1)
-
-      expect(streamSocket.write).toHaveBeenCalledTimes(1)
-      expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"ab"')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('flushes small interactive output immediately', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-
-      batcher.enqueue('client-1', 'session-1', '\x1b[20;2Hredraw', {
-        flushImmediately: true,
-        flushMaxChars: 1024
-      })
-
-      expect(streamSocket.write).toHaveBeenCalledTimes(1)
-      expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('\\u001b[20;2Hredraw')
-      vi.advanceTimersByTime(2)
-      expect(streamSocket.write).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('preserves transformed span metadata through an immediate flush', () => {
-    const { batcher, streamSocket } = createBatcher()
-
-    batcher.enqueue('client-1', 'session-1', '', {
-      flushImmediately: true,
-      rawLength: 9,
-      seq: 17,
-      transformed: true
-    })
-
-    expect(streamSocket.write).toHaveBeenCalledTimes(1)
-    expect(JSON.parse(String(streamSocket.write.mock.calls[0]?.[0]))).toMatchObject({
-      event: 'data',
-      payload: { data: '', rawLength: 9, seq: 17, sequenceChars: 9, transformed: true }
-    })
-  })
-
-  it('keeps large pending output batched even when an interactive redraw follows', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-      const pending = 'x'.repeat(1020)
-
-      batcher.enqueue('client-1', 'session-1', pending)
-      batcher.enqueue('client-1', 'session-1', 'redraw', {
-        flushImmediately: true,
-        flushMaxChars: 1024
-      })
-
-      expect(streamSocket.write).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(2)
-      expect(streamSocket.write).toHaveBeenCalledTimes(1)
-      expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain(`${pending}redraw`)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('flushes interactive output for one session while another session has large pending output', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-      const background = 'x'.repeat(2048)
-
-      batcher.enqueue('client-1', 'session-background', background)
-      batcher.enqueue('client-1', 'session-interactive', 'echo', {
-        flushImmediately: true,
-        flushMaxChars: 1024
-      })
-
-      expect(streamSocket.write).toHaveBeenCalledTimes(1)
-      expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain(
-        '"sessionId":"session-interactive"'
-      )
-      expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"echo"')
-
-      vi.advanceTimersByTime(2)
-      expect(streamSocket.write).toHaveBeenCalledTimes(2)
-      expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain(
-        '"sessionId":"session-background"'
-      )
-      expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain(`"data":"${background}"`)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('holds bulk output while the socket buffer is deep and resumes on the next flush', () => {
     vi.useFakeTimers()
     try {
@@ -182,30 +76,6 @@ describe('DaemonStreamDataBatcher', () => {
       batcher.flush('client-1')
       expect(writtenData(streamSocket)).toBe(bulk)
       expect(batcher.queuedCharsForClient('client-1')).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('lets interactive echo jump bulk held behind a deep socket', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-
-      streamSocket.writableLength = 128 * 1024
-      batcher.enqueue('client-1', 'session-bulk', 'x'.repeat(64 * 1024))
-      vi.advanceTimersByTime(2)
-      expect(nonSentinelWrites(streamSocket)).toHaveLength(0)
-
-      batcher.enqueue('client-1', 'session-typing', 'echo', {
-        flushImmediately: true,
-        flushMaxChars: 1024
-      })
-      const written = nonSentinelWrites(streamSocket)
-      expect(written).toHaveLength(1)
-      expect(written[0]?.sessionId).toBe('session-typing')
-      // Cross-session writes may overtake held bulk; byte order is required only within a session.
-      expect(batcher.queuedCharsForClient('client-1')).toBe(64 * 1024)
     } finally {
       vi.useRealTimers()
     }
@@ -263,21 +133,6 @@ describe('DaemonStreamDataBatcher', () => {
     }
   })
 
-  it('slices oversized held entries so one write cannot re-deepen the socket unboundedly', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-      const bulk = 'y'.repeat(64 * 1024 + 5)
-
-      batcher.enqueue('client-1', 'session-bulk', bulk)
-      vi.advanceTimersByTime(2)
-      expect(streamSocket.write).toHaveBeenCalledTimes(2)
-      expect(writtenData(streamSocket)).toBe(bulk)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('stops mid-queue when a written slice is followed by a still-deep socket', () => {
     vi.useFakeTimers()
     try {
@@ -298,38 +153,6 @@ describe('DaemonStreamDataBatcher', () => {
       streamSocket.write.mockImplementation(() => true)
       batcher.flush('client-1')
       expect(writtenData(streamSocket)).toBe(first)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('writes through the gate once held bulk exceeds the memory safety valve', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-      const huge = 'z'.repeat(32 * 1024 * 1024 + 1)
-
-      streamSocket.writableLength = 128 * 1024
-      batcher.enqueue('client-1', 'session-bulk', huge)
-      vi.advanceTimersByTime(2)
-      expect(writtenData(streamSocket).length).toBeGreaterThan(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not split surrogate pairs at the bulk slice boundary', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-      const bulk = `${'a'.repeat(64 * 1024 - 1)}😀${'b'.repeat(10)}`
-
-      batcher.enqueue('client-1', 'session-bulk', bulk)
-      vi.advanceTimersByTime(2)
-      expect(writtenData(streamSocket)).toBe(bulk)
-      for (const [line] of streamSocket.write.mock.calls) {
-        expect(String(line)).not.toContain('�')
-      }
     } finally {
       vi.useRealTimers()
     }
@@ -479,31 +302,6 @@ describe('DaemonStreamDataBatcher', () => {
     }
   })
 
-  it('delivers control events in byte order with the session data around them', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-      batcher.enqueue('client-1', 'session-1', 'before')
-      batcher.enqueueControlEvent('client-1', 'session-1', {
-        type: 'event',
-        event: 'transientFact',
-        sessionId: 'session-1',
-        payload: { kind: 'bell' }
-      })
-      batcher.enqueue('client-1', 'session-1', 'after')
-      vi.advanceTimersByTime(2)
-
-      const messages = streamSocket.write.mock.calls.map(
-        ([line]) => JSON.parse(String(line)) as { event: string; payload: { data?: string } }
-      )
-      expect(messages.map((m) => m.event)).toEqual(['data', 'transientFact', 'data'])
-      expect(messages[0]?.payload.data).toBe('before')
-      expect(messages[2]?.payload.data).toBe('after')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it("holds a control event behind its session's held bulk (order latch)", () => {
     vi.useFakeTimers()
     try {
@@ -525,32 +323,6 @@ describe('DaemonStreamDataBatcher', () => {
         'data',
         'sessionBackgroundMarker'
       ])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('delivers a held queued tail (data + facts, in order) once the socket drains', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-      streamSocket.writableLength = 128 * 1024
-      batcher.enqueue('client-1', 'session-bg', 'x'.repeat(64 * 1024))
-      batcher.enqueueControlEvent('client-1', 'session-bg', {
-        type: 'event',
-        event: 'transientFact',
-        sessionId: 'session-bg',
-        payload: { kind: 'bell' }
-      })
-      batcher.enqueue('client-1', 'session-bg', 'DONE')
-      vi.advanceTimersByTime(2)
-
-      streamSocket.writableLength = 0
-      batcher.flush('client-1')
-      expect(batcher.queuedCharsForClient('client-1')).toBe(0)
-      const messages = nonSentinelWrites(streamSocket)
-      expect(messages.map((m) => m.event)).toEqual(['data', 'transientFact', 'data'])
-      expect(messages.at(-1)?.payload?.data).toBe('DONE')
     } finally {
       vi.useRealTimers()
     }

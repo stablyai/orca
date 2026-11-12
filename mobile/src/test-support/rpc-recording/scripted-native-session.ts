@@ -1,7 +1,7 @@
-import type { RpcResponse } from '../../transport/types'
-import type { RpcClient } from '../../transport/rpc-client'
-import { buildDirectRpcWireRequest } from '../../transport/rpc-envelope-fields'
-import { RpcClientStreamRegistry } from '../../transport/rpc-client-stream-registry'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { buildDirectRpcWireRequest } from '../../transport/rpc/rpc-envelope-fields'
+import { RpcClientStreamRegistry } from '../../transport/rpc/rpc-client-stream-registry'
 
 import type { ScriptedRpcTransport, FrameListenerCrash } from './scripted-rpc-transport'
 import { DEVICE_TOKEN } from './scripted-rpc-device'

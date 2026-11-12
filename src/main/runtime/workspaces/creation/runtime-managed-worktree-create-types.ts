@@ -13,7 +13,11 @@ import type {
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type {
+  CrossStoreInferredSource,
+  CrossStoreParentRef
+} from '../../../../shared/worktree/lineage-types'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { WorktreeStartupDraftPaste } from '../startup/runtime-worktree-agent-startup'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { RuntimeRepoSelector } from '../catalog/runtime-repo-selector'
@@ -56,6 +60,9 @@ export type RuntimeManagedWorktreeCreateArgs = {
   runHooks?: boolean
   activate?: boolean
   setupDecision?: 'run' | 'skip' | 'inherit'
+  /** SHA-256 of the setup content the client approved; see CreateWorktreeArgs. */
+  approvedSetupHash?: string
+  approvedSetupHashes?: string[]
   setupOnly?: boolean
   awaitTerminalProvisioning?: boolean
   observeSetupCompletion?: boolean
@@ -81,6 +88,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupExtraAgentArgs?: string
   /** Main-internal: Orca, not a user, types into the startup agent once it starts. */
   startupSuppressUpdatePrompt?: boolean
+  /** Main-internal: the startup terminal's tab title, such as an automation run's. */
+  startupTitle?: string
   startupCwd?: string
   /** The surface behind a host-built startup agent (`startupAgent` or `startupDraft`). */
   startupLaunchSource?: string
@@ -104,6 +113,10 @@ export type RuntimeManagedWorktreeCreateArgs = {
     parentWorkspaceOrigin?: 'manual'
     envParentWorkspace?: string
     parentWorktree?: string
+    /** path: and name: in parentWorktree may name a folder workspace. */
+    matchFolderWorkspaces?: true
+    crossStoreParent?: CrossStoreParentRef
+    crossStoreParentInferredFrom?: CrossStoreInferredSource
     cwdParentWorktree?: string
     cwdParentAmbiguous?: true
     noParent?: boolean

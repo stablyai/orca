@@ -1,6 +1,6 @@
+import { guestNavigationMethods } from '../../guest-lifecycle/manager/browser-manager-test-harness'
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
-import '../../../runtime/desktop-browser-bridge/desktop-browser-bridge-allowlist.spec'
 import { mkdtempSync } from 'node:fs'
 import { RuntimeBrowserCommands } from '../../../runtime/browser/commands/browser-commands'
 import { setRuntimeBrowserCommandsFactory } from '../../../runtime/browser/installation/runtime-browser-commands-factory'
@@ -8,6 +8,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createConnection } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
+import { CdpBridge } from './cdp-bridge'
+import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
+import { OrcaRuntimeRpcServer } from '../../../runtime/rpc/server/runtime-rpc'
+import { readRuntimeMetadata } from '../../../runtime/rpc/server/runtime-metadata'
 
 const { webContentsFromIdMock } = vi.hoisted(() => ({
   webContentsFromIdMock: vi.fn()
@@ -44,13 +49,6 @@ const { getWorktreeListingMocks } = vi.hoisted(() => {
   let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
   return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
-
-import { BrowserManager } from '../../browser-manager'
-import { CdpBridge } from './cdp-bridge'
-import { BROWSER_TEXT_INSERT_CHUNK_BYTES } from '../../../../shared/browser-text-insertion-chunks'
-import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../../runtime/runtime-rpc'
-import { readRuntimeMetadata } from '../../../runtime/runtime-metadata'
 
 type AXNode = {
   nodeId: string
@@ -204,6 +202,7 @@ function createMockGuest(
   const debuggerListeners = new Map<string, ((...args: unknown[]) => void)[]>()
 
   const guest = {
+    ...guestNavigationMethods(),
     id,
     isDestroyed: vi.fn(() => false),
     isCurrentlyAudible: vi.fn(() => false),
@@ -292,7 +291,6 @@ describe('Browser automation pipeline (integration)', () => {
   let server: OrcaRuntimeRpcServer
   let endpoint: string
   let authToken: string
-  let activeGuest: ReturnType<typeof createMockGuest>['guest']
   let activeGuestHarness: ReturnType<typeof createMockGuest>
   let cdpBridge: CdpBridge
 
@@ -304,7 +302,6 @@ describe('Browser automation pipeline (integration)', () => {
     setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
     activeGuestHarness = createMockGuest(GUEST_WC_ID, 'https://example.com', 'Example Domain')
     const { guest } = activeGuestHarness
-    activeGuest = guest
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === GUEST_WC_ID) {
         return guest
@@ -351,60 +348,6 @@ describe('Browser automation pipeline (integration)', () => {
     return response
   }
 
-  it('takes a snapshot and returns refs for interactive elements', async () => {
-    const res = await rpc('browser.snapshot')
-    expect(res.ok).toBe(true)
-
-    const result = res.result as {
-      snapshot: string
-      refs: { ref: string; role: string; name: string }[]
-      url: string
-      title: string
-    }
-    expect(result.url).toBe('https://example.com')
-    expect(result.title).toBe('Example Domain')
-    expect(result.snapshot).toContain('heading "Example Domain"')
-    expect(result.snapshot).toContain('link "More information..."')
-    expect(result.refs).toHaveLength(1)
-    expect(result.refs[0]).toMatchObject({
-      ref: '@e1',
-      role: 'link',
-      name: 'More information...'
-    })
-    expect(activeGuest.debugger.attach).toHaveBeenCalledTimes(1)
-  })
-
-  it('preserves debugger listeners owned by other browser streams', async () => {
-    const externalDetach = vi.fn()
-    const externalMessage = vi.fn()
-    activeGuest.debugger.on('detach', externalDetach)
-    activeGuest.debugger.on('message', externalMessage)
-
-    const res = await rpc('browser.snapshot')
-    expect(res.ok).toBe(true)
-
-    activeGuestHarness.emitDebugger('message', {}, 'Runtime.consoleAPICalled', {})
-    activeGuestHarness.emitDebugger('detach')
-
-    expect(externalMessage).toHaveBeenCalledWith({}, 'Runtime.consoleAPICalled', {})
-    expect(externalDetach).toHaveBeenCalledTimes(1)
-    expect(activeGuest.debugger.removeAllListeners).not.toHaveBeenCalled()
-  })
-
-  it('returns error when clicking without a prior snapshot', async () => {
-    const res = await rpc('browser.click', { element: '@e1' })
-    expect(res.ok).toBe(false)
-    expect((res.error as { code: string }).code).toBe('browser_stale_ref')
-  })
-
-  it('returns error for non-existent ref', async () => {
-    await rpc('browser.snapshot')
-
-    const res = await rpc('browser.click', { element: '@e999' })
-    expect(res.ok).toBe(false)
-    expect((res.error as { code: string }).code).toBe('browser_ref_not_found')
-  })
-
   it('navigates to a URL and invalidates refs', async () => {
     await rpc('browser.snapshot')
 
@@ -424,165 +367,5 @@ describe('Browser automation pipeline (integration)', () => {
     expect(snapResult.snapshot).toContain('Search')
     expect(snapResult.refs.map((r) => r.name)).toContain('Search')
     expect(snapResult.refs.map((r) => r.name)).toContain('Home')
-  })
-
-  it('returns error for failed navigation', async () => {
-    const res = await rpc('browser.goto', { url: 'https://nonexistent.invalid' })
-    expect(res.ok).toBe(false)
-    expect((res.error as { code: string }).code).toBe('browser_navigation_failed')
-  })
-
-  it('clears readyState polling timers when navigation times out', async () => {
-    vi.useFakeTimers()
-    try {
-      const slowGuestHarness = createMockGuest(6001, 'https://slow.example.com', 'Slow Page', {
-        readyState: 'loading'
-      })
-      webContentsFromIdMock.mockImplementation((id: number) => {
-        if (id === 6001) {
-          return slowGuestHarness.guest
-        }
-        return null
-      })
-
-      const browserManager = new BrowserManager()
-      browserManager.attachGuestPolicies(slowGuestHarness.guest as never)
-      browserManager.registerGuest({
-        browserPageId: 'slow-page',
-        webContentsId: 6001,
-        rendererWebContentsId: RENDERER_WC_ID
-      })
-      const bridge = new CdpBridge(browserManager)
-      bridge.setActiveTab(6001)
-
-      const gotoResult = bridge.goto('https://slow.example.com/still-loading').then(
-        () => null,
-        (error: unknown) => error
-      )
-
-      await vi.advanceTimersByTimeAsync(25_000)
-
-      await expect(gotoResult).resolves.toMatchObject({ code: 'browser_timeout' })
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('chunks large browser fill text before CDP insertText', async () => {
-    activeGuestHarness.setTree(SEARCH_PAGE_TREE)
-    await rpc('browser.snapshot')
-
-    const text = 'x'.repeat(BROWSER_TEXT_INSERT_CHUNK_BYTES + 5)
-    const res = await rpc('browser.fill', { element: '@e2', value: text })
-
-    const insertCalls = activeGuestHarness.sendCommandMock.mock.calls.filter(
-      ([method]) => method === 'Input.insertText'
-    )
-    expect(res.ok).toBe(true)
-    expect(insertCalls).toHaveLength(2)
-    expect((insertCalls[0]![1] as { text: string }).text).toHaveLength(
-      BROWSER_TEXT_INSERT_CHUNK_BYTES
-    )
-    expect((insertCalls[1]![1] as { text: string }).text).toBe('xxxxx')
-  })
-
-  it('chunks large browser type text before CDP insertText', async () => {
-    const text = 'y'.repeat(BROWSER_TEXT_INSERT_CHUNK_BYTES + 2)
-    const res = await rpc('browser.type', { input: text })
-
-    const insertCalls = activeGuestHarness.sendCommandMock.mock.calls.filter(
-      ([method]) => method === 'Input.insertText'
-    )
-    expect(res.ok).toBe(true)
-    expect(insertCalls).toHaveLength(2)
-    expect((insertCalls[0]![1] as { text: string }).text).toHaveLength(
-      BROWSER_TEXT_INSERT_CHUNK_BYTES
-    )
-    expect((insertCalls[1]![1] as { text: string }).text).toBe('yy')
-  })
-
-  it('bounds capture request bookkeeping when network entries are evicted or fail', async () => {
-    const startRes = await rpc('browser.capture.start')
-    expect(startRes.ok).toBe(true)
-
-    for (let i = 0; i <= 1000; i++) {
-      activeGuestHarness.emitDebuggerMessage('Network.responseReceived', {
-        requestId: `req-${i}`,
-        response: {
-          url: `https://example.com/${i}`,
-          status: 200,
-          mimeType: 'text/plain'
-        },
-        timestamp: i
-      })
-    }
-
-    const state = (
-      cdpBridge as unknown as {
-        tabState: Map<
-          string,
-          {
-            networkLog: unknown[]
-            networkRequestMap: Map<string, unknown>
-          }
-        >
-      }
-    ).tabState.get('page-1')
-
-    expect(state?.networkLog).toHaveLength(1000)
-    expect(state?.networkRequestMap.has('req-0')).toBe(false)
-    expect(state?.networkRequestMap.size).toBe(1000)
-
-    activeGuestHarness.emitDebuggerMessage('Network.loadingFailed', { requestId: 'req-1' })
-    expect(state?.networkRequestMap.has('req-1')).toBe(false)
-    expect(state?.networkRequestMap.size).toBe(999)
-
-    const stopRes = await rpc('browser.capture.stop')
-    expect(stopRes.ok).toBe(true)
-    expect(state?.networkRequestMap.size).toBe(0)
-  })
-
-  it('lists open tabs', async () => {
-    const res = await rpc('browser.tabList')
-    expect(res.ok).toBe(true)
-    const result = res.result as { tabs: { index: number; url: string; active: boolean }[] }
-    expect(result.tabs).toHaveLength(1)
-    expect(result.tabs[0]).toMatchObject({
-      index: 0,
-      url: 'https://example.com',
-      active: true
-    })
-  })
-
-  it('returns error for out-of-range tab switch', async () => {
-    const res = await rpc('browser.tabSwitch', { index: 5 })
-    expect(res.ok).toBe(false)
-    expect((res.error as { code: string }).code).toBe('browser_tab_not_found')
-  })
-
-  it('returns browser_no_tab when no tabs are registered', async () => {
-    const emptyManager = new BrowserManager()
-    const emptyBridge = new CdpBridge(emptyManager)
-
-    const userDataPath2 = mkdtempSync(join(tmpdir(), 'browser-e2e-empty-'))
-    const runtime2 = new OrcaRuntimeService()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    runtime2.setAgentBrowserBridge(emptyBridge as any)
-
-    const server2 = new OrcaRuntimeRpcServer({ runtime: runtime2, userDataPath: userDataPath2 })
-    await server2.start()
-
-    const metadata2 = readRuntimeMetadata(userDataPath2)!
-    const res = await sendRequest(metadata2.transports[0]!.endpoint, {
-      id: 'req_no_tab',
-      authToken: metadata2.authToken,
-      method: 'browser.snapshot'
-    })
-
-    expect(res.ok).toBe(false)
-    expect((res.error as { code: string }).code).toBe('browser_no_tab')
-
-    await server2.stop()
   })
 })

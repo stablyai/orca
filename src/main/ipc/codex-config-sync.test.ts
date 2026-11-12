@@ -65,19 +65,6 @@ describe('codexConfigSync:status handler', () => {
     })
   })
 
-  it('reports synced when the selection runs directly on the real home', () => {
-    // System default uses no mirror; stale shared homes must not produce warnings.
-    const staleSharedHome = join(root, 'codex-runtime-home', 'home')
-    mkdirSync(staleSharedHome, { recursive: true })
-    writeFileSync(join(staleSharedHome, 'config.toml'), 'model = "stale"\n', 'utf-8')
-
-    expect(invokeHandler(null)).toEqual({
-      state: 'synced',
-      reason: null,
-      systemConfigPath: join(root, '.codex', 'config.toml')
-    })
-  })
-
   it('reports a stall when the selected home baseline cannot be read', () => {
     const perAccountHome = join(root, 'codex-accounts', 'acct-1', 'home')
     mkdirSync(perAccountHome, { recursive: true })

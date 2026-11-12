@@ -1,19 +1,20 @@
-import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
+import { textGenerationErrorText } from '@/lib/text-generation/text-generation-error-copy'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { getConnectionId } from '@/lib/connection-context'
-import { useAppStore, type AppState } from '@/store/index'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { useAppStore } from '@/store/index'
 import {
   cancelRuntimeGeneratePullRequestFields,
   generateRuntimePullRequestFields
-} from '@/runtime/runtime-git-generation-client'
-import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/runtime-git-client-context'
+} from '@/runtime/source-control/git/runtime-git-generation-client'
+import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { ResolveSourceControlAiResult } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { SourceControlAiPrCreationDefaults } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
-import type { PullRequestFieldRevisions } from '@/store/slices/pull-request-generation'
-import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
+import type { PullRequestFieldRevisions } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
+import type { PullRequestGenerationOptions } from '@/store/slices/hosted-review/generation/pull-request-generation-auto-submit'
 import { normalizeHostedReviewBaseRef as stripBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import type {
   GenerationSeed,
@@ -32,7 +33,6 @@ type CreatePullRequestFieldGenerationOptions = {
   draft: boolean
   worktreeId: string | null
   worktreePath: string
-  settings: AppState['settings']
   target: RuntimeClientTarget | null
   eligibility: HostedReviewCreationEligibility | null
   resolvedPrDefaults: Required<SourceControlAiPrCreationDefaults>
@@ -76,7 +76,6 @@ export function useCreatePullRequestFieldGeneration({
   draft,
   worktreeId,
   worktreePath,
-  settings,
   target,
   eligibility,
   resolvedPrDefaults,
@@ -94,24 +93,25 @@ export function useCreatePullRequestFieldGeneration({
   generationSeedRef,
   fieldRevisionsRef
 }: CreatePullRequestFieldGenerationOptions): CreatePullRequestFieldGenerationResult {
+  const t = useTranslate()
   const effectiveGenerating = generation?.generating ?? generating
   const effectiveGenerateError = generation?.generateError ?? generateError
 
   let generateDisabledReason: string | undefined
   if (submitting) {
-    generateDisabledReason = translate(
+    generateDisabledReason = t(
       'auto.components.right.sidebar.CreatePullRequest.createInProgress',
       'Create PR in progress...'
     )
   } else if (!resolvedPullRequestAi?.ok) {
     generateDisabledReason = resolvedPullRequestAi
       ? textGenerationErrorText(resolvedPullRequestAi)
-      : translate(
+      : t(
           'sourceControl.textGeneration.enableSourceControlAi',
           'Enable Source Control AI in Settings -> Git.'
         )
   } else if (!base.trim()) {
-    generateDisabledReason = translate(
+    generateDisabledReason = t(
       'sourceControl.textGeneration.chooseBaseBranch',
       'Choose a base branch before generating.'
     )
@@ -149,7 +149,7 @@ export function useCreatePullRequestFieldGeneration({
       const requestContext = {
         // Pin generation to the worktree owner so focused-host navigation cannot retarget it.
         target,
-        prefs: settings,
+        prefs: useAppStore.getState().settings,
         worktreeId,
         worktreePath,
         connectionId
@@ -233,7 +233,6 @@ export function useCreatePullRequestFieldGeneration({
       resolvedPrDefaults.useTemplate,
       setGenerateError,
       setGenerating,
-      settings,
       target,
       title,
       worktreeId,

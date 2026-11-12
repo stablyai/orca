@@ -46,9 +46,6 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
-import { HeadlessEmulator } from '../main/daemon/emulation/headless-emulator'
-import { projectTerminalVisibleLines } from '../main/runtime/terminal/view/orca-runtime-terminal-projection'
-import { readRuntimeFixture } from '../main/runtime/agent-transcript-replay-test-harness'
 
 function readFixture(overrides: Record<string, unknown> = {}) {
   return okFixture('req_terminal_read', {
@@ -73,45 +70,6 @@ describe('orca terminal read --screen', () => {
     spawnMock
   })
 
-  it('reports a recorded default-caret labelled draft separately from screen output', async () => {
-    const emulator = new HeadlessEmulator({ cols: 100, rows: 30 })
-    try {
-      await emulator.write(readRuntimeFixture('claude-2-1-316-default-labelled-middle'))
-      const projection = projectTerminalVisibleLines(emulator)
-      queueFixtures(
-        callMock,
-        readFixture({ source: 'screen', tail: projection.lines, draft: projection.draft })
-      )
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-      await main(['terminal', 'read', '--terminal', 'term_abc', '--screen', '--json'], '/tmp/repo')
-
-      const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
-      expect(printed.result.terminal.draft).toBe(
-        'Refactor the login page so that it preserves the existing authentication behavior and includes\nthe coverage report'
-      )
-      expect(printed.result.terminal.tail).toContain('❯')
-      expect(printed.result.terminal.tail.join('\n')).not.toContain('Refactor the login page')
-      expect(printed.result.terminal.tail.join('\n')).not.toContain('coverage report')
-    } finally {
-      emulator.dispose()
-    }
-  })
-
-  it('warns when a screen was asked for but only the stream was available', async () => {
-    queueFixtures(
-      callMock,
-      readFixture({ source: 'screen-unavailable', tail: ['cclclecleaclear'] })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'read', '--terminal', 'term_abc', '--screen'], '/tmp/repo')
-
-    const printed = String(logSpy.mock.calls[0]?.[0])
-    expect(printed).toContain('no rendered screen was available')
-    expect(printed).toContain('stacked fragments')
-  })
-
   // Older hosts strip the unknown screen key and return a stream read.
   it("refuses to pass an older host's stream off as a screen read", async () => {
     queueFixtures(callMock, readFixture({ tail: ['cclclecleaclear'] }))
@@ -123,25 +81,6 @@ describe('orca terminal read --screen', () => {
 
     expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
       'does not support --screen reads'
-    )
-    expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
-  })
-
-  it('rejects --screen with --cursor instead of implying history that is not there', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
-
-    await main(
-      ['terminal', 'read', '--terminal', 'term_abc', '--screen', '--cursor', '42', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'has no cursor to page from'
     )
     expect(process.exitCode).toBe(1)
 

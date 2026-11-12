@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { uptime } from 'node:os'
 import { durableWriteTempPath, writeFileDurableSync } from '../../filesystem/durable-file-write'
-import type { AutomaticWorkMode } from '../../../shared/host-spawn-admission'
+import type { AutomaticWorkMode } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import {
   decideStartupAutomaticWorkMode,
   parseAutomaticWorkRunMarker,
   type AutomaticWorkRunMarker as AutomaticWorkRunMarkerFile,
   type BootIdentity
-} from '../../../shared/automatic-work-run-marker'
+} from '../../../shared/terminal/pty/admission/automatic-work-run-marker'
 
 const PRIVATE_FILE_MODE = 0o600
 
@@ -62,9 +62,13 @@ export class AutomaticWorkRunMarker {
     const previous = readPreviousMarker(this.path)
     this.currentMode = decideStartupAutomaticWorkMode(previous, boot, now)
     if (this.currentMode.kind === 'paused') {
+      // A carried-over pause names an earlier death; previousExit says whether this start follows one.
       this.log('automatic-work-paused', {
         reason: this.currentMode.reason,
-        carriedOver: previous?.mode.kind === 'paused'
+        carriedOver: previous?.mode.kind === 'paused',
+        pausedSince: new Date(this.currentMode.since).toISOString(),
+        previousExit:
+          previous === null ? 'none' : previous.state === 'running' ? 'unclean' : 'clean'
       })
     }
     this.writeSync(this.armRequested ? 'running' : 'clean-exit')

@@ -3,6 +3,11 @@ import type { PluginSurface } from '../frames/plugin-protocol'
 import * as stored from './plugin-host-api-storage-schemas'
 import { PLUGIN_PANEL_BRIDGE_API } from './plugin-host-api-panel-methods'
 import { PLUGIN_WORKER_ACTIONS_API } from './plugin-host-api-worker-actions'
+import { PLUGIN_EDITOR_TYPOGRAPHY_API } from './plugin-host-api-editor-typography'
+import {
+  PLUGIN_TERMINAL_ID_MAX_LENGTH,
+  pluginWorkspaceContextSchema
+} from './plugin-host-api-workspace-context'
 import {
   ALL_SURFACES,
   FRAMES_ONLY,
@@ -13,6 +18,12 @@ import {
 } from './plugin-host-method-spec'
 
 export type { PluginHostMethodSpec } from './plugin-host-method-spec'
+export {
+  PLUGIN_TERMINAL_ID_MAX_LENGTH,
+  PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
+  PLUGIN_WORKSPACE_TERMINAL_LIMIT,
+  pluginWorkspaceContextSchema
+} from './plugin-host-api-workspace-context'
 
 /**
  * Host API 1 (`pluginApi: 1`) — the separately-versioned public facade plugins call. Every
@@ -32,33 +43,7 @@ export type { PluginHostMethodSpec } from './plugin-host-method-spec'
  */
 
 export const PANEL_ACTION_TEXT_MAX_LENGTH = 4096
-export const PLUGIN_WORKSPACE_TERMINAL_LIMIT = 50
-export const PLUGIN_WORKSPACE_LABEL_MAX_LENGTH = 512
-export const PLUGIN_TERMINAL_ID_MAX_LENGTH = 1024
-
 const workspaceReadContextParams = z.strictObject({}).optional()
-/** What `workspace.readContext` answers and `workspace.changed` carries. */
-export const pluginWorkspaceContextSchema = z
-  .object({
-    branch: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
-    displayName: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
-    /** Terminals of the focused workspace, so callers can address a specific
-     *  terminal id — the API has no "active terminal" write target. */
-    terminals: z
-      .array(
-        z
-          .object({
-            id: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH),
-            /** The pane's name, or its terminal title; absent when it has neither. */
-            title: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH).optional()
-          })
-          .strict()
-      )
-      .max(PLUGIN_WORKSPACE_TERMINAL_LIMIT)
-  })
-  .strict()
-  .nullable()
-const workspaceReadContextResult = pluginWorkspaceContextSchema
 
 const terminalSendTextParams = z.strictObject({
   /** Explicit target prevents delayed writes following focus changes into another pane. */
@@ -135,14 +120,14 @@ export function isPluginExternalUrl(url: string): boolean {
 export const PLUGIN_HOST_API = {
   'workspace.readContext': spec({
     summary:
-      'Branch, name and terminal ids of the focused workspace, or null when none is focused.',
+      'Id, branch, name and terminal ids of the focused workspace, or null when none is focused.',
     since: 0,
     scope: 'active-workspace',
     capability: 'workspace:read',
     mutation: false,
     surfaces: ALL_SURFACES,
     params: workspaceReadContextParams,
-    result: workspaceReadContextResult
+    result: pluginWorkspaceContextSchema
   }),
   'terminal.sendText': spec({
     summary: 'Types text into one terminal named by id, optionally pressing Enter.',
@@ -301,7 +286,8 @@ export const PLUGIN_HOST_API = {
     result: filesSaveAsResult
   }),
   ...PLUGIN_PANEL_BRIDGE_API,
-  ...PLUGIN_WORKER_ACTIONS_API
+  ...PLUGIN_WORKER_ACTIONS_API,
+  ...PLUGIN_EDITOR_TYPOGRAPHY_API
 }
 
 export type PluginHostApi = typeof PLUGIN_HOST_API

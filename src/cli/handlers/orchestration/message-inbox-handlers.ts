@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -9,37 +9,51 @@ import {
 import {
   formatMessageReadOnlyTag,
   type OrchestrationMessageSummary as MessageSummary
-} from '../../../shared/orchestration-check-output'
+} from '../../../shared/orchestration/mailbox/orchestration-check-output'
 import { callOrchestrationMutation } from './mutation-request'
+import { requirePeerMailCarrier } from './agent-server-route'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 import { withReceiptNext } from './receipt-next-text'
 import { printOrchestrationResult } from './agent-view'
 import { formatMessageViewText, toMessageView, type MessageView } from './message-agent-views'
 
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
-  'orchestration reply': async ({ flags, client, cwd, json }) => {
+  'orchestration reply': async (ctx) => {
+    const { flags, client, cwd, json } = ctx
+    await requirePeerMailCarrier(ctx)
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const result = await callOrchestrationMutation<{ message: { id: string }; next?: string }>(
-      client,
-      flags,
-      'orchestration.reply',
-      {
-        id: getRequiredStringFlag(flags, 'id'),
-        body: getRequiredStringFlag(flags, 'body'),
-        run: getOptionalStringFlag(flags, 'run'),
-        from
-      }
-    )
+    const result = await callOrchestrationMutation<{
+      message: { id: string }
+      warnings?: { message: string }[]
+      next?: string
+    }>(client, flags, 'orchestration.reply', {
+      id: getRequiredStringFlag(flags, 'id'),
+      body: getRequiredStringFlag(flags, 'body'),
+      run: getOptionalStringFlag(flags, 'run'),
+      on: getOptionalStringFlag(flags, 'on'),
+      from
+    })
     if (!flags.has('full')) {
       printOrchestrationResult(result, json, {
         fields: (value) => ({
           messageId: value.message.id,
+          warnings: value.warnings?.length
+            ? value.warnings.map((warning) => warning.message)
+            : undefined,
           next: value.next
         })
       })
       return
     }
-    printResult(result, json, (value) => withReceiptNext(`Replied ${value.message.id}`, value))
+    printResult(result, json, (value) =>
+      withReceiptNext(
+        [
+          `Replied ${value.message.id}`,
+          ...(value.warnings ?? []).map((warning) => `Warning: ${warning.message}`)
+        ].join('\n'),
+        value
+      )
+    )
   },
 
   'orchestration inbox': async ({ flags, client, json }) => {

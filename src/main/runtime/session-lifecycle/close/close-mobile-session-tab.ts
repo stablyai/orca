@@ -1,21 +1,21 @@
 import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in-main-layout'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import {
   adjudicateAbsentMobileSessionTabClose,
   resolveMobileSessionLifecycleCloseContext,
   type MobileSessionLifecycleCloseHost
-} from '../../mobile-session-lifecycle-close-adjudication'
+} from './mobile-session-lifecycle-close-adjudication'
 import {
   committedMobileSessionTabClose,
   delegatedMobileSessionTabClose,
   refusedMobileSessionTabClose,
   type MobileSessionTabCloseOutcome,
   type MobileSessionTabCloseOptions
-} from '../../mobile-session-tab-close-outcome'
+} from './mobile-session-tab-close-outcome'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
-import type { RuntimeEdgeCommandSurface } from '../../runtime-edge-command-controller'
+import type { RuntimeEdgeCommandSurface } from '../../construction/runtime-edge-command-controller'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
-import { retireHeadlessMobileSessionEditorTab } from '../../mobile-session-editor-projection'
+import { retireHeadlessMobileSessionEditorTab } from '../../session-tabs/headless-editor-tabs'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { closeMobileStructuredSessionPresentation } from '../../session-tabs/structured-session-tab-presentation'
@@ -47,14 +47,14 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     tabId: string,
     options: MobileSessionTabCloseOptions = {}
   ): Promise<MobileSessionTabCloseOutcome> {
-    const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
+    const graphFence = options.clientNavigationId ? this.captureRendererGraphFence() : undefined
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const observedPtyIds = await this.refreshMobileSessionPtyRecords()
-    if (graphEpoch !== null) {
-      this.assertStableReadyGraph(graphEpoch)
+    if (graphFence !== undefined) {
+      this.assertRendererGraphFence(graphFence)
     }
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)

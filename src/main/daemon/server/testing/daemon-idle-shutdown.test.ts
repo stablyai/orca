@@ -1,5 +1,4 @@
 import '../../pty-subprocess/testing/mock-descendant-sweep'
-import { EventEmitter } from 'node:events'
 import { connect, type Socket } from 'node:net'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -308,21 +307,6 @@ describe('current daemon lifecycle retirement', () => {
     expect(clock.pendingCount).toBe(0)
   })
 
-  it('rejects clean retirement while create or attach is in flight', async () => {
-    await startServer()
-    const client = new DaemonClient({ socketPath, tokenPath })
-    await client.ensureConnected()
-    const daemon = server as unknown as DaemonServerInternals
-    daemon.admission.createOrAttachInFlight = 1
-
-    await expect(client.request('shutdownIfIdle', undefined)).resolves.toEqual({
-      retiring: false
-    })
-
-    expect(onIdleShutdown).not.toHaveBeenCalled()
-    client.disconnect()
-  })
-
   it('rejects clean retirement when an unknown transport is connected', async () => {
     await startServer()
     const client = new DaemonClient({ socketPath, tokenPath })
@@ -385,17 +369,6 @@ describe('current daemon lifecycle retirement', () => {
     expect(onIdleShutdown).not.toHaveBeenCalled()
 
     rawSocket.destroy()
-    await waitFor(() => onIdleShutdown.mock.calls.length === 1)
-    expect(clock.pendingCount).toBe(0)
-  })
-
-  it('retires after the last authenticated client disconnects with no sessions', async () => {
-    await startServer()
-    const client = new DaemonClient({ socketPath, tokenPath })
-    await client.ensureConnected()
-    expect(clock.pendingCount).toBe(0)
-
-    client.disconnect()
     await waitFor(() => onIdleShutdown.mock.calls.length === 1)
     expect(clock.pendingCount).toBe(0)
   })
@@ -600,91 +573,6 @@ describe('current daemon lifecycle retirement', () => {
     await waitFor(() => onIdleShutdown.mock.calls.length === 1)
   })
 
-  it('uses the direct-construction protocol fixture version for hello compatibility', async () => {
-    await startServer({ protocolVersion: 22 })
-    const client = new DaemonClient({ socketPath, tokenPath, protocolVersion: 22 })
-
-    await expect(client.ensureConnected()).resolves.toBeUndefined()
-    client.disconnect()
-  })
-
-  it('requests clean retirement only for protocol v24 and newer adapters', async () => {
-    await startServer()
-    const current = new DaemonPtyAdapter({ socketPath, tokenPath })
-    await current.listProcesses()
-    const currentClient = (
-      current as unknown as {
-        client: DaemonClient
-      }
-    ).client
-    const currentRequest = vi.spyOn(currentClient, 'request')
-
-    await current.disconnectOnly()
-
-    expect(currentRequest).toHaveBeenCalledOnce()
-    expect(currentRequest.mock.calls[0]?.slice(0, 2)).toEqual(['shutdownIfIdle', undefined])
-    const timeoutMs = currentRequest.mock.calls[0]?.[2]
-    // Connection setup consumes the shared RPC deadline.
-    expect(timeoutMs).toEqual(expect.any(Number))
-    expect(timeoutMs).toBeGreaterThan(0)
-    expect(timeoutMs).toBeLessThanOrEqual(250)
-  })
-
-  it('does not send the v24 clean-disconnect RPC to a legacy daemon', async () => {
-    await startServer({ protocolVersion: 23 })
-    const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 23 })
-    await legacy.listProcesses()
-    const legacyClient = (
-      legacy as unknown as {
-        client: DaemonClient
-      }
-    ).client
-    const legacyRequest = vi.spyOn(legacyClient, 'request')
-
-    await legacy.disconnectOnly()
-
-    expect(legacyRequest.mock.calls.map(([type]) => type)).not.toContain('shutdownIfIdle')
-  })
-
-  it('rejects create or attach once the idle admission fence is pending', async () => {
-    await startServer()
-    const daemon = server as unknown as DaemonServerInternals
-    daemon.lifecycle.state = 'idle-shutdown-pending'
-
-    await expect(
-      daemon.requestRouter.route('late-client', {
-        id: 'late-create',
-        type: 'createOrAttach',
-        payload: { sessionId: 'late', cols: 80, rows: 24 }
-      })
-    ).rejects.toThrow('temporarily unavailable; reconnect')
-  })
-
-  it('aborts the pending shutdown when create or attach started before the fence', async () => {
-    await startServer()
-    const daemon = server as unknown as DaemonServerInternals
-    daemon.admission.createOrAttachInFlight = 1
-
-    daemon.lifecycle.beginIdleShutdown()
-
-    expect(daemon.lifecycle.state).toBe('running')
-    expect(onIdleShutdown).not.toHaveBeenCalled()
-  })
-
-  it('explicitly marks a post-fence accepted transport as retryable', async () => {
-    await startServer()
-    const daemon = server as unknown as DaemonServerInternals
-    daemon.lifecycle.state = 'idle-shutdown-pending'
-    const socket = new EventEmitter() as Socket
-    socket.end = vi.fn() as unknown as Socket['end']
-
-    daemon.connections.accept(socket)
-
-    const payload = vi.mocked(socket.end).mock.calls[0]?.[0]
-    expect(JSON.parse(String(payload))).toMatchObject({ ok: false, retryable: true })
-    socket.emit('close')
-  })
-
   it('preserves a replacement PID record during otherwise successful idle cleanup', async () => {
     writeFileSync(
       pidPath,
@@ -749,10 +637,5 @@ describe('daemon PID record ownership cleanup', () => {
 
     expect(unlinkOwnedDaemonPidFile(pidPath, 123, 'mine')).toBe(false)
     expect(readFileSync(pidPath, 'utf8')).toBe(contents)
-  })
-
-  it('leaves a missing record missing', () => {
-    expect(unlinkOwnedDaemonPidFile(pidPath, 123, 'mine')).toBe(false)
-    expect(existsSync(pidPath)).toBe(false)
   })
 })

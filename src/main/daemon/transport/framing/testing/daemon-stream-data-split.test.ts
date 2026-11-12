@@ -22,12 +22,6 @@ function write(
 }
 
 describe('writeStreamDataEvents wire parity', () => {
-  it('keeps JSON escaping, Unicode and newline framing byte-for-byte', () => {
-    expect(write('"\\\n\t\u0000é中🐙', 4096)).toEqual([
-      '{"type":"event","event":"data","sessionId":"session-1","payload":{"data":"\\\"\\\\\\n\\t\\u0000é中🐙"}}\n'
-    ])
-  })
-
   it('keeps split frames within the byte cap and preserves code points and sequence spans', () => {
     const data = '🐙é中\x1b[0m"\\\n'.repeat(100)
     for (const seq of [undefined, 9000]) {

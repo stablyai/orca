@@ -6,6 +6,8 @@ import {
   resolveProfileLoadingFallbackShell,
   resolveProfileLoadingShell
 } from './hydrate-shell-path'
+import { shellProbeDetached } from './shell-path-probe'
+import { bindShellProbeLifetime } from './shell-probe-lifetime'
 
 const START_MARKER = '__ORCA_LOGIN_SHELL_ENV_START__'
 const END_MARKER = '__ORCA_LOGIN_SHELL_ENV_END__'
@@ -27,6 +29,13 @@ type CachedEnvironment = {
 
 const environmentCache = new Map<string, CachedEnvironment>()
 const MAX_CACHED_ENVIRONMENTS = 8
+/** Moves whenever a cached capture is replaced or dropped. */
+let cacheRevision = 0
+
+/** Lets a reader of the cached capture tell, synchronously, that what it read is still current. */
+export function loginShellEnvironmentRevision(): number {
+  return cacheRevision
+}
 
 function cachedEnvironment(key: string): CachedEnvironment {
   const existing = environmentCache.get(key)
@@ -39,6 +48,7 @@ function cachedEnvironment(key: string): CachedEnvironment {
       break
     }
     environmentCache.delete(oldest)
+    cacheRevision++
   }
   const entry: CachedEnvironment = { attemptedAt: -Infinity, lastStartedAt: -Infinity }
   environmentCache.set(key, entry)
@@ -128,21 +138,19 @@ function spawnShellAndReadEnvironment(
   return new Promise((resolve) => {
     let settled = false
     const chunks: Buffer[] = []
-    const child = spawnProcess({ program: shell, args, env })
+    const child = spawnProcess({ program: shell, args, env, detached: shellProbeDetached() })
+    const lifetime = bindShellProbeLifetime(child)
     const finish = (value: NodeJS.ProcessEnv | null): void => {
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timer)
+      lifetime.release()
       resolve(value)
     }
     const timer = setTimeout(() => {
-      try {
-        child.kill('SIGKILL')
-      } catch {
-        // Best-effort timeout cleanup.
-      }
+      lifetime.kill()
       finish(null)
     }, timeoutMs)
     child.stdin.on('error', () => {})
@@ -222,6 +230,7 @@ export function captureLoginShellEnvironment(
       if (result.status === 'captured' || entry.last?.status !== 'captured') {
         entry.last = result
         entry.lastStartedAt = startedAt
+        cacheRevision++
       }
     })
     return capture
@@ -258,4 +267,5 @@ export function resolveLoginShellEnvironment(
 
 export function resetLoginShellEnvironmentCacheForTests(): void {
   environmentCache.clear()
+  cacheRevision++
 }

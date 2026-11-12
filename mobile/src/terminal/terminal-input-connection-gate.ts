@@ -1,4 +1,4 @@
-import type { ConnectionState } from '../transport/types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 type MobileTerminalInputGateOptions = {
   readonly connState: ConnectionState

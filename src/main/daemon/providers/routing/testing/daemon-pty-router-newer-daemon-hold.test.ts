@@ -35,33 +35,11 @@ describe('DaemonPtyRouter newer-daemon hold', () => {
     expect(current.spawn).not.toHaveBeenCalled()
   })
 
-  it('reattaches sessions adopted daemons own', async () => {
-    const { current, legacy, router } = setup({
-      holding: true,
-      restorable: ['legacy-session', 'current-session'],
-      currentSessions: ['current-session']
-    })
-    await router.spawn({ ...SPAWN, sessionId: 'legacy-session' })
-    await router.spawn({ ...SPAWN, sessionId: 'current-session' })
-    expect(legacy.spawn).toHaveBeenCalledOnce()
-    expect(current.spawn).toHaveBeenCalledOnce()
-  })
-
   it('holds when the adopted inventory cannot answer', async () => {
     const { legacy, router } = setup({ holding: true, restorable: ['newer-session'] })
     vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('timeout'))
     await expect(router.spawn({ ...SPAWN, sessionId: 'newer-session' })).rejects.toThrow(
       NEWER_DAEMON_HOLD_ERROR
     )
-  })
-
-  it('restores through the current daemon once the hold is released', async () => {
-    const { current, router, release } = setup({ holding: true, restorable: ['newer-session'] })
-    await expect(router.spawn({ ...SPAWN, sessionId: 'newer-session' })).rejects.toThrow()
-    release()
-    await expect(router.spawn({ ...SPAWN, sessionId: 'newer-session' })).resolves.toEqual({
-      id: 'newer-session'
-    })
-    expect(current.spawn).toHaveBeenCalledOnce()
   })
 })

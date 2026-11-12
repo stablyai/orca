@@ -1,3 +1,4 @@
+import { isClaudeToolResultContent } from '../../claude-tool-content'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type {
   ClaudeTranscriptCursor,
@@ -95,7 +96,7 @@ function childOperation(
   }
   if (progress.index < blocks.length) {
     const item = blocks[progress.index]
-    const result = progress.result || (isRecord(item) && item.type === 'tool_result')
+    const result = progress.result || isClaudeToolResultContent(item)
     const text =
       progress.text ||
       (isRecord(item) &&

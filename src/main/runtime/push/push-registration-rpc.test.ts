@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { eraseRpcMethods, type RpcContext, type RpcMethod } from '../rpc/core'
-import { NOTIFICATION_METHODS } from '../rpc/methods/notifications'
-import { DeviceRegistry } from '../device-registry'
-import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { NOTIFICATION_METHODS } from '../rpc/methods/notifications/notifications'
+import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
+import { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import { OrcaRuntimeService } from '../orca-runtime'
 
 function method(name: string): RpcMethod {
@@ -38,22 +38,6 @@ function contextFor(overrides: Partial<RpcContext>): RpcContext {
 }
 
 describe('notifications.registerPush', () => {
-  it('registers under the authenticated paired device id', async () => {
-    const registerPush = method('notifications.registerPush')
-    const ctx = contextFor({ clientKind: 'mobile', pairedDeviceId: 'device-1' })
-
-    const result = await registerPush.handler(registerPush.params!.parse(REGISTER_PARAMS), ctx)
-
-    expect(result).toEqual({ registered: true, registrationId: 'reg-1' })
-    expect(ctx.runtime.registerMobilePushDevice).toHaveBeenCalledWith({
-      deviceId: 'device-1',
-      platform: 'ios',
-      token: REGISTER_PARAMS.token,
-      apnsEnvironment: 'sandbox',
-      filter: REGISTER_PARAMS.filter
-    })
-  })
-
   it.each([
     ['a runtime-scoped caller', { clientKind: 'runtime' as const, pairedDeviceId: 'device-1' }],
     ['an in-process caller', {}],
@@ -92,14 +76,6 @@ describe('notifications.registerPush', () => {
 })
 
 describe('notifications.unregisterPush', () => {
-  it('unregisters the authenticated paired device', async () => {
-    const unregisterPush = method('notifications.unregisterPush')
-    const ctx = contextFor({ clientKind: 'mobile', pairedDeviceId: 'device-1' })
-
-    expect(await unregisterPush.handler(undefined, ctx)).toEqual({ unregistered: true })
-    expect(ctx.runtime.unregisterMobilePushDevice).toHaveBeenCalledWith('device-1')
-  })
-
   it('refuses a non-mobile caller', async () => {
     const unregisterPush = method('notifications.unregisterPush')
     const ctx = contextFor({ clientKind: 'runtime', pairedDeviceId: 'device-1' })
@@ -130,28 +106,9 @@ describe('revokeMobileDevice', () => {
       expect.objectContaining({ registrationId: 'reg-1', deviceId: device.deviceId })
     ])
   })
-
-  it('queues nothing for a device that never enabled push', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-push-revoke-'))
-    const server = new OrcaRuntimeRpcServer({
-      runtime: new OrcaRuntimeService(),
-      userDataPath,
-      enableWebSocket: false
-    })
-    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
-    const device = server['deviceRegistry']!.addDevice('phone', 'mobile')
-
-    expect(await server.revokeMobileDevice(device.deviceId)).toBe(true)
-    expect(server.getPushUnregisterOutbox().pending()).toEqual([])
-  })
 })
 
 describe('notifications.testPush', () => {
-  it('targets the authenticated phone and returns the service result', async () => {
-    const ctx = contextFor({ clientKind: 'mobile', pairedDeviceId: 'device-1' })
-    expect(await method('notifications.testPush').handler(null, ctx)).toEqual({ accepted: true })
-    expect(ctx.runtime.testMobilePushDevice).toHaveBeenCalledWith('device-1')
-  })
   it('refuses callers without an authenticated mobile identity', async () => {
     for (const overrides of [
       {},

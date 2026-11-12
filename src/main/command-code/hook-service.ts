@@ -7,22 +7,24 @@ import type {
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   buildManagedCommandHook,
-  createManagedCommandMatcher,
-  getSharedManagedScriptPath,
-  readHooksJson,
-  removeManagedCommands,
-  wrapPosixHookCommand,
-  writeHooksJson,
-  writeManagedScript,
   type HookDefinition
-} from '../agent-hooks/installer-utils'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import {
+  createManagedCommandMatcher,
+  removeManagedCommands
+} from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
+  writeHooksJsonRemote
+} from '../agent-hooks/installation/configuration/hooks-json-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import { buildCommandCodeManagedScript } from './command-code-managed-script'
 
 const COMMAND_CODE_EVENTS = [

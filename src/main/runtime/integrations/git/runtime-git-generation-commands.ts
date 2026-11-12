@@ -257,12 +257,12 @@ export class RuntimeGitGenerationCommands {
     if (!localEnv.ok) {
       return { success: false, error: localEnv.error }
     }
-    const localOptions = localGitOptionsForTarget(target)
-    return localOptions.wslDistro
-      ? discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride, {
-          cwd: target.worktree.path,
-          wslDistro: localOptions.wslDistro
-        })
-      : discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride)
+    const { wslDistro } = localGitOptionsForTarget(target)
+    return discoverCommitMessageModelsLocal(
+      typedAgentId,
+      localEnv.env,
+      agentCommandOverride,
+      wslDistro ? { cwd: target.worktree.path, wslDistro } : undefined
+    )
   }
 }

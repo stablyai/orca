@@ -1,8 +1,8 @@
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
-import { prepareClaudeLaunchAccount } from '../../claude-launch-account'
+import { prepareClaudeLaunchAccount } from './claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/structured-agent-command-resolution'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
-import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
+import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
   Options as ClaudeAgentSdkOptions,
@@ -17,7 +17,7 @@ import {
   agentSessionProviderHandleRoot,
   claudeProviderHandleLeafUuid
 } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { ClaudeStructuredAuthPolicy } from '../../../claude-accounts/claude-structured-auth-policy'
+import type { ClaudeStructuredAuthPolicy } from '../../../claude-accounts/runtime-auth/claude-structured-auth-policy'
 import {
   claudeChildEnv,
   claudeProbeEnv,
@@ -26,7 +26,10 @@ import {
   type ClaudeEnvDeps
 } from './claude-structured-child-env'
 import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
-import type { ClaudeCliFlagCheck, ClaudeCliFlagSupport } from '../../claude-cli-flag-support'
+import type {
+  ClaudeCliFlagCheck,
+  ClaudeCliFlagSupport
+} from '../../cli-capabilities/claude-cli-flag-support'
 import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
 import { withNativeChatVisualsEnv } from '../../../native-chat/native-chat-visuals-delivery'
 import { claudeLaunchResumesTranscript } from './claude-structured-launch-home'
@@ -55,9 +58,7 @@ export function withClaudeArtifactDefault(
   return chosen ? env : { ...env, [CLAUDE_ARTIFACT_ENV]: '1' }
 }
 
-type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'> & {
-  resolvePermissionModeInCli?: true
-}
+type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'>
 
 export type ClaudeStructuredSdkOptions = Pick<
   ClaudeAgentSdkOptions,
@@ -100,8 +101,8 @@ export function claudeStructuredPermissionOptions(
   mode: AgentChatPermissionChoice
 ): ClaudePermissionOptions {
   if (mode === 'own') {
-    // upstream request: https://github.com/anthropics/claude-agent-sdk-typescript/issues/519
-    return { resolvePermissionModeInCli: true }
+    // An omitted mode lets the CLI apply the user's settings defaultMode.
+    return {}
   }
   return mode === 'full-access'
     ? { extraArgs: { 'dangerously-skip-permissions': null } }
@@ -245,6 +246,7 @@ export function claudeStructuredLaunchPart(
         providerSessionId,
         claudeConfigDir,
         recordHome: accountHome.path,
+        cwd,
         hasTranscript: deps.hasTranscript
       }))
     // Fixed homes can be checked before the final account-routing recheck.
@@ -275,6 +277,7 @@ export function claudeStructuredLaunchPart(
         providerSessionId: fork.sourceSessionId,
         claudeConfigDir: launchHome,
         recordHome: accountHome.path,
+        cwd,
         hasTranscript: deps.hasTranscript
       })
     }

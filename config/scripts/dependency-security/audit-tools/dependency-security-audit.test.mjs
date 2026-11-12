@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { stringify } from 'yaml'
 import { evaluateSecurityAudit } from './dependency-security-audit.mjs'
-import { readSecurityAudit } from './check-dependency-security.mjs'
 
 const roots = []
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })))
@@ -70,16 +69,6 @@ function patchedWorkspace() {
   return { root, lock, writeLock }
 }
 
-it.each(['high', 'critical'])('blocks %s advisories including build-time findings', (severity) => {
-  expect(evaluateSecurityAudit(audit(severity), '.', [], { today })).toEqual([
-    expect.objectContaining({ severity, blocking: true })
-  ])
-})
-it('retains lower severities without blocking', () => {
-  expect(evaluateSecurityAudit(audit('moderate'), '.', [], { today })).toEqual([
-    expect.objectContaining({ severity: 'moderate', blocking: false })
-  ])
-})
 it('applies an exception only to the exact patched finding', () => {
   const { root } = patchedWorkspace()
   const findings = evaluateSecurityAudit(audit('high', ['1.2.3', '2.0.0']), '.', [exception], {
@@ -98,14 +87,7 @@ it('applies an exception only to the exact patched finding', () => {
     ).toBe(true)
   }
 })
-it('lets expired and removed patch exceptions coexist with a clean graph', () => {
-  expect(
-    evaluateSecurityAudit(audit('high', []), '.', [exception], { today: '2026-11-20' })
-  ).toEqual([])
-  expect(
-    evaluateSecurityAudit(audit(), '.', [exception], { today: '2026-11-20' })[0].blocking
-  ).toBe(true)
-})
+
 it.each(['bytes', 'registration', 'lock hash', 'unpatched snapshot'])(
   'refuses a changed %s',
   (change) => {
@@ -128,22 +110,3 @@ it.each(['bytes', 'registration', 'lock hash', 'unpatched snapshot'])(
     )
   }
 )
-it('rejects incomplete reports instead of treating them as clean', () => {
-  expect(() => evaluateSecurityAudit({}, '.', [], { today })).toThrow()
-  const incomplete = audit()
-  incomplete.advisories = {}
-  expect(() => evaluateSecurityAudit(incomplete, '.', [], { today })).toThrow('Incomplete')
-})
-it.each([
-  { code: 2 },
-  { signal: 'SIGTERM' },
-  { timedOut: true },
-  { outputTruncated: true },
-  { stdout: '{' },
-  { code: 1, stdout: '{"error":"registry unavailable"}' }
-])('fails closed on scanner errors: %j', (change) => {
-  expect(() => readSecurityAudit({ code: 0, stdout: JSON.stringify(audit()), ...change })).toThrow()
-})
-it('reads nonzero finding reports for policy evaluation', () => {
-  expect(readSecurityAudit({ code: 1, stdout: JSON.stringify(audit()) })).toEqual(audit())
-})

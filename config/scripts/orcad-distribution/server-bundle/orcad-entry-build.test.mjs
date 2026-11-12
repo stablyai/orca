@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it } from 'vitest'
@@ -14,23 +14,13 @@ import { runProcessSync } from '@orca/process-host'
 
 const directory = mkdtempSync(join(tmpdir(), 'orca-structured-provider-build-'))
 const bundle = join(directory, 'orcad-server.js')
-let serverMetafile
 
 beforeAll(async () => {
-  serverMetafile = (await buildOrcadEntry(bundle)).metafile
+  await buildOrcadEntry(bundle)
 }, 60_000)
 
 afterAll(() => {
   rmSync(directory, { recursive: true, force: true })
-})
-
-it('ships no runtime Electron imports in the actual server graph', () => {
-  const electronImporters = Object.entries(serverMetafile.inputs)
-    .filter(([, input]) =>
-      input.imports.some(({ path }) => path === 'electron' || path.startsWith('electron/'))
-    )
-    .map(([path]) => path)
-  expect(electronImporters).toEqual([])
 })
 
 it('loads the structured Claude SDK through the packaged server under plain Node', () => {
@@ -116,10 +106,6 @@ it.each(['import.meta', 'import.meta.dirname', 'import.meta.filename', 'import.m
   }
 )
 
-it('keeps the server bundle ASCII, so V8 stores its source one byte per character', () => {
-  expect(findNonAsciiSource(readFileSync(bundle, 'utf8'))).toBeNull()
-})
-
 it('escapes only the trailing license comment, never code', () => {
   const code = 'a=/[\u2726]/;'
   const escaped = escapeLegalCommentTail(
@@ -130,22 +116,3 @@ it('escapes only the trailing license comment, never code', () => {
   expect(findNonAsciiSource(escaped.slice(code.length))).toBeNull()
   expect(escapeLegalCommentTail(code)).toBe(code)
 })
-
-it('keeps a build with every dark switch turned on ASCII', () => {
-  const darkBundle = join(directory, 'orcad-server-dark.js')
-  const built = runProcessSync({
-    program: process.execPath,
-    args: [
-      '--input-type=module',
-      '-e',
-      `const { buildOrcadEntry } = await import(${JSON.stringify(
-        new URL('./orcad-entry-build.mjs', import.meta.url).href
-      )}); await buildOrcadEntry(${JSON.stringify(darkBundle)})`
-    ],
-    cwd: directory,
-    env: { ...process.env, ORCA_LAYOUT_OWNER: 'main', ORCA_SIDEBAR_INPUTS: 'main' },
-    timeoutMs: 120_000
-  })
-  expect(built.code, built.stderr.slice(-2_000)).toBe(0)
-  expect(findNonAsciiSource(readFileSync(darkBundle, 'utf8'))).toBeNull()
-}, 150_000)

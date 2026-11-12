@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { CommandHandler } from '../dispatch'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import {
   getDefaultUserDataPath,
@@ -11,8 +11,8 @@ import {
 import {
   getProfileStateExports,
   rollbackProfileState
-} from '../../main/persistence/profile-state/profile-state-recovery-command'
-import { acquireProfileStateMaintenance } from '../../main/persistence/profile-state/profile-state-access'
+} from '../../main/persistence/profile-state/recovery/profile-state-recovery-command'
+import { acquireProfileStateMaintenance } from '../../main/persistence/profile-state/access/profile-state-access'
 import {
   isProfileStateRecoveryCommandError,
   type ProfileStateExportsResult,

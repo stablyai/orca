@@ -9,8 +9,8 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import {
   getJiraListColumnLabel,
   jiraListColumnVisibility,
@@ -31,20 +31,21 @@ export function TaskPageJiraSortControls({
   onSort,
   orderBy
 }: TaskPageJiraSortControlsProps): React.JSX.Element {
+  const t = useTranslate()
   const columns = visibleColumns.map((column) => ({
     id: column.id,
-    label: getJiraListColumnLabel(column.id)
+    label: getJiraListColumnLabel(column.id, t)
   }))
   const directionLabel =
     direction === 'asc'
-      ? translate('auto.components.TaskPage.jiraSortAscending', 'ascending')
-      : translate('auto.components.TaskPage.jiraSortDescending', 'descending')
+      ? t('auto.components.TaskPage.jiraSortAscending', 'ascending')
+      : t('auto.components.TaskPage.jiraSortDescending', 'descending')
   const nextDirectionLabel =
     direction === 'asc'
-      ? translate('auto.components.TaskPage.jiraSortDescending', 'descending')
-      : translate('auto.components.TaskPage.jiraSortAscending', 'ascending')
-  const sortByLabel = translate('auto.components.TaskPage.jiraSortBy', 'Sort by')
-  const toggleDirectionLabel = translate(
+      ? t('auto.components.TaskPage.jiraSortDescending', 'descending')
+      : t('auto.components.TaskPage.jiraSortAscending', 'ascending')
+  const sortByLabel = t('auto.components.TaskPage.jiraSortBy', 'Sort by')
+  const toggleDirectionLabel = t(
     'auto.components.TaskPage.jiraToggleSortDirection',
     'Sort {{value0}}',
     { value0: nextDirectionLabel }

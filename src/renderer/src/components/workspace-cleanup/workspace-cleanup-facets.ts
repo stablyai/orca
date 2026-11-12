@@ -1,4 +1,4 @@
-import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
+import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/workspace-activity-facts'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import {
@@ -23,8 +23,9 @@ import type {
 import type { WorkspaceCleanupReviewInfo } from './workspace-cleanup-presentation'
 import type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'
 
-import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
+import type { Translate } from '@/i18n/use-translate'
 export type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'
 
 export type WorkspaceCleanupFacetSources = {
@@ -92,7 +93,8 @@ const EMPTY_REVIEW_INFO: WorkspaceCleanupReviewInfo = {
 
 export function buildWorkspaceCleanupFacets(
   candidate: WorkspaceCleanupCandidate,
-  sources: WorkspaceCleanupFacetSources = {}
+  sources: WorkspaceCleanupFacetSources = {},
+  t?: Translate
 ): WorkspaceCleanupFacets {
   const hostIdentity = getWorkspaceCleanupHostIdentity(
     getWorkspaceCleanupCandidateHostId(candidate),
@@ -164,7 +166,7 @@ export function buildWorkspaceCleanupFacets(
     isCompletelyEmpty:
       localContextCount === 0 && !review.hasReview && ticketSources.length === 0 && !hasComment
   }
-  return { ...facets, searchText: buildSearchText(facets) }
+  return { ...facets, searchText: buildSearchText(facets, t) }
 }
 
 export function buildWorkspaceCleanupFacetList(
@@ -218,7 +220,10 @@ function getTicketSources(
   return sources
 }
 
-function buildSearchText(facets: Omit<WorkspaceCleanupFacets, 'searchText'>): string {
+function buildSearchText(
+  facets: Omit<WorkspaceCleanupFacets, 'searchText'>,
+  t?: Translate
+): string {
   return [
     facets.displayName,
     facets.repoName,
@@ -231,7 +236,7 @@ function buildSearchText(facets: Omit<WorkspaceCleanupFacets, 'searchText'>): st
     facets.review.title,
     facets.review.provider,
     facets.gitState,
-    getWorkspaceCleanupGitChipLabel(facets.gitState),
+    getWorkspaceCleanupGitChipLabel(facets.gitState, t),
     ...facets.ticketSources,
     ...facets.blockers
   ]

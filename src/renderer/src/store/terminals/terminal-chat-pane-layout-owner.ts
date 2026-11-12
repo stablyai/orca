@@ -1,6 +1,6 @@
 // Record window-picked chat panes in main so saves cannot change them; frames bypass setTabLayout, so its chat moves are window choices.
 
-import { recordLayoutApply } from '@/runtime/layout-apply-send'
+import { recordLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from '../types'
 

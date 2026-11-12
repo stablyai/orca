@@ -1,42 +1,40 @@
 import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
-import { notifyRuntimeListeners } from '../../runtime-async-boundaries'
-
-type DriverState = RuntimeTerminalDriverState
+import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
 
 type RuntimeTerminalDriverDependencies = {
-  notifyChanged: (ptyId: string, next: DriverState) => void
+  notifyChanged: (ptyId: string, next: RuntimeTerminalDriverState) => void
   canClaimMobileFloor: (ptyId: string, clientId: string) => boolean
   commitMobileFloor: (
     ptyId: string,
     clientId: string,
-    previousFloor: DriverState,
+    previousFloor: RuntimeTerminalDriverState,
     isCurrent: () => boolean
   ) => Promise<void>
 }
 
 type MobileInputFloorState = {
-  base: DriverState
+  base: RuntimeTerminalDriverState
   generation: number
   committedGeneration: number
   pending: Map<symbol, { clientId: string; generation: number }>
 }
 
 export class RuntimeTerminalDriverController {
-  private readonly current = new Map<string, DriverState>()
-  private readonly listeners = new Map<string, Set<(driver: DriverState) => void>>()
+  private readonly current = new Map<string, RuntimeTerminalDriverState>()
+  private readonly listeners = new Map<string, Set<(driver: RuntimeTerminalDriverState) => void>>()
   private readonly inputFloorClaims = new Map<string, MobileInputFloorState>()
 
   constructor(private readonly deps: RuntimeTerminalDriverDependencies) {}
 
-  get(ptyId: string): DriverState {
+  get(ptyId: string): RuntimeTerminalDriverState {
     return this.current.get(ptyId) ?? { kind: 'idle' }
   }
 
-  getAll(): Map<string, DriverState> {
+  getAll(): Map<string, RuntimeTerminalDriverState> {
     return new Map(this.current)
   }
 
-  set(ptyId: string, next: DriverState): void {
+  set(ptyId: string, next: RuntimeTerminalDriverState): void {
     // A desktop reclaim or disconnect supersedes unfinished mobile input.
     if (next.kind !== 'mobile') {
       this.inputFloorClaims.delete(ptyId)
@@ -71,8 +69,9 @@ export class RuntimeTerminalDriverController {
     return true
   }
 
-  subscribe(ptyId: string, listener: (driver: DriverState) => void): () => void {
-    const listeners = this.listeners.get(ptyId) ?? new Set<(driver: DriverState) => void>()
+  subscribe(ptyId: string, listener: (driver: RuntimeTerminalDriverState) => void): () => void {
+    const listeners =
+      this.listeners.get(ptyId) ?? new Set<(driver: RuntimeTerminalDriverState) => void>()
     listeners.add(listener)
     this.listeners.set(ptyId, listeners)
     return () => {

@@ -1,4 +1,4 @@
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
@@ -19,7 +19,7 @@ import { translate } from '@/i18n/i18n'
 import { getHostedReviewStateChangeCopy } from './hosted-review-state-change-copy'
 import { buildGitHubPRStackMergeConfirmation } from './github-pr-stack-confirmation'
 import { useReadyHostedReviewAction } from './use-ready-hosted-review-action'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export type HostedReviewActionInfo = Pick<
   HostedReviewInfo,

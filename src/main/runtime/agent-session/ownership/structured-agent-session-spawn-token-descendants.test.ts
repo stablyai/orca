@@ -1,6 +1,6 @@
 // Spawn tokens prove descent, including detached editors/dev servers, so never authorize signals alone; scans can still prove an unused reservation.
 
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

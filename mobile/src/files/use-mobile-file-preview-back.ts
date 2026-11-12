@@ -14,8 +14,10 @@ export type MobileFilePreviewBack = {
 export function useMobileFilePreviewBack(options: {
   hasUnsavedDraft: boolean
   leave: () => void
+  // Runs before leaving with a discarded draft, so it is not offered back later.
+  onDiscard?: () => void
 }): MobileFilePreviewBack {
-  const { hasUnsavedDraft, leave } = options
+  const { hasUnsavedDraft, leave, onDiscard } = options
   const [asking, setAsking] = useState(false)
   const [askedAbout, setAskedAbout] = useState(hasUnsavedDraft)
 
@@ -42,8 +44,9 @@ export function useMobileFilePreviewBack(options: {
 
   const discard = useCallback(() => {
     setAsking(false)
+    onDiscard?.()
     leave()
-  }, [leave])
+  }, [leave, onDiscard])
 
   useBackClaim(requestBack)
 

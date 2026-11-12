@@ -21,7 +21,7 @@ import {
   presentBrowserExtensionWindow,
   type BrowserExtensionWindowEntry
 } from '../tabs-and-windows/browser-extension-window-model'
-import { requireOpenableUrl } from './tabs'
+import { requireOpenableUrl } from '../tabs-and-windows/browser-extension-requested-navigation'
 
 const windowIdSchema = z.number().int()
 const queryOptionsSchema = z

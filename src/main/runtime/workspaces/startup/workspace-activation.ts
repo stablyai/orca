@@ -21,11 +21,6 @@ import {
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeLineageResolution } from '../lineage/runtime-worktree-lineage-resolution'
-import type {
-  WorkspaceLineage,
-  WorktreeLineage,
-  WorktreeLineageWarning
-} from '../../../../shared/worktree/lineage-types'
 import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } from '../lineage/runtime-worktree-lineage-recording'
 import {
   deliverStartupFollowupPrompt,
@@ -76,6 +71,11 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     if (!repo) {
       throw new Error('repo_not_found')
     }
+    // A workspace this host runs on a recipe VM (over its SSH target) wakes with its opening;
+    // the wake can outlast activation, so it runs on its own and records its failure.
+    void this.wakeWorkspaceVm(worktree.id).catch((error: unknown) =>
+      console.warn('[runtime] workspace VM wake failed', error)
+    )
     const navigation = resolveRuntimeNavigationTarget({ ...opts, defaultTarget: 'host' })
     const targetsHost = navigationTargetsHost(navigation)
     const targetsClients = navigationTargetsClients(navigation)
@@ -142,7 +142,13 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     repo: Repo,
     draft: string,
     requestedAgent?: TuiAgent,
-    launchSource?: string
+    launchSource?: string,
+    inputs?: {
+      createdWithAgent?: TuiAgent
+      startupAgentArgs?: string | null
+      startupSessionOptions?: Parameters<typeof buildWorktreeStartupForDraft>[0]['sessionOptions']
+      startupLaunchPreferences?: AgentLaunchPreferences
+    }
   ): ReturnType<typeof buildWorktreeStartupForDraft> {
     if (!this.store) {
       return null
@@ -150,6 +156,11 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     return buildWorktreeStartupForDraft({
       repo,
       draft,
+      originalAgent: inputs?.createdWithAgent ?? requestedAgent,
+      agentArgs: inputs?.startupAgentArgs,
+      sessionOptions:
+        inputs?.startupSessionOptions ??
+        this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
       ...(requestedAgent ? { requestedAgent } : {}),
       ...(launchSource ? { launchSource } : {}),
       settings: this.store.getSettings(),
@@ -197,11 +208,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
   protected recordCreatedWorktreeLineage(
     worktree: Pick<Worktree, 'id' | 'instanceId'>,
     lineageResolution: WorktreeLineageResolution
-  ): {
-    lineage: WorktreeLineage | null
-    workspaceLineage: WorkspaceLineage | null
-    warnings: WorktreeLineageWarning[]
-  } {
+  ): ReturnType<typeof recordCreatedWorktreeLineageState> {
     return recordCreatedWorktreeLineageState(this.store, worktree, lineageResolution)
   }
 

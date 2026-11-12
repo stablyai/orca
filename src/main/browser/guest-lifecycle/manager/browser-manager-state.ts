@@ -1,31 +1,30 @@
 import { BrowserGrabSessionController } from '../../element-grab/browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from '../../certificate-trust/browser-certificate-trust-controller'
-import type { BrowserSiteDisplayController } from '../../site-settings/browser-site-display-controller'
-import {
-  createPageInitiatedTabBudget,
-  type PageInitiatedTabBudget
-} from '../popups/browser-page-initiated-tab-budget'
+import type { BrowserSiteDisplayController } from '../../site-settings/display/browser-site-display-controller'
+import { createPageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
+import type { PageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { BrowserPagePromptTarget } from '../prompts/browser-page-prompts'
-import type {
-  ActiveDownload,
-  CdpUserAgentOverrideState,
-  PendingMainFrameNavigation,
-  PendingPermissionEvent,
-  PendingPopupEvent,
-  BrowserGuestPolicy,
-  BrowserManagerLoadError,
-  PopupOwnerContext
-} from './browser-manager-types'
+import type { ActiveDownload } from './downloads/browser-active-download'
+import type { CdpUserAgentOverrideState } from './navigation/browser-user-agent-override-state'
+import type { PendingMainFrameNavigation } from './navigation/browser-main-frame-navigation'
+import type { PendingPermissionEvent, PendingPopupEvent } from './browser-manager-event-forwarding'
+import type { BrowserGuestPolicy } from './registration/browser-guest-policy-profile'
+import type { PopupOwnerContext } from '../popups/browser-popup-ownership'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent
-} from '../../../../shared/browser-guest-events'
-import type { BrowserGrabCancelReason } from '../../../../shared/browser-grab-types'
-import { BrowserManagerViewportScrollState } from './browser-manager-viewport-scroll-state'
-import { BrowserGuestDevToolsDock } from '../browser-guest-devtools-dock'
+} from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import type { BrowserGrabCancelReason } from '../../../../shared/browser/element-grab/browser-grab-types'
+import { BrowserManagerViewportScrollState } from './viewport/browser-manager-viewport-scroll-state'
+import { BrowserGuestDevToolsDock } from '../devtools/browser-guest-devtools-dock'
+
+export type BrowserManagerSettings = {
+  keybindings?: KeybindingOverrides
+  mobileEmulatorEnabled?: boolean
+}
 
 /** A link a headless serve page asked to open as an Orca tab beside it. */
 export type OffscreenBrowserTabOpenRequest = {
@@ -60,7 +59,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   ): BrowserLoadError
   protected abstract forwardOrQueueGuestLoadFailure(
     guestWebContentsId: number,
-    loadError: BrowserManagerLoadError
+    loadError: BrowserLoadError
   ): void
   protected abstract forwardOrQueuePermissionDenied(
     guestWebContentsId: number,
@@ -130,15 +129,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected abstract openLinkInOrcaTab(
     browserTabId: string,
     rawUrl: string,
-    activate?: boolean
+    activate?: boolean,
+    agentOpened?: boolean
   ): boolean
 
-  protected settingsResolver:
-    | (() => {
-        keybindings?: KeybindingOverrides
-        mobileEmulatorEnabled?: boolean
-      })
-    | null = null
+  protected settingsResolver: (() => BrowserManagerSettings) | null = null
   protected readonly webContentsIdByTabId = new Map<string, number>()
   protected readonly tabIdByWebContentsId = new Map<number, string>()
   protected readonly popupOwnerContextByGuestId = new Map<number, PopupOwnerContext>()
@@ -170,6 +165,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly loadErrorsByGuestId = new Map<number, BrowserLoadError>()
   // Restore the optimistically hidden error if navigation aborts.
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
+  // Offscreen pages have no renderer to hold their icon for session-tab rows.
+  protected readonly remoteTabFaviconUrlByGuestId = new Map<number, string>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
   protected offscreenTabOpener: ((request: OffscreenBrowserTabOpenRequest) => void) | null = null
   protected certificateTrustController: BrowserCertificateTrustController | null = null
@@ -218,12 +215,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     return this.settingsResolver?.().keybindings
   }
 
-  setSettingsResolver(
-    resolver: () => {
-      keybindings?: KeybindingOverrides
-      mobileEmulatorEnabled?: boolean
-    }
-  ): void {
+  setSettingsResolver(resolver: () => BrowserManagerSettings): void {
     this.settingsResolver = resolver
   }
 

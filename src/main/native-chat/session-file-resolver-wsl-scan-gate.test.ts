@@ -26,8 +26,19 @@ vi.mock('./wsl-transcript-fs-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslTranscriptFsGateModule>()),
   runWslTranscriptFsTask: mocks.gate
 }))
-vi.mock('../ai-vault/session-scanner-discovery', () => ({
-  walkSessionFiles: mocks.walk
+vi.mock('../ai-vault/discovery/session-scanner-discovery', () => ({
+  walkSessionFiles: mocks.walk,
+  forEachSessionFile: async (
+    dir: string,
+    agent: string,
+    issues: unknown[],
+    options: { readDirectory?: (dirPath: string) => Promise<unknown[]> },
+    onFile: (path: string) => void
+  ) => {
+    for (const path of await mocks.walk(dir, agent, issues, options)) {
+      onFile(path)
+    }
+  }
 }))
 // These cases cover root and path policy; the E9 gate has its own suite.
 vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))
@@ -49,7 +60,7 @@ vi.mock('../wsl/filesystem/wsl-running-path-filter', async (importOriginal) => (
 }))
 
 import { resolveSessionFilePath } from './session-file-resolver'
-import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
+import { WslTranscriptFsError } from './wsl-transcript-fs-error'
 
 const realPlatform = process.platform
 

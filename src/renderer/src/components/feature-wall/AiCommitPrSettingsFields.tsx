@@ -16,7 +16,7 @@ import type {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { aiCommitPrPickerDraft, commitMessagePickerModel } from './ai-commit-pr-picker'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type AiCommitPrSettingsFieldsProps = {
   config: CommitMessageAiSettings
@@ -41,12 +41,13 @@ export function AiCommitPrSettingsFields({
   onPick,
   writeConfig
 }: AiCommitPrSettingsFieldsProps): JSX.Element {
+  const t = useTranslate()
   const model = useMemo(() => commitMessagePickerModel(pickerEntries), [pickerEntries])
   return (
     <div className="flex flex-col gap-2.5">
       <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-3">
         <Label className="text-xs">
-          {translate('auto.components.feature.wall.AiCommitPrSettingsCard.29d119fe95', 'Agent')}
+          {t('auto.components.feature.wall.AiCommitPrSettingsCard.29d119fe95', 'Agent')}
         </Label>
         <AgentLaunchPicker
           model={model}
@@ -57,20 +58,17 @@ export function AiCommitPrSettingsFields({
           onPick={onPick}
           triggerLabel={
             isCustom
-              ? translate(
-                  'auto.components.feature.wall.AiCommitPrSettingsCard.560d4feb00',
-                  'Custom'
-                )
+              ? t('auto.components.feature.wall.AiCommitPrSettingsCard.560d4feb00', 'Custom')
               : undefined
           }
           emptyLabel={
             unsupportedAgentLabel
-              ? translate(
+              ? t(
                   'auto.components.feature.wall.AiCommitPrSettingsCard.1f9468c5c9',
                   '{{value0}} unsupported',
                   { value0: unsupportedAgentLabel }
                 )
-              : translate(
+              : t(
                   'auto.components.feature.wall.AiCommitPrSettingsCard.bd14e9c42a',
                   'Not configured'
                 )
@@ -78,12 +76,12 @@ export function AiCommitPrSettingsFields({
         >
           <DropdownMenuItem onSelect={() => onAgentChange(CUSTOM_AGENT_ID)}>
             <Terminal className="size-3.5" />
-            {translate('auto.components.feature.wall.AiCommitPrSettingsCard.560d4feb00', 'Custom')}
+            {t('auto.components.feature.wall.AiCommitPrSettingsCard.560d4feb00', 'Custom')}
           </DropdownMenuItem>
         </AgentLaunchPicker>
         {unsupportedAgentLabel ? (
           <p className="col-start-2 text-2xs leading-snug text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.feature.wall.AiCommitPrSettingsCard.unsupportedAgent',
               '{{agent}} is not supported. Choose Claude, Codex, or Custom.',
               { agent: unsupportedAgentLabel }
@@ -95,16 +93,13 @@ export function AiCommitPrSettingsFields({
       {isCustom ? (
         <div className="space-y-1.5">
           <Label htmlFor="feature-wall-ai-commit-custom-command" className="text-xs">
-            {translate(
-              'auto.components.feature.wall.AiCommitPrSettingsCard.9ee54037a4',
-              'Custom command'
-            )}
+            {t('auto.components.feature.wall.AiCommitPrSettingsCard.9ee54037a4', 'Custom command')}
           </Label>
           <Input
             id="feature-wall-ai-commit-custom-command"
             value={config.customAgentCommand}
             onChange={(event) => writeConfig({ customAgentCommand: event.target.value })}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.feature.wall.AiCommitPrSettingsCard.8d4152701a',
               'e.g. ollama run llama3.1 {{value0}}',
               { value0: CUSTOM_PROMPT_PLACEHOLDER }

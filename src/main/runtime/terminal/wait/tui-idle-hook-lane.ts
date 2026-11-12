@@ -3,7 +3,7 @@ import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtim
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { hookAuthority } from '../../agent-state-rules/agent-state-rules-engine'
 import { selectFreshExplicitAgentStatusRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
-import { terminalHostConnectionMatches } from '../../orchestration/worker-provider-session'
+import { terminalHostConnectionMatches } from '../../orchestration/workers/transcripts/worker-provider-session'
 
 type HookTurnState = 'done' | 'working' | 'permission'
 

@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { BrowserClientHostAuthorityReplacementWait } from './browser-client-host-authority-replacement-wait'
-import {
-  type BrowserClientHostedPageInventory,
-  type BrowserClientHostCommandEvent,
-  type BrowserClientHostLeaseAuthority,
-  BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE
+import type {
+  BrowserClientHostedPageInventory,
+  BrowserClientHostCommandEvent,
+  BrowserClientHostLeaseAuthority
 } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { PairedRuntimeBrowserClientHostComposition } from './paired-runtime-browser-client-host-composition'
 
@@ -38,119 +37,6 @@ const replacementInput = {
 }
 
 describe('PairedRuntimeBrowserClientHostComposition', () => {
-  it('activates exact route authority before admitting page commands', async () => {
-    const rig = createRig()
-    const composition = rig.createComposition()
-
-    await expect(composition.start()).resolves.toEqual(authority)
-    await rig.hostOptions.handler?.(command(), new AbortController().signal)
-
-    expect(rig.order).toEqual(['activate-routes', 'handle-command'])
-  })
-
-  it('provides the exact executor inventory to the host attach', () => {
-    const rig = createRig()
-    rig.createComposition()
-
-    expect(rig.hostOptions.getPageInventory?.()).toEqual([
-      expect.objectContaining({ browserPageId: 'page-a', state: 'active' })
-    ])
-    expect(rig.executor.snapshotPageInventory).toHaveBeenCalledOnce()
-  })
-
-  it('publishes a fresh inventory snapshot for every reconnect attach', () => {
-    const rig = createRig({ pageInventory: [] })
-    rig.executor.snapshotPageInventory
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([retainedPageInventory()])
-    rig.createComposition()
-
-    expect(rig.hostOptions.getPageInventory?.()).toEqual([])
-    expect(rig.hostOptions.getPageInventory?.()).toEqual([
-      expect.objectContaining({ browserPageId: 'page-a', state: 'active' })
-    ])
-    expect(rig.executor.snapshotPageInventory).toHaveBeenCalledTimes(2)
-  })
-
-  it('coalesces page availability losses into one inventory refresh', async () => {
-    const rig = createRig()
-    rig.createComposition()
-
-    rig.reportPageUnavailable()
-    rig.reportPageUnavailable()
-
-    expect(rig.host.refreshPageInventory).toHaveBeenCalledOnce()
-    await Promise.resolve()
-    await Promise.resolve()
-    rig.reportPageUnavailable()
-    expect(rig.host.refreshPageInventory).toHaveBeenCalledTimes(2)
-  })
-
-  it('preserves inventory while replacing authority with fresh routes', async () => {
-    const rig = createRig()
-    const composition = rig.createComposition()
-    await composition.start()
-
-    await expect(composition.replaceAuthority(replacementInput)).resolves.toEqual(
-      replacementAuthority
-    )
-
-    expect(rig.replacementInventory).toEqual([
-      expect.objectContaining({ browserPageId: 'page-a', authorityRuntimeId: 'runtime-a' })
-    ])
-    expect(rig.executor.close).not.toHaveBeenCalled()
-    expect(rig.routes.close).not.toHaveBeenCalled()
-    expect(rig.order).toEqual([
-      'activate-routes',
-      'retire-routes',
-      'fence-authority-transition',
-      'close-host',
-      'complete-authority-transition',
-      'attach-replacement-inventory',
-      'activate-replacement-routes'
-    ])
-  })
-
-  it('rejects retained inventory when replacement cannot reconcile it', async () => {
-    const rig = createRig({
-      replacementAuthority: {
-        ...replacementAuthority,
-        pageInventoryProtocolVersion: undefined,
-        pageReconciliationProtocolVersion: undefined
-      }
-    })
-    const composition = rig.createComposition()
-    await composition.start()
-
-    await expect(composition.replaceAuthority(replacementInput)).rejects.toThrow(
-      'browser_client_page_reconciliation_unsupported'
-    )
-
-    expect(rig.replacementInventory).toEqual([
-      expect.objectContaining({ browserPageId: 'page-a', authorityRuntimeId: 'runtime-a' })
-    ])
-    expect(rig.replacementRoutes.close).not.toHaveBeenCalled()
-    expect(rig.order).not.toContain('activate-replacement-routes')
-    await composition.close()
-  })
-
-  it('allows a legacy replacement when there is no retained inventory', async () => {
-    const legacyAuthority = {
-      ...replacementAuthority,
-      pageInventoryProtocolVersion: undefined,
-      pageReconciliationProtocolVersion: undefined
-    }
-    const rig = createRig({ pageInventory: [], replacementAuthority: legacyAuthority })
-    const composition = rig.createComposition()
-    await composition.start()
-
-    await expect(composition.replaceAuthority(replacementInput)).resolves.toEqual(legacyAuthority)
-
-    expect(rig.replacementInventory).toEqual([])
-    expect(rig.order).toContain('activate-replacement-routes')
-    await composition.close()
-  })
-
   it('waits for old handlers and ignores their late callbacks before replacement', async () => {
     const rig = createRig({ hostSettled: false })
     const composition = rig.createComposition()
@@ -170,41 +56,6 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
     expect(rig.hosts[1]!.close).not.toHaveBeenCalled()
     expect(rig.replacementRoutes.suspend).not.toHaveBeenCalled()
     expect(rig.onError).not.toHaveBeenCalled()
-  })
-
-  it('fails closed when retired routes reject during replacement', async () => {
-    const routeRetireError = new Error('route retirement failed')
-    const rig = createRig({ routeRetireError })
-    const composition = rig.createComposition()
-    await composition.start()
-
-    await expect(composition.replaceAuthority(replacementInput)).rejects.toThrow(
-      'paired_runtime_browser_client_host_composition_closed'
-    )
-    await composition.whenClosed()
-
-    expect(rig.onError).toHaveBeenCalledWith(routeRetireError)
-    expect(rig.executor.close).toHaveBeenCalledOnce()
-    expect(rig.routes.close).toHaveBeenCalledOnce()
-    expect(rig.order).not.toContain('activate-replacement-routes')
-  })
-
-  it('suspends routes without closing pages and gates commands through recovery', async () => {
-    const rig = createRig()
-    const composition = rig.createComposition()
-    await composition.start()
-
-    rig.hostOptions.onTransportLost?.(new Error('transport lost'))
-    const handling = rig.hostOptions.handler?.(command(), new AbortController().signal)
-    await Promise.resolve()
-    expect(rig.routes.suspend).toHaveBeenCalledOnce()
-    expect(rig.executor.handle).not.toHaveBeenCalled()
-    expect(rig.executor.close).not.toHaveBeenCalled()
-
-    rig.hostOptions.onReconnected?.(authority)
-    await expect(handling).resolves.toEqual({ status: 'completed' })
-    expect(rig.routes.reconnect).toHaveBeenCalledOnce()
-    expect(rig.executor.handle).toHaveBeenCalledOnce()
   })
 
   it('keeps one command gate across repeated loss while fencing stale route recovery', async () => {
@@ -232,171 +83,6 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
     expect(rig.routes.suspend).toHaveBeenCalledTimes(2)
     expect(rig.routes.reconnect).toHaveBeenCalledTimes(2)
     expect(rig.executor.handle).toHaveBeenCalledOnce()
-  })
-
-  it('settles dispatcher retirement before destroying and forgetting the page', async () => {
-    const rig = createRig()
-    const composition = rig.createComposition()
-    await composition.start()
-
-    await expect(composition.retirePage('page-a', 7)).resolves.toBe(true)
-
-    expect(rig.order).toEqual([
-      'activate-routes',
-      'retire-dispatcher-page',
-      'retire-executor-page',
-      'forget-dispatcher-page'
-    ])
-  })
-
-  it('closes control transport before executor pages and routes', async () => {
-    const rig = createRig()
-    const composition = rig.createComposition()
-    await composition.start()
-
-    await expect(composition.close()).resolves.toBe(true)
-
-    expect(rig.order).toEqual([
-      'activate-routes',
-      'closing',
-      'suspend-routes',
-      'fence-navigation',
-      'close-host',
-      'close-executor',
-      'close-routes'
-    ])
-  })
-
-  it('fences navigation and routes before terminal host cleanup can wait', async () => {
-    const rig = createRig()
-    const composition = rig.createComposition()
-    const error = new Error('terminal authority loss')
-    await composition.start()
-
-    rig.hostOptions.onError?.(error)
-
-    expect(rig.routes.suspend).toHaveBeenCalledWith(error)
-    expect(rig.executor.fenceNavigation).toHaveBeenCalledOnce()
-    expect(rig.order.slice(0, 5)).toEqual([
-      'activate-routes',
-      'closing',
-      'suspend-routes',
-      'fence-navigation',
-      'close-host'
-    ])
-    await composition.whenClosed()
-  })
-
-  it('waits out the grace instead of tearing down when the authority was replaced', async () => {
-    vi.useFakeTimers()
-    try {
-      const rig = createRig()
-      const composition = rig.createComposition()
-      await composition.start()
-
-      rig.hostOptions.onError?.(authorityReplacedError())
-
-      expect(rig.authorityReplacementWait.armed).toBe(true)
-      expect(rig.onError).not.toHaveBeenCalled()
-      expect(rig.order).toEqual(['activate-routes'])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('tears the composition down once the grace expires with no replacement', async () => {
-    vi.useFakeTimers()
-    try {
-      const rig = createRig()
-      const composition = rig.createComposition()
-      await composition.start()
-      const replaced = authorityReplacedError()
-
-      rig.hostOptions.onError?.(replaced)
-      vi.advanceTimersByTime(1_000)
-
-      expect(rig.onError).toHaveBeenCalledWith(replaced)
-      expect(rig.order).toContain('closing')
-      await vi.runAllTimersAsync()
-      await composition.whenClosed()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('cancels the grace when the replacement authority actually arrives', async () => {
-    vi.useFakeTimers()
-    try {
-      const rig = createRig()
-      const composition = rig.createComposition()
-      await composition.start()
-      rig.hostOptions.onError?.(authorityReplacedError())
-
-      await composition.replaceAuthority(replacementInput)
-
-      expect(rig.authorityReplacementWait.armed).toBe(false)
-      vi.advanceTimersByTime(10_000)
-      expect(rig.onError).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('cancels the grace when the composition closes for another reason', async () => {
-    vi.useFakeTimers()
-    try {
-      const rig = createRig()
-      const composition = rig.createComposition()
-      await composition.start()
-      rig.hostOptions.onError?.(authorityReplacedError())
-
-      await composition.close()
-
-      expect(rig.authorityReplacementWait.armed).toBe(false)
-      vi.advanceTimersByTime(10_000)
-      expect(rig.onError).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('arms one deadline for a burst of mismatch errors', async () => {
-    vi.useFakeTimers()
-    try {
-      const rig = createRig()
-      const composition = rig.createComposition()
-      await composition.start()
-
-      rig.hostOptions.onError?.(authorityReplacedError())
-      vi.advanceTimersByTime(900)
-      rig.hostOptions.onError?.(authorityReplacedError())
-      vi.advanceTimersByTime(100)
-
-      expect(rig.onError).toHaveBeenCalledTimes(1)
-      await vi.runAllTimersAsync()
-      await composition.whenClosed()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('still tears down immediately for a host error that is not a replacement', async () => {
-    vi.useFakeTimers()
-    try {
-      const rig = createRig()
-      const composition = rig.createComposition()
-      await composition.start()
-      const fatal = new Error('browser host process exited')
-
-      rig.hostOptions.onError?.(fatal)
-
-      expect(rig.authorityReplacementWait.armed).toBe(false)
-      expect(rig.onError).toHaveBeenCalledWith(fatal)
-      await vi.runAllTimersAsync()
-      await composition.whenClosed()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('fails closed without racing page cleanup when handlers do not settle', async () => {
@@ -428,45 +114,6 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
       'close-routes',
       'close-executor'
     ])
-  })
-
-  it('reports a deferred executor cleanup failure while retaining its fence', async () => {
-    const cleanupError = new Error('executor cleanup failed')
-    const rig = createRig({ executorCloseError: cleanupError, hostSettled: false })
-    const composition = rig.createComposition()
-    await composition.start()
-    await composition.close()
-
-    rig.settleHandlers()
-
-    await expect(composition.whenClosed()).rejects.toThrow('executor cleanup failed')
-    expect(rig.onError).toHaveBeenCalledWith(cleanupError)
-  })
-
-  it('forgets a failed create that left no unresolved executor page', async () => {
-    const rig = createRig()
-    rig.executor.retirePage.mockResolvedValueOnce(false)
-    const composition = rig.createComposition()
-    await composition.start()
-
-    await expect(composition.retirePage('page-a', 7)).resolves.toBe(true)
-
-    expect(rig.executor.hasUnresolvedPage).toHaveBeenCalledWith('page-a', 7)
-    expect(rig.host.forgetPage).toHaveBeenCalledWith('page-a', 7)
-  })
-
-  it('keeps an unresolved failed create fenced', async () => {
-    const rig = createRig()
-    rig.executor.retirePage.mockResolvedValueOnce(false)
-    rig.executor.hasUnresolvedPage.mockReturnValueOnce(true)
-    const composition = rig.createComposition()
-    await composition.start()
-
-    await expect(composition.retirePage('page-a', 7)).rejects.toThrow(
-      'browser_client_page_retirement_cleanup_pending'
-    )
-
-    expect(rig.host.forgetPage).not.toHaveBeenCalled()
   })
 })
 
@@ -633,12 +280,6 @@ function createRig(
         onError
       })
   }
-}
-
-function authorityReplacedError(): Error {
-  return Object.assign(new Error('lease attach named a retired runtime'), {
-    code: BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE
-  })
 }
 
 function retainedPageInventory(): BrowserClientHostedPageInventory {

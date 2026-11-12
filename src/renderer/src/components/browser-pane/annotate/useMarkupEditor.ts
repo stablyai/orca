@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { blitMarkupScene, renderCommittedLayer } from './markup-canvas-render'
 import { useMarkupKeyboardShortcuts, type PendingText } from './useMarkupKeyboardShortcuts'
 import { useMarkupPointerHandlers } from './useMarkupPointerHandlers'

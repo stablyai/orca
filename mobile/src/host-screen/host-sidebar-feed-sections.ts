@@ -231,9 +231,12 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
           view: {
             ...hostContext,
             sectionListKey: row.key,
-            lineageDepth: 0,
+            lineageDepth: row.depth,
             ...(row.groupDepth ? { projectGroupDepth: row.groupDepth } : {}),
-            ...(row.projectGroup.createdFrom === 'folder-scan' ? { inFolderScanGroup: true } : {})
+            ...(row.projectGroup.createdFrom === 'folder-scan' ? { inFolderScanGroup: true } : {}),
+            lineageChildCount: row.lineageChildCount ?? 0,
+            lineageCollapsed: row.lineageCollapsed === true,
+            ...(row.lineageGroupKey ? { lineageGroupKey: row.lineageGroupKey } : {})
           }
         })
         break

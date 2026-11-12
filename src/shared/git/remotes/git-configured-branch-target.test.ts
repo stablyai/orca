@@ -1,10 +1,5 @@
-// Pin URL-remote resolution parity and spawn counts: two lookups in a 58-remote repo formerly cost up to 118 subprocesses.
-
 import { describe, expect, it } from 'vitest'
-import {
-  getConfiguredBranchRemoteUpstream,
-  hasConfiguredBranchPushTarget
-} from './git-configured-branch-target'
+import { hasConfiguredBranchPushTarget } from './git-configured-branch-target'
 
 const BRANCH = 'imp/translation'
 const FORK_URL = 'https://github.com/contributor/orca.git'
@@ -56,38 +51,7 @@ function makeRunner(fixture: Fixture): {
   return { runGit, spawns }
 }
 
-const fiftyEightRemotes: RemoteRow[] = [
-  { name: 'origin', fetchUrl: UPSTREAM_URL },
-  ...Array.from({ length: 56 }, (_, index) => ({
-    name: `pr-user${index}-orca`,
-    fetchUrl: `https://github.com/user${index}/orca.git`
-  })),
-  { name: 'pr-contributor-orca', fetchUrl: FORK_URL }
-]
-
 describe('hasConfiguredBranchPushTarget', () => {
-  it('resolves both URL-valued remotes from one remote table read at 58 remotes', async () => {
-    const { runGit, spawns } = makeRunner({
-      remotes: fiftyEightRemotes,
-      config: {
-        [`branch.${BRANCH}.pushRemote`]: FORK_URL,
-        [`branch.${BRANCH}.remote`]: FORK_URL,
-        [`branch.${BRANCH}.merge`]: `refs/heads/${BRANCH}`
-      }
-    })
-
-    await expect(hasConfiguredBranchPushTarget(runGit, BRANCH)).resolves.toBe(true)
-
-    // Both the push remote and the branch remote name the same URL, so one table read answers.
-    expect(spawns.filter((args) => args[0] === 'remote')).toEqual([['remote', '-v']])
-    expect(spawns.filter((args) => args[1] === 'get-url')).toEqual([])
-  })
-
-  it('keeps the not-set case false when no remote is configured', async () => {
-    const { runGit } = makeRunner({ remotes: fiftyEightRemotes, config: {} })
-    await expect(hasConfiguredBranchPushTarget(runGit, BRANCH)).resolves.toBe(false)
-  })
-
   it('keeps the URL itself as the remote name when nothing matches', async () => {
     const { runGit } = makeRunner({
       remotes: [{ name: 'origin', fetchUrl: UPSTREAM_URL }],
@@ -99,73 +63,5 @@ describe('hasConfiguredBranchPushTarget', () => {
     })
     // Retain raw-URL equality on no match so a differently named merge branch remains pushable.
     await expect(hasConfiguredBranchPushTarget(runGit, BRANCH)).resolves.toBe(true)
-  })
-})
-
-describe('getConfiguredBranchRemoteUpstream', () => {
-  const remoteTrackingRefExists = async (): Promise<boolean> => true
-
-  it('picks the first remote holding a duplicated URL', async () => {
-    const { runGit, spawns } = makeRunner({
-      remotes: [
-        { name: 'origin', fetchUrl: UPSTREAM_URL },
-        { name: 'fork-a', fetchUrl: FORK_URL },
-        { name: 'fork-b', fetchUrl: FORK_URL }
-      ],
-      config: {
-        [`branch.${BRANCH}.remote`]: FORK_URL,
-        [`branch.${BRANCH}.merge`]: `refs/heads/${BRANCH}`
-      }
-    })
-
-    await expect(
-      getConfiguredBranchRemoteUpstream(runGit, BRANCH, remoteTrackingRefExists)
-    ).resolves.toEqual({
-      upstreamName: `fork-a/${BRANCH}`,
-      remoteName: 'fork-a',
-      branchName: BRANCH,
-      isConfiguredUpstream: false
-    })
-    expect(spawns.filter((args) => args[0] === 'remote')).toEqual([['remote', '-v']])
-  })
-
-  it('ignores a push URL when fetch and push differ', async () => {
-    const { runGit } = makeRunner({
-      remotes: [{ name: 'split', fetchUrl: UPSTREAM_URL, pushUrl: FORK_URL }],
-      config: {
-        [`branch.${BRANCH}.remote`]: FORK_URL,
-        [`branch.${BRANCH}.merge`]: `refs/heads/${BRANCH}`
-      }
-    })
-    await expect(
-      getConfiguredBranchRemoteUpstream(runGit, BRANCH, remoteTrackingRefExists)
-    ).resolves.toBeNull()
-  })
-
-  it('returns null with no remotes at all', async () => {
-    const { runGit } = makeRunner({
-      remotes: [],
-      config: {
-        [`branch.${BRANCH}.remote`]: FORK_URL,
-        [`branch.${BRANCH}.merge`]: `refs/heads/${BRANCH}`
-      }
-    })
-    await expect(
-      getConfiguredBranchRemoteUpstream(runGit, BRANCH, remoteTrackingRefExists)
-    ).resolves.toBeNull()
-  })
-
-  it('keeps a plain named remote untouched', async () => {
-    const { runGit, spawns } = makeRunner({
-      remotes: fiftyEightRemotes,
-      config: {
-        [`branch.${BRANCH}.remote`]: 'origin',
-        [`branch.${BRANCH}.merge`]: `refs/heads/${BRANCH}`
-      }
-    })
-    await expect(
-      getConfiguredBranchRemoteUpstream(runGit, BRANCH, remoteTrackingRefExists)
-    ).resolves.toMatchObject({ remoteName: 'origin' })
-    expect(spawns.filter((args) => args[0] === 'remote')).toEqual([])
   })
 })

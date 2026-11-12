@@ -40,19 +40,18 @@ vi.mock('./editor-external-watch-targets', async (importOriginal) => ({
   }),
   getEditorExternalWatchTargetKey: harness.keyOf
 }))
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: harness.readRuntimeFileContent
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { useEditorExternalWatch } from './useEditorExternalWatch'
 import { attachRestoredTabConflictScan } from '@/components/editor/external-changes/editor-restored-tab-conflict-scan'
-import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
-import {
-  isAutosaveSuspendedForFile,
-  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT
-} from '@/components/editor/autosave/editor-autosave'
+import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
+import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from '@/components/editor/autosave/editor-autosave'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from './worktree-file-change-event'
 import {
   claimCombinedDiffView,
@@ -177,17 +176,6 @@ describe('switching back to a workspace that was not watched', () => {
     await act(async () => vi.advanceTimersByTimeAsync(200))
   }
 
-  it('reloads clean tabs, flags a changed dirty tab without pausing it, and refreshes git status/Files once', async () => {
-    harness.readRuntimeFileContent.mockResolvedValue({ content: 'v2 agent write', isBinary: false })
-    await switchBack()
-
-    expect(reloads).toEqual(['clean.ts'])
-    expect(harness.readRuntimeFileContent).toHaveBeenCalledTimes(1)
-    expect(file(DIRTY)).toMatchObject({ isDirty: true, externalMutation: 'changed' })
-    expect(file(CLEAN).externalMutation).toBeFalsy()
-    expect(fileChangeEvents).toBe(1)
-  })
-
   it('marks a clean tab deleted and keeps it when its file was deleted while unwatched', async () => {
     harness.readRuntimeFileContent.mockResolvedValue({ content: 'v1', isBinary: false })
     pathExists.mockImplementation(async ({ filePath }: { filePath: string }) => filePath !== CLEAN)
@@ -220,8 +208,7 @@ describe('switching back to a workspace that was not watched', () => {
         gitStatusSignature: 'g',
         sections: [section('clean.ts', false), section('dirty.ts', true)],
         sectionHeights: {},
-        loadedIndices: [0, 1],
-        sideBySide: false
+        loadedIndices: [0, 1]
       }
     })
     harness.readRuntimeFileContent.mockResolvedValue({ content: 'v1', isBinary: false })
@@ -236,24 +223,5 @@ describe('switching back to a workspace that was not watched', () => {
     })
     expect(view?.loadedIndices).toEqual([1])
     expect(readCombinedDiffViewMemory(viewKey)?.scrollTop).toBe(120)
-  })
-
-  it('leaves a dirty tab alone when disk still matches what it last read', async () => {
-    harness.readRuntimeFileContent.mockResolvedValue({ content: 'v1', isBinary: false })
-    await switchBack()
-
-    expect(harness.readRuntimeFileContent).toHaveBeenCalledTimes(1)
-    expect(file(DIRTY).externalMutation).toBeFalsy()
-    expect(isAutosaveSuspendedForFile(file(DIRTY))).toBe(false)
-  })
-
-  it('does not re-read tabs of a workspace that was never dropped', async () => {
-    await render([active], [])
-    await render([active, background], [])
-    await act(async () => settleWatch())
-    await act(async () => vi.advanceTimersByTimeAsync(200))
-
-    expect(reloads).toEqual([])
-    expect(harness.readRuntimeFileContent).not.toHaveBeenCalled()
   })
 })

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { usePluginPanelsStore } from '@/store/plugin-panels'
+import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import type { PluginHostListEntry } from '../../../../../../shared/plugins/plugin-list-entry'
 import type { EditorSaveHookDecision } from '../../../../../../shared/plugins/events/plugin-editor-save-hook'
 import { createEditorSaveQueue } from '../queue/editor-save-queue'
@@ -16,7 +16,9 @@ import {
 import { EditorSaveDeniedByPluginError } from './editor-save-plugin-hook'
 import { registerPendingEditorFlush } from '../flush/editor-pending-flush'
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 const PATH = '/repo/src/a.ts'

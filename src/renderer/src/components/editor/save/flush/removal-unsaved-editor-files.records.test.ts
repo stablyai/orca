@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { lastViewUnsavedFiles } from './removal-unsaved-editor-files'
 
 function tab(id: string, patch: Partial<OpenFile> = {}): OpenFile {

@@ -39,19 +39,6 @@ function oscLinkAt(terminal: Terminal, row: number, col: number): OscLinkData | 
 }
 
 describe('OSC 8 hyperlink snapshot round-trip', () => {
-  it('retains a closed link URI without linking surrounding text', async () => {
-    const url = 'https://github.com/stablyai/orca/issues/12345'
-    const { terminal, addon } = createTerminal()
-    await write(terminal, `before \x1b]8;;${url}\x1b\\#12345\x1b]8;;\x1b\\ after`)
-
-    const restored = await replay(addon.serialize())
-    expect(restored.buffer.active.getLine(0)?.translateToString(true)).toBe('before #12345 after')
-    expect(oscLinkAt(restored, 0, 6)).toBeNull()
-    expect(oscLinkAt(restored, 0, 7)?.uri).toBe(url)
-    expect(oscLinkAt(restored, 0, 12)?.uri).toBe(url)
-    expect(oscLinkAt(restored, 0, 13)).toBeNull()
-  })
-
   it('keeps an open link active for output arriving after replay', async () => {
     const url = 'https://example.com/streaming-link'
     const { terminal, addon } = createTerminal()

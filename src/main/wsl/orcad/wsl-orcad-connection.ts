@@ -13,18 +13,15 @@ import type { WslHostConnectIntent } from '../../../shared/wsl-host-types'
 import { errorMessage } from '../../../shared/error-message'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import {
   wslConnectFailedStatus,
   type WslOrcadConnectionStatus
 } from './wsl-orcad-connection-status'
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
-import {
-  defaultWslOrcadEnvironmentId,
-  deployAndLaunchWslOrcad,
-  type WslOrcadLaunch
-} from './wsl-orcad-deploy'
+import { defaultWslOrcadEnvironmentId, deployAndLaunchWslOrcad } from './wsl-orcad-deploy'
+import type { WslOrcadLaunch } from './wsl-orcad-launch-contract'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { resolveWslOrcadPairing } from './wsl-orcad-pairing-identity'

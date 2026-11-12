@@ -2,12 +2,10 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { ClaudeEnvDeps } from '../../../claude/structured/launch/claude-structured-child-env'
 import { ClaudeStructuredSessionAdapter } from '../../../claude/structured/claude-structured-session-adapter'
-import type {
-  ClaudeStructuredSessionAdapterDeps,
-  ClaudeStructuredSessionEvent
-} from '../../../claude/structured/claude-structured-session-state'
+import type { ClaudeStructuredSessionAdapterDeps } from '../../../claude/structured/claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../../../claude/structured/claude-structured-session-event'
 import { claudeProviderHandleLink } from '../../../claude/structured/claude-structured-owner-identity'
-import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
 import {
   recordAgentSessionProviderHandle,
@@ -17,11 +15,11 @@ import type { AgentSessionRecordStore } from '../records/agent-session-record-st
 import {
   ClaudeAtRestCommandCatalog,
   type ClaudeAtRestCommandsDeps
-} from '../../../claude/claude-at-rest-commands'
-import type { ClaudeCommandCatalogProbe } from '../../../claude/claude-command-catalog-probe'
+} from '../../../claude/command-catalog/claude-at-rest-commands'
+import type { ClaudeCommandCatalogProbe } from '../../../claude/command-catalog/claude-command-catalog-probe'
 import { openClaudeStreamJsonConnection } from '../../../claude/claude-stream-json-connection'
-import type { ClaudeCliFlagSupport } from '../../../claude/claude-cli-flag-support'
-import { prewarmClaudeCliFlags } from '../../../claude/claude-cli-flag-prewarm'
+import type { ClaudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
+import { prewarmClaudeCliFlags } from '../../../claude/cli-capabilities/claude-cli-flag-prewarm'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
@@ -50,7 +48,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
 export function structuredClaudeLifecycleEvent(
   event: ClaudeStructuredSessionEvent
 ): StructuredAgentSessionLifecycleEvent | null {
-  if (event.type === 'options-reported') {
+  if (event.type === 'options-reported' || event.type === 'retiring') {
     return event
   }
   // Every exit of a child with an identity, expected or not: the host ends that child's record.

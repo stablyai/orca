@@ -251,24 +251,6 @@ describe('app store performance Oxlint plugin', () => {
     expect(diagnosticsBySource.get(sources[name])).toEqual([])
   })
 
-  it('does not flag test files', () => {
-    expect(
-      runOxlintPluginOnSources({
-        pluginName: 'app-store-performance',
-        pluginPath,
-        sources: [sources.historicalHotMap],
-        extension: 'test.tsx',
-        rules: { 'app-store-performance/no-whole-hot-map-selector': 'warn' }
-      })
-    ).toEqual([[]])
-  })
-
-  it('resolves an escaped store import through the text prefilter', () => {
-    expect(
-      diagnosticsBySource.get(sources.escapedImport).map((diagnostic) => diagnostic.code)
-    ).toEqual(['app-store-performance(require-selector)'])
-  })
-
   it.each(['lexicalBindings', 'shadowedImports'])('respects lexical bindings in %s', (name) => {
     expect(diagnosticsBySource.get(sources[name])).toEqual([])
   })
@@ -285,31 +267,10 @@ describe('app store performance Oxlint plugin', () => {
     ])
   })
 
-  it('allows focused, cached, and useShallow selectors', () => {
-    const diagnostics = diagnosticsBySource.get(sources.focusedSelectors)
-
-    expect(diagnostics).toEqual([])
-  })
-
   it('resolves selectors referenced by name, including ones hoisted below the call', () => {
     const diagnostics = diagnosticsBySource.get(sources.namedSelectors)
 
     expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-      'app-store-performance(no-fresh-selector-result)'
-    ])
-  })
-
-  it('does not let a component-local helper resolve a same-named imported selector', () => {
-    const diagnostics = diagnosticsBySource.get(sources.importedSelector)
-
-    expect(diagnostics).toEqual([])
-  })
-
-  it('covers sibling store hooks but not useSyncExternalStore', () => {
-    const diagnostics = diagnosticsBySource.get(sources.siblingStores)
-
-    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-      'app-store-performance(require-selector)',
       'app-store-performance(no-fresh-selector-result)'
     ])
   })

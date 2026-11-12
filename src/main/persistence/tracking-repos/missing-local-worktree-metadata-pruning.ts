@@ -6,8 +6,8 @@ import { sshRemotePtyLeaseAllowsReattach } from '../../../shared/ssh-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../../shared/worktree/id'
 import { isWslUncPath } from '../../../shared/wsl-paths'
-import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
-import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-identity-metadata'
+import { isFinalAutomationRunStatus } from '../../../shared/automations/history/automation-run'
+import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-metadata/worktree-identity-metadata'
 import {
   addPersistedSessionWorktreeOwners,
   createWorktreeOwnerCandidateCollector
@@ -173,6 +173,7 @@ export function pruneSessionlessMissingLocalWorktreeMetadataForRepo(
     }
     delete state.worktreeLineageById[worktreeId]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+    delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(worktreeId)]
     removedIds.push(worktreeId)
   }
   if (removedIds.length > 0) {

@@ -4,7 +4,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getComputerUsePaneSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.computer.use.search.442bec10fe', 'Computer Use'),
+    title: translate('auto.components.settings.computer.use.search.c3c3d70b5e', 'Computer use'),
     description: translate(
       'auto.components.settings.computer.use.search.9210db582b',
       'Allow agents to inspect screenshots and operate local apps when you ask.'

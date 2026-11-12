@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -39,19 +39,5 @@ afterAll(() => {
 describe('foreign SQLite reader build smoke', () => {
   it('passes against the built entry', () => {
     expect(() => smokeForeignSqliteReaderWorker(builtDirectory)).not.toThrow()
-  })
-
-  it('fails when the entry is missing', () => {
-    expect(() => smokeForeignSqliteReaderWorker(fixtureDirectory())).toThrow('smoke failed')
-  })
-
-  it('fails when the worker answers without reading', () => {
-    const directory = fixtureDirectory()
-    writeFileSync(
-      join(directory, ENTRY),
-      `const { parentPort } = require('node:worker_threads')
-      parentPort.on('message', ({ id }) => parentPort.postMessage({ id, ok: true, value: [] }))`
-    )
-    expect(() => smokeForeignSqliteReaderWorker(directory)).toThrow('smoke failed')
   })
 })

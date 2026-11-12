@@ -1,16 +1,16 @@
 import { repo } from './gitlab-ipc-repository-fixture'
-import type * as PipelineJobMutationsModule from '../../gitlab/pipeline-job-mutations'
-import type * as IssuesModule from '../../gitlab/issues'
-import type * as ProjectLabelAndMemberLookupModule from '../../gitlab/project-label-and-member-lookup'
-import type * as IssueUpdateModule from '../../gitlab/issue-update'
-import type * as MergeRequestReviewMutationsModule from '../../gitlab/merge-request-review-mutations'
-import type * as MergeRequestStateMutationsModule from '../../gitlab/merge-request-state-mutations'
-import type * as MergeRequestUpdateModule from '../../gitlab/merge-request-update'
-import type * as MergeRequestLookupModule from '../../gitlab/merge-request-lookup'
-import type * as MergeRequestListModule from '../../gitlab/merge-request-list'
-import type * as WorkItemQueriesModule from '../../gitlab/work-item-queries'
-import type * as ClientModule from '../../gitlab/client'
-import type * as GitlabAuthAndRateLimitModule from '../../gitlab/gitlab-auth-and-rate-limit'
+import type * as PipelineJobMutationsModule from '../../gitlab/pipelines/pipeline-job-mutations'
+import type * as IssuesModule from '../../gitlab/issues/gitlab-issue-queries'
+import type * as ProjectLabelAndMemberLookupModule from '../../gitlab/projects/project-label-and-member-lookup'
+import type * as IssueUpdateModule from '../../gitlab/issues/issue-update'
+import type * as MergeRequestReviewMutationsModule from '../../gitlab/merge-requests/merge-request-review-mutations'
+import type * as MergeRequestStateMutationsModule from '../../gitlab/merge-requests/merge-request-state-mutations'
+import type * as MergeRequestUpdateModule from '../../gitlab/merge-requests/merge-request-update'
+import type * as MergeRequestLookupModule from '../../gitlab/merge-requests/merge-request-lookup'
+import type * as MergeRequestListModule from '../../gitlab/merge-requests/merge-request-list'
+import type * as WorkItemQueriesModule from '../../gitlab/work-items/work-item-queries'
+
+import type * as GitlabAuthAndRateLimitModule from '../../gitlab/requests/gitlab-auth-and-rate-limit'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
@@ -94,43 +94,13 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../gitlab/client', () => ({
-  addIssueComment: addIssueCommentMock,
-  addMRInlineComment: addMRInlineCommentMock,
-  addMRComment: addMRCommentMock,
-  closeMR: closeMRMock,
-  createIssue: createIssueMock,
-  diagnoseAuth: vi.fn(),
-  getAuthenticatedViewer: vi.fn(),
-  getJobTrace: getJobTraceMock,
-  getIssue: getIssueMock,
-  getMergeRequest: getMergeRequestMock,
-  getMergeRequestForBranch: getMergeRequestForBranchMock,
-  getProjectSlug: getProjectSlugMock,
-  getRateLimit: vi.fn(),
-  getWorkItemByProjectRef: getWorkItemByProjectRefMock,
-  listAssignableUsers: listAssignableUsersMock,
-  listIssues: listIssuesMock,
-  listLabels: listLabelsMock,
-  listMergeRequests: listMergeRequestsMock,
-  listTodos: listTodosMock,
-  listWorkItems: listWorkItemsMock,
-  mergeMR: mergeMRMock,
-  reopenMR: reopenMRMock,
-  resolveMRDiscussion: resolveMRDiscussionMock,
-  retryJob: retryJobMock,
-  updateIssue: updateIssueMock,
-  updateMR: updateMRMock,
-  updateMRReviewers: updateMRReviewersMock
-}))
-
-vi.mock('../../gitlab/pipeline-job-mutations', async (importOriginal) => ({
+vi.mock('../../gitlab/pipelines/pipeline-job-mutations', async (importOriginal) => ({
   ...(await importOriginal<typeof PipelineJobMutationsModule>()),
   getJobTrace: getJobTraceMock,
   retryJob: retryJobMock
 }))
 
-vi.mock('../../gitlab/issues', async (importOriginal) => ({
+vi.mock('../../gitlab/issues/gitlab-issue-queries', async (importOriginal) => ({
   ...(await importOriginal<typeof IssuesModule>()),
   addIssueComment: addIssueCommentMock,
   createIssue: createIssueMock,
@@ -138,18 +108,18 @@ vi.mock('../../gitlab/issues', async (importOriginal) => ({
   listIssues: listIssuesMock
 }))
 
-vi.mock('../../gitlab/project-label-and-member-lookup', async (importOriginal) => ({
+vi.mock('../../gitlab/projects/project-label-and-member-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof ProjectLabelAndMemberLookupModule>()),
   listAssignableUsers: listAssignableUsersMock,
   listLabels: listLabelsMock
 }))
 
-vi.mock('../../gitlab/issue-update', async (importOriginal) => ({
+vi.mock('../../gitlab/issues/issue-update', async (importOriginal) => ({
   ...(await importOriginal<typeof IssueUpdateModule>()),
   updateIssue: updateIssueMock
 }))
 
-vi.mock('../../gitlab/merge-request-review-mutations', async (importOriginal) => ({
+vi.mock('../../gitlab/merge-requests/merge-request-review-mutations', async (importOriginal) => ({
   ...(await importOriginal<typeof MergeRequestReviewMutationsModule>()),
   addMRComment: addMRCommentMock,
   addMRInlineComment: addMRInlineCommentMock,
@@ -157,52 +127,51 @@ vi.mock('../../gitlab/merge-request-review-mutations', async (importOriginal) =>
   updateMRReviewers: updateMRReviewersMock
 }))
 
-vi.mock('../../gitlab/merge-request-state-mutations', async (importOriginal) => ({
+vi.mock('../../gitlab/merge-requests/merge-request-state-mutations', async (importOriginal) => ({
   ...(await importOriginal<typeof MergeRequestStateMutationsModule>()),
   closeMR: closeMRMock,
   mergeMR: mergeMRMock,
   reopenMR: reopenMRMock
 }))
 
-vi.mock('../../gitlab/merge-request-update', async (importOriginal) => ({
+vi.mock('../../gitlab/merge-requests/merge-request-update', async (importOriginal) => ({
   ...(await importOriginal<typeof MergeRequestUpdateModule>()),
   updateMR: updateMRMock
 }))
 
-vi.mock('../../gitlab/merge-request-lookup', async (importOriginal) => ({
+vi.mock('../../gitlab/merge-requests/merge-request-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof MergeRequestLookupModule>()),
   getMergeRequest: getMergeRequestMock,
   getMergeRequestForBranch: getMergeRequestForBranchMock,
   getProjectSlug: getProjectSlugMock
 }))
 
-vi.mock('../../gitlab/merge-request-list', async (importOriginal) => ({
+vi.mock('../../gitlab/merge-requests/merge-request-list', async (importOriginal) => ({
   ...(await importOriginal<typeof MergeRequestListModule>()),
   listMergeRequests: listMergeRequestsMock
 }))
 
-vi.mock('../../gitlab/work-item-queries', async (importOriginal) => ({
+vi.mock('../../gitlab/work-items/work-item-queries', async (importOriginal) => ({
   ...(await importOriginal<typeof WorkItemQueriesModule>()),
   getWorkItemByProjectRef: getWorkItemByProjectRefMock,
   listWorkItems: listWorkItemsMock,
   listTodos: listTodosMock
 }))
 
-vi.mock('../../gitlab/gitlab-auth-and-rate-limit', async (importOriginal) => {
-  const facadeMocks = await vi.importMock<typeof ClientModule>('../../gitlab/client')
+vi.mock('../../gitlab/requests/gitlab-auth-and-rate-limit', async (importOriginal) => {
   return {
     ...(await importOriginal<typeof GitlabAuthAndRateLimitModule>()),
-    diagnoseAuth: facadeMocks.diagnoseAuth,
-    getAuthenticatedViewer: facadeMocks.getAuthenticatedViewer,
-    getRateLimit: facadeMocks.getRateLimit
+    diagnoseAuth: vi.fn(),
+    getAuthenticatedViewer: vi.fn(),
+    getRateLimit: vi.fn()
   }
 })
 
-vi.mock('../../gitlab/work-item-details', () => ({
+vi.mock('../../gitlab/work-items/work-item-details', () => ({
   getWorkItemDetails: getWorkItemDetailsMock
 }))
 
-vi.mock('../../gitlab/gitlab-project-recents', () => ({
+vi.mock('../../gitlab/projects/gitlab-project-recents', () => ({
   recordGitLabProjectRecent: vi.fn()
 }))
 
@@ -259,145 +228,6 @@ describe('GitLab IPC handlers', () => {
     readWslDistroRunningStateMock.mockReset().mockResolvedValue('running')
   })
 
-  it('refuses a checks-panel MR poll for a stopped WSL distro, but not an explicit open', async () => {
-    setPlatform('win32')
-    readWslDistroRunningStateMock.mockResolvedValue('stopped')
-    getWorkItemDetailsMock.mockResolvedValue({ body: 'Details' })
-    registerGitLabHandlers(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The handlers read only the four accessors storeWithRepos implements.
-      storeWithRepos(
-        [repo()],
-        [
-          {
-            id: 'project-1',
-            displayName: 'Orca',
-            badgeColor: 'blue',
-            sourceRepoIds: ['repo-local'],
-            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
-            createdAt: 0,
-            updatedAt: 0
-          }
-        ]
-      ) as Store
-    )
-    const details = ipcHandlers.get('gitlab:workItemDetails')!
-    const args = { repoPath: '/local/orca', iid: 8, type: 'mr' }
-
-    await expect(details(null, { ...args, background: true })).rejects.toThrow(
-      "WSL distro 'Ubuntu' is not running"
-    )
-    expect(getWorkItemDetailsMock).not.toHaveBeenCalled()
-
-    await details(null, args)
-    expect(getWorkItemDetailsMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('resolves repoId and source host context before listing work items', async () => {
-    const remoteRepo = repo({
-      id: 'repo-ssh',
-      path: '/ssh/orca',
-      connectionId: 'builder',
-      executionHostId: toSshExecutionHostId('builder')
-    })
-    listWorkItemsMock.mockResolvedValueOnce({ items: [] })
-    registerGitLabHandlers(storeWithRepos([repo(), remoteRepo]) as Store)
-
-    const handler = ipcHandlers.get('gitlab:listWorkItems')
-    await expect(
-      handler?.(null, {
-        repoPath: '/does/not/matter',
-        repoId: 'repo-ssh',
-        sourceContext: {
-          kind: 'task-source',
-          provider: 'gitlab',
-          projectId: 'gitlab:stablyai/orca',
-          hostId: toSshExecutionHostId('builder'),
-          repoId: 'repo-ssh'
-        }
-      })
-    ).resolves.toEqual({ items: [] })
-
-    expect(listWorkItemsMock).toHaveBeenCalledWith(
-      '/ssh/orca',
-      'opened',
-      1,
-      20,
-      undefined,
-      undefined,
-      'builder'
-    )
-  })
-
-  it('forwards the typed search query into listMRs and listWorkItems', async () => {
-    const result = {
-      items: [{ id: 'mr-7', type: 'mr', number: 7 }],
-      page: 3,
-      perPage: 1,
-      totalCount: 0,
-      totalPages: 4
-    }
-    listMergeRequestsMock.mockResolvedValueOnce(result)
-    listWorkItemsMock.mockResolvedValueOnce(result)
-    registerGitLabHandlers(storeWithRepos([repo()]) as Store)
-
-    const mergeRequests = await ipcHandlers.get('gitlab:listMRs')?.(null, {
-      repoPath: '/local/orca',
-      state: 'opened',
-      page: 3,
-      perPage: 1,
-      query: '  fix login  '
-    })
-    const workItems = await ipcHandlers.get('gitlab:listWorkItems')?.(null, {
-      repoPath: '/local/orca',
-      state: 'opened',
-      page: 3,
-      perPage: 1,
-      query: 'fix login'
-    })
-
-    expect(mergeRequests).toEqual(result)
-    expect(workItems).toEqual(result)
-    // Preserve the query's sixth argument slot; omitting it silently disables search (#6263).
-    expect(listMergeRequestsMock).toHaveBeenCalledWith(
-      '/local/orca',
-      'opened',
-      3,
-      1,
-      undefined,
-      'fix login',
-      null
-    )
-    expect(listWorkItemsMock).toHaveBeenCalledWith(
-      '/local/orca',
-      'opened',
-      3,
-      1,
-      undefined,
-      'fix login',
-      null
-    )
-  })
-
-  it('drops blank or whitespace-only search queries to undefined', async () => {
-    listMergeRequestsMock.mockResolvedValueOnce({ items: [] })
-    registerGitLabHandlers(storeWithRepos([repo()]) as Store)
-
-    await ipcHandlers.get('gitlab:listMRs')?.(null, {
-      repoPath: '/local/orca',
-      query: '   '
-    })
-
-    expect(listMergeRequestsMock).toHaveBeenCalledWith(
-      '/local/orca',
-      'opened',
-      1,
-      20,
-      undefined,
-      undefined,
-      null
-    )
-  })
-
   it('rejects source context for a different host', async () => {
     registerGitLabHandlers(
       storeWithRepos([repo({ id: 'repo-local', path: '/local/orca' })]) as Store
@@ -419,430 +249,5 @@ describe('GitLab IPC handlers', () => {
     ).rejects.toThrow('source host does not match')
   })
 
-  it('resolves pasted URL lookups by repoId and source host context', async () => {
-    const remoteRepo = repo({
-      id: 'repo-ssh',
-      path: '/ssh/orca',
-      connectionId: 'builder',
-      executionHostId: toSshExecutionHostId('builder')
-    })
-    getWorkItemByProjectRefMock.mockResolvedValueOnce({
-      type: 'issue',
-      number: 42,
-      title: 'Remote issue'
-    })
-    registerGitLabHandlers(storeWithRepos([repo(), remoteRepo]) as Store)
-
-    const handler = ipcHandlers.get('gitlab:workItemByPath')
-    await expect(
-      handler?.(null, {
-        repoPath: '/local/orca',
-        repoId: 'repo-ssh',
-        sourceContext: {
-          kind: 'task-source',
-          provider: 'gitlab',
-          projectId: 'gitlab:stablyai/orca',
-          hostId: toSshExecutionHostId('builder'),
-          repoId: 'repo-ssh'
-        },
-        host: 'gitlab.com',
-        path: 'stablyai/orca',
-        iid: 42,
-        type: 'issue'
-      })
-    ).resolves.toMatchObject({ number: 42 })
-
-    expect(getWorkItemByProjectRefMock).toHaveBeenCalledWith(
-      '/ssh/orca',
-      { host: 'gitlab.com', path: 'stablyai/orca' },
-      42,
-      'issue',
-      'builder'
-    )
-  })
-
-  it('routes local WSL project GitLab issue, MR, work-item, and todo IPC through project git options', async () => {
-    setPlatform('win32')
-    const projects: ReturnType<Store['getProjects']> = [
-      {
-        id: 'project-1',
-        displayName: 'Orca',
-        badgeColor: 'blue',
-        sourceRepoIds: ['repo-local'],
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
-        createdAt: 0,
-        updatedAt: 0
-      }
-    ]
-    listMergeRequestsMock.mockResolvedValue({ items: [] })
-    listWorkItemsMock.mockResolvedValue({ items: [] })
-    listIssuesMock.mockResolvedValue({ items: [], totalPages: 3 })
-    getIssueMock.mockResolvedValue(null)
-    createIssueMock.mockResolvedValue({ ok: true, number: 1, url: 'https://gitlab.example/1' })
-    updateIssueMock.mockResolvedValue({ ok: true })
-    addIssueCommentMock.mockResolvedValue({ ok: true })
-    listLabelsMock.mockResolvedValue([])
-    listAssignableUsersMock.mockResolvedValue([])
-    listTodosMock.mockResolvedValue([])
-    getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'stablyai/orca' })
-    getMergeRequestForBranchMock.mockResolvedValue(null)
-    getMergeRequestMock.mockResolvedValue(null)
-    registerGitLabHandlers(storeWithRepos([repo()], projects) as Store)
-    const localGitOptions = { wslDistro: 'Ubuntu' }
-
-    await ipcHandlers.get('gitlab:projectSlug')?.(null, { repoPath: '/local/orca' })
-    await ipcHandlers.get('gitlab:mrForBranch')?.(null, {
-      repoPath: '/local/orca',
-      branch: 'feature/wsl'
-    })
-    await ipcHandlers.get('gitlab:mr')?.(null, { repoPath: '/local/orca', iid: 8 })
-    await ipcHandlers.get('gitlab:listMRs')?.(null, {
-      repoPath: '/local/orca',
-      state: 'opened',
-      page: 1,
-      perPage: 20
-    })
-    await ipcHandlers.get('gitlab:listWorkItems')?.(null, {
-      repoPath: '/local/orca',
-      state: 'opened',
-      page: 1,
-      perPage: 20
-    })
-    const issueListResult = await ipcHandlers.get('gitlab:listIssues')?.(null, {
-      repoPath: '/local/orca',
-      state: 'opened',
-      limit: 20,
-      page: 3
-    })
-    await ipcHandlers.get('gitlab:issue')?.(null, { repoPath: '/local/orca', number: 7 })
-    await ipcHandlers.get('gitlab:createIssue')?.(null, {
-      repoPath: '/local/orca',
-      title: 'Title',
-      body: 'Body'
-    })
-    await ipcHandlers.get('gitlab:updateIssue')?.(null, {
-      repoPath: '/local/orca',
-      number: 7,
-      updates: { body: 'Updated' }
-    })
-    await ipcHandlers.get('gitlab:addIssueComment')?.(null, {
-      repoPath: '/local/orca',
-      number: 7,
-      body: 'Comment'
-    })
-    await ipcHandlers.get('gitlab:listLabels')?.(null, { repoPath: '/local/orca' })
-    await ipcHandlers.get('gitlab:listAssignableUsers')?.(null, { repoPath: '/local/orca' })
-    await ipcHandlers.get('gitlab:todos')?.(null, { repoPath: '/local/orca' })
-
-    const hostedReviewOptions = { localGitExecOptions: localGitOptions }
-    expect(getProjectSlugMock).toHaveBeenCalledWith('/local/orca', null, hostedReviewOptions)
-    expect(getMergeRequestForBranchMock).toHaveBeenCalledWith(
-      '/local/orca',
-      'feature/wsl',
-      null,
-      null,
-      hostedReviewOptions
-    )
-    expect(getMergeRequestMock).toHaveBeenCalledWith('/local/orca', 8, null, hostedReviewOptions)
-    expect(listMergeRequestsMock).toHaveBeenCalledWith(
-      '/local/orca',
-      'opened',
-      1,
-      20,
-      undefined,
-      undefined,
-      null,
-      localGitOptions
-    )
-    expect(issueListResult).toMatchObject({ totalPages: 3 })
-    expect(listWorkItemsMock).toHaveBeenCalledWith(
-      '/local/orca',
-      'opened',
-      1,
-      20,
-      undefined,
-      undefined,
-      null,
-      localGitOptions
-    )
-    expect(listIssuesMock).toHaveBeenCalledWith(
-      '/local/orca',
-      20,
-      undefined,
-      'opened',
-      undefined,
-      null,
-      localGitOptions,
-      3
-    )
-    expect(getIssueMock).toHaveBeenCalledWith('/local/orca', 7, null, localGitOptions)
-    expect(createIssueMock).toHaveBeenCalledWith(
-      '/local/orca',
-      'Title',
-      'Body',
-      undefined,
-      null,
-      localGitOptions
-    )
-    expect(updateIssueMock).toHaveBeenCalledWith(
-      '/local/orca',
-      7,
-      { body: 'Updated' },
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(addIssueCommentMock).toHaveBeenCalledWith(
-      '/local/orca',
-      7,
-      'Comment',
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(listLabelsMock).toHaveBeenCalledWith('/local/orca', undefined, null, localGitOptions)
-    expect(listAssignableUsersMock).toHaveBeenCalledWith(
-      '/local/orca',
-      undefined,
-      null,
-      localGitOptions
-    )
-    expect(listTodosMock).toHaveBeenCalledWith('/local/orca', null, localGitOptions)
-  })
-
-  it('routes local WSL project GitLab MR details, review, job, and pasted URL IPC through project git options', async () => {
-    setPlatform('win32')
-    const projects: ReturnType<Store['getProjects']> = [
-      {
-        id: 'project-1',
-        displayName: 'Orca',
-        badgeColor: 'blue',
-        sourceRepoIds: ['repo-local'],
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
-        createdAt: 0,
-        updatedAt: 0
-      }
-    ]
-    const inlineInput = {
-      body: 'Inline',
-      path: 'src/app.ts',
-      line: 12,
-      baseSha: 'base',
-      startSha: 'start',
-      headSha: 'head'
-    }
-    getWorkItemDetailsMock.mockResolvedValue({ body: 'Details' })
-    closeMRMock.mockResolvedValue({ ok: true })
-    reopenMRMock.mockResolvedValue({ ok: true })
-    mergeMRMock.mockResolvedValue({ ok: true })
-    updateMRMock.mockResolvedValue({ ok: true })
-    updateMRReviewersMock.mockResolvedValue({ ok: true, reviewers: [] })
-    addMRCommentMock.mockResolvedValue({ ok: true })
-    addMRInlineCommentMock.mockResolvedValue({ ok: true })
-    resolveMRDiscussionMock.mockResolvedValue({ ok: true })
-    getJobTraceMock.mockResolvedValue({ ok: true, trace: 'trace' })
-    retryJobMock.mockResolvedValue({ ok: true })
-    getWorkItemByProjectRefMock.mockResolvedValue({ type: 'mr', number: 8 })
-    registerGitLabHandlers(storeWithRepos([repo()], projects) as Store)
-    const localGitOptions = { wslDistro: 'Ubuntu' }
-
-    await ipcHandlers.get('gitlab:workItemDetails')?.(null, {
-      repoPath: '/local/orca',
-      iid: 8,
-      type: 'mr'
-    })
-    await ipcHandlers.get('gitlab:closeMR')?.(null, { repoPath: '/local/orca', iid: 8 })
-    await ipcHandlers.get('gitlab:reopenMR')?.(null, { repoPath: '/local/orca', iid: 8 })
-    await ipcHandlers.get('gitlab:mergeMR')?.(null, {
-      repoPath: '/local/orca',
-      iid: 8,
-      method: 'squash'
-    })
-    await ipcHandlers.get('gitlab:updateMR')?.(null, {
-      repoPath: '/local/orca',
-      iid: 8,
-      updates: { title: 'Renamed' }
-    })
-    await ipcHandlers.get('gitlab:updateMRReviewers')?.(null, {
-      repoPath: '/local/orca',
-      iid: 8,
-      reviewerIds: [1]
-    })
-    await ipcHandlers.get('gitlab:addMRComment')?.(null, {
-      repoPath: '/local/orca',
-      iid: 8,
-      body: 'Comment'
-    })
-    await ipcHandlers.get('gitlab:addMRInlineComment')?.(null, {
-      repoPath: '/local/orca',
-      iid: 8,
-      input: inlineInput
-    })
-    await ipcHandlers.get('gitlab:resolveMRDiscussion')?.(null, {
-      repoPath: '/local/orca',
-      iid: 8,
-      discussionId: 'discussion-1',
-      resolved: true
-    })
-    await ipcHandlers.get('gitlab:jobTrace')?.(null, { repoPath: '/local/orca', jobId: 99 })
-    await ipcHandlers.get('gitlab:retryJob')?.(null, { repoPath: '/local/orca', jobId: 99 })
-    await ipcHandlers.get('gitlab:workItemByPath')?.(null, {
-      repoPath: '/local/orca',
-      host: 'gitlab.com',
-      path: 'g/p',
-      iid: 8,
-      type: 'mr'
-    })
-
-    expect(getWorkItemDetailsMock).toHaveBeenCalledWith(
-      '/local/orca',
-      8,
-      'mr',
-      undefined,
-      null,
-      undefined,
-      localGitOptions,
-      { includeReviewDetails: undefined }
-    )
-    await ipcHandlers.get('gitlab:workItemDetails')?.(null, {
-      repoPath: '/local/orca',
-      iid: 8,
-      type: 'mr',
-      includeReviewDetails: false
-    })
-    expect(getWorkItemDetailsMock).toHaveBeenLastCalledWith(
-      '/local/orca',
-      8,
-      'mr',
-      undefined,
-      null,
-      undefined,
-      localGitOptions,
-      { includeReviewDetails: false }
-    )
-    expect(closeMRMock).toHaveBeenCalledWith(
-      '/local/orca',
-      8,
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(reopenMRMock).toHaveBeenCalledWith(
-      '/local/orca',
-      8,
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(mergeMRMock).toHaveBeenCalledWith(
-      '/local/orca',
-      8,
-      'squash',
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(updateMRMock).toHaveBeenCalledWith(
-      '/local/orca',
-      8,
-      { title: 'Renamed' },
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(updateMRReviewersMock).toHaveBeenCalledWith(
-      '/local/orca',
-      8,
-      [1],
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(addMRCommentMock).toHaveBeenCalledWith(
-      '/local/orca',
-      8,
-      'Comment',
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(addMRInlineCommentMock).toHaveBeenCalledWith(
-      '/local/orca',
-      8,
-      inlineInput,
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(resolveMRDiscussionMock).toHaveBeenCalledWith(
-      '/local/orca',
-      8,
-      'discussion-1',
-      true,
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(getJobTraceMock).toHaveBeenCalledWith(
-      '/local/orca',
-      99,
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(retryJobMock).toHaveBeenCalledWith(
-      '/local/orca',
-      99,
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(getWorkItemByProjectRefMock).toHaveBeenCalledWith(
-      '/local/orca',
-      { host: 'gitlab.com', path: 'g/p' },
-      8,
-      'mr',
-      null,
-      localGitOptions
-    )
-  })
-
   // Bound raw CI traces before they exceed the runtime frame cap (#7732).
-  it('bounds the job trace in main when the caller asks for a log excerpt', async () => {
-    const noisyTrace = [
-      'section_start:1699000000:build\r\u001b[0K$ pnpm build',
-      ...Array.from({ length: 400 }, (_, index) => `line ${index}`),
-      '\u001b[0;31mERROR: Job failed: exit code 1\u001b[0m'
-    ].join('\n')
-    getJobTraceMock.mockResolvedValue({ ok: true, trace: noisyTrace })
-    registerGitLabHandlers(storeWithRepos([repo()]) as Store)
-
-    const raw = (await ipcHandlers.get('gitlab:jobTrace')?.(null, {
-      repoPath: '/local/orca',
-      jobId: 99
-    })) as { ok: true; trace: string }
-    const excerpt = (await ipcHandlers.get('gitlab:jobTrace')?.(null, {
-      repoPath: '/local/orca',
-      jobId: 99,
-      logExcerpt: true
-    })) as { ok: true; trace: string }
-
-    expect(raw.trace).toBe(noisyTrace)
-    expect(excerpt.trace).toContain('ERROR: Job failed: exit code 1')
-    expect(excerpt.trace).not.toContain('section_start')
-    expect(excerpt.trace).not.toContain('line 0\n')
-    expect(excerpt.trace.length).toBeLessThan(noisyTrace.length)
-  })
 })

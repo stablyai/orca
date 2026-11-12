@@ -5,11 +5,14 @@ type RuntimeTerminalViewSubscriberDependencies = {
 }
 
 type SilenceableRemoteView = { isSilent: () => boolean }
+/** Only views that report when their pane is hidden can claim to be on screen. */
+type PaneReportingRemoteView = { isHidden: () => boolean }
 
 export class RuntimeTerminalViewSubscribers {
   private readonly remoteCounts = new Map<string, number>()
   private readonly silenceableRemoteViews = new Map<string, Set<SilenceableRemoteView>>()
   private readonly rawCounts = new Map<string, number>()
+  private readonly paneReportingRemoteViews = new Map<string, Set<PaneReportingRemoteView>>()
 
   constructor(private readonly deps: RuntimeTerminalViewSubscriberDependencies) {}
 
@@ -17,15 +20,22 @@ export class RuntimeTerminalViewSubscribers {
     this.remoteCounts.delete(ptyId)
     this.silenceableRemoteViews.delete(ptyId)
     this.rawCounts.delete(ptyId)
+    this.paneReportingRemoteViews.delete(ptyId)
   }
 
-  registerRemote(ptyId: string, isSilent?: () => boolean): () => void {
+  registerRemote(ptyId: string, isSilent?: () => boolean, isHidden?: () => boolean): () => void {
     this.remoteCounts.set(ptyId, (this.remoteCounts.get(ptyId) ?? 0) + 1)
     const view = isSilent ? { isSilent } : null
     if (view) {
       const views = this.silenceableRemoteViews.get(ptyId) ?? new Set()
       views.add(view)
       this.silenceableRemoteViews.set(ptyId, views)
+    }
+    const paneView = isHidden ? { isHidden } : null
+    if (paneView) {
+      const views = this.paneReportingRemoteViews.get(ptyId) ?? new Set()
+      views.add(paneView)
+      this.paneReportingRemoteViews.set(ptyId, views)
     }
     this.deps.ensureProviderAttach(ptyId)
     this.deps.notifyPresenceChanged(ptyId)
@@ -35,8 +45,32 @@ export class RuntimeTerminalViewSubscribers {
       if (view && views?.delete(view) && views.size === 0) {
         this.silenceableRemoteViews.delete(ptyId)
       }
+      const paneViews = this.paneReportingRemoteViews.get(ptyId)
+      if (paneView && paneViews?.delete(paneView) && paneViews.size === 0) {
+        this.paneReportingRemoteViews.delete(ptyId)
+      }
       this.deps.notifyPresenceChanged(ptyId)
     })
+  }
+
+  /** A remote client is displaying this PTY's pane right now. */
+  isShownRemotely(ptyId: string): boolean {
+    for (const view of this.paneReportingRemoteViews.get(ptyId) ?? []) {
+      if (!view.isHidden()) {
+        return true
+      }
+    }
+    return false
+  }
+
+  /** A remote view could be displaying this PTY: one is on screen, or one cannot report a hidden pane. */
+  mayBeShownRemotely(ptyId: string): boolean {
+    const paneReporting = this.paneReportingRemoteViews.get(ptyId)?.size ?? 0
+    return (
+      this.isShownRemotely(ptyId) ||
+      (this.remoteCounts.get(ptyId) ?? 0) > paneReporting ||
+      this.deps.hasMobileSubscribers(ptyId)
+    )
   }
 
   registerRaw(ptyId: string): () => void {

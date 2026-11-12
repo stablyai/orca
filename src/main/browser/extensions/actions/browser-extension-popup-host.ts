@@ -4,7 +4,7 @@ import {
   getChromeExtensionOrigin,
   isSameExtensionNavigation
 } from '../../../../shared/browser/extensions/browser-extension-url'
-import { allowPageUnload } from '../../guest-lifecycle/browser-guest-unload-policy'
+import { allowPageUnload } from '../../guest-lifecycle/navigation/browser-guest-unload-policy'
 import { BrowserExtensionApiError } from '../api-runtime/browser-extension-namespace-registry'
 import {
   BROWSER_EXTENSION_POPUP_MAX,

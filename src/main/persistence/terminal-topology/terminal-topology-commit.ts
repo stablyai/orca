@@ -1,10 +1,10 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../../shared/workspace-layout/terminal-leaf-move'
+} from '../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
   CommandOf,
@@ -28,7 +28,7 @@ import type {
   DurableProfileStateMutation,
   StoreRuntimeState
 } from '../loading-store/store-runtime-state'
-import type { SessionHostPartitionOperations } from '../loading-store/session-host-partitions'
+import type { SessionHostPartitionOperations } from '../loading-store/workspace-sessions/session-host-partitions'
 import { planTerminalLeafMove, writeMovedLeafProfileRecords } from './terminal-leaf-move'
 import { writeRestorable } from './restorable-write'
 import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
@@ -156,7 +156,8 @@ export function applyLayout(
           ? commitWindowPaneDetach(
               hostIds,
               { ...command, windowDetach: command.windowDetach },
-              context
+              context,
+              run
             )
           : commitLayoutCommand(hostIds, command, context, run)
     ),

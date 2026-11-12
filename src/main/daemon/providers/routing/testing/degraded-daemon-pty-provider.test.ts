@@ -129,6 +129,7 @@ function createDaemonAdapter(
   label: string,
   sessions: string[] = []
 ): DaemonPtyAdapter & ProviderMock {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the degraded router reaches only these adapter members.
   return {
     ...createProvider(label, sessions, true),
     protocolVersion: 13,
@@ -137,6 +138,7 @@ function createDaemonAdapter(
     listSessions: vi.fn(async () => []),
     ackColdRestore: vi.fn(),
     clearTombstone: vi.fn(),
+    reportFocusLost: vi.fn(async () => {}),
     reconcileOnStartup: vi.fn(async () => ({ alive: sessions, killed: [] })),
     dispose: vi.fn(),
     disconnectOnly: vi.fn(async () => {}),
@@ -144,6 +146,22 @@ function createDaemonAdapter(
     fanoutSyntheticExits: vi.fn()
   } as unknown as DaemonPtyAdapter & ProviderMock
 }
+
+it('reports focus lost to the daemon that owns the session', async () => {
+  const current = createDaemonAdapter('daemon')
+  const legacy = createDaemonAdapter('legacy', ['legacy-session'])
+  const provider = new DegradedDaemonPtyProvider({
+    current,
+    legacy: [legacy],
+    fallback: createProvider('fallback')
+  })
+  await provider.discoverDaemonSessions()
+
+  await provider.reportFocusLost('legacy-session')
+
+  expect(legacy.reportFocusLost).toHaveBeenCalledWith('legacy-session')
+  expect(current.reportFocusLost).not.toHaveBeenCalled()
+})
 
 it('confirms repeated stale-binding absence without falling back or spawning', async () => {
   const current = createDaemonAdapter('daemon-current')

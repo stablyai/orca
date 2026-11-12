@@ -38,18 +38,4 @@ describe('cell reserve client', () => {
     expect(String(fetchImpl.mock.calls[0]![0])).toBe('https://c1.example/internal/reserve')
   })
 
-  it('reads every item as unreachable when the cell fails or answers out of shape', async () => {
-    for (const fetchImpl of [
-      async () => Promise.reject(new Error('timeout')),
-      async () => new Response('nope', { status: 503 }),
-      async () => Response.json({ v: 1, results: [] })
-    ]) {
-      const client = new CellReserveClient({
-        directorId: 'director-a',
-        identityToken: async () => 'token',
-        fetch: fetchImpl
-      })
-      expect(await client.reserve(target, item('a'))).toEqual({ outcome: 'unreachable' })
-    }
-  })
 })

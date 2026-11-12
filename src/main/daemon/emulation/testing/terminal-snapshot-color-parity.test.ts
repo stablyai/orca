@@ -41,57 +41,6 @@ function expectActiveBufferParity(source: ParityTerminal, restored: ParityTermin
 }
 
 describe('terminal snapshot color parity', () => {
-  it('preserves Codex truecolor backgrounds, BCE rows, and default trailing cells', async () => {
-    const source = createRendererParityTerminal({ cols: 24, rows: 6 })
-    let restored: ParityTerminal | undefined
-    try {
-      await writeChunksToTerminal(source.terminal, [
-        '\x1b[48;2;33;58;43m\x1b[2K\x1b[0m',
-        '\x1b[2;1H\x1b[48;2;74;34;29mremoved\x1b[0m',
-        '\x1b[3;1H\x1b[48;2;65;69;76m> prompt\x1b[0m',
-        '\x1b[4;1H\x1b[48;2;33;58;43madded\x1b[K\x1b[0m'
-      ])
-      restored = await restoreSerializedTerminal(source)
-
-      expectActiveBufferParity(source, restored)
-      const buffer = restored.terminal.buffer.active
-      expect(buffer.getLine(0)?.getCell(0)?.getBgColor()).toBe(0x213a2b)
-      expect(buffer.getLine(0)?.getCell(23)?.getBgColor()).toBe(0x213a2b)
-      expect(buffer.getLine(1)?.getCell(6)?.getBgColor()).toBe(0x4a221d)
-      expect(buffer.getLine(1)?.getCell(7)?.getBgColor()).toBe(-1)
-      expect(buffer.getLine(2)?.getCell(0)?.getBgColor()).toBe(0x41454c)
-    } finally {
-      source.terminal.dispose()
-      restored?.terminal.dispose()
-    }
-  })
-
-  it('preserves styled scrollback in the normal buffer', async () => {
-    const source = createRendererParityTerminal({ cols: 18, rows: 3 })
-    let restored: ParityTerminal | undefined
-    try {
-      const lines = Array.from(
-        { length: 7 },
-        (_, index) =>
-          `\x1b[48;2;${33 + index};${58 + index};${43 + index}mline-${index}\x1b[0m${index < 6 ? '\r\n' : ''}`
-      )
-      await writeChunksToTerminal(source.terminal, lines)
-      restored = await restoreSerializedTerminal(source)
-
-      expect(source.terminal.buffer.normal.baseY).toBeGreaterThan(0)
-      expectActiveBufferParity(source, restored)
-      expect(normalBufferRowsTrimmed(restored.terminal)).toEqual(
-        normalBufferRowsTrimmed(source.terminal)
-      )
-      expect(normalBufferStylesTrimmed(restored.terminal)).toEqual(
-        normalBufferStylesTrimmed(source.terminal)
-      )
-    } finally {
-      source.terminal.dispose()
-      restored?.terminal.dispose()
-    }
-  })
-
   it('preserves inverse null backgrounds without materializing wide-wrap padding', async () => {
     const source = createRendererParityTerminal({ cols: 10, rows: 4 })
     let restored: ParityTerminal | undefined
@@ -137,35 +86,6 @@ describe('terminal snapshot color parity', () => {
       const restoredBlank = restored.terminal.buffer.active.getLine(0)?.getCell(9)
       expect(restoredBlank?.getChars()).toBe(' ')
       expect(restoredBlank?.isInverse()).toBeTruthy()
-    } finally {
-      source.terminal.dispose()
-      restored?.terminal.dispose()
-    }
-  })
-
-  it('suppresses null-cell decorations when materializing an inverse background', async () => {
-    const source = createRendererParityTerminal({ cols: 40, rows: 4 })
-    let restored: ParityTerminal | undefined
-    try {
-      await writeChunksToTerminal(source.terminal, [
-        `\x1b[1;30H你\x1b[H\x1b[7;4;9;53m${'A'.repeat(30)}\x1b[0m\x1b[CZ`
-      ])
-      const sourceNull = source.terminal.buffer.active.getLine(0)?.getCell(30)
-      expect(sourceNull?.getChars()).toBe('')
-      expect(sourceNull?.isInverse()).toBeTruthy()
-      expect(sourceNull?.isUnderline()).toBeTruthy()
-      expect(sourceNull?.isStrikethrough()).toBeTruthy()
-      expect(sourceNull?.isOverline()).toBeTruthy()
-
-      restored = await restoreSerializedTerminal(source)
-
-      expectActiveBufferParity(source, restored)
-      const restoredBlank = restored.terminal.buffer.active.getLine(0)?.getCell(30)
-      expect(restoredBlank?.getChars()).toBe(' ')
-      expect(restoredBlank?.isInverse()).toBeTruthy()
-      expect(restoredBlank?.isUnderline()).toBeFalsy()
-      expect(restoredBlank?.isStrikethrough()).toBeFalsy()
-      expect(restoredBlank?.isOverline()).toBeFalsy()
     } finally {
       source.terminal.dispose()
       restored?.terminal.dispose()

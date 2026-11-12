@@ -79,8 +79,8 @@ declare module 'orca' {
   export type HostError = Error & { code: string; retryable: boolean; retryAfterMs?: number }
   // <generated: host methods, from plugin-host-api.ts>
   export type HostMethods = {
-    /** Branch, name and terminal ids of the focused workspace, or null when none is focused. */
-    "workspace.readContext": { params: Record<string, never> | undefined; result: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
+    /** Id, branch, name and terminal ids of the focused workspace, or null when none is focused. */
+    "workspace.readContext": { params: Record<string, never> | undefined; result: { workspaceId?: string; branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
     /** Shows a desktop notification. */
     "notifications.show": { params: { title: string; body?: string }; result: { delivered: boolean } }
     /** Reads a JSON value from the plugin's private store; null when absent. */
@@ -111,19 +111,23 @@ declare module 'orca' {
     "plugin.request": { params: { name: string; input?: JsonValue; timeoutMs?: number }; result: { output: JsonValue } }
     /** The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after. */
     "agents.list": { params: Record<string, never> | undefined; result: { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number }[] } }
-    /** Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you. */
-    "events.subscribe": { params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" }; result: { ok: true } }
+    /** Delivers a workspace, agent or editor event to this panel as `orca.on(event)`; needs the event's read capability, when it has one. The frame APIs call it for you. */
+    "events.subscribe": { params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" | "editor.typography.changed" }; result: { ok: true } }
+    /** The font family, size, weight, line height, ligatures, word wrap and minimap Orca's file editor uses now, editor zoom included. `editor.typography.changed` reports each change after. */
+    "editor.readTypography": { params: Record<string, never> | undefined; result: { fontFamily: string; cssFontFamily: string; fontSize: number; fontWeight: string; lineHeight: number; fontLigatures: boolean; wordWrap: "on" | "off"; minimap: boolean } }
   }
   /** Workspace and agent events `on(event)` delivers, with the read capability of their domain. */
   export type PluginEvents = {
-    /** A worktree workspace was created. */
-    "workspace.created": { workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }
-    /** A worktree workspace was removed. */
-    "workspace.removed": { workspaceId: string; kind: "worktree" | "folder"; path: string }
-    /** An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it. */
-    "agent.status.changed": { workspaceId: string | null; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }
-    /** The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context. */
-    "workspace.changed": { context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
+    /** A worktree workspace was created; `workspaceListId` (host API 1.7) is the id `workspace.list` gives it. */
+    "workspace.created": { workspaceId: string; workspaceListId?: string; kind: "worktree" | "folder"; path: string; branch: string }
+    /** A worktree workspace was removed; `workspaceListId` (host API 1.7) is the id `workspace.list` gave it. */
+    "workspace.removed": { workspaceId: string; workspaceListId?: string; kind: "worktree" | "folder"; path: string }
+    /** An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, `workspaceListId` (host API 1.7) is the id `workspace.list` gives that workspace, and `terminalId` names its terminal when Orca lists it. */
+    "agent.status.changed": { workspaceId: string | null; workspaceListId?: string; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }
+    /** The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers, its `workspaceId` included. Each new subscriber first gets the current context. */
+    "workspace.changed": { context: { workspaceId?: string; branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
+    /** What Orca's file editor uses changed (a setting or the editor zoom); the payload is what `editor.readTypography` now answers. Needs no capability. */
+    "editor.typography.changed": { fontFamily: string; cssFontFamily: string; fontSize: number; fontWeight: string; lineHeight: number; fontLigatures: boolean; wordWrap: "on" | "off"; minimap: boolean }
   }
   // </generated>
   export type HostMethod = keyof HostMethods

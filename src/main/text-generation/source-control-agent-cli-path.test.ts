@@ -30,7 +30,10 @@ describe.runIf(process.platform !== 'win32')('chat naming CLI discovery', () => 
     mkdirSync(bin, { recursive: true })
     symlinkSync(process.execPath, join(bin, 'node'))
     const codex = join(bin, 'codex')
-    writeFileSync(codex, "#!/usr/bin/env node\nconsole.log('Fix login flow')\n")
+    writeFileSync(
+      codex,
+      "#!/usr/bin/env node\nconsole.log(process.argv.includes('mcp') ? '[]' : 'Fix login flow')\n"
+    )
     chmodSync(codex, 0o755)
 
     const result = await generateConversationNameFromContext(

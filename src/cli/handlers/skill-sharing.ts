@@ -12,7 +12,7 @@ import type { SkillCloudOperation } from '../../shared/skill-cloud-contract'
 import type { SkillDiscoveryResult } from '../../shared/skills'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getRepeatedStringFlag } from '../flags'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import {
   RuntimeClientError,
   RuntimeRpcFailureError,

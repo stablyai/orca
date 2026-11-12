@@ -4,7 +4,7 @@ import {
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
-import { isAuthError } from '../../ssh/ssh-reconnect-error-classification'
+import { isAuthError } from '../../ssh/connection/reconnect/ssh-reconnect-error-classification'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import { OrcadManagedTunnelTransportProvider } from './orcad-managed-tunnel-transport'

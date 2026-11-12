@@ -2,12 +2,15 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
+  CrossStoreInferredSource,
+  CrossStoreParentRef,
+  CrossStoreWorkspaceLineage,
   WorktreeLineage,
   WorktreeLineageWarning,
   WorkspaceLineage
 } from '../../../../shared/worktree/lineage-types'
 import { type WorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
 
 type LineageParent =
@@ -35,7 +38,46 @@ export type WorktreeLineageRecordingResolution =
       coordinatorHandle?: string
       createdByTerminalHandle?: string
     }
+  | CrossStoreLineageResolution
   | { kind: 'none'; warnings: WorktreeLineageWarning[] }
+
+/** A parent in another Orca store; saved only in crossStoreLineageByChildKey. */
+export type CrossStoreLineageResolution = {
+  kind: 'crossStore'
+  parent: CrossStoreParentRef
+  origin: WorktreeLineage['origin']
+  capture: WorktreeLineage['capture']
+}
+
+/** A parent picked in the app (composer or menu), never the CLI's flag. */
+export function crossStoreManualLineage(parent: CrossStoreParentRef): CrossStoreLineageResolution {
+  return {
+    kind: 'crossStore',
+    parent,
+    origin: 'manual',
+    capture: { source: 'manual-action', confidence: 'explicit' }
+  }
+}
+
+/** App picks are manual; an orchestration-picked parent is orchestration's; else the CLI's flag or inferred caller. */
+export function crossStoreCreateLineage(input: {
+  crossStoreParent: CrossStoreParentRef
+  parentWorkspaceOrigin?: 'manual'
+  crossStoreParentInferredFrom?: CrossStoreInferredSource
+}): CrossStoreLineageResolution {
+  if (input.parentWorkspaceOrigin === 'manual') {
+    return crossStoreManualLineage(input.crossStoreParent)
+  }
+  return {
+    kind: 'crossStore',
+    parent: input.crossStoreParent,
+    origin:
+      input.crossStoreParentInferredFrom === 'orchestration-context' ? 'orchestration' : 'cli',
+    capture: input.crossStoreParentInferredFrom
+      ? { source: input.crossStoreParentInferredFrom, confidence: 'inferred' }
+      : { source: 'explicit-cli-flag', confidence: 'explicit' }
+  }
+}
 
 export function recordCreatedWorktreeLineage(
   store: RuntimeStore | null,
@@ -44,11 +86,15 @@ export function recordCreatedWorktreeLineage(
 ): {
   lineage: WorktreeLineage | null
   workspaceLineage: WorkspaceLineage | null
+  crossStoreLineage?: CrossStoreWorkspaceLineage | null
   warnings: WorktreeLineageWarning[]
 } {
   const warnings = resolution.kind === 'none' ? [...resolution.warnings] : []
   let lineage: WorktreeLineage | null = null
   let workspaceLineage: WorkspaceLineage | null = null
+  if (resolution.kind === 'crossStore') {
+    return { lineage, workspaceLineage, ...recordCrossStoreLineage(store, worktree, resolution) }
+  }
   if (resolution.kind !== 'lineage') {
     return { lineage, workspaceLineage, warnings }
   }
@@ -105,24 +151,74 @@ export function recordCreatedWorktreeLineage(
       }
     })
   }
-  if (childInstanceId && store?.setWorkspaceLineage) {
-    workspaceLineage = store.setWorkspaceLineage({
-      childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
-      childInstanceId,
-      parentWorkspaceKey: resolution.parent.workspaceKey,
-      parentInstanceId,
-      origin: resolution.origin,
-      capture: resolution.capture,
-      ...(resolution.taskId ? { taskId: resolution.taskId } : {}),
-      ...(resolution.orchestrationRunId
-        ? { orchestrationRunId: resolution.orchestrationRunId }
-        : {}),
-      ...(resolution.coordinatorHandle ? { coordinatorHandle: resolution.coordinatorHandle } : {}),
-      ...(resolution.createdByTerminalHandle
-        ? { createdByTerminalHandle: resolution.createdByTerminalHandle }
-        : {}),
-      createdAt
-    })
+  if (!childInstanceId) {
+    return { lineage, workspaceLineage, warnings }
+  }
+  const row: WorkspaceLineage = {
+    childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+    childInstanceId,
+    parentWorkspaceKey: resolution.parent.workspaceKey,
+    parentInstanceId:
+      resolution.parent.type === 'folder' ? resolution.parent.folderWorkspace.id : parentInstanceId,
+    origin: resolution.origin,
+    capture: resolution.capture,
+    ...(resolution.taskId ? { taskId: resolution.taskId } : {}),
+    ...(resolution.orchestrationRunId ? { orchestrationRunId: resolution.orchestrationRunId } : {}),
+    ...(resolution.coordinatorHandle ? { coordinatorHandle: resolution.coordinatorHandle } : {}),
+    ...(resolution.createdByTerminalHandle
+      ? { createdByTerminalHandle: resolution.createdByTerminalHandle }
+      : {}),
+    createdAt
+  }
+  if (resolution.parent.type === 'folder') {
+    // Created already: a same-id twin owning the bucket leaves the folder link unsaved, with a warning.
+    workspaceLineage = (target && store?.setFolderParentLineage?.(target, row)) ?? null
+    if (!workspaceLineage) {
+      warnings.push({
+        code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        message:
+          'Worktree created, but its lineage is held by a workspace at the same path on another host.'
+      })
+    }
+  } else if (lineage) {
+    // setWorktreeLineage already wrote this row as the link's workspace projection.
+    workspaceLineage = row
+  } else if (store?.setWorkspaceLineage) {
+    workspaceLineage = store.setWorkspaceLineage(row)
   }
   return { lineage, workspaceLineage, warnings }
+}
+
+function recordCrossStoreLineage(
+  store: RuntimeStore | null,
+  worktree: Pick<Worktree, 'id' | 'instanceId' | 'hostId'>,
+  resolution: CrossStoreLineageResolution
+): { crossStoreLineage: CrossStoreWorkspaceLineage | null; warnings: WorktreeLineageWarning[] } {
+  const target = store ? worktreeRowTarget(store, worktree) : undefined
+  const crossStoreLineage =
+    worktree.instanceId && target
+      ? (store?.setCrossStoreWorkspaceLineage?.(
+          {
+            childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+            childInstanceId: worktree.instanceId,
+            parent: resolution.parent,
+            origin: resolution.origin,
+            capture: resolution.capture,
+            createdAt: Date.now()
+          },
+          target.hostId
+        ) ?? null)
+      : null
+  return {
+    crossStoreLineage,
+    warnings: crossStoreLineage
+      ? []
+      : [
+          {
+            code: 'LINEAGE_PARENT_CONTEXT_MISSING',
+            message:
+              'Worktree created, but Orca could not record its parent on another machine for this workspace.'
+          }
+        ]
+  }
 }

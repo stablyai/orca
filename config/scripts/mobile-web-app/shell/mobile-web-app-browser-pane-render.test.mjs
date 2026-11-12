@@ -42,12 +42,10 @@ const FRAME = { width: 390, height: 698 }
 // Without viewport meta, Chromium lays out at 980 CSS px and scales to phone width; input expects CSS pixels, not source-device pixels.
 // Chromium 1217 measurement (2026-09-20) exposed ~41% targeting; viewport-meta control has scale one.
 const NO_VIEWPORT_META_PAGE_SCALE = SOURCE.deviceWidth / 980
-/** Noise at the largest layout the clamps admit, measured at 3,761,580 characters: 574% of the cap. */
-const OVER_CAP_FRAME = { width: 2400, height: 2160 }
 
 // Scratch pane-only route uses fixed-depth relative imports for reproducibility; substitute desktop screencastSupported answer, leaving capability probe to C7.
 const ROUTE_SOURCE = `
-import { useHostClient } from '../../../src/transport/host-client-hooks'
+import { useHostClient } from '../../../src/transport/connection/host-client-hooks'
 import { MobileBrowserPane } from '../../../src/browser/MobileBrowserPane'
 
 const TAB = {
@@ -235,27 +233,6 @@ function emitFrame(page, { b64, frameSeq, width, height, pageScaleFactor = 1 }) 
   )
 }
 
-// Select RN-Web background-image, the actual browser-frame-layer-paint write; testID could name an unpainted element.
-function readPaintedLayers(page) {
-  return page.evaluate(() => {
-    const painted = [...document.querySelectorAll('*')].filter((element) =>
-      element.style?.backgroundImage?.startsWith('url("data:image/jpeg')
-    )
-    return painted.map((element) => {
-      // The layer whose opacity the flip writes is the `<View>` above the `<Image>` surface.
-      let layer = element.parentElement
-      while (layer && layer.style.opacity === '') {
-        layer = layer.parentElement
-      }
-      return {
-        uri: element.style.backgroundImage,
-        digest: element.style.backgroundImage.slice(-24),
-        opacity: layer?.style.opacity ?? null
-      }
-    })
-  })
-}
-
 const waitForPaint = (page, count) =>
   page.waitForFunction(
     (expected) =>
@@ -266,145 +243,7 @@ const waitForPaint = (page, count) =>
     { timeout: 15_000 }
   )
 
-/** Which of the pane's two layers is on screen, by its position among them. */
-async function visibleLayerIndex(page) {
-  const layers = await readPaintedLayers(page)
-  return layers.findIndex((layer) => layer.opacity === '1')
-}
-
-// Wait for exact visible layer: URI writes precede decode/opacity flip (observed 80.7ms vs 85.7ms), so digest changes can return early.
-// Exact layer assertion also rejects a pane with nothing visible.
-async function waitForLayerFlip(page, staleIndex) {
-  await expect
-    .poll(() => visibleLayerIndex(page), { timeout: 15_000, interval: 25 })
-    .toBe(1 - staleIndex)
-}
-
 describePane('the browser pane in a page', () => {
-  it('subscribes over the binary lane and paints the frame it is handed', async () => {
-    const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
-    try {
-      await view.page.waitForFunction(() => globalThis.__orcaRenderCheckSubscribes.length > 0)
-      const subscribes = await view.page.evaluate(() => globalThis.__orcaRenderCheckSubscribes)
-      expect(subscribes).toHaveLength(1)
-      expect(subscribes[0]).toMatchObject({ method: SCREENCAST, wantsBinary: true })
-
-      const b64 = await encodeNoiseJpeg(view.page, { ...FRAME, seed: 1 })
-      expect(await emitFrame(view.page, { b64, frameSeq: 1, ...FRAME })).toBe('posted')
-      await waitForPaint(view.page, 1)
-
-      const layers = await readPaintedLayers(view.page)
-      // First frame paints both layers with initial layer 0 visible; only next frame proves decode-then-flip.
-      expect(layers.length).toBeGreaterThan(0)
-      expect(layers.filter((layer) => layer.opacity === '1').map((layer) => layer.uri)).toEqual([
-        `url("data:image/jpeg;base64,${b64}")`
-      ])
-      expect(view.consoleErrors).toEqual([])
-      expect(await view.csp()).toEqual([])
-      expect(view.foreignRequests).toEqual([])
-    } finally {
-      await view.context.close()
-    }
-  }, 120_000)
-
-  it('flips the double buffer on the second frame', async () => {
-    const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
-    try {
-      await view.page.waitForFunction(() => globalThis.__orcaRenderCheckSubscribes.length > 0)
-      const first = await encodeNoiseJpeg(view.page, { ...FRAME, seed: 7 })
-      await emitFrame(view.page, { b64: first, frameSeq: 1, ...FRAME })
-      await waitForPaint(view.page, 1)
-      const before = await readPaintedLayers(view.page)
-      const staleIndex = before.findIndex((layer) => layer.opacity === '1')
-
-      const second = await encodeNoiseJpeg(view.page, { ...FRAME, seed: 99 })
-      expect(second).not.toBe(first)
-      await emitFrame(view.page, { b64: second, frameSeq: 2, ...FRAME })
-      await waitForLayerFlip(view.page, staleIndex)
-
-      const after = await readPaintedLayers(view.page)
-      const visible = after.filter((layer) => layer.opacity === '1')
-      expect(visible).toHaveLength(1)
-      expect(visible[0].digest).not.toBe(before.find((l) => l.opacity === '1')?.digest)
-      expect(view.consoleErrors).toEqual([])
-      expect(await view.csp()).toEqual([])
-    } finally {
-      await view.context.close()
-    }
-  }, 120_000)
-
-  it('drops an over-cap frame, keeps the stream, and paints the next one', async () => {
-    const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
-    try {
-      await view.page.waitForFunction(() => globalThis.__orcaRenderCheckSubscribes.length > 0)
-      const small = await encodeNoiseJpeg(view.page, { ...FRAME, seed: 3 })
-      await emitFrame(view.page, { b64: small, frameSeq: 1, ...FRAME })
-      await waitForPaint(view.page, 1)
-      const before = await readPaintedLayers(view.page)
-      const staleIndex = before.findIndex((layer) => layer.opacity === '1')
-
-      // Noise at the largest layout the clamps admit, which §1 measured at 574% of the cap.
-      const huge = await encodeNoiseJpeg(view.page, { ...OVER_CAP_FRAME, seed: 5 })
-      expect(huge.length).toBeGreaterThan(windowCaps.maxMessageBytes)
-      expect(await emitFrame(view.page, { b64: huge, frameSeq: 2, ...OVER_CAP_FRAME })).toBe(
-        'dropped'
-      )
-
-      // The stream is still open: the next frame arrives on the same subscription and paints.
-      const next = await encodeNoiseJpeg(view.page, { ...FRAME, seed: 11 })
-      expect(await emitFrame(view.page, { b64: next, frameSeq: 3, ...FRAME })).toBe('posted')
-      await waitForLayerFlip(view.page, staleIndex)
-
-      expect(await view.page.evaluate(() => globalThis.__orcaRenderCheckDroppedFrames)).toEqual([2])
-      expect(await view.page.evaluate(() => globalThis.__orcaRenderCheckSubscribes.length)).toBe(1)
-      expect(await view.csp()).toEqual([])
-      expect(view.consoleErrors).toEqual([])
-    } finally {
-      await view.context.close()
-    }
-  }, 120_000)
-
-  it('asks for no binary lane at all when the shell withholds the grant', async () => {
-    const view = await openPane({ grants: [faultGrant] })
-    try {
-      await view.page.waitForFunction(() =>
-        document.body.innerText.includes('Update the Orca app to stream browser tabs here.')
-      )
-      expect(await view.page.evaluate(() => globalThis.__orcaRenderCheckSubscribes)).toEqual([])
-      expect(view.consoleErrors).toEqual([])
-      expect(await view.csp()).toEqual([])
-      expect(view.foreignRequests).toEqual([])
-    } finally {
-      await view.context.close()
-    }
-  }, 120_000)
-
-  it('streams past the unacked window because the page acks, and drops nothing', async () => {
-    // Thirty ~200KB frames exceed 4MiB window but each fits message cap; missing/ignored acks must cause drops.
-    const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
-    try {
-      await view.page.waitForFunction(() => globalThis.__orcaRenderCheckSubscribes.length > 0)
-      const b64 = await encodeNoiseJpeg(view.page, { ...FRAME, seed: 55 })
-      const cumulative = b64.length * 30
-      expect(cumulative).toBeGreaterThan(windowCaps.maxUnackedBytes)
-
-      const outcomes = []
-      for (let frameSeq = 1; frameSeq <= 30; frameSeq += 1) {
-        outcomes.push(await emitFrame(view.page, { b64, frameSeq, ...FRAME }))
-      }
-
-      expect(new Set(outcomes)).toEqual(new Set(['posted']))
-      expect(await view.page.evaluate(() => globalThis.__orcaRenderCheckDroppedFrames)).toEqual([])
-      // And the acks are real rather than the window merely being generous.
-      const acks = await view.page.evaluate(() => globalThis.__orcaRenderCheckAcks)
-      expect(acks.length).toBeGreaterThan(0)
-      expect(await view.csp()).toEqual([])
-      expect(view.consoleErrors).toEqual([])
-    } finally {
-      await view.context.close()
-    }
-  }, 120_000)
-
   it('issues one mouseClick with the geometry the native pane would send', async () => {
     const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
     try {

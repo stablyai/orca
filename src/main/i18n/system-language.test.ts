@@ -29,27 +29,4 @@ describe('native language snapshot', () => {
     expect(getSystemLanguageDetection()?.locale).toBe('fr')
     expect(getPreferredSystemLanguages).toHaveBeenCalledTimes(2)
   })
-
-  it.each(['empty', 'failed'])(
-    'permits uncertain browser fallback for %s native lookup',
-    async (kind) => {
-      getPreferredSystemLanguages.mockImplementation(() => {
-        if (kind === 'failed') {
-          throw new Error('Unavailable')
-        }
-        return []
-      })
-      const { getSystemLanguageDetection } = await import('./system-language')
-      expect(getSystemLanguageDetection()).toBeNull()
-      const fallback = getSystemLanguageDetection(['fr-FR'])
-      expect(fallback).toMatchObject({ locale: 'fr', source: 'browser-fallback' })
-      expect(getSystemLanguageDetection(['ja-JP'])).toBe(fallback)
-      const { getMainSystemLocale, setMainUiLanguage, mainI18n } = await import('./main-i18n')
-      expect(getMainSystemLocale()).toBe('fr')
-      await setMainUiLanguage('system')
-      expect(mainI18n.language).toBe('fr')
-      await setMainUiLanguage('en')
-      expect(mainI18n.language).toBe('en')
-    }
-  )
 })

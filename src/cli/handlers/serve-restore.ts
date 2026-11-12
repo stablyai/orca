@@ -1,10 +1,10 @@
 import type { CommandHandler } from '../dispatch'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import type {
   AutomaticWorkMode,
   AutomaticWorkResumeResult,
   LegacyRestoreRecord
-} from '../../shared/host-spawn-admission'
+} from '../../shared/terminal/pty/admission/spawn-admission-contract'
 
 type AutomaticWorkResumeResponse = {
   automaticWork: AutomaticWorkResumeResult | null

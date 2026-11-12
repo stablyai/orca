@@ -1,6 +1,8 @@
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace-statuses'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderLineageEdgeOf } from '../../../../shared/worktree/folder-lineage-parents'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
@@ -8,8 +10,12 @@ import { getWorkspaceRowKindFacts } from '../../../../shared/worktree/workspace-
 import { readWorkspaceReviewPR } from '../../../../shared/sidebar-list/workspace-review-facts'
 import { withOwnerRepos } from '../../../../shared/sidebar-list/workspace-rows'
 import { UNCACHED_LINKED_PR_STATE } from '../../../../shared/runtime-worktree-contracts'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { runtimeVisibleFolderWorkspaces } from '../catalog/runtime-visible-catalog'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import { runtimeWorktreePsRowKey } from './runtime-worktree-summary-paths'
 
 export function buildRuntimeWorktreePsSummaries(args: {
   store: RuntimeStore | null
@@ -17,13 +23,30 @@ export function buildRuntimeWorktreePsSummaries(args: {
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
 }): Map<string, RuntimeWorktreePsSummary> {
   const summaries = new Map<string, RuntimeWorktreePsSummary>()
+  const metaByHost = new Map<ExecutionHostId, Record<string, WorktreeMeta>>()
+  // A same-id twin on another host has its own metadata; an unhosted row keeps the id-keyed read.
+  const readMeta = (worktree: ResolvedWorktree): WorktreeMeta | undefined => {
+    const hostId = worktree.identity?.executionHostId ?? worktree.hostId
+    if (!hostId || !args.store?.getAllWorktreeMetaForHost) {
+      return (
+        args.store?.getWorktreeMeta?.(worktree.id) ?? args.store?.getAllWorktreeMeta()[worktree.id]
+      )
+    }
+    let hostMeta = metaByHost.get(hostId)
+    if (!hostMeta) {
+      hostMeta = args.store.getAllWorktreeMetaForHost(hostId)
+      metaByHost.set(hostId, hostMeta)
+    }
+    return hostMeta[worktree.id]
+  }
   const ghCache = args.store?.getGitHubCache?.()
+  const crossStoreLineage = args.store?.getAllCrossStoreWorkspaceLineage?.() ?? {}
+  const workspaceLineage = args.store?.getAllWorkspaceLineage?.()
   for (const { worktree, repo } of withOwnerRepos(
     args.resolvedWorktrees,
     args.store?.getRepos() ?? []
   )) {
-    const meta =
-      args.store?.getWorktreeMeta?.(worktree.id) ?? args.store?.getAllWorktreeMeta()[worktree.id]
+    const meta = readMeta(worktree)
     // Why: read the cache entry the desktop's PR lanes read; an uncached link keeps its badge as state 'unknown'.
     const cachedPR = ghCache ? readWorkspaceReviewPR(worktree, repo, ghCache.pr) : null
     const linkedPR: RuntimeWorktreePsSummary['linkedPR'] = cachedPR
@@ -39,12 +62,21 @@ export function buildRuntimeWorktreePsSummaries(args: {
         ? { number: meta.linkedPR, state: UNCACHED_LINKED_PR_STATE }
         : null
     const lineage = worktree.lineage
+    const recordedCrossStoreParent = crossStoreLineage[worktreeWorkspaceKey(worktree.id)]
+    // Lineage keyed by workspace key belongs to the row whose instance recorded it.
+    const crossStoreParent =
+      recordedCrossStoreParent &&
+      (!worktree.instanceId || recordedCrossStoreParent.childInstanceId === worktree.instanceId)
+        ? recordedCrossStoreParent
+        : undefined
     const priorWorktreeIds = meta?.priorWorktreeIds ?? worktree.priorWorktreeIds
-    summaries.set(worktree.id, {
+    const hostId = meta?.hostId ?? worktree.hostId
+    setPsSummary(summaries, {
       workspaceKind: 'git',
       worktreeId: worktree.id,
       repoId: worktree.repoId,
-      ...((meta?.hostId ?? worktree.hostId) ? { hostId: meta?.hostId ?? worktree.hostId } : {}),
+      ...(hostId ? { hostId } : {}),
+      ...(worktree.identity ? { identity: worktree.identity } : {}),
       terminalPlatform: args.platformByRepoId.get(worktree.repoId) ?? process.platform,
       repo: repo?.displayName ?? worktree.repoId,
       path: worktree.path,
@@ -65,6 +97,15 @@ export function buildRuntimeWorktreePsSummaries(args: {
         : {}),
       parentWorktreeId: worktree.parentWorktreeId,
       childWorktreeIds: worktree.childWorktreeIds,
+      ...(crossStoreParent ? { crossStoreParent } : {}),
+      ...(workspaceLineage
+        ? {
+            workspaceLineage: folderLineageEdgeOf(
+              workspaceLineage[worktreeWorkspaceKey(worktree.id)],
+              worktree.instanceId
+            )
+          }
+        : {}),
       displayName: worktree.displayName,
       workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
       sortOrder: meta?.sortOrder ?? 0,
@@ -95,16 +136,18 @@ export function buildRuntimeWorktreePsSummaries(args: {
   const projectGroupById = new Map(
     (args.store?.getProjectGroups?.() ?? []).map((group) => [group.id, group])
   )
-  for (const folderWorkspace of args.store?.getFolderWorkspaces?.() ?? []) {
+  for (const folderWorkspace of runtimeVisibleFolderWorkspaces(args.store)) {
     const projectGroup = projectGroupById.get(folderWorkspace.projectGroupId)
     if (!projectGroup?.parentPath) {
       continue
     }
     const worktree = folderWorkspaceToWorktree(folderWorkspace)
-    summaries.set(worktree.id, {
+    setPsSummary(summaries, {
       workspaceKind: 'folder-workspace',
       worktreeId: worktree.id,
       repoId: worktree.repoId,
+      // The phone names a row's machine from hostId; without it an SSH folder reads as local.
+      hostId: worktree.hostId,
       repo: projectGroup.name,
       path: worktree.path,
       branch: worktree.branch,
@@ -143,6 +186,13 @@ export function buildRuntimeWorktreePsSummaries(args: {
     })
   }
   return summaries
+}
+
+function setPsSummary(
+  summaries: Map<string, RuntimeWorktreePsSummary>,
+  summary: RuntimeWorktreePsSummary
+): void {
+  summaries.set(runtimeWorktreePsRowKey(summary), summary)
 }
 
 function sortStampSummaryFields(

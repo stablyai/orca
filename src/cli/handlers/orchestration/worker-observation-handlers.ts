@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import { printOrchestrationReceipt, printOrchestrationResult } from './agent-view'
 import { WORKER_SHOW_VIEW, type WorkerShowResult } from './worker-agent-views'
 import {
@@ -11,7 +11,7 @@ import { RuntimeClientError } from '../../runtime-client'
 import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
-} from '../../../shared/orchestration-worker-output'
+} from '../../../shared/orchestration/workers/orchestration-worker-output'
 import { formatWorkerRead, type LegacyWorkerReadResult } from './worker-output'
 
 export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHandler> = {
@@ -29,6 +29,14 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
       ]
       if (value.dispatch?.followUpOf) {
         lines.push(`Follow-up of: dispatch:${value.dispatch.followUpOf}`)
+      }
+      // This Orca's record of a worker on a server that did not answer.
+      if (value.server) {
+        lines.push(
+          `Server: ${value.server.name} (record as of ${value.server.asOf})`,
+          ...(value.observation?.reason ? [`Note: ${value.observation.reason}`] : []),
+          ...(value.lastReport ? [`Last report: ${value.lastReport}`] : [])
+        )
       }
       // A live PTY can contain a dead agent; show the independent agent verdict and recovery action.
       if (value.projection) {

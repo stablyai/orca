@@ -3,7 +3,7 @@ import { getLargeDiffRenderLimit } from '../../../shared/large-diff-render-limit
 import {
   IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
   filePreviewExtension
-} from '../../../shared/file-preview-kind'
+} from '../../../shared/file-preview/file-preview-kind'
 
 export function buildDiffResult(
   originalContent: string,

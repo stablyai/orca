@@ -25,15 +25,15 @@ import {
   wslMoveRigOutcome,
   type WslMoveRig
 } from '../../persistence/__fixtures__/wsl-mover/wsl-move-kill-rig'
-import { resetWslMoveDesktopRewriteStoresForTests } from '../../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
+import { resetWslMoveDesktopRewriteStoresForTests } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite-stores'
 import { moveProjectsToWslHost } from '../../persistence/moving-wsl-projects/wsl-move-driver'
 import {
   cancelWslMove,
   isWslMoveRunning,
   isWslMoveUnderwayOnHost
-} from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
@@ -73,7 +73,7 @@ vi.mock('../../managed-server/install/remote-versioned-install', async (importOr
 vi.mock('./wsl-orcad-instance-adoption', () => ({
   adoptUnrecordedWslOrcad: async () => ({ outcome: 'none' })
 }))
-vi.mock('../../ssh/orcad-running-version-adoption', () => ({
+vi.mock('../../managed-server/activation/orcad-running-version-adoption', () => ({
   adoptRunningOrcadVersion: host.adoptRunning
 }))
 vi.mock('../../ssh/remote-exec/remote-exec-command', () => ({ execCommand: host.exec }))
@@ -86,7 +86,7 @@ vi.mock('../../managed-server/activation/orcad-activation-recovery', () => ({
 vi.mock('../../orcad/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
-vi.mock('../../ssh/orcad-remote-deploy', () => ({ deployOrcad: host.deploy }))
+vi.mock('../../managed-server/install/orcad-remote-deploy', () => ({ deployOrcad: host.deploy }))
 vi.mock('../../managed-server/lifecycle/orcad-managed-version-gc', () => ({
   provenLiveDaemonVersion: () => null,
   pruneManagedOrcadVersions: vi.fn()

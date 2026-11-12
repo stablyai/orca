@@ -385,7 +385,7 @@ jobs:
           ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: dev
           NODE_OPTIONS: --max-old-space-size=4096
           # Leave build identity unset: telemetry accepts only official stable/rc, so branch artifacts stay silent.
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
@@ -401,7 +401,10 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tools
-          sparse-checkout: config/scripts/desktop-distribution/macos/adhoc-mac-manifests.mjs
+          sparse-checkout: |
+            config/scripts/desktop-distribution/macos/adhoc-mac-manifests.mjs
+            config/scripts/desktop-distribution/macos/gate-mac-update-manifests.mjs
+            src/shared/macos-darwin-floor.ts
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -440,7 +443,11 @@ jobs:
         env:
           MAC_ARCH: ${{ matrix.arch }}
           MAC_VERSION: ${{ needs.orcad-template-support.outputs.version }}
-        run: node .workflow-tools/config/scripts/desktop-distribution/macos/adhoc-mac-manifests.mjs stage "$MAC_ARCH" "$MAC_VERSION" dist .build/mac-manifests
+        run: |
+          set -euo pipefail
+          # Builder cannot write this field, so older macOS updaters would install a build that won't launch.
+          node .workflow-tools/config/scripts/desktop-distribution/macos/gate-mac-update-manifests.mjs dist
+          node .workflow-tools/config/scripts/desktop-distribution/macos/adhoc-mac-manifests.mjs stage "$MAC_ARCH" "$MAC_VERSION" dist .build/mac-manifests
 
       - name: Mint adhoc repo token
         id: app_token

@@ -1,9 +1,9 @@
+import { setActiveSink } from '../../observability/tracer'
 import { requestSessionSearchRoots } from './session-scanner-service-root-request'
-import { aiVaultScanWork, trackAiVaultScanProgress } from '../ai-vault-scan-progress'
+import { aiVaultScanWork, trackAiVaultScanProgress } from '../scan-lifecycle/ai-vault-scan-progress'
 import type { AiVaultScanWork } from '../../../shared/ai-vault/scanning/ai-vault-scan-progress'
-import type { AiVaultSessionTitle } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { readAiVaultFirstUserPrompt } from '../session-first-user-prompt-read'
+import { readAiVaultFirstUserPrompt } from '../prompts/session-first-user-prompt-read'
 import {
   flushSessionParseCachePersist,
   initSessionParseCachePersistence
@@ -21,9 +21,12 @@ import {
   type AiVaultServiceRequest,
   type AiVaultServiceResultValue
 } from './session-scanner-service-protocol'
-import { readAiVaultSessionTitlesFromFiles } from '../session-titles/session-title-file-reader'
+import {
+  readAiVaultSessionTitlesFromFiles,
+  type CachedAiVaultSessionTitle
+} from '../session-titles/session-title-file-reader'
 import { resolveHostReadableAiVaultTitleRequests } from '../session-titles/session-title-request-paths'
-import { listLocalAiVaultSubagentSessions } from '../session-subagent-reader'
+import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
 import {
   noteWslDistroMayHaveStopped,
   noteWslDistroWoken
@@ -33,10 +36,16 @@ if (!process.send) {
   throw new Error('AI Vault service requires a parent IPC channel.')
 }
 
+setActiveSink({
+  push: (record) => process.send?.({ type: 'trace', record }),
+  flush() {},
+  close() {}
+})
+
 const controllers = new Map<number, AbortController>()
 const cancelled = new Set<number>()
 const pending = new Set<number>()
-const titleIndex = new Map<string, AiVaultSessionTitle>()
+const titleIndex = new Map<string, CachedAiVaultSessionTitle>()
 const invalidatedPaths = new Set<string>()
 const sessionSearch = new SessionScannerServiceSearch(requestSessionSearchRoots)
 let initialized = false
@@ -68,19 +77,14 @@ async function scanReportingProgress(
 }
 
 async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultServiceResultValue> {
-  if (sessionSearch.handles(request)) {
-    try {
-      return await sessionSearch.execute(request)
-    } finally {
-      // Search has no controller to consume cancellation; discard its id here.
-      cancelled.delete(request.id)
-    }
-  }
   const controller = new AbortController()
   controllers.set(request.id, controller)
   try {
     if (cancelled.delete(request.id)) {
       controller.abort()
+    }
+    if (sessionSearch.handles(request)) {
+      return await sessionSearch.execute(request, controller.signal)
     }
     if (request.operation === 'titles') {
       const requests = await resolveHostReadableAiVaultTitleRequests(
@@ -117,7 +121,10 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
         cacheServiceTitle(titleIndex, {
           agent: session.agent,
           sessionId: session.sessionId,
-          title: session.title.trim()
+          title: session.title.trim(),
+          ...(session.titleKind
+            ? { kind: session.titleKind }
+            : { transcriptPath: session.filePath })
         })
       }
     }
@@ -165,6 +172,11 @@ function queueRequest(request: AiVaultServiceRequest): void {
     return
   }
   pending.add(request.id)
+  // Why: search deadlines and cancellation start at admission, independent of the interactive lane.
+  if (sessionSearch.handles(request)) {
+    void handleRequest(request)
+    return
+  }
   if (aiVaultServiceLane(request.operation) === 'interactive') {
     interactiveLane = interactiveLane.then(() => handleRequest(request))
     return
@@ -180,7 +192,7 @@ async function shutdown(): Promise<void> {
   for (const controller of controllers.values()) {
     controller.abort()
   }
-  sessionSearch.close()
+  await sessionSearch.close()
   await Promise.allSettled([cacheLane, interactiveLane])
   await flushSessionParseCachePersist()
   process.disconnect?.()

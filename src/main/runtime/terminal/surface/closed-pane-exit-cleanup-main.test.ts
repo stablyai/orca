@@ -1,6 +1,6 @@
 // Close drops panes before terminal exit; main must recover their closed-pane identity even headless (L80 Q2).
 import { expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 
 export const terminalComposerDraftSchema = z.looseObject({

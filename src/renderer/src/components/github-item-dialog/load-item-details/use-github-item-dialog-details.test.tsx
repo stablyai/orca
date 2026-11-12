@@ -19,7 +19,7 @@ import {
 
 const lookup = vi.hoisted(() => vi.fn())
 const setViewed = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemDetailsForSource: lookup
 }))
 vi.mock('@/components/github/github-work-item-comment-mutations', async (importOriginal) => ({

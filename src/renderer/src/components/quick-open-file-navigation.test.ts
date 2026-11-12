@@ -26,11 +26,11 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-vi.mock('@/runtime/runtime-file-metadata-client', () => ({
+vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', () => ({
   statRuntimePath: mocks.stat,
   isMissingRuntimePathError: (error: Error) => error.message.includes('ENOENT')
 }))
-vi.mock('@/runtime/runtime-file-routing', () => ({
+vi.mock('@/runtime/files/runtime-file-routing', () => ({
   isRemoteRuntimeFileOperation: (context: { connectionId?: string }) =>
     Boolean(context.connectionId)
 }))
@@ -41,8 +41,10 @@ vi.mock('./right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
     assertCurrent: mocks.assertCurrent
   })
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.rpc,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.rpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
 }))
 vi.mock('@/store/slices/editor/focus/editor-focus-reveal', () => ({

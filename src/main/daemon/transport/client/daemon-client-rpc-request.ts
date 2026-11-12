@@ -8,6 +8,7 @@ import {
 } from '../../protocol/daemon-errors'
 
 import type { DaemonPendingRequests } from './daemon-client-pending-requests'
+import { startResponsiveDeadline } from './daemon-responsive-deadline'
 
 type DaemonRpcRequestOptions = {
   socket: Socket
@@ -67,16 +68,14 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
     let sent = false
     let cancellationStarted = false
     let settled = false
-    let unmatchedCancelTimer: NodeJS.Timeout | null = null
+    let cancelUnmatchedGrace: (() => void) | null = null
     // Preserve the caller's cancellation error over a racing daemon reply; real disconnects still win.
     let cancellationError: Error | null = null
     const removeAbortListener = (): void => opts.signal?.removeEventListener('abort', onAbort)
     const clearTimers = (): void => {
-      clearTimeout(timer)
-      if (unmatchedCancelTimer) {
-        clearTimeout(unmatchedCancelTimer)
-        unmatchedCancelTimer = null
-      }
+      cancelDeadline()
+      cancelUnmatchedGrace?.()
+      cancelUnmatchedGrace = null
     }
     const rejectAndDrop = (error: Error): void => {
       if (settled) {
@@ -90,11 +89,14 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
     }
     // Allow a published create reply to arrive, but bound attach-only waits that may never get a response.
     const awaitLateResponseThenReject = (error: Error): void => {
-      if (settled || unmatchedCancelTimer) {
+      if (settled || cancelUnmatchedGrace) {
         return
       }
-      unmatchedCancelTimer = setTimeout(() => rejectAndDrop(error), opts.unmatchedCancelGraceMs)
-      unmatchedCancelTimer.unref?.()
+      cancelUnmatchedGrace = startResponsiveDeadline(
+        opts.unmatchedCancelGraceMs,
+        () => rejectAndDrop(error),
+        { unref: true }
+      )
     }
     const cancelCreate = (error: Error): void => {
       if (cancellationStarted) {
@@ -102,7 +104,7 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
       }
       cancellationStarted = true
       cancellationError = error
-      clearTimeout(timer)
+      cancelDeadline()
       if (!sent || typeof createSessionId !== 'string') {
         rejectAndDrop(error)
         return
@@ -128,14 +130,15 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
           awaitLateResponseThenReject(wedgedDaemonError(error, cancelError) ?? error)
         })
     }
-    const timer = setTimeout(() => {
+    // A reply that arrived while this process was frozen must settle before the timeout does.
+    const cancelDeadline = startResponsiveDeadline(opts.timeoutMs, () => {
       const error = createTimeoutError()
       if (typeof createSessionId === 'string') {
         cancelCreate(error)
       } else {
         rejectAndDrop(error)
       }
-    }, opts.timeoutMs)
+    })
     const onAbort = (): void => {
       removeAbortListener()
       cancelCreate(new Error('client_disconnected'))
@@ -161,7 +164,7 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
             : error
         )
       },
-      timer
+      cancelDeadline
     })
 
     opts.signal?.addEventListener('abort', onAbort, { once: true })

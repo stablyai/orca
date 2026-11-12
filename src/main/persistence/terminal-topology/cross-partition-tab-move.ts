@@ -1,5 +1,6 @@
 // Main moves editor tabs across partitions and writes only changed records, retaining in-memory views.
 
+import type { LayoutClientVisibility } from '../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
 import { randomUUID } from 'node:crypto'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
@@ -7,18 +8,21 @@ import type {
   CommandOf,
   LayoutApplyOutcome
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { updateLegacyPersistence } from '../../../shared/workspace-layout/workspace-layout-legacy-persistence'
-import { loadWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load'
-import type { LoadedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load-types'
-import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
+import { updateLegacyPersistence } from '../../../shared/workspace-layout/persistence/workspace-layout-legacy-persistence'
+import { loadWorkspaceLayout } from '../../../shared/workspace-layout/persistence/workspace-layout-load'
+import type { LoadedWorkspaceLayout } from '../../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import { nameBasedLoadContext } from '../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import type {
   WorkspaceLayout,
   WorkspaceLayoutModel
 } from '../../../shared/workspace-layout/workspace-layout-model'
-import { patchStoredSession } from '../../../shared/workspace-layout/workspace-layout-record-patch'
-import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
-import { moveTabToWorkspace } from '../../../shared/workspace-layout/workspace-layout-workspace-move'
-import { editorViewsOfModel, type PartitionEditorViews } from '../loading-store/layout-editor-views'
+import { patchStoredSession } from '../../../shared/workspace-layout/persistence/workspace-layout-record-patch'
+import { saveWorkspaceLayout } from '../../../shared/workspace-layout/persistence/workspace-layout-save'
+import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
+import {
+  editorViewsOfModel,
+  type PartitionEditorViews
+} from '../loading-store/workspace-sessions/layout-editor-views'
 
 type PartitionSession = {
   hostId: ExecutionHostId
@@ -72,7 +76,8 @@ function written(
 export function moveTabAcrossPartitions(
   from: PartitionSession,
   to: PartitionSession,
-  command: CommandOf<'moveTabToWorkspace'>
+  command: CommandOf<'moveTabToWorkspace'>,
+  visibility?: LayoutClientVisibility
 ): CrossPartitionTabMove {
   const loadedFrom = loadWorkspaceLayout(from.hostId, from.session, loadContext(from))
   const loadedTo = loadWorkspaceLayout(to.hostId, to.session, loadContext(to))
@@ -88,7 +93,8 @@ export function moveTabAcrossPartitions(
     command.toWorkspace,
     loadedTo.layout.workspaces[command.toWorkspace]
   )
-  const moved = moveTabToWorkspace(joined, command, {
+  const moved = applyLayoutCommand(joined, command, {
+    visibility,
     mintId: randomUUID,
     mintLeafId: randomUUID,
     now: Date.now

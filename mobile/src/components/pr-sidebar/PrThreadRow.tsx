@@ -1,5 +1,12 @@
 import { useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type HostInstance
+} from 'react-native'
 import {
   ExternalLink,
   FileText,
@@ -20,11 +27,11 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../platform/external-link'
-import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
+import { canEditComment, isResolvableComment } from '../../source-control/review/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
 import { PullDownMenu } from '../nav-bar/PullDownMenu'
 import type { ActionSheetAction } from '../ActionSheetModal'
-import { CommentMarkdown } from './CommentMarkdown'
+import { PrMarkdown } from './PrMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { PrCommentAvatar } from './PrCommentAvatar'
 import { PrThreadCode } from './PrThreadCode'
@@ -44,6 +51,8 @@ export type PrThreadActions = {
   isResolveBusy: (threadId: string) => boolean
   isEditBusy: (commentId: number) => boolean
   isDeleteBusy: (commentId: number) => boolean
+  // Where a reply to a comment waits until it is posted.
+  draftKey: (replyTo: number) => string | null
   // Repo slug for the slug-addressed edit/delete RPCs; gates the affordances when absent.
   prRepo: PRCommentRepoSlug | null
 }
@@ -90,7 +99,7 @@ export function PrThreadRow({
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<View>(null)
+  const menuRef = useRef<HostInstance>(null)
   const root = getPRCommentGroupRoot(group)
   const replies = group.kind === 'thread' ? group.replies : []
   const lastReply = replies.at(-1)
@@ -192,7 +201,7 @@ export function PrThreadRow({
             autoFocus
           />
         ) : (
-          <CommentMarkdown content={root.body} />
+          <PrMarkdown content={root.body} url={root.url} />
         )}
         {lastReply ? (
           <View style={styles.reply}>

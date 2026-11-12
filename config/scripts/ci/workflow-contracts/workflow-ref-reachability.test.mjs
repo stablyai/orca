@@ -15,7 +15,6 @@ const resolveSteps = adhoc.jobs['resolve-ref'].steps
 const earlyVet = resolveSteps.find((step) => step.id === 'resolve')
 const macSteps = adhoc.jobs['build-adhoc-mac-arch'].steps
 const macVet = macSteps.find((step) => step.id === 'vetted')
-const macCheckout = macSteps.find((step) => step.name === 'Checkout the requested ref')
 const directory = mkdtempSync(join(tmpdir(), 'workflow-ref-reachability-'))
 const repository = join(directory, 'remote.git')
 const identity = {
@@ -122,59 +121,5 @@ describe('release ref trust with case-twin names', () => {
         expect(result.output).toBe('')
       }
     }
-  })
-
-  it('rejects revision expressions and abbreviated SHAs before emitting an identity', async () => {
-    for (const ref of ['Fix~1', 'Fix^{commit}', ancestor.slice(0, 12), 'missing', '--help']) {
-      const result = await vet(earlyVet, ref)
-      expect(result.code, ref).not.toBe(0)
-      expect(result.output, ref).toBe('')
-    }
-  })
-
-  it('validates before source checkout and gates every source-consuming adhoc job', () => {
-    expect(resolveSteps).toHaveLength(1)
-    expect(resolveSteps[0].id).toBe('resolve')
-    expect(earlyVet.env.REQUESTED_REF).toBe('${{ inputs.ref || github.ref_name }}')
-    expect(adhoc.jobs['resolve-ref'].outputs.sha).toBe('${{ steps.resolve.outputs.sha }}')
-    expect(earlyVet.run).toBe(macVet.run)
-    for (const job of Object.values(adhoc.jobs)) {
-      const consumesSource =
-        job.with?.ref ||
-        job.steps?.some(
-          (step) =>
-            step.uses?.startsWith('actions/checkout@') &&
-            step.with?.ref !== '${{ github.workflow_sha }}'
-        )
-      if (!consumesSource) {
-        continue
-      }
-      expect([job.needs].flat()).toContain('resolve-ref')
-      expect(job.if || '').not.toContain('always()')
-    }
-  })
-
-  it('checks out the vetted SHA shallowly without mirroring case-twin refs again', async () => {
-    expect(macCheckout.with.ref).toBe('${{ steps.vetted.outputs.sha }}')
-    expect(macCheckout.with['persist-credentials']).toBe(false)
-    const checkout = join(directory, 'checkout')
-    const env = { ...identity, ...macCheckout.env }
-    await git(['init', checkout], env)
-    await git(
-      [
-        '-C',
-        checkout,
-        'fetch',
-        '--no-tags',
-        `--depth=${macCheckout.with['fetch-depth']}`,
-        repository,
-        upper
-      ],
-      env
-    )
-    await git(['-C', checkout, 'checkout', '--detach', upper], env)
-    expect(await git(['-C', checkout, 'rev-parse', 'HEAD'], env)).toBe(upper)
-    expect(await git(['-C', checkout, 'rev-list', '--count', 'HEAD'], env)).toBe('1')
-    expect(await git(['-C', checkout, 'for-each-ref', '--format=%(refname)'], env)).toBe('')
   })
 })

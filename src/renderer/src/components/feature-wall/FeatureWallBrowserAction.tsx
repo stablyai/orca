@@ -1,36 +1,38 @@
-import { useBundledSkillInstallAction } from '@/hooks/use-bundled-skill-install-action'
+import { useBundledSkillInstallAction } from '@/hooks/skills/installation/use-bundled-skill-install-action'
 import { bundledSkillSetupActionLabel } from '../skills/setup/bundled-skill-setup-copy'
-import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import { useOnboardingSkillRuntime } from '@/hooks/use-onboarding-skill-runtime'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
+import { useOnboardingSkillRuntime } from '@/hooks/skills/runtime/use-onboarding-skill-runtime'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
-import { buildAgentFeatureSkillInstallCommand } from '@/lib/agent-feature-install-commands'
-import { buildSkillCommandForRuntime } from '../../lib/skill-runtime-command'
-import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
+import { buildAgentFeatureSkillInstallCommand } from '@/lib/skills/installation/agent-feature-install-commands'
+import { buildSkillCommandForRuntime } from '../../lib/skills/runtime/skill-runtime-command'
 import { useCallback, useState } from 'react'
 import { ArrowUpRight, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { track } from '@/lib/telemetry'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { useAppStore } from '@/store/index'
 import {
   bundledSkillInstallNeedsAttention,
   useBundledSkillInstall
-} from '@/hooks/use-bundled-skill-install'
+} from '@/hooks/skills/installation/use-bundled-skill-install'
 import { BundledSkillInstallStatus } from '../skills/setup/BundledSkillInstallStatus'
 import {
   onboardingFeatureSetupRunTelemetry,
-  runOnboardingFeatureSetup,
-  type OnboardingFeatureSetupSelection
+  runOnboardingFeatureSetup
 } from '../onboarding/onboarding-feature-setup'
+import type { OnboardingFeatureSetupSelection } from '../onboarding/onboarding-feature-setup'
 import {
   promptForSetupGuideProject,
   useSetupTargetWorktree
 } from './FeatureWallSetupWorkflowActions'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 
 export function BrowserAction(props: { done: boolean }): React.JSX.Element {
+  const t = useTranslate()
   const targetWorktree = useSetupTargetWorktree()
   const browserCreationEnabled = useAppStore(
     (state) =>
@@ -80,10 +82,7 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
       {props.done || !browserCreationEnabled ? null : (
         <Button type="button" size="sm" className="w-fit gap-2" onClick={handleTryIt}>
           <ArrowUpRight className="size-3.5" />
-          {translate(
-            'auto.components.feature.wall.FeatureWallBrowserAction.c9728107c5',
-            'Try it out'
-          )}
+          {t('auto.components.feature.wall.FeatureWallBrowserAction.c9728107c5', 'Try it out')}
         </Button>
       )}
       <BrowserSkillInstallButton />
@@ -109,6 +108,7 @@ function BrowserSkillInstallForRuntime({
 }: {
   activeRuntime: ReturnType<typeof useOnboardingSkillRuntime>
 }): React.JSX.Element {
+  const t = useTranslate()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [busy, setBusy] = useState(false)
   const [wslSetup, setWslSetup] = useState<{
@@ -229,7 +229,7 @@ function BrowserSkillInstallForRuntime({
     }
     return (
       <p className="text-xs text-muted-foreground">
-        {translate('auto.components.skills.skillPlanOpCopy.installed', 'Installed')}
+        {t('auto.components.skills.skillPlanOpCopy.installed', 'Installed')}
       </p>
     )
   }
@@ -249,18 +249,15 @@ function BrowserSkillInstallForRuntime({
       >
         {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
         {busy
-          ? translate(
-              'auto.components.feature.wall.FeatureWallBrowserAction.5f97caf76b',
-              'Installing…'
-            )
+          ? t('auto.components.feature.wall.FeatureWallBrowserAction.5f97caf76b', 'Installing…')
           : installAction.kind === 'replace'
-            ? translate(
+            ? t(
                 'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
                 "Replace with Orca's copy"
               )
             : installAction.kind === 'run' && installAction.changes
-              ? bundledSkillSetupActionLabel(installAction.changes)
-              : translate('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
+              ? bundledSkillSetupActionLabel(installAction.changes, t)
+              : t('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
       </Button>
       <BundledSkillInstallStatus install={skillInstall} />
     </>

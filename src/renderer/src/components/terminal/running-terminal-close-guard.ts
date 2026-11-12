@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
-import type { TerminalTabCloseReason } from '@/store/slices/terminal-tab-retirement'
+import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
+import type { TerminalTabCloseReason } from '@/store/terminals/terminal-tab-retirement'
 import type { TerminalTabCloseIntent } from './terminal-tab-close-intent'
 import type { AppState } from '@/store/types'
 import { resolveBusyPtyCloseCopyKind } from './terminal-close-copy-kind'
@@ -106,9 +106,14 @@ export function guardRunningTerminalClose(params: {
         confirmClose(ptyIds)
         return
       }
-      // Answered probe failures/stale handles fail open like Cmd+W; they provide no live-child evidence and must not disable closing.
+      // "Could not tell" must not kill a bound pty's work (#33265); layout-only ids are often stale leaves that never answer.
+      const boundPtyIds = new Set(useAppStore.getState().ptyIdsByTabId?.[terminalTabId] ?? [])
       const busyPtyIds = probes
-        .filter((probe) => probe.verdict === 'live')
+        .filter(
+          (probe) =>
+            probe.verdict === 'live' ||
+            (probe.verdict === 'unverifiable' && boundPtyIds.has(probe.ptyId))
+        )
         .map((probe) => probe.ptyId)
       if (busyPtyIds.length === 0) {
         closeNow()

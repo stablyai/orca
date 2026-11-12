@@ -22,19 +22,20 @@ import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,
   type TestJournalOptions
-} from '../agent-session-journal/journal-host-database-test-support'
+} from '../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink
-} from '../agent-session-wire/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../agent-session-wire/structured-agent-session-logger-test-support'
+} from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import {
   createProviderTimelineAssembler,
   type ProviderTimelineAssembler,
   type ProviderTimelineAssemblerDeps
 } from './provider-timeline-assembler'
-import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/structured-agent-session-dead-generation-settlement'
+import '../agent-session-wire/termination/structured-agent-session-dead-generation-settlement'
+import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/termination/structured-agent-session-stale-state-settlement'
 import {
   createLegacyProviderTimelineIdentityScheme,
   type ProviderTimelineItemFamily

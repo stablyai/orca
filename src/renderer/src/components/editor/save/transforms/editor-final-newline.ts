@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { editorModelRegistry } from '@/lib/editor-model-registry'
+import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
 import { editorTabModelUri } from '../queue/editor-save-disk-precondition'
 import { hasPendingEditorBufferChange } from '../flush/editor-pending-flush'
 import { normalizeToModelEol } from '../../monaco-content-sync'

@@ -5,8 +5,13 @@ import {
   type PluginThemeRegistration
 } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
+import {
+  disambiguatedContentPluginNames,
+  disambiguatedPluginContentLabels
+} from '../plugins/presentation/plugin-name-disambiguation'
 import { resolveTerminalPalette } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { TERMINAL_THEME_CATALOG } from '../../../../shared/terminal-themes/terminal-theme-catalog'
+import type { Translate } from '../../i18n/use-translate'
 
 export type ThemeLookBase = 'light' | 'dark'
 
@@ -154,15 +159,16 @@ function pluginTerminalFor(
 function pluginLook(
   theme: PluginThemeRegistration,
   terminals: readonly PluginTerminalThemeRegistration[],
-  baseline: GlobalSettings
+  baseline: GlobalSettings,
+  shown: { label: string; source: string }
 ): ThemeLook {
   const tokens = completePluginAppThemeTokens(theme.tokens)
   const terminal = pluginTerminalFor(theme, terminals)
   return {
     kind: 'plugin',
     id: theme.id,
-    label: theme.label,
-    source: theme.pluginName,
+    label: shown.label,
+    source: shown.source,
     base: theme.base,
     theme,
     terminal,
@@ -208,13 +214,16 @@ function terminalLook(name: string, base: ThemeLookBase, source: string): ThemeL
 
 /** Every look the theme step offers for one mode: Orca's own first, then installed plugin
  *  themes, then popular terminal palettes painted through Match Terminal. */
-export function buildThemeLooks(options: {
-  base: ThemeLookBase
-  pluginThemes: readonly PluginThemeRegistration[]
-  pluginTerminalThemes: readonly PluginTerminalThemeRegistration[]
-  baseline: GlobalSettings
-  labels: { orca: string; builtIn: (base: ThemeLookBase) => string; community: string }
-}): ThemeLook[] {
+export function buildThemeLooks(
+  options: {
+    base: ThemeLookBase
+    pluginThemes: readonly PluginThemeRegistration[]
+    pluginTerminalThemes: readonly PluginTerminalThemeRegistration[]
+    baseline: GlobalSettings
+    labels: { orca: string; builtIn: (base: ThemeLookBase) => string; community: string }
+  },
+  t?: Translate
+): ThemeLook[] {
   const { base, pluginThemes, pluginTerminalThemes, baseline, labels } = options
   const builtIn: ThemeLook = {
     kind: 'built-in',
@@ -224,9 +233,15 @@ export function buildThemeLooks(options: {
     base,
     palette: { ...BUILT_IN_CHROME[base], terminal: currentTerminal(baseline, base) }
   }
-  const plugins = pluginThemes
-    .filter((theme) => theme.base === base)
-    .map((theme) => pluginLook(theme, pluginTerminalThemes, baseline))
+  const modeThemes = pluginThemes.filter((theme) => theme.base === base)
+  const themeLabels = disambiguatedPluginContentLabels(modeThemes, undefined, t)
+  const pluginNames = disambiguatedContentPluginNames(modeThemes, t)
+  const plugins = modeThemes.map((theme) =>
+    pluginLook(theme, pluginTerminalThemes, baseline, {
+      label: themeLabels.get(theme.id) ?? theme.label,
+      source: pluginNames.get(theme.pluginKey) ?? theme.pluginName
+    })
+  )
   const terminals = TERMINAL_LOOKS[base].flatMap(
     (name) => terminalLook(name, base, labels.community) ?? []
   )

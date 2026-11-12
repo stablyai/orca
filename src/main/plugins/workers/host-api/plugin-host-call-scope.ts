@@ -1,0 +1,49 @@
+import type { PluginErrorCode } from '../../../../shared/plugins/frames/plugin-protocol'
+import type { PluginPanelCaller } from '../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
+
+/**
+ * What one admitted call carries to its side effect. `assertActive` throws once the plugin was
+ * disabled, unconsented, kill-listed or removed since admission, so a call that waited (an audit
+ * write, a save dialog) never commits for a plugin that lost its approval meanwhile.
+ */
+export type PluginHostCallScope = {
+  assertActive(): void
+  /** The WebContents whose frame made the call (desktop IPC only): dialogs and budgets bind to it. */
+  callerWebContentsId?: number
+  /** The plugin's display name, for prompts Orca shows on its behalf. */
+  pluginName?: string
+  /** The open panel or editor that made the call; absent for workers. */
+  panel?: PluginPanelCaller
+  /** Writes to the plugin's log (`orca plugin logs`). */
+  log?: (line: string) => void
+  /** Aborts when the worker that made the call cancels it or exits. */
+  signal?: AbortSignal
+}
+
+export const UNSCOPED_PLUGIN_HOST_CALL: PluginHostCallScope = { assertActive: () => {} }
+
+/** A service failure whose code reaches the plugin instead of collapsing to `action_failed`. */
+export class PluginHostCallError extends Error {
+  constructor(
+    readonly code: PluginErrorCode,
+    message: string,
+    readonly retryAfterMs?: number,
+    /** What actually failed, for the plugin's log only; the plugin gets `message`. */
+    readonly detail?: string
+  ) {
+    super(message)
+  }
+}
+
+/**
+ * A runtime refusal as the plugin sees it. Its code applies from host API 1.7; a method that
+ * shipped earlier reports every runtime refusal as `action_failed`, as it always has.
+ */
+export class PluginRuntimeCallError extends PluginHostCallError {}
+
+/** The host API minor whose methods report runtime refusals with their own codes. */
+export const PLUGIN_RUNTIME_FAILURE_CODES_SINCE = 7
+
+export function pluginHostCallRevoked(): PluginHostCallError {
+  return new PluginHostCallError('consent_required', 'plugin is no longer enabled')
+}

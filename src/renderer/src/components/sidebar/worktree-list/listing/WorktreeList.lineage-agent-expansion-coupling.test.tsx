@@ -116,15 +116,17 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
-vi.mock('@/lib/sidebar-worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: mockStore.activateWorktreeFromSidebar
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 
 vi.mock('../../workspace-card/activity/CacheTimer', () => ({
   default: () => null,
@@ -308,6 +310,7 @@ function setAgentLineageState(options: {
     projectGroups: [],
     ptyIdsByTabId: {},
     recordFeatureInteraction: vi.fn(),
+    suppressContextualTour: vi.fn(),
     remoteBranchConflictByWorktreeId: {},
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),

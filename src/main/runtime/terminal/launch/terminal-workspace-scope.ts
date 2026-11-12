@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../../session-graph/session-graph-authority'
+import { OrcaRuntimeWithBrowserWorkspaceRouting } from '../../browser/client-pages/runtime-browser-workspace-routing'
 
 import {
   floatingWorkspaceToWorktree,
@@ -28,19 +28,24 @@ import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { resolveTerminalStartupCwd } from '../../../../shared/shell/launch/terminal-startup-cwd'
 
-import {
-  type ResolvedTerminalWorkspaceLaunchTarget,
-  AGENT_HOOK_RUNTIME_ENV_KEYS
-} from '../../orca-runtime-core'
+import type { ResolvedTerminalWorkspaceLaunchTarget } from './terminal-workspace-launch-target'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from '../../workspaces/catalog/runtime-worktree-selection'
 import { getRepoIdFromWorktreeId, worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { WORKTREE_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
-import { WorktreeIdRequiresFullPathError } from '../../workspaces/lineage/runtime-worktree-lineage-resolution'
+import { WorktreeIdRequiresFullPathError } from '../../workspaces/lineage/worktree-id-requires-full-path-error'
 import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
 import { resolveCreatedWorktreeTerminalTarget } from './runtime-created-worktree-terminal-target'
+const AGENT_HOOK_RUNTIME_ENV_KEYS = [
+  'ORCA_AGENT_HOOK_PORT',
+  'ORCA_AGENT_HOOK_TOKEN',
+  'ORCA_AGENT_HOOK_ENV',
+  'ORCA_AGENT_HOOK_VERSION',
+  'ORCA_AGENT_HOOK_TRANSPORT',
+  'ORCA_AGENT_HOOK_ENDPOINT'
+] as const
 
 export type TerminalWorkspaceCreationEvidence = [
   createdWorktree?: Worktree,
@@ -65,7 +70,7 @@ function withoutWorktreeLineage(worktree: Worktree): ResolvedWorktree {
   }
 }
 
-export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extends OrcaRuntimeWithTransitionGraphReloadToTerminalState {
+export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extends OrcaRuntimeWithBrowserWorkspaceRouting {
   protected resolveBrowserNetworkExecutionHostForWorktree(worktree?: {
     id: string
     repoId?: string

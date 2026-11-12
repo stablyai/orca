@@ -1,24 +1,25 @@
-import { AcpAtRestCommandCatalog } from '../../../acp/acp-at-rest-commands'
+import { AcpAtRestCommandCatalog } from '../../../acp/discovery/acp-at-rest-commands'
 import { resolveNativeChatVisualsSkillLocation } from '../../../native-chat/native-chat-visuals-skill-location'
 import { withSupportedCodexCli } from '../../../codex/structured/launch/codex-cli-installation-error'
 import { codexStructuredLaunchPart } from '../../../codex/structured/launch/codex-structured-launch-resolution'
 import { claudeStructuredLaunchPart } from '../../../claude/structured/launch/claude-structured-launch-resolution'
-import { claudeNamingInvocation } from '../../../claude/claude-naming-invocation'
-import { createClaudeCommandCatalogProbe } from '../../../claude/claude-command-catalog-probe'
+import { claudeNamingInvocation } from '../../../claude/conversation-naming/claude-naming-invocation'
+import { createClaudeCommandCatalogProbe } from '../../../claude/command-catalog/claude-command-catalog-probe'
 import { CodexStructuredSessionAdapter } from '../../../codex/structured/session-lifecycle/codex-structured-session-adapter'
 import { createCodexAtRestSkillCatalog } from '../../../codex/structured/catalog/codex-at-rest-skills-probe'
 import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-structured-agent-definition'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
-import { restoreJournal } from '../../../native-chat/agent-session-journal/journal-open'
+import { restoreJournal } from '../../../native-chat/agent-session-journal/replay/journal-open'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
-import type { AcpLaunchSpec } from '../../../acp/acp-launch-specs'
-import { acpStructuredAgentDefinition } from '../../../acp/acp-structured-agent-definitions'
-import { createAcpAgentConnection } from '../../../acp/acp-agent-connection'
-import { createOpenCodeAcpConnection } from '../../../opencode/opencode-acp-connection'
-import { acpStructuredLaunchPart } from '../../../acp/acp-structured-launch-resolution'
-import { AcpStructuredSessionAdapter } from '../../../acp/acp-structured-session-adapter'
+import { acpListingNeedsChatFolder } from '../../../acp/discovery/acp-model-discovery-policy'
+import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
+import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
+import { createAcpAgentConnection } from '../../../acp/process/acp-agent-connection'
+import { createOpenCodeAcpConnection } from '../../../opencode/acp/opencode-acp-connection'
+import { acpStructuredLaunchPart } from '../../../acp/launch/acp-structured-launch-resolution'
+import { AcpStructuredSessionAdapter } from '../../../acp/session/acp-structured-session-adapter'
 import { PI_RPC_RUNTIME_REGISTRATION } from '../../../pi/rpc-runtime-registration'
 import {
   claudeLaunchEnvOverlay,
@@ -41,7 +42,7 @@ import type {
 
 function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps, followUps, host } = context
-  const renameInvocation = {
+  const providerInvocation = {
     resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
     resolveWorkspacePath: deps.resolveWorkspacePath,
     resolveEnvironment: () => context.environment.resolveAgentEnvironment('codex'),
@@ -49,10 +50,10 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
     ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
   }
   return new CodexStructuredSessionAdapter({
-    renameInvocation,
+    providerInvocation,
     resolveAccountKind: deps.resolveCodexAccountKind,
     atRestCommands: createCodexAtRestSkillCatalog({
-      ...renameInvocation,
+      ...providerInvocation,
       ...(deps.prepareCodexCatalogProbeHome
         ? { prepareHome: deps.prepareCodexCatalogProbeHome }
         : {})
@@ -63,6 +64,9 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
         structuredAgentLaunchSources(context),
         codexStructuredLaunchPart({
           resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
+          ...(deps.prepareLaunchAccountHome
+            ? { prepareLaunchAccountHome: deps.prepareLaunchAccountHome }
+            : {}),
           ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
         })
       ),
@@ -160,7 +164,8 @@ function createAcpAdapter(
         ...deps.acpLaunchCommand,
         dataDirectory: deps.stateDirectory
       },
-      ...(spec.agent === 'omp'
+      // Agents that list models in a throwaway chat-folder session report commands there too.
+      ...(acpListingNeedsChatFolder(spec.modelDiscovery)
         ? {
             atRestCommands: new AcpAtRestCommandCatalog(spec, {
               ...deps.acpLaunchCommand,

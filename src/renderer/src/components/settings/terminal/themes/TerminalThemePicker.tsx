@@ -1,31 +1,20 @@
+import { useState } from 'react'
 import type React from 'react'
-import { useEffect, useRef, useState } from 'react'
 import { Trash2 } from 'lucide-react'
-import { ScrollArea } from '../../../ui/scroll-area'
-import { Button } from '../../../ui/button'
-import { Input } from '../../../ui/input'
-import { Label } from '../../../ui/label'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
-
-import { filterTerminalThemeOptions } from './terminal-theme-option-filter'
-import { isSettingsFormOptionQueryTooLarge } from '../../form-controls/settings-form-option-filter'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import type { TerminalThemeOption } from '@/lib/terminal-theme'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
-
-const MAX_THEME_RESULTS = 80
+import { ThemeColorSwatch } from '../../../plugins/page/PluginThemeSwatch'
+import { SettingsRow } from '../../form-controls/SettingsFormControls'
+import { SettingsSearchableSelect } from '../../form-controls/SettingsSearchableSelect'
+import { useTranslate } from '@/i18n/use-translate'
+import type { TerminalThemeOption } from '@/lib/terminal/appearance/terminal-theme'
 
 type ThemePickerProps = {
   label: string
   description: string
   selectedTheme: string
   themeOptions: TerminalThemeOption[]
-  query: string
-  onQueryChange: (value: string) => void
   onSelectTheme: (theme: string) => void
   onDeleteImportedTheme?: (theme: TerminalThemeOption) => void
-  /** After import, reveal and briefly highlight the Imported group. */
+  /** After import, open the picker at the Imported group. */
   importedHighlightSignal?: number
 }
 
@@ -34,226 +23,95 @@ export function ThemePicker({
   description,
   selectedTheme,
   themeOptions,
-  query,
-  onQueryChange,
   onSelectTheme,
   onDeleteImportedTheme,
   importedHighlightSignal
 }: ThemePickerProps): React.JSX.Element {
-  const importedGroupRef = useRef<HTMLDivElement | null>(null)
-  const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const [highlightImported, setHighlightImported] = useState(false)
+  const t = useTranslate()
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  // Settings search unmounts this row; seed from the prop so a remount doesn't replay an old import.
+  const [handledImportSignal, setHandledImportSignal] = useState(importedHighlightSignal ?? 0)
+  const importedLabel = t(
+    'auto.components.settings.SettingsFormControls.imported_themes',
+    'Imported'
+  )
 
-  // Imported themes sit below the fixed-height built-in list; reveal them after import.
-  useEffect(() => {
-    if (!importedHighlightSignal) {
-      return
-    }
-    importedGroupRef.current?.scrollIntoView({
-      behavior: motionSafeScrollBehavior(),
-      block: 'nearest'
-    })
-    setHighlightImported(true)
-    const timer = setTimeout(() => setHighlightImported(false), 2000)
-    return () => clearTimeout(timer)
-  }, [importedHighlightSignal])
+  if (importedHighlightSignal && importedHighlightSignal !== handledImportSignal) {
+    setHandledImportSignal(importedHighlightSignal)
+    setQuery(importedLabel)
+    setOpen(true)
+  }
 
-  const themeQuery = query.trim()
-  const shouldShowThemeQueryLabel =
-    themeQuery.length > 0 && !isSettingsFormOptionQueryTooLarge(themeQuery)
-  const matchingThemes = filterTerminalThemeOptions(themeOptions, query)
-  const selectedThemeLabel =
-    themeOptions.find((option) => option.value === selectedTheme)?.label ?? selectedTheme
-  const groupedThemes = [
+  const groups = [
     {
-      label: translate('auto.components.settings.SettingsFormControls.builtin_themes', 'Built-in'),
-      themes: matchingThemes
-        .filter((theme) => theme.group === 'built-in')
-        .slice(0, MAX_THEME_RESULTS)
+      key: 'built-in',
+      heading: t('auto.components.settings.SettingsFormControls.builtin_themes', 'Built-in')
     },
     {
-      label: translate('auto.components.settings.SettingsFormControls.imported_themes', 'Imported'),
-      themes: matchingThemes
-        .filter((theme) => theme.group === 'imported')
-        .slice(0, MAX_THEME_RESULTS)
+      key: 'imported',
+      heading: importedLabel
     },
     {
-      label: translate('auto.components.settings.SettingsFormControls.plugin_themes', 'Plugins'),
-      themes: matchingThemes.filter((theme) => theme.group === 'plugin').slice(0, MAX_THEME_RESULTS)
+      key: 'plugin',
+      heading: t('auto.components.settings.SettingsFormControls.plugin_themes', 'Plugins')
     }
-  ].filter((group) => group.themes.length > 0)
-  const visibleThemeCount = groupedThemes.reduce((sum, group) => sum + group.themes.length, 0)
+  ].map((group) => ({
+    ...group,
+    options: themeOptions
+      .filter((theme) => theme.group === group.key)
+      .map((theme) => ({
+        value: theme.value,
+        label: theme.label,
+        keywords: [theme.sourceLabel ?? '', theme.mode ?? ''],
+        detail: theme.sourceLabel,
+        icon: theme.previewTheme ? (
+          <ThemeColorSwatch
+            background={theme.previewTheme.background ?? 'var(--background)'}
+            accent={theme.previewTheme.blue ?? theme.previewTheme.foreground ?? 'var(--foreground)'}
+          />
+        ) : undefined,
+        action:
+          theme.group === 'imported' && onDeleteImportedTheme
+            ? {
+                label: t(
+                  'auto.components.settings.SettingsFormControls.delete_imported_theme',
+                  'Delete {{value0}}',
+                  { value0: theme.label }
+                ),
+                icon: <Trash2 />,
+                onSelect: () => onDeleteImportedTheme(theme)
+              }
+            : undefined
+      }))
+  }))
 
   return (
-    <div className="space-y-3">
-      <div className="space-y-1">
-        <Label>{label}</Label>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      <Input
-        ref={searchInputRef}
-        value={query}
-        onChange={(e) => onQueryChange(e.target.value)}
-        placeholder={translate(
-          'auto.components.settings.SettingsFormControls.search_terminal_themes',
-          'Search terminal themes'
-        )}
-      />
-      <div className="rounded-lg border border-border/50">
-        <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
-          <span>
-            {translate('auto.components.settings.SettingsFormControls.fbb428db98', 'Selected:')}{' '}
-            {selectedThemeLabel}
-          </span>
-          <span>
-            {translate('auto.components.settings.SettingsFormControls.4e11f87ca6', 'Showing')}{' '}
-            {visibleThemeCount}
-            {shouldShowThemeQueryLabel
-              ? translate(
-                  'auto.components.settings.SettingsFormControls.c822571b2e',
-                  ' matching "{{value0}}"',
-                  { value0: themeQuery }
-                )
-              : translate(
-                  'auto.components.settings.SettingsFormControls.cb330ef7f8',
-                  ' of {{value0}}',
-                  { value0: themeOptions.length }
-                )}
-          </span>
-        </div>
-        <ScrollArea className="h-64">
-          <div className="space-y-1 p-2">
-            {groupedThemes.map((group) => {
-              const isImported =
-                group.label ===
-                translate(
-                  'auto.components.settings.SettingsFormControls.imported_themes',
-                  'Imported'
-                )
-              return (
-                <div
-                  key={group.label}
-                  ref={isImported ? importedGroupRef : undefined}
-                  className={cn(
-                    'space-y-1 rounded-md transition-colors duration-500',
-                    isImported && highlightImported && 'bg-accent/40 ring-1 ring-accent'
-                  )}
-                >
-                  <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                    {group.label}
-                  </p>
-                  {group.themes.map((theme) => (
-                    <div
-                      key={theme.value}
-                      className={cn(
-                        'group/theme-row flex items-center rounded-md transition-colors',
-                        selectedTheme === theme.value
-                          ? 'bg-accent font-medium text-accent-foreground'
-                          : 'hover:bg-accent'
-                      )}
-                    >
-                      <button
-                        onClick={() => onSelectTheme(theme.value)}
-                        className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm"
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate">{theme.label}</span>
-                          {theme.sourceLabel ? (
-                            <span className="block truncate text-[11px] font-normal text-muted-foreground">
-                              {theme.group === 'plugin'
-                                ? translate(
-                                    'auto.components.settings.SettingsFormControls.from_plugin',
-                                    'From {{value0}}',
-                                    { value0: theme.sourceLabel }
-                                  )
-                                : translate(
-                                    'auto.components.settings.SettingsFormControls.imported_from',
-                                    'Imported from {{value0}}',
-                                    { value0: theme.sourceLabel }
-                                  )}
-                              {theme.mode && theme.mode !== 'unknown' ? ` · ${theme.mode}` : ''}
-                            </span>
-                          ) : null}
-                        </span>
-                        {/* Why: hide swatches on the current row so the color grid
-                        doesn't shift left to make room for the "Current" label. */}
-                        {theme.group !== 'built-in' &&
-                        theme.previewTheme &&
-                        selectedTheme !== theme.value ? (
-                          <span className="flex shrink-0 overflow-hidden rounded-sm border border-border/60">
-                            {[
-                              theme.previewTheme.black,
-                              theme.previewTheme.red,
-                              theme.previewTheme.green,
-                              theme.previewTheme.yellow,
-                              theme.previewTheme.blue,
-                              theme.previewTheme.magenta,
-                              theme.previewTheme.cyan,
-                              theme.previewTheme.white
-                            ].map((color, index) => (
-                              <span
-                                key={index}
-                                className="h-3 w-2"
-                                style={{ backgroundColor: color ?? 'transparent' }}
-                              />
-                            ))}
-                          </span>
-                        ) : null}
-                        {selectedTheme === theme.value ? (
-                          <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.16em]">
-                            {translate(
-                              'auto.components.settings.SettingsFormControls.9119fb2268',
-                              'Current'
-                            )}
-                          </span>
-                        ) : null}
-                      </button>
-                      {theme.group === 'imported' && onDeleteImportedTheme ? (
-                        <span className="mr-1.5 flex shrink-0 text-muted-foreground opacity-0 group-focus-within/theme-row:opacity-100 group-hover/theme-row:opacity-100 [@media(hover:none)]:opacity-100">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={() => {
-                                  onDeleteImportedTheme(theme)
-                                  // The row unmounts with focus inside it; keep keyboard users in the picker.
-                                  searchInputRef.current?.focus()
-                                }}
-                                aria-label={translate(
-                                  'auto.components.settings.SettingsFormControls.delete_imported_theme',
-                                  'Delete {{value0}}',
-                                  { value0: theme.label }
-                                )}
-                              >
-                                <Trash2 />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" sideOffset={4}>
-                              {translate(
-                                'auto.components.settings.SettingsFormControls.delete_theme',
-                                'Delete theme'
-                              )}
-                            </TooltipContent>
-                          </Tooltip>
-                        </span>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              )
-            })}
-            {visibleThemeCount === 0 ? (
-              <div className="px-3 py-6 text-sm text-muted-foreground">
-                {translate(
-                  'auto.components.settings.SettingsFormControls.ceefb9d7f1',
-                  'No themes found.'
-                )}
-              </div>
-            ) : null}
-          </div>
-        </ScrollArea>
-      </div>
-    </div>
+    <SettingsRow
+      label={label}
+      description={description}
+      className="flex-wrap"
+      control={
+        <SettingsSearchableSelect
+          ariaLabel={label}
+          value={selectedTheme}
+          groups={groups}
+          onValueChange={onSelectTheme}
+          allowReselect
+          open={open}
+          onOpenChange={setOpen}
+          query={query}
+          onQueryChange={setQuery}
+          searchPlaceholder={t(
+            'auto.components.settings.SettingsFormControls.search_terminal_themes',
+            'Search terminal themes'
+          )}
+          emptyText={t(
+            'auto.components.settings.SettingsFormControls.ceefb9d7f1',
+            'No themes found.'
+          )}
+        />
+      }
+    />
   )
 }

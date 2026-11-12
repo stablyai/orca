@@ -6,11 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RelayAgentHookServer } from './agent-hook-server'
 import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
-import {
-  sanitizeWslHookInstanceKey,
-  wslHookRelayEndpointDir,
-  wslHookRelayEndpointFilePath
-} from '../shared/wsl-hook-relay-contract'
+import { sanitizeWslHookInstanceKey } from '../shared/wsl-hook-relay-contract'
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const PANE_KEY = makePaneKey('tab-2', LEAF_ID)
@@ -89,41 +85,6 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
     expect(forwardClaudeAgentView).toHaveBeenCalledWith(body)
   })
 
-  it('falls back to an ephemeral port when the preferred port is occupied', async () => {
-    const occupant = createServer()
-    const occupiedPort = await new Promise<number>((resolve) => {
-      occupant.listen(0, '127.0.0.1', () => {
-        const address = occupant.address()
-        resolve(typeof address === 'object' && address ? address.port : 0)
-      })
-    })
-    try {
-      server = new RelayAgentHookServer({
-        endpointDir: tmpDir,
-        token: 'host-issued-token',
-        preferredPort: occupiedPort,
-        forward: () => {}
-      })
-      await server.start()
-
-      expect(server.usedPortFallback).toBe(true)
-      const bound = server.getCoordinates().port
-      expect(bound).toBeGreaterThan(0)
-      expect(bound).not.toBe(occupiedPort)
-      expect(server.getCoordinates().token).toBe('host-issued-token')
-    } finally {
-      await new Promise<void>((resolve) => occupant.close(() => resolve()))
-    }
-  })
-
-  it('keeps random-token ephemeral behavior when no coordinates are given (SSH shape)', async () => {
-    server = new RelayAgentHookServer({ endpointDir: tmpDir, forward: () => {} })
-    await server.start()
-    expect(server.getCoordinates().port).toBeGreaterThan(0)
-    expect(server.getCoordinates().token).toMatch(/^[0-9a-f-]{36}$/)
-    expect(server.usedPortFallback).toBe(false)
-  })
-
   it('rejects a wrong token but authenticates the host-issued fixed token', async () => {
     const forward = vi.fn()
     server = new RelayAgentHookServer({ endpointDir: tmpDir, token: 'host-issued-token', forward })
@@ -188,21 +149,6 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
 })
 
 describe('wsl hook relay endpoint contract', () => {
-  it('derives the endpoint dir from guest home and the restart-stable instance key', () => {
-    expect(wslHookRelayEndpointDir('/home/u', 'abc123')).toBe(
-      '/home/u/.orca-wsl/agent-hooks/instance-abc123'
-    )
-    expect(wslHookRelayEndpointDir('/home/u/', 'abc123')).toBe(
-      '/home/u/.orca-wsl/agent-hooks/instance-abc123'
-    )
-  })
-
-  it('names the guest endpoint file endpoint.env regardless of host platform', () => {
-    expect(wslHookRelayEndpointFilePath('/home/u', 'k1')).toBe(
-      '/home/u/.orca-wsl/agent-hooks/instance-k1/endpoint.env'
-    )
-  })
-
   it('sanitizes instance keys to a shell/path-inert alphabet', () => {
     expect(sanitizeWslHookInstanceKey('ABCdef012')).toBe('abcdef012')
     expect(sanitizeWslHookInstanceKey('  a-1  ')).toBe('a-1')

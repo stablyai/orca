@@ -1,7 +1,8 @@
 import type { Repo } from '../../../../shared/repo-types'
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
   getRepoHostIdentityForParts,
   type HostScopedRepoKey
@@ -14,9 +15,8 @@ import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-work
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { getAgentLaunchPlatformForRepo } from '../../terminal/launch/runtime-agent-launch-resolution'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
-  projectRepoWorktreeRows,
   joinRepoWorktreeRows,
   scanRepoWorktreeRows,
   type RepoWorktreeRowDeps,
@@ -66,12 +66,19 @@ export async function scanResolvedWorktreeRepos(
   if (!store) {
     return scans
   }
-  const repos = store.getRepos().filter((repo) => !isFolderRepo(repo))
+  const registered = store.getRepos()
+  const repoOwners = createRepoRowExecutionHostLookup(registered)
+  const repos = registered.filter((repo) => !isFolderRepo(repo))
   const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(store, repos)
   const deps = rowDeps()
   await Promise.all(
     repos.map(async (repo) => {
-      const scan = await scanRepoWorktreeRows(deps, repo, projectRuntimeByRepoId)
+      const scan = await scanRepoWorktreeRows(
+        deps,
+        repo,
+        projectRuntimeByRepoId,
+        repoOwners.rowsFor(repo.id).length
+      )
       // The key listRepoWorktreesForResolution caches under.
       const gitRun = scanCacheEntry(`${repo.id}\0${getRepoExecutionHostId(repo)}`) ?? null
       scans.set(resolvedWorktreeRepoScanKey(repo), { ...scan, gitRun })
@@ -90,23 +97,14 @@ export function joinResolvedWorktreeScans(
   const platformByRepoId = store
     ? platformsByRepoId(repos, resolveLocalProjectRuntimesForRepos(store, repos))
     : new Map<string, NodeJS.Platform>()
-  return { ...joinRows(store, rowDeps, scans, joinRepoWorktreeRows), platformByRepoId }
-}
-
-/** The same rows from memory only: no identity stamping and no launch platforms. */
-export function projectResolvedWorktreeScans(
-  store: RuntimeStore | null,
-  rowDeps: () => RepoWorktreeRowDeps,
-  scans: ResolvedWorktreeRepoScans
-): ResolvedWorktreeRowsJoin {
-  return joinRows(store, rowDeps, scans, projectRepoWorktreeRows)
+  return { ...joinRows(store, rowDeps, scans, repos), platformByRepoId }
 }
 
 function joinRows(
   store: RuntimeStore | null,
   rowDeps: () => RepoWorktreeRowDeps,
   scans: ResolvedWorktreeRepoScans,
-  rowsForRepo: typeof joinRepoWorktreeRows
+  repos: readonly Repo[]
 ): ResolvedWorktreeRowsJoin {
   if (!store) {
     return {
@@ -117,17 +115,24 @@ function joinRows(
     }
   }
   const metaById = store.getAllWorktreeMeta() ?? {}
+  const repoOwners = createRepoRowExecutionHostLookup(repos)
   const deps = rowDeps()
   const unscannedRepoKeys = new Set<HostScopedRepoKey>()
   const gitRunById = new Map<HostScopedWorktreeKey, object | null>()
   const scannedRepoKeys = new Set<HostScopedRepoKey>()
-  const perRepoWorktrees = store.getRepos().map((repo) => {
+  const perRepoWorktrees = repos.map((repo) => {
     const key = resolvedWorktreeRepoScanKey(repo)
     const scan = scans.get(key) ?? null
     if (!scan && !isFolderRepo(repo)) {
       unscannedRepoKeys.add(key)
     }
-    const rows = rowsForRepo(deps, repo, scan, metaById)
+    const rows = joinRepoWorktreeRows(
+      deps,
+      repo,
+      scan,
+      metaById,
+      repoOwners.rowsFor(repo.id).length
+    )
     if (scan?.ok) {
       scannedRepoKeys.add(key)
       for (const row of rows) {

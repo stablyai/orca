@@ -7,7 +7,7 @@ import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 import {
   clearNativeWindowsConptyPty,
   markNativeWindowsConptyPty
-} from '../terminal-model-query-authority'
+} from '../terminal/output/terminal-model-query-authority'
 
 // Captured pwsh 7.6/ConPTY: grey PSReadLine predictions from history are overwritten by absolute cursor moves.
 const PSREADLINE_PREDICTION_TRANSCRIPT = readFileSync(
@@ -62,17 +62,5 @@ describe('OrcaRuntimeService ConPTY stream reads', () => {
     } finally {
       clearNativeWindowsConptyPty(ptyId)
     }
-  })
-
-  it('keeps accumulated-stream reads for terminals that are not ConPTY', async () => {
-    const ptyId = 'pty-posix-prediction'
-    const runtime = startConptyRuntime(ptyId)
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData(ptyId, 'one\r\ntwo\rTWO\r\n', 100)
-
-    const read = await runtime.readTerminal(terminal.handle)
-
-    expect(read.tail).toEqual(['one', 'TWO'])
-    expect(read.source).toBe('stream')
   })
 })

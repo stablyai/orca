@@ -108,7 +108,7 @@ One thing the release adds to Orca.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `kind` | `"panels"` \| `"commands"` \| `"events"` \| `"hooks"` \| `"languagePacks"` \| `"keybindings"` \| `"vmRecipes"` \| `"themes"` \| `"terminalThemes"` \| `"iconThemes"` \| `"syntaxes"` \| `"customEditors"` \| `"newFiles"` \| `"settings"` \| `"statusBarItems"` | yes | 1.4.245 | Contribution point. Example: `"themes"` |
+| `kind` | `"panels"` \| `"commands"` \| `"events"` \| `"hooks"` \| `"languagePacks"` \| `"keybindings"` \| `"vmRecipes"` \| `"themes"` \| `"terminalThemes"` \| `"iconThemes"` \| `"fonts"` \| `"syntaxes"` \| `"customEditors"` \| `"newFiles"` \| `"settings"` \| `"statusBarItems"` | yes | 1.4.245 | Contribution point. Example: `"themes"` |
 | `name` | string | yes | 1.4.245 | What the item is called in Orca. Example: `"Dusk"` |
 | `detail` | string | no | 1.4.245 | Extra context, such as file extensions. |
 
@@ -146,12 +146,12 @@ orca://plugins/<publisher>.<id>?catalog=<official | community | catalog Git URL>
 
 - `catalog` defaults to `official`. `community` is Orca's community catalog. Any other value must be an HTTPS or SSH Git URL of at most 512 characters, read at its `main` branch, without a password or token. Orca asks **Add catalog …?** before fetching a catalog the user hasn't added, and that includes `community`.
 - Reserved publishers (above) are accepted only with the official catalog. A link longer than 2048 characters, with another query parameter, or with an id that isn't `<publisher>.<id>` shows a short error and does nothing else. Repeats of the same link within a few seconds are ignored.
-- Browsers and README viewers often block custom schemes, so link to the directory page instead. It opens the `orca://` link and shows install steps when Orca is missing: `https://onorca.dev/plugins/<publisher>.<id>?catalog=<same value>`.
+- Browsers and README viewers often block custom schemes, so link to the directory page instead. It opens the `orca://` link and shows install steps when Orca is missing: `https://orca.dev/plugins/<publisher>.<id>?catalog=<same value>`.
 
 For a README:
 
 ```md
-[Open in Orca](https://onorca.dev/plugins/acme.gleam-syntax?catalog=community)
+[Open in Orca](https://orca.dev/plugins/acme.gleam-syntax?catalog=community)
 ```
 
 ## Clients before format 2
