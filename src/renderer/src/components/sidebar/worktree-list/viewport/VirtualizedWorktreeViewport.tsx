@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
@@ -237,6 +236,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
       markDirectScrollInput,
       onKeyboardSelect: props.onKeyboardSelect,
       focusedWorktree: props.focusedWorktree,
+      focusedWorkspaceExecutionHostId: props.focusedWorkspaceExecutionHostId,
       resolveDeleteIntent: () =>
         resolveSidebarWorkspaceDeleteIntent({
           selectedWorktrees: props.selectedWorktrees,
@@ -386,7 +386,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         aria-activedescendant={getActiveDescendantOptionId({
           activeWorktreeId: props.focusedWorktree?.id ?? rowProps.activeWorktreeId,
           activeWorkspaceExecutionHostId: props.focusedWorktree
-            ? getWorktreeExecutionHostId(props.focusedWorktree, undefined)
+            ? (props.focusedWorkspaceExecutionHostId ?? null)
             : rowProps.activeWorkspaceExecutionHostId,
           primaryActiveRowKey: primaryActive.primaryActiveWorktreeRow?.rowKey,
           pinnedDisplayPolicy,

@@ -87,6 +87,8 @@ export function resolveCycleAnchorWorktreeId(args: {
   return null
 }
 
+export type SidebarWorkspacePreview = { row: RenderedWorkspaceRow; fromWorktreeId: string | null }
+
 export type LastActiveCycleWorkspace = {
   worktreeId: string
   executionHostId: ExecutionHostId | null

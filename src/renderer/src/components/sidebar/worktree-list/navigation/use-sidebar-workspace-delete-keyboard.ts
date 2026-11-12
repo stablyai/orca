@@ -56,14 +56,17 @@ export function useSidebarWorkspaceDeleteKeyboard({
       ) {
         return false
       }
+      if (e.repeat) {
+        e.preventDefault()
+        e.stopPropagation()
+        return true
+      }
       const intent = resolveDeleteIntent?.()
       if (intent) {
         e.preventDefault()
         e.stopPropagation()
-        if (!e.repeat) {
-          dropPreview()
-          runWorktreeContextMenuDeleteIntent(intent)
-        }
+        dropPreview()
+        runWorktreeContextMenuDeleteIntent(intent)
       }
       return true
     },

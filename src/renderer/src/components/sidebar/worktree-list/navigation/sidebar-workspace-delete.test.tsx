@@ -12,6 +12,7 @@ import { getActiveDescendantOptionId } from './active-descendant-option'
 import { buildRenderableRows } from '../listing/renderable-rows'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { Repo } from '../../../../../../shared/repo-types'
 import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
 
 const deleteOne = vi.hoisted(() => vi.fn())
@@ -46,6 +47,7 @@ let container: HTMLDivElement
 let list: HTMLDivElement
 let rows: HostSectionRow[]
 let activeModal: string
+let rowRepo: Repo
 let selected: ReturnType<typeof useSidebarWorktreeSelection>
 const repoMap = new Map([[repo.id, repo]])
 function Probe() {
@@ -64,6 +66,7 @@ function Probe() {
     markDirectScrollInput: () => {},
     onKeyboardSelect: selected.selectWorktree,
     focusedWorktree: selected.focusedWorktree,
+    focusedWorkspaceExecutionHostId: selected.focusedWorkspaceExecutionHostId,
     resolveDeleteIntent: () =>
       resolveSidebarWorkspaceDeleteIntent({
         selectedWorktrees: selected.selectedWorktrees,
@@ -80,7 +83,7 @@ function Probe() {
         ref={scrollRef}
         aria-activedescendant={getActiveDescendantOptionId({
           activeWorktreeId: selected.focusedWorktree?.id ?? 'a',
-          activeWorkspaceExecutionHostId: selected.focusedWorktree?.hostId ?? 'local',
+          activeWorkspaceExecutionHostId: selected.focusedWorkspaceExecutionHostId ?? 'local',
           primaryActiveRowKey: 'row-0',
           pinnedDisplayPolicy: 'single-location',
           renderRows: buildRenderableRows(rows),
@@ -111,7 +114,7 @@ function render() {
     type: 'item',
     rowKey: `row-${index}`,
     sectionKey: 'all',
-    repo,
+    repo: rowRepo,
     worktree: item,
     depth: 0,
     groupDepth: 0,
@@ -158,6 +161,7 @@ beforeEach(() => {
     worktreesByRepo: { [repo.id]: [a, b, twin] }
   })
   items = [a, b, twin]
+  rowRepo = repo
   activeModal = 'none'
   container = document.createElement('div')
   document.body.append(container)
@@ -270,6 +274,45 @@ it('uses menu-compatible batches and normalizes a filtered singleton to the sing
     expectedInstanceId: 'inc-b',
     expectedHostId: 'local'
   })
+})
+it('keeps an unhosted local batch when a sibling SSH repo shares its id', () => {
+  const localA = { ...a, hostId: undefined }
+  const localB = { ...b, hostId: undefined }
+  const sshRepo = { ...repo, connectionId: 'direct' }
+  store.setState({ repos: [repo, sshRepo] })
+  const intent = resolveSidebarWorkspaceDeleteIntent({
+    selectedWorktrees: [localA, localB],
+    focusedWorktree: localB,
+    repoMap: new Map([[repo.id, sshRepo]])
+  })
+  expect(intent).toEqual({
+    kind: 'batch',
+    worktrees: [
+      { id: 'a', instanceId: 'inc-a', hostId: undefined },
+      { id: 'b', instanceId: 'inc-b', hostId: undefined }
+    ]
+  })
+})
+it('uses the rendered remote repo for unhosted row focus and arrow navigation', () => {
+  rowRepo = { ...repo, connectionId: 'direct' }
+  items = [
+    { ...a, hostId: undefined },
+    { ...b, hostId: undefined },
+    { ...a, id: 'c', hostId: undefined }
+  ]
+  render()
+  click(1)
+  expect(list.getAttribute('aria-activedescendant')).toBe('worktree-list-option-row-1')
+  key(list, {
+    key: 'ArrowDown',
+    code: 'ArrowDown',
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false
+  })
+  expect(selected.focusedWorktree?.id).toBe('c')
+  expect(selected.focusedWorkspaceExecutionHostId).toBe('ssh:direct')
+  expect(list.getAttribute('aria-activedescendant')).toBe('worktree-list-option-row-2')
 })
 it('removes a single folder through its own route, not a Git worktree deletion', () => {
   items = [{ ...a, id: 'folder:notes', repoId: 'no-repo' }]

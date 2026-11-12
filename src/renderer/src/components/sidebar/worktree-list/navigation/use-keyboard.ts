@@ -4,13 +4,15 @@ import type React from 'react'
 import { useAppStore } from '@/store'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
-import type { RenderedWorkspaceRow } from './worktree-sidebar-row-preference'
+import type { SidebarWorkspacePreview } from './worktree-keyboard-cycle'
 import { resolveCycledWorkspaceRow, type LastActiveCycleWorkspace } from './worktree-keyboard-cycle'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -36,6 +38,7 @@ export function useWorktreeListKeyboardNavigation(args: {
   markDirectScrollInput: () => void
   onKeyboardSelect?: (worktree: Worktree) => void
   focusedWorktree?: Worktree | null
+  focusedWorkspaceExecutionHostId?: ExecutionHostId | null
   resolveDeleteIntent?: () => WorktreeContextMenuDeleteIntent | null
 }) {
   const {
@@ -48,6 +51,7 @@ export function useWorktreeListKeyboardNavigation(args: {
     markDirectScrollInput,
     onKeyboardSelect,
     focusedWorktree,
+    focusedWorkspaceExecutionHostId,
     resolveDeleteIntent
   } = args
   const keybindings = useAppStore((s) => s.keybindings)
@@ -70,9 +74,7 @@ export function useWorktreeListKeyboardNavigation(args: {
 
   // Held arrows move only the sidebar highlight; the workspace under it switches once the repeat stops.
   // fromWorktreeId: another input switching workspaces mid-hold invalidates the preview, so it never pulls the user back.
-  const previewRef = useRef<{ row: RenderedWorkspaceRow; fromWorktreeId: string | null } | null>(
-    null
-  )
+  const previewRef = useRef<SidebarWorkspacePreview | null>(null)
   const [keyboardPreview, setKeyboardPreview] = useState<
     (LastActiveCycleWorkspace & { fromWorktreeId: string | null }) | null
   >(null)
@@ -122,7 +124,7 @@ export function useWorktreeListKeyboardNavigation(args: {
         activeWorkspaceExecutionHostId: preview
           ? getWorktreeExecutionHostId(preview.worktree, preview.repo)
           : focused
-            ? getWorktreeExecutionHostId(focused, undefined)
+            ? (focusedWorkspaceExecutionHostId ?? null)
             : activeWorkspaceExecutionHostId,
         lastActiveWorkspace: lastActiveWorkspaceRef.current,
         navHistory: worktreeNavHistory,
@@ -180,6 +182,7 @@ export function useWorktreeListKeyboardNavigation(args: {
       pinnedDisplayPolicy,
       onKeyboardSelect,
       focusedWorktree,
+      focusedWorkspaceExecutionHostId,
       clearPreviewCommitTimer,
       commitPreview,
       dropPreview

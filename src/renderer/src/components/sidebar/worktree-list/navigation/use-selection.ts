@@ -4,7 +4,8 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import { getRenderedWorktreesInSidebarOrder } from './worktree-sidebar-row-preference'
+import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-preference'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   setVisibleWorktreeIds,
   setVisibleWorktreeShortcutTargets
@@ -21,9 +22,14 @@ export function useSidebarWorktreeSelection(args: {
 }) {
   const { sectionRows, pinnedDisplayPolicy } = args
   // Built rows include grouping/pinning reorder; use their order for selection and Cmd+1–9 parity.
-  const renderedWorktrees = useMemo(
-    () => getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy),
+  const renderedRows = useMemo(
+    () => getRenderedWorkspaceRowsInSidebarOrder(sectionRows, pinnedDisplayPolicy),
     [pinnedDisplayPolicy, sectionRows]
+  )
+  const renderedWorktrees = useMemo(() => renderedRows.map((row) => row.worktree), [renderedRows])
+  const repoByWorktree = useMemo(
+    () => new Map(renderedRows.map((row) => [row.worktree, row.repo])),
+    [renderedRows]
   )
   const renderedWorktreeIds = useReusedArrayIdentity(
     useMemo(
@@ -38,11 +44,13 @@ export function useSidebarWorktreeSelection(args: {
   })
   const { updateSelectionForGesture: updateSelection } = selection
   const [focusedKey, setFocusedKey] = useState<string | null>(null)
-  const focusedWorktree = useMemo(
-    () =>
-      selection.selectedItems.find((item) => getWorktreeHostIdentity(item) === focusedKey) ?? null,
-    [focusedKey, selection.selectedItems]
-  )
+  const focusedWorktree =
+    focusedKey !== null && selection.selectedKeys.has(focusedKey)
+      ? (selection.getItemForKey(focusedKey) ?? null)
+      : null
+  const focusedWorkspaceExecutionHostId = focusedWorktree
+    ? getWorktreeExecutionHostId(focusedWorktree, repoByWorktree.get(focusedWorktree))
+    : null
   if (focusedKey !== null && focusedWorktree === null) {
     setFocusedKey(null)
   }
@@ -105,6 +113,7 @@ export function useSidebarWorktreeSelection(args: {
     selectedWorktreeIds: selection.selectedKeys,
     selectedWorktrees: selection.selectedItems,
     focusedWorktree,
+    focusedWorkspaceExecutionHostId,
     selectWorktree,
     updateSelectionForGesture,
     selectForContextMenu
