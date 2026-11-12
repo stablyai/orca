@@ -386,11 +386,13 @@ export function NativeChatToolRunMembers({
         setHeldRowKey(undefined)
         // Before the window redraws for this scroll, which can run a pending restore: a jump past
         // the drawn rows must not send the reader back to the row it left.
-        anchorRef.current = anchorAtScrollOffset(virtualizer, rows, scroller.scrollTop)
+        if (!drawsEveryRow) {
+          anchorRef.current = anchorAtScrollOffset(virtualizer, rows, scroller.scrollTop)
+        }
       }
       readPosition()
     },
-    [marks, readPosition, rows, virtualizer]
+    [drawsEveryRow, marks, readPosition, rows, virtualizer]
   )
 
   useEffect(() => {
