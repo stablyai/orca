@@ -215,6 +215,9 @@ function mountTerminalPane(
       isActive: deps.isActive
     })
   }
+  if (deps.issueCommandSplit) {
+    deps.consumeTabIssueCommandSplit(deps.tabId)
+  }
   shouldPersistLayout = true
   preparation.syncCanExpandState()
   preparation.syncPaneCount()

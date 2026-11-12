@@ -103,9 +103,11 @@ vi.mock('../controller/use-terminal-pane-controller', async () => {
     useTerminalPaneController: (props: TerminalPaneProps) => {
       const [draft, setDraft] = useState('')
       const deps = state.depsByTab[props.tabId] ?? state.deps!
+      const [issueCommandSplit] = useState(() => deps.issueCommandSplit)
       const lifecycleController = {
         ...deps,
         ...props,
+        issueCommandSplit,
         isRendererVisible: props.isVisible ?? true,
         expandedPaneIdRef: useRef(null),
         removedTitleLeafIdsRef: useRef(new Set<string>()),
@@ -497,6 +499,32 @@ describe('manager-owned saved history', () => {
     } finally {
       registration.dispose()
     }
+  })
+
+  it('does not repeat a dispatched issue command when persistence replaces its surface before readiness', async () => {
+    const pending = deferred<string>()
+    state.reads.mockReturnValue(pending.promise)
+    state.deps!.issueCommandSplit = { command: 'issue runner', env: { ISSUE: '42' } }
+    state.consumeIssue.mockImplementation(() => {
+      state.deps!.issueCommandSplit = null
+    })
+    function ReplacedPane() {
+      const [generation, setGeneration] = useState(0)
+      state.store.setTabLayout.mockImplementationOnce((tabId, layout) => {
+        state.store.terminalLayoutsByTabId[tabId] = layout
+        setGeneration(1)
+      })
+      return <TerminalPane key={generation} {...props} />
+    }
+    render(<ReplacedPane />)
+    await waitFor(() => expect(state.reads).toHaveBeenCalledWith(FIRST_REF))
+    await act(async () => pending.resolve('saved history'))
+    await waitFor(() => expect(HeadlessMountManager.instances).toHaveLength(2))
+    const commands = HeadlessMountManager.instances.flatMap((manager) =>
+      manager.splitStartups.filter(Boolean)
+    )
+    expect(commands).toEqual([{ command: 'issue runner', env: { ISSUE: '42' } }])
+    expect(HeadlessMountManager.instances[0].destroyed).toBe(true)
   })
 
   it('retains a queued split across a retired mount until its successor dispatches the startup', async () => {

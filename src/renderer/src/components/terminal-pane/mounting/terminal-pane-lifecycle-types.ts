@@ -37,6 +37,7 @@ export type UseTerminalPaneLifecycleDeps = {
   startup?: TerminalPaneStartup | null
   /** Split pane runs the repo's issue-automation command with the issue number interpolated. */
   issueCommandSplit?: TerminalPaneIssueCommandSplit | null
+  consumeTabIssueCommandSplit: (tabId: string) => void
   isActive: boolean
   isVisible: boolean
   systemPrefersDark: boolean

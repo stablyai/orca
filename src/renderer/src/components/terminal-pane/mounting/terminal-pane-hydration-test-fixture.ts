@@ -126,6 +126,7 @@ export function mountDeps(): UseTerminalPaneLifecycleDeps {
     tabId: 'tab-1',
     worktreeId: 'wt-1',
     cwd: '/first',
+    consumeTabIssueCommandSplit: vi.fn(),
     isActive: false,
     isVisible: true,
     settings: null,

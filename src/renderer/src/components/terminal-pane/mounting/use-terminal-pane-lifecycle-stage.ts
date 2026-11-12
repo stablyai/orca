@@ -1,4 +1,3 @@
-import { useIssueCommandSplitSettlement } from '../layout/split/use-issue-command-split-settlement'
 import { useTerminalPaneStoreActions } from '../controller/use-terminal-pane-store-actions'
 import { useTerminalPaneLifecycle } from '../controller/use-terminal-pane-lifecycle'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
@@ -79,6 +78,7 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     cwd,
     startup,
     issueCommandSplit,
+    consumeTabIssueCommandSplit,
     isActive,
     isVisible: isRendererVisible,
     systemPrefersDark,
@@ -140,12 +140,6 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     resolveExternalPaneDropTarget,
     onExternalPaneDrop: handleExternalPaneDrop,
     detachPaneToNewTab
-  })
-  useIssueCommandSplitSettlement({
-    consumeTabIssueCommandSplit,
-    issueCommandSplit,
-    tabId,
-    terminalManager: mount.manager
   })
   return { terminalMountPhase: mount.phase, terminalManager: mount.manager }
 }
