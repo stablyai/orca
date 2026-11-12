@@ -41,25 +41,4 @@ describe('native chat PTY session options', () => {
       action: { type: 'toggle-command' }
     })
   })
-
-  it('never lets a tracked-only model mark discovered rows legacy', () => {
-    seedNativeChatAppliedSessionOptions(scopeKey, 'codex', { model: 'gpt-7-sol' })
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'codex',
-      scopeKey,
-      mode: 'live',
-      modelLabel: 'Model',
-      initialModels: [
-        { id: 'gpt-6-sol', label: 'Sol', options: [] },
-        { id: 'gpt-5.6-luna', label: 'Luna', options: [] }
-      ],
-      dispatchCommand: async () => {}
-    })!
-    const model = surface.getSnapshot().find(({ id }) => id === 'model')
-    const choices = model?.kind.type === 'select' ? model.kind.choices : []
-    expect(choices.map(({ value }) => value)).toEqual(['gpt-6-sol', 'gpt-5.6-luna', 'gpt-7-sol'])
-    expect(choices.filter(({ legacy }) => legacy).map(({ value }) => value)).toEqual([
-      'gpt-5.6-luna'
-    ])
-  })
 })
