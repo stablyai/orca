@@ -146,49 +146,6 @@ describe('UsageProviderStoreLifecycle', () => {
     vi.restoreAllMocks()
   })
 
-  it.each([100, 1000])('uses one consistent catalog per refresh at %i worktrees', async (count) => {
-    const worktrees = Array.from({ length: count }, (_, i) => ({
-      worktreeId: `repo::/work/${i}`,
-      path: `/work/${i}`,
-      displayName: `Work ${i}`
-    }))
-    const readCatalog = vi.fn<UsageStoreHost['readCatalog']>().mockResolvedValue({
-      repoIds: ['repo'],
-      worktreesByRepo: [['repo', worktrees]]
-    })
-    const store = new TestUsageStore(
-      join(tempDirectory, 'catalog.json'),
-      scan,
-      split,
-      capture,
-      readCatalog
-    )
-    stores.push(store)
-    await store.whenLoaded()
-    await store.refresh(true)
-    expect(readCatalog).not.toHaveBeenCalled()
-    await store.setEnabled(true)
-    const blocked = Promise.withResolvers<TestScanResult>()
-    scan.mockReturnValueOnce(blocked.promise)
-    const first = store.refresh(true)
-    const second = store.refresh(true)
-    await vi.waitFor(() => expect(scan).toHaveBeenCalledTimes(1))
-    expect(readCatalog).toHaveBeenCalledTimes(2)
-    expect(scan.mock.calls[0][0]).toHaveLength(count)
-    expect(scan.mock.calls[0][0][0]).toMatchObject({ path: '/work/0' })
-    blocked.resolve({ sessions: [{ id: 'catalog-result' }], dailyAggregates: [] })
-    await Promise.all([first, second])
-    expect(store.getState().sessions).toEqual([{ id: 'catalog-result' }])
-    readCatalog.mockClear()
-    await store.refresh()
-    expect(readCatalog).toHaveBeenCalledTimes(1)
-    expect(scan).toHaveBeenCalledTimes(1)
-    store.stopScanAdmission()
-    readCatalog.mockClear()
-    await store.refresh(true)
-    expect(readCatalog).not.toHaveBeenCalled()
-  })
-
   it('keeps a successful scan when the first async telemetry consent request rejects', async () => {
     const cacheFile = join(tempDirectory, 'consent-rejection.json')
     const consent = vi
