@@ -3,6 +3,7 @@ import { appendFile, lstat, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  bundledSkillInstallAction,
   bundledSkillNudgeEntries,
   bundledSkillNudgeKey,
   bundledSkillPlanState
@@ -82,6 +83,8 @@ describe("another Orca build's copy on the same host", () => {
     ])
     // Replacing it may downgrade it, so the dialog and setup button never offer to.
     expect(plan.skills[0].ops[0].replaceable).toBe(false)
+    // Setup counts it as installed: nothing to run, replace or fix.
+    expect(bundledSkillInstallAction(plan)).toEqual({ kind: 'none' })
     expect(bundledSkillPlanState(plan.skills[0])).toBe('current')
     expect(bundledSkillNudgeEntries(plan)).toEqual([])
     expect(bundledSkillNudgeKey('local', plan)).toBeNull()

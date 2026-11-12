@@ -137,10 +137,15 @@ export function bundledSkillInstallAction(plan: BundledSkillPlan): BundledSkillI
   if (paths.length > 0) {
     return { kind: 'replace', paths }
   }
+  // Another Orca build's copy is kept on purpose: an installed skill, not one to fix.
   const current =
     plan.skills.length > 0 &&
     plan.skills.every(
-      (entry) => entry.ops.length > 0 && entry.ops.every((op) => op.kind === 'keep')
+      (entry) =>
+        entry.ops.length > 0 &&
+        entry.ops.every(
+          (op) => op.kind === 'keep' || (op.kind === 'leave' && op.reason === 'other-build')
+        )
     )
   return { kind: current ? 'none' : 'attention' }
 }
