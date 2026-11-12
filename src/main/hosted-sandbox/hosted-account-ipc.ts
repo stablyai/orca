@@ -7,6 +7,10 @@ import type { HostedSandboxConfigResponse } from '../../shared/hosted-sandbox/ho
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { failure } from './hosted-workspace-runtime'
 import { githubRepoSlug, lookupGitHubRepoIds, type GitHubRepoIds } from './github-repo-ids'
+import {
+  HOSTED_GITHUB_USER_CHANNELS,
+  registerHostedGitHubUserHandlers
+} from './hosted-github-user-ipc'
 
 const CONFIG_TTL_MS = 5 * 60_000
 const SETUP_SESSION_ID = /^cs_[A-Za-z0-9_-]{22}$/
@@ -16,7 +20,8 @@ export const HOSTED_ACCOUNT_CHANNELS = [
   CH.connectGitHub,
   CH.getRepoAccess,
   CH.listGitHubRepositories,
-  CH.createFromGitHub
+  CH.createFromGitHub,
+  ...HOSTED_GITHUB_USER_CHANNELS
 ] as const
 
 type RepoArgs = { repoUrl?: unknown; setupSessionId?: unknown } | undefined
@@ -37,11 +42,19 @@ function repoTarget(args: RepoArgs): { repo: string; setupSessionId?: string } |
 export function registerHostedAccountHandlers(
   client: Pick<
     HostedSandboxControlPlaneClient,
-    'config' | 'connectGitHub' | 'githubRepoAccess' | 'githubRepositories' | 'create'
+    | 'config'
+    | 'connectGitHub'
+    | 'githubRepoAccess'
+    | 'githubRepositories'
+    | 'create'
+    | 'githubUser'
+    | 'connectGitHubUser'
+    | 'disconnectGitHubUser'
   >,
   options: { repoIds?: (repoUrl: string) => Promise<GitHubRepoIds | null> } = {}
 ): void {
   const repoIds = options.repoIds ?? lookupGitHubRepoIds
+  registerHostedGitHubUserHandlers(client)
   // The Worker re-measures every 5 minutes; match it so each new build sheet sees a fresh median.
   let config: { at: number; value: Promise<HostedSandboxConfigResponse | null> } | null = null
   ipcMain.handle(CH.getConfig, () => {

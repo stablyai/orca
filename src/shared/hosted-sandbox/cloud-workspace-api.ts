@@ -9,7 +9,8 @@ import type {
 } from './hosted-sandbox-wire'
 import type {
   HostedGithubRepoAccessResponse,
-  HostedGithubRepositoriesResponse
+  HostedGithubRepositoriesResponse,
+  HostedGithubUser
 } from './hosted-github-wire'
 
 export type CloudWorkspaceErrorCode =
@@ -87,6 +88,12 @@ export type OrcaCloudWorkspaceApi = {
     repoUrl?: string
     setupSessionId?: string
   }) => Promise<CloudWorkspaceResult<null>>
+  /** Whether the signed-in person connected their own GitHub (cloud commit attribution). */
+  getGitHubUser: () => Promise<CloudWorkspaceResult<HostedGithubUser>>
+  /** Opens GitHub's OAuth page in the browser so the person connects their own GitHub identity. */
+  connectGitHubUser: () => Promise<CloudWorkspaceResult<null>>
+  /** Forgets the person's GitHub identity; cloud commits use Orca Cloud's name again. */
+  disconnectGitHubUser: () => Promise<CloudWorkspaceResult<HostedGithubUser>>
   /** Can Orca Cloud clone this https GitHub repository for the signed-in account (cloud-start N2)? */
   getRepoAccess: (args: {
     repoUrl: string
@@ -116,6 +123,9 @@ export const ORCA_CLOUD_WORKSPACE_CHANNELS = {
   listCloudWorkspaceIds: 'orcaCloudWorkspace:listIds',
   getConfig: 'orcaCloudWorkspace:getConfig',
   connectGitHub: 'orcaCloudWorkspace:connectGitHub',
+  getGitHubUser: 'orcaCloudWorkspace:getGitHubUser',
+  connectGitHubUser: 'orcaCloudWorkspace:connectGitHubUser',
+  disconnectGitHubUser: 'orcaCloudWorkspace:disconnectGitHubUser',
   getRepoAccess: 'orcaCloudWorkspace:getRepoAccess',
   listGitHubRepositories: 'orcaCloudWorkspace:listGitHubRepositories',
   createFromGitHub: 'orcaCloudWorkspace:createFromGitHub',
