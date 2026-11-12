@@ -55,6 +55,8 @@ export function hostCanStartRecord(
   record: AgentSessionRecord
 ): boolean {
   return (
+    (!record.advisoryPolicy ||
+      deps.adapter.supportsAdvisoryPolicy?.(record.location, record.provider) === true) &&
     adapterSupportsCreateIfDeclared(deps.adapter, record.location, record.provider) &&
     agentDrivesSession(deps.agents, record)
   )

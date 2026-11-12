@@ -2,30 +2,31 @@ import { withOrcaClaudeChatEntrypoint } from '../../shared/agent-launch/startup/
 import { claudeStartupAnswerObservation } from './claude-startup-answer-observation'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
-import type { CanUseTool, OnUserDialog, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
+import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import { withoutRejectedClaudeApiKey } from './claude-rejected-api-key'
 import {
   ClaudeControlRequestError,
-  createClaudeControlSurface,
-  type ClaudeControlSurface
+  createClaudeControlSurface
 } from './claude-agent-sdk-control-requests'
 import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
-import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { claudeChildCloseProven } from './claude-child-exit-proof-ladder'
 import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
 import {
   claudeUnwrittenUserMessageError,
   createClaudeUserMessageQueue
 } from './claude-agent-sdk-user-message-queue'
-import type { ClaudeStructuredSdkOptions } from './structured/launch/claude-structured-launch-resolution'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { claudeStreamJsonExitError } from './claude-stream-json-exit-error'
 import { withObservedProviderExit } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import type { ProviderProcessCloseOptions } from '../provider-process/provider-process-close'
+import { createClaudeAdvisoryControls } from './structured/claude-advisory-controls'
+
+import type * as connection from './claude-stream-json-connection-types'
+export type * from './claude-stream-json-connection-types'
 
 export { ClaudeControlRequestError }
 
@@ -45,17 +46,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-export type ClaudeStreamJsonLaunch = {
-  /** Orca's resolved user CLI; the SDK falls back to a bundled binary that is not installed. */
-  pathToClaudeCodeExecutable: string
-  prefixArgs?: readonly string[]
-  options: ClaudeStructuredSdkOptions
-  cwd: string
-  env?: Record<string, string>
-  /** Delete these keys after merging inherited and launch env. */
-  envToDelete?: readonly string[]
-}
-
 function withoutKeys(env: Record<string, string>, keys: readonly string[]): Record<string, string> {
   for (const key of keys) {
     delete env[key]
@@ -63,50 +53,13 @@ function withoutKeys(env: Record<string, string>, keys: readonly string[]): Reco
   return env
 }
 
-export type ClaudeStreamJsonConnectionHandlers = {
-  onMessage?: (message: Record<string, unknown>) => void
-  /** Raw stdout before the SDK reads it, for state that must keep wire order with permission requests. */
-  onStdout?: (chunk: Buffer | string) => void
-  /** The SDK handles request IDs, aborts and deduplication; cannot combine with permissionPromptToolName. */
-  canUseTool?: CanUseTool
-  /** `request_user_dialog` control; the CLI only emits kinds declared in `supportedDialogKinds`. */
-  onUserDialog?: OnUserDialog
-  /** A transport/process fault; a physical root exit arrives marked observed and is followed by onExit. */
-  onFault?: (error: Error) => void
-  /** Report observed root exit once; expected stays true even after an unproven close attempt. */
-  onExit?: (error: Error, exit?: { expected: boolean }) => void
-}
-
-/** Root proof comes from our child handle or processless settlement; tree proof is independently verified. */
-export type ClaudeChildExitVerdict = {
-  root: DescendantTreeVerdict
-  tree: DescendantTreeVerdict
-  processless?: boolean
-  killDelivered?: true
-}
-
-export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
-  readonly pid: number | undefined
-  readonly closed: boolean
-  /** What the ladder has observed so far; read after a `close()` that returned false. */
-  readonly exitVerdict: ClaudeChildExitVerdict
-  readonly executableMissing?: boolean
-  exited?: Promise<Error>
-  startupFailure?: () => Error | undefined
-  pauseReading?: () => void
-  resumeReading?: () => void
-  send: (message: Record<string, unknown>, beforeDispatch?: () => Promise<void>) => Promise<void>
-  /** Resolves true after processless settlement, or root exit plus observed tree exit. */
-  close: (options?: ProviderProcessCloseOptions) => Promise<boolean>
-}
-
 export async function openClaudeStreamJsonConnection(
-  launch: ClaudeStreamJsonLaunch,
-  handlers: ClaudeStreamJsonConnectionHandlers = {},
+  launch: connection.ClaudeStreamJsonLaunch,
+  handlers: connection.ClaudeStreamJsonConnectionHandlers = {},
   spawnImpl: PipedProcessSpawner = spawnProcess,
   queryImpl?: typeof ClaudeAgentSdk.query
-): Promise<ClaudeStreamJsonConnection> {
-  const { query } = await loadClaudeAgentSdk()
+): Promise<connection.ClaudeStreamJsonConnection> {
+  const sdk = await loadClaudeAgentSdk()
   const startup = claudeStartupAnswerObservation(handlers.onStdout)
   const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, launch, startup.feed)
   // Always supply scrubbed env to prevent ambient auth leaks; only launch.env may pin CLAUDE_CONFIG_DIR.
@@ -119,16 +72,19 @@ export async function openClaudeStreamJsonConnection(
     )
   )
   const inbox = createClaudeUserMessageQueue()
-  const session = (queryImpl ?? query)({
+  const advisory = launch.advisoryPolicy
+    ? createClaudeAdvisoryControls(launch.advisoryPolicy, sdk, launch.options)
+    : undefined
+  const session = (queryImpl ?? sdk.query)({
     prompt: inbox.messages,
     options: {
-      ...launch.options,
+      ...(advisory?.options ?? launch.options),
       cwd: launch.cwd,
       env: withOrcaClaudeChatEntrypoint(env, process.platform),
       pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
       spawnClaudeCodeProcess: spawner.spawn,
-      ...(handlers.canUseTool ? { canUseTool: handlers.canUseTool } : {}),
-      ...(handlers.onUserDialog ? { onUserDialog: handlers.onUserDialog } : {})
+      ...(!advisory && handlers.canUseTool ? { canUseTool: handlers.canUseTool } : {}),
+      ...(!advisory && handlers.onUserDialog ? { onUserDialog: handlers.onUserDialog } : {})
     }
   })
   const managed = spawner.managed
@@ -142,6 +98,7 @@ export async function openClaudeStreamJsonConnection(
   let faultReported = false
   let exitReported = false
   let closePromise: Promise<boolean> | null = null
+  let advisoryTimer: ReturnType<typeof setTimeout> | undefined
   let readingBarrier: Promise<void> | null = null
   let releaseReadingBarrier: (() => void) | null = null
   const pauseReading = (): void => {
@@ -183,6 +140,8 @@ export async function openClaudeStreamJsonConnection(
   }
 
   const handleUnexpectedEnd = (cause?: Error): void => {
+    advisory?.end()
+    clearTimeout(advisoryTimer)
     resumeReading()
     if (!terminalError) {
       const error = claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus, cause)
@@ -253,7 +212,7 @@ export async function openClaudeStreamJsonConnection(
     }
   })
 
-  const send: ClaudeStreamJsonConnection['send'] = (message, beforeDispatch) => {
+  const send: connection.ClaudeStreamJsonConnection['send'] = (message, beforeDispatch) => {
     if (
       closing ||
       managed.rootVerdict === 'exited' ||
@@ -267,14 +226,30 @@ export async function openClaudeStreamJsonConnection(
         )
       )
     }
+    try {
+      advisory?.admitInput()
+    } catch (error) {
+      return Promise.reject(
+        claudeUnwrittenUserMessageError(
+          error instanceof Error ? error : new Error('Advisor input refused.')
+        )
+      )
+    }
     startup.finish()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dispatch constructs the SDK user envelope after mapping every content block.
-    return inbox.push(message as unknown as SDKUserMessage, beforeDispatch)
+    return inbox.push(
+      message as unknown as SDKUserMessage,
+      advisory
+        ? () => advisory.beforeWrite(() => session.initializationResult(), beforeDispatch)
+        : beforeDispatch
+    )
   }
 
   const close = (options?: ProviderProcessCloseOptions): Promise<boolean> => {
     closePromise ??= (async () => {
       closing = true
+      advisory?.end()
+      clearTimeout(advisoryTimer)
       resumeReading()
       // Capture before stopping: exited roots can leave reparented descendants undiscoverable.
       await (tree.refresh?.() ?? tree.capture())
@@ -305,6 +280,18 @@ export async function openClaudeStreamJsonConnection(
       return true
     })()
     return closePromise
+  }
+
+  if (advisory) {
+    advisoryTimer = setTimeout(() => {
+      advisory.end()
+      const stopped = close({ grace: 'brief' })
+      handlers.onFault?.(new Error('Advisor deadline reached.'))
+      void stopped.catch((error: unknown) => {
+        handlers.onFault?.(error instanceof Error ? error : new Error('Advisor stop failed.'))
+      })
+    }, advisory.remaining)
+    advisoryTimer.unref()
   }
 
   const controls = createClaudeControlSurface(session)

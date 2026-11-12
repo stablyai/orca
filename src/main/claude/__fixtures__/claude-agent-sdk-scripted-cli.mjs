@@ -159,6 +159,22 @@ for (const step of scenario.steps) {
     await waitFor('control_request', step.awaitControlRequest)
   } else if (step.awaitControlResponse !== undefined) {
     await waitFor('control_response', step.awaitControlResponse)
+  } else if (step.hook) {
+    const initialize = report.controlRequests.find(
+      (frame) => frame.request?.subtype === 'initialize'
+    )
+    const callback =
+      initialize?.request.hooks?.[step.hook.input.hook_event_name]?.[0]?.hookCallbackIds[0]
+    emit({
+      type: 'control_request',
+      request_id: step.hook.id,
+      request: {
+        subtype: 'hook_callback',
+        callback_id: callback,
+        input: step.hook.input
+      }
+    })
+    await waitFor('control_response', step.hook.id)
   } else if (step.awaitFile) {
     const deadline = Date.now() + step.awaitFile.timeoutMs
     while (!existsSync(step.awaitFile.path)) {

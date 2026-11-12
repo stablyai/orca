@@ -177,6 +177,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
+  /** Absent means the adapter cannot enforce a bounded advisory launch. */
+  supportsAdvisoryPolicy?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Keep runtime/location support in adapter data for remote enablement. */
   supportsLocation?(location: AgentSessionExecutionLocation): boolean
   /** Spawn once per reservation; use its token/fence because the store rejects mismatched handles. */
