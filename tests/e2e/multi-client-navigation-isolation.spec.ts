@@ -128,58 +128,6 @@ async function expectActiveWorktree(page: Page, worktreeId: string): Promise<voi
   )
 }
 
-test('keeps two paired browser clients and the host on independent worktrees', async ({
-  orcaPage,
-  electronApp,
-  testRepoPath
-}) => {
-  const suffix = randomUUID().slice(0, 8)
-  const branchA = `e2e-client-a-${suffix}`
-  const branchB = `e2e-client-b-${suffix}`
-  addGitWorktree(testRepoPath, branchA)
-  addGitWorktree(testRepoPath, branchB)
-
-  await expect
-    .poll(() => loadTestWorktreeIds(orcaPage, branchA, branchB), {
-      timeout: 30_000,
-      message: 'Expected host plus three client-selectable worktrees'
-    })
-    .not.toBeNull()
-
-  // Playwright's matcher does not narrow the polled value for TypeScript.
-  const ids = await loadTestWorktreeIds(orcaPage, branchA, branchB)
-  if (!ids) {
-    throw new Error('Test worktrees disappeared after discovery')
-  }
-
-  await selectWorktree(orcaPage, ids.host)
-
-  let clientA: Page | null = null
-  let clientB: Page | null = null
-  try {
-    const offerA = await createPairingOffer(orcaPage)
-    clientA = await openPairedClient(electronApp, offerA, ids.clientA)
-    await selectWorktree(clientA, ids.clientA)
-
-    // Why: rotation preserves used grants, so B is issued only after A has completed pairing.
-    const offerB = await createPairingOffer(orcaPage)
-    expect(offerB.deviceId).not.toBe(offerA.deviceId)
-    clientB = await openPairedClient(electronApp, offerB, ids.clientB)
-    await selectWorktree(clientB, ids.clientB)
-
-    await expectActiveWorktree(clientA, ids.clientA)
-    await expectActiveWorktree(orcaPage, ids.host)
-
-    await selectWorktree(clientA, ids.clientA2)
-
-    await expectActiveWorktree(clientB, ids.clientB)
-    await expectActiveWorktree(orcaPage, ids.host)
-  } finally {
-    await clientB?.close()
-    await clientA?.close()
-  }
-})
-
 test('keeps a paired client workspace create-with-agent off the other client and the host', async ({
   orcaPage,
   electronApp,

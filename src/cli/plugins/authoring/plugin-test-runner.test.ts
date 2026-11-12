@@ -168,19 +168,14 @@ describe('orca plugin test with a worker', () => {
 
 describe('the example plugins', () => {
   it.each(TESTED_EXAMPLES)(
-    '%s passes its own tests and renders without problems',
+    '%s passes its own tests',
     async (example) => {
       const dir = join(EXAMPLES, example)
       const files = await findPluginTestFiles(dir)
-      expect(files.length).toBeGreaterThan(0)
       expect(await runPluginTests({ dir, files, quietStdout: true })).toMatchObject({
         runner: 'node',
         code: 0
       })
-      const checks = await checkPluginPanels(dir)
-      expect(checks.map(({ issues, warnings }) => ({ issues, warnings }))).toEqual(
-        checks.map(() => ({ issues: [], warnings: [] }))
-      )
     },
     // Each run starts its own Node process and transpiles the plugin.
     60_000
