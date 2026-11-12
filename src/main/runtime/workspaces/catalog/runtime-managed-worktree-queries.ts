@@ -158,9 +158,7 @@ export class RuntimeManagedWorktreeQueries {
         worktrees: projectWorktreeLineageWithHostPeers(store, repo, detected)
       }
     }
-    const scan = await scanRuntimeWorktreesUntilNotOvertaken(store, repo, (target) =>
-      this.deps.scanRepo(target)
-    )
+    const scan = await scanRuntimeWorktreesUntilNotOvertaken(store, repo, this.deps.scanRepo)
     // Publish overtaken scans as non-authoritative: throwing would drop client rows. Prune nothing; the overtaking mutation's event requests a fresh listing.
     if (scan.ok && !scan.superseded && scan.authorityCurrent()) {
       // Headless hosts lack ipcMain listings; runtime must sweep its own metadata too (#17776).
@@ -170,7 +168,8 @@ export class RuntimeManagedWorktreeQueries {
           repo,
           gitWorktrees: scan.worktrees,
           scan: scan.metadataPruneExpectation,
-          scanGeneration: scan.scanGeneration
+          scanGeneration: scan.scanGeneration,
+          isCallerCurrent: scan.authorityCurrent
         })
       }
       if (scan.lineagePrune && scan.authorityCurrent()) {
@@ -204,7 +203,7 @@ export class RuntimeManagedWorktreeQueries {
     })
     return {
       repoId: repo.id,
-      authoritative: scan.ok && !scan.superseded,
+      authoritative: scan.ok && !scan.superseded && scan.authorityCurrent(),
       source: scan.ok ? 'git' : 'metadata-fallback',
       workspaceMetadata: listed.workspaceMetadata,
       // Stamp the scan's starting generation: that is the catalog its rows describe.

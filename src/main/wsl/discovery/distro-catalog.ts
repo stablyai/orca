@@ -81,10 +81,11 @@ function cacheWslDistroList(rawDistros: string[], probeSequence: number): string
     dropStaleWslAvailabilityFailure()
   }
   wslDistroCacheSequence = probeSequence
-  if (wslDistroCache?.join('\0') !== userDistros.join('\0')) {
+  const changed = wslDistroCache?.join('\0') !== userDistros.join('\0')
+  wslDistroCache = userDistros
+  if (changed) {
     notifyWslDiscoveryChanged()
   }
-  wslDistroCache = userDistros
   if (wslDistroCache.length === 0) {
     armWslDistroListRetry()
   }

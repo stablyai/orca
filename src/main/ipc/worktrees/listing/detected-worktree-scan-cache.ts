@@ -64,6 +64,8 @@ export type DetectedWorktreeScanResult = {
   /** Owns the next store-hygiene pass; absent preserves eager behavior for non-local scans. */
   hygieneDue?: boolean
   metadataPrune?: DetectedWorktreeMetadataPrune
+  /** Owner authority for these rows, independent of who owns side effects; absent for non-owner listings. */
+  authorityCurrent?: () => boolean
 }
 
 export function invalidateDetectedWorktreeScanCache(repoId: string): void {
@@ -145,8 +147,10 @@ export async function listDetectedGitWorktrees(
     !superseded && generationCurrent && isCurrentWorktreeCatalogObservation(observation)
       ? claimWorktreeCatalogHygiene(observation)
       : null
+  const authorityCurrent = (): boolean => isCurrentWorktreeCatalogObservation(observation)
   return {
     gitWorktrees,
+    authorityCurrent,
     fresh: claim !== null,
     superseded: superseded || !generationCurrent,
     generation: observation.generation,
@@ -156,7 +160,7 @@ export async function listDetectedGitWorktrees(
             generation: claim.generation,
             authorizedRootsRevision: claim.authorizedRootsRevision,
             ...localWorktreeGitOptions,
-            authorityCurrent: () => isCurrentWorktreeCatalogObservation(observation)
+            authorityCurrent
           },
           hygieneDue: claim.hygieneDue,
           ...(claim.expectation ? { metadataPrune: { expectation: claim.expectation } } : {})
@@ -197,7 +201,8 @@ export async function applyFreshDetectedWorktreeScanSideEffects(
       gitWorktrees,
       scan: metadataPrune.expectation,
       scanGeneration: sideEffectToken.generation,
-      isCallerCurrent: isCurrent,
+      // The helper rechecks after its path probes, right before deleting.
+      isCallerCurrent: () => isCurrent() && (sideEffectToken.authorityCurrent?.() ?? true),
       signal
     })
     if (!pruneResult.scanGenerationCurrent || !generationCurrent() || !isCurrent()) {

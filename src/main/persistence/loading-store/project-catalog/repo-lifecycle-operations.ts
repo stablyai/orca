@@ -13,7 +13,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { mergeProjectHostSetupCompatibilityState } from '../../tracking-repos/project-host-compatibility'
+import { applyProjectHostSetupCompatibilityState } from '../../tracking-repos/project-host-compatibility'
 import { RepoOrderPersistenceOperations } from '../../tracking-repos/repo-order-operations'
 import { pruneWorktreeStateForRepo as pruneWorktreeStateForRepoOperation } from '../../tracking-repos/repo-worktree-pruning'
 import { collectDeregisteredRepoIds } from '../../tracking-repos/deregistered-repo-residue'
@@ -282,13 +282,8 @@ export function getRepoUpdateOperations(
 }
 
 export function syncProjectHostSetupCompatibilityState(owner: RepoLifecycleOperations): void {
-  const compatibilityState = mergeProjectHostSetupCompatibilityState(
-    owner[repoLifecycleOperationsContext].runtime.state,
-    owner[repoLifecycleOperationsContext].runtime.state.repos
-  )
-  owner[repoLifecycleOperationsContext].runtime.state.projects = compatibilityState.projects
-  owner[repoLifecycleOperationsContext].runtime.state.projectHostSetups =
-    compatibilityState.projectHostSetups
+  const state = owner[repoLifecycleOperationsContext].runtime.state
+  applyProjectHostSetupCompatibilityState(state, state.repos)
 }
 
 export function getProjectHostSetupOperations(

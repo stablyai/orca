@@ -162,6 +162,7 @@ export function dropStaleWslAvailabilityFailure(): void {
   wslAvailabilityCacheGeneration += 1
   if (wslAvailableCache && !wslAvailableCache.available && !('unsupported' in wslAvailableCache)) {
     wslAvailableCache = null
+    notifyWslDiscoveryChanged()
   }
 }
 

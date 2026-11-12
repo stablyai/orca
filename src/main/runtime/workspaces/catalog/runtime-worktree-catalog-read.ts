@@ -1,6 +1,7 @@
 import type { WorktreeCatalogObservation } from '../../../workspaces/catalog/repo-worktree-catalog-observation'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { dropRepeatedWorktreeRows } from './repeated-worktree-rows'
+import { isCurrentWorktreeCatalogObservation } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
 
 const resultByObservation = new WeakMap<WorktreeCatalogObservation, RuntimeWorktreeScanResult>()
 const observationByResult = new WeakMap<RuntimeWorktreeScanResult, WorktreeCatalogObservation>()
@@ -53,7 +54,11 @@ export function claimRuntimeLineagePrune(
   result: RuntimeWorktreeScanResult
 ): { scanGeneration: number } | null {
   const observation = observationByResult.get(result)
-  if (!observation || lineagePrunedObservations.has(observation)) {
+  if (
+    !observation ||
+    lineagePrunedObservations.has(observation) ||
+    !isCurrentWorktreeCatalogObservation(observation)
+  ) {
     return null
   }
   lineagePrunedObservations.add(observation)

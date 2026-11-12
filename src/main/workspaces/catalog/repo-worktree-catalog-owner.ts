@@ -13,7 +13,7 @@ import type {
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent,
-  onLocalWorktreeScanGenerationBump
+  onWorktreeRouteInputsChanged
 } from './local-worktree-scan-generation'
 import { isLiveWorktreeCatalogRoute } from './repo-worktree-catalog-route'
 import { verify } from './repo-worktree-catalog-verification'
@@ -40,7 +40,7 @@ const entries = new Map<string, Entry>()
 
 onWorktreeScanGenerationBump((repoPath) => invalidateWorktreeCatalogForRepoPath(repoPath))
 // Route-changing writes and WSL discovery answers retire obsolete owners even when no reader follows.
-onLocalWorktreeScanGenerationBump(() => retireObsoleteWorktreeCatalogs())
+onWorktreeRouteInputsChanged(() => retireObsoleteWorktreeCatalogs())
 onWslDiscoveryChanged(() => retireObsoleteWorktreeCatalogs())
 const entryByObservation = new WeakMap<WorktreeCatalogObservation, Entry>()
 

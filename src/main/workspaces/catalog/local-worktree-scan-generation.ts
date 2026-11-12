@@ -25,27 +25,37 @@ export function getLocalWorktreeScanGeneration(repoId: string): number {
   return generation
 }
 
-const generationBumpListeners = new Set<() => void>()
+const routeInputListeners = new Set<() => void>()
+let routeInputsRevision = 0
+let routeInputNotificationQueued = false
 
-/** Repo, project-runtime and settings writes bump here; listeners run after the writer's synchronous update. */
-export function onLocalWorktreeScanGenerationBump(listener: () => void): void {
-  generationBumpListeners.add(listener)
+/** Repo, project and runtime-setting writes change which route runs a repo's Git; listeners run after the write. */
+export function onWorktreeRouteInputsChanged(listener: () => void): void {
+  routeInputListeners.add(listener)
 }
 
-let bumpNotificationQueued = false
+/** Advances synchronously so readers never trust a route snapshot taken before the write. */
+export function getWorktreeRouteInputsRevision(): number {
+  return routeInputsRevision
+}
 
-export function bumpLocalWorktreeScanGeneration(repoId: string): void {
-  generationByRepoId.set(repoId, ++generationSequence)
-  mutationRevision += 1
-  if (generationBumpListeners.size > 0 && !bumpNotificationQueued) {
-    bumpNotificationQueued = true
+export function markWorktreeRouteInputsChanged(): void {
+  routeInputsRevision += 1
+  if (routeInputListeners.size > 0 && !routeInputNotificationQueued) {
+    routeInputNotificationQueued = true
     queueMicrotask(() => {
-      bumpNotificationQueued = false
-      for (const listener of generationBumpListeners) {
+      routeInputNotificationQueued = false
+      for (const listener of routeInputListeners) {
         listener()
       }
     })
   }
+}
+
+export function bumpLocalWorktreeScanGeneration(repoId: string): void {
+  generationByRepoId.set(repoId, ++generationSequence)
+  mutationRevision += 1
+  markWorktreeRouteInputsChanged()
 }
 
 export function forgetLocalWorktreeScanGeneration(repoId: string): void {
