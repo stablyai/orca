@@ -109,7 +109,7 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
     if (!row || row.ownerDocument.activeElement !== pendingTab.origin) {
       return
     }
-    scrollToIndex(index, { align: 'auto' })
+    scrollToIndex(index, { align: pendingTab.edge === 'first' ? 'start' : 'end' })
     focusAgentKanbanCardEdge(row, pendingTab.edge)
   }, [indexByPaneKey, pendingTab, scrollToIndex])
 
