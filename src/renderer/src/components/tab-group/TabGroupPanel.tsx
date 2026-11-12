@@ -252,7 +252,7 @@ export default function TabGroupPanel({
     />
   )
 
-  // Why: shrinks and clips before the tab bar's floor, so narrow panes keep a grabbable tab and reserved spacers stay clear.
+  // Why: actions hide before the tab bar's floor is reached; min-w-0 + clipping is only a backstop so reserved spacers stay clear.
   const actionChromeClassName = cn(
     'flex min-w-0 items-center gap-0.5 overflow-hidden pl-1.5 pr-0.5 transition-opacity duration-150',
     !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
@@ -286,7 +286,7 @@ export default function TabGroupPanel({
       {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
       {tabStrip !== 'attached' ? null : (
         <div
-          className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-tab-bar"
+          className="h-[32px] shrink-0 border-b border-border bg-tab-bar"
           data-tab-group-strip-id={groupId}
           data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}
@@ -304,21 +304,33 @@ export default function TabGroupPanel({
                 }
               />
             ) : null}
-            <div className="min-w-10 flex-1 h-full">{tabBar}</div>
-            {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It may shrink so a narrow pane keeps its grabbable tab. */}
-            {reserveRightTitlebarSpace ? <div className="w-10 min-w-0" /> : null}
-            <div
-              className={actionChromeClassName}
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            >
-              <TabBarQuickCommandsButton
-                worktreeId={worktreeId}
-                groupId={groupId}
-                isFocused={isFocused}
-              />
-              {hasSplitGroups ? (
-                <TabGroupPaneActionsMenu isFocused={isFocused} onCloseGroup={commands.closeGroup} />
-              ) : null}
+            {/* Why: the tab-strip container excludes the reserved spacers, so width rules see only the room tabs and actions share. */}
+            <div className="@container/tab-strip flex min-w-0 flex-1 items-stretch">
+              <div className="min-w-10 flex-1 h-full">{tabBar}</div>
+              {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It may shrink so a narrow pane keeps its grabbable tab. */}
+              {reserveRightTitlebarSpace ? <div className="w-10 min-w-0" /> : null}
+              <div
+                className={actionChromeClassName}
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              >
+                {/* Why: drop an action whole (and from Tab order) once it can't fit beside the tab floor and "+", never leave a clipped focus target.
+                    163 = 40 tab + 36 "+" + 8 padding + 47 widest collapsed quick-command trigger + 2 gap + 28 pane actions + 2 sub-pixel slack; 114 = 40 + 36 + 8 + 28 + 2. */}
+                <div className="contents @max-[163px]/tab-strip:hidden">
+                  <TabBarQuickCommandsButton
+                    worktreeId={worktreeId}
+                    groupId={groupId}
+                    isFocused={isFocused}
+                  />
+                </div>
+                {hasSplitGroups ? (
+                  <div className="contents @max-[114px]/tab-strip:hidden">
+                    <TabGroupPaneActionsMenu
+                      isFocused={isFocused}
+                      onCloseGroup={commands.closeGroup}
+                    />
+                  </div>
+                ) : null}
+              </div>
             </div>
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
             {reserveRightTitlebarSpace ? (

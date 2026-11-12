@@ -4,7 +4,7 @@ import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } fro
 
 type NarrowLayout = { leftGroupId: string; rightGroupId: string; rightTabId: string }
 
-async function buildNarrowRightColumns(page: Page, worktreeId: string): Promise<NarrowLayout> {
+async function buildThreeColumns(page: Page, worktreeId: string): Promise<NarrowLayout> {
   return page.evaluate((id) => {
     const state = window.__store?.getState()
     if (!state) {
@@ -27,9 +27,6 @@ async function buildNarrowRightColumns(page: Page, worktreeId: string): Promise<
       throw new Error('Right split was not created')
     }
     const rightTab = state.createTab(id, rightGroupId, undefined, { activate: true })
-    // Root 80/20, then 60/40 inside it: the right column is under 120px wide.
-    state.setTabGroupSplitRatio(id, '', 0.8)
-    state.setTabGroupSplitRatio(id, 'second', 0.6)
     const rightTabId =
       window.__store
         ?.getState()
@@ -40,24 +37,91 @@ async function buildNarrowRightColumns(page: Page, worktreeId: string): Promise<
   }, worktreeId)
 }
 
-/** Widest run of strip pixels whose hit target is a tab, i.e. what a pointer can grab. */
-async function grabbableTabWidth(page: Page, groupId: string): Promise<number> {
+async function narrowRightColumns(page: Page, worktreeId: string): Promise<void> {
+  await page.evaluate((id) => {
+    const state = window.__store?.getState()
+    // Root 80/20, then 45/55 inside it: the right column is about 98px wide, under 120px.
+    state?.setTabGroupSplitRatio(id, '', 0.8)
+    state?.setTabGroupSplitRatio(id, 'second', 0.45)
+  }, worktreeId)
+}
+
+/** Widest run of strip pixels where a press starts a tab drag: a tab, but not its close button or other inner controls. */
+async function draggableTabRun(page: Page, groupId: string): Promise<{ width: number; x: number }> {
   return page.evaluate((id) => {
     const strip = document.querySelector<HTMLElement>(`[data-tab-group-strip-id="${id}"]`)
     if (!strip) {
-      return 0
+      return { width: 0, x: 0 }
     }
     const rect = strip.getBoundingClientRect()
     const y = rect.top + rect.height / 2
-    let widest = 0
+    let best = { width: 0, x: 0 }
+    let runStart = 0
     let run = 0
     for (let x = Math.ceil(rect.left); x < rect.right; x++) {
-      const tab = document.elementFromPoint(x, y)?.closest('[data-tab-id]')
-      run = tab && strip.contains(tab) ? run + 1 : 0
-      widest = Math.max(widest, run)
+      const hit = document.elementFromPoint(x, y)
+      const tab = hit?.closest('[data-tab-id]')
+      const draggable = tab && strip.contains(tab) && !hit?.closest('button, input')
+      if (draggable) {
+        runStart = run === 0 ? x : runStart
+        run++
+        if (run > best.width) {
+          best = { width: run, x: runStart + run / 2 }
+        }
+      } else {
+        run = 0
+      }
     }
-    return widest
+    return best
   }, groupId)
+}
+
+/** Tab through a strip from its first tab; report each strip control (not a tab's own close button) that took focus and whether all of it is visible. */
+async function tabThroughStrip(
+  page: Page,
+  groupId: string
+): Promise<{ label: string; fullyVisible: boolean }[]> {
+  const strip = page.locator(`[data-tab-group-strip-id="${groupId}"]`)
+  const tab = strip.locator('[data-tab-id]').first()
+  // Why: focusing a group can hand focus to its terminal a beat later; walk only from a tab that still holds focus.
+  await expect
+    .poll(async () => {
+      await tab.focus()
+      await page.waitForTimeout(100)
+      return tab.evaluate((el) => el === document.activeElement)
+    })
+    .toBe(true)
+  const visited: { label: string; fullyVisible: boolean }[] = []
+  for (let i = 0; i < 8; i++) {
+    await page.keyboard.press('Tab')
+    const focused = await page.evaluate((id) => {
+      const el = document.activeElement as HTMLElement | null
+      const stripEl = document.querySelector(`[data-tab-group-strip-id="${id}"]`)
+      if (!el || !stripEl?.contains(el)) {
+        return null
+      }
+      if (el.closest('[data-tab-id]')) {
+        return 'in-tab'
+      }
+      const r = el.getBoundingClientRect()
+      const y = r.top + r.height / 2
+      const shows = (x: number): boolean => {
+        const hit = document.elementFromPoint(x, y)
+        return Boolean(hit && (hit === el || el.contains(hit)))
+      }
+      return {
+        label: el.getAttribute('aria-label') ?? el.textContent?.trim() ?? el.tagName,
+        fullyVisible: r.width > 0 && shows(r.left + 1) && shows(r.right - 1)
+      }
+    }, groupId)
+    if (!focused) {
+      break
+    }
+    if (focused !== 'in-tab') {
+      visited.push(focused)
+    }
+  }
+  return visited
 }
 
 test('a narrow tab group keeps a grabbable tab and can be dragged into another group', async ({
@@ -68,22 +132,38 @@ test('a narrow tab group keeps a grabbable tab and can be dragged into another g
   const worktreeId = await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
 
-  const layout = await buildNarrowRightColumns(orcaPage, worktreeId)
+  const layout = await buildThreeColumns(orcaPage, worktreeId)
   const rightStrip = orcaPage.locator(`[data-tab-group-strip-id="${layout.rightGroupId}"]`)
+  await expect.poll(async () => (await rightStrip.boundingBox())?.width ?? 0).toBeGreaterThan(200)
+
+  // At normal width the strip's controls are all reachable by Tab and fully visible.
+  const wideFocus = await tabThroughStrip(orcaPage, layout.rightGroupId)
+  expect(wideFocus.map((control) => control.label)).toEqual(
+    expect.arrayContaining(['New tab', 'Pane Actions'])
+  )
+  expect(wideFocus.filter((control) => !control.fullyVisible)).toEqual([])
+
+  await narrowRightColumns(orcaPage, worktreeId)
   await expect.poll(async () => (await rightStrip.boundingBox())?.width ?? 0).toBeLessThan(120)
 
-  await expect.poll(() => grabbableTabWidth(orcaPage, layout.rightGroupId)).toBeGreaterThan(24)
+  await expect
+    .poll(async () => (await draggableTabRun(orcaPage, layout.rightGroupId)).width)
+    .toBeGreaterThanOrEqual(16)
 
-  const tab = rightStrip.locator('[data-tab-id]').first()
-  const tabBox = await tab.boundingBox()
-  const stripBox = await rightStrip.boundingBox()
+  // Keyboard users only reach controls they can see: anything that would clip is hidden instead.
+  const narrowFocus = await tabThroughStrip(orcaPage, layout.rightGroupId)
+  expect(narrowFocus.map((control) => control.label)).toContain('New tab')
+  expect(narrowFocus.filter((control) => !control.fullyVisible)).toEqual([])
+
+  const run = await draggableTabRun(orcaPage, layout.rightGroupId)
+  const tabBox = await rightStrip.locator('[data-tab-id]').first().boundingBox()
   const leftBody = await orcaPage
     .locator(`[data-tab-group-body-id="${layout.leftGroupId}"]`)
     .boundingBox()
-  if (!tabBox || !stripBox || !leftBody) {
+  if (!tabBox || !leftBody) {
     throw new Error('Drag geometry missing')
   }
-  const startX = Math.max(tabBox.x, stripBox.x) + 8
+  const startX = run.x
   const startY = tabBox.y + tabBox.height / 2
   await orcaPage.mouse.move(startX, startY)
   await orcaPage.mouse.down()
