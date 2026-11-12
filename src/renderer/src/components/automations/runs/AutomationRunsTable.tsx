@@ -54,7 +54,7 @@ export function AutomationRunsTable({
   })
   useRevealAutomationRun(
     (runId) => entries.findIndex((entry) => entry.run.id === runId),
-    (index) => virtualizer.scrollToIndex(index, { align: 'center' })
+    (index) => virtualizer.scrollToIndex(index, { align: 'auto' })
   )
 
   return (

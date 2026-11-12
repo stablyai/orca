@@ -126,22 +126,26 @@ export function AutomationDetailHealth({
 
   const usage = summarizeAutomationRunUsage(runs)
   const hasUsage = usage.knownRuns > 0
-  const usageValue = hasUsage
-    ? formatAutomationCost(usage.estimatedCostUsd, t)
-    : usage.unavailableRuns > 0 || runsUnavailable
-      ? t('auto.components.automations.AutomationDetail.usageUnavailable', 'Unavailable')
-      : t('auto.components.automations.AutomationDetail.noRuns', 'No runs')
-  const usageDetail = hasUsage
-    ? t(
-        'auto.components.automations.AutomationDetail.usageDetail',
-        '{{tokens}} tokens · {{known}}/{{total}} runs reported',
-        {
-          tokens: formatAutomationTokens(usage.totalTokens, intlLocale),
-          known: usage.knownRuns,
-          total: runs.length
-        }
-      )
-    : null
+  // Why: after a failed refresh the retained runs are stale; don't present their totals.
+  const usageValue = runsUnavailable
+    ? t('auto.components.automations.AutomationDetail.usageUnavailable', 'Unavailable')
+    : hasUsage
+      ? formatAutomationCost(usage.estimatedCostUsd, t)
+      : usage.unavailableRuns > 0
+        ? t('auto.components.automations.AutomationDetail.usageUnavailable', 'Unavailable')
+        : t('auto.components.automations.AutomationDetail.noRuns', 'No runs')
+  const usageDetail =
+    hasUsage && !runsUnavailable
+      ? t(
+          'auto.components.automations.AutomationDetail.usageDetail',
+          '{{tokens}} tokens · {{known}}/{{total}} runs reported',
+          {
+            tokens: formatAutomationTokens(usage.totalTokens, intlLocale),
+            known: usage.knownRuns,
+            total: runs.length
+          }
+        )
+      : null
 
   return (
     <div className="@container overflow-hidden rounded-lg border border-border/60">

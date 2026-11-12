@@ -119,7 +119,18 @@ export function AutomationRunHistory({
 
   useRevealAutomationRun(
     (runId) => runs.findIndex((run) => run.id === runId),
-    (index) => virtualizer.scrollToIndex(index, { align: 'center' })
+    (index) => {
+      // The returned-to run becomes the current row, so arrow keys continue from it.
+      const run = runs[index]
+      if (run) {
+        setSelectedRunState((current) =>
+          current.automationId === automationId && current.runId === run.id
+            ? current
+            : { automationId, runId: run.id }
+        )
+      }
+      virtualizer.scrollToIndex(index, { align: 'auto' })
+    }
   )
 
   // Track the rows’ header offset across zoom/font changes.

@@ -101,6 +101,7 @@ export function useAutomationsPageController() {
     setListSearchQuery
   } = local
   const { selectAutomationRow } = list
+  const selectHost = list.hostCatalog.selectHost
   const navigation = useMemo(
     () =>
       createAutomationsPageNavigation({
@@ -115,9 +116,12 @@ export function useAutomationsPageController() {
           selectExternalKey,
           setListSearchQuery
         },
-        selectAutomationRow
+        selectAutomationRow,
+        // The Runs page always spans every host, as the Runs tab sets it.
+        showAllHosts: () => selectHost({ kind: 'all' })
       }),
     [
+      selectHost,
       selectAutomationRow,
       selectExternalKey,
       setListSearchQuery,

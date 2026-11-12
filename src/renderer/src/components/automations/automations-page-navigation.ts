@@ -31,11 +31,13 @@ type NavigationLocal = Pick<
 export function createAutomationsPageNavigation({
   store,
   local,
-  selectAutomationRow
+  selectAutomationRow,
+  showAllHosts
 }: {
   store: Pick<AutomationsPageStoreState, 'setPendingAutomationRunNavigation'>
   local: NavigationLocal
   selectAutomationRow: (rowKey: string | null) => void
+  showAllHosts: () => void
 }) {
   const {
     setPageView,
@@ -97,6 +99,7 @@ export function createAutomationsPageNavigation({
         showList()
         return
       case 'runs':
+        showAllHosts()
         showRuns()
         return
       case 'external':
