@@ -14,6 +14,7 @@ import {
   type PreviewShortcutContext
 } from './preview-terminal-shortcuts'
 import { readTerminalClipboardSelection } from '@/components/terminal-pane/clipboard/terminal-clipboard-selection-text'
+import { copyTerminalSelectionFromUserInput } from '@/components/terminal-pane/clipboard/terminal-selection-copy'
 import { isAppOwnedCopyChord } from '@/components/terminal-pane/input/keyboard/xterm-bypass-policy'
 
 /** Compose IME, clipboard and pane policy in xterm’s single custom handler; defer macOS Cmd+V to its menu accelerator to avoid double paste. Dispose Option-location listeners on teardown. */
@@ -125,7 +126,7 @@ export function installPreviewTerminalKeyHandler(args: {
       const firstKeydown = !consumedClipboardKeys.has(keyIdentity)
       consumedClipboardKeys.add(keyIdentity)
       if (firstKeydown && selection) {
-        void window.api.ui.writeTerminalClipboardText(selection).catch(() => undefined)
+        void copyTerminalSelectionFromUserInput(terminal, 'keyboard').catch(() => undefined)
       }
       return consumeEvent(event)
     }

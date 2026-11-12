@@ -1,4 +1,5 @@
 import type { RefObject } from 'react'
+import { copySelectedTextFromUserInput } from '@/lib/clipboard/copy-selected-text-from-user-input'
 import { useAppStore } from '../../../store/index'
 import type { NativeChatComposerHandle } from '../composer/native-chat-composer-types'
 import {
@@ -12,11 +13,11 @@ function copyTranscriptSelectionOnSelect(root: HTMLElement): void {
   if (!useAppStore.getState().settings?.terminalClipboardOnSelect) {
     return
   }
-  const text = readNativeChatTranscriptSelection(root)
-  if (text) {
-    // Swallowed like the terminal's copy on select: a failed copy leaves the selection to retry.
-    void window.api.ui.writeClipboardText(text).catch(() => {})
-  }
+  // Swallowed like the terminal's copy on select: a failed copy leaves the selection to retry.
+  void copySelectedTextFromUserInput({
+    text: readNativeChatTranscriptSelection(root),
+    writeClipboardText: window.api.ui.writeClipboardText
+  }).catch(() => {})
 }
 
 export function NativeChatSelectionQuote({
