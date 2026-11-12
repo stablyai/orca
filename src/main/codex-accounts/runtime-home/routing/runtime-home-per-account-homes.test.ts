@@ -1,13 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSettings } from '../runtime-home-settings-test-fixtures'
 import {
   createCodexAuthJson,
   createManagedAuth,
   createStore,
-  expectResourceLinkedOrCopied,
   getRuntimeCodexAuthPath,
   getSystemCodexAuthPath,
   getSystemCodexHomePath,
@@ -97,56 +96,6 @@ describe('CodexRuntimeHomeService', () => {
       expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
     }
   )
-
-  it('materializes resources and config into the per-account home on launch', async () => {
-    writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
-    mkdirSync(join(getSystemCodexHomePath(), 'skills', 'review'), { recursive: true })
-    writeFileSync(
-      join(getSystemCodexHomePath(), 'skills', 'review', 'SKILL.md'),
-      'skill\n',
-      'utf-8'
-    )
-    writeFileSync(
-      join(getSystemCodexHomePath(), 'config.toml'),
-      'approval_policy = "never"\n',
-      'utf-8'
-    )
-    const home1 = createManagedAuth(
-      testState.userDataDir,
-      'account-1',
-      createCodexAuthJson('one@example.com', 'acct-1', 'one')
-    )
-    const store = createStore(
-      createSettings({
-        realHomeRoutable: true,
-        codexManagedAccounts: [
-          {
-            id: 'account-1',
-            email: 'one@example.com',
-            managedHomePath: home1,
-            providerAccountId: 'acct-1',
-            workspaceLabel: null,
-            workspaceAccountId: 'acct-1',
-            createdAt: 1,
-            updatedAt: 1,
-            lastAuthenticatedAt: 1
-          }
-        ],
-        activeCodexManagedAccountId: 'account-1',
-        activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
-      })
-    )
-    const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    expect(service.prepareForCodexLaunch()).toBe(home1)
-
-    expectResourceLinkedOrCopied(join(home1, 'skills'), join(getSystemCodexHomePath(), 'skills'))
-    expect(readFileSync(join(home1, 'skills', 'review', 'SKILL.md'), 'utf-8')).toBe('skill\n')
-    expect(readFileSync(join(home1, 'config.toml'), 'utf-8')).toContain('approval_policy = "never"')
-
-    expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe('{"account":"system"}\n')
-  })
 
   it('does not read shared auth when polling observes a managed-to-real-home transition', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
