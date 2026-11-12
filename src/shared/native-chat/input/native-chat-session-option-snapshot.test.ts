@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isDefaultServiceTier,
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor
 } from './native-chat-session-options'
+import {
+  nativeChatOptionValuesLabel,
+  nativeChatSessionChoiceLabel,
+  sayNativeChatSessionOptionEnglish
+} from './native-chat-session-option-labels'
+import { loneFastTier, speedButtonTiers } from './native-chat-session-speed-tiers'
+import { discoveredModel } from '../../agent-session/options/structured-agent-session-discovered-model'
 import { mergeDiscoveredAuthoritativeModels } from '../../agent-session/options/agent-session-option-catalog'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
@@ -302,5 +310,87 @@ describe('a boolean option always carries a value to render', () => {
       args: ['--model', 'claude-opus-4-8'],
       appliedValues: { model: 'claude-opus-4-8' }
     })
+  })
+})
+
+describe('serviceTier speed choices', () => {
+  it('keeps OMP native None as the clear base while preserving literal Default and multi-tier lists', () => {
+    const model = discoveredModel(
+      {
+        id: 'openai/gpt-5.4',
+        label: 'GPT-5.4',
+        isDefault: true,
+        efforts: [
+          { value: 'medium', label: 'Medium' },
+          { value: 'high', label: 'High' }
+        ],
+        serviceTiers: [
+          { value: 'none', label: 'None', description: 'Do not send service_tier' },
+          { value: 'auto', label: 'Auto' },
+          { value: 'default', label: 'Default', description: 'Standard pricing and performance' },
+          { value: 'flex', label: 'Flex' },
+          { value: 'scale', label: 'Scale' },
+          { value: 'priority', label: 'Priority' },
+          { value: 'ultrafast', label: 'Ultrafast' }
+        ]
+      },
+      false,
+      'omp'
+    )
+    const record = createNativeChatSessionOptionRecord('omp')
+    record.model = { value: 'openai/gpt-5.4', source: 'reported' }
+    record.valuesByModel['openai/gpt-5.4'] = {
+      effort: { value: 'high', source: 'reported' },
+      serviceTier: { value: 'none', source: 'reported' }
+    }
+    const unsetSnapshot = buildNativeChatSessionOptionSnapshot({
+      catalog: { models: [model], modelApply: {} },
+      models: [model],
+      record,
+      mode: 'live',
+      modelLabel: 'Model',
+      liveTransport: 'agent-session'
+    })
+    const unsetSpeed = unsetSnapshot.find((descriptor) => descriptor.id === 'serviceTier')!
+    expect(isDefaultServiceTier(unsetSpeed)).toBe(true)
+    expect(
+      nativeChatOptionValuesLabel(unsetSnapshot.slice(1), sayNativeChatSessionOptionEnglish)
+    ).toBe('High')
+    const tiers = speedButtonTiers(unsetSpeed)!
+    expect(tiers.standard).toMatchObject({ value: 'none', label: 'None' })
+    expect(tiers.tiers.map((choice) => choice.value)).toEqual([
+      'auto',
+      'default',
+      'flex',
+      'scale',
+      'priority',
+      'ultrafast'
+    ])
+    expect(loneFastTier(tiers.tiers)).toBeUndefined()
+
+    record.valuesByModel['openai/gpt-5.4'] = {
+      effort: { value: 'high', source: 'reported' },
+      serviceTier: { value: 'default', source: 'reported' }
+    }
+    const defaultSnapshot = buildNativeChatSessionOptionSnapshot({
+      catalog: { models: [model], modelApply: {} },
+      models: [model],
+      record,
+      mode: 'live',
+      modelLabel: 'Model',
+      liveTransport: 'agent-session'
+    })
+    const defaultSpeed = defaultSnapshot.find((descriptor) => descriptor.id === 'serviceTier')!
+    expect(isDefaultServiceTier(defaultSpeed)).toBe(false)
+    expect(
+      nativeChatOptionValuesLabel(defaultSnapshot.slice(1), sayNativeChatSessionOptionEnglish)
+    ).toBe('High · Default')
+    expect(
+      nativeChatSessionChoiceLabel(
+        { value: 'default', label: 'Standard' },
+        sayNativeChatSessionOptionEnglish,
+        'serviceTier'
+      )
+    ).toBe('Standard')
   })
 })

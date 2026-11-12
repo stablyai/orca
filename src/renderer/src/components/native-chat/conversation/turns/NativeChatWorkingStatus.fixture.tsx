@@ -20,8 +20,19 @@ function OmpTurn() {
       <div className="flex items-center justify-end gap-2">
         <NativeChatSessionSpeedButton
           label="Speed"
-          standard={{ value: 'default', label: 'Standard' }}
-          tiers={[{ value: 'priority', label: 'Fast' }]}
+          standard={{ value: 'none', label: 'None', description: 'Do not send service_tier' }}
+          tiers={[
+            { value: 'auto', label: 'Auto', description: 'Provider selects tier' },
+            {
+              value: 'default',
+              label: 'Default',
+              description: 'Standard pricing and performance'
+            },
+            { value: 'flex', label: 'Flex', description: 'Lower cost, slower response' },
+            { value: 'scale', label: 'Scale', description: 'High-throughput tier' },
+            { value: 'priority', label: 'Priority', description: 'Low-latency priority tier' },
+            { value: 'ultrafast', label: 'Ultrafast', description: 'Lowest-latency tier' }
+          ]}
           current={tier}
           disabled={false}
           onSet={(value) => setTier(String(value))}
@@ -33,3 +44,11 @@ function OmpTurn() {
 
 export const omp = defineFixture({ width: 560, render: () => <OmpTurn /> })
 export const narrow = defineFixture({ width: 320, render: () => <OmpTurn /> })
+export const ompMenuOpen = defineFixture({
+  width: 560,
+  render: () => <OmpTurn />,
+  interact: (frame) => {
+    const trigger = frame.querySelector<HTMLButtonElement>('button[aria-label^="Speed"]')
+    trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  }
+})

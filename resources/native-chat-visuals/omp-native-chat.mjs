@@ -1,5 +1,10 @@
 import { writeSync } from 'node:fs'
-import { realizesPriorityServiceTier, serviceTierFamily } from '@oh-my-pi/pi-ai'
+import { serviceTierFamily } from '@oh-my-pi/pi-ai'
+import {
+  SERVICE_TIER_OPENAI_OPTIONS,
+  SERVICE_TIER_ANTHROPIC_OPTIONS,
+  SERVICE_TIER_GOOGLE_OPTIONS
+} from '@oh-my-pi/pi-coding-agent/config/service-tier'
 
 export default function orcaNativeChat(api) {
   if (!process.argv.includes('acp')) {
@@ -10,26 +15,30 @@ export default function orcaNativeChat(api) {
   // OMP redirects process.stdout.write to stderr in ACP; protocol frames use the actual stdout fd.
   const notify = (method, params) =>
     writeSync(1, `${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`)
-  const supportsPriority = (model) =>
-    Boolean(serviceTierFamily(model) && realizesPriorityServiceTier('priority', model))
+  const choices = {
+    openai: SERVICE_TIER_OPENAI_OPTIONS,
+    anthropic: SERVICE_TIER_ANTHROPIC_OPTIONS,
+    google: SERVICE_TIER_GOOGLE_OPTIONS
+  }
   const reportOptions = (ctx) => {
     if (!root(ctx) || typeof api.getServiceTiers !== 'function') {
       return
     }
-    const model = ctx.model
-    const family = model && serviceTierFamily(model)
+    const tiers = api.getServiceTiers()
     notify('_orca/omp/options', {
-      model: model ? `${model.provider}/${model.id}` : null,
-      models: ctx.modelRegistry.getAvailable().map((entry) => ({
-        id: `${entry.provider}/${entry.id}`,
-        priority: supportsPriority(entry),
-        family: serviceTierFamily(entry) ?? null
-      })),
-      serviceTier: family ? (api.getServiceTiers()[family] ?? 'default') : null
+      models: ctx.modelRegistry.getAvailable().map((model) => {
+        const family = serviceTierFamily(model)
+        return {
+          id: `${model.provider}/${model.id}`,
+          serviceTiers: choices[family] ?? [],
+          serviceTier: family ? (tiers[family] ?? 'none') : null
+        }
+      })
     })
   }
 
   api.on('session_start', (_event, ctx) => reportOptions(ctx))
+  api.on('session_switch', (_event, ctx) => reportOptions(ctx))
   api.on('before_agent_start', (_event, ctx) => reportOptions(ctx))
   api.registerCommand('orca-service-tier', {
     description: 'Set the service tier selected in Orca',
@@ -40,13 +49,10 @@ export default function orcaNativeChat(api) {
       const tier = value.trim()
       const model = ctx.model
       const family = model && serviceTierFamily(model)
-      if (!family || !['default', 'priority'].includes(tier)) {
-        throw new Error('This model has no supported Orca service tier')
+      if (!choices[family]?.some((choice) => choice.value === tier)) {
+        throw new Error('This model has no matching native service tier')
       }
-      if (tier === 'priority' && !supportsPriority(model)) {
-        throw new Error('Priority service is unavailable for this model')
-      }
-      api.setServiceTier(family, tier === 'priority' ? 'priority' : undefined)
+      api.setServiceTier(family, tier === 'none' ? undefined : tier)
       reportOptions(ctx)
     }
   })
@@ -54,6 +60,7 @@ export default function orcaNativeChat(api) {
   let outputTokens = 0
   let durationMs = 0
   let measured = true
+  let requestStartedAt
   api.on('agent_start', (_event, ctx) => {
     if (!root(ctx)) {
       return
@@ -61,25 +68,36 @@ export default function orcaNativeChat(api) {
     outputTokens = 0
     durationMs = 0
     measured = true
+    requestStartedAt = undefined
+  })
+  api.on('before_provider_request', (_event, ctx) => {
+    if (root(ctx)) {
+      requestStartedAt = performance.now()
+    }
   })
   api.on('message_end', ({ message }, ctx) => {
     if (!root(ctx) || message.role !== 'assistant') {
       return
     }
     const tokens = message.usage?.output
-    const duration = message.duration
+    const elapsed =
+      requestStartedAt === undefined ? undefined : performance.now() - requestStartedAt
+    requestStartedAt = undefined
+    const duration = message.duration ?? elapsed
+    // Synthetic assistant notices have no provider request or output to measure.
+    if (tokens === 0 && duration === undefined) {
+      return
+    }
     measured &&= Number.isFinite(tokens) && tokens >= 0 && Number.isFinite(duration) && duration > 0
     if (!measured) {
       return
     }
     outputTokens += tokens
     durationMs += duration
-  })
-  api.on('agent_end', (event, ctx) => {
-    reportOptions(ctx)
-    if (!root(ctx) || event.willContinue || !measured || outputTokens <= 0 || durationMs <= 0) {
-      return
+    if (outputTokens > 0 && durationMs > 0) {
+      // Native agent_end hooks can run after ACP has already returned the prompt result.
+      notify('_orca/omp/generation', { outputTokens, durationMs })
     }
-    notify('_orca/omp/generation', { outputTokens, durationMs })
   })
+  api.on('agent_end', (_event, ctx) => reportOptions(ctx))
 }

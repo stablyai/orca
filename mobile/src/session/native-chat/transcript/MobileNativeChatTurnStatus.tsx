@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
-import { nativeChatElapsedSeconds } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import {
+  formatNativeChatTurnRate,
+  nativeChatElapsedSeconds
+} from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import {
   formatMobileNativeChatTurnStatusLabel,
   nativeChatTurnStatusCopy
@@ -40,9 +43,9 @@ export function MobileNativeChatTurnStatus({
   const t = useMobileTranslation()
   const settled = workedSeconds != null
   const elapsedSeconds = useElapsedSeconds(startedAt, !settled)
-  const rate = tokensPerSecond == null ? '' : ` · ${tokensPerSecond.toFixed(1)} tok/s`
   const label =
-    formatMobileNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict }, t) + rate
+    formatMobileNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict }, t) +
+    formatNativeChatTurnRate(workedSeconds, tokensPerSecond)
 
   if (settled && onToggleExpanded) {
     return (

@@ -51,9 +51,9 @@ pnpm dev:fresh [--keep] [--seed-from[=<profile dir>]]   # temporary profile, rem
 
 ## OMP native chat
 
-OMP loads the bundled `resources/native-chat-visuals/omp-native-chat.mjs` extension for ACP chats and model discovery. Fast uses OMP's per-provider-family `priority` service tier and the shared chat speed toggle. OMP's own model classifiers gate the choice; unknown or unsupported models offer no Fast control. Saved choices are applied before the opening request, and idle-session changes are confirmed by the running agent.
+OMP loads the bundled `resources/native-chat-visuals/omp-native-chat.mjs` telemetry extension independently of inline visuals and scratch setup, including restored ACP sessions and model discovery. The speed picker preserves the running OMP version's native provider-family choices, descriptions, and current value for each model. `None` clears the override; literal `Default` is a distinct selection. Native provider adapters decide which values reach a request, so a listed tier does not guarantee that the provider realizes it. Reasoning effort remains a separate control.
 
-The settled turn bar shows `tok/s` from the completed agent run's summed assistant-message `usage.output` counters divided by its summed measured `duration` values in seconds. This model-request average includes time to first token and excludes tool execution between requests. The journal retains the measurements across reconnects; streaming, older history, missing counters/durations, and spans below 100 ms show no rate. Text length supplies no token estimate.
+The settled desktop/mobile turn bar shows `tok/s` from native assistant `usage.output` counters divided by measured provider-request time. Native request duration is preferred; when absent, the real provider-request/message-end interval includes first-token wait and excludes tool gaps. Cumulative snapshots arrive before turn settlement and replace earlier snapshots in the durable journal rather than being added twice. Synthetic zero-token notices leave valid measurements intact. Running turns, older unmeasured history, missing counters/timing, and spans below 100 ms show no rate; text length supplies no token estimate.
 
 ## Troubleshooting
 

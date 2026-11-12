@@ -18,6 +18,9 @@ it('retains provider-token throughput across settlement and reload without count
   const first = translator.openPrompt('first', 1_000)
   first.events.forEach((event) => rig.assembler.apply(event))
   translator
+    .notification('_orca/omp/generation', { outputTokens: 42, durationMs: 500 }, 2_000)
+    .forEach((event) => rig.assembler.apply(event))
+  translator
     .notification('_orca/omp/generation', { outputTokens: 84, durationMs: 2_000 }, 30_000)
     .forEach((event) => rig.assembler.apply(event))
   translator

@@ -110,8 +110,8 @@ export function nativeChatSessionChoiceLabel(
   say: NativeChatSessionOptionSay,
   optionId?: string
 ): string {
-  // `default` is only Standard inside a speed choice; other selects may use the value.
-  if (optionId === 'serviceTier' && choice.value === 'default') {
+  // Translate only Orca's synthetic Standard choice; preserve a provider's literal Default tier.
+  if (optionId === 'serviceTier' && choice.value === 'default' && choice.label === 'Standard') {
     return say('standard')
   }
   const id = levelId(LEVEL_IDS, choice.value)

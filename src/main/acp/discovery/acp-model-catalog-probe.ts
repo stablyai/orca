@@ -99,9 +99,10 @@ export function createAcpModelCatalogProbe(
       spec.agent === 'omp'
         ? ((await resolveNativeChatVisualsSkillLocation())?.pluginDir ?? null)
         : null
+    const extensionPath = pluginDir ? join(pluginDir, 'omp-native-chat.mjs') : undefined
     const launch = {
       command,
-      args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDir })],
+      args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDir, extensionPath })],
       cwd,
       env,
       envToDelete
@@ -141,7 +142,7 @@ export function createAcpModelCatalogProbe(
           assertStructuredAgentResolutionCurrent(operation)
           const args = [
             ...prefixArgs,
-            ...spec.args({ fullAccess: false, pluginDir, model }),
+            ...spec.args({ fullAccess: false, pluginDir, extensionPath, model }),
             ...(folderArgs && folder ? folderArgs(folder.path) : [])
           ]
           const result = await runAgentModelCatalogSession(

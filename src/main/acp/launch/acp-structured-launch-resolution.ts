@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { checkAcpLaunchVersion } from './acp-launch-version'
 import { overlayEnvironmentVariables } from '../../../shared/environment-overlay'
 
@@ -34,6 +35,7 @@ import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-c
 import { nothingExchangedOn } from '../session/acp-structured-resume-history'
 import { acpUnannouncedLosses } from '../session/start/acp-session-reopen-failure'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
+import { resolveNativeChatVisualsSkillLocation } from '../../native-chat/native-chat-visuals-skill-location'
 
 export type AcpStructuredLaunch = StructuredAgentCommand & {
   spec: AcpLaunchSpec
@@ -186,7 +188,18 @@ export function acpStructuredLaunchPart(
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.
     const model = spec.launchesWithModel && !head ? record.options?.model : undefined
-    const args = spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null, model })
+    const extensionSkill =
+      spec.agent === 'omp'
+        ? (visuals?.skill ?? (await resolveNativeChatVisualsSkillLocation()))
+        : null
+    const args = spec.args({
+      fullAccess,
+      pluginDir: skill?.pluginDir ?? null,
+      ...(extensionSkill
+        ? { extensionPath: join(extensionSkill.pluginDir, 'omp-native-chat.mjs') }
+        : {}),
+      model
+    })
     return {
       launch: {
         spec,

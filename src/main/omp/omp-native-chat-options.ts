@@ -3,15 +3,19 @@ import type { AgentSessionModelOption } from '../../shared/agent-session/agent-s
 import type { AcpOptionWrite } from '../acp/options/acp-structured-options'
 
 const OmpNativeChatOptionsSchema = z.object({
-  model: z.string().min(1).nullable(),
   models: z.array(
     z.object({
       id: z.string().min(1),
-      priority: z.boolean(),
-      family: z.enum(['openai', 'anthropic', 'google']).nullable()
+      serviceTiers: z.array(
+        z.object({
+          value: z.string().min(1),
+          label: z.string().min(1),
+          description: z.string().optional()
+        })
+      ),
+      serviceTier: z.string().min(1).nullable()
     })
-  ),
-  serviceTier: z.string().min(1).nullable()
+  )
 })
 
 export type OmpNativeChatOptions = z.infer<typeof OmpNativeChatOptionsSchema>
@@ -34,12 +38,9 @@ export function withOmpServiceTiers(
   if (!report) {
     return models
   }
-  const supported = new Set(
-    report.models.filter((model) => model.priority).map((model) => model.id)
-  )
   return models.map((model) => ({
     ...model,
-    serviceTiers: supported.has(model.id) ? [{ value: 'priority', label: 'Fast' }] : []
+    serviceTiers: report.models.find((entry) => entry.id === model.id)?.serviceTiers ?? []
   }))
 }
 
@@ -52,11 +53,9 @@ export function ompServiceTierWrite(
   if (!report || !command) {
     return null
   }
-  const model = report.models.find((entry) => entry.id === modelId)
-  if (!model?.family) {
-    return null
-  }
-  return value === 'default' || (value === 'priority' && model?.priority)
+  return report.models
+    .find((entry) => entry.id === modelId)
+    ?.serviceTiers.some((choice) => choice.value === value)
     ? { method: 'command', text: command(value) }
     : null
 }
@@ -65,5 +64,6 @@ export function currentOmpServiceTier(
   report: OmpNativeChatOptions | undefined,
   modelId: string | undefined
 ): { serviceTier?: string } {
-  return report?.model === modelId && report?.serviceTier ? { serviceTier: report.serviceTier } : {}
+  const value = report?.models.find((entry) => entry.id === modelId)?.serviceTier
+  return value ? { serviceTier: value } : {}
 }

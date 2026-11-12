@@ -183,7 +183,13 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               env: { ...launch.env, ...skill?.env },
               args: [
                 ...invocation.prefixArgs,
-                ...spec.args({ fullAccess: false, pluginDir: skill?.pluginDir ?? null }),
+                ...spec.args({
+                  fullAccess: false,
+                  pluginDir: skill?.pluginDir ?? null,
+                  ...(spec.agent === 'omp' && location
+                    ? { extensionPath: join(location.pluginDir, 'omp-native-chat.mjs') }
+                    : {})
+                }),
                 ...folderArgs
               ]
             })

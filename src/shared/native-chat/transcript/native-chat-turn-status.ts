@@ -131,6 +131,19 @@ export function formatNativeChatTurnStatusLabel(input: {
   return NATIVE_CHAT_TURN_STATUS_COPY[key].replaceAll('{{value0}}', duration)
 }
 
+/** Append settled throughput when positive; running or unmeasured turns show no rate. */
+export function formatNativeChatTurnRate(
+  workedSeconds: number | null | undefined,
+  tokensPerSecond: number | null | undefined
+): string {
+  return workedSeconds != null &&
+    tokensPerSecond != null &&
+    Number.isFinite(tokensPerSecond) &&
+    tokensPerSecond > 0
+    ? ` · ${tokensPerSecond.toFixed(1)} tok/s`
+    : ''
+}
+
 export type NativeChatTurnTiming = {
   startedAt: number
   workedSeconds: number | null
@@ -267,7 +280,11 @@ export function selectNativeChatTurnStatuses(
       thinking: false,
       workedSeconds: settled.workedSeconds,
       ...(settled.verdict ? { verdict: settled.verdict } : {}),
-      ...(settled.tokensPerSecond != null ? { tokensPerSecond: settled.tokensPerSecond } : {})
+      ...(settled.tokensPerSecond != null &&
+      Number.isFinite(settled.tokensPerSecond) &&
+      settled.tokensPerSecond > 0
+        ? { tokensPerSecond: settled.tokensPerSecond }
+        : {})
     }
   }
   const activeTiming = timingByTurn[activeTurnKey]

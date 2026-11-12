@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { AcpStructuredOptions } from './acp-structured-options'
 import { OMP_ACP_DIALECT } from '../acp-dialects/omp-dialect'
 
-it('uses the newly selected model capability before OMP reports its service tier again', () => {
+it('uses native family selections and choices when switching models without another report', () => {
   const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
   const config = (model: string) => [
     {
@@ -20,13 +20,40 @@ it('uses the newly selected model capability before OMP reports its service tier
   ]
   options.adoptSession({ configOptions: config('openai/gpt-4.1') })
   options.adoptServiceTiers({
-    model: 'openai/gpt-4.1',
-    serviceTier: 'priority',
     models: [
-      { id: 'openai/gpt-4.1', priority: true, family: 'openai' },
-      { id: 'custom/qwen', priority: false, family: null },
-      { id: 'google/gemini', priority: true, family: 'google' }
+      {
+        id: 'openai/gpt-4.1',
+        serviceTier: 'priority',
+        serviceTiers: [
+          { value: 'none', label: 'None' },
+          { value: 'default', label: 'Default' },
+          { value: 'flex', label: 'Flex' },
+          { value: 'priority', label: 'Priority' }
+        ]
+      },
+      { id: 'custom/qwen', serviceTier: null, serviceTiers: [] },
+      {
+        id: 'google/gemini',
+        serviceTier: 'flex',
+        serviceTiers: [
+          { value: 'none', label: 'None' },
+          { value: 'flex', label: 'Flex' },
+          { value: 'priority', label: 'Priority' }
+        ]
+      }
     ]
+  })
+  expect(options.write('serviceTier', 'default')).toEqual({
+    method: 'command',
+    text: '/orca-service-tier default'
+  })
+  expect(options.write('serviceTier', 'none')).toEqual({
+    method: 'command',
+    text: '/orca-service-tier none'
+  })
+  expect(options.write('serviceTier', 'flex')).toEqual({
+    method: 'command',
+    text: '/orca-service-tier flex'
   })
   options.adoptConfigOptions(config('custom/qwen'))
   expect(options.write('serviceTier', 'priority')).toBeNull()
@@ -40,5 +67,6 @@ it('uses the newly selected model capability before OMP reports its service tier
     method: 'command',
     text: '/orca-service-tier priority'
   })
-  expect(options.read().current.confirmed).not.toContain('serviceTier')
+  expect(options.read().current.serviceTier).toBe('flex')
+  expect(options.write('serviceTier', 'default')).toBeNull()
 })

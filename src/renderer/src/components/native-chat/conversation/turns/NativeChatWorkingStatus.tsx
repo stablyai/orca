@@ -4,6 +4,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
   describeNativeChatTurnStatus,
+  formatNativeChatTurnRate,
   NATIVE_CHAT_TURN_STATUS_COPY
 } from '../../../../../../shared/native-chat/transcript/native-chat-turn-status'
 import type { AgentTurnOutcome } from '../../../../../../shared/agent-status/lifecycle/agent-turn-outcome'
@@ -65,8 +66,8 @@ export function NativeChatWorkingStatus({
     elapsedSeconds,
     verdict
   })
-  const rate = tokensPerSecond == null ? '' : ` · ${tokensPerSecond.toFixed(1)} tok/s`
-  const label = turnStatusLabel(key, duration, t) + rate
+  const label =
+    turnStatusLabel(key, duration, t) + formatNativeChatTurnRate(workedSeconds, tokensPerSecond)
   // `tabular-nums`: the live clock reflows its own label every second otherwise.
   const className =
     'flex min-h-8 items-center gap-1 border-b border-border text-sm text-chat-foreground-faint tabular-nums'
