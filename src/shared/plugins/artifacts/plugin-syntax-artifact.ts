@@ -90,14 +90,26 @@ function configurationSchema(strictness: PluginArtifactStrictness) {
           .array(optional(item))
           .max(64)
           .transform((items) => items.filter((entry) => entry !== undefined))
-  return z.object({
-    comments: optional(
-      z.object({ lineComment: optional(lineLiteral), blockComment: optional(linePair) })
-    ),
-    brackets: list(linePair).optional(),
-    autoClosingPairs: list(closingPair).optional(),
-    surroundingPairs: list(closingPair).optional()
-  })
+  return z
+    .object({
+      comments: optional(
+        z.object({ lineComment: optional(lineLiteral), blockComment: optional(linePair) })
+      ),
+      brackets: list(linePair).optional(),
+      autoClosingPairs: list(closingPair).optional(),
+      surroundingPairs: list(closingPair).optional()
+    })
+    .transform((config) => {
+      if (config.autoClosingPairs || !config.brackets) {
+        return config
+      }
+      // Why: without autoClosingPairs Monaco auto-closes every bracket, so long ones would be
+      // typed as you type; spell out only the pairs that pass the typed-pair rule.
+      const autoClosingPairs = config.brackets
+        .map(([open, close]) => ({ open, close }))
+        .filter((pair) => closingPair.safeParse(pair).success)
+      return { ...config, autoClosingPairs }
+    })
 }
 const tolerantConfigurationSchema = configurationSchema('tolerant')
 
