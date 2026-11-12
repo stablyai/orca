@@ -64,6 +64,7 @@ function withFileDestinations(
 ): CommentMarkdownExtension {
   return {
     remarkPlugins: [...(visualExtension?.remarkPlugins ?? []), remarkNativeChatFileDestinations],
+    remarkPluginsBefore: visualExtension?.remarkPluginsBefore,
     extraFlowSyntaxMarkers: visualExtension?.remarkPlugins.length
       ? visualExtension.extraFlowSyntaxMarkers
       : [],
@@ -146,7 +147,13 @@ export function NativeChatMarkdown({
         ? createNativeChatImageExtension(visualExtension, onLinkClick)
         : withFileDestinations(visualExtension)
     return preserveBulletIndentation
-      ? { ...base, remarkPluginsBefore: [remarkNativeChatBulletIndentation] }
+      ? {
+          ...base,
+          remarkPluginsBefore: [
+            remarkNativeChatBulletIndentation,
+            ...(base.remarkPluginsBefore ?? [])
+          ]
+        }
       : base
   }, [onLinkClick, preserveBulletIndentation, variant, visualExtension])
   const fileLinkExists = useNativeChatFileLinkExists(
