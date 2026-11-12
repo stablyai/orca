@@ -27,7 +27,9 @@ vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) =>
   readWslDistroRunningState: readWslDistroRunningStateMock
 }))
 
-import { ghExecFileAsync, glabExecFileAsync, setDefaultWslDistroOverride } from './runner'
+import { ghExecFileAsync } from './command-runner/hosted-cli/gh-exec-file'
+import { glabExecFileAsync } from './command-runner/hosted-cli/glab-exec-file'
+import { setDefaultWslDistroOverride } from './command-runner/host-routing/wsl-command-resolution'
 import { _resetGhRateLimitBreaker } from './gh-rate-limit-breaker'
 import { runAsWslExecUserAct } from '../wsl/discovery/wsl-background-exec-gate'
 import {

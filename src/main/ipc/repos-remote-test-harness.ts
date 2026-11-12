@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type * as GitRunner from '../git/runner'
+import type * as GitSpawnModule from '../git/command-runner/git-spawn'
 import type * as RepoModule from '../git/repo'
 
 /** Unconstrained spy; annotated explicitly so declaration emit never names @vitest/spy internals. */
@@ -116,15 +116,12 @@ export function gitRepoModuleMock(
 }
 
 // Keep real environment builders so clone tests verify actual credential-prompt guards.
-export function gitRunnerModuleMock(
+export function gitSpawnModuleMock(
   mocks: ReposIpcMocks,
-  actual: typeof GitRunner
+  actual: typeof GitSpawnModule
 ): Record<string, unknown> {
   return {
     ...actual,
-    gitExecFileAsync: mocks.gitExecFileAsyncMock,
-    gitExecFileAsyncBuffer: vi.fn(),
-    gitStreamStdout: vi.fn(),
     gitSpawn: mocks.gitSpawnMock,
     gitSpawnAfterWindowsEnvironmentReady: mocks.gitSpawnAfterWindowsEnvironmentReadyMock
   }

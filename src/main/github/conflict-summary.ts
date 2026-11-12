@@ -3,7 +3,7 @@ import {
   isUnsupportedMergeTreeMergeBaseError,
   isUnsupportedMergeTreeWriteTreeError
 } from '../../shared/git/branches/git-merge-tree-capability'
-import { gitExecFileAsync } from '../git/runner'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from '../git/git-runtime-options'
 import { createLocalGitObjectQuarantine } from '../git/local-git-object-quarantine'
 import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
@@ -11,7 +11,7 @@ import { RuntimeRemoteFetchController } from '../runtime/repositories/runtime-re
 import {
   clearGitCapabilityStateForTests,
   withLocalGitCapabilityCacheForExecution
-} from '../git/command-runner/git-capability-state'
+} from '../git/command-runner/host-routing/git-capability-state'
 import {
   __resetPRConflictSummaryDerivationCachesForTests,
   buildConflictSummaryCacheKey,

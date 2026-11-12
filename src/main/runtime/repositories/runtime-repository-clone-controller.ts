@@ -14,7 +14,7 @@ import {
   getSavedProjectPathKeys
 } from '../../git/repo-clone-path'
 import { gitSpawnAfterWindowsEnvironmentReady } from '../../git/command-runner/git-spawn'
-import { promptGuardGitEnv } from '../../git/command-runner/git-process-env'
+import { promptGuardGitEnv } from '../../git/command-runner/git-environment/git-process-env'
 import { reuseSavedCloneTarget } from '../../git/saved-clone-target'
 import { checkCloneTarget } from '../../git/clone-target-check'
 import type {

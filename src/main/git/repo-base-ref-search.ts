@@ -10,7 +10,7 @@ import { isRemoteHeadRef } from '../../shared/source-control/hosted-review/hoste
 import { runSearchBaseRefsGit } from './repo-ref-search-command'
 export { buildSearchBaseRefsArgv } from './repo-ref-search-command'
 import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 import { isQualifiedBaseRef, resolveBaseRefSearchSelector } from './base-ref-search-selector'
 
 type RefSearchPatternGroup = 'all' | 'segmented' | 'branchRoot'

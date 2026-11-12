@@ -7,7 +7,7 @@ import type {
 import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { ghExecFileAsync } from '../git/runner'
+import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
 import {
   clearGhRateLimitBlock,
   getGhRateLimitBlockedUntilMs,

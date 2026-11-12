@@ -20,13 +20,13 @@ import {
 import { RemoteRuntimeRequestConnection } from './remote-runtime-request-connection'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import { createFakeSpawnedChild } from '../../__fixtures__/fake-spawned-child'
-import * as commandResolution from '../../../main/git/command-runner/git-command-resolution'
+import * as commandResolution from '../../../main/git/command-runner/host-routing/git-command-resolution'
 import * as gitRunner from '../../../main/git/command-runner/git-exec-file'
 import {
   acquireGitAdmission,
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests
-} from '../../../main/git/command-runner/git-subprocess-admission'
+} from '../../../main/git/command-runner/admission/git-subprocess-admission'
 import { GitAdmissionScheduler } from '../../git/admission/git-admission-scheduler'
 
 const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))

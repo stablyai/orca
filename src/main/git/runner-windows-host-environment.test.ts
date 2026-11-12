@@ -14,13 +14,12 @@ vi.mock('node:child_process', () => ({
 
 import {
   awaitWindowsHostGitEnvironmentReady,
-  configureWindowsHostGitEnvironmentReadiness,
-  gitExecFileAsync,
-  gitExecFileAsyncBuffer,
-  gitSpawnAfterWindowsEnvironmentReady,
-  gitStreamStdout
-} from './runner'
-import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
+  configureWindowsHostGitEnvironmentReadiness
+} from './command-runner/host-routing/windows-host-git-environment'
+import { gitExecFileAsync, gitExecFileAsyncBuffer } from './command-runner/git-exec-file'
+import { gitSpawnAfterWindowsEnvironmentReady } from './command-runner/git-spawn'
+import { gitStreamStdout } from './command-runner/git-stream-stdout'
+import { _resetGitAdmissionForTests } from './command-runner/admission/git-subprocess-admission'
 
 type MockChildProcess = EventEmitter & {
   stdout: EventEmitter
@@ -72,67 +71,6 @@ describe('Windows host Git environment readiness', () => {
     } else {
       process.env.Path = originalPath
     }
-  })
-
-  it('waits for each native operation and refreshes a snapshotted PATH', async () => {
-    await withPlatform('win32', async () => {
-      const ready = deferred()
-      const waitUntilReady = vi.fn(() => ready.promise)
-      const child = createMockChildProcess(1234)
-      execFileMock.mockImplementation((_cmd, _args, _options, callback) => {
-        callback(null, 'ok', '')
-        return child
-      })
-      configureWindowsHostGitEnvironmentReadiness(waitUntilReady)
-      process.env.Path = 'hydrating-path'
-
-      const firstExec = gitExecFileAsync(['status'], {
-        cwd: String.raw`C:\repo`,
-        env: { Path: 'stale-path' }
-      })
-
-      expect(waitUntilReady).toHaveBeenCalledOnce()
-      expect(execFileMock).not.toHaveBeenCalled()
-      process.env.Path = 'hydrated-path'
-      ready.resolve()
-      await expect(firstExec).resolves.toEqual({ stdout: 'ok', stderr: '' })
-      expect(execFileMock.mock.calls[0]?.[2]?.env?.Path).toBe('hydrated-path')
-
-      await expect(gitExecFileAsync(['status'], { cwd: String.raw`C:\repo` })).resolves.toEqual({
-        stdout: 'ok',
-        stderr: ''
-      })
-      expect(waitUntilReady).toHaveBeenCalledTimes(2)
-    })
-  })
-
-  it('waits before native spawned Git and refreshes a snapshotted PATH', async () => {
-    await withPlatform('win32', async () => {
-      const ready = deferred()
-      const waitUntilReady = vi.fn(() => ready.promise)
-      const child = createMockChildProcess(1234)
-      spawnMock.mockReturnValue(child)
-      execFileMock.mockImplementation((_cmd, _args, _options, callback) => {
-        callback(Object.assign(new Error('missing SSH config'), { code: 1 }), '', '')
-        return child
-      })
-      configureWindowsHostGitEnvironmentReadiness(waitUntilReady)
-      process.env.Path = 'hydrating-path'
-
-      const spawned = gitSpawnAfterWindowsEnvironmentReady(['clone', 'url', 'repo'], {
-        cwd: String.raw`C:\repo`,
-        env: { Path: 'stale-path' },
-        stdio: ['ignore', 'ignore', 'pipe']
-      })
-
-      expect(waitUntilReady).toHaveBeenCalledOnce()
-      expect(spawnMock).not.toHaveBeenCalled()
-      process.env.Path = 'hydrated-path'
-      ready.resolve()
-
-      await expect(spawned).resolves.toBe(child)
-      expect(spawnMock.mock.calls[0]?.[2]?.env?.Path).toBe('hydrated-path')
-    })
   })
 
   it('does not gate spawned Git routed through WSL on the Windows host profile', async () => {

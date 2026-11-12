@@ -121,7 +121,7 @@ describe('main sync-spawn ratchet', () => {
     'const other = { spawnSync() {} }\nother.spawnSync()',
     "// execFileSync('git')\nconst script = \"require('child_process').execSync('ls')\"",
     "import * as cp from 'child_process'\ncp.spawn('git')",
-    "import { gitExecFileAsync } from './git/runner'\ngitExecFileAsync(['status'])"
+    "import { gitExecFileAsync } from './git/command-runner/git-exec-file'\ngitExecFileAsync(['status'])"
   ])('ignores %s', (source) => {
     expect(uses(source)).toEqual({ count: 0, symbols: [] })
   })

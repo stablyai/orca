@@ -1,6 +1,7 @@
 import { BoundedMap } from '../../../shared/bounded-map'
 import { StatusPorcelainParser } from '../../../shared/git/status/git-status-porcelain-parser'
-import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
+import { gitOptionalLocksDisabledEnv } from '../command-runner/git-environment/git-process-env'
+import { gitStreamStdout } from '../command-runner/git-stream-stdout'
 import type { GetStatusOptions } from './get-status-options'
 import { listUntrackedDirectoryFiles, readUntrackedScan } from './status-untracked-directories'
 

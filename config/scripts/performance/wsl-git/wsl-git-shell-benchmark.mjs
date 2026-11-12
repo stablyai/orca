@@ -325,7 +325,7 @@ async function main() {
       '--untracked-files=all'
     ]
     const [{ gitExecFileAsync }, { getWslGitReadEnvironment }, expected] = await Promise.all([
-      jiti.import('../../../../src/main/git/runner.ts'),
+      jiti.import('../../../../src/main/git/command-runner/git-exec-file.ts'),
       jiti.import('../../../../src/main/git/wsl-git-read-environment.ts'),
       runGit('fast', repo, args)
     ])
