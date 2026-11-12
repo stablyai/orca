@@ -32,6 +32,8 @@ export type CodexVoiceCallState = {
   muted: boolean
   speaking: 'user' | 'assistant' | null
   captions: readonly CodexVoiceCaption[]
+  /** The preferred voice this chat's Codex does not offer; its default voice speaks instead. */
+  unavailableVoice: string | null
   failure: { kind: CodexVoiceFailure; message?: string } | null
 }
 
@@ -57,6 +59,7 @@ export class CodexVoiceCall {
     muted: false,
     speaking: null,
     captions: [],
+    unavailableVoice: null,
     failure: null
   }
   private ended = false
@@ -168,6 +171,9 @@ export class CodexVoiceCall {
         return
       case 'error':
         this.providerMessage = event.message
+        return
+      case 'voice-unavailable':
+        this.update({ unavailableVoice: event.voice })
         return
       case 'ended':
         this.end(

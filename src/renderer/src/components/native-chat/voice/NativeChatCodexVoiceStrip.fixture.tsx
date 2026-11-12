@@ -18,6 +18,7 @@ const live: CodexVoiceCallState = {
       text: 'Write-through keeps reads fresh; write-back is faster.'
     }
   ],
+  unavailableVoice: null,
   failure: null
 }
 
@@ -61,6 +62,17 @@ export const failed = defineFixture({
 })
 
 export const narrow = defineFixture({ width: 360, render: strip(live) })
+
+/** The saved voice is missing from this Codex's v3 list (0.165 lists no `marin` there). */
+export const voiceUnavailable = defineFixture({
+  width: 720,
+  render: strip({ ...live, speaking: null, captions: [], unavailableVoice: 'marin' })
+})
+
+export const voiceUnavailableWithCaptions = defineFixture({
+  width: 720,
+  render: strip({ ...live, unavailableVoice: 'marin' })
+})
 
 function button(call: CodexVoiceCallState | null): () => React.JSX.Element {
   const voice: NativeChatCodexVoice = {

@@ -146,6 +146,8 @@ export type VoiceSettings = {
   aiCleanupInstructions?: string
   /** Said to take back what came just before it; only AI cleanup acts on it. Absent = "scratch that". */
   dictationCorrectionWord?: string
+  /** Codex Voice mode's voice, as Codex lists it. Absent = Codex's configured or built-in voice. */
+  codexVoice?: string
 }
 
 /** Where a dictation goes: an engine in the desktop's own process takes repoTerms, a host resolves worktreeId itself. */

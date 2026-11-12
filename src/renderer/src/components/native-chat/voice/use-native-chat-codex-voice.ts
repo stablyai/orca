@@ -6,6 +6,8 @@ import { runtimeEnvironmentSupportsCapabilities } from '@/runtime/rpc/compatibil
 import { subscribeStructuredAgentSessionVoice } from '@/runtime/native-chat/requests/structured-agent-session-subscriptions'
 import { openMicrophoneCaptureStream } from '@/components/dictation/microphone-devices'
 import { CodexVoiceCall, type CodexVoiceCallState } from './codex-voice-call'
+import { noteCodexVoiceSource } from './codex-voice-catalog'
+import { AGENT_SESSION_VOICE_NAME_PATTERN } from '../../../../../shared/agent-session/agent-session-voice-conversation'
 
 export type NativeChatCodexVoice = {
   /** `unavailable`: this chat's host has no voice relay. */
@@ -81,6 +83,11 @@ export function useNativeChatCodexVoice(args: {
     const voice = useAppStore.getState().settings?.voice
     const callTarget: RuntimeClientTarget =
       environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId }
+    // A hand-edited value the host would refuse falls back to Codex's default instead.
+    const codexVoice =
+      voice?.codexVoice && AGENT_SESSION_VOICE_NAME_PATTERN.test(voice.codexVoice)
+        ? voice.codexVoice
+        : undefined
     const next = new CodexVoiceCall(
       {
         openMicrophone: async () =>
@@ -97,7 +104,7 @@ export function useNativeChatCodexVoice(args: {
         subscribe: (offerSdp, onEvent, onError, onClose) =>
           subscribeStructuredAgentSessionVoice(
             callTarget,
-            { sessionId, offerSdp },
+            { sessionId, offerSdp, ...(codexVoice ? { voice: codexVoice } : {}) },
             onEvent,
             onError,
             onClose
@@ -113,6 +120,17 @@ export function useNativeChatCodexVoice(args: {
     setCall(next.current)
     void next.start()
   }, [sessionId, environmentId])
+
+  // Settings lists voices from the Codex chat shown last, and asks again when it opens.
+  const listVoices = args.agent === 'codex' && visible && availability === 'available'
+  useEffect(() => {
+    if (listVoices) {
+      noteCodexVoiceSource({
+        target: environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId },
+        sessionId
+      })
+    }
+  }, [listVoices, sessionId, environmentId])
 
   // Dictation started from anywhere (its shortcut included) takes the microphone from the call.
   useEffect(() => {

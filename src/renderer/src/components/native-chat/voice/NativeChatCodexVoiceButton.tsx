@@ -1,10 +1,11 @@
-import { AudioLines, PhoneOff } from 'lucide-react'
+import { AudioLines } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatCodexVoice } from './use-native-chat-codex-voice'
+import { NativeChatVoiceBars } from './NativeChatVoiceBars'
 
-/** Starts or ends this chat's Codex voice conversation; the strip above the composer shows it. */
+/** Turns this chat's Codex Voice mode on or off; the strip above the composer shows it. */
 export function NativeChatCodexVoiceButton({
   voice
 }: {
@@ -13,8 +14,8 @@ export function NativeChatCodexVoiceButton({
   const t = useTranslate()
   const inCall = !!voice.call && voice.call.phase !== 'ended'
   const label = inCall
-    ? t('components.native-chat.voice.end', 'End voice conversation')
-    : t('components.native-chat.voice.start', 'Start voice conversation')
+    ? t('components.native-chat.voice.end', 'End Voice mode')
+    : t('components.native-chat.voice.start', 'Start Voice mode')
   const blocked = inCall
     ? null
     : voice.availability === 'checking'
@@ -22,10 +23,13 @@ export function NativeChatCodexVoiceButton({
       : voice.availability === 'unavailable'
         ? t(
             'components.native-chat.voice.hostUnavailable',
-            "This chat's host does not support Codex voice yet"
+            "This chat's host does not support Codex Voice mode yet"
           )
         : voice.dictating
-          ? t('components.native-chat.voice.dictationActive', 'Finish dictation to start voice')
+          ? t(
+              'components.native-chat.voice.dictationActive',
+              'Finish dictation to start Voice mode'
+            )
           : null
   const hint =
     blocked ??
@@ -33,7 +37,7 @@ export function NativeChatCodexVoiceButton({
       ? label
       : t(
           'components.native-chat.voice.startHint',
-          "Talk with this chat's Codex. Speech uses Codex's OpenAI voice service."
+          "Talk with this chat's Codex. Voice mode uses Codex's OpenAI voice service."
         ))
   return (
     <Tooltip>
@@ -51,7 +55,13 @@ export function NativeChatCodexVoiceButton({
             onClick={inCall ? voice.stop : voice.start}
             className="pointer-coarse:size-11"
           >
-            {inCall ? <PhoneOff className="size-4" /> : <AudioLines className="size-4" />}
+            {inCall ? (
+              <NativeChatVoiceBars
+                moving={voice.call?.phase === 'live' && voice.call.speaking !== null}
+              />
+            ) : (
+              <AudioLines className="size-4" />
+            )}
           </Button>
         </span>
       </TooltipTrigger>

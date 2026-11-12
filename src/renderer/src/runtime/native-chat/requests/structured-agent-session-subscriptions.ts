@@ -88,7 +88,7 @@ export function subscribeStructuredAgentSessionTurnCompletions(
 /** One Codex voice attempt; unsubscribing stops the provider's voice session. */
 export function subscribeStructuredAgentSessionVoice(
   target: RuntimeClientTarget,
-  params: { sessionId: string; offerSdp: string },
+  params: { sessionId: string; offerSdp: string; voice?: string },
   onEvent: (event: AgentSessionVoiceEvent) => void,
   onError: (error: unknown) => void,
   onClose: () => void

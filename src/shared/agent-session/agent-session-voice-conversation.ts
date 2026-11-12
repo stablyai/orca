@@ -4,6 +4,9 @@
 /** Codex's helper bounds SDP at 64 KiB; a larger offer is not a browser offer. */
 export const AGENT_SESSION_VOICE_OFFER_MAX_LENGTH = 64 * 1024
 
+/** A voice name as Codex's `thread/realtime/listVoices` reports it; Codex owns which ones exist. */
+export const AGENT_SESSION_VOICE_NAME_PATTERN = /^[a-z0-9_-]{1,64}$/
+
 export const AGENT_SESSION_VOICE_END_REASONS = [
   'requested',
   'transport-closed',
@@ -28,7 +31,12 @@ export type AgentSessionVoiceEvent =
       final: boolean
     }
   | { type: 'error'; message: string }
+  /** This Codex does not offer the preferred voice, so the call uses Codex's default voice. */
+  | { type: 'voice-unavailable'; voice: string }
   /** Terminal: no frame follows, and the provider's session is being stopped. */
   | { type: 'ended'; reason: AgentSessionVoiceEndReason }
   /** Terminal: nothing was started. */
   | { type: 'refused'; reason: AgentSessionVoiceRefusal }
+
+/** Voices this chat's Codex offers for the realtime version Orca starts; null when it cannot list. */
+export type AgentSessionCodexVoices = { voices: string[] | null }
