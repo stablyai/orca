@@ -12,7 +12,6 @@ import type { StatsCollector } from '../../stats/collector'
 import { registerFilesystemHandlers } from '../filesystem/filesystem'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
 import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesystem-watcher-handlers'
-import { registerUsageProviderHandlers } from '../usage-provider-handlers'
 import { registerGitHubHandlers } from '../source-control/github'
 import { registerGitLabHandlers } from '../source-control/gitlab'
 import { registerHostedReviewHandlers } from '../source-control/hosted-review'
@@ -85,10 +84,6 @@ import {
   setTrustedClipboardRendererWebContentsId
 } from '../../window/clipboard-ipc-handlers'
 import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
-import type { ClaudeUsageStore } from '../../claude-usage/store'
-import type { CodexUsageStore } from '../../codex-usage/store'
-import type { OpenCodeUsageStore } from '../../opencode-usage/store'
-import type { MuseUsageStore } from '../../muse-usage/store'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexAccountService } from '../../codex-accounts/service'
 import type { ClaudeAccountService } from '../../claude-accounts/service'
@@ -147,10 +142,6 @@ export function registerCoreHandlers(
   store: Store,
   runtime: OrcaRuntimeService,
   stats: StatsCollector,
-  claudeUsage: ClaudeUsageStore,
-  codexUsage: CodexUsageStore,
-  openCodeUsage: OpenCodeUsageStore,
-  museUsage: MuseUsageStore,
   codexAccounts: CodexAccountService,
   claudeAccounts: ClaudeAccountService,
   rateLimits: RateLimitService,
@@ -188,7 +179,6 @@ export function registerCoreHandlers(
   })
   registerCliHandlers()
   registerPreflightHandlers(store)
-  registerUsageProviderHandlers({ claudeUsage, codexUsage, openCodeUsage, museUsage })
   registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)

@@ -8,7 +8,8 @@ import {
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText,
-  stripSentImagePromptMarkers
+  stripSentImagePromptMarkers,
+  withoutSentImagePromptMarkers
 } from './native-chat-image-transcript-markers'
 import { formatNativeChatFileReference } from '../../agent-image-paste'
 
@@ -250,5 +251,97 @@ describe('composer image chips at send and back', () => {
       )
       expect(stripSentImagePromptMarkers(`[Image #1] in ${file} [Image #1]`, 1)).toBe(`in ${file}`)
     }
+  })
+
+  it('leaves literal markers inside inline backticks and fenced code blocks untouched', () => {
+    expect(
+      stripSentImagePromptMarkers(
+        '[Image #1] why does `[Image #1]` and `` `[Image #1]` `` appear?',
+        1
+      )
+    ).toBe('why does `[Image #1]` and `` `[Image #1]` `` appear?')
+    expect(
+      promptMarkersToImageReferences(
+        '[Image #1] why does `[Image #1]` and `` `[Image #1]` `` appear?',
+        ['r-1']
+      )
+    ).toBe(`${chip('r-1')} why does \`[Image #1]\` and \`\` \`[Image #1]\` \`\` appear?`)
+
+    // Unclosed stray backtick must not swallow a real sent marker after it.
+    expect(stripSentImagePromptMarkers('Don`t show [Image #1]', 1)).toBe('Don`t show')
+
+    const fenced = ['[Image #1]', '```md', '[Image #1]', '```', '~~~', '[Image #1]', '~~~'].join(
+      '\n'
+    )
+    expect(stripSentImagePromptMarkers(fenced, 1)).toBe(
+      ['', '```md', '[Image #1]', '```', '~~~', '[Image #1]', '~~~'].join('\n')
+    )
+    expect(promptMarkersToImageReferences(fenced, ['r-1'])).toBe(
+      [chip('r-1'), '```md', '[Image #1]', '```', '~~~', '[Image #1]', '~~~'].join('\n')
+    )
+  })
+})
+
+describe('withoutSentImagePromptMarkers', () => {
+  const sent = (text: string, images: number, role: NativeChatMessage['role'] = 'user') => ({
+    id: 'm',
+    role,
+    blocks: [
+      { type: 'text' as const, text },
+      ...Array.from({ length: images }, (_, i) => ({
+        type: 'image-ref' as const,
+        path: `/tmp/${i}.png`
+      }))
+    ],
+    timestamp: 1,
+    source: 'transcript' as const
+  })
+
+  it('drops a marker from the middle of the words, not only the start', () => {
+    expect(
+      withoutSentImagePromptMarkers(sent('然后图片下面自带 [Image #1] 。如果不在开头', 1))[0]
+    ).toEqual({
+      type: 'text',
+      text: '然后图片下面自带  。如果不在开头'
+    })
+    expect(withoutSentImagePromptMarkers(sent('[Image #1] 就像这样', 1))[0]).toEqual({
+      type: 'text',
+      text: '就像这样'
+    })
+  })
+
+  it('drops the blank line a marker alone on the first or last line leaves', () => {
+    expect(
+      withoutSentImagePromptMarkers(sent('[Image #1]\r\nexplain\n  this\n[Image #2]', 2))[0]
+    ).toEqual({
+      type: 'text',
+      text: 'explain\n  this'
+    })
+  })
+
+  it('drops a text block left with nothing but its markers, returning the same array each call', () => {
+    const message = sent('[Image #1] [Image #2]', 2)
+    expect(withoutSentImagePromptMarkers(message)).toEqual([
+      { type: 'image-ref', path: '/tmp/0.png' },
+      { type: 'image-ref', path: '/tmp/1.png' }
+    ])
+    expect(withoutSentImagePromptMarkers(message)).toBe(withoutSentImagePromptMarkers(message))
+  })
+
+  it('keeps a marker past the message images, code-quoted markers, and imageless or agent rows', () => {
+    expect(withoutSentImagePromptMarkers(sent('see [Image #2]', 1))[0]).toEqual({
+      type: 'text',
+      text: 'see [Image #2]'
+    })
+    expect(withoutSentImagePromptMarkers(sent('[Image #1]\n```md\n[Image #1]\n```', 1))[0]).toEqual(
+      {
+        type: 'text',
+        text: '```md\n[Image #1]\n```'
+      }
+    )
+    const imageless = sent('see [Image #1]', 0)
+    expect(withoutSentImagePromptMarkers(imageless)).toBe(imageless.blocks)
+    const agent = sent('see [Image #1]', 1, 'assistant')
+    expect(withoutSentImagePromptMarkers(agent)).toBe(agent.blocks)
   })
 })
