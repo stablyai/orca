@@ -37,11 +37,11 @@ import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './ope
 import { applyRemoteViewerClipboardEnv } from './remote-viewer-clipboard-env'
 
 /** Mutate host-local PTY environment only for local execution; SSH cannot use these loopback endpoints or filesystem paths. */
-export function buildPtyHostEnv(
+export async function buildPtyHostEnv(
   id: string,
   baseEnv: Record<string, string>,
   opts: BuildPtyHostEnvOptions
-): Record<string, string> {
+): Promise<Record<string, string>> {
   mergePersistedWindowsPath(baseEnv)
   Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
 
@@ -57,7 +57,7 @@ export function buildPtyHostEnv(
 
   const openCodeConfig = captureOpenCodeSourceConfig(baseEnv, opts.userDataPath)
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
-  applyManagedDataAccountEnvironment(baseEnv, { ...opts, launchCommand: launchCommandHint })
+  await applyManagedDataAccountEnvironment(baseEnv, { ...opts, launchCommand: launchCommandHint })
   applyClaudeAgentViewEnv(baseEnv, opts)
   const explicitPiAgentKind = isPiCompatibleAgentType(opts.launchAgent)
     ? opts.launchAgent

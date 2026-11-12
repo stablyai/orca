@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
-import { z } from 'zod'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type {
@@ -9,45 +8,39 @@ import type {
   ManagedDataAccountsState
 } from '../../shared/managed-account-types'
 import { captureDataAccountCredentials } from './credential-capture'
+import { DevinHostAccountSelection } from './devin-host-account-selection'
 import { ManagedDataAccountProfileRemoval } from './profile-removal'
-import {
-  captureManagedDataAccountOriginalEnvironment,
-  restoreManagedDataAccountEnvironment
-} from '../../shared/managed-data-account-environment'
+import { ManagedDataAccountEnvironmentBaselineState } from './environment-baseline-state'
+import { managedDataAccountStateSchema } from './registry-state'
 
-const MAX_INLINE_AUTH_BASELINES = 64
-const MAX_INLINE_AUTH_BYTES = 64 * 1024
-
-type InlineAuthBaseline = { value: string; selections: Set<string> }
-
-const stateSchema = z.object({
-  accounts: z
-    .array(
-      z.object({
-        id: z.uuid(),
-        label: z.string().min(1).max(120),
-        integrations: z.array(z.string()).max(64),
-        createdAt: z.number()
-      })
-    )
-    .max(64),
-  activeAccountId: z.uuid().nullable()
-})
+export type ManagedDataAccountServiceOptions = {
+  platform?: NodeJS.Platform
+  devinAppDataRoot?: string
+}
 
 export class ManagedDataAccountService {
   private pending: Promise<unknown> = Promise.resolve()
   private readonly listeners = new Set<() => void>()
-  private readonly inlineAuthBaselines = new Map<string, InlineAuthBaseline>()
+  private readonly environmentBaselineState = new ManagedDataAccountEnvironmentBaselineState()
   private readonly profileRemoval: ManagedDataAccountProfileRemoval
+  private readonly devinHostAccountSelection: DevinHostAccountSelection
 
   constructor(
     private readonly root: string,
-    removeDirectory?: (directory: string) => void | Promise<void>
+    removeDirectory?: (directory: string) => void | Promise<void>,
+    options: ManagedDataAccountServiceOptions = {}
   ) {
+    this.devinHostAccountSelection = new DevinHostAccountSelection({
+      root,
+      platform: options.platform ?? process.platform,
+      appDataRoot: options.devinAppDataRoot,
+      accountDirectory: (accountId) => this.requireAccount('devin', accountId).directory,
+      assertOwned: (path) => this.assertOwned(path)
+    })
     this.profileRemoval = new ManagedDataAccountProfileRemoval(
       root,
       (path) => this.assertOwned(path),
-      (contents) => stateSchema.parse(JSON.parse(contents)),
+      (contents) => managedDataAccountStateSchema.parse(JSON.parse(contents)),
       removeDirectory
     )
     if (existsSync(root)) {
@@ -92,10 +85,15 @@ export class ManagedDataAccountService {
           sourceDataHome,
           join(directory, 'data')
         )
-        return this.persist(provider, {
-          accounts: [...state.accounts, { id, label, integrations, createdAt: Date.now() }],
-          activeAccountId: id
-        })
+        return await this.persistSelectionTransition(
+          provider,
+          state,
+          {
+            accounts: [...state.accounts, { id, label, integrations, createdAt: Date.now() }],
+            activeAccountId: id
+          },
+          directory
+        )
       } catch (error) {
         let registered = true
         try {
@@ -128,7 +126,7 @@ export class ManagedDataAccountService {
       const state = this.list(provider)
       const activeAccountId =
         accountId === null ? null : this.requireAccount(provider, accountId).id
-      return this.persist(provider, { ...state, activeAccountId })
+      return this.persistSelectionTransition(provider, state, { ...state, activeAccountId })
     })
   }
 
@@ -136,15 +134,18 @@ export class ManagedDataAccountService {
     provider: ManagedDataAccountProvider,
     accountId: string
   ): Promise<ManagedDataAccountsState> {
-    return this.mutate(() =>
-      this.profileRemoval.remove(
-        provider,
-        accountId,
-        this.list(provider),
-        (next) => this.writeState(provider, next),
-        () => this.notifyChanged()
+    return this.mutate(async () => {
+      const state = this.list(provider)
+      return this.devinHostAccountSelection.remove(provider, state, accountId, () =>
+        this.profileRemoval.remove(
+          provider,
+          accountId,
+          state,
+          (next) => this.writeState(provider, next),
+          () => this.notifyChanged()
+        )
       )
-    )
+    })
   }
 
   launchEnvironment(provider: ManagedDataAccountProvider): Record<string, string> {
@@ -153,6 +154,20 @@ export class ManagedDataAccountService {
       return {}
     }
     return this.environmentForAccount(provider, state.activeAccountId)
+  }
+
+  async syncLaunchCredentials(
+    provider: ManagedDataAccountProvider,
+    selectedEnvironment: Record<string, string>
+  ): Promise<void> {
+    if (provider !== 'devin') {
+      return
+    }
+    await this.devinHostAccountSelection.syncLaunchCredentials(
+      provider,
+      selectedEnvironment,
+      this.list('devin').accounts
+    )
   }
 
   transcriptEnvironments(provider: ManagedDataAccountProvider): Record<string, string>[] {
@@ -168,55 +183,15 @@ export class ManagedDataAccountService {
     environment: Record<string, string>,
     selected: Record<string, string>
   ): void {
-    const value = environment.OPENCODE_AUTH_CONTENT
-    let reference: string | undefined
-    if (value && selected.OPENCODE_AUTH_CONTENT === '') {
-      if (Buffer.byteLength(value, 'utf8') > MAX_INLINE_AUTH_BYTES) {
-        throw new Error('Inline authentication exceeds the managed launch limit.')
-      }
-      const selection = JSON.stringify([selected.XDG_DATA_HOME, selected.XDG_STATE_HOME])
-      const existing = [...this.inlineAuthBaselines].find(([, entry]) => entry.value === value)
-      if (existing) {
-        const [id, entry] = existing
-        if (
-          !entry.selections.has(selection) &&
-          entry.selections.size >= MAX_INLINE_AUTH_BASELINES
-        ) {
-          throw new Error('Managed inline authentication context limit reached.')
-        }
-        entry.selections.add(selection)
-        reference = id
-      } else {
-        if (this.inlineAuthBaselines.size >= MAX_INLINE_AUTH_BASELINES) {
-          throw new Error('Managed inline authentication baseline limit reached.')
-        }
-        reference = randomUUID()
-        this.inlineAuthBaselines.set(reference, { value, selections: new Set([selection]) })
-      }
-    }
-    captureManagedDataAccountOriginalEnvironment(environment, reference)
+    this.environmentBaselineState.captureOriginalEnvironment(environment, selected)
   }
 
   restoreOriginalEnvironment(environment: Record<string, string | undefined>): void {
-    // Restoring copied references requires the original overlay captured by this service.
-    const selection = JSON.stringify([
-      environment.ORCA_DATA_ACCOUNT_DATA_HOME,
-      environment.ORCA_DATA_ACCOUNT_STATE_HOME
-    ])
-    const ownsSelection =
-      environment.ORCA_DATA_ACCOUNT_PROVIDER === 'opencode' &&
-      environment.OPENCODE_AUTH_CONTENT === '' &&
-      environment.OPENCODE_DB === 'opencode.db' &&
-      environment.XDG_DATA_HOME === environment.ORCA_DATA_ACCOUNT_DATA_HOME &&
-      environment.XDG_STATE_HOME === environment.ORCA_DATA_ACCOUNT_STATE_HOME
-    restoreManagedDataAccountEnvironment(environment, true, (reference) => {
-      const baseline = this.inlineAuthBaselines.get(reference)
-      return ownsSelection && baseline?.selections.has(selection) ? baseline.value : undefined
-    })
+    this.environmentBaselineState.restoreOriginalEnvironment(environment)
   }
 
   clearInlineAuthBaselines(): void {
-    this.inlineAuthBaselines.clear()
+    this.environmentBaselineState.clear()
   }
 
   environmentForAccount(
@@ -260,16 +235,32 @@ export class ManagedDataAccountService {
     return checked
   }
 
+  private persistSelectionTransition(
+    provider: ManagedDataAccountProvider,
+    previous: ManagedDataAccountsState,
+    next: ManagedDataAccountsState,
+    unregisteredDirectory?: string
+  ): Promise<ManagedDataAccountsState> {
+    return this.devinHostAccountSelection.persistTransition(
+      provider,
+      previous,
+      next,
+      () => this.persist(provider, next),
+      () => this.list(provider).activeAccountId,
+      unregisteredDirectory
+    )
+  }
+
   private readState(path: string): ManagedDataAccountsState {
     this.assertOwned(path)
-    return stateSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
+    return managedDataAccountStateSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
   }
 
   private writeState(
     provider: ManagedDataAccountProvider,
     state: ManagedDataAccountsState
   ): ManagedDataAccountsState {
-    const checked = stateSchema.parse(state)
+    const checked = managedDataAccountStateSchema.parse(state)
     const path = join(this.root, provider, 'accounts.json')
     if (existsSync(path)) {
       this.assertOwned(path)

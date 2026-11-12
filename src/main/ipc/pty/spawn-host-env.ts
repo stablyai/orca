@@ -241,7 +241,7 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
       launchAgent: args.launchAgent,
       launchCommand
     })
-    buildPtyHostEnv(sessionId, env, {
+    await buildPtyHostEnv(sessionId, env, {
       isPackaged: getAppEnvironment().isPackaged(),
       resourcesPath: process.resourcesPath,
       userDataPath: getAppEnvironment().getPath('userData'),
