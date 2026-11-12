@@ -28,6 +28,7 @@ import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-h
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
+import { getLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
@@ -141,9 +142,10 @@ export async function scanRepoWorktreeRows(
   projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
   repoOwnerCount?: number
 ): Promise<RepoWorktreeRowsScan> {
+  const scanGeneration = getLocalWorktreeScanGeneration(repo.id)
   const scan = await readRepoWorktreeRowsScan(deps, repo, projectRuntimeByRepoId, repoOwnerCount)
   if (scan.ok) {
-    pruneLineageForMissingRepoWorktrees(deps.store, repo, scan.worktrees)
+    pruneLineageForMissingRepoWorktrees(deps.store, repo, scan.worktrees, { scanGeneration })
   }
   return scan
 }

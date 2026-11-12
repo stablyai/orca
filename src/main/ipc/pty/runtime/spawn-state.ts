@@ -12,7 +12,7 @@ import type {
 } from '../../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
+import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { AdoptStablePaneResult } from '../ipc/spawn-types'

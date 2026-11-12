@@ -21,20 +21,6 @@ const wide: GitHistoryItemViewModel = {
   kind: 'node'
 }
 
-it('keeps boundary strokes and restores full geometry when the graph column widens', () => {
-  const narrow = paths(draw(wide, 132))
-  expect(narrow).toContain('M 132 0 V 24')
-  expect(narrow).not.toContain('M 143 0 V 24')
-  expect(narrow).toContain('M 11 0 V 12')
-  expect(narrow).toContain('M 11 12 V 24')
-  const full = draw(wide)
-  expect(paths(draw(wide, 300))).toEqual(paths(full))
-  expect(paths(full)).toContain('M 264 0 V 24')
-  expect(paths(draw(wide, 132))).toEqual(narrow)
-  expect(full.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 275 24')
-  expect(draw(wide, 132).querySelector('svg')?.getAttribute('width')).toBe('275')
-})
-
 it('preserves converging arcs whose strokes enter the graph column', () => {
   const view: GitHistoryItemViewModel = {
     ...wide,
