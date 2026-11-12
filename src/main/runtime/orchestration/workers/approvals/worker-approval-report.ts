@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import {
   WorkerApprovalPayloadSchema,
+  closedApproval,
   type WorkerApprovalOutcome,
   type WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
@@ -13,7 +14,6 @@ import {
   stopReportId,
   type WorkerTurnStopReportDeps
 } from '../turn-stops/worker-turn-stop-report'
-import { closedApproval } from './worker-approval'
 
 /** A Claude terminal worker's approval id; a chat worker's is its journal item id. */
 export const TERMINAL_APPROVAL_ID_PREFIX = 'apr_'
@@ -58,11 +58,14 @@ export function recentOpenApprovalReports(
     .array()
     .parse(
       db.db
-        .prepare(`SELECT o.id, o.payload, o.from_handle FROM messages o
+        // Both sides read only Orca's stop reports through their partial index, never all mail.
+        .prepare(`SELECT o.id, o.payload, o.from_handle
+          FROM messages o INDEXED BY idx_messages_stop_reports
           WHERE o.type = 'escalation' AND o.id LIKE 'msg\\_stop\\_%' ESCAPE '\\'
             AND json_valid(o.payload) AND json_extract(o.payload, '$.approval.state') = 'open'
             -- A closed approval keeps its open report; leave it out before the bound.
-            AND NOT EXISTS (SELECT 1 FROM messages c WHERE c.run_id = o.run_id
+            AND NOT EXISTS (SELECT 1 FROM messages c INDEXED BY idx_messages_stop_reports
+              WHERE c.run_id = o.run_id
               AND c.id LIKE 'msg\\_stop\\_%' ESCAPE '\\' AND json_valid(c.payload)
               AND json_extract(c.payload, '$.approval.approvalId') = json_extract(o.payload, '$.approval.approvalId')
               AND json_extract(c.payload, '$.approval.state') <> 'open')

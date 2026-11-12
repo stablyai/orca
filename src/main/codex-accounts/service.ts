@@ -261,7 +261,7 @@ export class CodexAccountService {
   }
 
   private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
-    return this.identity.resolveSystemDefault()
+    return this.identity.resolveSystemDefault(this.configMirror.readHostModelProvider())
   }
 
   private readIdentityFromHome(

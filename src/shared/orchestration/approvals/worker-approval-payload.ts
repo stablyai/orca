@@ -7,7 +7,8 @@ export type WorkerApprovalDecision = z.infer<typeof WorkerApprovalDecisionSchema
 
 /** Who settled it: a person (in Orca), the coordinator agent, someone in the worker's own chat or
  *  terminal, the agent's own timeout, or no one Orca can name. `terminal-only`: closed for Orca while
- *  the prompt is still up; only a person at the worker's terminal can answer it. */
+ *  the prompt is still up; only a person at the worker's terminal can answer it. `worker-ended`: its
+ *  Dispatch stopped running, so nothing is left to answer. */
 export const WorkerApprovalAnswererSchema = z.enum([
   'person',
   'coordinator',
@@ -15,6 +16,7 @@ export const WorkerApprovalAnswererSchema = z.enum([
   'worker-terminal',
   'auto',
   'terminal-only',
+  'worker-ended',
   'unknown'
 ])
 export type WorkerApprovalAnswerer = z.infer<typeof WorkerApprovalAnswererSchema>
@@ -48,3 +50,21 @@ export const WorkerApprovalPayloadSchema = z.object({
 })
 export type WorkerApprovalPayload = z.infer<typeof WorkerApprovalPayloadSchema>
 export type WorkerApprovalState = WorkerApprovalPayload['state']
+
+/** The same approval once closed: nothing left to answer, and how it closed. */
+export function closedApproval(
+  open: WorkerApprovalPayload,
+  outcome: WorkerApprovalOutcome
+): WorkerApprovalPayload {
+  const closed: WorkerApprovalPayload = {
+    ...open,
+    // Expired is the agent's own timeout alone; every other close, named or not, is not one.
+    state: outcome.by === 'auto' ? 'expired' : 'answered',
+    allowedActions: [],
+    // Only a reason can be delivered.
+    outcome: { ...outcome, reasonDelivered: outcome.reason !== null && outcome.reasonDelivered }
+  }
+  // A countdown means nothing once the prompt is closed.
+  delete closed.expiresAt
+  return closed
+}

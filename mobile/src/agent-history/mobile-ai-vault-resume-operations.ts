@@ -2,7 +2,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/r
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import '../files/mobile-file-preview-operations'
 import { aiVaultResumePreparationSchema } from './mobile-ai-vault-resume-reply-schema'
-import '../browser/mobile-session-browser-reply-schema'
+import '../browser/tab-navigation/mobile-session-browser-reply-schema'
 import '../files/session-documents/mobile-file-tap-reply-schema'
 
 // Legacy resume reads unsupported-method refusals raw to fall back to shared home.

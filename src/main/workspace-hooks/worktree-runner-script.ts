@@ -9,7 +9,7 @@ import { scriptDeclaresPosixShell } from '../../shared/workspace-setup/setup-scr
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
 import { gitExecFileSync } from '../git/command-runner/git-exec-file-sync'
-import { isLocalGitRuntimeRouterInstalled } from '../git/command-runner/local-git-runtime-route'
+import { isLocalGitRuntimeRouterInstalled } from '../git/command-runner/host-routing/local-git-runtime-route'
 import { readWorktreeGitPath } from '../git/worktrees/catalog/worktree-git-path'
 import { resolveWslWorktreeGitPath } from '../git/worktrees/catalog/wsl-worktree-git-path'
 import { knownWslAutomountRoots } from '../wsl/filesystem/wsl-automount-root'

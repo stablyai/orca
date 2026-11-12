@@ -1,4 +1,3 @@
-// Exercise draft preservation, self-write echoes, autosave suspension and baseline settlement through the headless controller.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, requestEditorFileSave } from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { extractExecError } from '../../../git/exec-error'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
 import { ghExecFileAsync } from '../../gh-utils'
 import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'

@@ -1,5 +1,5 @@
 import { useRef, useState, useSyncExternalStore } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, View, type HostInstance } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
 import { NavBar, NavBarRefreshLine } from '../components/nav-bar/NavBar'
@@ -53,7 +53,7 @@ export function MobileSessionHeader({
   const showRefreshLine = useRefreshHint(catchingUp && connState === 'connected')
   const layout = useResponsiveLayout()
   const [headerWidth, setHeaderWidth] = useState<number | null>(null)
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const revealSidebar = useHostSidebarReveal()
   const topChrome = useTopChromeSpace()
   const sideRail = useShellSideRail()

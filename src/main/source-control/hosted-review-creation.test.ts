@@ -98,7 +98,7 @@ vi.mock('../gitlab/requests/glab-request-admission', () => ({
   release: vi.fn()
 }))
 
-vi.mock('../git/command-runner/glab-exec-file', () => ({
+vi.mock('../git/command-runner/hosted-cli/glab-exec-file', () => ({
   glabExecFileAsync: glabExecFileAsyncMock
 }))
 
