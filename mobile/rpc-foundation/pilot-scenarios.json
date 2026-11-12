@@ -19387,6 +19387,37 @@
       ]
     },
     {
+      "id": "session-tab-close-host-unavailable-tells-user",
+      "operation": "session.tab-close",
+      "family": "session.tab-close",
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "close-tab",
+          "id": "close-tab"
+        },
+        {
+          "complete": "session.tabs.close#1",
+          "params": {
+            "reason": "user",
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "runtime_unavailable",
+              "message": "runtime_unavailable"
+            }
+          }
+        },
+        {
+          "checkpoint": "kept"
+        }
+      ]
+    },
+    {
       "id": "review-mark-reviewed-persists",
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",

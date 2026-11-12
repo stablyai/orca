@@ -2494,6 +2494,10 @@
     "useAttachmentInputLeaseGate": {
       "reconnecting": "첨부 실패 (다시 연결 중)"
     },
+    "useCloseActions": {
+      "closeFailed": "탭을 닫지 못했습니다. 다시 시도하세요.",
+      "closeFailedDesktopNotReady": "탭을 닫지 못했습니다. 컴퓨터에서 Orca를 아직 불러오는 중입니다. 잠시 후 다시 시도하세요."
+    },
     "useContentCreateActions": {
       "browserCommandFailed": "브라우저 명령 실행에 실패했습니다.",
       "browserCreateFailed": "브라우저를 만들지 못했습니다.",

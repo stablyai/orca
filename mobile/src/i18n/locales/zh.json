@@ -2500,6 +2500,10 @@
     "useAttachmentInputLeaseGate": {
       "reconnecting": "添加附件失败（重新连接中）"
     },
+    "useCloseActions": {
+      "closeFailed": "无法关闭标签页。请重试。",
+      "closeFailedDesktopNotReady": "无法关闭标签页。电脑上的 Orca 仍在加载，请稍后重试。"
+    },
     "useContentCreateActions": {
       "browserCommandFailed": "浏览器命令执行失败",
       "browserCreateFailed": "创建浏览器失败",
