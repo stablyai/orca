@@ -1,12 +1,12 @@
 import { defineMethod } from '../../core'
 import { requireSwitchedOn } from '../../../sidebar-inputs/require-switched-on'
 import { readRuntimeDesktopSidebarFacts } from '../../../sidebar-inputs/sidebar-inputs-feed-domains'
-import { isHostOwnPhone } from '../../host-own-phone'
+import { isHostOwnPhone } from '../../callers/host-own-phone'
 import { SidebarInputsReadParams } from '../../../../../shared/sidebar-list/sidebar-inputs-feed-contract'
 import { SidebarSessionBeginParams } from '../../../../../shared/rpc-contract/sidebar-session-params'
 import { RepoIconDataUrlsParams } from '../../../../../shared/sidebar-list/repo-icon-data-urls-contract'
 import { SetCollapsedParams } from '../../../../../shared/rpc-contract/workspace-view-collapse-params'
-import { setCollapsedSection } from '../../../workspace-view-collapse-writes'
+import { setCollapsedSection } from '../../../sidebar-inputs/workspace-view-collapse-writes'
 import { ClientWorkspaceViewParams } from '../../../../../shared/rpc-contract/client-workspace-view-params'
 
 // Registered only with ORCA_SIDEBAR_INPUTS=main, so the producers below always exist.

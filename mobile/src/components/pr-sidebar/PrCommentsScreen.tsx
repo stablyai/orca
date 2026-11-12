@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View, type HostInstance } from 'react-native'
 import { Bot, ListFilter } from 'lucide-react-native'
 import { colors, pressedStyle, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -12,9 +12,9 @@ import {
   type PRCommentGroup
 } from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { isBotPRComment } from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
-import { canAddRootComment } from '../../session/pr-comment-actions'
+import { canAddRootComment } from '../../source-control/review/pr-comment-actions'
 import { buildPRCommentsResolutionPrompt } from '../../../../src/shared/source-control/review-comments/pr-comments-resolution-prompt'
-import { useMobileLaunchAgentLabel } from '../../session/use-mobile-launch-agent-label'
+import { useMobileLaunchAgentLabel } from '../../session/agent-launch/use-mobile-launch-agent-label'
 import { useHostProtocolGates } from '../host-protocol-gates-context'
 import { AgentLaunchNotice } from '../AgentLaunchNotice'
 import { useNow } from '../../hooks/use-now'
@@ -30,32 +30,16 @@ import { PrThreadScreen } from './PrThreadScreen'
 import { PRCommentComposer } from './PRCommentComposer'
 import { NotReady, ScreenFrame, type ScreenProps } from './pr-tab-screen-frame'
 import { livePrDetails, readyPrData } from './use-mobile-pr-tab'
-import { prSidebarResourceKey, type PrSidebarData } from '../../session/mobile-pr-sidebar-state'
 
 type CommentsFilter = 'unresolved' | 'all'
 // Each row parses Markdown; page so a long timeline cannot stall the JS thread.
 const COMMENT_PAGE = 12
-const refuseWrite = () => Promise.resolve(false)
 
 export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: ScreenProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const live = readyPrData(tab)
-  // A status reload or details reread blanks the PR for a moment; the last loaded PR stays up so an open thread
-  // and typed comments survive it. A failed read, no PR or another PR still replace it.
-  const [held, setHeld] = useState<PrSidebarData | null>(null)
-  const loaded = live && livePrDetails(live.details) ? live : null
-  const reloading =
-    tab.state.kind === 'loading' ||
-    (live?.details === null &&
-      held !== null &&
-      prSidebarResourceKey(live.pr) === prSidebarResourceKey(held.pr))
-  if (loaded ? loaded !== held : held !== null && !reloading) {
-    setHeld(loaded)
-  }
-  const data = loaded ?? (reloading && held ? held : live)
-  // While the tab has no PR its actions have none to write to, so held content takes typing but not writes.
-  const holding = live === null && data !== null
+  // The tab keeps the PR it shows through reloads, so the open thread and typed comments stay with it.
+  const data = readyPrData(tab)
   const details = livePrDetails(data?.details ?? null)
   const now = useNow(60_000)
   const groups = useMemo(() => groupPRComments(details?.comments ?? []), [details])
@@ -65,7 +49,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
   )
   const [hideBots, setHideBots] = useState(false)
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
-  const filterRef = useRef<View>(null)
+  const filterRef = useRef<HostInstance>(null)
   const [showResolved, setShowResolved] = useState(false)
   const [resolvedLimit, setResolvedLimit] = useState(COMMENT_PAGE)
   const [openThreadId, setOpenThreadId] = useState<string | null>(null)
@@ -99,18 +83,19 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
     () =>
       isPr
         ? {
-            reply: holding ? refuseWrite : commentActions.reply,
-            toggleResolve: holding ? refuseWrite : commentActions.toggleResolve,
+            reply: commentActions.reply,
+            toggleResolve: commentActions.toggleResolve,
             editComment: commentActions.editComment,
             deleteComment: commentActions.deleteComment,
             isReplyBusy: commentActions.isReplyBusy,
             isResolveBusy: commentActions.isResolveBusy,
             isEditBusy: commentActions.isEditBusy,
             isDeleteBusy: commentActions.isDeleteBusy,
+            draftKey: commentActions.draftKey,
             prRepo: data?.pr.prRepo ?? null
           }
         : undefined,
-    [commentActions, data?.pr.prRepo, holding, isPr]
+    [commentActions, data?.pr.prRepo, isPr]
   )
   const canComment = isPr && canAddRootComment(data?.pr.state ?? null)
   const { hostCapabilities } = useHostProtocolGates()
@@ -211,7 +196,8 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
                   })}
                   submitLabel={t('pullRequest.commentsSection.comment', 'Comment')}
                   submitting={commentActions.isRootBusy}
-                  onSubmit={holding ? refuseWrite : commentActions.addRootComment}
+                  draftKey={commentActions.draftKey(null)}
+                  onSubmit={commentActions.addRootComment}
                   inline
                 />
               </View>

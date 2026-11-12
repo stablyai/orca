@@ -11,7 +11,7 @@ import { pluginManifestSchema } from '../../../../../shared/plugins/manifest/plu
 import {
   settlePluginInstallTrust,
   usePluginInstallTrustStore
-} from '@/store/plugin-install-trust-request'
+} from '@/store/plugins/installation/plugin-install-trust-request'
 import type { PluginInstallTrustPrompt } from '../presentation/plugin-install-trust'
 import { usePluginInstallAction } from './use-plugin-install-action'
 

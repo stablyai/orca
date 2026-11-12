@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -11,6 +12,30 @@ import type { GitStatusResult } from '../../../../../../shared/git/status/git-st
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
 import { orderDeleteWorktreeStatusHydrationTargets } from './delete-worktree-dirty-change-counts'
+
+/** Routes a delete target's git reads to its owning host; null when no host can serve it. */
+export function resolveDeleteTargetGitContext(
+  target: Worktree,
+  repos: readonly Repo[]
+): RuntimeGitContext | null {
+  const owner = target.hostId
+    ? findRepoForHost(repos, target.repoId, { hostId: target.hostId })
+    : undefined
+  const ownerTarget = target.hostId
+    ? ipcOrRuntimeTargetForHostId(target.hostId)
+    : runtimeTargetForWorkspaceOwner(useAppStore.getState(), { workspaceId: target.id })
+  if (!ownerTarget) {
+    return null
+  }
+  return {
+    target: ownerTarget,
+    worktreeId: target.id,
+    worktreePath: target.path,
+    connectionId: target.hostId
+      ? (owner?.connectionId ?? undefined)
+      : (getConnectionId(target.id) ?? undefined)
+  }
+}
 
 const EMPTY_STATUS_BY_IDENTITY = new Map<string, GitStatusResult['entries'] | null>()
 
@@ -58,27 +83,16 @@ export function useDeleteWorktreeStatusHydration({
         setStatusByIdentity((current) => new Map(current).set(identity, existingStatus))
         continue
       }
-      const owner = target.hostId
-        ? findRepoForHost(repos, target.repoId, { hostId: target.hostId })
-        : undefined
-      const ownerTarget = target.hostId
-        ? ipcOrRuntimeTargetForHostId(target.hostId)
-        : runtimeTargetForWorkspaceOwner(currentState, { workspaceId: target.id })
-      if (!ownerTarget) {
+      const gitContext = resolveDeleteTargetGitContext(target, repos)
+      if (!gitContext) {
         setStatusByIdentity((current) => new Map(current).set(identity, null))
         continue
       }
-      void getRuntimeGitStatus(
-        {
-          target: ownerTarget,
-          worktreeId: target.id,
-          worktreePath: target.path,
-          connectionId: target.hostId
-            ? (owner?.connectionId ?? undefined)
-            : (getConnectionId(target.id) ?? undefined)
-        },
-        { admissionTier: 'background', includeLineStats: false, signal: controller.signal }
-      )
+      void getRuntimeGitStatus(gitContext, {
+        admissionTier: 'background',
+        includeLineStats: false,
+        signal: controller.signal
+      })
         .then((status) => {
           if (!controller.signal.aborted && generationRef.current === generation) {
             setStatusByIdentity((current) => new Map(current).set(identity, status.entries))

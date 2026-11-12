@@ -2,13 +2,14 @@ import { toast } from 'sonner'
 import type {
   GoogleCookieClearTarget,
   GoogleCookieClearResult
-} from '../../../../../shared/browser-google-cookie-clear'
-import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../../../../shared/browser-runtime-capabilities'
+} from '../../../../../shared/browser/cookies/browser-google-cookie-clear'
+import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store/index'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 function remoteGoogleCookieClearAvailable(environmentId: string): boolean {
@@ -33,7 +34,10 @@ export async function captureGoogleCookieClearTarget(
   const parsedHost = parseExecutionHostId(hostId)
   const environmentId = parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
   pairingRevision ??= environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
-  const targetLabel = label || (profileId === 'default' ? 'Default' : profileId)
+  const targetLabel = translateBrowserSessionProfileLabel(
+    label || (profileId === 'default' ? 'Default' : profileId),
+    profileId
+  )
   const local = await window.api.browser.sessionGoogleCookieClearTarget({
     profileId,
     environmentId
@@ -88,7 +92,10 @@ export async function confirmAndClearGoogleCookies(
 ): Promise<void> {
   const profileId = 'local' in target ? target.local.profileId : target.profileId
   const values = {
-    profile: target.label || (profileId === 'default' ? 'Default' : 'Browser profile')
+    profile: translateBrowserSessionProfileLabel(
+      target.label || (profileId === 'default' ? 'Default' : 'Browser profile'),
+      profileId
+    )
   }
   if (
     !(await confirm({

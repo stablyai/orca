@@ -29,7 +29,7 @@ export async function rewindJournalContext(input: {
   writer: JournalRowWriter
   cards: JournalQueuedMessages
   floor?: AgentJournalCursor
-  boundary?: Pick<JournalEpochRow, 'reason' | 'providerHandle'>
+  boundary?: Pick<JournalEpochRow, 'reason' | 'providerHandle' | 'historyOrigin'>
   fence: number
   items: readonly JournalReplacementItem[]
   inputReceipt: (
@@ -53,7 +53,8 @@ export async function rewindJournalContext(input: {
       const { cleared } = journalQueuePauseRestatement(
         state.queuePauseMarks,
         state.latestAcceptedTurnSequence,
-        input.cards.pauses()
+        input.cards.pauses(),
+        journalInputOrder(state).latestPersonAcceptedSequence()
       )
       const retained = journalInputOrder(state).newestTurn.retainFailures(
         state,
@@ -78,9 +79,11 @@ export async function rewindJournalContext(input: {
       if (boundary) {
         const previous = state.historyOrigin
         const historyOrigin =
-          previous && sameJournalConversation(previous.providerHandle, boundary.providerHandle)
-            ? { historyOrigin: previous.raw }
-            : {}
+          boundary.historyOrigin !== undefined
+            ? { historyOrigin: boundary.historyOrigin }
+            : previous && sameJournalConversation(previous.providerHandle, boundary.providerHandle)
+              ? { historyOrigin: previous.raw }
+              : {}
         plan.push((seq, ts) => ({
           kind: 'epoch',
           ...boundary,

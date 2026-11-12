@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { useAppStore } from '@/store/index'
-import { latestLookupGeneration } from '@/store/lookup-generation-sequence'
+import { latestLookupGeneration } from '@/store/slices/hosted-review/refresh/lookup-generation-sequence'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review/hosted-review-card-refresh'
 import type { ChecksPanelManualRefreshInput } from './manual-refresh-dependencies'
 

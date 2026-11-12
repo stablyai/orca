@@ -9,9 +9,10 @@ import type {
   GitStagingArea,
   GitStatusResult
 } from '../../../../../shared/git/status/git-status-types'
+import type { WorktreeAtRiskLocalFiles } from '../../../../../shared/worktree/at-risk-local-files'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 export async function getRuntimeGitStatus(
   context: RuntimeGitContext,
@@ -170,6 +171,24 @@ export async function getRuntimeGitIgnoredPaths(
     'git.checkIgnored',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), paths },
     { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeWorktreeAtRiskLocalFiles(
+  context: RuntimeGitContext,
+  signal?: AbortSignal
+): Promise<WorktreeAtRiskLocalFiles> {
+  if (context.target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.atRiskLocalFiles({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<WorktreeAtRiskLocalFiles>(
+    context.target,
+    'git.atRiskLocalFiles',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { timeoutMs: 15_000, ...(signal ? { signal } : {}) }
   )
 }
 

@@ -5,7 +5,7 @@ import type {
   OrcaProfileListState,
   SignOutCurrentOrcaProfileResult
 } from '../../../../../shared/orca-profiles'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 
 const { toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn(),

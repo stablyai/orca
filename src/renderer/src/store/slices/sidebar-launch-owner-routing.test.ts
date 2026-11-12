@@ -1,17 +1,19 @@
-import * as rendererPlatform from '@/lib/renderer-app-platform'
-import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
-import { makeFolderWorkspace } from './worktrees-slice-test-fixtures'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import * as rendererPlatform from '@/app-shell/platform/renderer-app-platform'
+import { makeDetectedResult } from './worktrees/listing/worktrees-detected-listing-fixtures'
+
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import { describe, expect, it, vi } from 'vitest'
-import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { runtimeStatuses } from './browser/browser-slice-test-harness'
 import { getAgentDetectionTargetKeyForWorktree } from '@/hooks/useAgentDetectionTarget'
 import {
   buildAgentLaunchRouteInput,
   worktreeLaunchWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 
 const id = 'repo1::/path/twin'
 function setup() {
@@ -112,8 +114,7 @@ it('keeps nested SSH inventory, capability transport and quoting on the owning s
   ).toEqual({ kind: 'resolved', environmentId: 'env-1' })
   expect(
     resolveAgentLaunchExecutionContext(state, { worktreeId: id, executionHostId: 'ssh:box' })
-      ?.resolvedLaunchPlatform
-  ).toBe('linux')
+  ).toMatchObject({ resolvedLaunchPlatform: 'linux' })
 })
 
 it.each(['listed', 'detected', 'unstamped'] as const)(

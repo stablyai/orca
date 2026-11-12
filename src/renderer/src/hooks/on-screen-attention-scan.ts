@@ -16,7 +16,7 @@ import {
   setPresenceGated
 } from './agent-auto-ack-presence'
 import type { AppState } from '@/store/types'
-import { selectFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
+import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import {
   acknowledgeViewedAutoAckTarget,
   readAgentAttentionTurnRecords,

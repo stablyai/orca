@@ -1,20 +1,20 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { findGroupAndWorktree, findGroupForTab } from '../../tab-group-state'
+import { findGroupAndWorktree, findGroupForTab } from '../../tabs/tab-group-state'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance
-} from '@/lib/editor-file-operation-provenance'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+} from '@/lib/editor/file-operations/editor-file-operation-provenance'
+import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import {
   createUntitledMarkdownFile,
   type UntitledMarkdownFileInfo
-} from '@/lib/create-untitled-markdown'
+} from '@/lib/editor/file-operations/create-untitled-markdown'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
+import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 

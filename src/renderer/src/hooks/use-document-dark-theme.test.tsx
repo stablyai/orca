@@ -14,7 +14,7 @@ vi.mock('@/store', () => ({
     })
 }))
 
-import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
+import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { useDocumentDarkTheme, useSettingsDarkTheme } from './use-document-dark-theme'
 
 function installMatchMedia(initialMatches: boolean): {

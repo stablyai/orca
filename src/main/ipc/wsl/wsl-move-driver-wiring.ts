@@ -13,7 +13,7 @@ import {
   WSL_MOVE_PROGRESS_CHANNEL,
   type WslMoveProgressEvent
 } from '../../../shared/wsl-move/wsl-move-driver-types'
-import { agentHookServer } from '../../agent-hooks/server'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { getDaemonHistoryDir } from '../../daemon/launch/daemon-launch-paths'
 import {
   countInProcessFallbackTerminals,
@@ -22,42 +22,42 @@ import {
 import { HistoryReader } from '../../daemon/history/restoration/history-reader'
 import { orcadMigrationDestinationFor } from '../../managed-server/lifecycle/orcad-runtime-conversion-wiring'
 import type { Store } from '../../persistence/loading-store/store'
-import { exportWslMoveManifest } from '../../persistence/moving-wsl-projects/wsl-move-manifest-export'
-import { ensureWslMoveDestinationBrowserLogins } from '../../persistence/moving-wsl-projects/wsl-move-browser-cookie-copy'
+import { exportWslMoveManifest } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-manifest-export'
+import { ensureWslMoveDestinationBrowserLogins } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-browser-cookie-copy'
 import { activeBrowserRoutePartitionOrcaProfileId } from '../../browser/routing/partitions/browser-route-partition-binding-runtime'
 import { wslHostBrowserRouteStorage } from '../../browser/routing/local-host-partitions/wsl-host-browser-route-partition'
-import { runGatedWslMoveDesktopRewritePass } from '../../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
+import { runGatedWslMoveDesktopRewritePass } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import type {
   WslMoveDriverDeps,
   WslMoveHost
-} from '../../persistence/moving-wsl-projects/wsl-move-driver-ports'
-import { proveWslMoveTerminalsExited } from '../../persistence/moving-wsl-projects/wsl-move-exit-proof'
+} from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
+import { proveWslMoveTerminalsExited } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-exit-proof'
 import {
   collectWslMoveGateInputs,
   listWslMovePanes,
   type WslMoveGateFactSources
-} from '../../persistence/moving-wsl-projects/wsl-move-gate-facts'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-gate-facts'
 import {
   classifyWslGuestPaneForeground,
   readWslGuestPaneShellCwd
-} from '../../persistence/moving-wsl-projects/wsl-move-guest-foreground'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-guest-foreground'
 import {
   listWslMoveSleptSessionPanes,
   readWslMoveSleptScrollbackFromHistory,
   withSleptSessionPanes,
   wslMoveTabTitle,
   wslMoveSleptSpoolRoot
-} from '../../persistence/moving-wsl-projects/wsl-move-slept-scrollback'
-import { scheduleWslMoveRewriteRetry } from '../../persistence/moving-wsl-projects/wsl-move-rewrite-retry'
+} from '../../persistence/moving-wsl-projects/terminal-state/wsl-move-slept-scrollback'
+import { scheduleWslMoveRewriteRetry } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-rewrite-retry'
 import {
   captureWslMoveRestoreHints,
   type WslMoveRestoreHintPane
-} from '../../persistence/moving-wsl-projects/wsl-move-restore-hints'
+} from '../../persistence/moving-wsl-projects/terminal-state/wsl-move-restore-hints'
 import {
   isWslMoveProjectFenced,
   wslMoveProjectRefForWorkspace
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { buildWslMoveShellHistoryBlobs } from '../../persistence/moving-wsl-projects/wsl-move-shell-history-blobs'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { buildWslMoveShellHistoryBlobs } from '../../persistence/moving-wsl-projects/terminal-state/wsl-move-shell-history-blobs'
 import { inspectPtyProviderProcessForRenderer } from '../../providers/pty-process-inspection'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getTrustedUIRendererWebContents, getTrustedUIRendererWindow } from '../ui'
@@ -72,15 +72,13 @@ import {
 import {
   setWslMoveReloadLanding,
   setWslMoveReloadableWindow
-} from '../../persistence/moving-wsl-projects/wsl-move-window-write-hold'
-import {
-  commitRemoteOrcadMigrationCatalog,
-  listRemoteOrcadRepositories,
-  stageRemoteOrcadMigrationBlobChunk
-} from '../../ssh/orcad-migration-catalog-client'
-import { listRemoteOrcadFolderCatalog } from '../../ssh/orcad-server-folder-workspaces'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
+import { commitRemoteOrcadMigrationCatalog } from '../../managed-server/migration/catalog/orcad-migration-catalog-client'
+import { listRemoteOrcadRepositories } from '../../managed-server/migration/linking/orcad-server-repositories'
+import { stageRemoteOrcadMigrationBlobChunk } from '../../managed-server/migration/transfers/orcad-migration-chunk-client'
+import { listRemoteOrcadFolderCatalog } from '../../managed-server/migration/linking/orcad-server-folder-workspaces'
 import { makeTerminalScrollbackSnapshotRef } from '../../pty/scrollback/terminal-scrollback-snapshots'
-import { pauseWorkspacesForProjectMove } from '../../window/project-move-pause'
+import { pauseWorkspacesForProjectMove } from '../../window/renderer-relays/project-move-pause'
 import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import { readWslGuestProcessTable } from '../../wsl/execution/wsl-guest-process-table'
 import { isWslDistroRegistered } from '../../wsl/discovery/wsl-distro-registry-id'

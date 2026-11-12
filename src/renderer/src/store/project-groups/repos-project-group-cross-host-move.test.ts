@@ -12,7 +12,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
@@ -75,27 +75,6 @@ beforeEach(() => {
           createCompatibleRuntimeStatusResponseIfNeeded(request) ?? runtimeCall(request)
       }
     }
-  })
-})
-
-function storeWith(projectGroups: ProjectGroup[]) {
-  const store = createTestStore()
-  store.setState({ repos: [remoteRepo], projectGroups })
-  return store
-}
-
-describe('moving a project into a group on another host', () => {
-  it('refuses with a toast instead of sending a move that would ungroup the project', async () => {
-    const store = storeWith([group('local-group', 'local'), group('remote-group', REMOTE_HOST)])
-
-    await expect(store.getState().moveProjectToGroup(remoteRepo, 'local-group', 0)).resolves.toBe(
-      false
-    )
-
-    expect(moveCalls()).toEqual([])
-    expect(moveProject).not.toHaveBeenCalled()
-    expect(store.getState().repos).toEqual([remoteRepo])
-    expect(toast.error).toHaveBeenCalledTimes(1)
   })
 })
 

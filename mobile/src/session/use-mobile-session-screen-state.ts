@@ -1,7 +1,8 @@
 import { useState, useRef, useMemo } from 'react'
-import { useTerminalSplitLayout } from './use-terminal-split-layout'
-import { createLiveInputCapture } from './live-input-capture'
-import { Animated, type ScrollView } from 'react-native'
+import { useTerminalSplitLayout } from '../terminal/session/use-terminal-split-layout'
+import { createLiveInputCapture } from '../terminal/session/live-input-capture'
+import { Animated } from 'react-native'
+import type { MobileAnimatedValue } from '../platform/animated-handles'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
 import {
@@ -9,22 +10,19 @@ import {
   getVisibleTerminalAccessoryKeys
 } from '../terminal/terminal-accessory-layout'
 import type { CustomKey } from '../terminal/terminal-custom-keys'
-import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
-import type { AppliedSnapshotMarker } from './session-tab-snapshot-gate'
-import { useWorktreeSessionTabsLoaded } from './use-initial-session-terminal-autocreate'
-import { createMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
+import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
+import { useWorktreeSessionTabsLoaded } from '../terminal/session/use-initial-session-terminal-autocreate'
+import { createMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
+import type { DiffNotesDelivery } from '../source-control/review/mobile-review-comment-state'
 import type {
-  DiffNotesDelivery,
   DirtyMarkdownDraft,
   FileDocState,
-  MarkdownDocState,
-  MobileDisplayMode,
-  MobileNewTabAgentLoadState,
-  MobileSessionTab,
-  Terminal
-} from './mobile-session-route-types'
-import { useMobileSessionTabActionTargets } from './use-mobile-session-tab-action-targets'
+  MarkdownDocState
+} from '../files/session-documents/session-document-state'
+import type { MobileDisplayMode, Terminal } from '../terminal/session/mobile-terminal-model'
+import type { MobileSessionTab } from './tabs/mobile-session-tabs'
+import { useMobileSessionTabActionTargets } from './tabs/use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
@@ -49,11 +47,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const activeSessionTabIdRef = useRef<string | null>(null)
   // Preserve an explicit phone tab pick while a host snapshot is transiently incomplete.
   const selectedSessionTabIdRef = useRef<string | null>(null)
-  const tabStripRef = useRef<ScrollView>(null)
-  const tabStripOffsetRef = useRef(0)
-  const tabStripViewportWidthRef = useRef(0)
-  const tabStripContentWidthRef = useRef(0)
-  const tabLayoutsRef = useRef<Map<string, { x: number; width: number }>>(new Map())
   const [markdownDocs, setMarkdownDocs] = useState<Map<string, MarkdownDocState>>(new Map())
   const markdownDocsRef = useRef<Map<string, MarkdownDocState>>(new Map())
   const [fileDocs, setFileDocs] = useState<Map<string, FileDocState>>(new Map())
@@ -73,9 +66,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   )
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
   const [showQuickCommands, setShowQuickCommands] = useState(false)
-  const [createTabAgentLoadState, setCreateTabAgentLoadState] =
-    useState<MobileNewTabAgentLoadState>('idle')
-  const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
   const [showTerminalLayout, setShowTerminalLayout] = useState(false)
@@ -88,6 +78,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
   const [directionPadEnabled, setDirectionPadEnabled] = useState(true)
+  const [smartRailEnabled, setSmartRailEnabled] = useState(false)
   const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
     getDefaultTerminalAccessoryBuiltInIds
   )
@@ -108,7 +99,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [dictationMode, setDictationMode] = useState<string | undefined>('toggle')
   const [dictationEnabled, setDictationEnabled] = useState(true)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const toastOpacityRef = useRef(new Animated.Value(0))
+  const toastOpacityRef = useRef<MobileAnimatedValue>(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const toastSeqRef = useRef(0)
   return {
@@ -139,11 +130,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setActiveSessionTabId,
     activeSessionTabIdRef,
     selectedSessionTabIdRef,
-    tabStripRef,
-    tabStripOffsetRef,
-    tabStripViewportWidthRef,
-    tabStripContentWidthRef,
-    tabLayoutsRef,
     markdownDocs,
     setMarkdownDocs,
     markdownDocsRef,
@@ -171,10 +157,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowCreateTabDrawer,
     showQuickCommands,
     setShowQuickCommands,
-    createTabAgentLoadState,
-    setCreateTabAgentLoadState,
-    createTabAgentOptions,
-    setCreateTabAgentOptions,
     showCreateBrowserModal,
     setShowCreateBrowserModal,
     showHeaderMoreActions,
@@ -192,6 +174,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setCustomKeys,
     directionPadEnabled,
     setDirectionPadEnabled,
+    smartRailEnabled,
+    setSmartRailEnabled,
     visibleBuiltInIds,
     setVisibleBuiltInIds,
     showCustomKeyModal,

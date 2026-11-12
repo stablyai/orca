@@ -1,11 +1,11 @@
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { GitHubProjectRow } from '../../../../../shared/github/project-types'
-import type { GitHubTaskObservation } from '@/lib/github-task-observation'
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
+import type { GitHubProjectRow } from '../../../../../shared/github/projects/project-types'
+import type { GitHubTaskObservation } from '@/lib/work-items/github/github-task-observation'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import type { HostIdentityFence } from '../../host-catalog-fencing'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import type { HostIdentityFence } from '../../../runtime/rpc/environment-revisions/host-identity-fence'
 import { applyTaskChange, type TaskChange, type TaskFacts } from './task-change'
 
 /** The shared task record's shape and the pure rules every layer of the record cache uses. */

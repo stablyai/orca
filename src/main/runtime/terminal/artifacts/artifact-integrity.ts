@@ -6,7 +6,7 @@ import type {
   TerminalFileContentBlocks,
   TerminalFileGrant
 } from './file-grants'
-import { isBinaryBuffer } from '../../../../shared/binary-buffer'
+import { isBinaryBuffer } from '../../../../shared/file-preview/binary-buffer'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   MOBILE_FILE_READ_MAX_BYTES

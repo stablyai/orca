@@ -1,9 +1,10 @@
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 // @vitest-environment happy-dom
 import './new-tab-agent-menu-host-preferences-test-fixture'
 import { act, renderHook } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
   useAgentLaunchPickerInventorySource,

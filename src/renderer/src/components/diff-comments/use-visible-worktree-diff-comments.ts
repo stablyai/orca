@@ -1,12 +1,12 @@
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useDiffCommentView } from './use-diff-comment-owner'
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
-import type { WorkspaceCopySource } from '@/lib/workspace-copy-owner'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
+import type { WorkspaceCopySource } from '@/lib/workspace/ownership/workspace-copy-owner'
 import { useMemo } from 'react'
 import {
   isMarkdownReviewNotesEnabled,
   withoutMarkdownReviewNotes
-} from '@/lib/markdown-review-notes-setting'
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes-setting'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 
 const NO_COMMENTS: DiffComment[] = []

@@ -3,7 +3,8 @@ import { expect } from 'vitest'
 import type { Root } from 'react-dom/client'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { useNewTabAgentMenuRows } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import TabBarCreateEntry from '../tab-bar/TabBarCreateEntry'
@@ -15,10 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 
-export async function verifyOmniboxPresetIdentity(
-  root: Root,
-  launch: (...args: unknown[]) => void
-) {
+function mountOmniboxEntries(root: Root, launch: (...args: unknown[]) => void) {
   const previous = useAppStore.getState()
   const worktree = makeWorktree({
     repoId: 'repo1',
@@ -40,20 +38,22 @@ export async function verifyOmniboxPresetIdentity(
   function Entries({ search }: { search: boolean }) {
     const model = useNewTabAgentMenuRows(worktree.id, true, { kind: 'local', contextKey: 'host' })
     const entries = useAgentLaunchPickerInventory(worktree.id, model, true)
-    return search ? (
-      <TabBarCreateEntry
-        worktreeId={worktree.id}
-        groupId="g"
-        menuOpen
-        onOpenEntry={async () => {}}
-        agentPickerEntries={entries}
-        onLaunchAgentOption={launch}
-      />
-    ) : (
+    return (
       <DropdownMenu defaultOpen modal={false}>
         <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
         <DropdownMenuContent>
-          <AgentLaunchPickerMenu entries={entries} runLaunch={launch} />
+          {search ? (
+            <TabBarCreateEntry
+              worktreeId={worktree.id}
+              groupId="g"
+              menuOpen
+              onOpenEntry={async () => {}}
+              agentPickerEntries={entries}
+              onLaunchAgentOption={launch}
+            />
+          ) : (
+            <AgentLaunchPickerMenu entries={entries} runLaunch={launch} />
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     )
@@ -68,50 +68,85 @@ export async function verifyOmniboxPresetIdentity(
     )
     await waitFor(() => expect(document.querySelector('input')).not.toBeNull())
   }
-  const configure = async () => {
-    await waitFor(() =>
-      expect(document.querySelector('button[aria-label="Configure Codex"]')).not.toBeNull()
-    )
-    await waitFor(() =>
-      expect(document.querySelector('button[aria-label="Configure Codex"]')).toHaveProperty(
-        'disabled',
-        false
-      )
-    )
-    fireEvent.click(document.querySelector('button[aria-label="Configure Codex"]')!)
-    await waitFor(() => expect(document.querySelector('textarea')).not.toBeNull())
-  }
-  const close = () => fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
-  try {
-    await showEntries(false)
-    await configure()
-    fireEvent.change(document.querySelector('textarea')!, {
-      target: { value: '--ordinary-pending' }
-    })
-    close()
-    await showEntries(true)
-    fireEvent.change(document.querySelector('input')!, { target: { value: 'Astra low' } })
-    await configure()
-    expect(document.querySelector('textarea')).not.toHaveProperty('value', '--ordinary-pending')
-    fireEvent.change(document.querySelector('textarea')!, {
-      target: { value: '--model private/preset --preset-pending' }
-    })
-    fireEvent.click(getByRole(document.body, 'radio', { name: 'Low' }))
-    close()
-    await showEntries(false)
-    await configure()
-    expect(document.querySelector('textarea')).toHaveProperty('value', '--ordinary-pending')
-    close()
-    await showEntries(true)
-    fireEvent.change(document.querySelector('input')!, { target: { value: 'Astra low' } })
-    await configure()
-    expect(document.querySelector('textarea')).toHaveProperty('value', '--preset-pending')
-    expect(document.body.textContent).toContain('private/preset')
-    expect(launch).not.toHaveBeenCalled()
-  } finally {
+  const restore = () =>
     act(() => {
       root.render(<div />)
       useAppStore.setState(previous, true)
     })
+  return { showEntries, restore }
+}
+
+const configureButton = () =>
+  document.querySelector<HTMLButtonElement>('button[aria-label="Configure Codex"]')
+
+const setupPanel = () =>
+  document.querySelector<HTMLElement>('[data-slot="dropdown-menu-sub-content"]')
+
+async function waitForConfigure() {
+  await waitFor(() => expect(configureButton()).not.toBeNull())
+  await waitFor(() => expect(configureButton()).toHaveProperty('disabled', false))
+  return configureButton()!
+}
+
+export async function verifyOmniboxSetupKeepsSearchFocus(
+  root: Root,
+  launch: (...args: unknown[]) => void
+) {
+  const { showEntries, restore } = mountOmniboxEntries(root, launch)
+  try {
+    await showEntries(true)
+    const input = document.querySelector('input')!
+    fireEvent.change(input, { target: { value: 'Astra low' } })
+    input.focus()
+    const configure = await waitForConfigure()
+    // Typing can shift a row under a resting pointer: that boundary crossing alone must not open setup.
+    fireEvent.keyDown(input, { key: 'w' })
+    fireEvent.pointerOver(configure, { pointerType: 'mouse' })
+    expect(configure.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.pointerMove(configure, { pointerType: 'mouse' })
+    await waitFor(() => expect(setupPanel()).not.toBeNull())
+    expect(document.activeElement).toBe(input)
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    await waitFor(() => expect(setupPanel()).toBeNull())
+    expect(document.activeElement).toBe(input)
+    expect(launch).not.toHaveBeenCalled()
+  } finally {
+    restore()
+  }
+}
+
+export async function verifyOmniboxPresetIdentity(
+  root: Root,
+  launch: (...args: unknown[]) => void
+) {
+  const { showEntries, restore } = mountOmniboxEntries(root, launch)
+  const configure = async () => {
+    fireEvent.click(await waitForConfigure())
+    await waitFor(() => expect(effort('Low')).not.toBeNull())
+  }
+  const close = () => fireEvent.keyDown(setupPanel()!, { key: 'Escape' })
+  const effort = (label: string) =>
+    getByRole(document.body, 'radio', { name: label }).getAttribute('data-state')
+  try {
+    await showEntries(false)
+    await configure()
+    fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
+    close()
+    await showEntries(true)
+    fireEvent.change(document.querySelector('input')!, { target: { value: 'Astra low' } })
+    await configure()
+    expect(effort('Low')).toBe('on')
+    close()
+    await showEntries(false)
+    await configure()
+    expect(effort('High')).toBe('on')
+    close()
+    await showEntries(true)
+    fireEvent.change(document.querySelector('input')!, { target: { value: 'Astra low' } })
+    await configure()
+    expect(effort('Low')).toBe('on')
+    expect(launch).not.toHaveBeenCalled()
+  } finally {
+    restore()
   }
 }

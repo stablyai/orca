@@ -28,10 +28,10 @@ import type {
   RuntimeTerminalSummary
 } from '../../../shared/runtime-terminal-contracts'
 import type { RuntimeSyncedLeaf } from '../../../shared/runtime-session-contracts'
-import type { readOrchestrationFleetAgentStatusSnapshot } from '../orchestration-fleet-agent-status-snapshot'
+import type { readOrchestrationFleetAgentStatusSnapshot } from '../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status/transport/agent-status-osc'
 import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runtime-terminal-agent-presence'
@@ -42,7 +42,7 @@ import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty
 import type { StructuredPointerTarget } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type * as PtyControllerContract from '../runtime-pty-controller-contract'
+import type * as PtyControllerContract from '../terminal/lifecycle/runtime-pty-controller-contract'
 import type { RuntimeClientEventBus } from '../client/events/runtime-client-event-bus'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
@@ -210,7 +210,8 @@ export abstract class RuntimeConstructionServices {
   protected abstract selectReposBySelector(selector: string): Repo[]
   protected abstract listRepoWorktreesForListing(
     repo: Repo,
-    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
+    options?: { claimsHygiene?: boolean }
   ): Promise<RuntimeWorktreeScanResult>
   protected abstract listKnownExecutionHostIds(
     additionalHostIds?: Iterable<ExecutionHostId>,
@@ -277,6 +278,7 @@ export abstract class RuntimeConstructionServices {
   protected abstract readonly getAgentStatusSnapshotForPaneFn:
     | ((paneKey: string) => AgentStatusIpcPayload[])
     | null
+  protected abstract readonly publicPaneStatusFn?: (paneKey: string) => AgentStatusIpcPayload[]
   abstract readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   protected abstract getTrackedDisplayTitleForPty(ptyId: string): string | null
   protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]
@@ -285,10 +287,8 @@ export abstract class RuntimeConstructionServices {
     selector: string,
     requiredHostId?: ExecutionHostId
   ): Promise<ResolvedWorktree>
-  protected abstract resolveWorkspaceSelector(
-    selector: string,
-    options?: { requireUsableFolderPath?: boolean; requiredHostId?: ExecutionHostId }
-  ): Promise<ResolvedWorktree>
+  protected abstract resolveWorkspaceSelector(...args: Calls.SelectorArgs): Calls.SelectorResult
+  protected abstract resolveWorkspaceCandidate(...args: Calls.SelectorArgs): Calls.CandidateResult
   protected abstract refreshPtyWorktreeRecordsWithControllerInventory(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId?: string | null,

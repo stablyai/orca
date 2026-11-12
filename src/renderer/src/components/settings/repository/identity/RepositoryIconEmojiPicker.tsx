@@ -3,7 +3,7 @@ import EmojiPicker, { EmojiStyle, Theme, type EmojiClickData } from 'emoji-picke
 import type { RepoIcon } from '../../../../../../shared/repo-icon'
 import { sanitizeRepoIcon } from '../../../../../../shared/repo-icon'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type RepositoryIconEmojiPickerProps = {
   selectedEmoji: string
@@ -15,6 +15,7 @@ export function RepositoryIconEmojiPicker({
   selectedEmoji,
   onSetIcon
 }: RepositoryIconEmojiPickerProps): React.JSX.Element {
+  const t = useTranslate()
   // Theme.AUTO only follows the OS setting, which can disagree with Orca's painted theme.
   const isDarkTheme = useDocumentDarkTheme()
 
@@ -23,7 +24,7 @@ export function RepositoryIconEmojiPicker({
     const repoIcon = sanitizeRepoIcon({ type: 'emoji', emoji: emojiData.emoji })
     if (!repoIcon) {
       toast.error(
-        translate(
+        t(
           'auto.components.settings.RepositoryIconPicker.emojiTooLongForRepoIcon',
           "This emoji can't be used as a repo icon."
         )
@@ -45,7 +46,7 @@ export function RepositoryIconEmojiPicker({
           lazyLoadEmojis
           onEmojiClick={handleEmojiClick}
           previewConfig={{ showPreview: true }}
-          searchPlaceholder={translate(
+          searchPlaceholder={t(
             'auto.components.settings.RepositoryIconPicker.searchEmojiPlaceholder',
             'Search emoji'
           )}
@@ -54,7 +55,7 @@ export function RepositoryIconEmojiPicker({
       </div>
       {selectedEmoji ? (
         <p className="mt-2 text-[11px] text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.RepositoryIconPicker.currentEmojiSelection',
             'Current: {{value0}}',
             { value0: selectedEmoji }

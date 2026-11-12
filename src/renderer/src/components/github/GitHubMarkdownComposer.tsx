@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useEditor } from '@tiptap/react'
-import type { Editor } from '@tiptap/react'
+import { useEditor, type Editor } from '@tiptap/react'
+
 import Placeholder from '@tiptap/extension-placeholder'
 import { Paperclip } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { cn } from '@/lib/class-names'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown/schema/rich-markdown-extensions'
 import { RichMarkdownToolbar } from '@/components/editor/rich-markdown/commands/RichMarkdownToolbar'
 import {
@@ -25,9 +25,9 @@ import {
 } from '@/components/github/github-markdown-composer-tabbar'
 import { GitHubMarkdownImageInput } from './github-markdown-image-input'
 import { useImageInput } from '@/components/github/use-image-input'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
-import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
@@ -65,6 +65,7 @@ export function GitHubMarkdownComposer({
   layout = 'stacked',
   previewGithubRepo = null
 }: GitHubMarkdownComposerProps): React.JSX.Element {
+  const t = useTranslate()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor | null>(null)
   const applyingExternalValueRef = useRef(false)
@@ -336,7 +337,7 @@ export function GitHubMarkdownComposer({
     >
       <Paperclip className="size-3.5 shrink-0" />
       <span>
-        {translate(
+        {t(
           'auto.components.github.GitHubMarkdownComposer.b7e4a1c902',
           'Paste, drop, or click to add files'
         )}

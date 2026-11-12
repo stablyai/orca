@@ -1,3 +1,10 @@
+import { publishTerminalProviderCapabilityChange } from './terminal-provider-capability-revision'
+import {
+  clearTerminalProviderGoneSessions,
+  pruneTerminalProviderGoneSessions,
+  terminalProviderSessionIsGone
+} from './terminal-provider-gone-sessions'
+
 type SnapshotCapability = { id: string; authoritative: boolean | null }
 type SnapshotCapabilityResolver = (ids: string[]) => Promise<SnapshotCapability[]>
 export type SnapshotCapabilityTab = { id: string; ptyId?: string | null }
@@ -23,24 +30,6 @@ const CAPABILITY_RESOLUTION_TIMEOUT_MS = 1_000
 let lastSynchronizedLivePtyIds: readonly string[] | null = null
 let earliestUnknownCapabilityRetryAtMs = Number.POSITIVE_INFINITY
 let synchronizationGeneration = 0
-let capabilityRevision = 0
-const capabilityRevisionListeners = new Set<() => void>()
-
-function publishCapabilityChange(): void {
-  capabilityRevision += 1
-  for (const listener of capabilityRevisionListeners) {
-    listener()
-  }
-}
-
-export function subscribeTerminalProviderSnapshotCapability(listener: () => void): () => void {
-  capabilityRevisionListeners.add(listener)
-  return () => capabilityRevisionListeners.delete(listener)
-}
-
-export function getTerminalProviderSnapshotCapabilityRevision(): number {
-  return capabilityRevision
-}
 
 export function collectTerminalProviderSnapshotPtyIds(
   state: SnapshotCapabilityBindingState
@@ -135,12 +124,17 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
   lastSynchronizedLivePtyIds = livePtyIds
   const live = new Set(livePtyIds.filter((id) => id.length > 0))
   let capabilityChanged = false
+  const changedPtyIds = new Set<string>()
   for (const cachedId of authoritativeSnapshotByPtyId.keys()) {
     if (!live.has(cachedId)) {
+      if (authoritativeSnapshotByPtyId.get(cachedId) === true) {
+        changedPtyIds.add(cachedId)
+      }
       capabilityChanged ||= authoritativeSnapshotByPtyId.get(cachedId) === true
       authoritativeSnapshotByPtyId.delete(cachedId)
     }
   }
+  pruneTerminalProviderGoneSessions(live)
   for (const pendingId of unknownCapabilityRetryAtByPtyId.keys()) {
     if (!live.has(pendingId)) {
       unknownCapabilityRetryAtByPtyId.delete(pendingId)
@@ -160,7 +154,7 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
     }
     refreshEarliestUnknownCapabilityRetry()
     if (capabilityChanged) {
-      publishCapabilityChange()
+      publishTerminalProviderCapabilityChange(changedPtyIds)
     }
     return unknownCapabilityRetryDelayMs(nowMs)
   }
@@ -173,7 +167,7 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
       if (generation !== synchronizationGeneration) {
         // Return zero to preserve a superseded caller’s retry chain; the winning startup pass ignores its return value.
         if (capabilityChanged) {
-          publishCapabilityChange()
+          publishTerminalProviderCapabilityChange(changedPtyIds)
         }
         return 0
       }
@@ -186,7 +180,7 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
     if (generation !== synchronizationGeneration) {
       // Supersession must preserve the caller’s timer chain for later slow re-asks.
       if (capabilityChanged) {
-        publishCapabilityChange()
+        publishTerminalProviderCapabilityChange(changedPtyIds)
       }
       return 0
     }
@@ -200,6 +194,9 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
     for (const id of batch) {
       const authoritative = resolvedById.get(id)
       if (typeof authoritative === 'boolean') {
+        if ((authoritativeSnapshotByPtyId.get(id) === true) !== (authoritative === true)) {
+          changedPtyIds.add(id)
+        }
         capabilityChanged ||=
           (authoritativeSnapshotByPtyId.get(id) === true) !== (authoritative === true)
         authoritativeSnapshotByPtyId.set(id, authoritative)
@@ -212,7 +209,7 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
   }
   refreshEarliestUnknownCapabilityRetry()
   if (capabilityChanged) {
-    publishCapabilityChange()
+    publishTerminalProviderCapabilityChange(changedPtyIds)
   }
   return unknownCapabilityRetryDelayMs(observedAtMs === undefined ? Date.now() : nowMs)
 }
@@ -223,7 +220,11 @@ export async function refreshTerminalProviderSnapshotCapabilities(
 ): Promise<number | null> {
   lastSynchronizedLivePtyIds = null
   let capabilityChanged = false
+  const changedPtyIds = new Set<string>()
   for (const id of livePtyIds) {
+    if (authoritativeSnapshotByPtyId.get(id) === true) {
+      changedPtyIds.add(id)
+    }
     capabilityChanged ||= authoritativeSnapshotByPtyId.get(id) === true
     authoritativeSnapshotByPtyId.delete(id)
     unknownCapabilityRetryAtByPtyId.delete(id)
@@ -231,7 +232,7 @@ export async function refreshTerminalProviderSnapshotCapabilities(
   }
   refreshEarliestUnknownCapabilityRetry()
   if (capabilityChanged) {
-    publishCapabilityChange()
+    publishTerminalProviderCapabilityChange(changedPtyIds)
   }
   return synchronizeTerminalProviderSnapshotCapabilities(livePtyIds, resolveCapabilities)
 }
@@ -258,10 +259,14 @@ export function terminalProviderHasAuthoritativeSnapshot(ptyId: string): boolean
   return authoritativeSnapshotByPtyId.get(ptyId) === true
 }
 
+export function terminalProviderAllowsParking(ptyId: string): boolean {
+  return authoritativeSnapshotByPtyId.get(ptyId) === true || terminalProviderSessionIsGone(ptyId)
+}
+
 export function clearTerminalProviderSnapshotCapabilities(): void {
-  const capabilityChanged = [...authoritativeSnapshotByPtyId.values()].some(
-    (authoritative) => authoritative
-  )
+  const capabilityChanged =
+    clearTerminalProviderGoneSessions() ||
+    [...authoritativeSnapshotByPtyId.values()].some((authoritative) => authoritative)
   authoritativeSnapshotByPtyId.clear()
   unknownCapabilityRetryAtByPtyId.clear()
   unknownCapabilityAttemptsByPtyId.clear()
@@ -269,6 +274,6 @@ export function clearTerminalProviderSnapshotCapabilities(): void {
   earliestUnknownCapabilityRetryAtMs = Number.POSITIVE_INFINITY
   synchronizationGeneration += 1
   if (capabilityChanged) {
-    publishCapabilityChange()
+    publishTerminalProviderCapabilityChange()
   }
 }

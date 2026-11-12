@@ -4,7 +4,7 @@
   "family": "settings.task-hydration",
   "namedDeltas": [],
   "values": {
-    "07e185c427ba": {
+    "05ccd79ba4af": {
       "name": "linear.status#1",
       "ordinal": 38,
       "args": [
@@ -15,107 +15,22 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "LogicalClientCutoverError",
-          "message": "RPC interrupted by connection migration",
-          "isRpcDeliveryUnknown": true,
-          "cause": {
-            "category": "Error",
-            "message": "Connection closed",
-            "isRpcDeliveryUnknown": true
-          }
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "0ab118b3136f": {
-      "name": "settings.get#1",
-      "ordinal": 35,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "LogicalClientCutoverError",
-          "message": "RPC interrupted by connection migration",
-          "isRpcDeliveryUnknown": true,
-          "cause": {
-            "category": "Error",
-            "message": "Connection closed",
-            "isRpcDeliveryUnknown": true
-          }
-        }
-      }
-    },
-    "0c1f31364093": {
-      "name": "jira.status#1",
-      "ordinal": 34,
-      "args": [
-        {
-          "name": "method",
-          "value": "jira.status"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 30000,
-        "error": {
-          "category": "Error",
-          "message": "Request timed out: jira.status",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "0ebb7f0660a0": {
-      "name": "showLinearTeamPicker",
-      "ordinal": 4,
-      "value": false
-    },
-    "10fab568df61": {
+    "0919c52e10c6": {
       "name": "ui.get#1",
       "ordinal": 36,
       "args": [
@@ -126,45 +41,55 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
         "status": "rejected",
         "startedAt": 0,
-        "settledAt": 30000,
+        "settledAt": 0,
         "error": {
-          "category": "Error",
-          "message": "Request timed out: ui.get",
-          "isRpcDeliveryUnknown": true
+          "category": "LogicalClientCutoverError",
+          "message": "RPC interrupted by connection migration",
+          "isRpcDeliveryUnknown": true,
+          "cause": {
+            "category": "Error",
+            "message": "Connection closed",
+            "isRpcDeliveryUnknown": true
+          }
         }
       }
     },
-    "1533d4f4be0d": {
-      "name": "preflight.check#1",
-      "ordinal": 37,
+    "0ebb7f0660a0": {
+      "name": "showLinearTeamPicker",
+      "ordinal": 4,
+      "value": false
+    },
+    "1305e04da46a": {
+      "name": "settings.get#1",
+      "ordinal": 35,
       "args": [
         {
           "name": "method",
-          "value": "preflight.check"
+          "value": "settings.get"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -189,36 +114,30 @@
       "ordinal": 41,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
     },
-    "193958548df2": {
-      "name": "linear.status#1",
-      "ordinal": 38,
+    "1833d0fa5f1d": {
+      "name": "jira.status#1",
+      "ordinal": 34,
       "args": [
         {
           "name": "method",
-          "value": "linear.status"
+          "value": "jira.status"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 30000,
-        "error": {
-          "category": "Error",
-          "message": "Request timed out: linear.status",
-          "isRpcDeliveryUnknown": true
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
     "19505460d94b": {
@@ -238,6 +157,32 @@
         "recent": []
       }
     },
+    "1dfcd3f6163d": {
+      "name": "preflight.check#1",
+      "ordinal": 37,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "1f343058c9bd": {
       "name": "tasksSupportState",
       "ordinal": 45,
@@ -246,36 +191,42 @@
         "kind": "unknown"
       }
     },
-    "22b355deb2df": {
-      "name": "provider",
-      "ordinal": 54,
-      "value": "github"
-    },
-    "2553185eae8f": {
-      "name": "jira.status#1",
-      "ordinal": 34,
+    "20ef49331589": {
+      "name": "ui.get#1",
+      "ordinal": 36,
       "args": [
         {
           "name": "method",
-          "value": "jira.status"
+          "value": "ui.get"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 0
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 30000,
+        "error": {
+          "category": "Error",
+          "message": "Request timed out: ui.get",
+          "isRpcDeliveryUnknown": true
+        }
       }
+    },
+    "22b355deb2df": {
+      "name": "provider",
+      "ordinal": 54,
+      "value": "github"
     },
     "26ece795530e": {
       "name": "showGitHubIssueSourcePicker",
@@ -321,6 +272,38 @@
       "ordinal": 1,
       "value": false
     },
+    "302df5159005": {
+      "name": "jira.status#1",
+      "ordinal": 34,
+      "args": [
+        {
+          "name": "method",
+          "value": "jira.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 30000,
+        "error": {
+          "category": "Error",
+          "message": "Request timed out: jira.status",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
     "3082bf4965fa": {
       "name": "selectedLinearWorkspaceId",
       "ordinal": 51,
@@ -345,6 +328,38 @@
         "$rpc": "null"
       }
     },
+    "37e9eb7f2e21": {
+      "name": "preflight.check#1",
+      "ordinal": 37,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection lost",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
     "394fb5675266": {
       "name": "mergeMethodProjectRow",
       "ordinal": 29,
@@ -356,6 +371,32 @@
       "name": "selectedLinearTeamIds",
       "ordinal": 50,
       "value": []
+    },
+    "3a94dcc00915": {
+      "name": "settings.get#1",
+      "ordinal": 35,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
     "3c66c971fe96": {
       "name": "showGitHubProjectViewPicker",
@@ -384,6 +425,38 @@
       "ordinal": 60,
       "value": "assigned"
     },
+    "4075b6316e30": {
+      "name": "ui.get#1",
+      "ordinal": 36,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "ui.get#1 rejected",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
     "40f00017ad77": {
       "name": "linearWorkspaces",
       "ordinal": 48,
@@ -399,6 +472,75 @@
       "ordinal": 64,
       "value": true
     },
+    "43f5e0efb7d5": {
+      "name": "jira.status#1",
+      "ordinal": 34,
+      "args": [
+        {
+          "name": "method",
+          "value": "jira.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "LogicalClientCutoverError",
+          "message": "RPC interrupted by connection migration",
+          "isRpcDeliveryUnknown": true,
+          "cause": {
+            "category": "Error",
+            "message": "Connection closed",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    },
+    "4526d5d74acb": {
+      "name": "settings.get#1",
+      "ordinal": 35,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "settings.get#1 rejected",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
     "45cfb5ee97ea": {
       "name": "pendingHostedMerge",
       "ordinal": 25,
@@ -411,24 +553,24 @@
       "ordinal": 3,
       "value": false
     },
-    "4c9934783b34": {
-      "name": "preflight.check#1",
-      "ordinal": 37,
+    "4a0377b4ac3c": {
+      "name": "jira.status#1",
+      "ordinal": 34,
       "args": [
         {
           "name": "method",
-          "value": "preflight.check"
+          "value": "jira.status"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -455,34 +597,24 @@
       "ordinal": 45,
       "value": "RPC interrupted by connection migration"
     },
-    "5729b7cdb4ba": {
-      "name": "showFilterSheet",
-      "ordinal": 12,
-      "value": false
-    },
-    "57568fbaf4f7": {
-      "name": "linearConnected",
-      "ordinal": 47,
-      "value": false
-    },
-    "581a7233083b": {
-      "name": "settings.get#1",
-      "ordinal": 35,
+    "525789d7c3fa": {
+      "name": "linear.status#1",
+      "ordinal": 38,
       "args": [
         {
           "name": "method",
-          "value": "settings.get"
+          "value": "linear.status"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -496,6 +628,48 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "57087f926eaf": {
+      "name": "preflight.check#1",
+      "ordinal": 37,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 30000,
+        "error": {
+          "category": "Error",
+          "message": "Request timed out: preflight.check",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "5729b7cdb4ba": {
+      "name": "showFilterSheet",
+      "ordinal": 12,
+      "value": false
+    },
+    "57568fbaf4f7": {
+      "name": "linearConnected",
+      "ordinal": 47,
+      "value": false
     },
     "5886b76643d9": {
       "name": "appliedQuery",
@@ -512,43 +686,6 @@
         "visibleTaskProviders": ["github", "linear"]
       }
     },
-    "5a2ae779ba31": {
-      "name": "jira.status#1",
-      "ordinal": 34,
-      "args": [
-        {
-          "name": "method",
-          "value": "jira.status"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "LogicalClientCutoverError",
-          "message": "RPC interrupted by connection migration",
-          "isRpcDeliveryUnknown": true,
-          "cause": {
-            "category": "Error",
-            "message": "Connection closed",
-            "isRpcDeliveryUnknown": true
-          }
-        }
-      }
-    },
     "5c7f665de6c4": {
       "name": "githubPreset",
       "ordinal": 57,
@@ -559,39 +696,119 @@
       "ordinal": 46,
       "value": {}
     },
-    "626911402c1c": {
-      "name": "settings.get#1",
-      "ordinal": 35,
+    "688fe01c6196": {
+      "name": "jira.status#1",
+      "ordinal": 34,
       "args": [
         {
           "name": "method",
-          "value": "settings.get"
+          "value": "jira.status"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "connected": false
+          }
+        }
+      }
+    },
+    "714d4b3547ff": {
+      "name": "projectRepoNotInOrca",
+      "ordinal": 20,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "71bedad13169": {
+      "name": "ui.get#1",
+      "ordinal": 36,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "74d8785ba556": {
+      "name": "linear.status#1",
+      "ordinal": 38,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
         "status": "rejected",
         "startedAt": 0,
-        "settledAt": 0,
+        "settledAt": 30000,
         "error": {
           "category": "Error",
-          "message": "settings.get#1 rejected",
+          "message": "Request timed out: linear.status",
           "isRpcDeliveryUnknown": true
         }
       }
     },
-    "696ce2d131d0": {
+    "756c11d6e5bc": {
+      "name": "settings.get#1",
+      "ordinal": 40,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "7b0ad7b958dd": {
+      "name": "tasksSupportState",
+      "ordinal": 2,
+      "value": {
+        "client": "logical-client",
+        "kind": "unknown"
+      }
+    },
+    "800b1afcceea": {
       "name": "preflight.check#1",
       "ordinal": 37,
       "args": [
@@ -602,13 +819,13 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -625,26 +842,6 @@
             }
           }
         }
-      }
-    },
-    "714d4b3547ff": {
-      "name": "projectRepoNotInOrca",
-      "ordinal": 20,
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "756c11d6e5bc": {
-      "name": "settings.get#1",
-      "ordinal": 40,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
-    "7b0ad7b958dd": {
-      "name": "tasksSupportState",
-      "ordinal": 2,
-      "value": {
-        "client": "logical-client",
-        "kind": "unknown"
       }
     },
     "8015a69c7774": {
@@ -679,7 +876,7 @@
       "ordinal": 53,
       "value": ["github", "linear"]
     },
-    "8cbc6b250510": {
+    "8c4056edb811": {
       "name": "linear.status#1",
       "ordinal": 38,
       "args": [
@@ -690,19 +887,27 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 0
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "connected": false
+          }
+        }
       }
     },
     "8db7a6a7d531": {
@@ -739,46 +944,6 @@
         }
       }
     },
-    "921ecca2c27f": {
-      "name": "settings.get#1",
-      "ordinal": 35,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "settings": {
-              "defaultTuiAgent": "codex",
-              "disabledTuiAgents": ["claude"],
-              "hostSettingOverrides": {},
-              "prBotAuthorOverrides": ["bot-user"],
-              "visibleTaskProviders": ["github", "linear"]
-            }
-          }
-        }
-      }
-    },
     "931e8e15095d": {
       "name": "showGitHubProjectPicker",
       "ordinal": 16,
@@ -789,24 +954,24 @@
       "ordinal": 58,
       "value": "issues"
     },
-    "96654352593d": {
-      "name": "jira.status#1",
-      "ordinal": 34,
+    "95d5a2a2f417": {
+      "name": "ui.get#1",
+      "ordinal": 36,
       "args": [
         {
           "name": "method",
-          "value": "jira.status"
+          "value": "ui.get"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -821,30 +986,41 @@
         }
       }
     },
-    "97faf97e14a6": {
-      "name": "ui.get#1",
-      "ordinal": 36,
+    "965996579b8a": {
+      "name": "preflight.check#1",
+      "ordinal": 37,
       "args": [
         {
           "name": "method",
-          "value": "ui.get"
+          "value": "preflight.check"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 0
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "LogicalClientCutoverError",
+          "message": "RPC interrupted by connection migration",
+          "isRpcDeliveryUnknown": true,
+          "cause": {
+            "category": "Error",
+            "message": "Connection closed",
+            "isRpcDeliveryUnknown": true
+          }
+        }
       }
     },
     "98281d0e8b13": {
@@ -858,38 +1034,6 @@
       "name": "showGitHubPagePicker",
       "ordinal": 15,
       "value": false
-    },
-    "9c545d3c7262": {
-      "name": "settings.get#1",
-      "ordinal": 35,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 30000,
-        "error": {
-          "category": "Error",
-          "message": "Request timed out: settings.get",
-          "isRpcDeliveryUnknown": true
-        }
-      }
     },
     "9d27c74981a1": {
       "name": "error",
@@ -921,36 +1065,47 @@
         "unavailableReason": "Update Orca desktop to browse Jira on mobile."
       }
     },
-    "a5addaab38bf": {
-      "name": "linearFilter",
-      "ordinal": 59,
-      "value": "all"
-    },
-    "aa231760f80d": {
-      "name": "preflight.check#1",
-      "ordinal": 37,
+    "a4b7901e0372": {
+      "name": "linear.status#1",
+      "ordinal": 38,
       "args": [
         {
           "name": "method",
-          "value": "preflight.check"
+          "value": "linear.status"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 0
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "LogicalClientCutoverError",
+          "message": "RPC interrupted by connection migration",
+          "isRpcDeliveryUnknown": true,
+          "cause": {
+            "category": "Error",
+            "message": "Connection closed",
+            "isRpcDeliveryUnknown": true
+          }
+        }
       }
+    },
+    "a5addaab38bf": {
+      "name": "linearFilter",
+      "ordinal": 59,
+      "value": "all"
     },
     "aa9af10b3812": {
       "name": "preflight.check#1",
@@ -962,37 +1117,35 @@
       "ordinal": 39,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"jira.status\"}"
     },
-    "b93a0543b001": {
-      "name": "ui.get#1",
-      "ordinal": 36,
+    "ad03aa751af2": {
+      "name": "settings.get#1",
+      "ordinal": 35,
       "args": [
         {
           "name": "method",
-          "value": "ui.get"
+          "value": "settings.get"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "ui": {}
-          }
+        "settledAt": 30000,
+        "error": {
+          "category": "Error",
+          "message": "Request timed out: settings.get",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
@@ -1011,32 +1164,6 @@
       "name": "showRepoPicker",
       "ordinal": 13,
       "value": false
-    },
-    "be24124756fa": {
-      "name": "settings.get#1",
-      "ordinal": 35,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
     },
     "c11fe123ce70": {
       "name": "showGitHubProjectFieldsPicker",
@@ -1067,7 +1194,7 @@
       "hydrated": false,
       "settings": {}
     },
-    "c8683823a3a8": {
+    "c87109595a65": {
       "name": "ui.get#1",
       "ordinal": 36,
       "args": [
@@ -1078,24 +1205,26 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection lost",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "ui": {}
+          }
         }
       }
     },
@@ -1132,24 +1261,34 @@
       "ordinal": 45,
       "value": "Request timed out: settings.get"
     },
-    "dca6419d8a5b": {
+    "dd6fb20daf67": {
       "name": "linear.status#1",
-      "ordinal": 38,
+      "ordinal": 43,
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    },
+    "e033cf17e121": {
+      "name": "showGitLabViewPicker",
+      "ordinal": 9,
+      "value": false
+    },
+    "e44e17349036": {
+      "name": "settings.get#1",
+      "ordinal": 35,
       "args": [
         {
           "name": "method",
-          "value": "linear.status"
+          "value": "settings.get"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -1164,16 +1303,6 @@
         }
       }
     },
-    "dd6fb20daf67": {
-      "name": "linear.status#1",
-      "ordinal": 43,
-      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-    },
-    "e033cf17e121": {
-      "name": "showGitLabViewPicker",
-      "ordinal": 9,
-      "value": false
-    },
     "e61de5a1b27e": {
       "name": "defaultGitHubPreset",
       "ordinal": 56,
@@ -1187,38 +1316,6 @@
         "$rpc": "undefined"
       }
     },
-    "ee7cceedb9a0": {
-      "name": "ui.get#1",
-      "ordinal": 36,
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "ui.get#1 rejected",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
     "f164de325151": {
       "name": "pendingProjectGitHubMerge",
       "ordinal": 26,
@@ -1226,132 +1323,29 @@
         "$rpc": "null"
       }
     },
-    "f5aac28962c4": {
-      "name": "ui.get#1",
-      "ordinal": 36,
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "LogicalClientCutoverError",
-          "message": "RPC interrupted by connection migration",
-          "isRpcDeliveryUnknown": true,
-          "cause": {
-            "category": "Error",
-            "message": "Connection closed",
-            "isRpcDeliveryUnknown": true
-          }
-        }
-      }
-    },
-    "facc816347f5": {
-      "name": "preflight.check#1",
-      "ordinal": 37,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.check"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 30000,
-        "error": {
-          "category": "Error",
-          "message": "Request timed out: preflight.check",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "fd9076dd08ec": {
-      "name": "linear.status#1",
-      "ordinal": 38,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.status"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-6",
-          "ok": true,
-          "result": {
-            "connected": false
-          }
-        }
-      }
-    },
     "fdb0bbb8aa59": {
       "name": "showLinearConnect",
       "ordinal": 6,
       "value": false
     },
-    "ff86ae553649": {
-      "name": "jira.status#1",
-      "ordinal": 34,
+    "ffc5c47817a5": {
+      "name": "settings.get#1",
+      "ordinal": 35,
       "args": [
         {
           "name": "method",
-          "value": "jira.status"
+          "value": "settings.get"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -1360,10 +1354,16 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-2",
+          "id": "frame-3",
           "ok": true,
           "result": {
-            "connected": false
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": ["claude"],
+              "hostSettingOverrides": {},
+              "prBotAuthorOverrides": ["bot-user"],
+              "visibleTaskProviders": ["github", "linear"]
+            }
           }
         }
       }
@@ -1377,11 +1377,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "2553185eae8f",
-            "921ecca2c27f",
-            "97faf97e14a6",
-            "aa231760f80d",
-            "8cbc6b250510"
+            "1833d0fa5f1d",
+            "ffc5c47817a5",
+            "71bedad13169",
+            "1dfcd3f6163d",
+            "05ccd79ba4af"
           ],
           "payloads": [
             "d1af3771ebfa",
@@ -1435,11 +1435,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "ff86ae553649",
-            "921ecca2c27f",
-            "b93a0543b001",
-            "696ce2d131d0",
-            "fd9076dd08ec"
+            "688fe01c6196",
+            "ffc5c47817a5",
+            "c87109595a65",
+            "800b1afcceea",
+            "8c4056edb811"
           ],
           "payloads": [
             "d1af3771ebfa",
@@ -1515,11 +1515,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "2553185eae8f",
-            "be24124756fa",
-            "b93a0543b001",
-            "aa231760f80d",
-            "8cbc6b250510"
+            "1833d0fa5f1d",
+            "3a94dcc00915",
+            "c87109595a65",
+            "1dfcd3f6163d",
+            "05ccd79ba4af"
           ],
           "payloads": [
             "d1af3771ebfa",
@@ -1573,11 +1573,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "ff86ae553649",
-            "921ecca2c27f",
-            "b93a0543b001",
-            "696ce2d131d0",
-            "fd9076dd08ec"
+            "688fe01c6196",
+            "ffc5c47817a5",
+            "c87109595a65",
+            "800b1afcceea",
+            "8c4056edb811"
           ],
           "payloads": [
             "d1af3771ebfa",
@@ -1653,11 +1653,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "2553185eae8f",
-            "626911402c1c",
-            "97faf97e14a6",
-            "aa231760f80d",
-            "8cbc6b250510"
+            "1833d0fa5f1d",
+            "4526d5d74acb",
+            "71bedad13169",
+            "1dfcd3f6163d",
+            "05ccd79ba4af"
           ],
           "payloads": [
             "d1af3771ebfa",
@@ -1714,11 +1714,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "ff86ae553649",
-            "626911402c1c",
-            "ee7cceedb9a0",
-            "696ce2d131d0",
-            "fd9076dd08ec"
+            "688fe01c6196",
+            "4526d5d74acb",
+            "4075b6316e30",
+            "800b1afcceea",
+            "8c4056edb811"
           ],
           "payloads": [
             "d1af3771ebfa",
@@ -1776,11 +1776,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "2553185eae8f",
-            "be24124756fa",
-            "ee7cceedb9a0",
-            "aa231760f80d",
-            "8cbc6b250510"
+            "1833d0fa5f1d",
+            "3a94dcc00915",
+            "4075b6316e30",
+            "1dfcd3f6163d",
+            "05ccd79ba4af"
           ],
           "payloads": [
             "d1af3771ebfa",
@@ -1837,11 +1837,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "ff86ae553649",
-            "626911402c1c",
-            "ee7cceedb9a0",
-            "696ce2d131d0",
-            "fd9076dd08ec"
+            "688fe01c6196",
+            "4526d5d74acb",
+            "4075b6316e30",
+            "800b1afcceea",
+            "8c4056edb811"
           ],
           "payloads": [
             "d1af3771ebfa",
@@ -1899,11 +1899,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "2553185eae8f",
-            "626911402c1c",
-            "97faf97e14a6",
-            "aa231760f80d",
-            "8cbc6b250510"
+            "1833d0fa5f1d",
+            "4526d5d74acb",
+            "71bedad13169",
+            "1dfcd3f6163d",
+            "05ccd79ba4af"
           ],
           "payloads": [
             "d1af3771ebfa",
@@ -1960,11 +1960,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "ff86ae553649",
-            "626911402c1c",
-            "97faf97e14a6",
-            "696ce2d131d0",
-            "fd9076dd08ec"
+            "688fe01c6196",
+            "4526d5d74acb",
+            "71bedad13169",
+            "800b1afcceea",
+            "8c4056edb811"
           ],
           "payloads": [
             "d1af3771ebfa",
@@ -2022,11 +2022,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "0c1f31364093",
-            "9c545d3c7262",
-            "10fab568df61",
-            "facc816347f5",
-            "193958548df2"
+            "302df5159005",
+            "ad03aa751af2",
+            "20ef49331589",
+            "57087f926eaf",
+            "74d8785ba556"
           ],
           "payloads": [
             "d1af3771ebfa",
@@ -2084,11 +2084,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "96654352593d",
-            "581a7233083b",
-            "c8683823a3a8",
-            "4c9934783b34",
-            "dca6419d8a5b"
+            "4a0377b4ac3c",
+            "e44e17349036",
+            "95d5a2a2f417",
+            "37e9eb7f2e21",
+            "525789d7c3fa"
           ],
           "payloads": [
             "d1af3771ebfa",
@@ -2147,11 +2147,11 @@
         "observation": {
           "sender": [
             "8db7a6a7d531",
-            "5a2ae779ba31",
-            "0ab118b3136f",
-            "f5aac28962c4",
-            "1533d4f4be0d",
-            "07e185c427ba"
+            "43f5e0efb7d5",
+            "1305e04da46a",
+            "0919c52e10c6",
+            "965996579b8a",
+            "a4b7901e0372"
           ],
           "payloads": [
             "d1af3771ebfa",

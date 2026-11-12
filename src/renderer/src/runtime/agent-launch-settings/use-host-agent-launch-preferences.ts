@@ -1,4 +1,4 @@
-import { useAppViewExternalStore } from '@/store/app-state-view'
+import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -9,7 +9,7 @@ import {
   resolveAgentLaunchInventoryHost,
   type ProspectiveWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   type AgentLaunchPreferences,

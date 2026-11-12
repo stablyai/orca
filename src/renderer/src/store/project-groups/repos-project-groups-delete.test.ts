@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -8,6 +8,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
+import { replaceRuntimeEnvironmentRevisions } from '../../runtime/rpc/environment-revisions/runtime-environment-revision'
 
 describe('repos-project-groups-delete', () => {
   const remoteRepo: Repo = {
@@ -39,6 +40,8 @@ describe('repos-project-groups-delete', () => {
 
   beforeEach(() => {
     clearRuntimeCompatibilityCacheForTests()
+    // Shared-process runs can leave another file's env-1 pairing revision behind.
+    replaceRuntimeEnvironmentRevisions([])
     reposRemove.mockReset()
     reposRemoveForHost.mockReset()
     reposRemoveForHost.mockResolvedValue(undefined)

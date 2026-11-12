@@ -8,7 +8,10 @@ import {
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
-import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../shared/secure-file'
+import {
+  bestEffortFsyncDirectorySync,
+  fsyncFileSync
+} from '../../shared/secure-storage/secure-file'
 import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -28,21 +31,10 @@ import {
   hasOrcaProfileStateDatabase,
   getProfileUserDataPath
 } from './profile-storage-paths'
-import { copyLegacyStateToProfile } from './profile-legacy-state-import'
+import { copyLegacyStateToProfile } from './storage/profile-legacy-state-import'
 import { profileStateJsonExportPaths } from '../persistence/profile-state/legacy-json/profile-state-export-path'
-import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/profile-state-authority-marker'
-import { profileStateDatabaseBackups } from '../persistence/profile-state/profile-state-backup-path'
-
-export {
-  getOrcaProfileBrowserSessionMetaFile,
-  getOrcaProfileDataFile,
-  getOrcaProfileDirectory,
-  getOrcaProfileIndexPath,
-  getOrcaProfileStateDatabaseFile,
-  hasOrcaProfileStateDatabase,
-  getOrcaProfilesDirectory,
-  initOrcaProfilePaths
-} from './profile-storage-paths'
+import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/database/profile-state-authority-marker'
+import { profileStateDatabaseBackups } from '../persistence/profile-state/backup/profile-state-backup-path'
 
 export type ActiveOrcaProfileState = {
   index: OrcaProfileIndex

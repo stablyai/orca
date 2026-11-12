@@ -1,5 +1,4 @@
 import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import * as sessionCreate from '../../../rpc/methods/structured-sessions/creation/structured-agent-session-create'
 import { attachParams, providerFaults } from './structured-chat-coordinator-fake-codex-fixture'
@@ -11,6 +10,7 @@ import {
   db,
   host,
   openChat,
+  root,
   runtime
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
@@ -35,7 +35,7 @@ it('keeps a minted worker start unknown after one preamble handover without an e
   } as never)
   vi.spyOn(sessionCreate, 'createStructuredAgentSessionForWorktree').mockImplementation(
     async (args) => {
-      const attached = await host.attach(args.caller, attachParams(args.envelope.sessionId))
+      const attached = await host.attach(args.caller, attachParams(args.envelope.sessionId, root))
       if (!attached.ok) {
         throw new Error('scripted worker attach refused')
       }

@@ -1,5 +1,5 @@
 import React from 'react'
-import type { usePluginNewFiles } from '@/store/plugin-new-files'
+import type { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import {

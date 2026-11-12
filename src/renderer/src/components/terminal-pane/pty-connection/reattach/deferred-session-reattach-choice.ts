@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '@/store/index'
 import { isWebTerminalSurfaceTabId } from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import { getEagerPtyBufferHandle } from '../../pty-transport/delivery/pty-dispatcher'

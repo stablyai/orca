@@ -1,20 +1,20 @@
 import type { AgentLaunchChoices } from './agent-launch/choices/agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
-import type { BrowserProfileScope } from './browser-profile-scope'
+import type { BrowserProfileScope } from './browser/profiles/browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
 import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
-import type { GitHubProjectSettings } from './github/project-types'
+import type { GitHubProjectSettings } from './github/projects/project-types'
 import type { VoiceSettings } from './speech-types'
 import type { AiVaultSearchSettings } from './ai-vault/search/ai-vault-search-settings'
 import type { GitLabProjectSettings } from './gitlab-types'
-import type { TaskProvider } from './task-providers'
+import type { TaskProvider } from './work-items/task-providers'
 import type { AppIconId } from './app-icon'
 import type { SourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings-types'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-themes/terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
-import type { GlobalWindowsRuntimeDefault } from './project-execution-runtime'
+import type { GlobalWindowsRuntimeDefault } from './execution-host/project-runtime-preference'
 import type { PersistedNativeChatSessionOptions } from './native-chat/input/native-chat-session-options'
 import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
 import type { ComputerAwakeMode } from './computer-awake-mode'
@@ -103,6 +103,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number
+  /** One-shot Windows move from the old 500 default to Regular; pending until its notice is closed. */
+  terminalFontWeightWindowsRegular?: 'notice-pending' | 'done'
   terminalFontWeightBold: number
   terminalLineHeight: number
   terminalScrollSensitivity: number
@@ -127,6 +129,10 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalUseSeparateLightTheme: boolean
   terminalThemeLight: string
   terminalDividerColorLight: string
+  /** Mirror the terminal palette into Claude Code's theme; off restores the theme Orca replaced. */
+  claudeCodeThemeSync: boolean
+  /** `pending` until the offer toast shows at the next Claude launch, then `settled`. */
+  claudeCodeThemeSyncOffer?: 'pending' | 'settled'
   terminalInactivePaneOpacity: number
   terminalActivePaneOpacity: number
   terminalPaneOpacityTransitionMs: number
@@ -245,13 +251,15 @@ export type GlobalSettings = GlobalSettingsBase & {
   showAutomationsButton?: boolean
   /** Deprecated: Artifacts are always available. Use showArtifactsButton for sidebar visibility. */
   artifactsEnabled?: boolean
-  /** Capability gate for agent-driven publishing; off until granted, enforced in main, not just the UI. */
+  /** Capability gate for public artifact publishing; on for new profiles, enforced in main, not just the UI. */
   artifactSharingEnabled?: boolean
   /** Capability gate for agent/CLI skill publishing; manual reviewed publishing remains available. */
   agentSkillSharingEnabled?: boolean
   /** Escalate native-chat worker turn errors to the dispatching Run; absent means on. Renderer-only so workers cannot silence failures via CLI. */
   /** Close a finished worker's terminal or chat after a grace period; absent means on. The coordinator's runtime decides. */
   orchestrationWorkerAutoReleaseEnabled?: boolean
+  /** Coordinator agents may allow workers' permission prompts on this machine; absent means off. Not in any agent-writable settings RPC. */
+  orchestrationCoordinatorApprovalsEnabled?: boolean
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
   showArtifactsButton?: boolean
   /** Only toggles the sidebar shortcut; Skills stay reachable from Settings. */
@@ -487,6 +495,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   telemetry?: TelemetrySettings
   /** Voice/dictation settings; persistence merge hydrates getDefaultSettings() values for older profiles. */
   voice?: VoiceSettings
+  /** One-shot migration flag for the Auto dictation-mode default; after migration an explicit Toggle sticks. */
+  voiceDictationModeDefaultedToAuto?: boolean
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
   aiVaultSearch?: AiVaultSearchSettings
 }

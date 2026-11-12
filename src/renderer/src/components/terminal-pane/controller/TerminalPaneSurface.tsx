@@ -5,7 +5,7 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import TerminalSearch from '@/components/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
-import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import { hasWorkspaceFileDragType } from '@/lib/files/drop/workspace-file-drag'
 import CloseTerminalDialog from '../layout/close/CloseTerminalDialog'
 import TerminalContextMenu from '../context-menu/TerminalContextMenu'
 import TerminalPaneHeaderOverlay from '../titles/TerminalPaneHeaderOverlay'
@@ -34,12 +34,14 @@ import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/wo
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { useWslHostStartCardReplacesPaneError } from '../pty-transport/recovery/wsl/use-wsl-host-stopped-pane'
 import { terminalPaneMenuAddToChat } from '../clipboard/terminal-pane-menu-copy-actions'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function TerminalPaneSurface({
   controller
 }: {
   controller: TerminalPaneController
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     activeAgentId,
     activePane,
@@ -51,6 +53,7 @@ export function TerminalPaneSurface({
     agentSessionContinuation,
     agentSessionFork,
     beginPaneDragFromHeader,
+    chatPane,
     closeTerminalLinkActions,
     contextMenu,
     contextMenuCanContinueInNewSession,
@@ -142,6 +145,7 @@ export function TerminalPaneSurface({
         className="absolute inset-0 min-h-0 min-w-0"
         data-terminal-tab-id={tabId}
         data-terminal-chat-view={effectiveChatViewMode && activePaneIsChatLeaf ? 'true' : undefined}
+        data-terminal-chat-pane={effectiveChatViewMode && chatPane ? '' : undefined}
         data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
@@ -152,19 +156,13 @@ export function TerminalPaneSurface({
         }}
         onAuxClickCapture={handlePrimarySelectionAuxClick}
         onDragOver={(event) => {
-          if (
-            event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
-            event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-          ) {
+          if (hasWorkspaceFileDragType(event.dataTransfer)) {
             event.preventDefault()
             event.dataTransfer.dropEffect = 'copy'
           }
         }}
         onDrop={(event) => {
-          if (
-            !event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) &&
-            !event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-          ) {
+          if (!hasWorkspaceFileDragType(event.dataTransfer)) {
             return
           }
           event.preventDefault()
@@ -213,11 +211,11 @@ export function TerminalPaneSurface({
         ? createPortal(
             <TerminalErrorToast
               error={visibleTerminalError.error}
-              resourceLimit={visibleTerminalError.resourceLimit}
               agentId={activeAgentId}
               paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
+              onRestoreTerminalFocus={() => activePane.terminal.focus()}
               onRetry={
                 isPaneOwnerRecoveryError(visibleTerminalError.error)
                   ? () =>
@@ -226,9 +224,7 @@ export function TerminalPaneSurface({
                       )
                   : undefined
               }
-              onOpenNewTerminal={() => {
-                openTerminalBesideTab(tabId)
-              }}
+              onOpenNewTerminal={() => void openTerminalBesideTab(tabId)}
               onClosePane={() => handleRequestClosePane(activePane.id)}
             />,
             activePane.container,
@@ -262,6 +258,7 @@ export function TerminalPaneSurface({
       <TerminalContextMenu
         open={contextMenu.open}
         onOpenChange={contextMenu.setOpen}
+        onRestoreTerminalFocus={contextMenu.onRestoreTerminalFocus}
         menuPoint={contextMenu.point}
         menuOpenedAtRef={contextMenu.menuOpenedAtRef}
         canClosePane={canCloseTerminalPane({
@@ -269,7 +266,7 @@ export function TerminalPaneSurface({
           showSplitButton,
           isTabPinned
         })}
-        closePaneLabel={terminalPaneCloseLabel(contextMenu.paneCount)}
+        closePaneLabel={terminalPaneCloseLabel(contextMenu.paneCount, t)}
         canExpandPane={contextMenu.paneCount > 1}
         canEqualizePaneSizes={contextMenu.paneCount > 1 && expandedPaneId === null}
         menuPaneIsExpanded={

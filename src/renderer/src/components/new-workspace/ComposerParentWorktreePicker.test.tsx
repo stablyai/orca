@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
 import type React from 'react'
-import type * as WorktreeRepoIndex from '@/store/worktree-repo-index'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
@@ -28,17 +27,6 @@ const storeState = vi.hoisted(
     }) as FakeStoreState
 )
 
-const popoverMock = vi.hoisted(() => ({
-  open: false,
-  onOpenChange: undefined as ((open: boolean) => void) | undefined
-}))
-
-const indexSpies = vi.hoisted(() => ({
-  getIndexedAllWorktrees: vi.fn(),
-  getIndexedWorktreeMap: vi.fn(),
-  getIndexedWorktreeById: vi.fn()
-}))
-
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
@@ -51,39 +39,34 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: FakeStoreState) => unknown) => selector(storeState)
 }))
 
-// Wrap real projections to preserve exclusion coverage while counting enumeration calls.
-vi.mock('@/store/worktree-repo-index', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeRepoIndex>()
-  indexSpies.getIndexedAllWorktrees.mockImplementation(actual.getIndexedAllWorktrees)
-  indexSpies.getIndexedWorktreeMap.mockImplementation(actual.getIndexedWorktreeMap)
-  indexSpies.getIndexedWorktreeById.mockImplementation(actual.getIndexedWorktreeById)
-  return { ...actual, ...indexSpies }
-})
-
 vi.mock('@/components/ui/popover', async () => {
-  const { cloneElement } = await import('react')
+  const { cloneElement, createContext, useContext, useMemo } = await import('react')
+  const PopoverState = createContext<{ open: boolean; onOpenChange?: (open: boolean) => void }>({
+    open: false
+  })
   return {
     Popover: ({
       children,
-      open,
+      open = false,
       onOpenChange
     }: {
       children: React.ReactNode
       open?: boolean
       onOpenChange?: (open: boolean) => void
     }) => {
-      popoverMock.open = open ?? false
-      popoverMock.onOpenChange = onOpenChange
-      return <div>{children}</div>
+      const value = useMemo(() => ({ open, onOpenChange }), [open, onOpenChange])
+      return <PopoverState.Provider value={value}>{children}</PopoverState.Provider>
     },
     // Radix `asChild` renders the child itself and owns its click; mirror that.
-    PopoverTrigger: ({ children }: { children: React.ReactElement }) =>
-      cloneElement(children as React.ReactElement<{ onClick?: () => void }>, {
-        onClick: () => popoverMock.onOpenChange?.(!popoverMock.open)
-      }),
+    PopoverTrigger: ({ children }: { children: React.ReactElement }) => {
+      const { open, onOpenChange } = useContext(PopoverState)
+      return cloneElement(children as React.ReactElement<{ onClick?: () => void }>, {
+        onClick: () => onOpenChange?.(!open)
+      })
+    },
     // Radix mounts content only while open — the property the lazy list relies on.
     PopoverContent: ({ children }: { children: React.ReactNode }) =>
-      popoverMock.open ? <div>{children}</div> : null
+      useContext(PopoverState).open ? <div>{children}</div> : null
   }
 })
 
@@ -167,33 +150,37 @@ function candidateLabels(): string[] {
 }
 
 beforeEach(() => {
-  popoverMock.open = false
-  popoverMock.onOpenChange = undefined
   storeState.worktreesByRepo = {}
   storeState.repos = []
   storeState.worktreeLineageById = {}
   storeState.workspaceLineageByChildKey = {}
-  indexSpies.getIndexedAllWorktrees.mockClear()
-  indexSpies.getIndexedWorktreeMap.mockClear()
-  indexSpies.getIndexedWorktreeById.mockClear()
 })
 
 afterEach(cleanup)
 
 describe('ComposerParentWorktreePicker', () => {
-  it('restricts candidates to the active folder workspace subtree', () => {
+  it('offers live folder descendants through retired roots and intermediate parents', () => {
     const attached = makeWorktree({
       id: 'attached',
       displayName: 'Attached',
-      instanceId: 'attached-instance'
+      instanceId: 'attached-instance',
+      removing: true,
+      removalRecorded: true
     })
     const nested = makeWorktree({
       id: 'nested',
       displayName: 'Nested',
       instanceId: 'nested-instance'
     })
+    const bridge = makeWorktree({
+      id: 'bridge',
+      instanceId: 'bridge-instance',
+      removing: true,
+      removalRecorded: true
+    })
+    const leaf = makeWorktree({ id: 'leaf', displayName: 'Leaf', instanceId: 'leaf-instance' })
     const outside = makeWorktree({ id: 'outside', displayName: 'Outside' })
-    seed([attached, nested, outside])
+    seed([attached, nested, bridge, leaf, outside])
     storeState.workspaceLineageByChildKey = {
       [worktreeWorkspaceKey(attached.id)]: {
         childWorkspaceKey: worktreeWorkspaceKey(attached.id),
@@ -214,23 +201,45 @@ describe('ComposerParentWorktreePicker', () => {
         origin: 'manual',
         capture: { source: 'manual-action', confidence: 'explicit' },
         createdAt: 2
+      },
+      [bridge.id]: {
+        worktreeId: bridge.id,
+        worktreeInstanceId: 'bridge-instance',
+        parentWorktreeId: nested.id,
+        parentWorktreeInstanceId: 'nested-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 3
+      },
+      [leaf.id]: {
+        worktreeId: leaf.id,
+        worktreeInstanceId: 'leaf-instance',
+        parentWorktreeId: bridge.id,
+        parentWorktreeInstanceId: 'bridge-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 4
       }
     }
-
+    const onChange = vi.fn()
     render(
       <ComposerParentWorktreePicker
         repoId={REPO_ID}
         value={null}
-        onChange={vi.fn()}
+        onChange={onChange}
         activeFolderWorkspaceId="folder-1"
       />
     )
     fireEvent.click(trigger())
 
     const labels = candidateLabels().join(' ')
-    expect(labels).toContain('Attached')
+    expect(labels).not.toContain('Attached')
+    expect(labels).not.toContain('bridge')
     expect(labels).toContain('Nested')
+    expect(labels).toContain('Leaf')
     expect(labels).not.toContain('Outside')
+    fireEvent.click(rows().find((row) => row.textContent?.includes('Leaf'))!)
+    expect(onChange).toHaveBeenCalledWith('leaf')
   })
 
   it('closes an open popover when the drawer collapses the trigger', () => {

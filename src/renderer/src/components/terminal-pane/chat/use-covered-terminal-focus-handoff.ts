@@ -1,6 +1,6 @@
 import { useLayoutEffect, type RefObject } from 'react'
 import type { Terminal } from '@xterm/xterm'
-import { focusNativeChatPromptCard } from '../../native-chat/use-native-chat-prompt-card-focus'
+import { focusNativeChatPromptCard } from '../../native-chat/prompts/use-native-chat-prompt-card-focus'
 
 /** Commit focus to the visible chat cover before making xterm inert, preventing later terminal.focus from sending keys to a hidden agent. */
 export function useCoveredTerminalFocusHandoff(

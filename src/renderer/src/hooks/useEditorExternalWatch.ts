@@ -1,9 +1,9 @@
 import { useSourceControlWatchConsumers } from './source-control-watch-consumers'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { subscribeEditorRuntimeFileWatch } from './editor-runtime-file-watch'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import {
   getEditorExternalWatchTargetKey,
   selectEditorExternalWatchTargets,
@@ -18,6 +18,10 @@ import {
   releaseWatchRoot,
   type HeldWatchRoots
 } from './editor-external-watch-local-roots'
+import {
+  selectLocalTabFoldersKey,
+  SymlinkedTabFolderWatches
+} from './editor-external-watch-symlink-folders'
 
 type FsChangedHandler = (
   payload: FsChangedPayload,
@@ -47,6 +51,13 @@ export function useEditorExternalWatch(): void {
   const remoteWatchUnsubsRef = useRef(new Map<string, () => void>())
   const heldWatchRootsRef = useRef<HeldWatchRoots>(new Map())
   const fsChangedHandlerRef = useRef<FsChangedHandler | null>(null)
+  const [symlinkedFolders] = useState(() => new SymlinkedTabFolderWatches(warnExternalWatchFailure))
+  const tabFoldersKey = useAppStore(
+    useCallback(
+      (state) => selectLocalTabFoldersKey(state.openFiles, snapshot.targets),
+      [snapshot.targets]
+    )
+  )
 
   // Why: diff targets so unchanged worktrees keep their subscription; full teardown on every store change drops events in the gap.
   useEffect(() => {
@@ -108,20 +119,30 @@ export function useEditorExternalWatch(): void {
     // Why: the selector keeps the snapshot identity until a target or unwatched key changes.
   }, [snapshot])
 
+  // Why: runs after the target diff so targetsRef holds the targets these folders belong to.
+  useEffect(() => {
+    symlinkedFolders.sync(tabFoldersKey, targetsRef.current, heldWatchRootsRef.current)
+  }, [symlinkedFolders, tabFoldersKey])
+
   // Why: one stable fs:changed listener prevents target-key changes from opening an event-loss gap.
   useEffect(() => {
     const remoteWatchUnsubs = remoteWatchUnsubsRef.current
     const heldWatchRoots = heldWatchRootsRef.current
     const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(
-      (worktreePath, runtimeEnvironmentId, connectionId) =>
-        targetsRef.current.filter(
+      (worktreePath, runtimeEnvironmentId, connectionId) => [
+        ...targetsRef.current.filter(
           (target) =>
             normalizeRuntimePathForComparison(target.worktreePath) ===
               normalizeRuntimePathForComparison(worktreePath) &&
             target.runtimeEnvironmentId === runtimeEnvironmentId &&
             // Why: a local and an SSH root can share a path; runtime streams are already per host.
             (runtimeEnvironmentId !== null || target.connectionId === connectionId)
-        )
+        ),
+        // Why: a watched tab folder reports under its own path; its workspaces reconcile the events.
+        ...(runtimeEnvironmentId === null
+          ? symlinkedFolders.targetsFor(worktreePath, connectionId)
+          : [])
+      ]
     )
     const unsubscribe = window.api.fs.onFsChanged((payload) => handleFsChanged(payload, null))
     fsChangedHandlerRef.current = handleFsChanged
@@ -134,12 +155,13 @@ export function useEditorExternalWatch(): void {
         remoteUnsubscribe()
       }
       remoteWatchUnsubs.clear()
+      symlinkedFolders.clear()
       releaseAllWatchRoots(heldWatchRoots)
       targetsRef.current = []
       unwatchedTargetKeysRef.current = new Set()
       // Why: module-scoped reload timers survive StrictMode's synthetic cleanup; a late reload dispatch is harmless.
     }
-  }, [])
+  }, [symlinkedFolders])
 }
 
 function subscribeRuntimeTarget(

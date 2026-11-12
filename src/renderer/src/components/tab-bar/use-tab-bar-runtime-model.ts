@@ -1,37 +1,35 @@
-import { getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { getSimulatorTabForWorktree } from '@/lib/simulator/tabs/ensure-simulator-tab'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Tab } from '../../../../shared/tab-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
-import { useAppStore } from '../../store'
-import { buildStatusMap } from '../../lib/git-path-decoration'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import { useAppStore } from '../../store/index'
+import { buildStatusMap } from '../../lib/source-control/paths/git-path-decoration'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getConnectionIdForWorktreeCopy } from '@/lib/connection-owner-resolution'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { getConnectionIdForWorktreeCopy } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   getWindowsTerminalCapabilityOwnerKey,
-  useWindowsTerminalCapabilities,
-  type WindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+  useWindowsTerminalCapabilities
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/mobile-emulator-tab-intro-visibility'
-import {
-  selectTabBarAgentProjections,
-  type TabBarAgentProjections
-} from './tab-agent-types-by-tab-id'
+import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
+import type { TabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { createUnifiedTabLookup } from './tab-bar-item-model'
-import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Tab } from '../../../../shared/tab-types'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
+import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 
 const isWindows = navigator.userAgent.includes('Windows')
 export const isMacOs = navigator.userAgent.includes('Mac')

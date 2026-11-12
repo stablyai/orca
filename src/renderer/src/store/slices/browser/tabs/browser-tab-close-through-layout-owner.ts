@@ -4,13 +4,13 @@ import type {
   BrowserPage,
   BrowserWorkspace
 } from '../../../../../../shared/browser-workspace-types'
-import { dedupeTabOrder } from '../../../../../../shared/workspace-layout/tab-order'
+import { dedupeTabOrder } from '../../../../../../shared/workspace-layout/tab-groups/tab-order'
 import type { AppState } from '../../../types'
-import { pickNextActiveTab } from '../../tab-group-state'
+import { pickNextActiveTab } from '../../tabs/tab-selection-history'
 import {
   getRecentlyClosedTabPosition,
   type RecentlyClosedTabPosition
-} from '../../recently-closed-tab-position'
+} from '../../tabs/recently-closed-tab-position'
 import { closeContentTabThroughLayoutOwner } from '../../tabs/content-tab-close-through-layout-owner'
 import type { BrowserSliceGet, RemoteBrowserPageHandle } from '../browser-slice-contract'
 

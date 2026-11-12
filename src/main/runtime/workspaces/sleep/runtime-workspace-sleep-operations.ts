@@ -5,20 +5,60 @@ import type {
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
 } from '../../../../shared/workspace-sleep'
-import {
-  WorkspaceSleepCoordinator,
-  type RecipeVmOpening,
-  type RecipeVmState
-} from './workspace-sleep-runtime'
+import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
+import type { RecipeVmOpening, RecipeVmState } from './recipe-vm-operations'
 import { dropStrandedSleepRecord } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
 import { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'
+import {
+  deleteLostContact,
+  runWorkspaceLifecycleCommand,
+  workspaceLifecycleKey
+} from '../lifecycle/workspace-lifecycle-commands'
+import { getRuntimeWorktreeRemovalOptionsKey } from '../catalog/runtime-worktree-selection'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import type {
+  RecipeWorkspaceRemoval,
+  RecipeWorkspaceRemoveParams
+} from '../../../ephemeral-vm/workspace-removal'
+import type { RecipeEnvironmentDescription } from '../../../../shared/recipe-host-removal'
+/** Desktop-only wiring: removal of a workspace whose recipe environment this host provisioned. */
+export type RecipeWorkspaceRemovalHooks = {
+  owns: (params: RecipeWorkspaceRemoveParams) => boolean
+  remove: (params: RecipeWorkspaceRemoveParams) => Promise<RecipeWorkspaceRemoval>
+  describe: (hostId: string) => ReadonlyMap<string, RecipeEnvironmentDescription>
+}
+
 export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
   // Switch point: only a build where main produces the sidebar's inputs queues lifecycle commands.
   readonly workspaceLifecycle = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new WorkspaceLifecycleQueue() : null
+  private recipeWorkspaceRemoval: RecipeWorkspaceRemovalHooks | null = null
+
+  setRecipeWorkspaceRemoval(hooks: RecipeWorkspaceRemovalHooks): void {
+    this.recipeWorkspaceRemoval = hooks
+  }
+
+  /** Throws when several recipe records claim the workspace, so nothing is destroyed on a guess. */
+  ownsRecipeWorkspaceRemoval(params: RecipeWorkspaceRemoveParams): boolean {
+    return this.recipeWorkspaceRemoval?.owns(params) ?? false
+  }
+
+  removeRecipeWorkspace(params: RecipeWorkspaceRemoveParams): Promise<RecipeWorkspaceRemoval> {
+    if (!this.recipeWorkspaceRemoval) {
+      throw new Error('This Orca host cannot remove recipe workspaces.')
+    }
+    return this.recipeWorkspaceRemoval.remove(params)
+  }
+
+  /** The recipe environments a phone's delete sheet names, by workspace id, for one host. */
+  describeRecipeWorkspaceEnvironments(
+    hostId: string
+  ): ReadonlyMap<string, RecipeEnvironmentDescription> {
+    return this.recipeWorkspaceRemoval?.describe(hostId) ?? new Map()
+  }
 
   abstract sleepTerminalsForWorktree(
     worktreeSelector: string
@@ -70,6 +110,45 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
   /** Opening a workspace wakes its recipe VM, if this host holds one; resolves with the VM's record. */
   wakeWorkspaceVm(worktreeId: string): Promise<EphemeralVmRuntimeRecord | null> {
     return this.workspaceSleep.wakeVm(worktreeId)
+  }
+
+  /** Removes a workspace whose recipe VM this host provisioned. It is a lifecycle delete, so it
+   *  cancels queued sleeps and waits for a running one; `destroyVm` then orders the VM's destroy
+   *  behind any wake or suspend still running. */
+  removeRecipeWorkspaceVm<T>(
+    worktreeId: string,
+    hostId: string,
+    options: { force: boolean; runHooks: boolean; allowFailedArchiveHook: boolean },
+    remove: (destroyVm: <D>(destroy: () => Promise<D>) => Promise<D>) => Promise<T>
+  ): Promise<T> {
+    const host = parseExecutionHostId(hostId)
+    if (!host) {
+      throw new Error('Recipe workspace removal needs a host-qualified workspace.')
+    }
+    return runWorkspaceLifecycleCommand(
+      this.workspaceLifecycle,
+      workspaceLifecycleKey(host.id, worktreeId),
+      {
+        kind: 'delete',
+        lostContact: deleteLostContact,
+        run: () => remove((destroy) => this.workspaceSleep.destroyVm(worktreeId, destroy)),
+        delete: {
+          key: getRuntimeWorktreeRemovalOptionsKey({
+            force: options.force,
+            runHooks: options.runHooks,
+            allowUnverifiedPtyStop: options.force,
+            allowFailedArchiveHook: options.allowFailedArchiveHook
+          }),
+          force: options.force,
+          label: worktreeId
+        }
+      }
+    )
+  }
+
+  /** The user's Suspend VM, serialised with any wake of the same VM. */
+  suspendWorkspaceVm(worktreeId: string): Promise<void> {
+    return this.workspaceSleep.suspendVm(worktreeId)
   }
 
   /** Where this workspace's recipe VM stands for a client about to reach its server. */

@@ -1,14 +1,15 @@
-import type { BrowserLinkOpenContext } from './browser-link-destination'
-import type { HttpLinkBrowserRequestFields } from './http-link-browser-placement'
 import { showOpenInGroupRefusedToast } from '@/components/terminal-pane/links/files/terminal-file-open-in-group-toast'
-import { beginLinkOpenRequest } from '../../link-open-request'
+import { beginLinkOpenRequest } from '../../links/link-open-request'
 import { translate } from '@/i18n/i18n'
 import {
   openHttpLink,
   captureHttpLinkIntent,
-  canHttpLinkOpenInSourceGroup,
-  type HttpLinkSourceOwner
+  canHttpLinkOpenInSourceGroup
 } from '@/lib/browser/navigation/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import type { BrowserLinkOpenContext } from './browser-link-destination'
+import type { HttpLinkBrowserRequestFields } from './http-link-browser-placement'
+import type { Translate } from '@/i18n/use-translate'
 
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null
@@ -91,16 +92,13 @@ export function httpLinkDirectClickDestination(
   return shiftKey ? (destinations.alternate ?? destinations.primary) : destinations.primary
 }
 
-export function httpLinkDestinationLabel(destination: HttpLinkDestination): string {
+export function httpLinkDestinationLabel(
+  destination: HttpLinkDestination,
+  t: Translate = translate
+): string {
   return destination === 'orca'
-    ? translate(
-        'auto.components.terminal.pane.TerminalLinkActionPopover.orcaBrowser',
-        'Orca Browser'
-      )
-    : translate(
-        'auto.components.terminal.pane.TerminalLinkActionPopover.systemBrowser',
-        'System Browser'
-      )
+    ? t('auto.components.terminal.pane.TerminalLinkActionPopover.orcaBrowser', 'Orca Browser')
+    : t('auto.components.terminal.pane.TerminalLinkActionPopover.systemBrowser', 'System Browser')
 }
 
 export function buildHttpLinkActions(
@@ -112,14 +110,15 @@ export function buildHttpLinkActions(
     sourceOwner?: HttpLinkSourceOwner
     sourceTabId?: string | null
     openInSourceGroup: () => void | Promise<void>
-  }
+  },
+  t: Translate = translate
 ): { primary: HttpLinkAction; alternate?: HttpLinkAction; secondaryActions?: HttpLinkAction[] } {
   const primaryDestination = destinations?.primary
   const primary: HttpLinkAction = {
     external: primaryDestination === 'system',
     label: primaryDestination
-      ? httpLinkDestinationLabel(primaryDestination)
-      : translate('auto.components.terminal.pane.TerminalLinkActionPopover.openLink', 'Open link'),
+      ? httpLinkDestinationLabel(primaryDestination, t)
+      : t('auto.components.terminal.pane.TerminalLinkActionPopover.openLink', 'Open link'),
     run: () => open(primaryDestination)
   }
   const secondaryActions =
@@ -133,7 +132,7 @@ export function buildHttpLinkActions(
     )
       ? [
           {
-            label: translate(
+            label: t(
               'auto.components.terminal.pane.TerminalLinkActionPopover.openInNewTab',
               'Open in new tab'
             ),
@@ -150,7 +149,7 @@ export function buildHttpLinkActions(
     ...(secondaryActions ? { secondaryActions } : {}),
     alternate: {
       external: alternateDestination === 'system',
-      label: httpLinkDestinationLabel(alternateDestination),
+      label: httpLinkDestinationLabel(alternateDestination, t),
       run: () => open(alternateDestination)
     }
   }

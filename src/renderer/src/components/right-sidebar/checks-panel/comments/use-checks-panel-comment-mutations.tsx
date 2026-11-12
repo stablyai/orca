@@ -1,8 +1,8 @@
 import { useCallback } from 'react'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { toast } from 'sonner'
 import { mergePRCommentIntoList } from '@/store/github/comments/pr-comment-cache'
-import { githubProjectHost } from '../../../../../../shared/github/project-identity'
+import { githubProjectHost } from '../../../../../../shared/github/projects/project-identity'
 import {
   setReactionOnSubject,
   restoreReactionOnSubject
@@ -18,13 +18,13 @@ import type { ChecksPanelCommentResolutionState } from './use-checks-panel-comme
 import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
 import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
 import { checksPanelAsyncResultKey } from '../refresh/checks-panel-async-result-key'
-import { isMutablePRConversationComment } from '../../../../../../shared/github/pr-comment-mutability'
+import { isMutablePRConversationComment } from '../../../../../../shared/github/comments/pr-comment-mutability'
 import type {
   GitHubReactionContent,
   PRComment
-} from '../../../../../../shared/github/comment-types'
+} from '../../../../../../shared/github/comments/comment-types'
 import { translate } from '@/i18n/i18n'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 import { gitHubSlugApiForWorkspace } from '@/runtime/repository-github/github-slug-owner-api'
 import { errorMessage } from '../../../../../../shared/error-message'
 

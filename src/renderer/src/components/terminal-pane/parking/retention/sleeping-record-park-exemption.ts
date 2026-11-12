@@ -4,7 +4,7 @@ import {
   parsePaneKey
 } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { activationTreatsNoteAsFinished } from '../../../../lib/agent-session/resume/sleeping-agent-pane-ownership'
-import { createWorktreeRecordSelector } from '@/store/worktree-record-selector-cache'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
 
 const EMPTY_TAB_IDS: ReadonlySet<string> = new Set()
 
@@ -12,36 +12,34 @@ type SleepingRecordParkExemptionState = {
   sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
 }
 
-/** Exempt only consumable sleeping records: parked panes cannot cold-restore, but finished notes would pin panes forever. Memoize by record-map identity to avoid rescanning every worktree on unrelated writes; iterate without allocating Object.values. */
-export const selectSleepingRecordParkExemptTabIds = createWorktreeRecordSelector<
-  SleepingRecordParkExemptionState,
-  ReadonlySet<string>
->({
-  readSources: (state) => [state.sleepingAgentSessionsByPaneKey],
-  empty: EMPTY_TAB_IDS,
-  build: ({ sleepingAgentSessionsByPaneKey }, worktreeId) => {
-    if (!sleepingAgentSessionsByPaneKey) {
-      return EMPTY_TAB_IDS
-    }
-    let owned: Set<string> | null = null
-    for (const paneKey in sleepingAgentSessionsByPaneKey) {
-      const record = sleepingAgentSessionsByPaneKey[paneKey]
-      if (!record || record.worktreeId !== worktreeId) {
-        continue
-      }
+const exemptionsByEntries = new WeakMap<object, ReadonlySet<string>>()
+
+/** Only consumable parsed records pin panes; raw prefix ownership is a separate coverage fact. */
+export function selectSleepingRecordParkExemptTabIds(
+  state: SleepingRecordParkExemptionState,
+  worktreeId: string
+): ReadonlySet<string> {
+  if (!state.sleepingAgentSessionsByPaneKey) {
+    return EMPTY_TAB_IDS
+  }
+  const entries = sleepingAgentRecordIndex.entries(state.sleepingAgentSessionsByPaneKey, worktreeId)
+  let tabIds = exemptionsByEntries.get(entries)
+  if (!tabIds) {
+    const ids = new Set<string>()
+    for (const [, record] of entries) {
       if (activationTreatsNoteAsFinished(record)) {
         continue
       }
-      // Why: malformed pane keys must yield no owner instead of a truncated tab id.
       const tabId =
         record.tabId ??
         parsePaneKey(record.paneKey)?.tabId ??
         parseLegacyNumericPaneKey(record.paneKey)?.tabId
       if (tabId) {
-        owned ??= new Set()
-        owned.add(tabId)
+        ids.add(tabId)
       }
     }
-    return owned ?? EMPTY_TAB_IDS
+    tabIds = ids
+    exemptionsByEntries.set(entries, tabIds)
   }
-})
+  return tabIds
+}

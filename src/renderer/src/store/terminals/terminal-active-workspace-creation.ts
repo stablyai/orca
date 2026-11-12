@@ -1,15 +1,15 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { TabSplitTarget } from '../slices/tabs'
+import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   resolveWorktreeOperationRouteResult,
   resolveWorktreeOperationRouteResultForHost
-} from '@/lib/worktree-operation-route'
-import { isWebClientLocation } from '@/lib/web-client-location'
+} from '@/lib/workspace/ownership/worktree-operation-route'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { workspaceEditorFiles } from '../slices/editor/tabs/workspace-editor-files'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 

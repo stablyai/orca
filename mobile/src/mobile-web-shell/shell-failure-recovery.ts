@@ -7,6 +7,8 @@ import type {
 } from './mobile-web-shell-session-contract'
 import { step } from './mobile-web-shell-session-step'
 
+const REMOUNT = { kind: 'remount' } as const
+
 // The session reducer owns flow restarts; recovery only decides when deleting the host cache is warranted.
 export type RefetchAfterDelete = (
   session: MobileWebShellSession,
@@ -19,7 +21,8 @@ export type RefetchAfterDelete = (
 export function reduceShellFailed(
   session: MobileWebShellSession,
   reason: MobileWebShellReportedFailure,
-  refetch: RefetchAfterDelete
+  refetch: RefetchAfterDelete,
+  reclaimed = false
 ): MobileWebShellStep {
   if (reason === 'host-profile-unreadable') {
     // Terminal failures advance flow so pending startup work is cancelled and its completions rejected.
@@ -31,14 +34,20 @@ export function reduceShellFailed(
   switch (reason) {
     case 'isolation-unavailable':
       return step(session, { state: failedState(session, reason), flow: session.flow + 1 })
-    case 'render-process-gone':
+    case 'render-process-gone': {
+      const remount = reclaimed ? ({ kind: 'remount', inForeground: true } as const) : REMOUNT
+      // Background jetsam is not the page's fault and would otherwise wall on return; a second one before paint is a loop.
+      if (reclaimed && !session.reclaimedOnce) {
+        return step(session, { reclaimedOnce: true }, [remount])
+      }
       return session.remountedOnce
         ? step(session, { state: failedState(session, reason) })
-        : step(session, { remountedOnce: true }, [{ kind: 'remount' }])
+        : step(session, { remountedOnce: true }, [remount])
+    }
     case 'document-load-failed':
       return session.pageRemountedOnce
         ? step(session, { state: failedState(session, reason) })
-        : step(session, { pageRemountedOnce: true }, [{ kind: 'remount' }])
+        : step(session, { pageRemountedOnce: true }, [REMOUNT])
     case 'generation-unreadable':
       return session.retriedOnce || session.gates === null
         ? step(session, { state: failedState(session, reason) })

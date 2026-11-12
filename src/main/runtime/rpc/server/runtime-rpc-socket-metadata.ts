@@ -1,14 +1,28 @@
 import { readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
+import {
+  resolveDaemonUnixSocketPath,
+  shortDaemonSocketDir
+} from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
 
 // MUST match createRuntimeTransportMetadata's o-${pid}-${suffix}.sock naming; unit tests enforce parity.
 export const RUNTIME_SOCKET_NAME_REGEX = /^o-(\d+)-[A-Za-z0-9_-]+\.sock$/
 
-export function sweepOrphanedRuntimeSockets(userDataPath: string, ownPid: number): void {
+/** Dirs that can hold this userData's runtime sockets: itself and its relocated short dir. */
+export function runtimeSocketDirs(
+  userDataPath: string,
+  uid: number | undefined = process.getuid?.()
+): string[] {
+  return uid === undefined
+    ? [userDataPath]
+    : [userDataPath, shortDaemonSocketDir(userDataPath, uid)]
+}
+
+export function sweepOrphanedRuntimeSockets(socketDir: string, ownPid: number): void {
   let entries: string[]
   try {
-    entries = readdirSync(userDataPath)
+    entries = readdirSync(socketDir)
   } catch {
     // First launch may have no userData to sweep.
     return
@@ -32,7 +46,7 @@ export function sweepOrphanedRuntimeSockets(userDataPath: string, ownPid: number
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
         try {
-          rmSync(join(userDataPath, entry), { force: true })
+          rmSync(join(socketDir, entry), { force: true })
         } catch {
           // Sweep best-effort; later startup or reboot handles unlink failures.
         }
@@ -57,6 +71,7 @@ export function createRuntimeTransportMetadata(
   }
   return {
     kind: 'unix',
-    endpoint: join(userDataPath, `o-${pid}-${endpointSuffix}.sock`)
+    // Long userData paths overflow sun_path (EINVAL); relocate like the daemon socket.
+    endpoint: resolveDaemonUnixSocketPath(userDataPath, `o-${pid}-${endpointSuffix}.sock`, platform)
   }
 }

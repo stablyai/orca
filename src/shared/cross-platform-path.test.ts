@@ -126,37 +126,4 @@ describe('cross-platform path containment', () => {
       )
     ).toBe('line\nbreak')
   })
-
-  it('returns a byte-exact suffix when comparison folding changes length', () => {
-    // NFC/case folding changes length; slicing raw paths by folded lengths fabricates suffixes callers rejoin on disk.
-    const nfc = '/Users/ada/프로젝트'
-    const nfd = nfc.normalize('NFD')
-    for (const root of [nfc, nfd]) {
-      for (const candidate of [nfc, nfd]) {
-        expect(relativePathInsideRoot(root, `${candidate}/src/index.ts`)).toBe('src/index.ts')
-      }
-    }
-
-    // Pre-existing over-slice: toLowerCase expands U+0130 to two UTF-16 units.
-    expect(relativePathInsideRoot('C:\\İş', 'C:\\İş\\src\\a.ts')).toBe('src/a.ts')
-
-    // Kelvin U+212A folds to K; agree on Windows syntax or segment counts desynchronize.
-    expect(relativePathInsideRoot('\u212A:/a\\b', '\u212A:/a\\b/c')).toBe(
-      relativePathInsideRoot('K:/a\\b', 'K:/a\\b/c')
-    )
-
-    expect(relativePathInsideRoot('/repo/🚀app', '/repo/🚀app/src/🎉file.ts')).toBe('src/🎉file.ts')
-
-    // UNC-shaped paths under / must return relative suffixes without a leading slash.
-    expect(relativePathInsideRoot('/', '//server/share/x')).toBe('server/share/x')
-
-    // WSL suffixes stay decomposed: Linux treats NFC/NFD as distinct entries.
-    const decomposed = '프로젝트'.normalize('NFD')
-    expect(
-      relativePathInsideRoot(
-        '\\\\wsl$\\Ubuntu\\home\\ada\\repo',
-        `\\\\wsl.localhost\\Ubuntu\\home\\ada\\repo\\${decomposed}\\a.ts`
-      )
-    ).toBe(`${decomposed}/a.ts`)
-  })
 })

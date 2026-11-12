@@ -1,18 +1,18 @@
 import {
   retirePendingWorkspaceTabs,
   hasPendingEntityTab
-} from '@/runtime/layout-owner-pending-tabs'
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { editorPlacementsInContentOwners } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import type { AppState } from '../../types'
-export { renameWorktreeLayoutKeys } from './rename-worktree-layout'
-import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import './rename-worktree-layout'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
-import { getTerminalActivationSpawnSuppression } from '../terminal-activation-spawn-suppression'
-import { collapseEmptiedKeptGroups } from './collapse-emptied-kept-groups'
+import { recordDraft, tabBucketDraft } from '../../keyed-record-transitions'
+import { collapseEmptiedKeptGroups, type GroupLayoutDrafts } from './collapse-emptied-kept-groups'
 import {
   createKeptWorktreeSurfacePruners,
+  pruneKeptEntries,
   type KeptWorktreeSurfaceRemoval
 } from './kept-worktree-surface-pruning'
 
@@ -62,13 +62,24 @@ export function removeWorktreeLayout(
   const kept = removed.kept ? createKeptWorktreeSurfacePruners(s, removed.kept) : null
   const keep = <T>(value: T, prune: ((value: T) => T) | undefined): T =>
     prune ? prune(value) : value
-  const groupLayout = removed.kept
-    ? collapseEmptiedKeptGroups(
-        s,
-        keep(omitByWorktree(s.groupsByWorktree), kept?.groups),
-        removed.kept.worktreeIds
-      )
-    : null
+  // Seam records are built once each, through the same operations, in the order this teardown applies them.
+  const tabs = tabBucketDraft(s.tabsByWorktree ?? {})
+  const unifiedTabs = tabBucketDraft(s.unifiedTabsByWorktree)
+  const drafts: GroupLayoutDrafts = {
+    groups: recordDraft(s.groupsByWorktree ?? {}),
+    layout: recordDraft(s.layoutByWorktree ?? {}),
+    activeGroups: recordDraft(s.activeGroupIdByWorktree ?? {})
+  }
+  for (const worktreeId of worktreeIds) {
+    tabs.delete(worktreeId)
+    unifiedTabs.delete(worktreeId)
+    drafts.groups.delete(worktreeId)
+  }
+  if (removed.kept && kept) {
+    pruneKeptEntries(tabs, removed.kept.worktreeIds, kept.entries.tabs)
+    pruneKeptEntries(drafts.groups, removed.kept.worktreeIds, kept.entries.groups)
+    collapseEmptiedKeptGroups(s.groupsByWorktree, drafts, removed.kept.worktreeIds)
+  }
   const removedContentIds = new Set(
     s.openFiles.filter((file) => worktreeIds.has(file.worktreeId)).map((file) => file.id)
   )
@@ -94,24 +105,36 @@ export function removeWorktreeLayout(
         hasPendingEntityTab(null, file.id) ||
         file.mode === 'edit')
   )
+  // Removed workspaces' entries are source-only here, so the kept groups stand in for the pruned record.
+  const keptGroups = removed.kept
+    ? Object.fromEntries(
+        [...removed.kept.worktreeIds].flatMap((id) => {
+          const groups = drafts.groups.get(id)
+          return groups ? [[id, groups]] : []
+        })
+      )
+    : null
   const transferred = editorPlacementsInContentOwners(
     remainingFiles,
     s.unifiedTabsByWorktree,
-    groupLayout?.groups ?? s.groupsByWorktree,
+    keptGroups ? { ...s.groupsByWorktree, ...keptGroups } : s.groupsByWorktree,
     worktreeIds
   )
-  const transferredPlacements = keep(omitByWorktree(transferred.sourceTabs), kept?.unifiedTabs)
   const survivingIds = new Set(remainingFiles.map((file) => file.id))
-  const unifiedTabs = Object.fromEntries(
-    Object.entries(transferredPlacements).map(([id, tabs]) => [
-      id,
-      tabs.filter(
-        (tab) => !isEditorTabContentType(tab.contentType) || survivingIds.has(tab.entityId)
-      )
-    ])
-  )
+  for (const [id, sourceTabs] of Object.entries(transferred.sourceTabs)) {
+    if (worktreeIds.has(id)) {
+      continue
+    }
+    const pruned =
+      kept && removed.kept?.worktreeIds.has(id) ? kept.entries.unifiedTabs(sourceTabs) : sourceTabs
+    const live = pruned.filter(
+      (tab) => !isEditorTabContentType(tab.contentType) || survivingIds.has(tab.entityId)
+    )
+    unifiedTabs.set(id, live.length === pruned.length ? pruned : live)
+  }
+  const nextUnifiedTabs = unifiedTabs.finish()
   const liveTabIds = new Set(
-    Object.values(unifiedTabs).flatMap((tabs) => tabs.map((tab) => tab.id))
+    Object.values(nextUnifiedTabs).flatMap((tabs) => tabs.map((tab) => tab.id))
   )
   const removedPlacementIds = new Set(
     Object.values(s.unifiedTabsByWorktree).flatMap((tabs) =>
@@ -123,8 +146,11 @@ export function removeWorktreeLayout(
       .filter(([, tabs]) => tabs.some((tab) => removedPlacementIds.has(tab.id)))
       .map(([id]) => id)
   )
-  const cleanGroups = Object.fromEntries(
-    Object.entries(omitByWorktree(transferred.sourceGroups)).map(([id, groups]) => [
+  for (const [id, groups] of Object.entries(transferred.sourceGroups)) {
+    if (worktreeIds.has(id)) {
+      continue
+    }
+    drafts.groups.set(
       id,
       affectedWorkspaces.has(id)
         ? groups.map((group) => {
@@ -140,16 +166,13 @@ export function removeWorktreeLayout(
             }
           })
         : groups
-    ])
-  )
-  const collapsed = collapseEmptiedKeptGroups(
-    {
-      ...s,
-      layoutByWorktree: groupLayout?.layout ?? s.layoutByWorktree,
-      activeGroupIdByWorktree: groupLayout?.activeGroups ?? s.activeGroupIdByWorktree
-    },
-    cleanGroups,
-    affectedWorkspaces
+    )
+  }
+  // Removed worktrees' entries stay deleted; collapsing them would write an empty group list back.
+  collapseEmptiedKeptGroups(
+    s.groupsByWorktree,
+    drafts,
+    new Set([...affectedWorkspaces].filter((id) => !worktreeIds.has(id)))
   )
   const recentEditors = Object.fromEntries(
     Object.entries(omitByWorktree(s.recentlyClosedEditorTabsByWorktree)).map(([id, rows]) => [
@@ -175,27 +198,33 @@ export function removeWorktreeLayout(
       ([id, selected]) => [id, selected && survivingIds.has(selected) ? selected : null]
     )
   )
-  const ownerLayouts = { ...collapsed.layout }
-  const ownerActiveGroups = { ...collapsed.activeGroups }
   const ownerOrders = { ...keep(omitByWorktree(s.tabBarOrderByWorktree), kept?.tabBarOrder) }
   const ownerActiveTypes = { ...omitByWorktree(s.activeTabTypeByWorktree) }
   for (const tab of transferred.movedTabs) {
     affectedWorkspaces.add(tab.worktreeId)
-    ownerLayouts[tab.worktreeId] ??= { type: 'leaf', groupId: tab.groupId }
-    ownerActiveGroups[tab.worktreeId] ??= tab.groupId
+    if (drafts.layout.get(tab.worktreeId) == null) {
+      drafts.layout.set(tab.worktreeId, { type: 'leaf', groupId: tab.groupId })
+    }
+    if (drafts.activeGroups.get(tab.worktreeId) == null) {
+      drafts.activeGroups.set(tab.worktreeId, tab.groupId)
+    }
     ownerOrders[tab.worktreeId] = [...(ownerOrders[tab.worktreeId] ?? []), tab.entityId]
     activeFiles[tab.worktreeId] ??= tab.entityId
     ownerActiveTypes[tab.worktreeId] ??= 'editor'
   }
+  for (const worktreeId of worktreeIds) {
+    drafts.layout.delete(worktreeId)
+    drafts.activeGroups.delete(worktreeId)
+  }
   const patch: WorktreeLayoutPatch = {
-    tabsByWorktree: keep(omitByWorktree(s.tabsByWorktree), kept?.tabs),
+    tabsByWorktree: tabs.finish(),
     terminalLayoutsByTabId: omitByTabId(s.terminalLayoutsByTabId),
     ptyIdsByTabId: omitByTabId(s.ptyIdsByTabId),
     // Why: split-tab layout/group state is worktree-owned; leaving it makes a deleted worktree look restorable.
-    unifiedTabsByWorktree: unifiedTabs,
-    groupsByWorktree: collapsed.groups,
-    layoutByWorktree: omitByWorktree(ownerLayouts),
-    activeGroupIdByWorktree: omitByWorktree(ownerActiveGroups),
+    unifiedTabsByWorktree: nextUnifiedTabs,
+    groupsByWorktree: drafts.groups.finish(),
+    layoutByWorktree: drafts.layout.finish(),
+    activeGroupIdByWorktree: drafts.activeGroups.finish(),
     tabBarOrderByWorktree: Object.fromEntries(
       Object.entries(ownerOrders).map(([id, order]) => [
         id,
@@ -239,64 +268,4 @@ export function removeWorktreeLayout(
     )
   }
   return patch
-}
-
-/**
- * Tags a worktree's wakeable terminal tabs for an activation spawn, optionally bumping their
- * generation so dead panes remount.
- */
-export function markWorktreeTabsForActivationSpawn(
-  s: AppState,
-  worktreeId: string,
-  options: { isWakeable: (tab: TerminalTab) => boolean; bumpGeneration: boolean }
-): Pick<AppState, 'tabsByWorktree'> {
-  const { isWakeable, bumpGeneration } = options
-  return {
-    tabsByWorktree: {
-      ...s.tabsByWorktree,
-      [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((tab) =>
-        !isWakeable(tab)
-          ? tab
-          : {
-              ...tab,
-              ...(bumpGeneration ? { generation: (tab.generation ?? 0) + 1 } : {}),
-              // Why: slept terminal remount/spawn is click-driven wake work; tag its PTY updates so they don't reshuffle Recent.
-              pendingActivationSpawn: getTerminalActivationSpawnSuppression(
-                s.terminalLayoutsByTabId[tab.id]
-              )
-            }
-      )
-    }
-  }
-}
-
-/** Detaches terminal tabs from their PTYs, leaving the tabs in place to respawn. */
-export function unbindTerminalTabPtys(
-  s: AppState,
-  tabIds: ReadonlySet<string>
-): Pick<AppState, 'tabsByWorktree' | 'ptyIdsByTabId'> {
-  let nextTabsByWorktree = s.tabsByWorktree
-  const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
-  for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
-    let nextTabs = tabs
-    for (const [index, tab] of tabs.entries()) {
-      if (!tabIds.has(tab.id)) {
-        continue
-      }
-      if (nextTabs === tabs) {
-        nextTabs = [...tabs]
-      }
-      const { pendingActivationSpawn: _pendingActivationSpawn, ...tabWithoutActivationSpawn } = tab
-      void _pendingActivationSpawn
-      nextTabs[index] = { ...tabWithoutActivationSpawn, ptyId: null }
-      nextPtyIdsByTabId[tab.id] = []
-    }
-    if (nextTabs !== tabs) {
-      if (nextTabsByWorktree === s.tabsByWorktree) {
-        nextTabsByWorktree = { ...nextTabsByWorktree }
-      }
-      nextTabsByWorktree[worktreeId] = nextTabs
-    }
-  }
-  return { tabsByWorktree: nextTabsByWorktree, ptyIdsByTabId: nextPtyIdsByTabId }
 }

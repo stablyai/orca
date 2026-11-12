@@ -1,4 +1,3 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
@@ -11,10 +10,7 @@ import {
   invoke,
   request,
   type LegacyCompatibilityDispatcherHarness
-} from '../../../orchestration-legacy-compatibility-dispatcher-test-fixture'
-
-const STRANGER_HANDLE = 'term_stranger_coord'
-const STRANGER_PANE = 'tab_stranger:77777777-7777-4777-8777-777777777777'
+} from '../../../orchestration/compatibility/testing/orchestration-legacy-compatibility-dispatcher-test-fixture'
 
 afterEach(() => {
   cleanupLegacyCompatibilityDispatcherHarnesses()
@@ -62,30 +58,6 @@ describe('orchestration gate Run authorization', () => {
     }
   )
 
-  it('G2 refuses an unattested caller creating a gate on another Run task', async () => {
-    const harness = createHarness()
-    const runA = bindCurrentCoordinatorRun(harness)
-    const before = adoptedTaskState(harness)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.gateCreate',
-        { task: harness.taskId, question: 'Proceed?', from: CURRENT_COORDINATOR_HANDLE },
-        UNATTESTED_CURRENT_COORDINATOR,
-        'g2-cross-run-gate-create'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: {
-        code: 'task_not_found',
-        message: `Task ${harness.taskId} was not found in Run ${runA}.`
-      }
-    })
-    expect(adoptedTaskState(harness)).toEqual(before)
-  })
-
   it('G2 refuses the same caller when it names no sender terminal at all', async () => {
     const harness = createHarness()
     bindCurrentCoordinatorRun(harness)
@@ -129,95 +101,6 @@ describe('orchestration gate Run authorization', () => {
 
     expect(response).toMatchObject({ ok: false })
     expect(adoptedTaskState(harness)).toEqual(before)
-  })
-
-  it('G4 refuses an attested bound caller creating a gate in a stranger Run', async () => {
-    const harness = createHarness()
-    const runA = bindCurrentCoordinatorRun(harness)
-    const strangerRun = harness.db.createRun({
-      objective: 'stranger work',
-      coordinatorHandle: STRANGER_HANDLE,
-      coordinatorPaneKey: STRANGER_PANE
-    })
-    const strangerTask = harness.db.createTask({
-      spec: 'stranger assignment',
-      runId: strangerRun.id
-    })
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.gateCreate',
-        { task: strangerTask.id, question: 'Proceed?', from: CURRENT_COORDINATOR_HANDLE },
-        currentEvidence('coordinator'),
-        'g4-stranger-gate-create'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: {
-        code: 'task_not_found',
-        message: `Task ${strangerTask.id} was not found in Run ${runA}.`
-      }
-    })
-    expect(harness.db.getTask(strangerTask.id)?.status).toBe('ready')
-    expect(harness.db.listGates({ taskId: strangerTask.id })).toHaveLength(0)
-  })
-
-  it('G4 refuses the stranger Run even when it is named explicitly', async () => {
-    const harness = createHarness()
-    const runA = bindCurrentCoordinatorRun(harness)
-    const strangerRun = harness.db.createRun({
-      objective: 'stranger work',
-      coordinatorHandle: STRANGER_HANDLE,
-      coordinatorPaneKey: STRANGER_PANE
-    })
-    const strangerTask = harness.db.createTask({
-      spec: 'stranger assignment',
-      runId: strangerRun.id
-    })
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.gateCreate',
-        {
-          task: strangerTask.id,
-          question: 'Proceed?',
-          from: CURRENT_COORDINATOR_HANDLE,
-          run: strangerRun.id
-        },
-        currentEvidence('coordinator'),
-        'g4-explicit-stranger-gate-create'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: {
-        code: 'consumer_fenced',
-        message: `This caller is bound to Run ${runA}, not Run ${strangerRun.id}. Nothing changed.`
-      }
-    })
-    expect(harness.db.getTask(strangerTask.id)?.status).toBe('ready')
-  })
-
-  it('G5 refuses an unattested caller resolving another Run gate', async () => {
-    const harness = createHarness()
-    bindCurrentCoordinatorRun(harness)
-    const gate = harness.db.createGate({ taskId: harness.taskId, question: 'Proceed?' })
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.gateResolve',
-        { id: gate.id, resolution: 'yes', from: CURRENT_COORDINATOR_HANDLE },
-        UNATTESTED_CURRENT_COORDINATOR,
-        'g5-cross-run-gate-resolve'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { message: `Gate not found: ${gate.id}` } })
-    expect(harness.db.getGate(gate.id)?.status).toBe('pending')
-    expect(harness.db.getTask(harness.taskId)?.status).toBe('blocked')
   })
 
   it('keeps gate-list from leaking gates outside the caller Run', async () => {

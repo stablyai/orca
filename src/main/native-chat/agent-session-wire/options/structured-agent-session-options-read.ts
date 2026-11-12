@@ -1,4 +1,4 @@
-import { readAcpForkSupport } from '../../../acp/acp-fork-support'
+import { readAcpForkSupport } from '../../../acp/capabilities/acp-fork-support'
 import { supportsSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../../agent-model-catalog/agent-model-catalog-operation'
@@ -132,6 +132,7 @@ export async function readStructuredAgentSessionOptions(
   const floor = session.journal.context.floor()
   const contextFloor = floor ? { contextFloor: floor } : {}
   const restingOptions = await atRest()
+  const recovery = await readStructuredSessionRecovery(session, context, sessionId)
   if (live && usesModelSpecificAcpEfforts(agent)) {
     options = {
       ...options,
@@ -159,12 +160,6 @@ export async function readStructuredAgentSessionOptions(
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined
-  const reportedModel = live
-    ? (options.current.reportedModel ??
-      (agent === 'claude' && options.current.confirmed?.includes('model')
-        ? options.current.model
-        : undefined))
-    : undefined
   const current = {
     ...selected.current,
     ...options.current,
@@ -236,7 +231,6 @@ export async function readStructuredAgentSessionOptions(
       current.serviceTier = projected.options.serviceTier
     }
   }
-  const recovery = await readStructuredSessionRecovery(session, context, sessionId)
   return {
     ...options,
     ...recovery,
@@ -258,7 +252,7 @@ export async function readStructuredAgentSessionOptions(
     current: {
       ...current,
       acceptedInputSources,
-      ...(reportedModel ? { reportedModel } : {}),
+      reportedModel: undefined,
       ...(reportedEffort !== undefined ? { reportedEffort } : {}),
       defaulted,
       confirmed,

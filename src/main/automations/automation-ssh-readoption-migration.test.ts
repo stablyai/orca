@@ -3,8 +3,9 @@ import {
   migrateAutomationHostFilterSshTargetId,
   migrateAutomationsForSshReadoption
 } from './automation-ssh-readoption-migration'
-import { hostStableKey } from '../../shared/automation-owner-key'
-import type { Automation, AutomationRun } from '../../shared/automations-types'
+import { hostStableKey } from '../../shared/automations/ownership/automation-owner-key'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 
 const NOW = 1_700_000_000_000

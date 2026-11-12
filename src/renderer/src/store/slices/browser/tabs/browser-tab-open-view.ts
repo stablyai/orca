@@ -3,12 +3,10 @@ import type {
   BrowserPage,
   BrowserWorkspace
 } from '../../../../../../shared/browser-workspace-types'
-import {
-  FLOATING_TERMINAL_WORKTREE_ID,
-  ORCA_BROWSER_BLANK_URL
-} from '../../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import type { AppState } from '../../../types'
-import { ownsGlobalSelection } from '../../../global-selection-owner'
+import { ownsGlobalSelection } from '../../../workspaces/selection/global-selection-owner'
 import { workspaceEditorFiles } from '../../editor/tabs/workspace-editor-files'
 
 // The window's own view of a browser tab it opens: its tab-bar order entry, browser selection and

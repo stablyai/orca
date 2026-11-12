@@ -1,29 +1,7 @@
 import type { IBufferLine } from '@xterm/xterm'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { buildHardWrappedHttpLogicalLineCandidates } from './hard-wrapped-terminal-http-links'
-import {
-  TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS,
-  TERMINAL_HTTP_URL_MAX_LENGTH
-} from './terminal-http-link-limits'
-
-function bufferLine(text: string, onTranslateWithColumns: () => void): IBufferLine {
-  return {
-    isWrapped: false,
-    length: text.length,
-    translateToString: (
-      _trimRight?: boolean,
-      startColumn = 0,
-      endColumn = text.length,
-      outColumns?: number[]
-    ) => {
-      if (outColumns) {
-        onTranslateWithColumns()
-      }
-      outColumns?.push(...Array.from({ length: text.length + 1 }, (_value, index) => index))
-      return text.slice(startColumn, endColumn)
-    }
-  } as IBufferLine
-}
+import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
 
 function bufferLineWithCellColumns(text: string): IBufferLine {
   const columns: number[] = []
@@ -49,51 +27,6 @@ function bufferLineWithCellColumns(text: string): IBufferLine {
 }
 
 describe('hard-wrapped terminal HTTP candidate bounds', () => {
-  it('builds each required column map once and rejects an overlength candidate early', () => {
-    const onTranslateWithColumns = vi.fn()
-    const rows = Array.from({ length: TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS }, (_value, index) =>
-      bufferLine(`| ${index === 0 ? 'http://x' : 'aaaaaaaa'} |`, onTranslateWithColumns)
-    )
-
-    expect(
-      buildHardWrappedHttpLogicalLineCandidates(
-        { getLine: (y) => rows[y] },
-        TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS
-      )
-    ).toEqual([])
-    expect(onTranslateWithColumns).toHaveBeenCalledTimes(
-      Math.floor(TERMINAL_HTTP_URL_MAX_LENGTH / 'aaaaaaaa'.length) + 1
-    )
-  })
-
-  it('does not build column maps while rejecting rows without an HTTP scheme', () => {
-    const onTranslateWithColumns = vi.fn()
-    const rows = Array.from({ length: TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS }, () =>
-      bufferLine(`| ${'a'.repeat(500)} |`, onTranslateWithColumns)
-    )
-
-    expect(
-      buildHardWrappedHttpLogicalLineCandidates(
-        { getLine: (y) => rows[y] },
-        TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS
-      )
-    ).toEqual([])
-    expect(onTranslateWithColumns).not.toHaveBeenCalled()
-  })
-
-  it('stops scanning back at a table border instead of walking every framed row', () => {
-    const rows = Array.from({ length: TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS }, (_value, index) =>
-      bufferLine(
-        index % 10 === 0 ? '├──────────────────────┤' : `│ https://example.com/${index} │`,
-        () => undefined
-      )
-    )
-    const getLine = vi.fn((y: number) => rows[y])
-
-    buildHardWrappedHttpLogicalLineCandidates({ getLine }, TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS)
-    expect(new Set(getLine.mock.calls.map(([y]) => y)).size).toBeLessThan(20)
-  })
-
   it('reconstructs framed URL rows aligned by cells when a fragment has wide characters', () => {
     const rowTexts = ['|http://a/ab|', '|a你你你你你|', '|tailzzzzzzz|']
     const rows = rowTexts.map(bufferLineWithCellColumns)

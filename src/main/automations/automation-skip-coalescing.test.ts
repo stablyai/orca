@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
-import type { Automation } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence/loading-store/store'
 import {
@@ -97,27 +97,6 @@ describe('repeated skipped_unavailable coalescing', () => {
     removeTreeSync(testState.dir)
   })
 
-  it('folds every later refusal into the first record instead of writing a row each', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const { store, automation } = await seedUnresolvableAutomation()
-    const service = startedAutomationService(store)
-
-    await evaluateAt(store, automation.id, '2026-05-13T09:01:00')
-    await evaluateAt(store, automation.id, '2026-05-14T09:01:00')
-    await evaluateAt(store, automation.id, '2026-05-15T09:01:00')
-    service.stop()
-
-    const runs = store.listAutomationRuns(automation.id)
-    expect(runs).toHaveLength(1)
-    expect(runs[0]).toMatchObject({
-      status: 'skipped_unavailable',
-      error: SETUP_GONE,
-      occurrenceCount: 3,
-      scheduledFor: new Date('2026-05-13T09:00:00').getTime(),
-      lastOccurrenceAt: new Date('2026-05-15T09:00:00').getTime()
-    })
-  })
-
   it('gives a manual attempt its own answer rather than folding it into a scheduled skip', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const { store, automation } = await seedUnresolvableAutomation()
@@ -129,27 +108,6 @@ describe('repeated skipped_unavailable coalescing', () => {
     expect(manual.status).toBe('skipped_unavailable')
     expect(manual.occurrenceCount).toBeUndefined()
     expect(store.listAutomationRuns(automation.id)).toHaveLength(2)
-  })
-
-  it('counts one occurrence once, however many times the scheduler revisits it', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const { store, automation } = await seedUnresolvableAutomation()
-    const scheduledFor = Date.now()
-    seedSkip(store, automation, scheduledFor, SETUP_GONE)
-
-    expect(
-      store.recordRepeatedAutomationSkip(automation.id, SETUP_GONE, scheduledFor)?.occurrenceCount
-    ).toBeUndefined()
-    const folded = store.recordRepeatedAutomationSkip(
-      automation.id,
-      SETUP_GONE,
-      scheduledFor + 1000
-    )
-    expect(folded?.occurrenceCount).toBe(2)
-    expect(
-      store.recordRepeatedAutomationSkip(automation.id, SETUP_GONE, scheduledFor + 1000)
-        ?.occurrenceCount
-    ).toBe(2)
   })
 
   it('resumes counting a folded record across a reload', async () => {

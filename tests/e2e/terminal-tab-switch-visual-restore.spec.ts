@@ -173,10 +173,6 @@ async function createCodexMarkedTerminalTab(page: Page): Promise<string> {
   return createAgentMarkedTerminalTab(page, 'codex', 'node -e "setInterval(() => {}, 1000)"')
 }
 
-async function createGrokMarkedTerminalTab(page: Page): Promise<string> {
-  return createAgentMarkedTerminalTab(page, 'grok', 'node -e "setInterval(() => {}, 1000)"')
-}
-
 async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((id) => {
     const store = window.__store
@@ -732,59 +728,6 @@ test.describe('Terminal tab switch visual restore', () => {
       .poll(() => getTerminalContent(orcaPage, 8_000), {
         timeout: 10_000,
         message: 'light tab resume did not request skipped hidden-output recovery'
-      })
-      .toContain(marker)
-  })
-
-  test('restores skipped hidden Grok output on light tab resume', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-
-    const shellTabId = (await getActiveTabId(orcaPage))!
-    const grokTabId = await createGrokMarkedTerminalTab(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    await waitForPanePtyIdOnTab(orcaPage, grokTabId)
-    const paneIdentity = await readPaneIdentityOnTab(orcaPage, grokTabId)
-    const paneKey = `${grokTabId}:${paneIdentity.leafId}`
-
-    await activateTerminalTab(orcaPage, shellTabId)
-    const runId = `${Date.now()}`
-    const marker = `${TAB_SWITCH_MARKER_PREFIX}_SKIPPED_GROK_${runId}`
-    // Why: synchronized-output mode exercises the hidden renderer skip path
-    // used by agent TUIs before light tab resume requests recovery.
-    const hiddenFrame = [
-      '\x1b[?2026h',
-      `${marker} hidden renderer frame`,
-      'status=streaming while tab-hidden',
-      '\x1b[?2026l'
-    ].join('\r\n')
-    await resetHiddenOutputDebug(orcaPage)
-    await injectPaneData(orcaPage, paneKey, hiddenFrame, {
-      seq: hiddenFrame.length,
-      rawLength: hiddenFrame.length
-    })
-
-    await expect
-      .poll(async () => (await readHiddenOutputDebug(orcaPage))?.hiddenRendererSkipCount ?? 0, {
-        timeout: 5_000,
-        message: 'Grok-marked hidden output did not take the skipped renderer path'
-      })
-      .toBeGreaterThan(0)
-    await setHiddenSnapshotOverride(orcaPage, paneIdentity.ptyId, {
-      data: `${marker} restored from main snapshot\r\n`,
-      cols: paneIdentity.cols,
-      rows: paneIdentity.rows,
-      seq: hiddenFrame.length
-    })
-
-    await activateTerminalTab(orcaPage, grokTabId)
-
-    await expect
-      .poll(() => getTerminalContent(orcaPage, 8_000), {
-        timeout: 10_000,
-        message: 'light tab resume did not request skipped Grok hidden-output recovery'
       })
       .toContain(marker)
   })

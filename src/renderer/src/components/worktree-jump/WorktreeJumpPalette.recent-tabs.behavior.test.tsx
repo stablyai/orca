@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
+
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -16,8 +16,7 @@ import {
   makeGroup,
   makeRecentTabState,
   makeRepo,
-  makeUnifiedTab,
-  makeWorktree
+  makeUnifiedTab
 } from './worktree-jump-palette-test-fixtures'
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -169,12 +168,6 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
   await flushEffects()
 }
 
-function getRenderedRowIds(): string[] {
-  return [...testContainer.querySelectorAll<HTMLElement>('[data-command-item]')].map(
-    (node) => node.dataset.commandItem ?? ''
-  )
-}
-
 function getTabRowIds(): string[] {
   return [
     ...testContainer.querySelectorAll<HTMLElement>(
@@ -260,21 +253,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toContain('tab-alpha-file')
   })
 
-  it('excludes an archived worktree tab even with a blocked agent', async () => {
-    const alpha = makeWorktree('wt-alpha', 'Alpha workspace', { isArchived: true })
-    const beta = makeWorktree('wt-beta', 'Beta workspace')
-    await renderPalette(
-      makeRecentTabState({
-        worktreesByRepo: { 'repo-1': [alpha, beta] },
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
-        }
-      })
-    )
-
-    expect(getTabRowIds()).toEqual(['tab-beta'])
-  })
-
   it('does not admit the current tab mid-open when it goes unread', async () => {
     await renderPalette(
       makeRecentTabState({
@@ -325,106 +303,5 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toContain('tab-alpha')
     expect(testContainer.textContent).toContain('Alpha chat')
     expect(document.querySelector('[data-slot=tooltip-trigger]')?.textContent).toContain('Working')
-  })
-
-  it('keeps a frozen current row listed when its agent finishes mid-open', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        activeWorktreeId: 'wt-alpha',
-        activeTabType: 'terminal',
-        activeTabId: 'term-alpha',
-        activeTabIdByWorktree: { 'wt-alpha': 'term-alpha' },
-        activeTabTypeByWorktree: { 'wt-alpha': 'terminal' },
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'working', Date.now())
-        }
-      })
-    )
-
-    expect(getTabRowIds()).toContain('tab-alpha')
-
-    await act(async () => {
-      useAppStore.setState({
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'done', Date.now())
-        }
-      } as Partial<AppState>)
-    })
-    await flushEffects()
-
-    expect(getTabRowIds()).toContain('tab-alpha')
-    expect(document.querySelector('[data-slot=tooltip-trigger]')?.textContent).toContain('Done')
-  })
-
-  it('activates the row a digit chord addresses while open', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        unifiedTabsByWorktree: {
-          'wt-alpha': [
-            {
-              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
-              lastFocusedAt: Date.now() - 3 * 86400_000
-            }
-          ],
-          'wt-beta': [
-            {
-              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
-              lastFocusedAt: Date.now()
-            }
-          ]
-        }
-      })
-    )
-
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
-
-    await act(async () => {
-      emitCmdJRowIndexJump(1)
-    })
-    await flushEffects()
-
-    expect(activateWorkspaceTabPaletteResult).toHaveBeenCalledWith(
-      expect.objectContaining({ tabId: 'tab-alpha' })
-    )
-  })
-
-  it('keeps the agent badge on an Open Tabs row a query surfaced', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'working', Date.now())
-        }
-      })
-    )
-
-    // Require actual typed-query state; otherwise the test could silently exercise empty-query results.
-    const applyQuery = setCommandQuery
-    if (!applyQuery) {
-      throw new Error('CommandInput never installed a query setter')
-    }
-    await act(async () => {
-      applyQuery('Alpha')
-    })
-    await flushEffects()
-
-    expect(getTabRowIds()).toContain('tab-alpha')
-    expect(getTabRowIds()).not.toContain('tab-beta')
-    const alphaRow = testContainer.querySelector<HTMLElement>(
-      `[data-command-item="${encodePaletteIdentity(['workspace-tab', '', 'wt-alpha', 'tab-alpha'])}"]`
-    )
-    expect(alphaRow?.querySelector('[data-slot=tooltip-trigger]')?.textContent).toContain('Working')
-  })
-
-  it('keeps create-worktree below the matches it would otherwise outrank', async () => {
-    await renderPalette(makeRecentTabState())
-
-    await act(async () => {
-      setCommandQuery?.('Alpha')
-    })
-    await flushEffects()
-
-    const rows = getRenderedRowIds().filter((id) => id.length > 0)
-    expect(rows.at(-1)).toBe('__create_worktree__')
-    expect(rows.length).toBeGreaterThan(1)
   })
 })

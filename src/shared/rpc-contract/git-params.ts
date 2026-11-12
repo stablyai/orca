@@ -82,6 +82,17 @@ export const GitCommitCompare = WorktreeSelector.extend({
     .pipe(FullGitObjectId)
 })
 
+export const GitSequencer = WorktreeSelector.extend({
+  operation: z.enum(['cherry-pick', 'revert'])
+})
+
+export const GitCreateBranch = WorktreeSelector.extend({
+  name: z.string().min(1),
+  startPoint: FullGitObjectId
+})
+
+export const GitCommitAction = WorktreeSelector.extend({ commitId: FullGitObjectId })
+
 export const GitHistoryRefName = z
   .string()
   .refine(isGitHistoryRefName, 'Expected full branch or tag ref names')
@@ -249,7 +260,12 @@ export const GitRebaseFromBase = WorktreeSelector.extend({
     )
 })
 
+export const GitSwitchBranch = WorktreeSelector.extend({
+  target: z.object({ kind: z.enum(['local', 'remote', 'new']), name: z.string().min(1) })
+})
+
 export const GitCheckout = WorktreeSelector.extend({
+  detached: z.boolean().optional(),
   branch: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
@@ -260,7 +276,10 @@ export const GitCheckout = WorktreeSelector.extend({
         // Why: never let a branch arg be parsed as a git flag (arg injection).
         .refine((value) => !value.startsWith('-'), 'Branch must not start with -')
     )
-})
+}).refine(
+  (params) => !params.detached || FullGitObjectId.safeParse(params.branch).success,
+  'Expected a full git object id for detached checkout'
+)
 
 export const GitRemoteFileUrl = WorktreeSelector.extend({
   relativePath: z

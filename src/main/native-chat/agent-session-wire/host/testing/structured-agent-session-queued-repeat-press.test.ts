@@ -32,7 +32,9 @@ async function queuedDraft(text: string): Promise<string> {
 
 describe('a repeated draft press under a fresh operation id', () => {
   it('Send-now pressed twice sends the draft once and answers both presses with its submission', async () => {
-    await openRigTurnFor(rig, await rig.workingSend())
+    const opening = await rig.workingSend()
+    await rig.settleAccepted(opening, 'opening')
+    await openRigTurnFor(rig, opening)
     const draftId = await queuedDraft('send me now')
     const [first, second] = await Promise.all([rig.sendNow(draftId), rig.sendNow(draftId)])
     expect(first).toMatchObject({ ok: true, replayed: false })
@@ -107,9 +109,13 @@ describe('a queued Send receipt', () => {
     const db = openTestJournalHostDatabase(rig.root).db
     db.exec(`CREATE TRIGGER fail_draft_receipt BEFORE INSERT ON agent_session_command_receipts
       BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END`)
-    await expect(rig.host.send(CALLER, params(id, 'must roll back'))).rejects.toThrow(
-      'receipt unavailable'
-    )
+    expect(await rig.host.send(CALLER, params(id, 'must roll back'))).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'journalWriteFailed' }
+      }
+    })
     expect(await rig.drafts()).toHaveLength(0)
     expect(rig.store.readCommandReceipt({ kind: 'global' }, id)).toEqual({ verdict: 'absent' })
     expect(rig.store.listOperationRows().find((row) => row.operationId === id)).toBeUndefined()

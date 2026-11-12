@@ -1,17 +1,18 @@
 import React from 'react'
 import { FolderKanban, MessageSquare } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getPRCommentAudienceEmptyLabel,
   getPrCommentAudienceFilters
 } from '@/lib/source-control/review/comments/pr-comment-audience-labels'
 import type { PRCommentAudienceFilter } from '../../../../../shared/source-control/review-comments/pr-comment-audience'
 import type { PRCommentGroup } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { translate } from '@/i18n/i18n'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRFile } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { useTranslate } from '@/i18n/use-translate'
 import type { IssueConversationEntry } from './issue-conversation-entries'
 import { ConversationTabCommentCard } from './conversation-tab-comment-card'
 import { ConversationTabCommentGroup } from './conversation-tab-comment-group'
@@ -54,6 +55,7 @@ export function ConversationTabActivity({
   }
   onCommentFilterChange: (filter: PRCommentAudienceFilter) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <div className="flex items-center gap-2 pt-1">
@@ -64,8 +66,8 @@ export function ConversationTabActivity({
         )}
         <span className="text-[13px] font-medium text-foreground">
           {item.type === 'issue'
-            ? translate('auto.components.GitHubItemDialog.timeline.activity', 'Activity')
-            : translate('auto.components.GitHubItemDialog.1506916c09', 'Comments')}
+            ? t('auto.components.GitHubItemDialog.timeline.activity', 'Activity')
+            : t('auto.components.GitHubItemDialog.1506916c09', 'Comments')}
         </span>
         {comments.length + (item.type === 'issue' ? resolvedTimelineItemsLength : 0) > 0 && (
           <span className="rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
@@ -100,7 +102,7 @@ export function ConversationTabActivity({
       {item.type === 'issue' ? (
         issueConversationEntries.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
-            {translate('auto.components.GitHubItemDialog.timeline.noActivity', 'No activity yet.')}
+            {t('auto.components.GitHubItemDialog.timeline.noActivity', 'No activity yet.')}
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-3">
@@ -120,11 +122,11 @@ export function ConversationTabActivity({
         )
       ) : comments.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
-          {translate('auto.components.GitHubItemDialog.5a94f3d0e9', 'No comments yet.')}
+          {t('auto.components.GitHubItemDialog.5a94f3d0e9', 'No comments yet.')}
         </div>
       ) : visibleComments.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
-          {getPRCommentAudienceEmptyLabel(commentFilter)}
+          {getPRCommentAudienceEmptyLabel(commentFilter, t)}
         </div>
       ) : (
         <div className="flex min-w-0 flex-col gap-3">

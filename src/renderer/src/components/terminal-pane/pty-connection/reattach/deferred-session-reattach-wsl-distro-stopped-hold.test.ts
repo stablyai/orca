@@ -5,7 +5,7 @@ import { registerAgentStatusStartupSnapshot } from '@/hooks/ipc-events/agent-sta
 import {
   noteUserWorkspaceSwitch,
   resetWorkspaceSwitchUserActsForTests
-} from '@/lib/workspace-switch-user-act'
+} from '@/lib/workspace/activation/workspace-switch-user-act'
 import { wslDistroHoldMessage } from '../../../../../../shared/wsl-distro-stopped-hold'
 import {
   startHeldPanesForWslDistro,

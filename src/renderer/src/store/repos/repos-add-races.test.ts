@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import {
   installReposRuntimeRoutingHarness,
   localRepo,

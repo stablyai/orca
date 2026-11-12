@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type React from 'react'
 import type { TreeNode } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
-import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
+import type { LocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
 import {
   createEmptyFileExplorerSelection,
   createSingleFileExplorerSelection,

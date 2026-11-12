@@ -8,7 +8,7 @@ const { planWorktreeSortOrderUpdates } = await jiti.import(
   '../../../../src/shared/worktree/sort-order-update.ts'
 )
 const { reuseEqualCatalogRows } = await jiti.import(
-  '../../../../src/renderer/src/store/catalog-row-reconciliation.ts'
+  '../../../../src/renderer/src/lib/catalog-reconciliation/catalog-row-reconciliation.ts'
 )
 
 const WORKTREE_COUNT = 655

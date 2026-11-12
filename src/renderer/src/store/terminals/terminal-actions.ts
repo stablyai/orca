@@ -1,3 +1,4 @@
+import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
@@ -17,19 +18,13 @@ import type { StartupCommandDelivery } from '../../../../shared/agent-launch/sta
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentStartedTelemetry } from '../../lib/workspace/creation/worktree-startup-payload'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
-import type {
-  GeneratedTabTitleUpdate,
-  TerminalTabTitleUpdate
-} from '../slices/terminal-tab-title-batch'
+import type { GeneratedTabTitleUpdate, TerminalTabTitleUpdate } from './terminal-tab-title-batch'
 import type {
   NativeChatLaunchDraft,
   NativeChatLaunchPrompt
 } from '@/components/native-chat/drafts/native-chat-launch-prompt'
 import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
-import type {
-  TerminalTabCloseReason,
-  TerminalTabRetirementPlan
-} from '../slices/terminal-tab-retirement'
+import type { TerminalTabCloseReason, TerminalTabRetirementPlan } from './terminal-tab-retirement'
 import type {
   AccountRestartAgent,
   TerminalCreationExecutionFacts,
@@ -220,7 +215,7 @@ export type TerminalActions = {
   queueTabStartupCommand: (
     tabId: string,
     startup: {
-      command: string
+      command?: string
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
@@ -230,6 +225,7 @@ export type TerminalActions = {
       resumeOrigin?: 'saved'
       launchToken?: string
       launchAgent?: TuiAgent
+      freshAgentLaunch?: FreshWorkspaceAgentLaunch
       agentArgsOverride?: string | null
       draftPrompt?: string
       sessionOptions?: Record<string, SessionOptionValue>
@@ -247,7 +243,7 @@ export type TerminalActions = {
     tabId: string,
     expected?: TerminalState['pendingStartupByTabId'][string]
   ) => {
-    command: string
+    command?: string
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
@@ -257,6 +253,7 @@ export type TerminalActions = {
     resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
+    freshAgentLaunch?: FreshWorkspaceAgentLaunch
     agentArgsOverride?: string | null
     draftPrompt?: string
     sessionOptions?: Record<string, SessionOptionValue>

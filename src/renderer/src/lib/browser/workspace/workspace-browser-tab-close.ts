@@ -1,9 +1,9 @@
 import { useAppStore } from '@/store/index'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser/cleanup/browser-webview-cleanup'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '../../resolve-owner'
-import { warnAmbiguousOwnerOnce } from '../../ambiguous-owner-warning'
-import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
-import type { BrowserWorkspaceTabClosePlan } from '@/runtime/browser-workspace-tab-close-plan'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '../../workspace/ownership/resolve-owner'
+import { warnAmbiguousOwnerOnce } from '../../workspace/ownership/ambiguous-owner-warning'
+import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser/closing/browser-workspace-tab-close'
+import type { BrowserWorkspaceTabClosePlan } from '@/runtime/browser/closing/browser-workspace-tab-close-plan'
 
 const REFUSED_CLOSE_PLAN: BrowserWorkspaceTabClosePlan = {
   hostEnvironmentIds: [],

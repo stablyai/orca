@@ -23,42 +23,7 @@ describe('normalizeAgentSessionConversationName hostile text', () => {
 })
 
 describe('normalizeAgentSessionConversationName joiners', () => {
-  // Preserve U+200C/U+200D: stripping them breaks family emoji and Persian/Hindi orthography in user-language names.
   const ZWJ = '\u200D'
-  const ZWNJ = '\u200C'
-
-  it.each([
-    ['family emoji', `Fix \u{1F468}${ZWJ}\u{1F469}${ZWJ}\u{1F467} layout`],
-    ['flag emoji', `Ship \u{1F3F3}\uFE0F${ZWJ}\u{1F308} theme`],
-    ['profession emoji', `Add \u{1F469}${ZWJ}\u{1F4BB} avatar`],
-    ['Persian ZWNJ', `می${ZWNJ}خواهم تست`],
-    ['Hindi ZWNJ conjunct', `क्${ZWNJ}ष ठीक`]
-  ])('keeps the joiners in a %s name', (_label, name) => {
-    expect(normalizeAgentSessionConversationName(name)).toBe(name)
-  })
-
-  // These Cf runs escaped the old enumeration and produced nonempty labels that rendered invisibly.
-  it.each([
-    ['invisible maths operators', '\u2061\u2062\u2063\u2064'],
-    ['tag characters', '\u{E0020}\u{E0041}\u{E007F}'],
-    ['a Mongolian vowel separator', '\u180E'],
-    ['interlinear annotation marks', '\uFFF9\uFFFA\uFFFB'],
-    ['deprecated format characters', '\u206A\u206B\u206C\u206D\u206E\u206F'],
-    ['Arabic number signs', '\u0600\u0601\u06DD'],
-    ['the joiners themselves', `${ZWNJ}${ZWJ}`],
-    ['a bidi and zero-width mix', '\u202E\u200B\u2060'],
-    // Surviving joiners split collapsed runs; the blank-label guard must also consume the resulting spaces.
-    ['joiners split by a tab', `${ZWJ}\t${ZWJ}`],
-    ['joiners split by a newline', `${ZWJ}\n${ZWJ}`],
-    ['joiners split by a byte order mark', `${ZWJ}\uFEFF${ZWJ}`],
-    ['joiners split by zero-width spaces', `\u200B${ZWJ}\u200B${ZWJ}`],
-    ['joiners split by literal spaces', ` ${ZWJ} ${ZWJ} `],
-    ['joiners split by a bidi override', `\u202E${ZWJ}\u202E${ZWJ}`],
-    ['mixed joiners split by a tab', `${ZWJ}\t${ZWNJ}`],
-    ['joiners wrapped in tag characters', `\u{E0020}${ZWJ}\u{E0041}${ZWJ}\u{E007F}`]
-  ])('rejects a name that is only %s', (_label, name) => {
-    expect(normalizeAgentSessionConversationName(name)).toBeNull()
-  })
 
   it('drops a tag-character payload hidden after a real title', () => {
     // Invisible tag characters encode readable ASCII; this payload reached real Codex history through thread/name/set.

@@ -54,12 +54,14 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
 vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep: vi.fn()
 }))
-vi.mock('@/runtime/web-runtime-session-snapshot', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
 }))
 

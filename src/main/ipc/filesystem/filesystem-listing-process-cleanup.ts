@@ -1,8 +1,8 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
-import { killSpawnedRipgrepProcess } from '../../../shared/ripgrep-process-availability'
+import type { ChildProcess } from 'node:child_process'
+import { killSpawnedRipgrepProcess } from '../../../shared/ripgrep/ripgrep-process-availability'
 
 export type FilesystemListingProcess = {
-  child: ChildProcessHandle
+  child: ChildProcess
   isDone: () => boolean
   finish: (error?: Error) => void
 }

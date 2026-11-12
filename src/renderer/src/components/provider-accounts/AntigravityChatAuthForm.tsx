@@ -6,8 +6,9 @@ import {
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { callAntigravityChatAuthConfig } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
-import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY } from '../../../../shared/account-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
@@ -16,12 +17,16 @@ import {
 } from '../../../../shared/antigravity-chat-auth-config'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 
-type AuthAction = {
+export type AntigravityChatAuthAction = {
   disabled: boolean
   start: () => void
-  hint: string | null
+  /** Display name of the method Sign in will use; null when it is not known yet. */
+  method: string | null
+  /** Enterprise needs a project and location before it can be saved or used. */
+  incomplete: boolean
   reauth: boolean
   alert: string | null
   recovering: boolean
@@ -31,18 +36,21 @@ type AuthFormProps = {
   disabled: boolean
   onSignIn: () => void
   heading: ReactNode
-  hostLabel: string
   signInError?: string | null
-  children: (action: AuthAction) => ReactNode
+  /** Wraps the method and Enterprise fields, e.g. as one settings row. */
+  fieldsRow?: (fields: ReactNode) => ReactNode
+  children: (action: AntigravityChatAuthAction) => ReactNode
 }
+
+const unwrapped = (fields: ReactNode): ReactNode => fields
 
 export function AntigravityChatAuthForm({
   owner,
   disabled,
   onSignIn,
   heading,
-  hostLabel,
   signInError,
+  fieldsRow,
   children
 }: AuthFormProps): React.JSX.Element | null {
   const capability = useStructuredAgentSessionHostCapabilityState(
@@ -56,7 +64,8 @@ export function AntigravityChatAuthForm({
         {children({
           disabled: false,
           start: onSignIn,
-          hint: null,
+          method: null,
+          incomplete: false,
           reauth: false,
           recovering: false,
           alert: signInError ?? null
@@ -73,8 +82,8 @@ export function AntigravityChatAuthForm({
       supported={capability === 'supported'}
       onSignIn={onSignIn}
       heading={heading}
-      hostLabel={hostLabel}
       signInError={signInError}
+      fieldsRow={fieldsRow}
     >
       {children}
     </AuthForm>
@@ -87,10 +96,11 @@ function AuthForm({
   supported,
   onSignIn,
   heading,
-  hostLabel,
   signInError,
+  fieldsRow = unwrapped,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
+  const t = useTranslate()
   const id = useId()
   const edited = useRef(false)
   const reads = useRef(0)
@@ -182,13 +192,16 @@ function AuthForm({
     ...(nextProject ? { gcpProject: nextProject } : {}),
     ...(nextLocation ? { gcpLocation: nextLocation } : {})
   })
-  let valid = false
-  try {
-    resolveAntigravityChatAuthConfig(draft())
-    valid = true
-  } catch {
-    // Incomplete Enterprise fields remain editable without changing the host's saved method.
+  const complete = (value: ReturnType<typeof draft>): boolean => {
+    try {
+      resolveAntigravityChatAuthConfig(value)
+      return true
+    } catch {
+      return false
+    }
   }
+  // Incomplete Enterprise fields stay an unsaved draft so the host keeps its saved method.
+  const valid = complete(draft())
   const blocked = disabled || pending || preparing || !loaded || unavailable
   function save(value: unknown): Promise<boolean> {
     let config: AntigravityChatAuthConfig
@@ -227,7 +240,7 @@ function AuthForm({
         if (mounted.current) {
           reads.current++
           setError({
-            message: translate(
+            message: t(
               'accounts.antigravity.settingsSaveFailed',
               "Orca couldn't save your Antigravity sign-in settings. Try again."
             ),
@@ -275,7 +288,7 @@ function AuthForm({
       })
   }
   const commitText = () => {
-    if (edited.current && !blocked) {
+    if (edited.current && !blocked && valid) {
       void save(draft())
     }
   }
@@ -285,118 +298,111 @@ function AuthForm({
       event.currentTarget.blur()
     }
   }
+  const methodName = methodLabel(method, t)
   return (
     <>
       {heading}
-      <div className="space-y-2">
-        {!unavailable && (
-          <div className="space-y-1">
-            <Label htmlFor={`${id}-method`} variant="settings">
-              {translate('accounts.antigravity.authMethod', 'Sign in with')}
-            </Label>
-            <Select
-              value={method}
-              disabled={blocked}
-              onValueChange={(value) => {
-                edited.current = true
-                setMethod(value)
-                void save(draft(value))
-              }}
+      {!unavailable &&
+        fieldsRow(
+          <div className="space-y-3">
+            <AntigravityChatAuthSettingRow
+              htmlFor={`${id}-method`}
+              label={t('accounts.antigravity.authMethod', 'Sign in with')}
             >
-              <SelectTrigger id={`${id}-method`} size="sm" density="compact">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="oauth-personal">
-                  {translate('accounts.antigravity.personal', 'Google account')}
-                </SelectItem>
-                <SelectItem value="oauth-business">
-                  {translate('accounts.antigravity.enterprise', 'Gemini Enterprise')}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              <Select
+                value={method}
+                disabled={blocked}
+                onValueChange={(value) => {
+                  edited.current = true
+                  setMethod(value)
+                  if (complete(draft(value))) {
+                    void save(draft(value))
+                  }
+                }}
+              >
+                <SelectTrigger id={`${id}-method`} className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    value="oauth-personal"
+                    description={t(
+                      'accounts.antigravity.personalOption',
+                      'Your personal Google AI plan'
+                    )}
+                  >
+                    {methodLabel('oauth-personal', t)}
+                  </SelectItem>
+                  <SelectItem
+                    value="oauth-business"
+                    description={t(
+                      'accounts.antigravity.enterpriseOption',
+                      "Your organization's license"
+                    )}
+                  >
+                    {methodLabel('oauth-business', t)}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </AntigravityChatAuthSettingRow>
+            {method === 'oauth-business' && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor={`${id}-project`}>
+                    {t('accounts.antigravity.gcpProject', 'Google Cloud project')}
+                  </Label>
+                  <Input
+                    id={`${id}-project`}
+                    value={project}
+                    disabled={blocked}
+                    placeholder={t('accounts.antigravity.projectPlaceholder', 'my-project-id')}
+                    onChange={(event) => {
+                      edited.current = true
+                      setProject(event.target.value)
+                      setError(null)
+                    }}
+                    onBlur={commitText}
+                    onKeyDown={commitOnEnter}
+                  />
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor={`${id}-location`}>
+                    {t('accounts.antigravity.location', 'Location')}
+                  </Label>
+                  <Input
+                    id={`${id}-location`}
+                    value={location}
+                    disabled={blocked}
+                    placeholder={t('accounts.antigravity.locationPlaceholder', 'us-central1')}
+                    onChange={(event) => {
+                      edited.current = true
+                      setLocation(event.target.value)
+                      setError(null)
+                    }}
+                    onBlur={commitText}
+                    onKeyDown={commitOnEnter}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
-        {!unavailable && method === 'oauth-business' && (
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label htmlFor={`${id}-project`} variant="settings">
-                {translate('accounts.antigravity.gcpProject', 'Google Cloud project')}
-              </Label>
-              <Input
-                id={`${id}-project`}
-                density="compact"
-                value={project}
-                disabled={blocked}
-                placeholder={translate('accounts.antigravity.projectPlaceholder', 'my-project-id')}
-                onChange={(event) => {
-                  edited.current = true
-                  setProject(event.target.value)
-                  setError(null)
-                }}
-                onBlur={commitText}
-                onKeyDown={commitOnEnter}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`${id}-location`} variant="settings">
-                {translate('accounts.antigravity.gcpLocation', 'Google Cloud location')}
-              </Label>
-              <Input
-                id={`${id}-location`}
-                density="compact"
-                value={location}
-                disabled={blocked}
-                placeholder={translate('accounts.antigravity.locationPlaceholder', 'us-central1')}
-                onChange={(event) => {
-                  edited.current = true
-                  setLocation(event.target.value)
-                  setError(null)
-                }}
-                onBlur={commitText}
-                onKeyDown={commitOnEnter}
-              />
-            </div>
-          </div>
-        )}
-        {error && !active && (
-          <p role="alert" className="text-xs text-destructive">
-            {error.message}
-          </p>
-        )}
-      </div>
       {children({
-        alert: error && !active ? null : (signInError ?? null),
+        alert: error && !active ? error.message : (signInError ?? null),
         recovering: unavailable,
         disabled: disabled || preparing || (!unavailable && (!loaded || !valid)),
         start,
         reauth: authenticatedMethod !== null && authenticatedMethod !== method,
-        hint:
-          unavailable || !loaded || (method !== 'oauth-business' && method !== 'oauth-personal')
-            ? null
-            : authenticatedMethod !== null && authenticatedMethod !== method
-              ? translate(
-                  'accounts.antigravity.signInAgainWith',
-                  'Sign in again to use {{method}}.',
-                  {
-                    method:
-                      method === 'oauth-business'
-                        ? translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
-                        : translate('accounts.antigravity.personal', 'Google account')
-                  }
-                )
-              : translate(
-                  'accounts.antigravity.signInWith',
-                  'Signs in with {{method}} on {{host}}.',
-                  {
-                    host: hostLabel,
-                    method:
-                      method === 'oauth-business'
-                        ? translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
-                        : translate('accounts.antigravity.personal', 'Google account')
-                  }
-                )
+        method: unavailable || !loaded ? null : methodName,
+        incomplete: loaded && !unavailable && !valid && method === 'oauth-business'
       })}
     </>
   )
+}
+
+function methodLabel(method: string, t: Translate = translate): string | null {
+  if (method === 'oauth-business') {
+    return t('accounts.antigravity.enterprise', 'Gemini Enterprise')
+  }
+  return method === 'oauth-personal' ? t('accounts.antigravity.personal', 'Google account') : null
 }

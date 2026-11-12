@@ -4,7 +4,7 @@ import { mountFixture } from '../recorder-fixture-shape'
 import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
+import type { RpcClientContextValue } from '../../../transport/connection/rpc-client-context-contract'
 
 const HOST = 'host-1'
 const WORKTREE = 'wt-files'

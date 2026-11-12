@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
-import { hardenExistingSecureFile } from '../../secure-file'
-import { readNodeFileSyncWithinLimit } from '../../node-bounded-file-reader'
+import { hardenExistingSecureFile } from '../../secure-storage/secure-file'
+import { readNodeFileSyncWithinLimit } from '../../file-content/node-bounded-file-reader'
 
 // Why: remote RPC, tunnel and worker-server checks resolve the saved-server registry many times per second;
 // rechecking, rehardening, reparsing and revalidating unchanged files each time blocked the Electron main thread.

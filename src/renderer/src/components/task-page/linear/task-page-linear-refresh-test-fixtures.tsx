@@ -4,12 +4,12 @@ import type { LinearEditState } from '../../linear-item-drawer-types'
 import { useCallback } from 'react'
 import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import { LinearIssueTextEditor } from '../../LinearIssueTextEditor'
 import { useLinearIssueEditController } from '../../linear-item-drawer-edit-controller'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import { useStore } from 'zustand'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { useTaskPageLinearCollectionEffectsPrelude } from './use-task-page-linear-collection-effects'
 import { useTaskPageLinearCustomViewEffects } from './use-task-page-linear-custom-view-effects'
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
@@ -136,12 +136,12 @@ vi.mock('@/hooks/useIssueMetadata', async (original) => ({
   })
 }))
 
-vi.mock('@/store/selectors', async (original) => {
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', async (original) => {
   const empty: [] = []
   return { ...(await original<Record<string, unknown>>()), useAllWorktrees: () => empty }
 })
 
-vi.mock('@/store/workspace-record-selectors', async (original) => {
+vi.mock('@/store/workspaces/catalog/workspace-record-fields', async (original) => {
   const empty: [] = []
   return { ...(await original<Record<string, unknown>>()), selectFolderWorkspaces: () => empty }
 })

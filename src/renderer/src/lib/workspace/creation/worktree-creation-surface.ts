@@ -1,4 +1,4 @@
-import { getIndexedReposById } from '@/store/worktree-repo-index'
+import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
 import type { UISlice } from '@/store/slices/ui/ui-slice-contract'

@@ -10,6 +10,7 @@ import {
 import { parseDaemonReadyIdentity } from '../endpoint/identity/daemon-ready-identity'
 import { unlinkOwnedDaemonPidFile } from './daemon-spawner'
 import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
+import { watchLaunchedDaemonExit } from './daemon-exit-record'
 
 /** Default readiness IPC budget; callers may allow longer. */
 export const DAEMON_CHILD_STARTUP_TIMEOUT_MS = 10_000
@@ -202,6 +203,7 @@ async function launchDaemonChildAttempt(
         releaseStderr()
         child.disconnect()
         child.unref()
+        watchLaunchedDaemonExit(child, readyIdentity.pid)
         resolve()
       }
     }

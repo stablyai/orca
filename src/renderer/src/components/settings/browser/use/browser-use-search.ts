@@ -5,8 +5,8 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 export const getBrowserUsePaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.browser.use.search.a1414dcefb',
-      'Install Browser Use Skill'
+      'auto.components.settings.browser.use.search.e72d500ca5',
+      'Install browser use skill'
     ),
     description: translate(
       'auto.components.settings.browser.use.search.a7e82445fa',
@@ -39,8 +39,8 @@ export const getBrowserUsePaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.browser.use.search.614c756ab1',
-      'Import Browser Cookies'
+      'auto.components.settings.browser.use.search.9e2bfa1405',
+      'Import browser cookies'
     ),
     description: translate(
       'auto.components.settings.browser.use.search.2fb24d17db',

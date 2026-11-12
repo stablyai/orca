@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { REPO_COLORS } from '../../../../shared/constants'
+import { REPO_COLORS } from '../../../../shared/repo-badge-color'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
@@ -65,8 +65,6 @@ function ws(
     displayName: name,
     branch: name,
     path: `/Users/me/code/${repoName}/${name}`,
-    tier: 'review',
-    selectedByDefault: false,
     reasons: [],
     blockers: [],
     lastActivityAt: NOW,

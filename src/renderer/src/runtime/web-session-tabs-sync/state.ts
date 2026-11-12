@@ -1,15 +1,12 @@
-import type { AppState } from '../../store'
-import type { RetiredTerminalTabSweepState } from '../../store/slices/retired-terminal-tab-state-sweep'
+import type { AppState } from '../../store/types'
+import type { RetiredTerminalTabSweepState } from '../../store/terminals/retired-terminal-tab-state-sweep'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type {
-  RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
-  RuntimeMobileSessionTabGroup,
-  RuntimeMobileSessionTabsRemovedResult,
-  RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type {
   BrowserCertificateFailure,
   BrowserPage,
@@ -173,7 +170,6 @@ export function resetReceivedSessionTabsFrameSequence(): void {
   receivedSessionTabsFrameSequence = 0
 }
 
-export type TerminalSurface = RuntimeMobileSessionTerminalClientTab
 export type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
 export type ReadyBrowserSurface = RuntimeMobileSessionBrowserTab & { browserPageId: string }
 export type ReadyEditorSurface = RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab
@@ -184,7 +180,7 @@ export type MirroredTerminalTab = {
   hostTabId: string
   ptyIds: string[]
   layout: TerminalLayoutSnapshot
-  retainedSurfaceByPrunedLeafId?: ReadonlyMap<string, TerminalSurface>
+  retainedSurfaceByPrunedLeafId?: ReadonlyMap<string, RuntimeMobileSessionTerminalClientTab>
 }
 export type MirroredBrowserTab = {
   workspace: BrowserWorkspace
@@ -229,6 +225,7 @@ export type WebSessionTabsSyncState = Pick<
   | 'unreadTerminalTabs'
   | 'sortEpoch'
 > &
+  Partial<Pick<AppState, 'splitLandingGroupIds'>> &
   Partial<RetiredTerminalTabSweepState> &
   Partial<
     Pick<
@@ -242,6 +239,7 @@ export type WebSessionTabsSyncState = Pick<
       | 'localOnlyScrollbackByTabId'
       | 'pendingStartupByTabId'
       | 'runtimePaneTitlesByTabId'
+      | 'sleepingAgentSessionsByPaneKey'
     >
   >
 
@@ -280,7 +278,3 @@ export type WebSessionTabsBatchContext = {
   changedRecords: Set<WebSessionTabsBatchRecordKey>
   openFilesIndex: WebSessionOpenFilesIndex | null
 }
-
-export type AgentTab = RuntimeMobileSessionAgentTab
-export type TabGroupSnapshot = RuntimeMobileSessionTabGroup
-export type RemovedTabsResult = RuntimeMobileSessionTabsRemovedResult

@@ -12,7 +12,7 @@ import {
   findLinearIssueWorkspaceAttachment,
   type LinearIssueAttachmentRef
 } from '@/lib/work-items/linear/linear-issue-workspace-attachment'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** Re-read current workspace attachments at action time so newly created issue workspaces are reused instead of duplicated. */
 export function openLinearIssueWorkspaceOrStart(

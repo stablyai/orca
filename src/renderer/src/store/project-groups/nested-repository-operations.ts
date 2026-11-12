@@ -1,3 +1,4 @@
+import { initializeNewRootProjectGroupOrder } from './project-group-update-persistence'
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
@@ -81,6 +82,7 @@ export function createNestedRepositoryActions(
     importNestedRepos: async (args) => {
       try {
         const target = runtimeTargetForOwnerEnvironment(args.runtimeEnvironmentId)
+        const knownGroupIds = new Set(get().projectGroups.map((group) => group.id))
         const result =
           target.kind === 'local'
             ? await window.api.projectGroups.importNested(args)
@@ -96,6 +98,9 @@ export function createNestedRepositoryActions(
                 },
                 { timeoutMs: 60_000 }
               )
+        if (result.group && !knownGroupIds.has(result.group.id)) {
+          result.group = await initializeNewRootProjectGroupOrder(target, result.group, get())
+        }
         const catalogOptions = { runtimeEnvironmentId: args.runtimeEnvironmentId }
         await get().fetchProjectGroups(catalogOptions)
         await get().fetchFolderWorkspaces(catalogOptions)

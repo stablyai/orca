@@ -7,7 +7,7 @@ import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent
-} from '../../../../shared/browser-guest-events'
+} from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { formatBrowserRemoteDownloadMessage } from './browser-download-destination-toast'
 import { formatByteCount } from './navigate/browser-notices'
 

@@ -37,4 +37,7 @@ export type QueuedMessageRow = {
    *  it. Null on cards from builds before it was recorded, which read as queued before any Stop. */
   queuedAt: AgentJournalCursor | null
   options?: AgentSessionExecutionOptions
+  deliveryMode?: 'queue' | 'steer'
+  /** Absent only on rows admitted before the single-list format. */
+  unattended?: boolean
 }

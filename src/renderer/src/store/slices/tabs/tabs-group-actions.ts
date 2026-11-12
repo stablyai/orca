@@ -1,16 +1,17 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import type { TabSplitTarget, TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { activeSurfacePatchMatchesState, buildActiveSurfacePatch } from './tabs-surface'
-import type { TabGroup } from '../../../../../shared/tab-types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import {
   buildSplitNode,
   collapseGroupLayout,
   replaceLeaf
-} from '../../../../../shared/workspace-layout/tab-group-layout-tree'
-import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
-import { insertTabIdIntoOrder } from '../../../../../shared/workspace-layout/tab-order'
+} from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
+import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
+import { insertTabIdIntoOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
-import { ownsGlobalSelection } from '../../global-selection-owner'
+import { ownsGlobalSelection } from '../../workspaces/selection/global-selection-owner'
+import { replaceRecordEntries } from '../../keyed-record-transitions'
 
 type SplitGroupState = Pick<
   TabsSlice,
@@ -24,6 +25,24 @@ export function insertSplitGroup(
   target: TabSplitTarget,
   newGroup: TabGroup
 ): SplitGroupState {
+  const split = splitGroupEntries(state, worktreeId, target, newGroup)
+  return {
+    groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [[worktreeId, split.groups]]),
+    layoutByWorktree: replaceRecordEntries(state.layoutByWorktree, [[worktreeId, split.layout]]),
+    activeGroupIdByWorktree:
+      split.activeGroupId === null
+        ? state.activeGroupIdByWorktree
+        : replaceRecordEntries(state.activeGroupIdByWorktree, [[worktreeId, split.activeGroupId]])
+  }
+}
+
+/** insertSplitGroup's values for its one worktree; a null active group id leaves the entry unwritten. */
+export function splitGroupEntries(
+  state: SplitGroupState,
+  worktreeId: string,
+  target: TabSplitTarget,
+  newGroup: TabGroup
+): { groups: TabGroup[]; layout: TabGroupLayoutNode; activeGroupId: string | null } {
   const { sourceGroupId, splitDirection } = target
   const currentLayout =
     state.layoutByWorktree[worktreeId] ?? ({ type: 'leaf', groupId: sourceGroupId } as const)
@@ -34,18 +53,9 @@ export function insertSplitGroup(
     splitDirection === 'left' || splitDirection === 'up' ? 'first' : 'second'
   )
   return {
-    groupsByWorktree: {
-      ...state.groupsByWorktree,
-      [worktreeId]: [...(state.groupsByWorktree[worktreeId] ?? []), newGroup]
-    },
-    layoutByWorktree: {
-      ...state.layoutByWorktree,
-      [worktreeId]: replaceLeaf(currentLayout, sourceGroupId, replacement)
-    },
-    activeGroupIdByWorktree:
-      target.activate === false
-        ? state.activeGroupIdByWorktree
-        : { ...state.activeGroupIdByWorktree, [worktreeId]: newGroup.id }
+    groups: [...(state.groupsByWorktree[worktreeId] ?? []), newGroup],
+    layout: replaceLeaf(currentLayout, sourceGroupId, replacement),
+    activeGroupId: target.activate === false ? null : newGroup.id
   }
 }
 
@@ -106,25 +116,26 @@ export function createTabsGroupActions(
         // A new root and its first order member must become observable together.
         const nextGroup = { ...group, tabOrder }
         return {
-          groupsByWorktree: {
-            ...state.groupsByWorktree,
-            [worktreeId]: groups.length
-              ? groups.map((entry) => (entry.id === groupId ? nextGroup : entry))
-              : [nextGroup]
-          },
-          layoutByWorktree: {
-            ...state.layoutByWorktree,
-            [worktreeId]: (orderSlot && state.layoutByWorktree[worktreeId]) || {
-              type: 'leaf',
-              groupId
-            }
-          },
+          groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [
+            [
+              worktreeId,
+              groups.length
+                ? groups.map((entry) => (entry.id === groupId ? nextGroup : entry))
+                : [nextGroup]
+            ]
+          ]),
+          layoutByWorktree: replaceRecordEntries(state.layoutByWorktree, [
+            [
+              worktreeId,
+              (orderSlot && state.layoutByWorktree[worktreeId]) || {
+                type: 'leaf',
+                groupId
+              }
+            ]
+          ]),
           activeGroupIdByWorktree: groups.length
             ? state.activeGroupIdByWorktree
-            : {
-                ...state.activeGroupIdByWorktree,
-                [worktreeId]: groupId
-              }
+            : replaceRecordEntries(state.activeGroupIdByWorktree, [[worktreeId, groupId]])
         }
       })
       return groupId
@@ -135,10 +146,7 @@ export function createTabsGroupActions(
         const groupAlreadyFocused = state.activeGroupIdByWorktree[worktreeId] === groupId
         const nextActiveGroupIdByWorktree = groupAlreadyFocused
           ? state.activeGroupIdByWorktree
-          : {
-              ...state.activeGroupIdByWorktree,
-              [worktreeId]: groupId
-            }
+          : replaceRecordEntries(state.activeGroupIdByWorktree, [[worktreeId, groupId]])
         // Only surface tabs of the active workspace; focusing an unseen group must not consume its bell.
         if (state.activeWorktreeId !== worktreeId) {
           if (groupAlreadyFocused) {
@@ -186,13 +194,17 @@ export function createTabsGroupActions(
           current.activeGroupIdByWorktree,
           worktreeId,
           groupId,
-          remainingGroups[0]?.id ?? null
+          remainingGroups[0]?.id ?? null,
+          replaceRecordEntries
         )
+        const nextGroupsByWorktree = replaceRecordEntries(current.groupsByWorktree, [
+          [worktreeId, remainingGroups]
+        ])
         // Why: drop the dead group's recent-quick-command entry so the map can't grow unbounded as groups open/close.
         const { [groupId]: _droppedRecent, ...remainingRecent } =
           current.recentQuickCommandIdByGroup
         return {
-          groupsByWorktree: { ...current.groupsByWorktree, [worktreeId]: remainingGroups },
+          groupsByWorktree: nextGroupsByWorktree,
           layoutByWorktree: collapsedState.layoutByWorktree,
           activeGroupIdByWorktree: collapsedState.activeGroupIdByWorktree,
           recentQuickCommandIdByGroup: remainingRecent,
@@ -200,10 +212,7 @@ export function createTabsGroupActions(
             ? buildActiveSurfacePatch(
                 {
                   ...current,
-                  groupsByWorktree: {
-                    ...current.groupsByWorktree,
-                    [worktreeId]: remainingGroups
-                  },
+                  groupsByWorktree: nextGroupsByWorktree,
                   layoutByWorktree: collapsedState.layoutByWorktree,
                   activeGroupIdByWorktree: collapsedState.activeGroupIdByWorktree
                 },
@@ -218,14 +227,17 @@ export function createTabsGroupActions(
 
     createEmptySplitGroup: (worktreeId, sourceGroupId, direction, opts) => {
       const newGroupId = createBrowserUuid()
-      set((state) =>
-        insertSplitGroup(
+      set((state) => ({
+        ...insertSplitGroup(
           state,
           worktreeId,
           { sourceGroupId, splitDirection: direction, activate: opts?.activate },
           emptySplitGroup(worktreeId, newGroupId)
-        )
-      )
+        ),
+        ...(opts?.landing
+          ? { splitLandingGroupIds: { ...state.splitLandingGroupIds, [newGroupId]: worktreeId } }
+          : {})
+      }))
       get().recordFeatureInteraction?.('terminal-panes')
       return newGroupId
     }

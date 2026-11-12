@@ -1,4 +1,4 @@
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'

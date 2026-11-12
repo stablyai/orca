@@ -1,12 +1,14 @@
-import { makeDetectedResult } from '../../worktrees-detected-listing-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeDetectedResult } from '../../worktrees/listing/worktrees-detected-listing-fixtures'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createUntitledFileInActiveWorkspace } from './untitled-file-creation'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance
-} from '@/lib/editor-file-operation-owner'
-import { createTestStore, makeWorktree, seedStore, TEST_REPO } from '../../store-test-helpers'
-import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
+} from '@/lib/editor/file-operations/editor-file-operation-provenance'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 import { toast } from 'sonner'

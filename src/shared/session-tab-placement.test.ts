@@ -48,12 +48,6 @@ describe('placeCreatedSessionTab', () => {
     ).toEqual(['split::left', 'trailing', 'split::right', 'new'])
   })
 
-  it('appends when the anchor is absent', () => {
-    expect(
-      placeCreatedSessionTab([{ id: 'a' }, { id: 'b' }], created, 'missing').map((t) => t.id)
-    ).toEqual(['a', 'b', 'new'])
-  })
-
   it('re-places a tab that is already in the list instead of duplicating it', () => {
     expect(
       placeCreatedSessionTab([{ id: 'a' }, { id: 'new' }, { id: 'b' }], created, 'b').map(

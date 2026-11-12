@@ -1,3 +1,5 @@
+import { prepareWorktreeModelStartupInputs } from './runtime-worktree-model-startup'
+import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { agentStartedTelemetry } from '../../../agent-launch/agent-started-telemetry'
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
@@ -25,7 +27,7 @@ import {
 } from '../../terminal/launch/agent-launch-typed-line-shell'
 import { detectAgentsOnHost } from '../../../preflight/workspace-agent-detection'
 import { agentCommandOverrideDetectionOptions } from '../../../preflight/installed-agent-detection'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
 
 export type WorktreeStartupDraftPaste = { agent: TuiAgent; content: string }
@@ -85,7 +87,11 @@ export async function resolveWorktreeStartupDraftAgent(
 }
 
 export async function buildWorktreeStartupForDraft(
-  environment: StartupEnvironment & { draft: string; requestedAgent?: TuiAgent }
+  environment: StartupEnvironment & {
+    draft: string
+    requestedAgent?: TuiAgent
+    originalAgent?: TuiAgent
+  }
 ): Promise<{
   agent: TuiAgent
   startup: AttributedWorktreeStartupLaunch
@@ -103,16 +109,29 @@ export async function buildWorktreeStartupForDraft(
   }
 
   const { platform, shell, launchRuntime } = environment.getLaunchRuntime(agent)
-  const launchArgs = resolveAgentStartupPlanInputs({
+  const resolvedInputs = resolveAgentStartupPlanInputs({
     agent,
     settings,
     platform,
     shell,
     isRemote: repoIsRemote(repo),
-    ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {})
+    ...(agent === (environment.originalAgent ?? environment.requestedAgent)
+      ? {
+          ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
+          sessionOptions: environment.sessionOptions
+        }
+      : {})
   })
+  const prepared = await prepareWorktreeModelStartupInputs({
+    inputs: resolvedInputs,
+    cwd: repo.path,
+    isWsl: !(launchRuntime instanceof Error) && isWslShellName(launchRuntime.pty.shellOverride)
+  })
+  const launchArgs = prepared.inputs
   const telemetry = agentStartedTelemetry(agent, environment.launchSource)
-  const draftPlan = buildAgentDraftLaunchPlan({ ...launchArgs, draft: content })
+  const draftPlan = prepared.launchConfig
+    ? null
+    : buildAgentDraftLaunchPlan({ ...launchArgs, draft: content })
   if (draftPlan) {
     return {
       agent,
@@ -140,7 +159,7 @@ export async function buildWorktreeStartupForDraft(
     agent,
     startup: {
       command: startupPlan.launchCommand,
-      launchConfig: startupPlan.launchConfig,
+      launchConfig: prepared.launchConfig ?? startupPlan.launchConfig,
       ...(startupPlan.startupCommandDelivery
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),
@@ -152,7 +171,7 @@ export async function buildWorktreeStartupForDraft(
   }
 }
 
-export function buildWorktreeStartupForAgent(
+export async function buildWorktreeStartupForAgent(
   environment: StartupEnvironment & {
     agent: TuiAgent
     prompt?: string
@@ -163,18 +182,18 @@ export function buildWorktreeStartupForAgent(
     /** Caller delivers any uncarried prompt; report typed-line carry. Absent preserves CLI behavior. */
     onPromptCarry?: (carried: boolean) => void
   }
-): {
+): Promise<{
   agent: TuiAgent
   startup: AttributedWorktreeStartupLaunch
   followup?: WorktreeStartupFollowup
   launchRuntime: AgentLaunchRuntime | Error
-} {
+}> {
   const { agent, repo, settings } = environment
   if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
     throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
   }
   const { platform, shell, launchRuntime } = environment.getLaunchRuntime(agent)
-  const planInputs = resolveAgentStartupPlanInputs({
+  const resolvedInputs = resolveAgentStartupPlanInputs({
     agent,
     settings,
     platform,
@@ -186,6 +205,12 @@ export function buildWorktreeStartupForAgent(
     sessionOptions:
       environment.sessionOptions ?? environment.toSessionOptions(environment.launchPreferences)
   })
+  const prepared = await prepareWorktreeModelStartupInputs({
+    inputs: resolvedInputs,
+    cwd: repo.path,
+    isWsl: !(launchRuntime instanceof Error) && isWslShellName(launchRuntime.pty.shellOverride)
+  })
+  const planInputs = prepared.inputs
   const prompt = environment.prompt ?? ''
   let startupPlan: ReturnType<typeof buildAgentStartupPlan>
   if (environment.onPromptCarry) {
@@ -215,7 +240,7 @@ export function buildWorktreeStartupForAgent(
     agent,
     startup: {
       command: startupPlan.launchCommand,
-      launchConfig: startupPlan.launchConfig,
+      launchConfig: prepared.launchConfig ?? startupPlan.launchConfig,
       ...(startupPlan.startupCommandDelivery
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),
@@ -231,7 +256,7 @@ export function buildWorktreeStartupForAgent(
   }
 }
 
-export function resolveWorktreeCreateAgentStartup(
+export async function resolveWorktreeCreateAgentStartup(
   args: RuntimeManagedWorktreeCreateArgs,
   build: (
     agent: TuiAgent,
@@ -245,17 +270,24 @@ export function resolveWorktreeCreateAgentStartup(
       launchSource?: string
       onPromptCarry?: (carried: boolean) => void
     }
-  ) => {
-    agent: TuiAgent
-    startup: WorktreeStartupLaunch
-    followup?: WorktreeStartupFollowup
-    launchRuntime: AgentLaunchRuntime | Error
-  }
+  ) =>
+    | Promise<{
+        agent: TuiAgent
+        startup: WorktreeStartupLaunch
+        followup?: WorktreeStartupFollowup
+        launchRuntime: AgentLaunchRuntime | Error
+      }>
+    | {
+        agent: TuiAgent
+        startup: WorktreeStartupLaunch
+        followup?: WorktreeStartupFollowup
+        launchRuntime: AgentLaunchRuntime | Error
+      }
 ) {
   if (args.startup || !args.startupAgent) {
     return null
   }
-  const built = build(args.startupAgent, args.startupPrompt, args.startupLaunchPreferences, {
+  const built = await build(args.startupAgent, args.startupPrompt, args.startupLaunchPreferences, {
     ...(args.startupAgentArgs !== undefined ? { agentArgs: args.startupAgentArgs } : {}),
     ...(args.startupSessionOptions ? { sessionOptions: args.startupSessionOptions } : {}),
     ...(args.startupExtraAgentArgs ? { extraAgentArgs: args.startupExtraAgentArgs } : {}),

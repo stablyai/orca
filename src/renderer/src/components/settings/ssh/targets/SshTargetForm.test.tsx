@@ -4,7 +4,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { EMPTY_FORM, type EditingTarget } from './ssh-target-draft'
+import { EMPTY_FORM, type EditingTarget } from '../../../ssh-host-form/ssh-target-draft'
 import { SshTargetForm } from './SshTargetForm'
 
 afterEach(() => {

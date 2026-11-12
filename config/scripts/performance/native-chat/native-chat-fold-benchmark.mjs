@@ -15,7 +15,7 @@ import {
   summarizeFoldOutput
 } from './native-chat-fold-benchmark-workloads.mjs'
 
-// ORCA_BACKGROUND_LAUNCH=1 node --expose-gc config/scripts/native-chat-fold-benchmark.mjs > full-fold.json
+// ORCA_BACKGROUND_LAUNCH=1 node --expose-gc config/scripts/performance/native-chat/native-chat-fold-benchmark.mjs > full-fold.json
 const root = path.resolve(import.meta.dirname, '../../../..')
 const refs = {
   original: '51e7181850b022bae2d41091fe1229accef4bd50',
@@ -24,7 +24,7 @@ const refs = {
 }
 const entry = (ref) => `
   export { foldToolMessages as fold } from '${ref ? './src/shared/native-chat-tool-fold' : './src/shared/native-chat/tools/native-chat-tool-fold'}'
-  import { createNativeChatMessageListProjection } from './src/renderer/src/components/native-chat/native-chat-message-list-projection'
+  import { createNativeChatMessageListProjection } from '${ref ? './src/renderer/src/components/native-chat/native-chat-message-list-projection' : './src/renderer/src/components/native-chat/conversation/projection/native-chat-message-list-projection'}'
   import { deriveNativeChatRowContent } from '${ref ? './src/shared/native-chat-row-content' : './src/shared/native-chat/transcript/native-chat-row-content'}'
   import { pairNativeChatToolResults } from '${ref ? './src/shared/native-chat-tool-pairing' : './src/shared/native-chat/tools/native-chat-tool-pairing'}'
   export function createPipeline() {

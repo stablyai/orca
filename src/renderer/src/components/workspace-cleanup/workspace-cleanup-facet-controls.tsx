@@ -2,7 +2,7 @@ import React from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { parseWorkspaceCleanupFacetNumber } from './workspace-cleanup-facet-panel-model'
 
 export function FacetSection({

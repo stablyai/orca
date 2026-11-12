@@ -3,15 +3,18 @@ import { shouldRunSetupForCreate } from '../../../workspace-hooks/effective-hook
 import { getEffectiveHooks } from '../../../workspace-hooks/hooks'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
   getWorktreeMirrorDistro
 } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { resolveDefaultBaseRefWithLocalGit } from '../../../git/repo-default-base-ref'
-import type { LocalGitExecOptions } from '../../../git/repo-default-base-ref'
-import { resolveLocalGitUsername } from '../../../git/git-username'
+import {
+  resolveDefaultBaseRefWithLocalGit,
+  type LocalGitExecOptions
+} from '../../../git/refs/resolution/repo-default-base-ref'
+
+import { resolveLocalGitUsername } from '../../../git/repositories/git-username'
 import { computeWorkspaceRoot, getWorktreePathSettings } from '../../../ipc/worktree-logic'
 import { resolveWorktreeCreateBase } from '../../../workspaces/creation/worktree-create-base'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'

@@ -7,30 +7,30 @@ import {
 } from './structured-agent-session-launch.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { moveStructuredAgentLaunchDraft } from './structured-agent-session-launch-draft'
-import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-composer-draft-memory'
+import { nativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import './structured-agent-session-launch-prompt'
 import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-staged-prompt'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   isNativeChatComposerDraftUnsaved,
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/native-chat-composer-draft-load'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
 import {
   flushNativeChatComposerDrafts,
   nativeChatComposerDraftWritesSettled
-} from '@/components/native-chat/native-chat-composer-draft-persistence'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
 import { act, renderHook } from '@testing-library/react'
-import { useNativeChatDraft } from '@/components/native-chat/use-native-chat-draft'
-import { useNativeChatStructuredComposerSend } from '@/components/native-chat/use-native-chat-structured-composer-send'
+import { useNativeChatDraft } from '@/components/native-chat/drafts/use-native-chat-draft'
+import { useNativeChatStructuredComposerSend } from '@/components/native-chat/composer/submit/use-native-chat-structured-composer-send'
 
 describe('structured launch draft persistence', () => {
   it.each(['claude', 'codex'] as const)(

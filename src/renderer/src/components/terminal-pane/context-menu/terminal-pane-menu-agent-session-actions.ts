@@ -6,7 +6,7 @@ import {
   type PreparedAgentSessionFork
 } from '../session-fork/terminal-agent-session-fork'
 import { prepareAgentSessionContinuationFromPane } from '../session-continuation/terminal-agent-session-continuation'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session/context/agent-session-continuation'
 
 export type TerminalPaneMenuAgentSessionContext = {
   paneCwdRef: React.RefObject<PaneCwdMap>

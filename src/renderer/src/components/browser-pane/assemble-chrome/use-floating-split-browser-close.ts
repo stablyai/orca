@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { resolveBrowserSourceUnifiedTab } from '@/lib/browser/workspace/browser-workspace-source-resolution'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import { useAppStore } from '@/store'
@@ -10,6 +10,7 @@ export function useFloatingSplitBrowserClose(
   worktreeId: string,
   browserPageId: string
 ): BrowserChromeToolAction | null {
+  const t = useTranslate()
   const tabId = useAppStore((state) => {
     if (
       !isFloatingWorkspaceId(worktreeId) ||
@@ -27,6 +28,6 @@ export function useFloatingSplitBrowserClose(
     onSelect: () => {
       dispatchWorkspaceTabCommand({ type: 'close', target: { kind: 'tab', worktreeId, tabId } })
     },
-    label: translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')
+    label: t('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')
   }
 }

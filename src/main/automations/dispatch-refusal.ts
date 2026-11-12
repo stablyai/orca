@@ -1,9 +1,9 @@
 // Skip coalescing requires a fixed, byte-identical sentence for each refusal reason.
 import type { Store } from '../persistence/loading-store/store'
-import type { Automation } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunWriter } from './automation-run-writer'
-import { wslMoveRepoBackoff } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { wslMoveRepoBackoff } from '../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { isOrcadFencedAutomation } from './orcad-fenced-automation'
 import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
@@ -11,7 +11,7 @@ import {
   AUTOMATION_RUN_FAILURE_COPY,
   automationRunFailure,
   type AutomationRunFailure
-} from '../../shared/automation-run-failure-copy'
+} from '../../shared/automations/history/automation-run-failure-copy'
 
 export const NO_DISPATCH_HOST = AUTOMATION_RUN_FAILURE_COPY.noDispatchHost
 export const WSL_MOVE_IN_PROGRESS = AUTOMATION_RUN_FAILURE_COPY.wslMoveInProgress

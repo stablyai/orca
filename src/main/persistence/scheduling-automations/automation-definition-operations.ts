@@ -1,31 +1,32 @@
 import { retainAutomationReselectionContexts } from './automation-host-reselection'
+import { automationCreateIdentity } from './automation-create-identity'
 import { getRepoSshConnectionId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
-import { findAutomationRepoForWrite } from '../../../shared/automation-repo-target'
+import { findAutomationRepoForWrite } from '../../../shared/automations/ownership/automation-repo-target'
 import {
   applyAutomationLaunchSetupPatch,
-  automationCanonicalLaunchSetup,
   automationWithLaunchSetup
-} from '../../../shared/automation-launch-setup'
+} from '../../../shared/automations/launch/automation-launch-setup'
+import { automationCanonicalLaunchSetup } from '../../../shared/automations/launch/automation-canonical-launch-setup'
 import { randomUUID } from 'node:crypto'
 import type {
   Automation,
   AutomationCreateInput,
-  AutomationRun,
   AutomationUpdateInput
-} from '../../../shared/automations-types'
+} from '../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import { normalizeAutomationPrecheck } from '../../../shared/automations/launch/automation-precheck'
 import {
   assertAutomationExtraAgentArgs,
   storedExtraAgentArgs
-} from '../../../shared/automation-extra-agent-args-record'
-import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
+} from '../../../shared/automations/launch/automation-extra-agent-args-record'
+import { nextAutomationOccurrenceAfter } from '../../../shared/automations/scheduling/automation-schedule-occurrences'
 import {
   applyAutomationExecutionTarget,
   deriveAutomationExecutionTargetForCreate,
   deriveAutomationExecutionTargetForUpdate
-} from '../../../shared/automation-execution-target'
+} from '../../../shared/automations/ownership/automation-execution-target'
 import {
   assertAutomationDestination,
   assertAutomationOwnerFence,
@@ -33,7 +34,7 @@ import {
   assertExecutionTargetMatchesDestination,
   type AutomationDestination,
   type AutomationUpdatePreconditions
-} from '../../../shared/automation-owner-precondition'
+} from '../../../shared/automations/ownership/automation-owner-precondition'
 import {
   getAutomationContextsForRepo,
   automationContextAfterUpdate,
@@ -110,7 +111,7 @@ export function createAutomation(
   const extraAgentArgs = storedExtraAgentArgs(setup.extraAgentArgs)
   const automation: Automation = {
     id: randomUUID(),
-    ...(input.creationKey ? { creationKey: input.creationKey } : {}),
+    ...automationCreateIdentity(input),
     name: input.name.trim() || 'Untitled automation',
     prompt: input.prompt,
     precheck: normalizeAutomationPrecheck(input.precheck),
@@ -307,7 +308,5 @@ export function updateAutomation(
   operations.flush()
   return automationWithLaunchSetup(updated)
 }
-
-export { stampLegacyAutomationRunContext } from './automation-context-migration'
 
 export { deleteAutomation } from './automation-definition-removal'

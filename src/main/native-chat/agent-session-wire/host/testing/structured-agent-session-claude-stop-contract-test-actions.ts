@@ -10,7 +10,7 @@ import {
   claudeWasSent as wrote,
   type FakeConnection
 } from '../../../../claude/structured/claude-structured-session-test-support'
-import { invokeCanUseTool } from '../../../../claude/claude-can-use-tool-test-support'
+import { invokeCanUseTool } from '../../../../claude/structured/permissions/claude-can-use-tool-test-support'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage,
@@ -57,8 +57,9 @@ export async function send(text: string, fence?: number): Promise<string> {
 }
 
 export async function dispatch(clientMessageId: string) {
-  const submission = (await fixture.host.journalSnapshot(SESSION)).submissions.find(
-    (entry) => entry.clientMessageId === clientMessageId
+  const submission = (await fixture.host.journalSnapshot(SESSION)).submissions.findLast(
+    (entry) =>
+      entry.clientMessageId === clientMessageId || entry.queuedMessageId === clientMessageId
   )
   return { state: submission?.dispatchState, reason: submission?.reason }
 }

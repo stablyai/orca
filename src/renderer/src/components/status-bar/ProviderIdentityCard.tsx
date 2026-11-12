@@ -2,7 +2,7 @@ import React from 'react'
 import { Card } from '@/components/ui/card'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
 import { formatTimeAgo, ProviderIcon, ProviderPanel } from './tooltip'
 
@@ -17,6 +17,7 @@ export function ProviderIdentityCard({
   footer?: React.ReactNode
   usagePercentageDisplay: UsagePercentageDisplay
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="w-full space-y-2 text-xs">
       <div className="flex items-center justify-between gap-2">
@@ -26,10 +27,10 @@ export function ProviderIdentityCard({
         </div>
         <span className="shrink-0 text-muted-foreground">
           {p.updatedAt
-            ? translate('auto.components.status.bar.tooltip.updatedAgo', 'Updated {{time}}', {
-                time: formatTimeAgo(p.updatedAt)
+            ? t('auto.components.status.bar.tooltip.updatedAgo', 'Updated {{time}}', {
+                time: formatTimeAgo(p.updatedAt, t)
               })
-            : translate('auto.components.status.bar.tooltip.notYetUpdated', 'Not yet updated')}
+            : t('auto.components.status.bar.tooltip.notYetUpdated', 'Not yet updated')}
         </span>
       </div>
       <Card size="sm">

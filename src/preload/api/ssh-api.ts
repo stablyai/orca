@@ -12,7 +12,7 @@ import type {
   SshTargetCreateInput,
   SshTargetUpdateInput
 } from '../../shared/ssh-types'
-import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../shared/file-access/filesystem-path-flavor'
 
 export type SshApi = {
   listTargets: () => Promise<SshTarget[]>

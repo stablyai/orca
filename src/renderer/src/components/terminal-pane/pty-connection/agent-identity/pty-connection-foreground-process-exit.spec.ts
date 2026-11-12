@@ -34,7 +34,6 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
 
   describe('connectPanePty process-exit retirement', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -65,8 +64,9 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
       deps: ReturnType<typeof createDeps>
     }> {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const tabId = `tab-${ptyId}`
       const transport = createMockTransport(ptyId)
       transport.getPtyId.mockImplementation(() => ptyId)

@@ -2,11 +2,11 @@ import { win32 as pathWin32 } from 'node:path'
 import type { AgentHookInstallStatus } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   createManagedCommandMatcher,
-  removeManagedCommands,
-  writeManagedScript,
-  type HookDefinition
-} from '../../../agent-hooks/installer-utils'
-import { readHooksJson } from '../../../agent-hooks/hooks-json-read'
+  removeManagedCommands
+} from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import { writeManagedScript } from '../../../agent-hooks/installation/scripts/managed-hook-script-write'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import { upsertHookTrustEntries, type CodexTrustEntry } from '../../trust/toml/config-toml-trust'
 import '../../trust/identity/codex-trust-identity'
 import {
@@ -17,8 +17,11 @@ import {
   writeCodexHooksJson
 } from '../definitions/codex-hook-definition'
 import { grantManagedCodexHookTrust } from '../../trust/grants/codex-hook-trust-grant'
-import type { CodexManagedTrustGrantPlan } from '../../trust/grants/codex-managed-trust-grant-plan'
-import { removeSelfComputedTrustBeforeGrant } from '../../trust/grants/codex-managed-trust-grant-plan'
+
+import {
+  type CodexManagedTrustGrantPlan,
+  removeSelfComputedTrustBeforeGrant
+} from '../../trust/grants/codex-managed-trust-grant-plan'
 import { getManagedScript } from '../definitions/codex-hook-script'
 import {
   removeStaleWslRuntimeManagedHookTrustEntries,
@@ -107,7 +110,8 @@ async function installManagedHooksIntoWslRuntimeExclusively(
       groupIndex: 0,
       handlerIndex: 0,
       command,
-      timeoutSec: hook.timeout
+      timeoutSec: hook.timeout,
+      statusMessage: hook.statusMessage
     })
   }
 

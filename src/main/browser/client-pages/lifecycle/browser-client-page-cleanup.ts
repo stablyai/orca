@@ -1,39 +1,11 @@
+import type { BrowserClientPageNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
+import type { BrowserClientPageRenderer } from '../renderer/browser-client-page-renderer-contract'
+import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import type { BrowserRouteGuestLifecycleClaim } from '../../routing/guest-authority/browser-route-page-authority'
 import type { BrowserRouteSessionHandle } from '../../routing/sessions/browser-route-session-state'
-import type { BrowserRouteProxyEndpoint } from '../../routing/sessions/browser-route-session-policy'
 import type { BrowserRouteWebContentsRegistry } from '../../routing/guest-authority/browser-route-webcontents-registry'
-import { browserClientPageIdentity } from '../execution/browser-client-page-command-admission'
+import { browserClientPageIdentity } from '../renderer/browser-client-page-renderer-contract'
 import type { BrowserClientRetainedPage } from './browser-client-page-retained-state'
-
-export type BrowserClientPageNetworkRoute = {
-  key: string
-  executionHostIdentity: string
-  /** Pre-migration identity of the same host, so its existing partition can be adopted. */
-  legacyExecutionHostIdentity: string
-  proxyEndpoint: BrowserRouteProxyEndpoint
-  release(): void | Promise<void>
-}
-
-export type BrowserClientPageRendererIdentity = Readonly<{
-  partition: string
-  browserPageId: string
-  pageHostGeneration: number
-}>
-
-export type BrowserClientPageRenderer = {
-  rendererWebContentsId: number
-  isCurrent(): boolean
-  mountPage(
-    page: BrowserClientPageRendererIdentity,
-    signal: AbortSignal
-  ): Promise<{ webContentsId: number }>
-  rekeyPage?(
-    previous: BrowserClientPageRendererIdentity,
-    next: BrowserClientPageRendererIdentity,
-    signal: AbortSignal
-  ): Promise<void>
-  retirePage(page: BrowserClientPageRendererIdentity): void | Promise<void>
-}
 
 export async function cleanupBrowserClientPage(
   routeWebContents: Pick<BrowserRouteWebContentsRegistry, 'beginGuestRetirement'>,
@@ -41,7 +13,7 @@ export async function cleanupBrowserClientPage(
     guestMayExist: boolean
     lifecycleClaim: BrowserRouteGuestLifecycleClaim | null
     renderer: BrowserClientPageRenderer | null
-    rendererPages: readonly BrowserClientPageRendererIdentity[]
+    rendererPages: readonly Readonly<BrowserClientPageRendererIdentity>[]
     routeSession: BrowserRouteSessionHandle | null
     route: BrowserClientPageNetworkRoute | null
   }
@@ -94,7 +66,7 @@ export async function cleanupRetainedBrowserClientPage(
     }): Promise<void>
     releaseUploadStaging?(): void | Promise<void>
   },
-  previousRendererPage?: BrowserClientPageRendererIdentity
+  previousRendererPage?: Readonly<BrowserClientPageRendererIdentity>
 ): Promise<void> {
   const failures: unknown[] = []
   try {

@@ -3,10 +3,10 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import { CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import { isCodexTerminalServerIsolationEnabled } from '../../../../../../shared/codex-terminal-server-isolation'
-import { whenCodexTerminalAppears } from '../codex-presence/codex-terminal-presence'
+import { whenAgentTerminalAppears } from '../agent-presence/agent-terminal-presence'
 
 // Why no hydration check: the seen flag defaults to true until the persisted value arrives.
 function isNoticeDue(state: AppState): boolean {
@@ -69,6 +69,6 @@ export function useCodexTerminalServerIsolationNotice(): void {
     if (!due || isPairedWebClientWindow()) {
       return
     }
-    return whenCodexTerminalAppears(showCodexTerminalServerIsolationNotice)
+    return whenAgentTerminalAppears('codex', showCodexTerminalServerIsolationNotice)
   }, [due])
 }

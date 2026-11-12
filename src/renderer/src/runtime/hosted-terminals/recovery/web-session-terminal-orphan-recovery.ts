@@ -2,7 +2,7 @@ import type { TerminalOrphanRecoveryOptions } from './web-session-terminal-orpha
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
 import { callRuntimeEnvironmentWithRevision } from '../../rpc/calls/runtime-rpc-environment-call'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { getSessionTabsRuntimeIdFromResponse } from '../../web-session-tabs-sync/publisher-identity-fences'
 import {
   cacheRetainedSurfaces,
@@ -31,7 +31,7 @@ import {
   terminalRowsBySurface
 } from './surfaces/web-session-terminal-orphan-recovery-surface-index'
 import { resolveTerminalOrphanInventory } from './inventory/web-session-terminal-orphan-recovery-inventory'
-import { suppressCancelledStructuredSessionTabs } from '../../structured-agent-session-tab-retirement'
+import { suppressCancelledStructuredSessionTabs } from '../../native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import { resolvePersistedTerminalSurfaces } from './panes/web-session-terminal-orphan-recovery-pane'
 import {
   clearCachedSurfaceResolutions,

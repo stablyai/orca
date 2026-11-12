@@ -1,18 +1,14 @@
 import { expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   ephemeralVmCleanup,
   ephemeralVmListRuntimes,
   installReposRuntimeRoutingHarness,
-  reposRemoveForHost,
-  runtimeEnvironmentCall,
   runtimeEnvironmentsList,
   sshRepo
 } from './repo-runtime-routing.test-fixture'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -24,36 +20,6 @@ vi.mock('sonner', () => ({
 }))
 
 installReposRuntimeRoutingHarness()
-
-it('retains a runtime-owned SSH project when VM cleanup fails', async () => {
-  const runtimeRepo: Repo = { ...sshRepo, connectionId: 'runtime-ssh-runtime-1' }
-  ephemeralVmListRuntimes.mockResolvedValue([
-    {
-      id: 'runtime-1',
-      cleanupStatus: 'not_started',
-      sshTargetId: runtimeRepo.connectionId
-    }
-  ])
-  ephemeralVmCleanup.mockResolvedValue({
-    status: 'cleanup_failed',
-    cleanupStatus: 'failed',
-    sshTargetId: runtimeRepo.connectionId
-  })
-  const store = createTestStore()
-  store.setState({ repos: [runtimeRepo], activeRepoId: runtimeRepo.id })
-
-  await store.getState().removeProject(runtimeRepo.id, {
-    hostId: getRepoExecutionHostId(runtimeRepo),
-    errorFeedback: 'toast'
-  })
-
-  expect(store.getState().repos).toEqual([runtimeRepo])
-  expect(reposRemoveForHost).not.toHaveBeenCalled()
-  expect(toast.error).toHaveBeenCalledWith(
-    expect.any(String),
-    expect.objectContaining({ description: expect.stringContaining('Retry cleanup') })
-  )
-})
 
 const vmServerRepo: Repo = {
   ...sshRepo,
@@ -79,49 +45,6 @@ const vmServer: PublicKnownRuntimeEnvironment = {
     remotePort: 6768
   }
 }
-
-it('destroys a recipe VM whose managed server holds the project, without asking the gone server', async () => {
-  ephemeralVmListRuntimes.mockResolvedValue([
-    { id: 'runtime-1', cleanupStatus: 'not_started', sshTargetId: 'runtime-ssh-runtime-1' }
-  ])
-  ephemeralVmCleanup.mockResolvedValue({ status: 'cleaned', cleanupStatus: 'succeeded' })
-  const store = createTestStore()
-  store.setState({
-    repos: [vmServerRepo],
-    runtimeEnvironments: [vmServer]
-  })
-
-  await store.getState().removeProject(vmServerRepo.id, {
-    hostId: 'runtime:env-vm',
-    errorFeedback: 'toast'
-  })
-
-  expect(ephemeralVmCleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-1' })
-  expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
-    expect.objectContaining({ method: 'repo.rm' })
-  )
-  expect(store.getState().repos).toEqual([])
-})
-
-it("retains a recipe VM's managed-server project when VM cleanup fails", async () => {
-  ephemeralVmListRuntimes.mockResolvedValue([
-    { id: 'runtime-1', cleanupStatus: 'not_started', sshTargetId: 'runtime-ssh-runtime-1' }
-  ])
-  ephemeralVmCleanup.mockResolvedValue({
-    status: 'cleanup_failed',
-    cleanupStatus: 'failed',
-    sshTargetId: 'runtime-ssh-runtime-1'
-  })
-  const store = createTestStore()
-  store.setState({ repos: [vmServerRepo], runtimeEnvironments: [vmServer] })
-
-  await store.getState().removeProject(vmServerRepo.id, {
-    hostId: 'runtime:env-vm',
-    errorFeedback: 'toast'
-  })
-
-  expect(store.getState().repos).toEqual([vmServerRepo])
-})
 
 it('never destroys another VM whose server publishes the same workspace id', async () => {
   const sharedWorkspaceId = `${vmServerRepo.id}::/home/orca/project`

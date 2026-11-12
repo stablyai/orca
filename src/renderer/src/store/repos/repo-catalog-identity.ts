@@ -6,7 +6,7 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { mergeFetchedProjectCompatibilityForHost } from '../../../../shared/project-compatibility-host-merge'
 import { projectCompatibilityFromRepos } from '../../../../shared/project-compatibility-merge'
-import { mergeByIdentity } from '../catalog-identity'
+import { mergeByIdentity } from '../../lib/catalog-reconciliation/catalog-identity'
 import { isSavedHostCatalogRow } from './saved-host-catalog-rows'
 
 export function mergeFetchedReposForHost(

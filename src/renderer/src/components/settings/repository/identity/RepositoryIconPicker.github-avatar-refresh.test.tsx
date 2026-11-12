@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../../shared/repo-types'
+import { getProjectIdentityKey } from '../../../../../../shared/project-host-setup-projection'
 import { RepositoryIconPicker } from './RepositoryIconPicker'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
@@ -15,7 +16,9 @@ vi.mock('./RepositoryIconColorSection', () => ({
 }))
 
 vi.mock('./RepositoryIconTabs', () => ({
-  RepositoryIconTabs: () => null
+  RepositoryIconTabs: ({ onUseGitHubAvatar }: { onUseGitHubAvatar: () => void }) => (
+    <button data-avatar-action onClick={onUseGitHubAvatar} />
+  )
 }))
 
 const apiMocks = {
@@ -48,7 +51,7 @@ async function flushEffects(): Promise<void> {
   })
 }
 
-describe('RepositoryIconPicker GitHub avatar refresh', () => {
+describe('RepositoryIconPicker GitHub identity', () => {
   beforeEach(() => {
     apiMocks.repoSlug.mockReset()
     apiMocks.repoUpstream.mockReset()
@@ -63,57 +66,72 @@ describe('RepositoryIconPicker GitHub avatar refresh', () => {
     document.body.replaceChildren()
   })
 
-  it('refreshes stale GitHub avatar metadata lazily when repo settings opens', async () => {
-    const updateRepo = vi.fn()
-    // Non-fork repo (upstream resolved to null) transferred stablyai -> parkerrex.
-    const repo = makeRepo({
-      upstream: null,
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/stablyai.png?size=64',
-        source: 'github',
-        label: 'stablyai/orca'
-      }
+  it.each([
+    { state: 'selected origin', upstream: { owner: 'brennanb2025', repo: 'learnsomething' } },
+    { state: 'defined nonfork', upstream: null },
+    { state: 'unavailable metadata', upstream: undefined }
+  ])('preserves saved $state when settings opens and reopens', async ({ upstream }) => {
+    const original = makeRepo({
+      upstream,
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/brennanb2025/learnsomething',
+        remoteName: 'origin',
+        remoteUrl: 'https://github.com/brennanb2025/learnsomething.git'
+      },
+      ...(upstream !== undefined
+        ? {
+            repoIcon: {
+              type: 'image',
+              src: 'https://github.com/echavemann.png?size=64',
+              source: 'github',
+              label: upstream === null ? 'brennanb2025/learnsomething' : 'echavemann/learnsomething'
+            } as const
+          }
+        : {})
     })
-    apiMocks.repoUpstream.mockResolvedValueOnce(null)
-    apiMocks.repoSlug.mockResolvedValueOnce({ owner: 'parkerrex', repo: 'orca' })
+    let saved: Repo = JSON.parse(JSON.stringify(original))
+    apiMocks.repoUpstream.mockResolvedValue(
+      upstream === undefined ? null : { owner: 'echavemann', repo: 'learnsomething' }
+    )
+    apiMocks.repoSlug.mockResolvedValue({ owner: 'brennanb2025', repo: 'learnsomething' })
+    const updateRepo = (_id: string, updates: Partial<Repo>) => {
+      saved = { ...saved, ...updates }
+    }
 
-    act(() => {
-      root.render(<RepositoryIconPicker repo={repo} updateRepo={updateRepo} />)
-    })
+    act(() => root.render(<RepositoryIconPicker repo={saved} updateRepo={updateRepo} />))
+    await flushEffects()
+    act(() => root.unmount())
+    saved = JSON.parse(JSON.stringify(saved))
+    root = createRoot(container)
+    act(() => root.render(<RepositoryIconPicker repo={saved} updateRepo={updateRepo} />))
     await flushEffects()
 
-    expect(updateRepo).toHaveBeenCalledExactlyOnceWith('repo-1', {
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/parkerrex.png?size=64',
-        source: 'github',
-        label: 'parkerrex/orca'
-      }
-    })
+    expect(saved.upstream).toEqual(upstream)
+    expect(saved.repoIcon).toEqual(original.repoIcon)
+    expect(getProjectIdentityKey(saved)).toBe('github:brennanb2025/learnsomething')
   })
 
-  it('does not clobber a fork identity when the live upstream lookup fails offline', async () => {
-    const updateRepo = vi.fn()
-    // A fork whose avatar tracks its parent org, resolved earlier while online.
-    const repo = makeRepo({
-      upstream: { owner: 'stablyai', repo: 'orca' },
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/stablyai.png?size=64',
-        source: 'github',
-        label: 'stablyai/orca'
-      }
-    })
-    // Failed upstream probes are ambiguous; never replace a known parent identity with same-name origin.
-    apiMocks.repoUpstream.mockResolvedValueOnce(null)
-    apiMocks.repoSlug.mockResolvedValueOnce({ owner: 'parkerrex', repo: 'orca' })
-
-    act(() => {
-      root.render(<RepositoryIconPicker repo={repo} updateRepo={updateRepo} />)
+  it('still applies a live GitHub avatar when the user requests it', async () => {
+    let saved = makeRepo({ upstream: null })
+    apiMocks.repoUpstream.mockResolvedValue({ owner: 'echavemann', repo: 'learnsomething' })
+    apiMocks.repoSlug.mockResolvedValue({ owner: 'brennanb2025', repo: 'learnsomething' })
+    const updateRepo = (_id: string, updates: Partial<Repo>) => {
+      saved = { ...saved, ...updates }
+    }
+    act(() => root.render(<RepositoryIconPicker repo={saved} updateRepo={updateRepo} />))
+    await flushEffects()
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-avatar-action]')?.click()
     })
     await flushEffects()
 
-    expect(updateRepo).not.toHaveBeenCalled()
+    expect(saved.upstream).toEqual({ owner: 'echavemann', repo: 'learnsomething' })
+    expect(saved.repoIcon).toEqual({
+      type: 'image',
+      src: 'https://github.com/echavemann.png?size=64',
+      source: 'github',
+      label: 'echavemann/learnsomething'
+    })
+    expect(getProjectIdentityKey(saved)).toBe('github:echavemann/learnsomething')
   })
 })

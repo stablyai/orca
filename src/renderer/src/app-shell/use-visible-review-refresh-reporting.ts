@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import type { AppState } from '../store/types'
-import { rightSidebarShowsPullRequestData } from '../lib/right-sidebar-visibility'
+import { rightSidebarShowsPullRequestData } from '../components/right-sidebar/visibility/right-sidebar-visibility'
 import { findWorktreeById, buildPRRefreshCandidate } from '../store/github/refresh/worktree-refresh'
 import { getHostedReviewCacheKey } from '../store/slices/hosted-review/hosted-review-cache-identity'
 import { getVisibleHostedReviewWorkspaces } from '../store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets'
@@ -14,7 +14,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 function visibleReviewWorkspacesForState(state: AppState) {
   const ids = new Set(state.visibleReviewCardWorktreeIds ?? [])

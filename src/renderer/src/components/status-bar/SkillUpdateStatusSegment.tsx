@@ -1,9 +1,9 @@
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { requestSkillFreshnessUpdateDialog } from '../skills/skill-freshness-update-dialog'
-import { useLatestSkillUpdateRun } from '../skills/skill-update-run-store'
-import { updatedSkillsLabel } from '../skills/skill-plan-op-copy'
+import { useTranslate } from '@/i18n/use-translate'
+import { requestSkillFreshnessUpdateDialog } from '../skills/freshness/skill-freshness-update-dialog'
+import { useLatestSkillUpdateRun } from '../skills/freshness/skill-update-run-store'
+import { updatedSkillsLabel } from '../skills/freshness/skill-plan-op-copy'
 
 // Keep reporting after the update dialog closes; statusBarItems must not hide the remaining progress surface.
 export function SkillUpdateStatusSegment({
@@ -11,6 +11,7 @@ export function SkillUpdateStatusSegment({
 }: {
   iconOnly: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const run = useLatestSkillUpdateRun()
 
   if (run.state === 'idle') {
@@ -21,23 +22,23 @@ export function SkillUpdateStatusSegment({
     if (run.state === 'running') {
       return {
         icon: <Loader2 className="size-3 animate-spin text-muted-foreground" />,
-        label: translate(
+        label: t(
           'auto.components.status.bar.SkillUpdateStatusSegment.runningLabel',
           'Updating skills'
         ),
         tooltip:
           run.names.length === 1
-            ? translate(
+            ? t(
                 'auto.components.status.bar.SkillUpdateStatusSegment.runningOne',
                 'Updating {{value0}}…',
                 { value0: run.names[0] }
               )
-            : translate(
+            : t(
                 'auto.components.status.bar.SkillUpdateStatusSegment.runningSkills',
                 'Updating {{count}} skills…',
                 { count: run.names.length, defaultValue_one: 'Updating {{count}} skill…' }
               ),
-        ariaLabel: translate(
+        ariaLabel: t(
           'auto.components.status.bar.SkillUpdateStatusSegment.runningAria',
           'Skills updating. Click to open details.'
         )
@@ -46,12 +47,12 @@ export function SkillUpdateStatusSegment({
     if (run.state === 'done' && run.summary.ok && !run.needsAttention) {
       return {
         icon: <CheckCircle2 className="size-3 text-emerald-500" />,
-        label: translate(
+        label: t(
           'auto.components.status.bar.SkillUpdateStatusSegment.successLabel',
           'Skills updated'
         ),
-        tooltip: updatedSkillsLabel(run.summary),
-        ariaLabel: translate(
+        tooltip: updatedSkillsLabel(run.summary, t),
+        ariaLabel: t(
           'auto.components.status.bar.SkillUpdateStatusSegment.successAria',
           'Skills updated. Click to open details.'
         )
@@ -61,16 +62,16 @@ export function SkillUpdateStatusSegment({
       icon: <AlertCircle className="size-3 text-yellow-500" />,
       label:
         run.state === 'done' && run.summary.ok && run.needsAttention
-          ? translate('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
-          : translate(
+          ? t('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
+          : t(
               'auto.components.status.bar.SkillUpdateStatusSegment.attentionLabel',
               'Skills need attention'
             ),
-      tooltip: translate(
+      tooltip: t(
         'auto.components.status.bar.SkillUpdateStatusSegment.attentionTooltip',
         'Some skill updates were skipped — click to see details'
       ),
-      ariaLabel: translate(
+      ariaLabel: t(
         'auto.components.status.bar.SkillUpdateStatusSegment.attentionAria',
         'Some skill updates were skipped. Click to open details.'
       )

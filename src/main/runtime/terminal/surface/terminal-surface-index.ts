@@ -9,14 +9,14 @@ import type {
   RuntimeSyncedLeaf,
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph
-} from '../../../../shared/runtime-types'
-import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-load-types'
+} from '../../../../shared/runtime-session-contracts'
+import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import type {
   LayoutTab,
   WorkspaceLayout
 } from '../../../../shared/workspace-layout/workspace-layout-model'
-import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
-import { bindingOf } from '../../pane-live-facts'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import { bindingOf } from './pane-live-facts'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
@@ -24,7 +24,7 @@ import {
   projectSessionTabs,
   type ProjectedSessionTabs
 } from '../../../../shared/workspace-layout/old-client/old-client-session-tabs-projection'
-import { projectRuntimeSurfaces } from '../../runtime-leaf-record-projection'
+import { projectRuntimeSurfaces } from '../records/runtime-leaf-record-projection'
 import type { WorkspaceLayoutReads } from './workspace-layout-stream'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { loadChatTabLayout } from '../../agent-session/agent-session-tab-layout'

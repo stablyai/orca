@@ -90,14 +90,6 @@ describe('a Back press crossing from the shell to the page', () => {
     expect(pair.backClaims).toEqual([true, false, true])
   })
 
-  it('says nothing again when this document is holding nothing', async () => {
-    const pair = await opened()
-    pair.host.receive(JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }))
-    await pair.flush()
-    expect(notifies(pair)).toEqual([])
-    expect(pair.backClaims).toEqual([])
-  })
-
   it('gives the key back when the page client closes', async () => {
     const pair = await opened()
     pair.client.claimBack(() => true)

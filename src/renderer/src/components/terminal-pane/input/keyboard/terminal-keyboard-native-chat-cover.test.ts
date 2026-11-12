@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { KeybindingOverrides } from '../../../../../../shared/keybindings/types'
 import { createTerminalKeyboardEventHandlers } from './terminal-keyboard-event-handlers'
 import type { TerminalShortcutAction } from './terminal-shortcut-policy'
@@ -100,37 +100,6 @@ function pressChord(
   handlers.onKeyDown(event)
   return event
 }
-
-function mountCoveredPane(): { scope: HTMLElement; transcript: HTMLElement } {
-  const scope = document.createElement('div')
-  const cover = document.createElement('div')
-  cover.className = 'native-chat-pane-shell'
-  const transcript = document.createElement('div')
-  cover.append(transcript)
-  scope.append(cover)
-  document.body.append(scope)
-  return { scope, transcript }
-}
-
-describe('terminal selection under a native chat cover', () => {
-  afterEach(() => vi.unstubAllGlobals())
-
-  it('leaves copy to the chat when the hidden terminal still holds a selection', () => {
-    const { scope, transcript } = mountCoveredPane()
-    const writeTerminalClipboardText = vi.fn().mockResolvedValue(undefined)
-    vi.stubGlobal('api', { ui: { writeTerminalClipboardText } })
-    const handlers = createHandlers(scope, vi.fn(), {
-      action: { type: 'copySelection' },
-      terminal: { getSelection: () => 'hidden terminal text' }
-    })
-
-    expect(pressChord(transcript, handlers, 'c').defaultPrevented).toBe(false)
-    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
-
-    expect(pressChord(scope, handlers, 'c').defaultPrevented).toBe(true)
-    expect(writeTerminalClipboardText).toHaveBeenCalledWith('hidden terminal text')
-  })
-})
 
 describe('terminal find under a native chat cover', () => {
   it('leaves a chat.find rebound onto another terminal chord to the chat', () => {

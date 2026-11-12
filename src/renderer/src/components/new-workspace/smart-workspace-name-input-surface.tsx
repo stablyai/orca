@@ -4,18 +4,20 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { WorkspaceEmojiPickerButton } from '@/components/workspace-emoji/WorkspaceEmojiPickerButton'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { isBlockingJiraUrlIntent } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import { isBlockingLinearUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
-import { replaceCompletedWorkspaceEmojiShortcode } from '@/lib/workspace-emoji-shortcodes'
-import { cn } from '@/lib/utils'
+import { replaceCompletedWorkspaceEmojiShortcode } from '@/lib/workspace/display/workspace-emoji-shortcodes'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { SelectionIcon } from './smart-workspace-source-row-content'
 import type { SmartWorkspaceNameFieldController } from './use-smart-workspace-name-field-controller'
 
 export function renderSmartWorkspaceNameInput(
-  controller: SmartWorkspaceNameFieldController
+  controller: SmartWorkspaceNameFieldController,
+  t: Translate = translate
 ): React.JSX.Element {
   const {
     selectedSource,
@@ -128,7 +130,7 @@ export function renderSmartWorkspaceNameInput(
                 tabIndex={-1}
                 onClick={openSelectedSource}
                 className="size-6 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.new.workspace.SmartWorkspaceNameField.2c69728c2a',
                   'Open link in browser'
                 )}
@@ -137,7 +139,7 @@ export function renderSmartWorkspaceNameInput(
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={6}>
-              {translate(
+              {t(
                 'auto.components.new.workspace.SmartWorkspaceNameField.370a1faf67',
                 'Open in browser'
               )}
@@ -153,7 +155,7 @@ export function renderSmartWorkspaceNameInput(
               tabIndex={-1}
               onClick={onClearSelectedSource}
               className="size-6 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.new.workspace.SmartWorkspaceNameField.7199ff19c7',
                 'Clear selected source'
               )}
@@ -162,7 +164,7 @@ export function renderSmartWorkspaceNameInput(
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={6}>
-            {translate('auto.components.new.workspace.SmartWorkspaceNameField.0c9e668e3a', 'Clear')}
+            {t('auto.components.new.workspace.SmartWorkspaceNameField.0c9e668e3a', 'Clear')}
           </TooltipContent>
         </Tooltip>
       </div>

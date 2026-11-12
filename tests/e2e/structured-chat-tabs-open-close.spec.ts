@@ -177,7 +177,8 @@ test.describe('structured chat tabs', () => {
         .poll(() => readStubRequests(claudeStub.launchLog, pid))
         .toEqual([
           { type: 'control_request', subtype: 'list_models' },
-          { type: 'control_request', subtype: 'get_settings' }
+          { type: 'control_request', subtype: 'get_settings' },
+          { type: 'control_request', subtype: 'initialize' }
         ])
     }
 

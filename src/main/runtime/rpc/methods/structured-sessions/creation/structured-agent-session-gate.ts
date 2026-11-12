@@ -8,7 +8,7 @@ import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import type { RpcContext } from '../../../core'
-import { rpcCallerOperationKey } from '../../../rpc-caller-identity'
+import { rpcCallerOperationKey } from '../../../callers/rpc-caller-identity'
 import { structuredAgentSessionHostRefusal } from '../../../../agent-session/structured-agent-session-host-refusal'
 import {
   createSupportFollowsHostSetting,
@@ -131,6 +131,25 @@ export async function requireRenameStructuredHost(
 /** Persist/share proven paired device id, never clientId bearer credentials (for example, who answered a prompt). */
 export function structuredCallerFor(ctx: RpcContext): StructuredAgentSessionCaller {
   return {
+    clientKind: ctx.clientKind,
+    telemetryOwnerKey:
+      ctx.caller?.kind === 'paired-device'
+        ? ctx.clientKind === 'runtime'
+          ? ctx.caller.deviceId
+          : ctx.clientKind === 'mobile'
+            ? ctx.pairedDeviceParentId
+            : undefined
+        : undefined,
+    userClient:
+      ctx.caller?.kind === 'desktop'
+        ? 'desktop'
+        : ctx.caller?.kind === 'paired-device'
+          ? ctx.clientKind === 'mobile'
+            ? 'mobile'
+            : ctx.clientKind === 'runtime'
+              ? 'desktop'
+              : undefined
+          : undefined,
     callerKey:
       ctx.caller?.kind === 'paired-device'
         ? rpcCallerOperationKey(ctx.caller)

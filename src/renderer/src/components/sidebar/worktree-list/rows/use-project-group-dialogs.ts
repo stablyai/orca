@@ -15,7 +15,7 @@ import { refreshFolderProjectGroup } from './project-group-folder-refresh'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }

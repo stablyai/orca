@@ -1,3 +1,6 @@
+import { useAppStore } from '@/store'
+import { resolveStatusBarUsageTemplate } from '../../../../shared/status-bar-usage-format'
+import { buildUsageFormatValues, renderUsageFormatTemplate } from './usage-format-template'
 import { AlertTriangle } from 'lucide-react'
 import React from 'react'
 import type {
@@ -26,6 +29,7 @@ import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, useIntlLocale, type Translate } from '@/i18n/use-translate'
 import { getStatusBarUsageSections } from './status-bar-usage-sections'
 import { GroupedPoolUsage } from './usage-grouped-pools'
 import { formatStatusBarSectionLabel, isGroupedUsagePool } from './usage-pool-label'
@@ -67,10 +71,11 @@ function WindowLabel({
   showLabel?: boolean
   labelFirst?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <span className="tabular-nums">
       {showLabel && labelFirst ? `${label} ` : ''}
-      {formatBareUsagePercentage(w.usedPercent, display)}
+      {formatBareUsagePercentage(w.usedPercent, display, t)}
       {showLabel && !labelFirst ? ` ${label}` : ''}
     </span>
   )
@@ -95,7 +100,8 @@ function OwnerNotSetUpLabel({
 }: {
   placeholder: OwnerNotSetUpPlaceholder
 }): React.JSX.Element {
-  const { before, host, after } = getOwnerNotSetUpLabelParts(placeholder)
+  const t = useTranslate()
+  const { before, host, after } = getOwnerNotSetUpLabelParts(placeholder, t)
   return (
     <span className="text-[11px] font-medium">
       {before}
@@ -132,6 +138,7 @@ export function UsageOverflowChip({
   providerCount: number
   display: UsagePercentageDisplay
 }): React.JSX.Element {
+  const t = useTranslate()
   const tones = hidden.map(getUsageTone)
   const tone = tones.includes('urgent')
     ? 'urgent'
@@ -140,10 +147,10 @@ export function UsageOverflowChip({
       : 'normal'
   const names = hidden
     .map((p) => {
-      const tightest = getTightestUsageSection(p)
+      const tightest = getTightestUsageSection(p, t)
       const name = getProviderDisplayName(p.provider)
       return tightest
-        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display)}`
+        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display, t)}`
         : name
     })
     .join(', ')
@@ -153,13 +160,9 @@ export function UsageOverflowChip({
       data-usage-collapsed={hidden.length === 0}
       data-tone={tone}
       aria-hidden={hidden.length === 0}
-      title={translate(
-        'auto.components.status.bar.StatusBar.hiddenUsageProviders',
-        'Also: {{value0}}',
-        {
-          value0: names
-        }
-      )}
+      title={t('auto.components.status.bar.StatusBar.hiddenUsageProviders', 'Also: {{value0}}', {
+        value0: names
+      })}
       className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[tone=urgent]:border-destructive/40 data-[tone=urgent]:text-destructive data-[tone=warning]:border-status-warning-border data-[tone=warning]:text-status-warning data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
     >
       {/* Why: count changes must not invalidate density measurements and restart probing. */}
@@ -215,22 +218,47 @@ function isExtraUsageActive(p: ProviderRateLimits): boolean {
   )
 }
 
-function formatCompactExtraUsage(balance: ProviderRateLimits['extraUsage']): string {
+function formatCompactExtraUsage(
+  balance: ProviderRateLimits['extraUsage'],
+  t: Translate = translate
+): string {
   if (!balance) {
     return ''
   }
   if (balance.unit === 'credits') {
     return balance.unlimited
-      ? translate('auto.components.status.bar.StatusBar.4025a6f62f', 'Unlimited')
-      : translate('auto.components.status.bar.StatusBar.a95969101f', '{{value0}} credits', {
+      ? t('auto.components.status.bar.StatusBar.4025a6f62f', 'Unlimited')
+      : t('auto.components.status.bar.StatusBar.a95969101f', '{{value0}} credits', {
           value0: formatCreditCount(balance.balance)
         })
   }
   return balance.balance === null
     ? ''
-    : translate('auto.components.status.bar.StatusBar.4fba7dc1e7', '{{value0}} bal', {
+    : t('auto.components.status.bar.StatusBar.4fba7dc1e7', '{{value0}} bal', {
         value0: formatCurrencyAmount(balance.balance, balance.currencyCode)
       })
+}
+
+function CustomUsageText({
+  template,
+  limits,
+  display,
+  now
+}: {
+  template: string
+  limits: ProviderRateLimits
+  display: UsagePercentageDisplay
+  now: number
+}): React.JSX.Element {
+  const locale = useIntlLocale()
+  return (
+    <span className="whitespace-pre tabular-nums">
+      {renderUsageFormatTemplate(
+        template,
+        buildUsageFormatValues(limits, { display, now, locale })
+      )}
+    </span>
+  )
 }
 
 export function ProviderSegment({
@@ -244,25 +272,30 @@ export function ProviderSegment({
   display: UsagePercentageDisplay
   mode?: StatusBarUsageMode
 }): React.JSX.Element {
+  const t = useTranslate()
   const provider = p?.provider ?? 'claude'
-  const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
+  const usageFormat = useAppStore((state) => state.statusBarUsageFormat)
+  const template = resolveStatusBarUsageTemplate(usageFormat, provider)
+  const statusLabel = p ? getProviderUsageStatusLabel(p, t) : ''
   // Why: not a problem; Claude updates its own login the next time it runs.
   const calm = p ? isClaudeUsageWaitingForClaude(p) : false
   const calmClock = useNow(60_000, calm && p?.status === 'error')
   const tightest = p
     ? mode === 'compact'
-      ? getUsageHeadlineSection(p)
-      : getTightestUsageSection(p)
+      ? getUsageHeadlineSection(p, t)
+      : getTightestUsageSection(p, t)
     : null
-  const sections = getStatusBarUsageSections(p, mode)
+  const sections = getStatusBarUsageSections(p, mode, t)
   const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)
   const showLabels = mode === 'verbose' || !compact
   const now = useResetCountdownClock(
-    showLabels
-      ? groupedBuckets
-          .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_URGENT_PERCENT)
-          .map((bucket) => bucket.resetsAt)
-      : []
+    template && p
+      ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
+      : showLabels
+        ? groupedBuckets
+            .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_URGENT_PERCENT)
+            .map((bucket) => bucket.resetsAt)
+        : []
   )
 
   // Why static: unfocused windows never poll, so a pending chip's pulse would redraw the compositor indefinitely.
@@ -287,7 +320,7 @@ export function ProviderSegment({
     return (
       <span
         className="inline-flex items-center gap-1 text-muted-foreground"
-        title={getProviderUsageErrorMessage(p)}
+        title={getProviderUsageErrorMessage(p, t)}
       >
         <ProviderIcon provider={provider} />
         {/* Why "--" when compact: an icon alone would read as a healthy chip. */}
@@ -316,10 +349,12 @@ export function ProviderSegment({
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {mode === 'verbose' && tightest && !compact ? (
+      {!template && mode === 'verbose' && tightest && !compact ? (
         <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
       ) : null}
-      {showGroupedPools ? (
+      {template ? (
+        <CustomUsageText template={template} limits={p} display={display} now={now} />
+      ) : showGroupedPools ? (
         <GroupedPoolUsage
           visibleBuckets={groupedBuckets}
           allBuckets={p.buckets ?? []}
@@ -332,7 +367,7 @@ export function ProviderSegment({
             {index > 0 ? <span className="text-muted-foreground">·</span> : null}
             <WindowLabel
               w={section.window}
-              label={formatStatusBarSectionLabel(p, section, now)}
+              label={formatStatusBarSectionLabel(p, section, now, t)}
               display={display}
               showLabel={showLabels}
               labelFirst={section.labelFirst}
@@ -340,10 +375,10 @@ export function ProviderSegment({
           </React.Fragment>
         ))
       )}
-      {showBalance && p.extraUsage ? (
+      {!template && showBalance && p.extraUsage ? (
         <>
           <span className="text-muted-foreground">·</span>
-          <span className="tabular-nums">{formatCompactExtraUsage(p.extraUsage)}</span>
+          <span className="tabular-nums">{formatCompactExtraUsage(p.extraUsage, t)}</span>
         </>
       ) : null}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}

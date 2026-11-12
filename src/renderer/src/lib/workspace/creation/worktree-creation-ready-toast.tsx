@@ -1,20 +1,30 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import { getIndexedRepoMap } from '@/store/worktree-repo-index'
-import { workspaceNavigationToastAction } from '@/lib/workspace-navigation-toast-action'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { workspaceNavigationToastAction } from '@/lib/workspace/activation/workspace-navigation-toast-action'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import { resolveIndexedWorktreeOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { withRepoHostOwnership } from '@/store/slices/worktrees/listing/worktree-host-ownership'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** Announces a create that finished after the user left its creation surface, instead of pulling them to it. */
 export function showWorktreeCreationReadyToast(
+  ...args: Parameters<typeof createWorktreeCreationReadyToast>
+): void {
+  try {
+    createWorktreeCreationReadyToast(...args)
+  } catch (error) {
+    console.error('worktree create: ready toast failed', args[0].id, error)
+  }
+}
+
+function createWorktreeCreationReadyToast(
   worktree: Pick<Worktree, 'id' | 'repoId' | 'displayName' | 'branch' | 'path' | 'hostId'>,
   creationHostId?: ExecutionHostId
 ): void {

@@ -1,5 +1,5 @@
 import { lstat } from 'node:fs/promises'
-import { gitEnvWithoutYesNoPrompt } from '../../command-runner/git-no-prompt-env'
+import { gitEnvWithoutYesNoPrompt } from '../../command-runner/git-environment/git-no-prompt-env'
 import { pruneGitWorktrees } from './worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
@@ -10,9 +10,10 @@ import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
-import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
-import type { RemoveWorktreeOptions } from '../worktree-operation-options'
+import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
+
 import {
+  type RemoveWorktreeOptions,
   getErrorCode,
   gitExecOptions,
   normalizeLocalBranchRef
@@ -25,7 +26,7 @@ import { runUnderWorktreeDeleteLimit } from './worktree-delete-limit'
 import { removeWindowsCheckout, usesNativeWindowsRemoval } from './windows-worktree-removal'
 import { listWorktreesStrict } from '../catalog/worktree-listing'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
-import { runKeyedSerializedOperation } from '../../../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
 
 const branchCleanupQueueByRepo = new Map<string, Promise<void>>()
 

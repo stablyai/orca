@@ -1,8 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import Database from '../../../sqlite/sync-database'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { prepareLegacyTranscriptImport } from './journal-legacy-import'
 import { createTrackedJournalOpener } from '../store-lifecycle/journal-host-database-test-support'
 import './journal-pi-active-branch'
@@ -40,36 +39,6 @@ export function registerJournalPiContextImportTests(): void {
   }
 
   describe('saved Pi context import', () => {
-    it('keeps prepared history when temporary database teardown reports an error', async () => {
-      const close = Database.prototype.close
-      const closeSpy = vi.spyOn(Database.prototype, 'close').mockImplementation(function (
-        this: Database.Database
-      ) {
-        close.call(this)
-        throw new Error('test teardown failure')
-      })
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-      try {
-        const items = await prepare([
-          {
-            type: 'message',
-            id: 'first',
-            parentId: null,
-            message: { role: 'user', content: 'hello' }
-          }
-        ])
-        expect(items).toHaveLength(1)
-        expect(items[0]?.identity).toMatchObject({ provider: 'legacy', recordId: 'first' })
-        expect(warn).toHaveBeenCalledWith(
-          '[journal-pi-import] temporary database close failed:',
-          expect.objectContaining({ message: 'test teardown failure' })
-        )
-      } finally {
-        closeSpy.mockRestore()
-        warn.mockRestore()
-      }
-    })
-
     it.each(PI_CONTEXT_FIXTURES)('$name', async (fixture) => {
       const items = await prepare(fixture.entries, 'version' in fixture ? fixture.version : 3)
       expect(

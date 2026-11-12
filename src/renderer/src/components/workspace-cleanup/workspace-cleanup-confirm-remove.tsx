@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
-  shouldForceWorkspaceCleanupRemoval,
+  needsWorkspaceCleanupRemovalApproval,
   type WorkspaceCleanupCandidate
 } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupRemovalProgress } from './workspace-cleanup-background-removal'
@@ -63,9 +64,10 @@ export function WorkspaceCleanupConfirmRemove({
   onCancel: () => void
   onConfirm: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null)
   const count = candidates.length
-  const riskCount = candidates.filter(shouldForceWorkspaceCleanupRemoval).length
+  const riskCount = candidates.filter(needsWorkspaceCleanupRemovalApproval).length
   const deleting = progress !== null
   const progressValue = progress
     ? Math.min(100, Math.max(0, (progress.processedCount / progress.totalCount) * 100))
@@ -77,12 +79,12 @@ export function WorkspaceCleanupConfirmRemove({
           <div className="min-w-0">
             <DialogTitle className="text-base">
               {deleting
-                ? translate(
+                ? t(
                     'components.workspace.cleanup.confirm.deletingTitle',
                     'Deleting {{count}} workspaces',
                     { count, defaultValue_one: 'Deleting {{count}} workspace' }
                   )
-                : translate(
+                : t(
                     'components.workspace.cleanup.confirm.deleteTitle',
                     'Delete {{count}} workspaces?',
                     { count, defaultValue_one: 'Delete {{count}} workspace?' }
@@ -90,18 +92,18 @@ export function WorkspaceCleanupConfirmRemove({
             </DialogTitle>
             <DialogDescription className="mt-1.5 text-xs leading-5">
               {deleting
-                ? translate(
+                ? t(
                     'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1d3503357d',
                     'You can close this and come back while deletion continues.'
                   )
-                : translate(
+                : t(
                     'auto.components.workspace.cleanup.WorkspaceCleanupDialog.38ca0b1400',
                     "This permanently deletes their local files. You can't undo this."
                   )}
             </DialogDescription>
             {riskCount > 0 && !deleting ? (
               <p className="mt-1 text-xs text-destructive">
-                {translate(
+                {t(
                   'components.workspace.cleanup.browse.forceDeleteRisk',
                   '{{count}} workspaces currently show risk and may need a force delete',
                   {
@@ -116,7 +118,7 @@ export function WorkspaceCleanupConfirmRemove({
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.workspace.cleanup.WorkspaceCleanupDialog.74f6c16279',
               'Back'
             )}
@@ -132,7 +134,7 @@ export function WorkspaceCleanupConfirmRemove({
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="size-3.5 shrink-0 animate-spin" />
               <span className="font-medium text-foreground">
-                {formatWorkspaceCleanupRemovalProgress(progress)}
+                {formatWorkspaceCleanupRemovalProgress(progress, t)}
               </span>
             </div>
             <Progress value={progressValue} className="mt-2 h-1.5" />
@@ -168,19 +170,13 @@ export function WorkspaceCleanupConfirmRemove({
       <DialogFooter className="border-t border-border px-5 py-3">
         <Button variant="outline" onClick={onCancel}>
           {deleting
-            ? translate(
-                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.191f0bc98e',
-                'Close'
-              )
-            : translate(
-                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.b6bae1eed1',
-                'Cancel'
-              )}
+            ? t('auto.components.workspace.cleanup.WorkspaceCleanupDialog.191f0bc98e', 'Close')
+            : t('auto.components.workspace.cleanup.WorkspaceCleanupDialog.b6bae1eed1', 'Cancel')}
         </Button>
         {!deleting ? (
           <Button variant="destructive" onClick={onConfirm} disabled={count === 0}>
             <Trash2 className="size-4" />
-            {translate(
+            {t(
               'auto.components.workspace.cleanup.WorkspaceCleanupDialog.deleteButtonCount',
               'Delete {{value0}}',
               { value0: count }
@@ -203,42 +199,39 @@ function ConfirmRemoveRow({
   reviewInfo: WorkspaceCleanupReviewInfo
   last: boolean
 }): React.JSX.Element {
-  const dirtyLabel = getDirtyGitLabel(candidate)
+  const t = useTranslate()
+  const dirtyLabel = getDirtyGitLabel(candidate, t)
   const branchDiffersFromName = candidate.branch !== candidate.displayName
-  const contextPillLabels = formatContextDetailLabels(candidate)
-  const showGitMetadataChip = shouldShowGitMetadataChip(candidate)
-  const factStatuses = getCandidateFactStatuses(candidate)
-  const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
+  const contextPillLabels = formatContextDetailLabels(candidate, t)
+  const showGitMetadataChip = shouldShowGitMetadataChip(candidate, t)
+  const factStatuses = getCandidateFactStatuses(candidate, t)
+  const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate, t)
   return (
     <div
       role="group"
-      aria-label={getWorkspaceCleanupCandidateAccessibleName(candidate)}
+      aria-label={getWorkspaceCleanupCandidateAccessibleName(candidate, t)}
       className={cn('border-b border-border/60 px-5 py-2.5', last && 'border-b-0')}
     >
       <div className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
         <WorkspaceCleanupMetadataText
           icon={Folder}
-          label={translate(
-            'components.workspace.cleanup.browse.projectNamed',
-            'Project: {{value0}}',
-            {
-              value0: candidate.repoName
-            }
-          )}
+          label={t('components.workspace.cleanup.browse.projectNamed', 'Project: {{value0}}', {
+            value0: candidate.repoName
+          })}
           value={candidate.repoName}
           className="min-w-0 shrink-[4]"
         />
         <WorkspaceCleanupMetadataText
           icon={Monitor}
-          label={translate('components.workspace.cleanup.host.label', 'Host: {{value0}}', {
+          label={t('components.workspace.cleanup.host.label', 'Host: {{value0}}', {
             value0: hostLabel
           })}
           value={hostLabel}
           className="min-w-0 shrink-[4]"
         />
         <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
-          {formatWorkspaceCleanupRelativeTime(candidate.lastActivityAt, now)}
+          {formatWorkspaceCleanupRelativeTime(candidate.lastActivityAt, now, t)}
         </span>
       </div>
       {factStatuses.length > 0 ||
@@ -272,8 +265,11 @@ function ConfirmRemoveRow({
   )
 }
 
-function formatWorkspaceCleanupRemovalProgress(progress: WorkspaceCleanupRemovalProgress): string {
-  const deletedText = translate(
+function formatWorkspaceCleanupRemovalProgress(
+  progress: WorkspaceCleanupRemovalProgress,
+  t: Translate = translate
+): string {
+  const deletedText = t(
     'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4c2990886e',
     '{{value0}}/{{value1}} deleted',
     { value0: progress.removedCount, value1: progress.totalCount }
@@ -281,7 +277,7 @@ function formatWorkspaceCleanupRemovalProgress(progress: WorkspaceCleanupRemoval
   if (progress.failedCount === 0) {
     return deletedText
   }
-  return translate(
+  return t(
     'auto.components.workspace.cleanup.WorkspaceCleanupDialog.86ba852118',
     '{{value0}}, {{value1}} failed',
     { value0: deletedText, value1: progress.failedCount }

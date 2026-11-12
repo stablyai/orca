@@ -10,13 +10,13 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../shared/workspace-session/workspace-session-state-types'
-import { SESSION_FIELD_OWNERS } from '../../shared/workspace-layout/workspace-layout-beside'
-import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
-import type { LoadedWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-load-types'
-import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
+import { SESSION_FIELD_OWNERS } from '../../shared/workspace-layout/persistence/workspace-layout-beside'
+import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/persistence/workspace-layout-load'
+import type { LoadedWorkspaceLayout } from '../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import { nameBasedLoadContext } from '../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import type { WorkspaceLayoutModel } from '../../shared/workspace-layout/workspace-layout-model'
-import { patchStoredSession } from '../../shared/workspace-layout/workspace-layout-record-patch'
-import { saveWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-save'
+import { patchStoredSession } from '../../shared/workspace-layout/persistence/workspace-layout-record-patch'
+import { saveWorkspaceLayout } from '../../shared/workspace-layout/persistence/workspace-layout-save'
 import type { ShutdownReconnectFacts } from '../runtime/terminal/recovery/shutdown-reconnect-facts'
 
 const FIELD_OWNERS: Readonly<Record<string, string>> = SESSION_FIELD_OWNERS

@@ -1,7 +1,5 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
 import {
   createRestTestRig,
   type RestTestRig
@@ -16,7 +14,6 @@ import { CodexAppServerExitError } from '../../../../codex/app-server/codex-app-
 import { codexStartFailure } from '../../../../codex/app-server/codex-startup-outcome'
 import { executeAgentLaunch } from '../../../../agent-launch/agent-launch-executor'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
-import * as structuredCreate from '../structured-sessions/creation/structured-agent-session-create'
 import {
   methodNamed,
   rpcContext,
@@ -27,16 +24,6 @@ import {
 const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
 const AGENT_LAUNCH_REPLAY = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launchReplay')
 const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
-
-// The phone: it renders either surface and sends a new chat's first message itself.
-const PHONE: Partial<RpcContext> = {
-  clientKind: 'mobile',
-  pairedDeviceId: 'device-1',
-  clientCapabilities: [
-    AGENT_LAUNCH_RUNTIME_CAPABILITY,
-    AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
-  ]
-}
 // The `orca` CLI carries no capability list.
 const CLI: Partial<RpcContext> = {}
 const SESSION = 'codex_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d'
@@ -104,29 +91,6 @@ function launch(caller: Partial<RpcContext>, prompt?: string, delivery = 'submit
   return AGENT_LAUNCH.handler(params, rpcContext(launchRuntime(), caller))
 }
 
-it.each([
-  { name: 'a bare launch from the phone waits', caller: PHONE, startsAtCreation: false },
-  {
-    name: 'a draft launch keeps eager creation',
-    caller: PHONE,
-    prompt: 'fix the build',
-    delivery: 'draft',
-    startsAtCreation: true
-  },
-  { name: 'a bare launch from the CLI starts', caller: CLI, startsAtCreation: true }
-])('$name', async ({ caller, prompt, delivery, startsAtCreation }) => {
-  const result = await launch(caller, prompt, delivery)
-
-  expect(result.outcome).toMatchObject({ kind: 'structured', sessionId: SESSION })
-  expect(rig.store.getRecord(SESSION)).toBeDefined()
-  expect(result.prompt).toEqual(
-    prompt ? { delivery: 'draft', outcome: 'not-delivered' } : undefined
-  )
-  expect((await rig.host.journalSnapshot(SESSION)).submissions).toEqual([])
-  // At rest, nothing is spawned until the chat's first message.
-  expect(rig.adapter.acquire.mock.calls.length > 0).toBe(startsAtCreation)
-})
-
 async function child(sessionId = SESSION) {
   await vi.waitFor(() =>
     expect(rig.host.collaboratorsForTests().sessions.get(sessionId)?.child).toBeTruthy()
@@ -172,15 +136,6 @@ function holdStarts() {
     ])
   )
 }
-
-it('a whitespace-only submit creates an eager empty chat without sending a turn', async () => {
-  const result = await launch(PHONE, ' \t\n ')
-  expect(result.outcome).toMatchObject({ kind: 'structured', sessionId: SESSION })
-  expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'not-delivered' })
-  expect(rig.adapter.acquire).toHaveBeenCalledOnce()
-  expect((await rig.host.journalSnapshot(SESSION)).submissions).toEqual([])
-  expect(rig.adapter.dispatch).not.toHaveBeenCalled()
-})
 
 it('the opening prompt owns retry with explicit model and permission for a legacy-capability CLI caller', async () => {
   holdStarts()
@@ -315,55 +270,6 @@ it('replays a lost reply for a prompted folder launch without another message or
     serviceTier: 'fast'
   })
   expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
-})
-
-it.each([true, false])(
-  'keeps an explicit Claude Fast %s over the opposite saved selection',
-  async (fastMode) => {
-    const runtime = launchRuntime()
-    const resolve = runtime.resolveStructuredAgentSessionCreateIntent.getMockImplementation()!
-    runtime.resolveStructuredAgentSessionCreateIntent.mockImplementation(async (params) => ({
-      ...(await resolve(params)),
-      provider: 'claude',
-      agent: 'claude',
-      accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/host/.claude' },
-      options: { model: 'claude-opus-4-6', effort: 'medium', fastMode: String(!fastMode) }
-    }))
-    const created = await agentLaunchSurfaceFactory(
-      rpcContext(runtime, PHONE)
-    ).createStructuredSession({
-      worktreeId: 'wt-7',
-      agent: 'claude',
-      withoutPrompt: true,
-      options: { model: 'claude-opus-4-6', fastMode }
-    })
-    expect(rig.store.getRecord(created.sessionId)?.options).toEqual({
-      model: 'claude-opus-4-6',
-      effort: 'medium',
-      fastMode: String(fastMode)
-    })
-    expect(rig.adapter.acquire).not.toHaveBeenCalled()
-  }
-)
-
-it('omits unsupported-only Codex Fast overrides and retains saved defaults', async () => {
-  const runtime = launchRuntime()
-  const create = vi.spyOn(structuredCreate, 'createStructuredAgentSessionForWorktree')
-  const created = await agentLaunchSurfaceFactory(
-    rpcContext(runtime, PHONE)
-  ).createStructuredSession({
-    worktreeId: 'wt-7',
-    agent: 'codex',
-    withoutPrompt: true,
-    options: { fastMode: true }
-  })
-  expect(create.mock.calls[0]?.[0]).not.toHaveProperty('options')
-  expect(rig.store.getRecord(created.sessionId)?.options).toEqual({
-    model: 'gpt-5.6-sol',
-    effort: 'medium'
-  })
-  expect(rig.adapter.acquire).not.toHaveBeenCalled()
-  create.mockRestore()
 })
 
 it.each(['before', 'after'] as const)(

@@ -26,7 +26,18 @@ function withoutNamedDefault(catalog: ListedHostModelCatalog): ListedHostModelCa
   }
 }
 
-/** Undefined when no answer fits this launch. Workspace config can replace defaults, so another workspace’s answer is valid only for named models, no-default lists or host-proven workspace-independent defaults. */
+/** A default no workspace config could replace stays; any other can't be promised to a new launch. */
+export function withoutUnprovenNewLaunchDefault(
+  catalog: AgentSessionModelCatalogResult
+): AgentSessionModelCatalogResult {
+  return catalog.origin === 'unknown' ||
+    catalog.listingNamesConfiguredModel === false ||
+    catalog.defaultHoldsInEveryWorkspace === true
+    ? catalog
+    : withoutNamedDefault(catalog)
+}
+
+/** Undefined when no answer fits this launch. Workspace config can replace defaults, so another workspace’s default is named only for no-default lists or host-proven workspace-independent defaults. */
 export function selectHostModelCatalogSnapshot(
   snapshot: HostModelCatalogSnapshot | undefined,
   launch: HostModelCatalogLaunch
@@ -49,19 +60,34 @@ export function selectHostModelCatalogSnapshot(
   ) {
     return listed
   }
-  return launch.seedsModel ? withoutNamedDefault(listed) : undefined
+  // Another workspace may run a different default, so name none; the list itself still lets a new chat pick.
+  return withoutNamedDefault(listed)
 }
 
 /** The snapshot after a host answer for `worktree` (null for a session-less read); undefined means keep none.
- *  An unknown or empty answer proves absence and retires what it answered for. */
+ *  An unknown or empty answer proves absence and retires what it answered for. One whose listing is
+ *  still running proves nothing yet: it never replaces or retires a held list, but may fill an empty scope. */
 export function withHostModelCatalogAnswer(
   snapshot: HostModelCatalogSnapshot | undefined,
   worktree: string | null,
   catalog: AgentSessionModelCatalogResult
 ): HostModelCatalogSnapshot | undefined {
-  if (catalog.origin === 'unknown' || catalog.models.length === 0) {
+  const listed = catalog.origin !== 'unknown' && catalog.models.length > 0
+  if (catalog.listingInProgress) {
+    const held =
+      worktree === null
+        ? !!snapshot && (snapshot.account !== null || snapshot.byWorktree.size > 0)
+        : snapshot?.byWorktree.has(worktree) === true
+    if (held || !listed) {
+      return snapshot
+    }
+  }
+  if (!listed) {
     if (worktree === null || !snapshot) {
       return undefined
+    }
+    if (!snapshot.byWorktree.has(worktree)) {
+      return snapshot
     }
     const retired = snapshot.byWorktree.get(worktree)
     const byWorktree = new Map(snapshot.byWorktree)

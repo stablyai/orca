@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import {
   getClipboardEventText,
@@ -65,6 +65,7 @@ export function useRemoteBrowserPageKeyboard({
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
 } {
+  const t = useTranslate()
   const lastCopyWriteRef = useRef<CopyWrite | null>(null)
 
   /** Returns the chord to forward when the page script cannot reach the focused frame. */
@@ -89,7 +90,7 @@ export function useRemoteBrowserPageKeyboard({
     if (tooLarge) {
       setPaneNotice({
         kind: 'consequence',
-        text: translate(
+        text: t(
           'browser.remote.selectionTooLargeToCopy',
           'The selection is too large to copy from a page streamed from the remote host.'
         )

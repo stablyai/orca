@@ -5,7 +5,7 @@ import type { FolderWorkspacePathStatus } from '../../../../shared/folder-worksp
 import './folder-path-status'
 import '../../../../shared/project-groups'
 import { makeFolderWorkspace } from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 
 const mocks = vi.hoisted(() => ({ getPathStatus: vi.fn(), callRuntimeRpc: vi.fn() }))
 

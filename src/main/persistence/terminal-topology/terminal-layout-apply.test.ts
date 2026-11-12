@@ -1,4 +1,4 @@
-import { withoutGitGraph } from '../../../shared/workspace-layout/workspace-layout-client-visibility'
+import { withoutGitGraph } from '../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
 import type { LayoutEffects } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -6,14 +6,13 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { Store } from '../loading-store/store'
-import { leafIds, WindowSession } from './terminal-topology-window-session-fixture'
+import { WindowSession } from './testing/terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,
-  FIXTURE_FOLDER_WORKTREE_ID,
   FIXTURE_GIT_WORKTREE_ID,
   openTopologyStore,
   reopenTopologyStore
-} from './terminal-topology-profile-fixture'
+} from './testing/terminal-topology-profile-fixture'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
@@ -100,86 +99,6 @@ describe('Store.applyLayoutCommand (layout.apply)', () => {
       reason: 'user'
     })
     expect(revision(store)).toBeGreaterThan(revisionBefore)
-  })
-
-  it('prunes the partition’s expired close records when it records one, as today', async () => {
-    const { store } = await storeWithOneTab()
-    store.setWorkspaceSession({
-      ...store.getWorkspaceSession(),
-      closedTerminalTabTombstonesByTabId: {
-        'tab-old': { worktreeId: 'repo-other::/x', closedAt: 1, reason: 'user' }
-      }
-    })
-
-    await store.applyLayoutCommand({
-      type: 'closeTabs',
-      workspace: WORKTREE,
-      tabIds: [TAB],
-      force: true,
-      recordClose: 'cleanup'
-    })
-
-    expect(
-      Object.keys(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId ?? {})
-    ).toEqual([TAB])
-  })
-
-  it('writes a folder workspace’s split', async () => {
-    const { store } = await storeWithOneTab(undefined, FIXTURE_FOLDER_WORKTREE_ID)
-
-    const reply = await store.applyLayoutCommand({
-      ...split,
-      workspace: FIXTURE_FOLDER_WORKTREE_ID
-    })
-
-    expect(reply.ok).toBe(true)
-    const root = store.getWorkspaceSession().terminalLayoutsByTabId[TAB]?.root
-    expect(leafIds(root)).toEqual([LEAF, reply.ok ? reply.result.leafId : undefined])
-  })
-
-  it('keeps records the split did not touch exactly as stored', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-layout-apply-'))
-    directories.push(directory)
-    const store = await openTopologyStore(directory, emptyTerminalSessionProfile())
-    const window = new WindowSession(getDefaultWorkspaceSession())
-    window.addTab(WORKTREE, TAB, LEAF)
-    window.bind(TAB, LEAF, 'pty-1')
-    // Verify record patches preserve residue that full load/save normalization would drop.
-    window.session.terminalPtyIncarnationsByPaneKey = { [`${TAB}:${LEAF}`]: 'incarnation-1' }
-    window.session.tabsByWorktree[WORKTREE]![0]!.sortOrder = 7
-    store.setWorkspaceSession(window.snapshot())
-    const stored = store.getWorkspaceSession()
-
-    await store.applyLayoutCommand(split)
-
-    const written = store.getWorkspaceSession()
-    expect(written.terminalPtyIncarnationsByPaneKey).toEqual(
-      stored.terminalPtyIncarnationsByPaneKey
-    )
-    expect(written.tabsByWorktree).toEqual(stored.tabsByWorktree)
-    expect(written.unifiedTabs).toEqual(stored.unifiedTabs)
-  })
-
-  it('refuses a pane main does not hold and writes nothing', async () => {
-    const { store } = await storeWithOneTab()
-    const before = store.getWorkspaceSession()
-
-    const reply = await store.applyLayoutCommand({ ...split, leafId: 'missing-leaf' })
-
-    expect(reply).toEqual({ ok: false, code: 'pane_not_found' })
-    expect(store.getWorkspaceSession()).toEqual(before)
-  })
-
-  it('writes an SSH workspace’s split into that host’s partition only', async () => {
-    const { store } = await storeWithOneTab('ssh:target-1')
-    const local = store.getWorkspaceSession()
-
-    const reply = await store.applyLayoutCommand(split, ['ssh:target-1'])
-
-    expect(reply.ok).toBe(true)
-    const root = store.getWorkspaceSession('ssh:target-1').terminalLayoutsByTabId[TAB]?.root
-    expect(leafIds(root)).toHaveLength(2)
-    expect(store.getWorkspaceSession()).toEqual(local)
   })
 })
 

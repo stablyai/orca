@@ -6,10 +6,13 @@ import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { retainValidFilterRepoIds } from './repo-filter-selection'
 import { readRuntimeWorktreeVisibilitySnapshot } from '../slices/settings/worktree-visibility-owner-settings'
 import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
-import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
+import { filterSetupScriptPromptDismissalsToValidRepos } from '@/runtime/repo-hooks/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'
-import { claimHostCatalogFence, isHostCatalogFenceCurrent } from '../host-catalog-fencing'
+import { isRemovedRuntimeHostId } from '../host-catalog/removed-runtime-host-rows'
+import {
+  claimHostCatalogFence,
+  isHostCatalogFenceCurrent
+} from '../host-catalog/host-catalog-fence'
 import type { RepoSlice } from './repo-state'
 import {
   fetchRepoCatalogForTarget,

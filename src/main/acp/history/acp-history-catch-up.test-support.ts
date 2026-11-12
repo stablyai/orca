@@ -12,7 +12,7 @@ import {
   NAMESPACE,
   SESSION
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { openAcpFixtureRig } from '../acp-timeline-fixture.test-support'
+import { openAcpFixtureRig } from '../timeline/testing/acp-timeline-fixture.test-support'
 import { catchUpAcpHistory } from './acp-history-catch-up'
 
 export async function setup(dialect: AcpDialect, identity: AcpHistoryTurnIdentity) {

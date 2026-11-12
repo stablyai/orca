@@ -3,7 +3,7 @@ import { getDefaultUIState } from '../../../../../shared/constants'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import type { AppState } from '../../types'
 import { createUISlice } from './create-ui-slice'
-import { createWorktreeNavHistorySlice } from '../worktree-nav-history'
+import { createWorktreeNavHistorySlice } from './workspace-navigation-history'
 import { createSettingsSearchState } from '../settings/settings-search-state'
 
 export function createUIStore(): StoreApi<AppState> {

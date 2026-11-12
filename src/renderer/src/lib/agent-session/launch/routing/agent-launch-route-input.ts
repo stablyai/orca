@@ -1,45 +1,49 @@
-import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight-params'
+import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
+import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
+import { authorityKey } from '../../../../../../shared/host-authority'
+import {
+  resolveOwner,
+  runtimeEnvironmentIdForWorkspaceOwner
+} from '@/lib/workspace/ownership/resolve-owner'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   type ExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
-import type { AppState } from '@/store/types'
-import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
-import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
-import type { Worktree } from '../../../../../../shared/worktree/types'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../../../../shared/shell/launch/terminal-startup-cwd'
-import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
-import type { AgentLaunchRoutingInput } from '@/lib/agent-session/launch/routing/agent-launch-routing'
-// Import the resolver directly: the connection-context facade reaches the store root and creates a launch-graph cycle.
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState,
   getRepoConnectionIdFromState
-} from '@/lib/connection-owner-resolution'
+} from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext
-} from '@/lib/local-preflight-context'
-import type { NativeChatLaunchPromptDelivery } from '@/lib/agent-session/launch/prompt/native-chat-launch-prompt-delivery'
+} from '@/runtime/hosts/preflight/local-preflight-context'
 import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
+import { resolveStructuredAgentSessionOwner } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { pairedHostClientCapabilities } from '@/runtime/rpc/targets/paired-host-client-capabilities'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
-import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
-import { authorityKey } from '../../../../../../shared/host-authority'
-import { resolveOwner, runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight-params'
+import type { AppState } from '@/store/types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentLaunchRoutingInput } from '@/lib/agent-session/launch/routing/agent-launch-routing'
+import type { NativeChatLaunchPromptDelivery } from '@/lib/agent-session/launch/prompt/native-chat-launch-prompt-delivery'
+
+// Import the resolver directly: the connection-context facade reaches the store root and creates a launch-graph cycle.
 
 export type ProspectiveWorkspaceKind = NonNullable<AgentLaunchRoutingInput['workspaceKind']>
 
@@ -133,14 +137,7 @@ export type AgentLaunchRouteArgs = {
 }
 
 export { workspaceKindForWorktreeId }
-export const worktreeLaunchWorkspace = (
-  worktreeId: string,
-  hostId?: ExecutionHostId
-): ProspectiveWorkspace => ({
-  kind: workspaceKindForWorktreeId(worktreeId),
-  worktreeId,
-  ...(hostId ? { hostId } : {})
-})
+export { worktreeLaunchWorkspace } from './worktree-launch-workspace'
 
 function resolveExecutionHostId(store: AgentLaunchRouteStore, workspace: ProspectiveWorkspace) {
   if (workspace.worktreeId) {
@@ -310,7 +307,10 @@ export function buildAgentLaunchRouteInput(
           workspacePath: workspace.hostId
             ? selectedWorkspace?.path
             : workspace.worktreeId
-              ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
+              ? findFirstIndexedWorktree<Worktree>(
+                  selectWorktreesByRepo(store) ?? {},
+                  workspace.worktreeId
+                )?.path
               : undefined,
           resolveFolderWorkspacePath: (folderWorkspaceId) =>
             workspace.hostId

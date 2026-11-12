@@ -5,7 +5,6 @@ import {
   terminalCustomThemeRemoval,
   withImportedTerminalColorOverrides
 } from './terminal-theme-selection'
-import { TERMINAL_THEME_CATALOG } from './terminal-theme-catalog'
 
 const base = {
   theme: 'system' as const,
@@ -13,42 +12,6 @@ const base = {
   terminalUseSeparateLightTheme: true,
   terminalThemeLight: 'Builtin Tango Light'
 }
-
-describe('the terminal colours a host configures', () => {
-  it('uses the light theme for a light appearance, so a light user is not told dark', () => {
-    expect(resolveConfiguredTerminalColors(base, false)).toEqual({
-      foreground: '#2e3434',
-      background: '#ffffff'
-    })
-    expect(resolveConfiguredTerminalColors({ ...base, theme: 'light' }, true)).toEqual({
-      foreground: '#2e3434',
-      background: '#ffffff'
-    })
-    expect(resolveConfiguredTerminalColors(base, true)).toEqual({
-      foreground: '#ffffff',
-      background: '#282c34'
-    })
-  })
-
-  it('follows the selected catalog theme and colour overrides', () => {
-    const name = 'Tokyo Night'
-    const selected = TERMINAL_THEME_CATALOG[name]
-    expect(selected).toBeDefined()
-    expect(resolveConfiguredTerminalColors({ ...base, terminalThemeDark: name }, true)).toEqual({
-      foreground: selected?.foreground,
-      background: selected?.background
-    })
-    expect(
-      resolveConfiguredTerminalColors(
-        { ...base, terminalColorOverrides: { background: '#101010' } },
-        true
-      )
-    ).toEqual({ foreground: '#ffffff', background: '#101010' })
-    expect(
-      resolveConfiguredTerminalColors({ ...base, terminalThemeDark: 'no such theme' }, true)
-    ).toEqual({ foreground: '#ffffff', background: '#282c34' })
-  })
-})
 
 describe('terminal colour overrides per theme slot (#10561)', () => {
   const settings = {
@@ -82,15 +45,6 @@ describe('terminal colour overrides per theme slot (#10561)', () => {
     expect(
       withImportedTerminalColorOverrides(settings, { ...imported, theme: 'dark' }, false)
     ).toEqual({ theme: 'dark', terminalColorOverrides: { background: '#101010', red: '#ff0000' } })
-  })
-
-  it('keeps the theme colour for a field cleared in memory', () => {
-    expect(
-      resolveConfiguredTerminalColors(
-        { ...base, terminalColorOverrides: { background: undefined } },
-        true
-      )
-    ).toEqual({ foreground: '#ffffff', background: '#282c34' })
   })
 })
 

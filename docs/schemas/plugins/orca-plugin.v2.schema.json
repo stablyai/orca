@@ -208,9 +208,9 @@
         },
         "events": {
           "default": [],
-          "description": "Events delivered to the plugin worker. At most 4.",
+          "description": "Events delivered to the plugin worker. At most 5.",
           "x-orca-since": "1.4.160",
-          "maxItems": 4,
+          "maxItems": 5,
           "type": "array",
           "items": {
             "$ref": "#/$defs/EventContribution"
@@ -736,7 +736,8 @@
             "workspace.created",
             "workspace.removed",
             "agent.status.changed",
-            "workspace.changed"
+            "workspace.changed",
+            "editor.typography.changed"
           ],
           "description": "Event delivered to the plugin worker.",
           "x-orca-since": "1.4.160",
@@ -744,7 +745,8 @@
             "workspace.created": "1.4.245",
             "workspace.removed": "1.4.245",
             "agent.status.changed": "1.4.160",
-            "workspace.changed": "1.4.246"
+            "workspace.changed": "1.4.246",
+            "editor.typography.changed": "1.4.256"
           }
         }
       },
@@ -752,7 +754,7 @@
         "on"
       ],
       "additionalProperties": false,
-      "description": "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events."
+      "description": "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events. Editor events need no capability."
     },
     "HookContribution": {
       "type": "object",
@@ -1579,7 +1581,11 @@
             "storage:own",
             "secrets:own",
             "settings:own",
-            "appearance:write"
+            "appearance:write",
+            "workspace:create",
+            "automation:read",
+            "automation:write",
+            "history:read"
           ],
           "description": "Capability granted on user consent.",
           "x-orca-since": "1.4.160",
@@ -1594,7 +1600,11 @@
             "storage:own": "1.4.245",
             "secrets:own": "1.4.245",
             "settings:own": "1.4.160",
-            "appearance:write": "1.4.249"
+            "appearance:write": "1.4.249",
+            "workspace:create": "1.4.258",
+            "automation:read": "1.4.258",
+            "automation:write": "1.4.258",
+            "history:read": "1.4.258"
           }
         }
       },

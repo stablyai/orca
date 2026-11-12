@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'
-import { pairedServerMirrors } from '@/runtime/paired-server-workspace'
+import { pairedServerMirrors } from '@/runtime/workspace-layout/frames/paired-server-workspace'
 import {
   isTabPaneTreeHeld,
   onTabPaneTreeRedraw,
   requestTabPaneTreeRedraw
-} from '@/runtime/layout-owner-pane-intents'
+} from '@/runtime/workspace-layout/intents/layout-owner-pane-tree-holds'
 import { isHostAuthoritativeLayout } from '../reconciliation/terminal-live-layout-reconciliation'
 import { reconcileMountedPanesToLayout } from '../reconciliation/terminal-pane-frame-reconciliation'
 import type { TerminalPaneCloseController } from '../close/use-terminal-pane-close-actions'

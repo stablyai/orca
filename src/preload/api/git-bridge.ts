@@ -1,3 +1,7 @@
+import type {
+  GitCommitAction,
+  GitCommitActionResult
+} from '../../shared/git/commands/git-commit-action'
 import { ipcRenderer } from 'electron'
 import type {
   GitForkSyncExpectedUpstream,
@@ -6,6 +10,7 @@ import type {
 import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git/status/git-status-types'
 import type { ConflictResolution } from '../../shared/source-control/listing/source-control-entry-actions'
 import type { GitPushTarget } from '../../shared/worktree/types'
+import type { WorktreeAtRiskLocalFiles } from '../../shared/worktree/at-risk-local-files'
 import type { GitStageWorktreeScope } from '../../shared/git/paths/git-stage-worktree-scope'
 import type {
   GitHistoryItemRef,
@@ -46,6 +51,10 @@ export const gitApi = {
     paths: string[]
     connectionId?: string
   }): Promise<string[]> => ipcRenderer.invoke('git:checkIgnored', args),
+  atRiskLocalFiles: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<WorktreeAtRiskLocalFiles> => ipcRenderer.invoke('git:atRiskLocalFiles', args),
   findHugeFoldersToIgnore: (args: { worktreePath: string }): Promise<string[]> =>
     ipcRenderer.invoke('git:findHugeFoldersToIgnore', args),
   appendGitignore: (args: { worktreePath: string; folderName: string }): Promise<boolean> =>
@@ -146,6 +155,32 @@ export const gitApi = {
     message: string
     connectionId?: string
   }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
+  createBranch: (args: {
+    worktreePath: string
+    name: string
+    startPoint: string
+    connectionId?: string
+  }): Promise<GitCommitActionResult> => ipcRenderer.invoke('git:createBranch', args),
+  cherryPick: (args: {
+    worktreePath: string
+    commitId: string
+    connectionId?: string
+  }): Promise<GitCommitActionResult> => ipcRenderer.invoke('git:cherryPick', args),
+  revert: (args: {
+    worktreePath: string
+    commitId: string
+    connectionId?: string
+  }): Promise<GitCommitActionResult> => ipcRenderer.invoke('git:revert', args),
+  sequencerAbort: (args: {
+    worktreePath: string
+    operation: GitCommitAction
+    connectionId?: string
+  }): Promise<void> => ipcRenderer.invoke('git:sequencerAbort', args),
+  sequencerContinue: (args: {
+    worktreePath: string
+    operation: GitCommitAction
+    connectionId?: string
+  }): Promise<GitCommitActionResult | void> => ipcRenderer.invoke('git:sequencerContinue', args),
   completeMerge: (args: {
     worktreePath: string
     connectionId?: string

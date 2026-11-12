@@ -1,8 +1,8 @@
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
-} from '../../node-bounded-json-stringify'
-import { writeSecureFile } from '../../secure-file'
+} from '../../json-stream/node-bounded-json-stringify'
+import { writeSecureFile } from '../../secure-storage/secure-file'
 import {
   RuntimeEnvironmentStoreSchema,
   type KnownRuntimeEnvironment,

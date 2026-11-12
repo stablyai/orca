@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
-import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { resetHostStructuredAgentsForTests } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import type * as TerminalOperation from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
-import type * as WebEnvironment from '@/runtime/web-runtime-session-environment'
+import type * as WebEnvironment from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import type * as RuntimeRpcClient from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { AgentLaunchChoices } from '../../src/shared/agent-launch/choices/agent-launch-choices'
 import type { FolderWorkspace } from '../../src/shared/folder-workspaces/folder-workspace-types'
@@ -107,7 +107,7 @@ vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.hostRpc
 }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
+vi.mock('@/store/index', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('sonner', () => ({
   toast: { message: vi.fn(), error: mocks.toastError, success: mocks.toastSuccess }
 }))
@@ -115,11 +115,10 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.reveal
 }))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.fn(() => []) }))
-vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn() }))
-vi.mock('@/lib/telemetry', () => ({
-  track: vi.fn(),
-  tuiAgentToAgentKind: mockLaunchAgentKind
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
+  pasteDraftWhenAgentReady: vi.fn()
 }))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
 vi.mock('../../src/shared/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),
@@ -140,16 +139,19 @@ vi.mock(
     }
   }
 )
-vi.mock('@/runtime/web-runtime-session-snapshot', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
 }))
 vi.mock('@/runtime/hosted-terminals/placement/web-runtime-terminal-placement-settlement', () => ({
   settleWebRuntimeTerminalPlacement: vi.fn(async () => {})
 }))
-vi.mock('@/runtime/web-runtime-session-environment', async (importOriginal) => ({
-  ...(await importOriginal<typeof WebEnvironment>()),
-  isWebRuntimeSessionActive: vi.fn(() => true)
-}))
+vi.mock(
+  '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WebEnvironment>()),
+    isWebRuntimeSessionActive: vi.fn(() => true)
+  })
+)
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()

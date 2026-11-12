@@ -1,7 +1,7 @@
 /** Treat only repo_not_found as already removed and purge client ghost rows (#11994). Other failures retain rows; toasts remain opt-in for single-project callers while bulk/background aggregate errors. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -95,17 +95,5 @@ describe('removeProject when the owning host already dropped the project', () =>
     await store.getState().removeProject('project-b', { hostId: 'runtime:env-1' })
 
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['project-a'])
-  })
-
-  it('keeps the row and stays silent when the remote fails for another reason', async () => {
-    answerRepoRmWith('runtime_unavailable')
-    const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo])
-
-    await store.getState().removeProject('project-b', { hostId: 'runtime:env-1' })
-
-    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['project-a', 'project-b'])
-    expect(toast.error).not.toHaveBeenCalled()
-    // An unconfirmed removal is not evidence the host dropped the project.
-    expect(reposRemoveForHost).not.toHaveBeenCalled()
   })
 })

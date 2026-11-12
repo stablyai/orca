@@ -3,7 +3,7 @@ import {
   nativeChatLaunchAgentForLeaf,
   nativeChatLeafOwnsTabWideEvidence,
   resolveNativeChatLeafRoute
-} from '../../native-chat/native-chat-leaf-routing'
+} from '../../native-chat/pane/routing/native-chat-leaf-routing'
 import { canContinueAgentSessionInNewSession } from '../session-continuation/terminal-agent-session-continuation'
 import type { TerminalPaneMobileController } from '../controller/use-terminal-pane-mobile-actions'
 import { useShallow } from 'zustand/react/shallow'

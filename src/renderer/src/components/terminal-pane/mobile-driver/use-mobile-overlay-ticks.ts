@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
-import { getFitOverrideForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
+import {
+  getFitOverrideForPty,
+  onOverrideChange
+} from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { safeFit } from '@/lib/pane-manager/pane-fit'
+import { safeFit } from '@/lib/pane-manager/terminal-fit/pane-fit'
 import {
   applyDesktopFitFallbackAfterReplay,
   fitAndRefreshDesktopPane

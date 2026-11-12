@@ -7,21 +7,21 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import '@/store/slices/worktree-helpers'
+
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import {
   findFolderWorkspaceOwner,
   getExplicitRuntimeEnvironmentIdForFolderWorkspace,
   type FolderWorkspaceRuntimeOwnerState
-} from '../../folder-workspace-runtime-owner'
+} from '../../workspace/ownership/folder-workspace-runtime-owner'
 import { findIndexedRepoOwner } from '../../workspace/ownership/repo-owner-index'
 import {
   findIndexedWorktreeOwner,
   findIndexedProjectGroupOwner,
   hasIndexedDetectedWorktree
 } from '../../workspace/ownership/worktree-runtime-owner-index'
-import { resolveExplicitWorktreeOperationRouteResult } from '../../worktree-operation-catalog-route'
+import { resolveExplicitWorktreeOperationRouteResult } from '../../workspace/ownership/worktree-operation-catalog-route'
 import type { WorktreeRuntimeOwnerState } from '../../workspace/ownership/worktree-runtime-owner-state'
 
 /** Session locators are machine-scoped, while merged records/current-catalog routes can disagree with capture ownership. Block only known host disagreement; unknown legacy evidence must not strand resumes. Preserve four unknowns: undefined means unstamped (#9030); null means local or paired runtime and only excludes SSH; runtime:* relabels host/nested-SSH workspaces and proves no machine; null current owner means unhydrated catalog, never authoritative local. Wrong-host resume can fork irrecoverably, so preserve records and avoid guessing from routing defaults. This decision differs from workspace-session-terminal-buffers, where refusing unknown capture would lose the only scrollback copy. */

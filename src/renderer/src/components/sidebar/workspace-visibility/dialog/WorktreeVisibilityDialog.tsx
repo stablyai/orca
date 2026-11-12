@@ -8,7 +8,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   importNewExternalWorktreeInboxPaths,
   type NewExternalWorktreesInboxActionState
@@ -56,9 +56,10 @@ import {
 } from './worktree-visibility-use-global'
 import { createWorktreeVisibilitySourceMutation } from '../sources/worktree-visibility-source-mutation'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
-import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
+  const t = useTranslate()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
@@ -343,7 +344,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
         <DialogHeader>
           <div className="flex items-center gap-1.5">
             <DialogTitle>
-              {translate(
+              {t(
                 'auto.components.sidebar.WorktreeVisibilityDialog.83a5ba8dd1',
                 'Non-Orca worktrees'
               )}

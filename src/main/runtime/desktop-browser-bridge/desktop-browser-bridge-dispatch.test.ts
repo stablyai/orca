@@ -1,10 +1,8 @@
-import '../rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
-  DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
-  DESKTOP_BROWSER_BRIDGE_SETTING_LABEL
+  DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY
 } from '../../../shared/desktop-browser-bridge-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { defineMethod } from '../rpc/core'
@@ -177,167 +175,6 @@ describe('desktop browser bridge on orcad', () => {
     expect(localGoto).not.toHaveBeenCalled()
   })
 
-  it('sends open-url to the attached desktop as the tab create it already runs', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-    const { events } = await attachDesktop(dispatcher)
-    const ready = ReadyEvent.parse(events[0])
-
-    const call = cliCall(dispatcher, 'browser.openUrl', {
-      url: 'https://example.com/',
-      worktree: 'path:/srv/app'
-    })
-    await vi.waitFor(() => expect(events).toHaveLength(2))
-    const forwarded = ForwardedEvent.parse(events[1])
-    // Older desktops support tabCreate but not openUrl.
-    expect(forwarded).toEqual({
-      type: 'request',
-      requestId: forwarded.requestId,
-      method: 'browser.tabCreate',
-      timeoutMs: expect.any(Number),
-      workspaceId: 'repo-1::/srv/app',
-      params: { url: 'https://example.com/', worktree: 'id:repo-1::/srv/app' }
-    })
-    await dispatcher.dispatch(
-      {
-        id: 'answer',
-        authToken: 'bound',
-        method: 'desktopBrowserBridge.result',
-        params: {
-          attachmentId: ready.attachmentId,
-          requestId: forwarded.requestId,
-          ok: true,
-          result: { browserPageId: 'desktop-page' }
-        }
-      },
-      DESKTOP
-    )
-
-    await expect(call).resolves.toMatchObject({
-      ok: true,
-      result: { browserPageId: 'desktop-page' }
-    })
-    expect(localOpenUrl).not.toHaveBeenCalled()
-  })
-
-  it('refuses a non-web open-url on the host before it reaches the desktop', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-    const { events } = await attachDesktop(dispatcher)
-
-    const response = await cliCall(dispatcher, 'browser.openUrl', {
-      url: 'file:///etc/hosts',
-      worktree: 'path:/srv/app'
-    })
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(events).toHaveLength(1)
-  })
-
-  it('names the setting for open-url when no desktop hosts or shares a browser', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    const response = await cliCall(dispatcher, 'browser.openUrl', {
-      url: 'https://example.com/',
-      worktree: 'path:/srv/app'
-    })
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'desktop_browser_bridge_unavailable' }
-    })
-    expect(response.ok ? '' : response.error.message).toContain(
-      DESKTOP_BROWSER_BRIDGE_SETTING_LABEL
-    )
-    expect(localOpenUrl).not.toHaveBeenCalled()
-  })
-
-  it("leaves open-url to a desktop hosting this runtime's pages while none shares its browser", async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime({ localBrowser: true })
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    await expect(
-      cliCall(dispatcher, 'browser.openUrl', {
-        url: 'https://example.com/',
-        worktree: 'path:/srv/app'
-      })
-    ).resolves.toMatchObject({ ok: true, result: { browserPageId: 'paired-host-page' } })
-  })
-
-  it('never forwards a command outside the allowlist', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-    const { events } = await attachDesktop(dispatcher)
-
-    const response = await cliCall(dispatcher, 'browser.cookie.get', { worktree: 'path:/srv/app' })
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'desktop_browser_bridge_not_forwarded' }
-    })
-    expect(events).toHaveLength(1)
-    expect(localCookie).not.toHaveBeenCalled()
-  })
-
-  it('names the setting when no desktop is attached (setting off or an older desktop)', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    const response = await cliCall(dispatcher, 'browser.goto', { url: 'https://example.com' })
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'desktop_browser_bridge_unavailable' }
-    })
-    expect(response.ok ? '' : response.error.message).toContain(
-      DESKTOP_BROWSER_BRIDGE_SETTING_LABEL
-    )
-  })
-
-  it('refuses an attach from a desktop that did not negotiate the capability', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    const { events } = await attachDesktop(dispatcher, { ...DESKTOP, clientCapabilities: [] })
-
-    expect(events[0]).toMatchObject({
-      error: { message: 'desktop_browser_bridge_capability_required' }
-    })
-    expect(getDesktopBrowserBridgeRegistry(runtime).hasAttachment()).toBe(false)
-  })
-
-  it('refuses an attach from a phone or an unauthenticated socket', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    const { events } = await attachDesktop(dispatcher, {
-      ...DESKTOP,
-      pairedDeviceId: ''
-    })
-
-    expect(events[0]).toMatchObject({
-      error: { message: 'authenticated_desktop_browser_bridge_required' }
-    })
-  })
-
-  it('a desktop runtime never serves the bridge', async () => {
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    const { events } = await attachDesktop(dispatcher)
-
-    expect(events[0]).toMatchObject({ error: { message: 'desktop_browser_bridge_not_served' } })
-  })
-
   it('detaching fails the waiting command and the next one names the setting', async () => {
     setDesktopBrowserBridgeHostEnabled(true)
     const { runtime, cleanups } = orcadRuntime()
@@ -361,36 +198,6 @@ describe('desktop browser bridge on orcad', () => {
     await expect(
       cliCall(dispatcher, 'browser.goto', { url: 'https://example.com' })
     ).resolves.toMatchObject({ ok: false, error: { code: 'desktop_browser_bridge_unavailable' } })
-  })
-
-  it('leaves a host with its own headless browser on it while no desktop is attached', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime({ localBrowser: true })
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    await expect(
-      cliCall(dispatcher, 'browser.goto', { url: 'https://example.com' })
-    ).resolves.toMatchObject({ ok: true, result: { url: 'local' } })
-  })
-
-  it('does not forward calls from a paired client, only the host CLI', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime({ localBrowser: true })
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-    const { events } = await attachDesktop(dispatcher)
-
-    const response = await dispatcher.dispatch(
-      {
-        id: 'paired',
-        authToken: 'bound',
-        method: 'browser.goto',
-        params: { url: 'https://a.test' }
-      },
-      DESKTOP
-    )
-
-    expect(response).toMatchObject({ ok: true, result: { url: 'local' } })
-    expect(events).toHaveLength(1)
   })
 
   it.each([

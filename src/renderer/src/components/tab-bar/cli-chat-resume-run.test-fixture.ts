@@ -5,7 +5,7 @@ import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-sessi
 import { stopStructuredLaunchSlotTracking } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
-import { resetWebSessionFocusIntentForTests } from '@/runtime/web-session-focus-intent'
+import { resetWebSessionFocusIntentForTests } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { StructuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
 import type { CliChatResumeSource } from './cli-chat-resume-source'

@@ -1,5 +1,6 @@
 import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
+import { speechModelNotReadyError } from '../../../shared/speech-model-retirement'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel } from '../../speech/model-catalog'
 import {
@@ -10,16 +11,23 @@ import {
   MobileDictationChunkOrder,
   type MobileDictationChunk
 } from './mobile-dictation-chunk-order'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { hostDictationTerms } from './runtime-dictation-terms'
+import { dictationTextSettingsFor } from '../../../shared/dictation-cleanup'
+import type { DictationTerm } from '../../../shared/dictation-dictionary'
+import { cleanUpDictatedText } from '../../speech/dictation-cleanup-service'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
 import {
   DictationTranscript,
   type DictationTranscriptSnapshot
-} from './mobile-dictation-transcript'
+} from '../../../shared/dictation-transcript'
 
 type MobileDictationSession = {
   id: string
   owner: string
   clientId: string
+  /** The dictionary it was transcribed with, which cleanup spells by too. */
+  terms: DictationTerm[]
   state: 'starting' | 'active' | 'closing'
   transcript: DictationTranscript
   errors: string[]
@@ -27,6 +35,8 @@ type MobileDictationSession = {
   reportedRevision: number
   reportedAt: number
   chunkOrder: MobileDictationChunkOrder
+  // Cloud audio past the upload cap is dropped, so the client should stop and insert what was kept.
+  audioLimitReached: boolean
   abandonTimer?: ReturnType<typeof setTimeout>
 }
 
@@ -39,6 +49,7 @@ export class RuntimeMobileDictationController {
   async start(params: {
     dictationId: string
     modelId?: string
+    worktreeId?: string
     clientId?: string
   }): Promise<{ dictationId: string; modelId: string; dedupesResentChunks: true }> {
     const store = this.requireStore()
@@ -56,7 +67,7 @@ export class RuntimeMobileDictationController {
     }
     const modelState = await getSpeechModelManager(store).getModelState(modelId)
     if (modelState.status !== 'ready') {
-      throw new Error(`voice_model_not_ready:${modelState.status}`)
+      throw new Error(speechModelNotReadyError(modelState))
     }
     const clientId = params.clientId
     if (!clientId) {
@@ -69,25 +80,28 @@ export class RuntimeMobileDictationController {
     }
 
     const owner = `mobile:${clientId}:${params.dictationId}`
+    const terms = hostDictationTerms(store, params.worktreeId)
     const session: MobileDictationSession = {
       id: params.dictationId,
       owner,
       clientId,
+      terms,
       state: 'starting',
       transcript: new DictationTranscript(),
       errors: [],
       reportedRevision: 0,
       reportedAt: 0,
-      chunkOrder: new MobileDictationChunkOrder()
+      chunkOrder: new MobileDictationChunkOrder(),
+      audioLimitReached: false
     }
     this.sessions.set(clientId, session)
     try {
       await getSpeechSttService(store).startDictation(
         modelId,
         (event) => acceptEvent(session, event),
-        undefined,
+        terms,
         owner,
-        voice.dictationLanguage
+        dictationTextSettingsFor({ ...store.getSettings(), voice })
       )
       if (this.sessions.get(clientId) !== session) {
         throw new Error('dictation_canceled')
@@ -114,7 +128,7 @@ export class RuntimeMobileDictationController {
     sampleRate: number
     seq?: number
     clientId?: string
-  }): { dictationId: string } & Partial<DictationTranscriptSnapshot> {
+  }): { dictationId: string; audioLimitReached?: true } & Partial<DictationTranscriptSnapshot> {
     const session = this.requireOwnedSession(params)
     if (session.state !== 'active') {
       throw new Error('dictation_stream_closing')
@@ -128,21 +142,26 @@ export class RuntimeMobileDictationController {
     for (const chunk of ready) {
       this.feedChunk(session, chunk)
     }
+    // Repeated on every reply, so a reply lost to a drop cannot hide it.
+    const reply = session.audioLimitReached
+      ? { dictationId: params.dictationId, audioLimitReached: true as const }
+      : { dictationId: params.dictationId }
     // The text so far lets the phone keep it if the connection never comes back; resent each second in case a reply was lost.
     const now = Date.now()
     const { revision } = session.transcript
     if (session.reportedRevision === revision && now - session.reportedAt < 1000) {
-      return { dictationId: params.dictationId }
+      return reply
     }
     session.reportedRevision = revision
     session.reportedAt = now
-    return { dictationId: params.dictationId, ...session.transcript.snapshot() }
+    return { ...reply, ...session.transcript.snapshot() }
   }
 
-  async finish(params: {
-    dictationId: string
-    clientId?: string
-  }): Promise<{ dictationId: string; text: string }> {
+  /** `agentEnv`: what AI cleanup runs the user's agent with, when it's on. */
+  async finish(
+    params: { dictationId: string; clientId?: string },
+    agentEnv?: CommitMessageAgentEnvironmentResolvers
+  ): Promise<{ dictationId: string; text: string }> {
     const session = this.requireOwnedSession(params)
     for (const chunk of session.chunkOrder.drain()) {
       this.feedChunk(session, chunk)
@@ -151,7 +170,17 @@ export class RuntimeMobileDictationController {
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
     }
-    return { dictationId: params.dictationId, text: session.transcript.snapshot().text }
+    const heard = session.transcript.snapshot().text
+    // The phone waits out cleanup inside its finish deadline; on any failure it gets the words as heard.
+    const store = this.requireStore()
+    const cleaned = await cleanUpDictatedText(
+      { text: heard, terms: session.terms },
+      { getSettings: () => store.getSettings(), getAgentEnvResolvers: () => agentEnv }
+    )
+    return {
+      dictationId: params.dictationId,
+      text: cleaned.status === 'cleaned' ? cleaned.text : heard
+    }
   }
 
   async cancel(params: {
@@ -166,12 +195,18 @@ export class RuntimeMobileDictationController {
   }
 
   private feedChunk(session: MobileDictationSession, chunk: MobileDictationChunk): void {
+    if (session.audioLimitReached) {
+      return
+    }
     const pcm = Buffer.from(chunk.audioBase64, 'base64')
     const samples = new Float32Array(Math.floor(pcm.length / 2))
     for (let i = 0; i < samples.length; i += 1) {
       samples[i] = pcm.readInt16LE(i * 2) / 32768
     }
-    getSpeechSttService(this.requireStore()).feedAudio(samples, chunk.sampleRate, session.owner)
+    const speech = getSpeechSttService(this.requireStore())
+    if (speech.feedAudio(samples, chunk.sampleRate, session.owner)) {
+      session.audioLimitReached = true
+    }
   }
 
   private requireOwnedSession(params: {

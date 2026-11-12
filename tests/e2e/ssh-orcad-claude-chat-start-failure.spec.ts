@@ -48,7 +48,8 @@ test('a Claude chat that Claude refuses to start as root names the reason', asyn
     await page.evaluate(async () => {
       await window.__store?.getState().updateSettings({
         nativeChatProviders: { claude: true, codex: true },
-        defaultTuiAgent: 'claude'
+        defaultTuiAgent: 'claude',
+        claudeCodeThemeSyncOffer: 'settled'
       })
     })
     await (await tabCreateMenuTrigger(page)).click()

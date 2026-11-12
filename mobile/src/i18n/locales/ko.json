@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "무엇이든 물어보세요. @로 파일 참조, /로 명령어 실행",
-      "reconnecting": "다시 연결 중…",
       "waitingForTerminal": "터미널 대기 중…"
     },
     "diffCard": {
@@ -301,12 +300,18 @@
       "plan": "계획",
       "stoppedManually": "수동으로 중지됨",
       "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
+      "safetyReviewApproved": "{{agent}}이(가) 이 작업을 승인했습니다. 세부 정보 보기.",
       "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
       "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트).",
       "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}.",
       "signIn": "로그인",
       "signInHint": "이 채팅을 실행 중인 컴퓨터에서 터미널을 엽니다",
       "forkedFrom": "분기 원본"
+    },
+    "ciResultLine": {
+      "failingLead": "CI 실패:",
+      "greenLead": "CI 통과:",
+      "at": "커밋"
     },
     "orcaStop": {
       "canContinue": "이 대화에서 계속할 수 있습니다.",
@@ -351,8 +356,14 @@
       "pausedState": "일시 중지됨",
       "queuedState": "대기 중",
       "resume": "재개",
-      "resumeSending": "대기 중인 메시지 전송 재개",
-      "title": "대기 중인 메시지"
+      "resumeSending": "대기 중인 메시지 전송 재개"
+    },
+    "offlineQueue": {
+      "failed": "보내지 못했습니다 — 보내기를 탭해 다시 시도하세요",
+      "waitingFor": "{{host}}에 다시 연결되면 보냅니다",
+      "waiting": "데스크톱에 다시 연결되면 보냅니다",
+      "behind": "대기 중 — 앞의 메시지를 확인해야 합니다",
+      "closed": "Orca가 닫히기 전에 보내지 못했습니다"
     },
     "receipt": {
       "cancelled": "취소",
@@ -587,6 +598,7 @@
       "fullCopySaveUpdate": "이 첨부 파일의 전체 복사와 저장 기능은 휴대전화 업데이트에서 제공될 예정입니다."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} 오프라인 · {{time}} 기준",
       "reconnecting": "{{hostName}}에 다시 연결하는 중…",
       "stopped": "{{hostName}}이(가) 중지되었습니다. 컴퓨터에서 시작하세요.",
       "server": "서버",
@@ -1287,6 +1299,62 @@
       "sessionLimit": "이 컴퓨터에서 받아쓰기 중인 기기가 너무 많습니다. 하나가 끝나면 다시 시도하세요.",
       "sessionLost": "받아쓰기 중 컴퓨터와의 연결이 끊어졌습니다. 다시 시도하세요.",
       "updateFailed": "받아쓰기 설정을 업데이트하지 못했습니다."
+    },
+    "controls": {
+      "start": "받아쓰기",
+      "starting": "받아쓰기 시작 중",
+      "stop": "중지하고 삽입",
+      "finishing": "받아쓰기 마무리 중",
+      "cancel": "받아쓰기 취소",
+      "meterOnPhone": "녹음 중, {{duration}}, 이 휴대폰에서",
+      "meterOn": "녹음 중, {{duration}}, {{computer}}에서",
+      "meterOnComputer": "녹음 중, {{duration}}, 컴퓨터에서",
+      "meter": "녹음 중, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}}초",
+      "durationSeconds_other": "{{count}}초",
+      "durationMinutes_one": "{{count}}분",
+      "durationMinutes_other": "{{count}}분",
+      "discard": "녹음 삭제",
+      "retry": "받아쓰기 다시 시도",
+      "retryShort": "다시 시도"
+    },
+    "status": {
+      "finishingOn": "{{computer}}에서 마무리 중",
+      "finishingOnComputer": "컴퓨터에서 마무리 중",
+      "movedTo": "{{computer}}(으)로 전환됨",
+      "movedToComputer": "컴퓨터로 전환됨"
+    },
+    "failure": {
+      "connectionLost": "연결 끊김",
+      "connectionSlow": "연결이 너무 느림",
+      "phoneStopped": "이 휴대폰에서 중지됨",
+      "stopped": "받아쓰기 중지됨",
+      "recordingKept": "녹음 보관됨"
+    },
+    "announce": {
+      "typedInto": "{{target}}에 입력됨",
+      "insertedIn": "{{target}}에 삽입됨",
+      "listeningOnPhone": "듣는 중. 이 휴대폰에서 받아쓰는 중입니다.",
+      "listeningOn": "듣는 중. {{computer}}에서 받아쓰는 중입니다.",
+      "listeningOnComputer": "듣는 중. 컴퓨터에서 받아쓰는 중입니다.",
+      "finishing": "마무리 중.",
+      "inserted": "삽입됨.",
+      "cancelled": "받아쓰기가 취소되었습니다.",
+      "movedTo": "이 휴대폰의 받아쓰기가 멈췄습니다. {{computer}}에서 계속합니다.",
+      "movedToComputer": "이 휴대폰의 받아쓰기가 멈췄습니다. 컴퓨터에서 계속합니다.",
+      "stoppedKept": "받아쓰기가 중지되었습니다. {{reason}}. 녹음은 보관됩니다.",
+      "stoppedKeptGeneric": "받아쓰기가 중지되었습니다. 녹음은 보관됩니다.",
+      "stillListening": "계속 듣는 중입니다."
+    },
+    "pill": {
+      "open": "열기",
+      "listening": "듣는 중",
+      "starting": "시작 중",
+      "finishing": "마무리 중",
+      "stopped": "받아쓰기 중지됨",
+      "label": "{{target}}에 받아쓰기, {{duration}}",
+      "hint": "두 번 탭하여 돌아가기"
     }
   },
   "files": {
@@ -1303,10 +1371,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "모바일에서 {{name}} 사용 불가",
       "loadFolderFailed": "폴더를 불러올 수 없습니다.",
+      "loadedOfTotal": "{{total}}개 중 {{loaded}}개",
       "loading": "로드 중…",
       "openFolder": "{{name}} 폴더 열기",
       "previewFile": "{{name}} 파일 미리보기",
       "retryLoading": "{{path}} 다시 불러오기",
+      "searchAll": "모두 검색",
+      "searchAllIn": "{{folder}} 전체 검색",
+      "searched": "{{folder}}에서 {{total}}개 중 {{loaded}}개를 검색했습니다.",
+      "searching": "{{folder}} 검색 중… {{total}}개 중 {{loaded}}개",
+      "showMore": "{{rows}}개 더 보기",
       "unavailable": "모바일에서 사용 불가"
     },
     "fileExplorerRowActions": {
@@ -1380,15 +1454,16 @@
       "openFailed": "이 PDF를 열 수 없습니다.",
       "opening": "PDF 여는 중…",
       "updateRequired": "PDF를 열려면 Orca 모바일을 업데이트하세요."
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "{{time}} 편집 이후 데스크톱에서 변경됨",
+      "copyMyEdits": "내 편집 복사",
+      "discard": "버리기",
+      "restore": "복원",
+      "unsavedFrom": "{{time}}의 저장되지 않은 편집"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "활성 {{count}}개",
-      "heading": "에이전트",
-      "showAll": "{{count}}개 모두 보기",
-      "showFewer": "접기"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} 업데이트 알림 닫기",
       "title": "Orca {{version}} 업데이트 가능",
@@ -1512,6 +1587,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "\"{{name}}\" ({{branch}})을(를) 삭제하시겠습니까?",
+      "deleteDestroysEnvironment": "Orca가 이 작업 트리용으로 만든 환경 \"{{environment}}\"도 커밋되지 않은 작업과 실행 중인 터미널과 함께 삭제됩니다.",
+      "deleteKeepsEnvironment": "Orca가 이 작업 트리용으로 만든 환경 \"{{environment}}\"은(는) 계속 실행됩니다. 레시피에 삭제 단계가 없습니다.",
       "deleteWorktree": "작업 트리 삭제",
       "pin": "고정",
       "primaryWorktreeDeleteHint": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",
@@ -2082,6 +2159,10 @@
       "providerExitedRejection": "이 메시지가 전송되기 전에 {{agent}}이(가) 중지되었습니다.",
       "providerExitedRow": "이 응답이 진행되는 동안 {{agent}}이(가) 중지되었습니다. 이 대화에서 계속할 수 있습니다.",
       "providerRateLimited": "{{agent}}이(가) 속도 제한에 걸려 다시 시도하고 있습니다.",
+      "providerUnavailable": "서비스가 혼잡하여 {{agent}}이(가) 응답하지 못했습니다. 다른 모델을 선택하거나 잠시 기다린 후 다시 보내세요.",
+      "providerSafetyStopped": "{{agent}}이(가) 안전 검사 후 이 응답을 중단했습니다. 요청을 검토한 후 다시 보내세요.",
+      "providerResponseFailed": "{{agent}}이(가) 이 응답을 완료하지 못했습니다. 자세한 내용을 열어 확인하세요.",
+      "selectedModel": "선택한 모델",
       "providerRejected": "{{agent}}이(가) 이 메시지를 받아들이지 않았습니다.",
       "providerRejectedQuoted": "{{agent}}이(가) 이 메시지를 받아들이지 않았습니다: {{detail}}.",
       "providerRetryLastError": "마지막 오류: {{detail}}.",
@@ -2171,8 +2252,7 @@
       "copyPathLabel": "Markdown 경로 복사",
       "copySource": "Markdown 소스 복사",
       "discard": "버리기",
-      "dismissKeyboard": "키보드 닫기",
-      "dismissKeyboardHint": "소프트웨어 키보드를 숨기고 Markdown 편집기를 열린 상태로 유지합니다.",
+      "previewTruncated": "미리보기가 일부만 표시됩니다.",
       "readOnly": "읽기 전용"
     },
     "nativeChatAttachActions": {
@@ -2236,20 +2316,16 @@
       "loadFailed": "PR을 로드할 수 없습니다."
     },
     "queuedCardText": {
-      "showLess": "접기",
       "showLessHint": "메시지의 일부만 표시합니다.",
-      "showMore": "더 보기",
       "showMoreHint": "메시지 전체를 표시합니다."
     },
     "queuedMessageCardRow": {
-      "deleteHint": "대기 중인 메시지 삭제",
       "images_one": "이미지 {{count}}개",
       "images_other": "이미지 {{count}}개",
       "moreActions": "추가 작업",
       "send": "보내기",
       "sendAgainHint": "이 메시지 다시 보내기",
       "sendHint": "이 메시지 보내기",
-      "showLessHint": "메시지의 일부만 표시합니다.",
       "steer": "지금 보내기",
       "steerHint": "모델을 중단하지 않고 보냅니다"
     },
@@ -2369,8 +2445,7 @@
     "tabStrip": {
       "checkingCapabilities": "데스크톱에서 지원하는 기능을 확인 중입니다. 잠시 후 다시 시도하세요.",
       "newTab": "새 탭",
-      "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다.",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다."
     },
     "terminalActionSheetActions": {
       "clearTerminal": "터미널 지우기",
@@ -2381,11 +2456,7 @@
     "terminalInputActions": {
       "attachFileHint": "사진 대신 파일을 첨부하려면 길게 누르세요.",
       "attachPhoto": "사진 첨부",
-      "sendingImage": "이미지 전송 중",
-      "startDictation": "음성 받아쓰기 시작",
-      "startingDictation": "음성 받아쓰기 시작 중",
-      "stopDictation": "음성 받아쓰기 중지",
-      "transcribingDictation": "음성 받아쓰기를 텍스트로 변환 중"
+      "sendingImage": "이미지 전송 중"
     },
     "terminalLiveInputStatus": {
       "listening": "듣는 중",
@@ -2394,8 +2465,6 @@
       "processing": "처리 중",
       "releaseMicHint": "중지하려면 마이크에서 손을 떼세요",
       "startingMic": "마이크 시작 중",
-      "stopHint": "중지하려면 마이크를 탭하세요",
-      "transcribing": "데스크톱에서 텍스트로 변환 중",
       "uploadingImage": "호스트에 이미지 업로드 중",
       "uploadingImageTitle": "이미지 업로드 중"
     },
@@ -2419,6 +2488,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "첨부 실패 (다시 연결 중)"
+    },
+    "useCloseActions": {
+      "closeFailed": "탭을 닫지 못했습니다. 다시 시도하세요.",
+      "closeFailedDesktopNotReady": "탭을 닫지 못했습니다. 컴퓨터에서 Orca를 아직 불러오는 중입니다. 잠시 후 다시 시도하세요."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "브라우저 명령 실행에 실패했습니다.",
@@ -2489,7 +2562,8 @@
       "insertFailed": "받아쓰기 내용을 삽입하지 못했습니다.",
       "insertFailedCopied": "받아쓰기 내용을 삽입하지 못해 클립보드에 복사했습니다.",
       "inserted": "받아쓰기 내용 삽입됨",
-      "stoppedAfterSilence": "1분 동안 말소리가 없어 중지했습니다."
+      "stoppedAtCloudLimit": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다.",
+      "stoppedAfterSilenceSeconds": "{{seconds}}초 동안 조용해서 중지했습니다"
     },
     "useNativeChatStop": {
       "stopNotSent": "중지 요청 전송 안 됨",
@@ -2810,6 +2884,8 @@
       "dictationHeading": "받아쓰기",
       "dictationMode": "받아쓰기 모드",
       "dictationModeDescription": "토글: 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다. 길게 누르기: 누르고 있는 동안 받아쓰기합니다.",
+      "dictationModeWithAutoDescription": "자동: 탭하여 시작하고 중지합니다. 컴퓨터에서는 단축키를 길게 누르면 손을 뗄 때까지 녹음합니다. 길게 누르기: 누르고 있는 동안 받아쓰기합니다. 토글: 한 번 누르면 시작하고, 다시 누르면 중지합니다.",
+      "autoMode": "자동",
       "downloadFailed": "다운로드 실패",
       "enableDictation": "음성 받아쓰기 활성화",
       "holdMode": "길게 누르기",
@@ -3282,6 +3358,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}}을(를) 병합하시겠습니까?",
+      "confirmGitHubSquash": "PR #{{number}}의 커밋을 합쳐서 병합하시겠습니까?",
+      "confirmGitHubRebase": "PR #{{number}}을(를) 리베이스한 후 병합하시겠습니까?",
+      "confirmGitLabMerge": "병합 요청 #{{number}}을(를) 병합하시겠습니까?",
+      "confirmGitLabSquash": "병합 요청 #{{number}}의 커밋을 합쳐서 병합하시겠습니까?",
+      "confirmGitLabRebase": "병합 요청 #{{number}}을(를) 리베이스한 후 병합하시겠습니까?",
+      "merged": "병합됨",
+      "closed": "닫힘",
+      "conflicts": "충돌",
+      "behind": "뒤처짐",
+      "blocked": "차단됨",
+      "checksPending": "검사 대기 중",
+      "ableToMerge": "병합 가능",
+      "unknown": "알 수 없음"
+    },
+    "pagination": {
+      "pageUnreachable": "{{page}}페이지는 GitHub 검색에서 반환할 수 있는 범위를 벗어났습니다.",
+      "loadPageFailed": "GitHub에서 {{page}}페이지를 불러오지 못했습니다.",
+      "noMoreResults": "{{page}}페이지에 더 이상 결과가 없습니다."
+    },
     "composerSource": {
       "baseFailed": "기본 브랜치를 확인하지 못했습니다.",
       "forkPushWarning": "이 PR에서 \"유지 관리자의 수정 허용\"이 꺼져 있어 GitHub에서 포크로의 푸시를 거부할 수 있습니다."

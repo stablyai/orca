@@ -3,15 +3,15 @@ import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/diff-comment-types'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
-import { isMarkdownComment } from '@/lib/diff-comment-compat'
+import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { isMarkdownComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import {
   enqueueDiffCommentPersist,
   mutateDiffComments,
   normalizeDiffComment
 } from './diff-comment-persistence'
-import { selectWorktreeDiffCommentsOrEmpty } from '../../worktree-diff-comments-selector'
-import { readOwnedDiffComments, type DiffCommentOwner } from '../../diff-comment-owner'
+import { selectWorktreeDiffCommentsOrEmpty } from './worktree-diff-comments-selector'
+import { readOwnedDiffComments, type DiffCommentOwner } from './diff-comment-owner'
 
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
@@ -50,10 +50,6 @@ export type DiffCommentDeliverySnapshot = Pick<
   DiffComment,
   'body' | 'filePath' | 'id' | 'lineNumber' | 'selectedText' | 'source' | 'startLine'
 >
-
-function generateId(): string {
-  return createBrowserUuid()
-}
 
 function deliverySnapshotMatches(
   comment: DiffComment,
@@ -105,7 +101,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
     const comment: DiffComment = normalizeDiffComment({
       ...input,
-      id: generateId(),
+      id: createNonSecureContextUuid(),
       createdAt: Date.now()
     })
     const result = mutateDiffComments(set, owner, (existing) => [...existing, comment])

@@ -1,7 +1,8 @@
 import type { Terminal } from '@xterm/xterm'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { useAppStore } from '@/store'
+import { isCurrentPlatformIosWeb } from '@/app-shell/platform/ios-web-platform'
 import {
   getLayoutCharacterForCode,
   prefetchLayoutCharacters
@@ -14,7 +15,10 @@ import {
   type PreviewShortcutContext
 } from './preview-terminal-shortcuts'
 import { readTerminalClipboardSelection } from '@/components/terminal-pane/clipboard/terminal-clipboard-selection-text'
-import { isAppOwnedCopyChord } from '@/components/terminal-pane/input/keyboard/xterm-bypass-policy'
+import {
+  isAppOwnedCopyChord,
+  isMacNativeMenuChord
+} from '@/components/terminal-pane/input/keyboard/xterm-bypass-policy'
 
 /** Compose IME, clipboard and pane policy in xterm’s single custom handler; defer macOS Cmd+V to its menu accelerator to avoid double paste. Dispose Option-location listeners on teardown. */
 export function installPreviewTerminalKeyHandler(args: {
@@ -29,6 +33,9 @@ export function installPreviewTerminalKeyHandler(args: {
   const { terminal } = args
   const platform = getShortcutPlatform()
   const consumedClipboardKeys = new Set<string>()
+  const hasNativeMenu = platform === 'darwin' && !isCurrentPlatformIosWeb()
+  const isNativeMenuChord = (event: KeyboardEvent): boolean =>
+    hasNativeMenu && isMacNativeMenuChord(event)
   const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
   const consumeEvent = (event: KeyboardEvent): false => {
     event.preventDefault()
@@ -154,6 +161,11 @@ export function installPreviewTerminalKeyHandler(args: {
       optionKeyLocations: optionKeyLocations.get()
     })
     if (!action) {
+      // After the resolver: it is this surface's only shortcut layer, so user bindings win.
+      if (isNativeMenuChord(event)) {
+        nativeOnlyShortcutTracker.armKeyDown(event)
+        return false
+      }
       return true
     }
     switch (action.type) {

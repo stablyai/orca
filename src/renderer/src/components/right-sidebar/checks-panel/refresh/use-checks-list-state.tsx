@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { useActiveWorktree } from '@/store/selectors'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import type { GitLabProjectRef } from '../../../../../../shared/gitlab-types'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
-import type { GitHubRepositoryIdentity } from '../../../../../../shared/github/pull-request-types'
+import type {
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../../../shared/github/checks/check-types'
+import type { GitHubRepositoryIdentity } from '../../../../../../shared/github/repositories/repository-identity'
 import { sortChecksBySeverity } from '../../../../../../shared/source-control/checks/pr-check-severity-order'
 import { summarizeProviderChecks } from '../../../../../../shared/source-control/checks/provider-check-summary'
 import { createCheckRunDetailsRequestId } from '@/components/editor/check-details/actions/check-run-details-tab'

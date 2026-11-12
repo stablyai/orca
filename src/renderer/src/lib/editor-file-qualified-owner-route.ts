@@ -1,8 +1,8 @@
-import { resolveUnstampedRecordHost } from './worktree-operation-catalog-route'
+import { resolveUnstampedRecordHost } from '@/lib/workspace/ownership/worktree-operation-catalog-route'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
+import { findFolderWorkspaceOwner } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import {
   findIndexedWorktreeOwnerForHost,
   findIndexedDetectedWorktrees
@@ -10,12 +10,12 @@ import {
 import {
   selectWorktreesByRepo,
   selectDetectedWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   resolveWorktreeOperationRouteResultForHost,
   type WorktreeOperationRouteResolution,
   type WorktreeOperationRouteState
-} from './worktree-operation-route'
+} from '@/lib/workspace/ownership/worktree-operation-route'
 
 export function resolveQualifiedEditorOwnerRoute(
   state: WorktreeOperationRouteState,

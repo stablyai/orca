@@ -13,6 +13,14 @@ const GRACE_MS = 2 * 60_000
 describe('orchestration worker automatic release', () => {
   const h = createOrchestrationWorkerReleaseHarness()
 
+  // This fixture's worker reports no transcript: release records that, and worker-read says so.
+  async function expectOutputReference(dispatchId: string): Promise<void> {
+    expect(h.db.getWorkerTerminalArchive(dispatchId)?.kind).toBe('terminal_tail')
+    await expect(
+      h.call('orchestration.workerRead', { dispatch: dispatchId })
+    ).rejects.toMatchObject({ code: 'archive_unavailable' })
+  }
+
   afterEach(() => {
     getWorkerTerminalAutoReleaseScheduler(h.runtime).clear()
     h.cleanup()
@@ -26,7 +34,7 @@ describe('orchestration worker automatic release', () => {
   }
 
   it.each(['succeeded', 'failed'] as const)(
-    'releases a %s worker once its grace period ends and keeps its output readable',
+    'releases a %s worker once its grace period ends and keeps where its output lives',
     async (outcome) => {
       setupWithFakeClock()
       const { dispatchId } = await h.startSettledWorker(outcome)
@@ -47,24 +55,9 @@ describe('orchestration worker automatic release', () => {
       )
       expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
       expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
-      await expect(
-        h.call('orchestration.workerRead', { dispatch: dispatchId })
-      ).resolves.toMatchObject({
-        terminal: { tail: ['worker output line 1', 'worker output line 2'] }
-      })
+      await expectOutputReference(dispatchId)
     }
   )
-
-  it('never extends the deadline for a repeated worker_done', async () => {
-    setupWithFakeClock()
-    const { taskId, dispatchId } = await h.startSettledWorker()
-    const armed = h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    h.settle(taskId, dispatchId, 'succeeded')
-
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at).toBe(armed)
-  })
 
   it('hands a terminal reused during the grace period to the new Dispatch', async () => {
     setupWithFakeClock()
@@ -101,20 +94,6 @@ describe('orchestration worker automatic release', () => {
 
     await h.call('orchestration.workerRelease', { dispatch: followUp.dispatchId })
     await vi.waitFor(() => expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1))
-  })
-
-  it("closes a worker the user typed into on time; an older client's typing report keeps nothing", async () => {
-    setupWithFakeClock()
-    const { dispatchId } = await h.startSettledWorker()
-
-    await expect(
-      h.call('orchestration.workerTerminalUserInput', { paneKey: h.workerPaneKey })
-    ).resolves.toEqual({ changed: 0 })
-    await vi.advanceTimersByTimeAsync(GRACE_MS)
-
-    await vi.waitFor(() =>
-      expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
-    )
   })
 
   const keepOpen = (keep: boolean): Promise<unknown> =>
@@ -213,51 +192,6 @@ describe('orchestration worker automatic release', () => {
     await vi.waitFor(() => expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1))
   })
 
-  it('does not arm a worker retained before it reported', async () => {
-    setupWithFakeClock()
-    const { taskId, dispatchId } = await h.startWorker()
-    await h.call('orchestration.workerRetain', { dispatch: dispatchId })
-
-    h.settle(taskId, dispatchId, 'succeeded')
-    await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
-
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at).toBeNull()
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['silent', async () => (await h.startWorker()).dispatchId],
-    [
-      'abandoned',
-      async () => {
-        const { dispatchId } = await h.startWorker()
-        await h.call('orchestration.workerAbandon', { dispatch: dispatchId })
-        return dispatchId
-      }
-    ],
-    [
-      'pre-upgrade settled',
-      async () => {
-        const { dispatchId } = await h.startSettledWorker()
-        h.db.db
-          .prepare(
-            'UPDATE worker_terminal_resources SET auto_release_at = NULL, auto_release_dispatch_id = NULL WHERE owner_dispatch_id = ?'
-          )
-          .run(dispatchId)
-        return dispatchId
-      }
-    ]
-  ] as const)('leaves a %s worker to manual release', async (_state, start) => {
-    setupWithFakeClock()
-    const dispatchId = await start()
-
-    getWorkerTerminalAutoReleaseScheduler(h.runtime).rearm()
-    await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
-
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at).toBeNull()
-  })
-
   describe('across a restart', () => {
     let userDataDir: string
 
@@ -270,14 +204,6 @@ describe('orchestration worker automatic release', () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
       vi.setSystemTime(new Date('2026-10-27T12:00:00Z'))
       h.setup({ userDataDir })
-    }
-
-    async function expectReadableArchive(dispatchId: string): Promise<void> {
-      await expect(
-        h.call('orchestration.workerRead', { dispatch: dispatchId })
-      ).resolves.toMatchObject({
-        terminal: { tail: ['worker output line 1', 'worker output line 2'] }
-      })
     }
 
     it('releases a deadline missed while the app was closed once, when the database reopens', async () => {
@@ -294,7 +220,7 @@ describe('orchestration worker automatic release', () => {
         expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
       )
       expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
-      await expectReadableArchive(dispatchId)
+      await expectOutputReference(dispatchId)
 
       h.restart()
       await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
@@ -309,7 +235,7 @@ describe('orchestration worker automatic release', () => {
         // Hold the step after which a crash leaves the row in this state.
         const held =
           interruptedAt === 'requested'
-            ? vi.mocked(h.runtime.readTerminal).mockReturnValue(new Promise(() => {}))
+            ? vi.mocked(h.runtime.showTerminal).mockReturnValue(new Promise(() => {}))
             : vi.mocked(h.runtime.closeTerminal).mockReturnValue(new Promise(() => {}))
         await vi.advanceTimersByTimeAsync(GRACE_MS)
         await vi.waitFor(() => expect(held).toHaveBeenCalled())
@@ -321,7 +247,7 @@ describe('orchestration worker automatic release', () => {
 
         expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
         expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
-        await expectReadableArchive(dispatchId)
+        await expectOutputReference(dispatchId)
       }
     )
   })
@@ -363,16 +289,6 @@ describe('orchestration worker automatic release', () => {
     const keepChat = (keep: boolean): Promise<unknown> =>
       h.call('orchestration.workerKeepOpen', { sessionId: 's1', keep })
 
-    it('arms a chat worker on worker_done like a terminal worker', () => {
-      setupWithFakeClock()
-
-      const dispatchId = startSettledChatWorker()
-
-      expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at).toBe(
-        '2026-10-27 12:02:00'
-      )
-    })
-
     function claimAndCommitChatRelease(dispatchId: string): string {
       h.db.claimDueWorkerTerminalAutoReleases(Date.now() + GRACE_MS)
       const resourceId = h.db.getWorkerTerminalResourceByOwner(dispatchId)!.id
@@ -410,17 +326,6 @@ describe('orchestration worker automatic release', () => {
       const joined = claimAndCommitChatRelease(dispatchId)
       h.db.requestWorkerTerminalRelease(dispatchId)
       expect(h.db.admitWorkerChatReleaseClose(joined, inTurn)).toBe(true)
-    })
-
-    it('keeps a close that began final when the agent works again: its archive stays', () => {
-      setupWithFakeClock()
-      const dispatchId = startSettledChatWorker()
-      const resourceId = claimAndCommitChatRelease(dispatchId)
-
-      h.db.suspendWorkerTerminalAutoRelease(chatPaneKey)
-
-      expect(h.db.getWorkerTerminalResource(resourceId)?.release_state).toBe('releasing')
-      expect(h.db.getWorkerTerminalArchive(dispatchId)).toBeDefined()
     })
   })
 })

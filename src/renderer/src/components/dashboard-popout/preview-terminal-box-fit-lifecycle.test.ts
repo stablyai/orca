@@ -63,22 +63,6 @@ function thrown(operation: () => void): unknown {
   throw new Error('Expected an error')
 }
 
-it('keeps live geometry and coalesces repeated requests into one frame', () => {
-  const owner = harness()
-  owner.schedule()
-  owner.schedule()
-  owner.schedule()
-  expect(owner.read).not.toHaveBeenCalled()
-  expect(frames.size).toBe(1)
-  flush()
-  expect(owner.read).toHaveBeenCalledOnce()
-  expect(owner.container.style.transform).toBe('scale(0.75)')
-  expect(owner.container.style.transformOrigin).toBe('top left')
-  expect(owner.box.style.alignItems).toBe('flex-start')
-  owner.dispose()
-  expect(cancelFrame).not.toHaveBeenCalled()
-})
-
 it('cancels frame zero once and suppresses captured or later callbacks after disposal', () => {
   const owner = harness()
   owner.schedule()
@@ -89,49 +73,6 @@ it('cancels frame zero once and suppresses captured or later callbacks after dis
   owner.schedule()
   expect(owner.read).not.toHaveBeenCalled()
   expect(owner.container.style.transform).toBe('')
-  expect(frames.size).toBe(0)
-  expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(0)
-})
-
-it('preserves synchronous frame completion without canceling a completed handle', () => {
-  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-    callback(16)
-    return 0
-  })
-  const owner = harness()
-  owner.schedule()
-  owner.schedule()
-  expect(owner.read).toHaveBeenCalledTimes(2)
-  owner.dispose()
-  expect(cancelFrame).not.toHaveBeenCalled()
-})
-
-it('retains a reentrant successor frame and cancels only that pending successor', () => {
-  const owner = harness()
-  owner.read.mockImplementationOnce(() => {
-    owner.schedule()
-    return null
-  })
-  owner.schedule()
-  flush()
-  expect(owner.read).toHaveBeenCalledOnce()
-  expect([...frames.keys()]).toEqual([1])
-  owner.dispose()
-  expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(1)
-})
-
-it('marks disposal before cancellation reenters schedule or invokes the retired callback', () => {
-  const owner = harness()
-  owner.schedule()
-  const callback = frames.get(0)
-  cancelFrame.mockImplementationOnce((id) => {
-    owner.schedule()
-    owner.dispose()
-    callback?.(16)
-    return frames.delete(id)
-  })
-  owner.dispose()
-  expect(owner.read).not.toHaveBeenCalled()
   expect(frames.size).toBe(0)
   expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(0)
 })

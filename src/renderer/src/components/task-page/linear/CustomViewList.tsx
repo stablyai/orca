@@ -1,5 +1,5 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   LinearCustomViewTable,
   LinearCollectionNotice
@@ -10,6 +10,7 @@ export function TaskPageLinearCustomViewList({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     selectedLinearWorkspaceId,
     linearCustomViewsResult,
@@ -20,11 +21,11 @@ export function TaskPageLinearCustomViewList({
   return (
     <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
       <div className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground grid-cols-[minmax(220px,1.5fr)_120px_120px_120px_130px_60px]">
-        <span>{translate('auto.components.TaskPage.9c57663908', 'View')}</span>
-        <span>{translate('auto.components.TaskPage.0aa8525950', 'Model')}</span>
-        <span>{translate('auto.components.TaskPage.a04fe7ba73', 'Visibility')}</span>
-        <span>{translate('auto.components.TaskPage.b4e10f096e', 'Owner')}</span>
-        <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+        <span>{t('auto.components.TaskPage.9c57663908', 'View')}</span>
+        <span>{t('auto.components.TaskPage.0aa8525950', 'Model')}</span>
+        <span>{t('auto.components.TaskPage.a04fe7ba73', 'Visibility')}</span>
+        <span>{t('auto.components.TaskPage.b4e10f096e', 'Owner')}</span>
+        <span>{t('auto.components.TaskPage.f362667d55', 'Updated')}</span>
         <span />
       </div>
       <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto scrollbar-sleek">

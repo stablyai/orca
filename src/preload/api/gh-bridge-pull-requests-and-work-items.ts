@@ -1,15 +1,18 @@
-import type { GhAccountBinding } from '../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../shared/github/accounts/account-binding'
 import { ipcRenderer } from 'electron'
-import type { GitHubReactionContent } from '../../shared/github/comment-types'
+import type { GitHubReactionContent } from '../../shared/github/comments/comment-types'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason
-} from '../../shared/github/pull-request-refresh-types'
-import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
-import type { GitHubWorkItem, ListWorkItemsResult } from '../../shared/github/work-item-types'
+} from '../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../shared/github/repositories/repository-identity'
+import type {
+  GitHubWorkItem,
+  ListWorkItemsResult
+} from '../../shared/github/work-items/work-item-types'
 import type { GitHubCreateIssueResult } from '../../shared/issue-mutation-types'
-import type { TaskSourceContext } from '../../shared/task-source-context'
+import type { TaskSourceContext } from '../../shared/work-items/task-source-context'
 import type { PreloadApi } from '../api-types'
 
 export const ghPullRequestsAndWorkItemsApi = {

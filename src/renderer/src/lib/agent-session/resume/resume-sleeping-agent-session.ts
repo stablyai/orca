@@ -1,9 +1,8 @@
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
 import { useAppStore } from '@/store/index'
 import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
-import {
-  agentProviderSessionsEqual,
-  type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
@@ -13,26 +12,24 @@ import {
   recordPaneIsOwnedByPreservedPane,
   stablePaneHasLivePty
 } from './sleeping-agent-pane-ownership'
-import { isPaneSpawnDeferred } from '../../pane-spawn-deferral-registry'
+import { isPaneSpawnDeferred } from '../../../components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import { settleSweptRecord, sweepTreatsAsFinished } from './swept-sleep-record-settlement'
-import {
-  launchSleepingAgentSession,
-  type ResumeSleepingAgentSessionsOptions
-} from './sleeping-agent-session-launch'
+import { launchSleepingAgentSession } from './sleeping-agent-session-launch'
+import type { ResumeSleepingAgentSessionsOptions } from './sleeping-agent-session-launch'
 import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
 import {
   findUnhydratedHostMirrorForPane,
-  isHostMirroredSleepingRecord,
-  type UnhydratedHostMirror
+  isHostMirroredSleepingRecord
 } from './host-mirrored-pane-liveness'
-import { parkUntilHostMirrorHandleLands } from '../../host-mirror-handle-gap-wait'
+import type { UnhydratedHostMirror } from './host-mirrored-pane-liveness'
+import { parkUntilHostMirrorHandleLands } from './host-mirror-handle-gap-wait'
 import { getClaimRepresentativeRecords } from './sleeping-record-claim-representative'
 import {
   sleepingRecordHostAllowsSessionClaim,
   sleepingRecordNamesAnotherExecutionHost
 } from './sleeping-record-execution-host-scope'
-import { resolveWorkspaceTerminalHostAuthority } from '../../workspace-terminal-host-authority'
-import { parkUntilHostSessionMirrorHydrates } from '@/runtime/host-session-mirror-hydration'
+import { resolveWorkspaceTerminalHostAuthority } from '../../workspace/ownership/workspace-terminal-host-authority'
+import { parkUntilHostSessionMirrorHydrates } from '@/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
 
 function clearPassiveCompletedRecordsForClaimKey(
   records: readonly SleepingAgentSessionRecord[],
@@ -154,7 +151,9 @@ function providerSessionOwnedElsewhere(
   state: ReturnType<typeof useAppStore.getState>
 ): boolean {
   // Claim keys handle same-workspace duplicates; finished notes, moved hosts and foreign-machine records cannot claim sessions.
-  return Object.values(state.sleepingAgentSessionsByPaneKey).some(
+  return Array.from(
+    sleepingAgentRecordIndex.providerSessionCandidates(state.sleepingAgentSessionsByPaneKey, record)
+  ).some(
     (other) =>
       other.worktreeId !== record.worktreeId &&
       other.agent === record.agent &&
@@ -221,7 +220,9 @@ export function resumeSleepingAgentSessionsForWorktree(
     return 0
   }
   // Main resumes workspace sleep records in their own panes; only stranded ones get a fresh tab here.
-  const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
+  const worktreeRecords = sleepingAgentRecordIndex
+    .entries(state.sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)
     .filter(
       (record) =>
         record.worktreeId === worktreeId &&

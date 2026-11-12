@@ -2,12 +2,13 @@
 
 import { expect, vi } from 'vitest'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
-import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { loadMainLayoutModel } from '@/runtime/workspace-layout/testing/main-loaded-layout-frames.test-fixture'
+import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout/frames/workspace-layout-frame-sync'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { createTestStore, seedStore } from '../../../../store/slices/store-test-helpers'
-import { makeWorktree, TEST_REPO } from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../../../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../../../store/repos/repo.test-fixture'
 import { detachTerminalPaneToTab } from './terminal-pane-tab-detach'
 import { LEAF_1, LEAF_2 } from './terminal-pane-tab-detach-fixture'
 

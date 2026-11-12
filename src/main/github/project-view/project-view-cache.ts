@@ -1,5 +1,5 @@
-import type { GitHubProjectOwnerType } from '../../../shared/github/project-types'
-import { githubProjectHost } from '../../../shared/github/project-identity'
+import type { GitHubProjectOwnerType } from '../../../shared/github/projects/project-types'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
 
 export const PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES = 512
 

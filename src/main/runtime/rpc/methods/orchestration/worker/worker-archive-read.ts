@@ -1,7 +1,7 @@
 import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
-} from '../../../../../../shared/orchestration-worker-output'
+} from '../../../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { PtyLivenessVerdict } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -9,10 +9,12 @@ import type {
   WorkerTerminalArchiveRow,
   WorkerTerminalResourceRow
 } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
-import type {
-  WorkerTerminalTailArchive,
-  WorkerTranscriptSnapshotArchive
+import {
+  isWorkerOutputReference,
+  type WorkerTerminalTailArchive,
+  type WorkerTranscriptSnapshotArchive
 } from '../../../../orchestration/workers/archives/worker-output-archive'
+import { readReleasedWorkerOriginal } from './worker-original-read'
 import { clampWorkerTranscriptLimit } from '../../../../orchestration/workers/transcripts/worker-transcript-payload'
 import {
   createWorkerOutputSourceIdentity,
@@ -42,6 +44,10 @@ export async function readArchivedWorkerOutput(args: {
       'archive_unavailable',
       `Dispatch ${args.dispatchId} was released without a preserved output archive.`
     )
+  }
+  // Releases now record where the original lives; rows from before keep the copy read below.
+  if (isWorkerOutputReference(archive)) {
+    return readReleasedWorkerOriginal(args, archive)
   }
   if (archive.kind === 'structured_journal') {
     if (args.source === 'terminal') {

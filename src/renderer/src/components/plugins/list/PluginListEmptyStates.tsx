@@ -1,5 +1,5 @@
 import { Blocks, ChevronLeft, Loader2, PackageCheck, SearchX } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { PluginCatalogEmptyState } from './PluginCatalogEmptyState'
 
@@ -13,17 +13,18 @@ export function PluginNoMatches({
   filtered: boolean
   onClear: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <PluginCatalogEmptyState
       icon={SearchX}
       title={
         query
-          ? translate(
+          ? t(
               'auto.components.settings.PluginManager.noResultsTitle',
               'No plugins match “{{value0}}”',
               { value0: query }
             )
-          : translate(
+          : t(
               'auto.components.settings.PluginListEmptyStates.noFilterMatches',
               'No plugins match these filters'
             )
@@ -31,16 +32,13 @@ export function PluginNoMatches({
       action={
         <Button variant="outline" size="sm" onClick={onClear}>
           {query && filtered
-            ? translate(
+            ? t(
                 'auto.components.settings.PluginListEmptyStates.clearBoth',
                 'Clear search and filters'
               )
             : query
-              ? translate(
-                  'auto.components.settings.PluginMarketplaceBrowser.clearSearch',
-                  'Clear search'
-                )
-              : translate('auto.components.settings.PluginFilterPopover.clear', 'Clear filters')}
+              ? t('auto.components.settings.PluginMarketplaceBrowser.clearSearch', 'Clear search')
+              : t('auto.components.settings.PluginFilterPopover.clear', 'Clear filters')}
         </Button>
       }
     />
@@ -55,17 +53,18 @@ export function PluginPageMissing({
   loading: boolean
   onBack: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div>
       <Button variant="ghost" size="xs" className="-ml-2" onClick={onBack}>
         <ChevronLeft />
-        {translate('auto.components.settings.PluginDetailPage.back', 'Plugins')}
+        {t('auto.components.settings.PluginDetailPage.back', 'Plugins')}
       </Button>
       {loading ? (
         <Loader2 className="mx-auto mt-10 size-4 animate-spin text-muted-foreground" />
       ) : (
         <p className="mt-6 text-sm text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.PluginListEmptyStates.pageGone',
             'This plugin is no longer installed or listed.'
           )}
@@ -77,16 +76,14 @@ export function PluginPageMissing({
 
 /** The Installed or Updates filter with nothing installed. */
 export function PluginNoneInstalled({ onBrowse }: { onBrowse: () => void }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <PluginCatalogEmptyState
       icon={Blocks}
-      title={translate(
-        'auto.components.settings.PluginManager.noneInstalledTitle',
-        'No plugins installed'
-      )}
+      title={t('auto.components.settings.PluginManager.noneInstalledTitle', 'No plugins installed')}
       action={
         <Button variant="outline" size="sm" onClick={onBrowse}>
-          {translate('auto.components.settings.PluginManager.browseAll', 'Browse all plugins')}
+          {t('auto.components.settings.PluginManager.browseAll', 'Browse all plugins')}
         </Button>
       }
     />
@@ -99,19 +96,17 @@ export function PluginAllInstalled({
 }: {
   onShowInstalled: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <PluginCatalogEmptyState
       icon={PackageCheck}
-      title={translate(
+      title={t(
         'auto.components.settings.PluginManager.allInstalledTitle',
         'Every catalog plugin is installed'
       )}
       action={
         <Button variant="outline" size="sm" onClick={onShowInstalled}>
-          {translate(
-            'auto.components.settings.PluginManager.showInstalled',
-            'Show installed plugins'
-          )}
+          {t('auto.components.settings.PluginManager.showInstalled', 'Show installed plugins')}
         </Button>
       }
     />

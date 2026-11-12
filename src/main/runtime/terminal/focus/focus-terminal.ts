@@ -1,9 +1,9 @@
 import { OrcaRuntimeWithWaitForLeafPtyId } from '../view/renderer-terminal-snapshot'
-import type { RuntimeTerminalFocus } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalFocus } from '../../../../shared/runtime-terminal-contracts'
 import type {
   RuntimeTerminalReveal,
   TerminalPaneRevealTarget
-} from '../../../../shared/workspace-layout/terminal-pane-reveal'
+} from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import { copySleepingAgentLaunchConfig } from '../launch/runtime-agent-launch-resolution'

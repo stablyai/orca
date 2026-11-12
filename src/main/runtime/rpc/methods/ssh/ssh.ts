@@ -7,8 +7,8 @@ import {
   listRegisteredSshTargets,
   SshTargetManagementUnservedError
 } from '../../../../ssh/targets/ssh-target-registry'
-import { isManagedOrcadSshTarget } from '../../../../ssh/connection/ssh-connection-store'
-import { browseSshDirectory } from '../../../../ssh/ssh-remote-directory-browse'
+import { isManagedOrcadSshTarget } from '../../../../ssh/targets/ssh-target-runtime-ownership'
+import { browseSshDirectory } from '../../../../ssh/filesystem/ssh-remote-directory-browse'
 import { defineMethod } from '../../core'
 import {
   getPublicSshError,

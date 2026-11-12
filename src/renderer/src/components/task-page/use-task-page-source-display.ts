@@ -1,7 +1,7 @@
 import type { TaskPageLinearCreationStateModel } from './linear/use-task-page-linear-creation-state'
 import { useMemo } from 'react'
-import type { GitHubTaskKind } from '../../../../shared/task-github-search'
-import { buildGitHubRepoUrl } from '../../../../shared/github/links'
+import type { GitHubTaskKind } from '../../../../shared/work-items/task-github-search'
+import { buildGitHubRepoUrl } from '../../../../shared/github/repositories/links'
 import { getTaskSourceContextSummary } from '../task-source-context-summary'
 import { getGitHubProjectSourceSummary } from './task-page-source-context'
 

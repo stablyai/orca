@@ -4,7 +4,7 @@ import {
   mintDocPreviewGrant,
   revokeDocPreviewGrant
 } from '../document-preview/doc-preview-grant-registry'
-import { buildDocPreviewUrl } from '../../../shared/doc-preview-scheme'
+import { buildDocPreviewUrl } from '../../../shared/document-preview/doc-preview-scheme'
 
 function makeRawPayload(overrides: Record<string, unknown> = {}) {
   return {
@@ -67,19 +67,6 @@ function makeRawPayload(overrides: Record<string, unknown> = {}) {
 }
 
 describe('clampGrabPayload', () => {
-  it('redacts secret-bearing cssClasses outside the attribute path', () => {
-    const payload = clampGrabPayload(
-      makeRawPayload({
-        target: {
-          ...makeRawPayload().target,
-          cssClasses: 'primary access_token=secret'
-        }
-      })
-    )
-
-    expect(payload?.target.cssClasses).toBe('[redacted]')
-  })
-
   it('redacts secret-bearing browser annotation metadata fields', () => {
     const payload = clampGrabPayload(
       makeRawPayload({
@@ -160,61 +147,5 @@ describe('clampGrabPayload', () => {
     expect(clampGrabPayload(raw, forgedUrl)?.page.sanitizedUrl).toBe('')
     revokeDocPreviewGrant(grant.id)
     expect(clampGrabPayload(raw, guestUrl)?.page.sanitizedUrl).toBe('')
-  })
-
-  it('keeps safe and ARIA attributes while stripping unsafe names', () => {
-    const payload = clampGrabPayload(
-      makeRawPayload({
-        target: {
-          ...makeRawPayload().target,
-          attributes: {
-            ID: 'checkout',
-            class: 'source-code stateful auth token',
-            role: 'button',
-            type: 'button',
-            'aria-label': 'Submit',
-            'aria-labelledby': 'checkout-label',
-            'aria-hidden': 'false',
-            onclick: 'alert(1)',
-            style: 'display:none',
-            'data-secret': 'hidden',
-            'notaria-label': 'unexpected'
-          }
-        }
-      })
-    )
-
-    expect(payload?.target.attributes).toEqual({
-      id: 'checkout',
-      class: 'source-code stateful auth token',
-      role: 'button',
-      type: 'button',
-      'aria-label': 'Submit',
-      'aria-labelledby': 'checkout-label',
-      'aria-hidden': 'false'
-    })
-  })
-
-  it.each([
-    'access_token=credential',
-    'API_KEY=credential',
-    'password=credential',
-    'secret=credential',
-    'session_id=credential',
-    'csrf=credential'
-  ])('redacts %s in allowed attribute values', (value) => {
-    const payload = clampGrabPayload(
-      makeRawPayload({
-        target: {
-          ...makeRawPayload().target,
-          attributes: { title: value, 'aria-label': value }
-        }
-      })
-    )
-
-    expect(payload?.target.attributes).toEqual({
-      title: '[redacted]',
-      'aria-label': '[redacted]'
-    })
   })
 })

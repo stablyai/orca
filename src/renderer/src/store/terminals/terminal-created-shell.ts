@@ -1,6 +1,6 @@
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { getProjectRuntimeFolder } from '@/lib/local-project-runtime-workspace'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { getProjectRuntimeFolder } from '@/runtime/hosts/wsl/local-project-runtime-workspace'
 import { findLocalFolderWorkspaceRuntimeRepo } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { isWslUncPath } from '../../../../shared/wsl-paths'

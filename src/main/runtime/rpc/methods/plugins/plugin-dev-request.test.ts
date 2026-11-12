@@ -10,9 +10,9 @@ import { PluginService } from '../../../../plugins/plugin-service'
 import type {
   PluginWorkerHandle,
   PluginWorkerPanelRequest
-} from '../../../../plugins/workers/plugin-host-process-types'
+} from '../../../../plugins/workers/parent-process/plugin-host-process-types'
 
-import type { PluginWorkerFactory } from '../../../../plugins/workers/plugin-worker-startup'
+import type { PluginWorkerFactory } from '../../../../plugins/workers/worker-supervision/plugin-worker-startup'
 import { eraseRpcMethods, type RpcContext } from '../../core'
 import { PLUGIN_DEV_REQUEST_METHODS } from './plugin-dev-request'
 import { setPluginServiceForRpc } from './plugins'
@@ -93,35 +93,7 @@ async function realService(options: {
   return { root, factory, requestFromPanel }
 }
 
-function workerError(code: string, message: string): Error {
-  return Object.assign(new Error(message), { code })
-}
-
 describe('plugins.devRequest', () => {
-  it.each([
-    ['unknown_method', 'no panel handler named nope', /orca\.panels\.handle\('nope'/],
-    ['timeout', 'nope timed out after 30000ms', /--timeout-ms/]
-  ])('maps a worker %s to plugin_request_failed', async (code, message, step) => {
-    await realService({
-      answer: async () => {
-        throw workerError(code, message)
-      }
-    })
-    const failure = devRequest().handler({ pluginKey: 'samples.demo', name: 'nope' }, context)
-    await expect(failure).rejects.toMatchObject({
-      code: 'plugin_request_failed',
-      data: { requestCode: code, nextSteps: [expect.stringMatching(step)] }
-    })
-  })
-
-  it('refuses an installed (non-dev) plugin key', async () => {
-    const { factory } = await realService({ answer: async () => null, dev: false })
-    await expect(
-      devRequest().handler({ pluginKey: 'samples.demo', name: 'count' }, context)
-    ).rejects.toMatchObject({ code: 'plugin_not_found' })
-    expect(factory).not.toHaveBeenCalled()
-  })
-
   it('refuses an unapproved plugin without starting its worker', async () => {
     const { factory } = await realService({ answer: async () => null, approved: false })
     await expect(

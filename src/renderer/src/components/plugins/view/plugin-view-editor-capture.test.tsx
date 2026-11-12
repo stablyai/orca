@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePluginEditorCaptureReport } from '@/components/editor/plugin-editor-capture-status'
 import { registerEditorFrameFlush } from '@/components/editor/save/flush/editor-pending-flush'
-import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
+import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { captureOpenEditor } from './plugin-view-editor-capture'
 
 vi.mock('./plugin-view-panel-settle', () => ({

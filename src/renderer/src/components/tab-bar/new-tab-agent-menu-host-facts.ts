@@ -1,3 +1,4 @@
+import { readAgentMenuLaunchFacts } from './agent-menu-launch-facts'
 import type { AppState } from '@/store/types'
 import {
   buildAgentLaunchRouteInput,
@@ -24,6 +25,7 @@ export function newTabAgentMenuHostFacts(state: AppState, workspace: Prospective
   return {
     executionHostId: input.executionHostId,
     inventoryExecutionHostId,
+    hostPlatform: readAgentMenuLaunchFacts(state, workspace).hostPlatform,
     runtimeId: host?.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null,
     pairingRevision:
       host?.kind === 'runtime' ? getRuntimeEnvironmentRevision(host.environmentId) : undefined,

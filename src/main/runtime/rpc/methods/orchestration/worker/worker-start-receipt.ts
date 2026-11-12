@@ -3,6 +3,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { WorkerDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
+import { reportFailedWorkerStart } from '../../../../orchestration/workers/turn-stops/failed-worker-start-report'
 import {
   isUnknownWorkerStartOutcome,
   type createStructuredWorkerSessionForWorktree,
@@ -10,6 +11,8 @@ import {
 } from './worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
+import { replaceDispatchCapabilities } from '../../../../orchestration/terminal-authority/views/worker-terminal-redaction'
+import { redactString } from '../../../../../observability/redactor'
 
 type WorkerStartFailureArgs = {
   runtime: OrcaRuntimeService
@@ -75,13 +78,22 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
 }
 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
-  const reason =
-    formatTerminalStartFailure(args.error) ??
-    (args.error instanceof Error ? args.error.message : String(args.error))
+  // A launch's printed output can echo its injected capability or other secrets; the receipt must never carry them.
+  const reason = redactString(
+    replaceDispatchCapabilities(
+      formatTerminalStartFailure(args.error) ??
+        (args.error instanceof Error ? args.error.message : String(args.error))
+    ).value
+  )
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
     : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)
+  if (!unknown) {
+    reportFailedWorkerStart(args.db, worker, (handle, type) =>
+      args.runtime.notifyMessageArrived(handle, type)
+    )
+  }
   // Offer cleanup for this start's still-owned resource, including a chat retaining its refused task.
   const residual = unknown ? undefined : args.db.getWorkerTerminalResourceByOwner(args.dispatchId)
   const releasable = residual?.ownership_state === 'owned'

@@ -7,9 +7,9 @@ import {
 import { parsePaneKey } from '../../../src/shared/workspace-layout/stable-pane-id'
 import { hostScopeCensusIsComplete } from '../../../src/shared/runtime-listing-host-scope'
 import { salvagingArray } from '../../../src/shared/zod-salvage'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import type { RpcClient } from '../transport/rpc-client'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileAutomationRun } from './automation-reply-schema'
 
 const terminalList = bindDeferredRpcOperation(

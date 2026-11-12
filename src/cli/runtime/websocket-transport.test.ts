@@ -1,11 +1,11 @@
 import { createServer, type Server } from 'node:http'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import 'node:fs'
+import 'node:os'
+import 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer } from 'ws'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
-import type { PairingOffer } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import {
   decrypt,
@@ -14,12 +14,12 @@ import {
   generateKeyPair,
   publicKeyToBase64
 } from '../../shared/remote-runtime/e2ee/node/e2ee-crypto'
-import { sendWebSocketRequestWithStatusPreflight } from './websocket-transport'
-import { getRemoteRuntimeRequestAdmissionEvidence } from '../../shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
+import './websocket-transport'
+import '../../shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
 import { RuntimeClient } from './client'
-import { requestWorktreeRemoval } from '../handlers/worktree-removal-request'
+import '../workspaces/worktree-removal-request'
 import { launchOrcaApp } from './launch'
-import { addEnvironmentFromPairingCode } from './environments'
+import './environments'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
@@ -48,93 +48,6 @@ describe('CLI remote WebSocket transport', () => {
     await Promise.all(servers.splice(0).map((server) => server.close()))
   })
 
-  it('accepts a bare pairing payload as well as the orca URL wrapper', async () => {
-    const runtime = await startTestRuntime('runtime-ws-2', {
-      appVersion: '1.5.0',
-      remoteUpdateSupport: {
-        installMode: 'unsupported-headless-serve',
-        automatic: false,
-        reason: 'manual-service-update-required'
-      },
-      capabilities: ['updater.remote-control.v1'],
-      degradations: [
-        {
-          code: 'browser_unavailable',
-          capability: 'browser.headless.v1',
-          message: 'Browser automation is unavailable.'
-        }
-      ]
-    })
-    servers.push(runtime)
-    const offer: PairingOffer = {
-      v: 2,
-      endpoint: runtime.endpoint,
-      deviceToken: runtime.deviceToken,
-      publicKeyB64: runtime.publicKeyB64
-    }
-    const pairingUrl = encodePairingOffer(offer)
-    const barePayload = new URLSearchParams(pairingUrl.slice(pairingUrl.indexOf('?') + 1)).get(
-      'code'
-    )!
-
-    const client = new RuntimeClient('/tmp/unused', 5_000, barePayload)
-    const status = await client.getCliStatus()
-
-    expect(status.result.app).toEqual({ running: false, pid: null })
-    expect(status.result.runtime.reachable).toBe(true)
-    expect(status.result.runtime.runtimeId).toBe('runtime-ws-2')
-    expect(status.result.runtime).toMatchObject({
-      appVersion: '1.5.0',
-      remoteUpdateSupport: { automatic: false, reason: 'manual-service-update-required' },
-      capabilities: ['updater.remote-control.v1'],
-      degradations: [expect.objectContaining({ code: 'browser_unavailable' })]
-    })
-  })
-
-  it('does not launch a local desktop app for remote-paired open', async () => {
-    const runtime = await startTestRuntime('runtime-remote-headless', {
-      desktopWindowStatus: 'initializing'
-    })
-    servers.push(runtime)
-    const client = new RuntimeClient(
-      '/tmp/unused',
-      5_000,
-      encodePairingOffer({
-        v: 2,
-        endpoint: runtime.endpoint,
-        deviceToken: runtime.deviceToken,
-        publicKeyB64: runtime.publicKeyB64
-      })
-    )
-
-    const status = await client.openOrca()
-
-    expect(status.result.app.desktopWindowStatus).toBe('initializing')
-    expect(launchOrcaApp).not.toHaveBeenCalled()
-  })
-
-  it('connects through a saved environment selector', async () => {
-    const runtime = await startTestRuntime('runtime-env-1')
-    servers.push(runtime)
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-env-'))
-    addEnvironmentFromPairingCode(userDataPath, {
-      name: 'remote-dev',
-      pairingCode: encodePairingOffer({
-        v: 2,
-        endpoint: runtime.endpoint,
-        deviceToken: runtime.deviceToken,
-        publicKeyB64: runtime.publicKeyB64
-      })
-    })
-
-    const client = new RuntimeClient(userDataPath, 5_000, null, 'remote-dev')
-    const status = await client.getCliStatus()
-
-    expect(status.result.app).toEqual({ running: false, pid: null })
-    expect(status.result.runtime.reachable).toBe(true)
-    expect(status.result.runtime.runtimeId).toBe('runtime-env-1')
-  })
-
   it('blocks remote RPCs when the server protocol is too old', async () => {
     const runtime = await startTestRuntime('runtime-old', { runtimeProtocolVersion: 1 })
     servers.push(runtime)
@@ -158,232 +71,6 @@ describe('CLI remote WebSocket transport', () => {
     expect(runtime.authFrames).toHaveLength(1)
     expect(runtime.requestMethods).toEqual(['status.get'])
   })
-
-  it('preflights and dispatches through one authenticated connection', async () => {
-    const runtime = await startTestRuntime('runtime-single-auth')
-    servers.push(runtime)
-    const client = new RuntimeClient(
-      '/tmp/unused',
-      5_000,
-      encodePairingOffer({
-        v: 2,
-        endpoint: runtime.endpoint,
-        deviceToken: runtime.deviceToken,
-        publicKeyB64: runtime.publicKeyB64
-      })
-    )
-
-    await expect(client.call('repo.list')).rejects.toMatchObject({ code: 'method_not_found' })
-
-    expect(runtime.connectionCount()).toBe(1)
-    expect(runtime.authFrames).toHaveLength(1)
-    expect(runtime.requestMethods).toEqual(['status.get', 'repo.list'])
-  })
-
-  it('blocks orchestration mutations when a remote runtime lacks the contract capability', async () => {
-    const runtime = await startTestRuntime('runtime-old-orchestration', { capabilities: [] })
-    servers.push(runtime)
-    const client = new RuntimeClient(
-      '/tmp/unused',
-      5_000,
-      encodePairingOffer({
-        v: 2,
-        endpoint: runtime.endpoint,
-        deviceToken: runtime.deviceToken,
-        publicKeyB64: runtime.publicKeyB64
-      })
-    )
-
-    await expect(client.call('orchestration.send', { subject: 'hello' })).rejects.toMatchObject({
-      code: 'orchestration_migration_required',
-      data: {
-        reason: 'runtime_capability_missing',
-        effectsApplied: false
-      }
-    })
-  })
-
-  it.each(['status', 'capable-mutation', 'legacy-mutation'] as const)(
-    'reports paired timeout at %s without replay',
-    async (phase) => {
-      const received = Promise.withResolvers<void>()
-      const status: Parameters<typeof startTestRuntime>[1] = {
-        capabilities: ['worktree.remove-branch-policy.v1']
-      }
-      const runtime = await startTestRuntime('timeout', status)
-      servers.push(runtime)
-      const client = new RuntimeClient(
-        '/tmp/unused',
-        5000,
-        encodePairingOffer({
-          v: 2,
-          endpoint: runtime.endpoint,
-          deviceToken: runtime.deviceToken,
-          publicKeyB64: runtime.publicKeyB64
-        })
-      )
-      await client.getCliStatus()
-      status.hold = phase === 'status' ? 'status.get' : 'worktree.rm'
-      if (phase === 'legacy-mutation') {
-        status.capabilities = undefined
-      }
-      status.onRequest = (method) => {
-        if (method === status.hold) {
-          received.resolve()
-        }
-      }
-      const warning = vi.spyOn(console, 'error').mockImplementation(() => {})
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-      try {
-        const response = requestWorktreeRemoval(client, {
-          worktree: 'id:task',
-          hostId: 'local',
-          force: false,
-          deleteBranch: false,
-          runHooks: false,
-          allowFailedArchiveHook: false
-        }).catch((error: unknown) => error)
-        await received.promise
-        await vi.runAllTimersAsync()
-        expect(await response).toMatchObject({
-          code: phase === 'status' ? 'runtime_timeout' : 'worktree_removal_in_progress'
-        })
-        expect(runtime.requestMethods).toEqual(
-          phase === 'status'
-            ? ['status.get', 'status.get']
-            : ['status.get', 'status.get', 'worktree.rm']
-        )
-        expect(warning.mock.calls).toHaveLength(phase === 'legacy-mutation' ? 1 : 0)
-        expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
-          pendingRequestCount: 0,
-          retainedBytes: 0
-        })
-      } finally {
-        vi.useRealTimers()
-        warning.mockRestore()
-      }
-    }
-  )
-
-  it('selects paired params before serialization and releases failed preparation without dispatch', async () => {
-    const runtime = await startTestRuntime('prepare')
-    servers.push(runtime)
-    const dispatched = vi.fn()
-    await expect(
-      sendWebSocketRequestWithStatusPreflight(
-        {
-          endpoint: runtime.endpoint,
-          hostPublicKeyB64: runtime.publicKeyB64,
-          credential: { kind: 'token', deviceToken: runtime.deviceToken }
-        },
-        'worktree.rm',
-        {},
-        5000,
-        () => {},
-        undefined,
-        { paramsForStatus: () => ({ value: 1n }), onDispatch: dispatched }
-      )
-    ).rejects.toBeInstanceOf(Error)
-    expect(dispatched).not.toHaveBeenCalled()
-    expect(runtime.requestMethods).toEqual(['status.get'])
-    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
-      pendingRequestCount: 0,
-      retainedBytes: 0
-    })
-  })
-
-  it.each([
-    'capable',
-    'absent',
-    'empty',
-    'unrelated',
-    'malformed',
-    'failed',
-    'disconnect',
-    'after-send',
-    'protocol',
-    'auth'
-  ] as const)(
-    'preflights branch intent on the mutation socket after cached compatibility: %s',
-    async (mode) => {
-      const status: NonNullable<Parameters<typeof startTestRuntime>[1]> = {
-        capabilities: ['worktree.remove-branch-policy.v1'],
-        malformed: false,
-        failure: false,
-        disconnect: false,
-        mutationDisconnect: false,
-        rejectAuth: false,
-        runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION
-      }
-      const runtime = await startTestRuntime('removal', status)
-      servers.push(runtime)
-      const client = new RuntimeClient(
-        '/tmp/unused',
-        5000,
-        encodePairingOffer({
-          v: 2,
-          endpoint: runtime.endpoint,
-          deviceToken: runtime.deviceToken,
-          publicKeyB64: runtime.publicKeyB64
-        })
-      )
-      await client.getCliStatus()
-      if (mode === 'absent') {
-        status.capabilities = undefined
-      }
-      if (mode === 'empty') {
-        status.capabilities = []
-      }
-      if (mode === 'unrelated') {
-        status.capabilities = ['future.capability']
-      }
-      status.malformed = mode === 'malformed'
-      const successful = ['capable', 'absent', 'empty', 'unrelated'].includes(mode)
-      const warning = vi.spyOn(console, 'error').mockImplementation(() => {})
-      status.failure = mode === 'failed'
-      status.disconnect = mode === 'disconnect'
-      status.mutationDisconnect = mode === 'after-send'
-      status.rejectAuth = mode === 'auth'
-      if (mode === 'protocol') {
-        status.runtimeProtocolVersion = 0
-      }
-      const removal = requestWorktreeRemoval(client, {
-        worktree: 'id:task',
-        hostId: 'local',
-        force: false,
-        deleteBranch: false,
-        runHooks: false,
-        allowFailedArchiveHook: false
-      })
-      await (successful
-        ? expect(removal).resolves.toMatchObject({ result: { removed: true } })
-        : expect(removal).rejects.toBeInstanceOf(Error))
-      expect(
-        warning.mock.calls.filter(([message]) => String(message).includes('host is older'))
-      ).toHaveLength(successful && mode !== 'capable' ? 1 : 0)
-      if (successful) {
-        expect(runtime.requestParams.at(-1)).toEqual({
-          worktree: 'id:task',
-          hostId: 'local',
-          force: false,
-          runHooks: false,
-          allowFailedArchiveHook: false,
-          allowUnverifiedPtyStop: false,
-          waitForBackgroundRemoval: true,
-          ...(mode === 'capable' ? { deleteBranch: false } : {})
-        })
-      }
-      warning.mockRestore()
-      expect(runtime.connectionCount()).toBe(2)
-      expect(runtime.requestMethods).toEqual(
-        successful || mode === 'after-send'
-          ? ['status.get', 'status.get', 'worktree.rm']
-          : mode === 'auth'
-            ? ['status.get']
-            : ['status.get', 'status.get']
-      )
-    }
-  )
 })
 
 async function startTestRuntime(

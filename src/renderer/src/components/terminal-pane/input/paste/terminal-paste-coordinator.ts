@@ -7,7 +7,7 @@ import {
 import {
   measurePastePayloadMetadata as measureTerminalPastePayloadMetadata,
   measurePastePayloadMetadataWithYield as measureTerminalPastePayloadMetadataWithYield
-} from '../../../../lib/paste-payload-metadata'
+} from '../../../../lib/text-input/paste/paste-payload-metadata'
 import type {
   TerminalPastePayload,
   TerminalPastePlan,

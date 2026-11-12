@@ -1,4 +1,4 @@
-import type { RuntimeFilePreviewResult } from '../../../shared/runtime-file-contracts'
+import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
 import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
 import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/runtime-environment-registry-root'
 import {
@@ -8,7 +8,7 @@ import {
   toRuntimeWorktreeRelativePath,
   type DocPreviewGrant
 } from './doc-preview-grant-registry'
-import type { RuntimeDocPreviewReadParams } from './doc-preview-file-reader'
+import type { RuntimeDocPreviewReadParams } from './doc-preview-runtime-read-contract'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
 const TIMEOUT_MS = 15_000

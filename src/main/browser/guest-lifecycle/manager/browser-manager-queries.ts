@@ -5,8 +5,9 @@ import type {
 } from '../../../../shared/browser-workspace-types'
 import type { ManagedBrowserGuestContext } from '../../certificate-trust/browser-certificate-challenge'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
-import { safeOrigin, type BrowserPopupPage } from './browser-manager-types'
-import { BrowserManagerRegistration } from './browser-manager-registration'
+import { safeOrigin } from '../browser-event-origin'
+import type { BrowserPopupPage } from '../popups/browser-popup-ownership'
+import { BrowserManagerRegistration } from './registration/browser-manager-registration'
 import {
   isBrowserRouteGuestPopup,
   listBrowserRouteGuestPopups
@@ -110,6 +111,13 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     return webContentsId === undefined
       ? null
       : (this.loadErrorsByGuestId.get(webContentsId) ?? null)
+  }
+
+  getBrowserPageRemoteTabFaviconUrl(browserPageId: string): string | null {
+    const webContentsId = this.webContentsIdByTabId.get(browserPageId)
+    return webContentsId === undefined
+      ? null
+      : (this.remoteTabFaviconUrlByGuestId.get(webContentsId) ?? null)
   }
 
   getBrowserPageCertificateFailure(browserPageId: string): BrowserCertificateFailure | null {

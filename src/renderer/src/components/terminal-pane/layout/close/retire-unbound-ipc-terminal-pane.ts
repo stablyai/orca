@@ -1,7 +1,8 @@
+import { captureTerminalPaneNoticeRetirement } from '../../mounting/terminal-pane-notice-retirement'
 import {
   buildTerminalTabRetirementPlan,
   getTerminalPtyOwnershipIdentity
-} from '@/store/slices/terminal-tab-retirement'
+} from '@/store/terminals/terminal-tab-retirement'
 import { startTerminalTabProviderRetirement } from '@/store/terminals/terminal-tab-close-providers'
 import {
   terminalPaneHasOtherOwner,
@@ -33,6 +34,14 @@ export function retireUnboundIpcTerminalPane(args: UnboundTerminalPaneRetirement
   if (hasOtherOwner(leafId)) {
     return
   }
+  const retireNotice = captureTerminalPaneNoticeRetirement({
+    tabId,
+    leafId,
+    worktreeId: plan.worktreeId,
+    ptyId,
+    transport,
+    getTransports: args.getTransports
+  })
   const retirementPlan = {
     ...plan,
     ptyIds: [ptyId],
@@ -59,9 +68,11 @@ export function retireUnboundIpcTerminalPane(args: UnboundTerminalPaneRetirement
       // A replacement can own even this same leaf by the time the reply arrives.
       if (!hasOtherOwner()) {
         requestRetirement()
+        retireNotice()
       }
       return true
     }
   })
   requestRetirement()
+  retireNotice()
 }

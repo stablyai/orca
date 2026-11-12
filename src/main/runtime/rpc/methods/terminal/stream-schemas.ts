@@ -24,9 +24,12 @@ export const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
       writeUnavailable: z.literal(1).optional(),
       // Old clients quarantine input after writeUnavailable; send host-lost semantics only to clients that understand them.
       endpointLossNotice: z.literal(1).optional(),
-      inputAck: z.literal(1).optional()
+      inputAck: z.literal(1).optional(),
+      outputCadence: z.literal(1).optional()
     })
     .optional(),
+  // Initial cadence, so a resubscribe resumes coalescing without a follow-up frame.
+  outputCadence: z.enum(['focused', 'background']).optional(),
   // Name the client input sequence domain across stream replacement so replay deduplicates.
   inputSessionId: z.string().min(1).max(128).optional()
 })

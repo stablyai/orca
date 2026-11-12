@@ -7,7 +7,7 @@ import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh
 import { RemoteFileBrowser } from '../../host-path-browser/RemoteFileBrowser'
 import { SshTargetRow } from '../../host-admission/ssh/SshTargetRow'
 import { AddServerSshHostDialog } from '../../host-admission/ssh/AddServerSshHostDialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useBoundedHostRows } from '../../../host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '../../../host-picker/HostListSearchField'
 import { HostListOverflowNote } from '../../../host-picker/HostListOverflowNote'
@@ -42,6 +42,7 @@ export function RemoteStep({
   onConnectTarget,
   server
 }: RemoteStepProps): React.JSX.Element {
+  const t = useTranslate()
   const [browsing, setBrowsing] = useState(false)
   const [addingServerHost, setAddingServerHost] = useState(false)
   const targetRows = useBoundedHostRows(
@@ -59,13 +60,10 @@ export function RemoteStep({
       <>
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.sidebar.AddRepoRemoteStep.dd3ff65486',
-              'Browse remote filesystem'
-            )}
+            {t('auto.components.sidebar.AddRepoRemoteStep.dd3ff65486', 'Browse remote filesystem')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.sidebar.AddRepoRemoteStep.007651bdf9',
               'Navigate to a directory and click Select to choose it.'
             )}
@@ -89,13 +87,10 @@ export function RemoteStep({
     <>
       <DialogHeader>
         <DialogTitle>
-          {translate(
-            'auto.components.sidebar.AddRepoRemoteStep.91b93a90a4',
-            'Open project on SSH host'
-          )}
+          {t('auto.components.sidebar.AddRepoRemoteStep.91b93a90a4', 'Open project on SSH host')}
         </DialogTitle>
         <DialogDescription>
-          {translate(
+          {t(
             'auto.components.sidebar.AddRepoRemoteStep.serverDescription',
             'Choose an SSH host that {{server}} connects to, and enter the path to a Git repository on it.',
             { server: server.label }
@@ -106,11 +101,11 @@ export function RemoteStep({
       <div className="space-y-3 pt-1">
         <div className="space-y-1">
           <label className="text-[11px] font-medium text-muted-foreground">
-            {translate('auto.components.sidebar.AddRepoRemoteStep.44637f43bd', 'SSH target')}
+            {t('auto.components.sidebar.AddRepoRemoteStep.44637f43bd', 'SSH target')}
           </label>
           {sshTargets.length === 0 ? (
             <p className="py-1 text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.sidebar.AddRepoRemoteStep.serverEmpty',
                 '{{server}} has no SSH hosts yet.',
                 { server: server.label }
@@ -140,7 +135,7 @@ export function RemoteStep({
             onClick={() => setAddingServerHost(true)}
           >
             <Plus className="size-3.5" />
-            {translate('auto.components.sidebar.AddRepoRemoteStep.serverAddHost', 'Add SSH host')}
+            {t('auto.components.sidebar.AddRepoRemoteStep.serverAddHost', 'Add SSH host')}
           </Button>
           <AddServerSshHostDialog
             environmentId={server.environmentId}
@@ -153,7 +148,7 @@ export function RemoteStep({
 
         <div className="space-y-1">
           <label className="text-[11px] font-medium text-muted-foreground">
-            {translate('auto.components.sidebar.AddRepoRemoteStep.ef410aa881', 'Host path')}
+            {t('auto.components.sidebar.AddRepoRemoteStep.ef410aa881', 'Host path')}
           </label>
           <div className="flex gap-2">
             <Input
@@ -167,7 +162,7 @@ export function RemoteStep({
                   }
                 }
               }}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.sidebar.AddRepoRemoteStep.6680289908',
                 '/home/user/project'
               )}
@@ -196,11 +191,8 @@ export function RemoteStep({
           className="w-full"
         >
           {isAddingRemote
-            ? translate('auto.components.sidebar.AddRepoRemoteStep.35831a7312', 'Adding...')
-            : translate(
-                'auto.components.sidebar.AddRepoRemoteStep.36d427bb66',
-                'Add project on SSH host'
-              )}
+            ? t('auto.components.sidebar.AddRepoRemoteStep.35831a7312', 'Adding...')
+            : t('auto.components.sidebar.AddRepoRemoteStep.36d427bb66', 'Add project on SSH host')}
         </Button>
       </div>
     </>

@@ -5,8 +5,8 @@ import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layo
 import {
   collectReleasedLeafIds,
   hydrateWorkspaceTerminalRows
-} from '../slices/terminal-session-row-hydration'
-import { removeSleepingAgentSessionsForTab } from '../slices/terminal-tab-retirement'
+} from './terminal-session-row-hydration'
+import { removeSleepingAgentSessionsForTab } from './terminal-tab-retirement'
 
 export type WorkspaceTerminalRowPlan = {
   canonicalTabIdBySubsumedTabId: Map<string, string>

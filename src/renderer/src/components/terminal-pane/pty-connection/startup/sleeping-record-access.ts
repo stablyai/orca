@@ -1,10 +1,11 @@
 import { installSavedResumeStartupCancellation } from './saved-resume-startup-cancellation'
 import { launchConfigsEqual } from '../../../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 import { useAppStore } from '@/store/index'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
 import type { PtyConnectResult } from '../../pty-transport/pty-transport-types'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { findLegacyNumericSleepingRecord } from '../../../../../../shared/sleeping-record-legacy-pane-key'
-import { neutralTerminalTitle } from '../../../../../../shared/workspace-layout/terminal-pane-title-reset'
+import { neutralTerminalTitle } from '../../../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-title-reset'
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
@@ -15,7 +16,7 @@ import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/
 import {
   beginAgentStartupDeliveryAttempt,
   releaseAgentStartupDeliveryAttempt
-} from '@/lib/agent-startup-delayed-delivery'
+} from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
@@ -30,7 +31,12 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       return { paneKey: session.cacheKey, record: stableRecord }
     }
     const legacy = findLegacyNumericSleepingRecord(
-      state.sleepingAgentSessionsByPaneKey,
+      Object.fromEntries(
+        sleepingAgentRecordIndex.entries(
+          state.sleepingAgentSessionsByPaneKey,
+          session.deps.worktreeId
+        )
+      ),
       { tabId: session.deps.tabId, numericPaneId: String(session.pane.id) },
       (record) => record.worktreeId === session.deps.worktreeId
     )
@@ -44,7 +50,10 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     if (consumed.paneKey !== keepPaneKey) {
       state.clearSleepingAgentSession(consumed.paneKey)
     }
-    for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
+    for (const [paneKey, record] of sleepingAgentRecordIndex.entries(
+      state.sleepingAgentSessionsByPaneKey,
+      consumed.record.worktreeId
+    )) {
       if (
         paneKey !== consumed.paneKey &&
         paneKey !== keepPaneKey &&
@@ -64,9 +73,10 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
   session.savedStartupAutomaticClaim = session.paneStartup?.resumeSource
     ? useAppStore.getState().automaticAgentResumeClaimsByTabId[session.deps.tabId]
     : undefined
-  session.launchToken = session.paneStartup?.launchConfig
-    ? (session.paneStartup.launchToken ?? createBrowserUuid())
-    : undefined
+  session.launchToken =
+    session.paneStartup?.launchConfig || session.paneStartup?.freshAgentLaunch
+      ? (session.paneStartup.launchToken ?? createBrowserUuid())
+      : undefined
   session.startupDraftAgent =
     session.paneStartup?.launchAgent ?? session.paneStartup?.initialAgentStatus?.agent
   session.startupDraftAgentConfig = session.startupDraftAgent
@@ -77,6 +87,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       ? session.paneStartup.draftPrompt
       : null
   session.startupDraftPromptNeedsPaste =
+    !(session.runtimeEnvironmentId && session.paneStartup?.freshAgentLaunch) &&
     session.startupDraftPrompt !== null &&
     !session.startupDraftAgentConfig?.draftPromptFlag &&
     !session.startupDraftAgentConfig?.draftPromptEnvVar

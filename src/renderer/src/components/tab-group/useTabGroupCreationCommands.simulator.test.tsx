@@ -1,10 +1,11 @@
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
-import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../../shared/emulator-runtime-capabilities'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'

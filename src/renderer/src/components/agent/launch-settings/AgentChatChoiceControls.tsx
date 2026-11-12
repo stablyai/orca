@@ -1,49 +1,50 @@
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { ManagedRuntimeInstallRow } from '../../managed-runtime/ManagedRuntimeInstallRow'
-import { useAntigravityChatSignIn } from '../../provider-accounts/AntigravityChatSignInRow'
-import {
-  AntigravityProviderSignInArea,
-  antigravityProviderSignInShown
-} from '../../provider-accounts/AntigravityProviderSignInArea'
+import { useAntigravityChatSignIn } from '../../provider-accounts/use-antigravity-chat-sign-in'
+import { AntigravityProviderSignInArea } from '../../provider-accounts/AntigravityProviderSignInArea'
+import { antigravityProviderSignInShown } from '../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import {
   getHostRuntimeLabel,
   getRuntimeSentenceLabel
-} from '../../settings/accounts/scope/accounts-pane-runtime'
+} from '../../../lib/provider-accounts/account-runtime-label'
 import type { AgentOpensAs } from '../../../lib/agent-session/launch/native-chat-provider-choice'
 import { SettingsSegmentedControl } from '../../settings/form-controls/SettingsFormControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../shared/agent-session/structured-chat-platform-support'
-import { isWindowsDesktopClient } from '@/lib/windows-path-access'
+import { isWindowsDesktopClient } from '@/lib/files/os-open/windows-path-access'
 
 // The chat choice is this computer's, so the downloaded chat programs are too.
 const CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
 
 export function AgentOpensAsControl({
   label,
-  opensAs
+  opensAs,
+  disabled = false
 }: {
   label: string
   opensAs: AgentOpensAs
+  disabled?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SettingsSegmentedControl<'chat' | 'cli'>
       value={opensAs.value}
       onChange={opensAs.onChange}
-      ariaLabel={translate('settings.agents.defaultOpensAs', 'Open {{value0}} as', {
+      ariaLabel={t('settings.agents.defaultOpensAs', 'Open {{value0}} as', {
         value0: label
       })}
       size="sm"
       options={[
-        { value: 'chat', label: translate('settings.agents.defaultOpensAsChat', 'Chat') },
+        { value: 'chat', label: t('settings.agents.defaultOpensAsChat', 'Chat'), disabled },
         {
           value: 'cli',
-          label: translate('settings.agents.defaultOpensAsCli', 'CLI'),
-          disabled: opensAs.cliMissing,
+          label: t('settings.agents.defaultOpensAsCli', 'CLI'),
+          disabled: disabled || opensAs.cliMissing,
           tooltip: opensAs.cliMissing
-            ? translate(
+            ? t(
                 'settings.agents.installCliForTerminal',
                 'Install the {{value0}} CLI to open it in a terminal.',
                 { value0: label }
@@ -62,9 +63,10 @@ export function chatUnavailableOnThisDesktop(agent: string): boolean {
 
 /** Why an agent opens in a terminal on a Windows host; the Chat | CLI choice still routes remote hosts. */
 export function ChatUnavailableOnWindowsNote({ label }: { label: string }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <p className="text-xs text-muted-foreground">
-      {translate(
+      {t(
         'settings.agents.chatUnavailableOnWindows',
         "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
         { value0: label }
@@ -81,6 +83,7 @@ export function AgentChatRuntimeArea({
   agent: TuiAgent
   label: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const runtime = useManagedRuntimeInstall(CHAT_HOST, agent, true)
   // Install and Remove wait for a running sign-in, which runs the installed server.
   const signIn = useAntigravityChatSignIn(
@@ -103,7 +106,7 @@ export function AgentChatRuntimeArea({
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium leading-none">
-                {translate('settings.agents.chatRuntime', 'Chat runtime')}
+                {t('settings.agents.chatRuntime', 'Chat runtime')}
               </p>
               <div className="mt-1">{line}</div>
             </div>
@@ -114,7 +117,7 @@ export function AgentChatRuntimeArea({
       {agent === 'antigravity' && antigravityProviderSignInShown(runtime) ? (
         <AntigravityProviderSignInArea
           owner={CHAT_HOST}
-          label={getRuntimeSentenceLabel({ runtime: 'host', label: getHostRuntimeLabel() })}
+          label={getRuntimeSentenceLabel({ runtime: 'host', label: getHostRuntimeLabel(t) })}
           install={runtime}
         />
       ) : null}

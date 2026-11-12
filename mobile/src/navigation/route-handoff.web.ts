@@ -6,7 +6,7 @@ import {
 } from '../mobile-web-shell/bridge/bridge-caps'
 import { matchesRoutePattern } from '../mobile-web-shell/page-route-policy'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
-import { usePageBridgeClient } from '../transport/client-context.web'
+import { usePageBridgeClient } from '../transport/connection/client-context.web'
 import { stringifyRouteHref, type RouterHref } from './route-href'
 import { useBackClaim } from './use-back-claim.web'
 import type { RouteHandoff } from './route-handoff'
@@ -19,9 +19,12 @@ function pathnameOf(href: string): string {
 export type RouteHandoffOutcome = 'local' | 'handed-off' | 'refused'
 
 // Inspect parameter tuples: assignability alone treats no-arg back/dismissAll/reload as href-taking functions.
+// Require the first parameter to accept any href so string-literal options (setTransitionMode) do not count.
 type TakesHref<TMember> = TMember extends (...args: infer TArgs) => unknown
   ? TArgs extends [RouterHref, ...unknown[]]
-    ? true
+    ? RouterHref extends TArgs[0]
+      ? true
+      : false
     : false
   : false
 

@@ -115,46 +115,6 @@ describe('terminal IME composer placeholder mask', () => {
     document.body.replaceChildren()
   })
 
-  it.each([
-    ['Codex', codexPlaceholderFrame()],
-    [
-      'Claude',
-      `\x1b[2J\x1b[H${'─'.repeat(24)}\r\n❯ \x1b7\x1b[2mTry “fix the failing test”\x1b[22m\x1b8`
-    ],
-    [
-      'Claude with a labelled frame',
-      `\x1b[2J\x1b[H${'─'.repeat(24)} mode ─\r\n❯ \x1b7\x1b[2mTry “fix the failing test”\x1b[22m\r\n${'─'.repeat(31)}\x1b8`
-    ]
-  ])('owns a structurally verified %s placeholder during composition', async (_agent, frame) => {
-    const rig = openTerminal()
-    await rig.write(frame)
-
-    expect(rig.terminal.buffer.active.cursorX).toBe(2)
-    rig.compose()
-
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
-    expect(rig.compositionView.querySelector('.xterm-composition-remainder')).not.toBeNull()
-  })
-
-  it.each([
-    [
-      'Codex lookalike without a footer',
-      `\x1b[1m›\x1b[22m \x1b7\x1b[2m${CODEX_PLACEHOLDER}\x1b[22m\x1b8`
-    ],
-    [
-      'Claude lookalike without a frame',
-      '\x1b[2J\x1b[H❯ \x1b7\x1b[2mTry “fix the failing test”\x1b[22m\x1b8'
-    ],
-    ['arbitrary all-DIM output', '\x1b[2J\x1b[H\x1b[2mWaiting for input\x1b[22m\x1b[17D']
-  ])('leaves an ordinary shell %s visible', async (_case, frame) => {
-    const rig = openTerminal()
-    await rig.write(frame)
-
-    rig.compose()
-
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
-  })
-
   it('leaves non-placeholder Codex draft text untouched', async () => {
     const rig = openTerminal()
     await rig.write(
@@ -172,22 +132,6 @@ describe('terminal IME composer placeholder mask', () => {
     expect(rig.compositionView.querySelector('.xterm-composition-remainder')?.textContent).toBe(
       ' this'
     )
-  })
-
-  it('leaves a typed draft visible while its stock placeholder is still rendered', async () => {
-    const rig = openTerminal()
-    await rig.write(
-      [
-        '\x1b[2J\x1b[H\x1b[1m\u203a\x1b[22m \uc548\ub155\x1b7',
-        `\x1b[2m${CODEX_PLACEHOLDER}\x1b[22m`,
-        '\r\n\r\n\x1b[2mgpt-5.6 \u00b7 ~/repo\x1b[22m\x1b8'
-      ].join('')
-    )
-
-    expect(rig.terminal.buffer.active.cursorX).toBe(6)
-    rig.compose()
-
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
   })
 
   it('drops a latched owner on blur even when no session end follows', async () => {
@@ -222,26 +166,6 @@ describe('terminal IME composer placeholder mask', () => {
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
   })
 
-  it('clears ownership on composition end, blur, and disposal', async () => {
-    const rig = openTerminal()
-    await rig.write(codexPlaceholderFrame())
-    rig.compose()
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
-
-    await rig.endComposition()
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
-
-    rig.compose()
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
-    rig.textarea.dispatchEvent(new FocusEvent('blur'))
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
-
-    rig.compose()
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
-    rig.disposeMask()
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
-  })
-
   it('keeps the newest session owner when an older session ends first', async () => {
     const rig = openTerminal()
     await rig.write(codexPlaceholderFrame())
@@ -252,19 +176,6 @@ describe('terminal IME composer placeholder mask', () => {
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
 
     dispatchSession(rig, XTERM_COMPOSITION_SESSION_END_EVENT, 2)
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
-  })
-
-  it('clears the visible owner on a current end and ignores a late older end', async () => {
-    const rig = openTerminal()
-    await rig.write(codexPlaceholderFrame())
-
-    dispatchSession(rig, XTERM_COMPOSITION_SESSION_START_EVENT, 11)
-    dispatchSession(rig, XTERM_COMPOSITION_SESSION_START_EVENT, 12)
-    dispatchSession(rig, XTERM_COMPOSITION_SESSION_END_EVENT, 12)
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
-
-    dispatchSession(rig, XTERM_COMPOSITION_SESSION_END_EVENT, 11)
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
   })
 })

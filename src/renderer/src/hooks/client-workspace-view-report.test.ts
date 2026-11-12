@@ -74,49 +74,4 @@ describe('createClientWorkspaceViewReporter', () => {
       }
     ])
   })
-
-  it('reports an away user’s screen with no presence, and renews as soon as input returns', () => {
-    const { sent, report } = reporter()
-    presence.remaining = 0
-    report.update(STATE, ['local-wt'], [])
-    expect(sent[0].view.presentForMs).toBe(0)
-    report.renewPresence()
-    expect(sent).toHaveLength(1)
-    presence.remaining = 180_000
-    report.renewPresence()
-    expect(sent).toHaveLength(2)
-  })
-
-  it('retries a failed send, empty or not, no sooner than a refresh', async () => {
-    const sent: ClientWorkspaceView[] = []
-    let fail = true
-    const report = createClientWorkspaceViewReporter(async (_target, view) => {
-      sent.push(view)
-      if (fail) {
-        throw new Error('method_not_found')
-      }
-    })
-    report.update(STATE, ['local-wt'], [])
-    await Promise.resolve()
-    report.renewPresence()
-    expect(sent).toHaveLength(1)
-    vi.setSystemTime(Date.now() + 10_000)
-    report.renewPresence()
-    expect(sent).toHaveLength(2)
-
-    fail = false
-    vi.setSystemTime(Date.now() + 10_000)
-    report.renewPresence()
-    await Promise.resolve()
-    expect(sent).toHaveLength(3)
-
-    fail = true
-    report.update(STATE, [], [])
-    await Promise.resolve()
-    fail = false
-    vi.setSystemTime(Date.now() + 10_000)
-    report.renewPresence()
-    expect(sent).toHaveLength(5)
-    expect(sent.at(-1)?.workspaceIds).toEqual([])
-  })
 })

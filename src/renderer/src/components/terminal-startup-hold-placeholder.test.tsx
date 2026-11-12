@@ -24,7 +24,7 @@ vi.mock('../store', async () => {
   }))
   return { useAppStore }
 })
-vi.mock('./native-chat/use-native-chat-toggle-shortcut', () => ({
+vi.mock('./native-chat/pane/routing/use-native-chat-toggle-shortcut', () => ({
   useNativeChatToggleShortcut: () => {}
 }))
 vi.mock('./terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking', () => ({

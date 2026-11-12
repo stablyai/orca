@@ -1,16 +1,19 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
-import { useAppStore } from '../../store'
-import { createWebRuntimeSessionBrowserTab } from '../../runtime/web-runtime-browser-creation'
+import { useAppStore } from '../../store/index'
+import { createWebRuntimeSessionBrowserTab } from '../../runtime/browser/creation/web-runtime-browser-creation'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
-import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
-import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
-import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
+import { openMobileEmulatorTab } from '@/lib/simulator/launch/open-mobile-emulator-tab'
+import {
+  ensureSimulatorTab,
+  getSimulatorTabForWorktree
+} from '@/lib/simulator/tabs/ensure-simulator-tab'
+import { buildDuplicatedBrowserTabOptions } from '@/lib/browser/workspace/duplicate-browser-tab-options'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
+import { browserWorkspaceHasRemoteOwner } from '@/runtime/browser/ownership/remote-browser-tab-ownership'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { translate } from '@/i18n/i18n'
+import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
 
 export function useTabGroupCreationCommands({
   groupId,

@@ -6,7 +6,7 @@ import {
   parseLegacyNumericPaneKey,
   parsePaneKey
 } from '../../../shared/workspace-layout/stable-pane-id'
-import { agentHookServer } from '../../agent-hooks/server'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 
 export function legacyMigrationUnsupportedRowsToAliasEntries(
   entries: MigrationUnsupportedPtyEntry[]

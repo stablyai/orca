@@ -66,6 +66,7 @@ export type AttachFlowInput = {
   logger: StructuredAgentSessionLogger
   authority: AgentSessionAttachAuthority
   callerKey: string
+  telemetryCaller?: () => string | undefined
   params: AgentSessionAttachParams
   now: () => number
   recordPhase?: AgentSessionCreatePhaseRecorder

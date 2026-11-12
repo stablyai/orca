@@ -15,7 +15,7 @@ vi.mock('sonner', () => ({
 }))
 
 import { useAppStore } from '@/store'
-import { makeTab } from '@/store/slices/store-test-helpers'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { makeCandidate } from './workspace-cleanup-presentation-fixtures'
 import { useWorkspaceCleanupRemoval } from './use-workspace-cleanup-removal'
 import { useWorkspaceCleanupDialogLifecycle } from './use-workspace-cleanup-dialog-lifecycle'

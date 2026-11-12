@@ -5,13 +5,13 @@ import { useAppStore } from '@/store/index'
 import {
   runtimeEnvironmentIdForWorkspaceOwner,
   type RuntimeEnvironmentOwnerMatch
-} from '@/lib/resolve-owner'
+} from '@/lib/workspace/ownership/resolve-owner'
 import type { OrcadDeploymentLink } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { peekRuntimeEnvironmentCapability } from '../../rpc/compatibility/runtime-compatibility-cache'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { hasRegisteredRuntimeTerminalTab } from '../mounted-surfaces/mounted-terminal-tab-registry'
 
 // Why bounded: a slow or unreachable host must never keep a terminal from mounting.

@@ -40,7 +40,9 @@ export function legacyQueuedChange(
       : {})
   }
   const card = queuedCardFromChange(state, row.messageId, change)
-  return unanswered(card, state.submissions) ? change : null
+  // Completed legacy cards still prove who started their accepted handoff after table cleanup.
+  const accepted = attempt !== null && state.submissions.get(attempt)?.dispatchState === 'accepted'
+  return unanswered(card, state.submissions) || accepted ? change : null
 }
 
 /** Legacy refusals may have cleared handoff links without proving non-delivery.

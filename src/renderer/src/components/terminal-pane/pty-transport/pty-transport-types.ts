@@ -1,9 +1,11 @@
+import type { TerminalOutputCadence } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
+import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalAttachmentLaunchResult } from '../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type { AgentIdleEdgeMeta } from '../../../../../shared/terminal/output/terminal-output-side-effects'
 import type {
   RestoreSpawnIntent,
   SpawnDeferralReason
-} from '../../../../../shared/host-spawn-admission'
+} from '../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { ParsedAgentStatusPayload } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   TerminalLaunchResult,
@@ -15,12 +17,12 @@ import type {
   AgentPromptDelivery
 } from '../../../../../shared/agent-session/agent-session-host-authority'
 import type { StartupCommandDelivery } from '../../../../../shared/agent-launch/startup/codex-startup-delivery'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
 import type { EventProps } from '../../../../../shared/telemetry-event-classification'
 import type { TerminalInputKind } from '../../../../../shared/terminal/input/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { PtyDataMeta } from './delivery/pty-dispatcher'
 import type {
@@ -224,6 +226,8 @@ export type PtyTransport = {
   claimViewport?: (cols: number, rows: number) => boolean
   /** Capability-negotiated paired-runtime delivery gate; false preserves legacy delivery. */
   setOutputPaused?: (paused: boolean) => boolean
+  /** Capability-negotiated: lets the host coalesce a visible-but-unfocused pane's output longer. */
+  setOutputCadence?: (cadence: TerminalOutputCadence) => void
   resize: (
     cols: number,
     rows: number,
@@ -248,6 +252,8 @@ export type PtyTransport = {
   ownsRecovery?: () => boolean
   /** Typed input the host has not applied yet, which a remount would discard. */
   hasUndeliveredInput?: () => boolean
+  /** Input sent now is held and delivered to this pane's terminal once it connects. */
+  isHoldingInput?: () => boolean
   /** The user dismissed the error surface; the next occurrence of the same message must surface again. */
   notifyErrorSurfaceDismissed?: () => void
   getPtyId: () => string | null
@@ -305,8 +311,11 @@ export type IpcPtyTransportOptions = {
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
   resumeOrigin?: 'saved'
+  /** The pane a saved restore resumes, when it opens in another pane. */
+  resumeSourcePaneKey?: string
   agentPrompt?: string
   agentPromptDelivery?: AgentPromptDelivery
+  freshAgentLaunch?: FreshWorkspaceAgentLaunch
   agentArgsOverride?: string | null
   agentLaunchPreferences?: AgentLaunchPreferences
   launchToken?: string

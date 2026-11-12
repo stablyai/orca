@@ -1,9 +1,9 @@
-import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
+import { resolveTerminalHostOwnership } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   buildTerminalTabRetirementPlan,
   getTerminalPtyOwnershipIdentity
-} from '@/store/slices/terminal-tab-retirement'
+} from '@/store/terminals/terminal-tab-retirement'
 import { startTerminalTabProviderRetirement } from '@/store/terminals/terminal-tab-close-providers'
 import {
   terminalPaneHasOtherOwner,

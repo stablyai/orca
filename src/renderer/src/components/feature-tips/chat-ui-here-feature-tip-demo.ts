@@ -1,4 +1,5 @@
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export const CHAT_DEMO_FILE = 'auth.ts'
 export const CHAT_DEMO_MODEL = 'Opus'
@@ -15,11 +16,12 @@ export type ChatDemoCopy = {
   flow: { name: string; arrow: string | null }[]
 }
 
-export function chatDemoRevealTokens(text: string): ChatDemoToken[] {
+export function chatDemoRevealTokens(
+  text: string,
+  intlLocale: string = getIntlLocale()
+): ChatDemoToken[] {
   const tokens: ChatDemoToken[] = []
-  for (const { segment } of new Intl.Segmenter(getIntlLocale(), { granularity: 'word' }).segment(
-    text
-  )) {
+  for (const { segment } of new Intl.Segmenter(intlLocale, { granularity: 'word' }).segment(text)) {
     const last = tokens.at(-1)
     if (last && !last.link && segment.trim() === '') {
       last.text += segment
@@ -30,32 +32,35 @@ export function chatDemoRevealTokens(text: string): ChatDemoToken[] {
   return tokens
 }
 
-export function getChatDemoCopy(): ChatDemoCopy {
-  const [before, ...after] = translate(
+export function getChatDemoCopy(t: Translate = translate, intlLocale?: string): ChatDemoCopy {
+  const [before, ...after] = t(
     'featureTips.chatUiHere.demoReply',
     'Login starts in {{file}}: the browser posts to /login, the server checks the password and creates a session, then redirects you to the app. Here’s the flow:',
     { file: FILE_SLOT }
   ).split(FILE_SLOT)
   return {
-    tabTitle: translate('featureTips.chatUiHere.demoTabTitle', 'Explain login'),
-    prompt: translate('featureTips.chatUiHere.demoPrompt', 'Map out how login works'),
+    tabTitle: t('featureTips.chatUiHere.demoTabTitle', 'Explain login'),
+    prompt: t('featureTips.chatUiHere.demoPrompt', 'Map out how login works'),
     reply: [
-      ...chatDemoRevealTokens(before),
+      ...chatDemoRevealTokens(before, intlLocale),
       ...(after.length > 0
-        ? [{ text: CHAT_DEMO_FILE, link: true as const }, ...chatDemoRevealTokens(after.join(''))]
+        ? [
+            { text: CHAT_DEMO_FILE, link: true as const },
+            ...chatDemoRevealTokens(after.join(''), intlLocale)
+          ]
         : [])
     ],
     flow: [
       {
-        name: translate('featureTips.chatUiHere.demoBrowser', 'Browser'),
-        arrow: translate('featureTips.chatUiHere.demoPassword', 'password')
+        name: t('featureTips.chatUiHere.demoBrowser', 'Browser'),
+        arrow: t('featureTips.chatUiHere.demoPassword', 'password')
       },
       { name: '/login', arrow: '' },
       {
-        name: translate('featureTips.chatUiHere.demoSession', 'Session'),
-        arrow: translate('featureTips.chatUiHere.demoCookie', 'cookie')
+        name: t('featureTips.chatUiHere.demoSession', 'Session'),
+        arrow: t('featureTips.chatUiHere.demoCookie', 'cookie')
       },
-      { name: translate('featureTips.chatUiHere.demoApp', 'App'), arrow: null }
+      { name: t('featureTips.chatUiHere.demoApp', 'App'), arrow: null }
     ]
   }
 }
