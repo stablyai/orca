@@ -118,6 +118,7 @@ it.each(incompatibleBypasses)(
 )
 
 it.each([
+  DEFAULT_SYSTEM_PROXY.replace('    1 : 169.254/16', '    1 : 169.254/16\n    2 : *.corp.example'),
   DEFAULT_SYSTEM_PROXY.replace('*.local', 'googleapis.com'),
   DEFAULT_SYSTEM_PROXY.replace('*.local', '*google*'),
   DEFAULT_SYSTEM_PROXY.replace('169.254/16', '142.250/15'),

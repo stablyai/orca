@@ -102,10 +102,10 @@ function parseSystemProxy(output: string): PythonSystemProxy | null {
     }
     if (isIP(entry)) {
       bypass.push(entry)
-    } else if (/^\*\.[a-z\d](?:[a-z\d.-]*[a-z\d])?$/i.test(entry)) {
-      bypass.push(entry.slice(1))
+    } else if (entry === '*.local') {
+      bypass.push('.local')
     } else if (!isPrivateIpv4Prefix(entry)) {
-      // Exact hostnames and other globs cannot retain their matching semantics in NO_PROXY.
+      // NO_PROXY widens domain wildcards to their apex and exact hostnames to suffixes.
       return null
     }
   }
