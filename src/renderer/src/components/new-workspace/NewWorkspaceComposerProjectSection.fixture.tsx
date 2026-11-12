@@ -97,6 +97,7 @@ function ProjectAndHostPreview({
         onProjectChange={setProject}
         projectDescriptionId="fixture-project-description"
         onAddProject={() => {}}
+        onAddProjectEntryRequest={() => {}}
         focusNameInput={() => {}}
         shouldShowRunTargetPicker={!folderOnly}
         projectHostSetupOptions={hosts}

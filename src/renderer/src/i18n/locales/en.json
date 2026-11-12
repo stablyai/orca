@@ -8004,6 +8004,14 @@
         },
         "workspaceKanbanStatusLane": {
           "newWorkspaceInStatus": "New workspace in {{status}}"
+        },
+        "AddProjectMenu": {
+          "changeProjectHost": "Project host: {{host}}",
+          "projectHost": "Project host",
+          "addRemoteHost": "Add remote host…",
+          "browseFolder": "Browse folder…",
+          "cloneFromUrl": "Clone from URL…",
+          "createNewProject": "Create new project…"
         }
       },
       "shared": {
