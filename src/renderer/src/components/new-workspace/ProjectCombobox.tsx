@@ -1,5 +1,5 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, FolderPlus, Github } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -46,6 +46,11 @@ type ProjectComboboxProps = {
   onShowMoreCloudRepos?: (() => void) | null
   /** Bumped to open the list at its cloud-only section ("Choose a GitHub repository"). */
   openSignal?: number
+  /**
+   * Bumped to move focus here quietly (RR-c1: a stopped Create points at the field's error): no
+   * path tooltip on that focus, since the error is already speaking. Hover and Tab still show it.
+   */
+  focusSignal?: number
 }
 
 const ADD_PROJECT_KEY = 'add-project'
@@ -67,10 +72,12 @@ export default function ProjectCombobox({
   onCloudRepoSelected,
   onMoreCloudAccess,
   onShowMoreCloudRepos = null,
-  openSignal = 0
+  openSignal = 0,
+  focusSignal = 0
 }: ProjectComboboxProps): React.JSX.Element {
   const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
+  const quietFocus = useRef(false)
   const contentRef = useRef<HTMLDivElement>(null)
   const recentIds = useRecentProjectIds()
   // Derive keys from the displayed sections: folder grouping changes raw rank order, so keyboard selection must follow what users see.
@@ -117,6 +124,13 @@ export default function ProjectCombobox({
     () => sectionProjectOptions(matches, query, recentIds),
     [matches, query, recentIds]
   )
+  // RR-c1: a stopped Create focuses the field without its path tooltip.
+  useEffect(() => {
+    if (focusSignal > 0) {
+      quietFocus.current = true
+      inputRef.current?.focus()
+    }
+  }, [focusSignal, inputRef])
   // "Choose a GitHub repository": open with the first cloud-only row armed (scrolled into view).
   useOpenOnSignal(openSignal, () => {
     inputRef.current?.focus()
@@ -185,18 +199,27 @@ export default function ProjectCombobox({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <Tooltip open={tooltipOpen && committed && !open} onOpenChange={setTooltipOpen}>
+      <Tooltip
+        open={tooltipOpen && committed && !open}
+        onOpenChange={(next) => (next && quietFocus.current ? undefined : setTooltipOpen(next))}
+      >
         <PopoverAnchor asChild>
           <TooltipTrigger asChild>
             <div
               data-project-combobox-root="true"
+              // A pointer on the field ends the quiet focus: hover shows the tooltip again.
+              onPointerEnter={() => {
+                quietFocus.current = false
+              }}
               onClick={() => {
                 inputRef.current?.focus()
                 setOpen(true)
               }}
               className={cn(
                 COMBOBOX_FIELD_SHELL,
-                invalid && 'border-destructive ring-destructive/20 dark:ring-destructive/40',
+                // Invalid stays red while focused, so the field and its error read as one.
+                invalid &&
+                  'border-destructive ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/40 dark:ring-destructive/40',
                 triggerClassName
               )}
             >
@@ -226,6 +249,7 @@ export default function ProjectCombobox({
                     setOpen(true)
                   }}
                   onBlur={(event) => {
+                    quietFocus.current = false
                     const next = event.relatedTarget
                     // A parent dialog's trap can refocus this field as a nested dialog mounts; Radix misses focus that leaves before the list mounts.
                     if (
