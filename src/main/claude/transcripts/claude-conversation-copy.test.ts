@@ -1,5 +1,5 @@
 import './claude-conversation-worker.test-fixture'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -44,8 +44,16 @@ afterEach(async () => {
   await rm(root, { force: true, recursive: true })
 })
 
-function copy(uuid: string, settled: boolean, before?: string, opener?: string, source = SOURCE) {
+function copy(
+  uuid: string,
+  settled: boolean,
+  before?: string,
+  opener?: string,
+  source = SOURCE,
+  destinationCwd?: string
+) {
   return copyClaudeConversation({
+    ...(destinationCwd ? { destinationCwd } : {}),
     identity: {
       sessionId: 'orca-source',
       workspaceId: 'workspace',
@@ -108,4 +116,32 @@ it('retains an accepted queued steer at the interrupted main-branch endpoint', a
     attachment: { prompt: 'Also remember B' },
     forkedFrom: { messageUuid: '00000000-0000-4000-8000-000000000099' }
   })
+})
+
+it("writes a copy for another worktree into that worktree's project, where Claude resumes it", async () => {
+  const prefix = rows.slice(0, 28)
+  await writeFile(sourcePath, `${prefix.map((row) => JSON.stringify(row)).join('\n')}\n`)
+  const assistant = prefix.findLast((row) => row.type === 'assistant')!
+  const result = await copy(
+    assistant.uuid,
+    true,
+    undefined,
+    undefined,
+    SOURCE,
+    '/repo/feature.fork'
+  )
+  expect(result.filePath).toBe(
+    join(selectedHome, 'projects', '-repo-feature-fork', `${result.sessionId}.jsonl`)
+  )
+  expect(await readdir(join(selectedHome, 'projects'))).toEqual(['-repo-feature-fork'])
+})
+
+it('refuses a worktree whose path Claude would name by hash, writing nothing', async () => {
+  const prefix = rows.slice(0, 28)
+  await writeFile(sourcePath, `${prefix.map((row) => JSON.stringify(row)).join('\n')}\n`)
+  const assistant = prefix.findLast((row) => row.type === 'assistant')!
+  await expect(
+    copy(assistant.uuid, true, undefined, undefined, SOURCE, `/${'a'.repeat(250)}`)
+  ).rejects.toThrow('Use a shorter worktree path')
+  await expect(readdir(join(selectedHome, 'projects'))).rejects.toThrow()
 })

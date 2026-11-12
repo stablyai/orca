@@ -4,15 +4,11 @@ import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-
 import { newAgentPromptOutcome } from '@/lib/agent-session/launch/prompt/new-agent-prompt-outcome'
 import { buildAgentSessionForkPrompt } from '@/lib/agent-session/context/agent-session-fork-context'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import { createForkWorktree, forkableWorktreeBranch } from '@/lib/workspace/creation/fork-worktree'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { TUI_AGENT_CONFIG } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getForkAgentLaunchPlatform } from './terminal-agent-session-fork-launch-platform'
-import { slugifyForWorkspaceName } from '../../../../../shared/workspace-name'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { translate } from '@/i18n/i18n'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
@@ -35,34 +31,8 @@ export type PreparedAgentSessionFork = {
   focusSource: () => void
 }
 
-function buildForkWorkspaceName(sourceName: string): string {
-  return slugifyForWorkspaceName(`${sourceName}-fork`) || 'session-fork'
-}
-
 function resolveTuiAgent(value: string | null | undefined): TuiAgent | null {
   return value && Object.hasOwn(TUI_AGENT_CONFIG, value) ? (value as TuiAgent) : null
-}
-
-function getUsableForkBase(
-  worktree:
-    | { branch?: string | null; isArchived?: boolean; isBare?: boolean; repoId?: string }
-    | null
-    | undefined,
-  repo: { kind?: string } | null | undefined,
-  worktreeId: string
-): string | null {
-  const branch = worktree?.branch?.trim()
-  if (
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
-    !branch ||
-    worktree?.isArchived ||
-    worktree?.isBare ||
-    !repo ||
-    repo.kind === 'folder'
-  ) {
-    return null
-  }
-  return branch
 }
 
 async function copyForkContext(prompt: string, focusSource: () => void): Promise<boolean> {
@@ -134,19 +104,7 @@ export async function copyAgentSessionForkContext(
   return copyForkContext(fork.prompt, fork.focusSource)
 }
 
-/** The transport that owns the source: its server, else where this app reaches it (local or SSH). */
-function forkCreationHostId(
-  state: Parameters<typeof resolveOwner>[0],
-  worktreeId: string
-): ExecutionHostId | undefined {
-  const owner = resolveOwner(state, { workspaceId: worktreeId })
-  if (owner.kind !== 'resolved') {
-    return undefined
-  }
-  const { endpoint, at } = owner.owner
-  return endpoint.kind === 'environment' ? toRuntimeExecutionHostId(endpoint.environmentId) : at
-}
-
+/** Creates a fork worktree from the source branch and starts its agent with the captured context. */
 export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Promise<boolean> {
   const store = useAppStore.getState()
   const sourceWorktree = store.getKnownWorktreeById(fork.worktreeId)
@@ -161,7 +119,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   }
   const sourceRepo = store.repos.find((repo) => repo.id === sourceWorktree.repoId)
   const sourceProjectRuntime = getLocalProjectExecutionRuntimeContext(store, fork.worktreeId)
-  const sourceBranch = getUsableForkBase(sourceWorktree, sourceRepo, fork.worktreeId)
+  const sourceBranch = forkableWorktreeBranch(sourceWorktree, sourceRepo, fork.worktreeId)
   if (!sourceBranch) {
     toast.error(
       translate(
@@ -171,38 +129,17 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     )
     return false
   }
-  const forkName = buildForkWorkspaceName(sourceWorktree.displayName || sourceBranch)
-  let created: Awaited<ReturnType<typeof store.createWorktree>>
+  let created: Awaited<ReturnType<typeof createForkWorktree>>
   try {
-    created = await store.createWorktree(
-      sourceWorktree.repoId,
-      forkName,
-      sourceBranch,
-      'inherit',
-      undefined,
-      'terminal_context_menu',
-      `Fork of ${sourceWorktree.displayName || forkName}`,
-      undefined,
-      undefined,
-      undefined,
-      fork.agent ?? undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      // Why: a project two hosts publish refuses a host-less create; the fork belongs on its source's host.
-      { executionHostId: forkCreationHostId(store, fork.worktreeId) }
-    )
+    created = await createForkWorktree({
+      sourceWorktreeId: fork.worktreeId,
+      repoId: sourceWorktree.repoId,
+      sourceName: sourceWorktree.displayName || sourceBranch,
+      sourceDisplayName: sourceWorktree.displayName,
+      baseBranch: sourceBranch,
+      agent: fork.agent ?? undefined,
+      source: 'terminal_context_menu'
+    })
   } catch (error) {
     toast.error(
       error instanceof Error
@@ -214,7 +151,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     )
     return false
   }
-  const forkWorktreeId = created.worktree.id
+  const forkWorktreeId = created.id
 
   if (!fork.agent) {
     activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
@@ -229,7 +166,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   })
   const launchPlatform = getForkAgentLaunchPlatform({
     repo: sourceRepo,
-    worktreePath: created.worktree.path,
+    worktreePath: created.path,
     projectRuntime: sourceProjectRuntime
   })
   const result = launchAgentInNewTabWithOutcome({

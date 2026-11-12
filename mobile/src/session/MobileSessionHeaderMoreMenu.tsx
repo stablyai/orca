@@ -1,9 +1,11 @@
 import type { RefObject } from 'react'
 import type { HostInstance } from 'react-native'
 import {
+  Bot,
   Columns2,
   Folder,
   GitBranch,
+  GitBranchPlus,
   ListChecks,
   Plus,
   SquareChevronRight
@@ -15,6 +17,7 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { mobileWorktreeForkAction } from './native-chat/mobile-native-chat-worktree-fork-action'
 
 type Props = {
   controller: MobileSessionController
@@ -42,6 +45,14 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     handleOpenNewTab,
     handleOpenQuickCommands
   } = controller
+  const worktreeFork = mobileWorktreeForkAction(controller, controller.activeSessionTab, t)
+  const subagentFork = mobileWorktreeForkAction(
+    controller,
+    controller.activeSessionTab,
+    t,
+    undefined,
+    'subagent'
+  )
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
   const panels: ActionSheetAction[] = [
     ...(!isFloatingWorkspaceRoute
@@ -114,18 +125,22 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
           }
         ]
       : []
-  const tabs: ActionSheetAction[] = actionsCollapsed
-    ? [
-        {
-          id: 'newTab',
-          label: t('session.header.newTab', 'New tab'),
-          icon: Plus,
-          disabled: tabActionsDisabled,
-          closeBeforePress: true,
-          onPress: handleOpenNewTab
-        }
-      ]
-    : []
+  const tabs: ActionSheetAction[] = [
+    ...(worktreeFork ? [{ ...worktreeFork, icon: GitBranchPlus }] : []),
+    ...(subagentFork ? [{ ...subagentFork, icon: Bot }] : []),
+    ...(actionsCollapsed
+      ? [
+          {
+            id: 'newTab',
+            label: t('session.header.newTab', 'New tab'),
+            icon: Plus,
+            disabled: tabActionsDisabled,
+            closeBeforePress: true,
+            onPress: handleOpenNewTab
+          }
+        ]
+      : [])
+  ]
   return (
     <PullDownMenu
       visible={showHeaderMoreActions}

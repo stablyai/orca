@@ -10,6 +10,7 @@ import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-
 import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
 import { selectNativeChatViewState } from './session/status/native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { NativeChatTerminalForkProvider } from './messages/actions/NativeChatTerminalForkProvider'
 import {
   useNativeChatInteractiveSendReveal,
   useNativeChatRevealLatest
@@ -303,6 +304,7 @@ export function NativeChatResolvedView({
   })
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
 
+  const terminalForkTarget = { agent, sessionId, transcriptPath, terminalTabId }
   const root = (
     <div
       ref={rootRef}
@@ -348,17 +350,19 @@ export function NativeChatResolvedView({
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
-          <NativeChatMessageList
-            ref={messageListRef}
-            session={sessionWithPending}
-            isVisible={isVisible}
-            isWorking={turnActive}
-            expandSignal={false}
-            {...turnTiming}
-            awaitingInput={awaitingInput}
-            deliveryNotices={deliveryNotices}
-            runtimeContext={imageRuntimeContext}
-          />
+          <NativeChatTerminalForkProvider {...terminalForkTarget} messages={session.messages}>
+            <NativeChatMessageList
+              ref={messageListRef}
+              session={sessionWithPending}
+              isVisible={isVisible}
+              isWorking={turnActive}
+              expandSignal={false}
+              {...turnTiming}
+              awaitingInput={awaitingInput}
+              deliveryNotices={deliveryNotices}
+              runtimeContext={imageRuntimeContext}
+            />
+          </NativeChatTerminalForkProvider>
         )}
       </NativeChatCrewFrame>
       {/* A collapsed card stays mounted but hidden, so a partly answered question survives. */}

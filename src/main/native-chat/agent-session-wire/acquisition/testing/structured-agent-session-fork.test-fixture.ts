@@ -199,13 +199,13 @@ export function forkTestSource(rig: RestTestRig, agent: 'claude' | 'codex' = 'co
     now: rig.clock.now,
     randomUuid: () => '00000000-0000-0000-0000-000000000123'
   })
-  const prepare = () =>
+  const prepare = (location = record.location) =>
     prepareStructuredAgentSessionFork({
       host,
       sessionId: record.sessionId,
       throughItemId: 'legacy:codex:source:selected-response',
       agent,
-      location: record.location,
+      location,
       envelope: intent.envelope
     })
   return {

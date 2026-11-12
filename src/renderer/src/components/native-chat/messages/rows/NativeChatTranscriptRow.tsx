@@ -165,7 +165,12 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           }
           fork={
             fork &&
-            nativeChatSlotOffersFork(slot, { chat: fork, latestTurnKey: context.latestTurnKey })
+            (fork.offersRow
+              ? fork.offersRow(slot)
+              : nativeChatSlotOffersFork(slot, {
+                  chat: fork,
+                  latestTurnKey: context.latestTurnKey
+                }))
               ? fork.rowAction
               : undefined
           }

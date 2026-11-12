@@ -1,6 +1,8 @@
 import { useContext, useSyncExternalStore } from 'react'
 import { Pressable, View } from 'react-native'
 import { GitFork } from 'lucide-react-native'
+import { chooseMobileFork } from '../mobile-native-chat-fork-choice'
+import { mobileSubagentForkAvailable } from '../../mobile-structured-chat-worktree-fork'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
 import { colors, radii } from '../../../theme/mobile-theme'
@@ -43,12 +45,24 @@ export function MobileNativeChatResponseActions({
         />
       ) : null}
       {fork && offer !== 'hidden' ? (
-        <ForkButton offer={offer} onFork={() => fork.fork(message)} />
+        <ForkButton
+          offer={offer}
+          onFork={() =>
+            fork.worktreeForkOffered()
+              ? chooseMobileFork({
+                  inChat: () => fork.fork(message),
+                  intoWorktree: (mode) => fork.forkToWorktree(message, mode),
+                  subagent: mobileSubagentForkAvailable(fork.hostCapabilities())
+                })
+              : fork.fork(message)
+          }
+        />
       ) : null}
     </View>
   )
 }
 
+/** One fork action under a response: beside this chat, or into a new worktree. */
 function ForkButton({
   offer,
   onFork

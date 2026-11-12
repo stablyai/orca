@@ -3411,7 +3411,33 @@
       "busy": "Another chat or terminal is opening. Wait, then fork the {{agent}} chat again.",
       "unconfirmed": "{{agent}} couldn't confirm the fork. It may have opened anyway; check Session History before forking again.",
       "failed": "{{agent}} couldn't fork this chat. {{detail}}",
-      "unsupported": "This host runs an older Orca. Update Orca on the host, then try again."
+      "unsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
+      "worktree": {
+        "title": "Fork into a new worktree",
+        "message": "The new worktree opens a copy of this chat. Start its branch from:",
+        "baseMain": "Main branch",
+        "baseCurrent": "This branch ({{branch}})",
+        "cancel": "Cancel",
+        "offline": "Connect to the host, then fork the chat again.",
+        "createFailed": "Couldn’t create the worktree.",
+        "nothing": "There’s no response to fork yet.",
+        "menu": "Fork into New Worktree",
+        "menuHint": "A new worktree with a copy of this chat"
+      },
+      "subagent": {
+        "title": "Background subagent",
+        "message": "A copy of this chat works on this in its own worktree and reports back here.",
+        "start": "Start",
+        "started": "Subagent started in {{name}}",
+        "menu": "Fork as Background Subagent",
+        "menuHint": "A copy of this chat works on a task and reports back"
+      },
+      "choose": {
+        "title": "Fork from this response",
+        "inChat": "In a new chat",
+        "worktree": "Into a new worktree",
+        "subagent": "As a background subagent"
+      }
     },
     "hostOutage": {
       "offlineAsOf": "{{host}} is offline · as of {{time}}",

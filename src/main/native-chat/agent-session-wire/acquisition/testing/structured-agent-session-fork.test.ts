@@ -83,6 +83,19 @@ it('keeps an earlier immutable response available while an unrelated later turn 
   })
 })
 
+it('copies a chat into another worktree on the same host, where the fork then opens', async () => {
+  const test = source()
+  const forkWorktree = { ...test.record.location, workspaceId: 'repo::/work/feature-fork' }
+  test.host.deps.resolveWorkspacePath = async (workspaceId) =>
+    workspaceId === forkWorktree.workspaceId ? '/work/feature-fork' : rig.root
+  await expect(test.prepare(forkWorktree)).resolves.toMatchObject({
+    location: { workspaceId: 'repo::/work/feature-fork' }
+  })
+  expect(test.copy).toHaveBeenCalledWith(
+    expect.objectContaining({ destinationCwd: '/work/feature-fork' })
+  )
+})
+
 it('keeps a checkpoint copy valid across a same-root source relaunch', async () => {
   const test = source()
   const nativeCopy = test.copy.getMockImplementation()!

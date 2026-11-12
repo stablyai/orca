@@ -20715,7 +20715,10 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "optionsApplyNext": "The agent is working. Changes apply to your next message.",
+        "optionsQueued": "Queued: {{choices}}. Applied when this reply finishes.",
+        "optionsQueueHint": "The agent is working. Your choice is queued and applied when this reply finishes."
       },
       "tool": {
         "exitCode": "exit {{value0}}",
@@ -21414,7 +21417,48 @@
         "commandDescription": "Fork this chat from its latest response",
         "commandWorking": "Wait for the response to finish, then fork.",
         "commandNothing": "There’s no response to fork yet.",
-        "commandTakesNoText": "Send /fork on its own, then write in the new chat."
+        "commandTakesNoText": "Send /fork on its own, then write in the new chat.",
+        "worktree": {
+          "notGit": "This chat’s workspace is not a git worktree, so it can’t fork into a new one.",
+          "createFailed": "Couldn’t create the worktree",
+          "title": "Fork into a new worktree",
+          "description": "The new worktree opens a copy of this chat, up to this response, so you can take it another way. This chat stays as it is.",
+          "baseLabel": "Start the branch from",
+          "baseMain": "Main branch",
+          "baseMainHint": "The project’s default base, like any new worktree.",
+          "baseCurrent": "This branch",
+          "baseCurrentHint": "{{branch}}, as last committed. Uncommitted changes stay here.",
+          "baseCurrentUnavailable": "This workspace has no branch to start from.",
+          "cancel": "Cancel",
+          "creating": "Creating worktree…",
+          "confirm": "Fork",
+          "menu": "Fork into New Worktree…",
+          "sidebarMenu": "Fork Chat into New Worktree",
+          "forkNotStarted": "The worktree was created, but the chat could not be forked into it.",
+          "created": "Created {{name}}",
+          "nameLabel": "Name",
+          "whereName": "The worktree’s folder and branch are named {{name}} (the branch with your prefix). The exact folder and branch show once it’s created."
+        },
+        "subagent": {
+          "title": "Fork as a background subagent",
+          "description": "A copy of this chat, up to this response, works on a task in its own worktree and reports back here. You keep working in this chat.",
+          "taskLabel": "Task",
+          "taskPlaceholder": "What should the subagent do?",
+          "confirm": "Start subagent",
+          "menu": "Fork as Background Subagent…"
+        },
+        "menuTooltip": "Fork from this response: in a new tab, a new worktree, or as a background subagent.",
+        "menuTab": "In a new tab",
+        "menuWorktree": "Into a new worktree…",
+        "menuSubagent": "As a background subagent…",
+        "fromMessage": "Fork from here",
+        "fromMessageTooltip": "Fork from here: a new chat up to this message, with it as an unsent draft you can edit.",
+        "fromMessageNothing": "There’s no response before this message to fork from.",
+        "fromMessageTab": "Edit in a new tab",
+        "fromMessageWorktree": "Edit in a new worktree…",
+        "terminalFailed": "Couldn’t fork this chat",
+        "terminalHostTooOld": "Update Orca on the host that runs this chat, then fork again.",
+        "terminalNoWorktree": "The new worktree isn’t available yet. Try again."
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",

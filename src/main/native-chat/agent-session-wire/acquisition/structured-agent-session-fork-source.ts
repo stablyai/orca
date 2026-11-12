@@ -113,7 +113,7 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
     }
     if (
       record.provider !== input.agent ||
-      !agentSessionExecutionLocationsEqual(record.location, input.location) ||
+      !forkStaysOnSourceHost(record.location, input.location) ||
       input.sessionId === input.envelope.sessionId
     ) {
       fail(`${name} could not open the source chat in this workspace. Open it again and try again.`)
@@ -189,6 +189,15 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
         `${name} could not open the source workspace. Open it again and try again.`,
         'launchFolderMissing'
       )
+    const destinationCwd = agentSessionExecutionLocationsEqual(record.location, input.location)
+      ? undefined
+      : ((await host.deps
+          .resolveWorkspacePath?.(input.location.workspaceId)
+          .catch(() => undefined)) ??
+        fail(
+          `${name} could not open the new worktree. Open it again and try again.`,
+          'launchFolderMissing'
+        ))
     const launchEnv = { ...process.env, ...(await host.deps.resolveLaunchEnv?.(input.agent)) }
     const providerSessionId = metadata.sessionHistory.rowSessionId(sourceHead)
     if (capability === 'tip' && selected.latest && !selected.checkpoint.settled) {
@@ -243,7 +252,16 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
       providerSessionId,
       requireCurrent,
       fail,
-      throughItemId
+      throughItemId,
+      destinationCwd
     }
   }
+}
+
+/** A fork may open in another worktree, but its agent's saved chat must stay on the same machine. */
+function forkStaysOnSourceHost(
+  source: AgentSessionExecutionLocation,
+  fork: AgentSessionExecutionLocation
+): boolean {
+  return source.executionHostId === fork.executionHostId && source.wslDistro === fork.wslDistro
 }

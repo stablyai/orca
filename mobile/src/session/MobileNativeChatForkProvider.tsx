@@ -5,6 +5,18 @@ import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent
 import { MobileNativeChatForkedFromContext } from './native-chat/transcript/mobile-native-chat-notice-context'
 import { forkMobileStructuredChat } from './mobile-structured-chat-fork'
 import {
+  forkMobileStructuredChatIntoWorktree,
+  type MobileWorktreeForkMode
+} from './mobile-structured-chat-worktree-fork'
+import { useMobileWorktreeForkRequest } from './native-chat/mobile-native-chat-worktree-fork-requests'
+import { useNewWorktreeRuntimeCapabilities } from '../new-workspace/creation/worktree-create-capability'
+import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
+import {
+  useWorkspaceExecutionHost,
+  workspaceRouteHref
+} from '../navigation/workspace-execution-host'
+import { translate } from '../i18n/mobile-i18n'
+import {
   MobileNativeChatForkContext,
   useMobileNativeChatFork
 } from './native-chat/use-mobile-native-chat-fork'
@@ -26,10 +38,50 @@ export function MobileNativeChatForkProvider({
   useLayoutEffect(() => {
     latestController.current = controller
   })
+  const terminal = controller.activeSessionTab?.type === 'terminal'
   const createFork = useCallback(
-    (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) =>
-      forkMobileStructuredChat(latestController.current, agent, forkFrom),
+    async (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) => {
+      const current = latestController.current
+      // A terminal chat forks into a new terminal resuming a cut copy of its transcript.
+      if (current.activeSessionTab?.type === 'terminal') {
+        await current.handleCreateTerminal(undefined, {
+          sourceChatFork: {
+            sessionId: forkFrom.sessionId,
+            agent,
+            throughEntryId: forkFrom.throughItemId
+          }
+        })
+        return
+      }
+      return forkMobileStructuredChat(current, agent, forkFrom)
+    },
     []
+  )
+  const executionHost = useWorkspaceExecutionHost()
+  const { getWorktreeCreateCutoverSupport } = useNewWorktreeRuntimeCapabilities(client, true)
+  const createWorktreeFork = useCallback(
+    (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource, mode: MobileWorktreeForkMode) => {
+      const current = latestController.current
+      return forkMobileStructuredChatIntoWorktree({
+        mode,
+        terminal: current.activeSessionTab?.type === 'terminal',
+        sourceLabel: current.activeSessionTab?.title || undefined,
+        client: current.client,
+        sourceWorktreeId: current.worktreeId,
+        agent,
+        forkFrom,
+        worktreeCreateIdempotency: getWorktreeCreateCutoverSupport(),
+        showToast: current.showToast,
+        openWorktree: (worktreeId, name, warning) =>
+          current.router.push(
+            workspaceRouteHref(
+              hostNewWorktreeSessionRoute(current.hostId, worktreeId, name, warning),
+              executionHost
+            )
+          )
+      })
+    },
+    [executionHost, getWorktreeCreateCutoverSupport]
   )
   const fork = useMobileNativeChatFork({
     client,
@@ -41,8 +93,19 @@ export function MobileNativeChatForkProvider({
     turnJournal: chat.nativeChatTurnJournal,
     agentWorking: chat.nativeChatTurnActive,
     sessionForkSupport: chat.nativeChatForkSupport,
-    createFork
+    createFork,
+    createWorktreeFork,
+    terminal
   })
+  const showNothingToFork = useCallback(
+    () =>
+      latestController.current.showToast(
+        translate('chat.fork.worktree.nothing', 'There’s no response to fork yet.'),
+        3000
+      ),
+    []
+  )
+  useMobileWorktreeForkRequest(fork.forkLatestToWorktree, showNothingToFork)
   // A fork and its source share a workspace and host.
   const openSource = useMemo(
     () =>
