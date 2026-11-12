@@ -10,7 +10,10 @@ import {
 import { isOrcaCloudExecutionHostId } from './orca-cloud-environment-id'
 import { cloudAgentLaunchNeedsHold, holdCloudAgentLaunch } from './cloud-agent-launch-hold'
 
-/** The hold key of a structured chat: its pane key, which its strip and composer read. */
+/**
+ * The hold key of a structured chat, from its session id alone: a restored chat's tab id can carry a
+ * suffix (`:history-N`), so its strip and composer read this key, never one built from the tab id.
+ */
 export function structuredCloudHoldKey(sessionId: string): string {
   return structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
 }
