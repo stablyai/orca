@@ -145,24 +145,26 @@ export async function getComputerTextActionFlags(flags: Map<string, string | boo
 
 export function getComputerKeyActionFlags(flags: Map<string, string | boolean>): {
   key: string
+  allowSystemShortcut?: boolean
 } {
   const key = getRequiredStringFlag(flags, 'key')
   const message = computerUsePressKeyValidationMessage(key)
   if (message) {
     throw new RuntimeClientError('invalid_argument', message)
   }
-  return { key }
+  return { key, ...(flags.has('allow-system-shortcut') ? { allowSystemShortcut: true } : {}) }
 }
 
 export function getComputerHotkeyActionFlags(flags: Map<string, string | boolean>): {
   key: string
+  allowSystemShortcut?: boolean
 } {
   const key = getRequiredStringFlag(flags, 'key')
   const message = computerUseHotkeyValidationMessage(key)
   if (message) {
     throw new RuntimeClientError('invalid_argument', message)
   }
-  return { key }
+  return { key, ...(flags.has('allow-system-shortcut') ? { allowSystemShortcut: true } : {}) }
 }
 
 export async function getComputerSetValueActionFlags(

@@ -191,7 +191,8 @@ export const TypeText = ComputerObserveTargetBase.extend({
 }).superRefine(validateComputerTarget)
 
 export const PressKey = ComputerObserveTargetBase.extend({
-  key: requiredString('Missing key')
+  key: requiredString('Missing key'),
+  allowSystemShortcut: OptionalBoolean
 }).superRefine((value, ctx) => {
   validateComputerTarget(value, ctx)
   const message = computerUsePressKeyValidationMessage(value.key)
@@ -201,7 +202,8 @@ export const PressKey = ComputerObserveTargetBase.extend({
 })
 
 export const Hotkey = ComputerObserveTargetBase.extend({
-  key: requiredString('Missing key')
+  key: requiredString('Missing key'),
+  allowSystemShortcut: OptionalBoolean
 }).superRefine((value, ctx) => {
   validateComputerTarget(value, ctx)
   const message = computerUseHotkeyValidationMessage(value.key)

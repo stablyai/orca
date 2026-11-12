@@ -122,6 +122,7 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 - After any UI-changing action, use the returned state or rerun `get-app-state` before choosing the next element index.
 - Use `type-text` only after focusing a field and confirming the app has a focused text receiver; synthetic keyboard delivery is reported as unverified, so inspect the returned state before assuming text landed.
 - Use `press-key` for single/navigation keys such as Return, Escape, Tab, and arrows. Use `hotkey` only for one modifier chord plus one key, such as `CmdOrCtrl+A` or `CmdOrCtrl+Shift+P`; prefer `CmdOrCtrl+...` for cross-platform combos.
+- Shortcuts that quit or close the app, log out, lock the screen, force-quit or end the session (such as `Cmd+Q` on macOS, `Alt+F4` on Windows and Linux, `Ctrl+Q` on Linux) are refused with `system_shortcut_blocked`. Close windows through their own buttons or menus instead. Add `--allow-system-shortcut` only when the user asked for that exact shortcut.
 - Use `click --modifiers <chord>` for modifier-clicks. Never synthesize separate modifier-down and modifier-up commands around a click; interruption can leave a modifier logically held.
 - Coordinates are window-local; use coordinates from the latest screenshot/state for the same target window.
 
@@ -182,6 +183,7 @@ Slack: the accessibility tree may be shallow while the screenshot contains usefu
 
 - `app_not_found`: run `list-apps` and retry with the bundle ID. If the target is a web app such as Gmail, choose the desktop browser app/window that contains it; do not retry `ORCA computer ... --app Gmail` unchanged because `orca computer` app selectors refer to desktop apps, not website names.
 - `app_blocked`: stop; the target is intentionally blocked from computer-use.
+- `system_shortcut_blocked`: the shortcut would quit, close, log out, lock or end the session. Use a semantic action such as the window's close button or menu item, or ask the user; retry with `--allow-system-shortcut` only when the user asked for that exact shortcut.
 - `window_not_found` / `window_stale`: run `list-windows`, choose a current selector, then rerun `get-app-state`.
 - `background_unavailable`: for a popup or `<select>`, use `set-value` on it; otherwise retry once with `--restore-window` after telling the user it will take over their screen.
 - `window_not_focused`: retry once with `--restore-window`; if the message says restore was already requested, stop retrying restore and bring the app forward manually or check permissions. For editable fields prefer `set-value`, then inspect before assuming keyboard input worked.

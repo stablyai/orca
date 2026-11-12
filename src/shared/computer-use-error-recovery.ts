@@ -18,6 +18,11 @@ export function computerUseErrorRecoveryData(
       return recoverWith(
         'Do not continue with this app through computer-use; choose a non-sensitive target or ask the user to handle it manually.'
       )
+    case 'system_shortcut_blocked':
+      return recoverWith(
+        'Do not retry this shortcut to close a window or quit an app; use a semantic action such as clicking its close button or menu item, or ask the user to do it.',
+        'Retry with `--allow-system-shortcut` only when the user explicitly asked for this exact shortcut.'
+      )
     case 'window_not_found':
       return recoverWith(
         'Run `orca computer list-windows --app <app> --json` and target one of the listed windows.',
