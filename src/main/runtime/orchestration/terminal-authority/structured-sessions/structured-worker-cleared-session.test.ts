@@ -33,6 +33,7 @@ const { structuredSessionMailReach } =
   await import('../../mailbox/routing/structured-session-mail-address')
 const { captureWorkerOutputReference } =
   await import('../../workers/archives/worker-output-archive')
+const { encodeWorkerOutputCursor } = await import('../../workers/transcripts/worker-output-cursor')
 const { stopStructuredWorker, readStructuredWorkerJournal } =
   await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle')
 await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session')
@@ -378,6 +379,11 @@ describe.each(['live', 'at-rest'] as const)(
       expect(history.indexOf('PRE-CLEAR')).toBeGreaterThan(-1)
       expect(history.indexOf('POST-CLEAR')).toBeGreaterThan(history.indexOf('PRE-CLEAR'))
       expect(db.getWorkerTerminalArchive(dispatchId)?.content).not.toContain('CLEAR')
+      // A cursor refusal keeps its own code; it never reads as lost output.
+      const foreign = encodeWorkerOutputCursor('ctx_other', 'transcript', 'identity', 1)
+      await expect(
+        rpcRuntime(db).call('orchestration.workerRead', { dispatch: dispatchId, cursor: foreign })
+      ).rejects.toMatchObject({ code: 'cursor_dispatch_mismatch' })
     })
 
     it('stops the worker by closing the successor, and can then release it', async () => {

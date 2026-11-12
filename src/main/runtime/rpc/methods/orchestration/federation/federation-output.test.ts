@@ -400,7 +400,7 @@ describe('orchestration federated worker output', () => {
 
     const unavailable = {
       ok: false,
-      error: { message: expect.stringContaining('is no longer available') }
+      error: { code: 'archive_unavailable', message: expect.stringContaining('worker_done') }
     }
     await expect(
       homeCall('rpc_remote_read_archive_after_removal', 'orchestration.workerRead', {

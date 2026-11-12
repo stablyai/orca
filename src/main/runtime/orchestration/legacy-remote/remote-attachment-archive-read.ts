@@ -11,20 +11,22 @@ export async function readRemoteAttachmentArchive(args: {
   limit?: number
   liveness?: 'live' | 'unverifiable' | 'exited'
 }) {
-  const archive = args.runtime
-    .getOrchestrationDb()
-    .getWorkerTerminalArchive(args.attachment.dispatch_id)
+  const db = args.runtime.getOrchestrationDb()
+  const archive = db.getWorkerTerminalArchive(args.attachment.dispatch_id)
   if (!archive || !args.attachment.terminal_handle) {
     return null
   }
   return readArchivedWorkerOutput({
-    db: args.runtime.getOrchestrationDb(),
+    db,
     dispatchId: args.attachment.dispatch_id,
     workerState: args.attachment.state,
     resource: {
       id: `remote-attachment:${args.attachment.dispatch_id}`,
       terminal_handle: args.attachment.terminal_handle,
-      release_state: args.attachment.stage === 'released' ? 'released' : 'releasing'
+      release_state: args.attachment.stage === 'released' ? 'released' : 'releasing',
+      // Rows released before references locate their transcript through the host's resume record.
+      resume_session:
+        db.getWorkerTerminalResourceByOwner(args.attachment.dispatch_id)?.resume_session ?? null
     },
     source: args.source,
     cursor: args.cursor,

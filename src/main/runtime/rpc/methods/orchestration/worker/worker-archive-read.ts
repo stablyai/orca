@@ -3,6 +3,8 @@ import type {
   OrchestrationWorkerReadSource
 } from '../../../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { PtyLivenessVerdict } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
+import { needsWslHostResolution } from '../../../../../native-chat/host-readable-transcript-path'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { readWorkerResumeSession } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -78,6 +80,11 @@ async function readReleasedTranscript(
   if (!agent || !sessionId) {
     throw outputUnavailable(args.dispatchId, 'its transcript was never located')
   }
+  const transcriptPath = reference.transcriptPath ?? resume?.providerSession.transcriptPath
+  // The resume record keeps no distro; without one a guest path could resolve in another distro.
+  if (!reference.wslDistro && transcriptPath && needsWslHostResolution(transcriptPath)) {
+    throw outputUnavailable(args.dispatchId, 'its WSL distro was never recorded')
+  }
   const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
   if (cursor && (cursor.source !== 'transcript' || !cursor.boundaryCheckpoint)) {
     throw sourceChanged()
@@ -85,7 +92,7 @@ async function readReleasedTranscript(
   const transcript = await readWorkerTranscript({
     agent,
     sessionId,
-    transcriptPath: reference.transcriptPath ?? resume?.providerSession.transcriptPath,
+    transcriptPath,
     wslDistro: reference.wslDistro,
     offset: cursor?.position,
     expectedBoundaryCheckpoint: cursor?.boundaryCheckpoint ?? undefined,
@@ -142,10 +149,14 @@ async function readReleasedChatHistory(
       ...(args.limit === undefined ? {} : { limit: args.limit })
     })
   } catch (error) {
-    if (error instanceof OrchestrationError && error.code === 'source_changed') {
-      throw error
+    // Cursor, host-boundary and other refusals keep their own codes, as on a live read.
+    if (
+      error instanceof OrchestrationError &&
+      (error.code === 'transcript_required' || error.code === CODES.notLive)
+    ) {
+      throw outputUnavailable(args.dispatchId, 'its chat history could not be read')
     }
-    throw outputUnavailable(args.dispatchId, 'its chat history could not be read')
+    throw error
   }
 }
 
