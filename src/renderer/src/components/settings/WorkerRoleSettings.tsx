@@ -44,9 +44,8 @@ export function WorkerRoleSettings({
       await updateSettings({ orchestrationWorkerRoles: parseWorkerRoleProfiles(next) })
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure))
-    } finally {
-      setPending(false)
     }
+    setPending(false)
   }
 
   return (
