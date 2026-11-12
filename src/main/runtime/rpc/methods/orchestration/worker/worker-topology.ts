@@ -6,6 +6,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { createStructuredWorkerSession } from '../structured-workers/orchestration-structured-worker-session'
 import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
+import type { AgentSessionAdvisoryPolicy } from '../../../../../../shared/agent-session/agent-session-advisory-policy'
 
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
@@ -94,6 +95,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
+  advisoryPolicy?: AgentSessionAdvisoryPolicy
   /** `--model`/`--effort`; the session seeds them exactly as a saved selection is seeded. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
@@ -104,6 +106,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
     worktreeId: args.worktreeId,
     agent: args.agent,
     dispatchId: args.dispatchId,
+    ...(args.advisoryPolicy ? { advisoryPolicy: args.advisoryPolicy } : {}),
     ...(options ? { options } : {})
   })
   args.effects.push({

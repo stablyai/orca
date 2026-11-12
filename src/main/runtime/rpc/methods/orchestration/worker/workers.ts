@@ -28,6 +28,7 @@ import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prom
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address-prefix'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
+import { assertAdvisoryWorkerRequest } from './worker-advisory-admission'
 
 type WorkerStartContext = Pick<
   RpcContext,
@@ -69,10 +70,17 @@ export async function startWorker(
   const { params, followUp, coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
     prepared
   const db = runtime.getOrchestrationDb()
-  const mode = decideWorkerStartMode({
-    params,
-    settings: readWorkerStartModeSettings(runtime)
-  })
+  const mode = params.advisoryPolicy
+    ? {
+        mode: 'structured' as const,
+        preferred: 'structured' as const,
+        reason: 'requested' as const,
+        detail: 'The bounded advisory policy requires a constrained structured worker.'
+      }
+    : decideWorkerStartMode({
+        params,
+        settings: readWorkerStartModeSettings(runtime)
+      })
   if (params.on) {
     // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
     const receipt = await startFederatedWorker({
@@ -116,6 +124,7 @@ export async function prepareWorkerStart(
   }: Omit<WorkerStartContext, 'orchestrationMutation'>,
   followUp?: WorkerFollowUp
 ) {
+  assertAdvisoryWorkerRequest(params, Boolean(followUp))
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
       'invalid_argument',

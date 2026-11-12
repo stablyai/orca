@@ -50,6 +50,14 @@ orca orchestration worker-start --task <taskId> --worktree current --agent claud
 
 `--agent` takes any Orca agent ID enabled on the worker server, for example `claude`, `codex`, `cursor`, `antigravity`, `muse`, `opencode`, or `opencode2`. `--model` accepts opaque provider model IDs for Claude, Codex, Cursor, Antigravity, Grok, and Muse (for example `--agent muse --model muse-spark-1.3`); OpenCode accepts a per-launch model only in an existing worktree, when the execution host verifies its CLI version and model availability; OpenCode effort remains unsupported. Other agents run the model from their own config. `--effort` requires `--model` and only applies when that agent/model supports the level. Neither flag can combine with `--terminal` (reuse an existing pane). Overrides apply to that launch only and show as `model` / `effort` in the start receipt (`--full --json` shows `launch.requested` / `launch.effective`). Federated starts need a worker host that advertises launch-preference support.
 
+### Bounded advisory workers
+
+`--advisory-policy-file <path>` supplies a private JSON policy for one consultation. It requires a fresh `--spec`, an explicit `--parent`, an exact existing empty local folder workspace, and explicit Claude model and effort. It refuses terminal reuse, remote routing, worktree creation, setup, retries and inherited conversations. Ordinary worker launches are unchanged.
+
+The version 1 policy contains `schema: 1`, `dataScope: "published"`, `sourcePin`, `deadlineAt`, `maxModelCalls` (1–4), and `artifacts` with `path`, `sha256` and `text`. The deadline must be within 300 seconds. The owner supplies the pinned published snapshots; the SDK snapshot server checks their hashes and serves only those immutable bytes. Raw snapshots stay out of worker metadata, which carries a policy fingerprint. The restricted tool surface provides snapshot read/search and one scoped report, then revokes access and stops the owned child. Only the consultation child Task settles; its owner still evaluates the advice.
+
+**Advisory execution is disabled pending native qualification.** The `orchestration.worker-advisory-policy.v1` capability means that the runtime understands and refuses unsupported policies. It does not prove account eligibility, disabled overages, actual provider request limits, process teardown, privacy isolation or advice quality. No production provider adapter currently advertises advisory execution support.
+
 After starting workers, end your turn. Orca wakes the coordinator when a worker reports, asks, or stops; run the `check` command the wake gives you and handle every message it prints:
 
 ```bash

@@ -7,6 +7,9 @@ import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle
 import { adapterFor, fakeClaude } from '../claude-structured-session-test-support'
 import { ClaudeStructuredSessionAdapter } from '../claude-structured-session-adapter'
 import type { AgentSessionAdvisoryReporter } from '../../../../shared/agent-session/agent-session-advisory-report'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const ADVISORY = {
   schema: 1 as const,
@@ -113,11 +116,12 @@ describe('claude structured launch resolution', () => {
     })
     saved.advisoryPolicy!.artifacts[0]!.text = 'changed after resolution'
     const claude = fakeClaude({ initSessionId: launch.providerSessionId })
+    const folder = await mkdtemp(join(tmpdir(), 'orca-advisory-launch-'))
     try {
       const reports: unknown[] = []
       let publish: AgentSessionAdvisoryReporter | undefined
       const adapter = new ClaudeStructuredSessionAdapter({
-        resolveLaunch: async () => launch,
+        resolveLaunch: async () => ({ ...launch, cwd: folder }),
         openConnection: (childLaunch, handlers) => {
           publish = handlers?.onAdvisoryReport
           return claude.openConnection(childLaunch, handlers)
@@ -149,6 +153,7 @@ describe('claude structured launch resolution', () => {
       expect(reports).toEqual([{ status: 'inconclusive' }])
     } finally {
       claude.dispose()
+      await rm(folder, { recursive: true, force: true })
     }
   })
 

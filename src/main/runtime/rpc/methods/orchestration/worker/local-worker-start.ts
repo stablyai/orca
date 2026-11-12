@@ -39,6 +39,7 @@ import type { WorkerStartMutation } from './worker-start-mutation'
 import { prepareWorkerStartCard } from '../../../../orchestration/workers/launch/worker-start-card'
 import { rebindReusedStructuredWorker } from '../structured-workers/orchestration-structured-worker-session'
 import { placedWorkerParty, type WorkerFollowUp } from './worker-follow-up-placement'
+import { assertAdvisoryWorkerPlacement } from './worker-advisory-admission'
 
 export async function startLocalWorker(args: {
   params: WorkerStartInput
@@ -126,18 +127,17 @@ export async function startLocalWorker(args: {
       : requestedWorktree === 'current'
         ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
         : await runtime.showManagedTerminalWorkspace(requestedWorktree)
-  if (terminal) {
-    await assertExplicitWorkerUsable({
-      runtime,
-      db,
-      terminal,
-      from: params.from,
-      coordinator,
-      resolvedWorktreeId: resolvedWorktree?.id
-    })
-  }
+  await assertExplicitWorkerUsable({
+    runtime,
+    db,
+    terminal: terminal || undefined,
+    from: params.from,
+    coordinator,
+    resolvedWorktreeId: resolvedWorktree?.id
+  })
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
+  await assertAdvisoryWorkerPlacement(params, resolvedWorktree, mode)
 
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
   refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)

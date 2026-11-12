@@ -3,12 +3,13 @@ import type { ClaudeStreamJsonConnectionHandlers } from '../claude-stream-json-c
 import { claudeConfigDirEnvPatch } from '../claude-config-dir-pin'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
 import { launchPreparationFailure } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import { readdir } from 'node:fs/promises'
 import type {
   ClaudeAcquisitionLaunch,
   ClaudeSessionAcquisitionInput
 } from './launch/claude-structured-acquisition-launch'
 
-export function openClaudeAcquisitionConnection({
+export async function openClaudeAcquisitionConnection({
   launch,
   input,
   deps,
@@ -31,6 +32,9 @@ export function openClaudeAcquisitionConnection({
         spawnToken: input.spawnToken,
         currentGeneration
       })
+      if ((await readdir(launch.cwd)).length !== 0) {
+        throw new Error('Advisory launch folder must be empty.')
+      }
     } catch (error) {
       throw launchPreparationFailure(error)
     }
