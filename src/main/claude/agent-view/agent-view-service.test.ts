@@ -10,7 +10,7 @@ import {
   captureLoginShellEnvironment,
   resetLoginShellEnvironmentCacheForTests,
   resolveLoginShellEnvironment
-} from '../../startup/login-shell-environment'
+} from '../../startup/shell-environment/login-shell-environment'
 
 const roots: string[] = []
 afterEach(async () => {

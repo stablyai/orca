@@ -1,5 +1,5 @@
 import type { App } from 'electron'
-import { argvRequestsServeMode } from './serve-mode-argv'
+import { argvRequestsServeMode } from './serve-launch/serve-mode-argv'
 import { writeStartupDiagnosticLine, type StartupDiagnosticSink } from './startup-diagnostics'
 
 export const SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE =

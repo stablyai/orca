@@ -20,6 +20,7 @@ const GIT_SORT_FIELDS: ReadonlySet<WorkspaceCleanupSortField> = new Set(['git', 
 
 const GIT_DERIVED_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'dirty-files',
+  'ignored-files',
   'unpushed-commits',
   'git-status-error',
   'unknown-base'
@@ -55,7 +56,12 @@ export function selectWorkspaceCleanupGitEvidenceTargets(
     if (targets.length >= max) {
       break
     }
-    if (!hasWorkspaceCleanupGitEvidence(candidate) && !resolved.has(candidate.worktreeId)) {
+    // An unreachable host has no evidence to give until a fresh scan reaches it.
+    if (
+      !hasWorkspaceCleanupGitEvidence(candidate) &&
+      !resolved.has(candidate.worktreeId) &&
+      !candidate.blockers.includes('ssh-disconnected')
+    ) {
       targets.push(candidate.worktreeId)
     }
   }

@@ -1,4 +1,4 @@
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitHubIssueUpdate } from '../../../../../shared/issue-mutation-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
@@ -11,7 +11,7 @@ import {
 import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'
 import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import {
   getTaskPageGitHubDuplicateCandidates,
   validateTaskPageGitHubDuplicateTarget,
@@ -23,7 +23,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
-import { githubProjectHost } from '../../../../../shared/github/project-identity'
+import { githubProjectHost } from '../../../../../shared/github/projects/project-identity'
 import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'

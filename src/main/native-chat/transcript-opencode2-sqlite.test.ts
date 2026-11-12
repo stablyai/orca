@@ -3,7 +3,7 @@ import { handleOpenCodeSqliteRequest } from '../ai-vault/scanners/opencode/reade
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../sqlite/sync-database'
 import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
 import { readOpenCodeTranscriptPage } from './transcript-opencode-sqlite-query'
@@ -81,3 +81,39 @@ it('captures the M1 copied roots without events, excludes a racing CLI root, and
     DELETE FROM session_message WHERE session_id = 'ses_e4d797526ffee7BYM6ri3gpmbg' AND seq < 90;`)
   expect(await handleOpenCodeSqliteRequest(request)).toEqual({ id: 1, ok: true, value: [] })
 })
+
+it.each([100, 1000])(
+  'decodes each of %i v2 messages once for content and fork evidence',
+  (count) => {
+    const { path, insert, db } = fixture()
+    const data = { content: [{ type: 'text', text: 'response' }], outcome: 'succeeded' }
+    const raw = JSON.stringify(data)
+    db.exec('BEGIN')
+    for (let index = 1; index <= count; index++) {
+      insert(`msg-${index}`, index === count ? 'idle' : 'assistant', data)
+    }
+    db.exec('COMMIT')
+    const parse = vi.spyOn(JSON, 'parse')
+    let page
+    let decodes
+    try {
+      page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'session', limit: count })
+      decodes = parse.mock.calls.filter(([input]) => input === raw).length
+    } finally {
+      parse.mockRestore()
+    }
+    expect(decodes).toBe(count)
+    expect(page?.items).toHaveLength(count)
+    expect(page?.items[0].message).toMatchObject({
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'response' }]
+    })
+    expect(page?.forkTip).toHaveLength(count)
+    expect(page?.forkTip?.at(-1)).toEqual({
+      id: `opencode:msg-${count}`,
+      role: 'terminal',
+      terminal: true
+    })
+    expect(page?.hasMore).toBe(false)
+  }
+)

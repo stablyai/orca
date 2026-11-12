@@ -13,7 +13,7 @@ import {
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
-import type { GitHubViewer } from '../../../../../shared/github/pull-request-types'
+import type { GitHubViewer } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   extractImageFilesFromDataTransfer,

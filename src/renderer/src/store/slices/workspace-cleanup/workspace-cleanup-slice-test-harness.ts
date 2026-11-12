@@ -43,6 +43,7 @@ export function makeCandidate(
 }
 
 export function makeState(overrides: Partial<AppState> = {}): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the slices cleanup reads
   return {
     tabsByWorktree: {},
     ptyIdsByTabId: {},
@@ -56,6 +57,8 @@ export function makeState(overrides: Partial<AppState> = {}): AppState {
     lastVisitedAtByWorktreeId: {},
     workspaceCleanupDismissals: {},
     workspaceCleanupViewedCandidates: {},
+    repos: [],
+    runtimeEnvironments: [],
     ...overrides
   } as AppState
 }
@@ -63,6 +66,7 @@ export function makeState(overrides: Partial<AppState> = {}): AppState {
 export function createCleanupTestStore(removeWorktree: ReturnType<typeof vi.fn> = vi.fn()) {
   return create<AppState>()(
     (...a) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the slices cleanup reads
       ({
         tabsByWorktree: {},
         ptyIdsByTabId: {},
@@ -74,6 +78,8 @@ export function createCleanupTestStore(removeWorktree: ReturnType<typeof vi.fn> 
         agentStatusByPaneKey: {},
         runtimePaneTitlesByTabId: {},
         lastVisitedAtByWorktreeId: {},
+        repos: [],
+        runtimeEnvironments: [],
         removeWorktree,
         ...createWorkspaceCleanupSlice(...a)
       }) as unknown as AppState
@@ -88,6 +94,7 @@ export function installWorkspaceCleanupApi(
     api: {
       workspaceCleanup: {
         scan,
+        cancelScan: vi.fn().mockResolvedValue(true),
         getCachedScan,
         dismiss: vi.fn().mockResolvedValue(undefined),
         clearDismissals: vi.fn().mockResolvedValue(undefined)

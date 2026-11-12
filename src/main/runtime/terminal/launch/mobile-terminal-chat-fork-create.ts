@@ -8,7 +8,7 @@ import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../share
 import {
   prepareStructuredChatCliFork,
   isStructuredChatCliForkSourceCurrent
-} from '../../../ai-vault/structured-chat-cli-fork'
+} from '../../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'

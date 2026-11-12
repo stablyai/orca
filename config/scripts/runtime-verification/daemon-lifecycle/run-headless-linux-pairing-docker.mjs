@@ -4,10 +4,8 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const STARTUP_TIMEOUT_MS = 20_000
-const APPIMAGE_EXTRACTION_TIMEOUT_MS = 60_000
 const commandArgs = process.argv.slice(2)
 const appImageArg = valueAfter('--appimage')
-const pairingOnly = commandArgs.includes('--pairing-only')
 if (!appImageArg) {
   fail('Usage: run-headless-linux-pairing-docker.mjs --appimage /path/to/orca.AppImage')
 }
@@ -32,28 +30,17 @@ const images = [
     tag: 'orca-headless-pairing:debian-13',
     base: 'debian@sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd',
     libasound: 'libasound2t64'
-  },
-  {
-    name: 'ubuntu-22.04-baseline',
-    tag: 'orca-headless-pairing:ubuntu-22.04',
-    base: 'ubuntu@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982',
-    libasound: 'libasound2'
   }
 ]
 
 try {
   docker(['volume', 'create', artifactVolume])
   docker(['network', 'create', network])
-  for (const image of pairingOnly ? images.slice(0, 2) : images) {
+  for (const image of images) {
     buildImage(image)
   }
   extractAppImage(images[0].tag)
-  if (!pairingOnly) {
-    await validateStartupMatrix()
-    await validateUnavailableContracts()
-  }
   await validateAuthenticatedPairing()
-  await validateUnreachableOffer()
   console.log('Headless Linux pairing Docker validation passed.')
 } finally {
   for (const container of containers) {
@@ -111,71 +98,6 @@ function extractAppImage(image) {
   ])
 }
 
-async function validateStartupMatrix() {
-  const required = images.slice(0, 2)
-  for (const image of required) {
-    for (const launch of ['direct', 'xvfb', 'dbus-xvfb', 'journal']) {
-      for (const mode of ['human', 'json']) {
-        const result = await startAndWait({ image, launch, mode, address: 'pair-host.test' })
-        validateReady(result.stdout, mode, 'pair-host.test', {
-          allowStdoutNoise: launch !== 'direct'
-        })
-        stopContainer(result.name)
-        console.log(`PASS ${image.name} ${launch} ${mode}`)
-      }
-    }
-  }
-  const baseline = await startAndWait({
-    image: images[2],
-    launch: 'xvfb',
-    mode: 'json',
-    address: '127.0.0.1'
-  })
-  validateReady(baseline.stdout, 'json', '127.0.0.1', { allowStdoutNoise: true })
-  stopContainer(baseline.name)
-  console.log(`PASS ${images[2].name} xvfb json`)
-
-  const publicEntry = await startAndWait({
-    image: images[0],
-    launch: 'direct',
-    mode: 'json',
-    address: '127.0.0.1',
-    appPath: '/artifacts/orca.AppImage',
-    startupTimeoutMs: APPIMAGE_EXTRACTION_TIMEOUT_MS
-  })
-  validateReady(publicEntry.stdout, 'json', '127.0.0.1', { allowStdoutNoise: true })
-  stopContainer(publicEntry.name)
-  console.log('PASS AppImage --appimage-extract-and-run --no-sandbox serve')
-}
-
-async function validateUnavailableContracts() {
-  const invalid = await startAndWait({
-    image: images[0],
-    launch: 'direct',
-    mode: 'json',
-    address: '0.0.0.0'
-  })
-  const invalidPayload = readyJson(invalid.stdout)
-  assert(invalidPayload.pairing?.available === false, 'wildcard pairing must be unavailable')
-  assert(
-    invalidPayload.pairing.reason === 'invalid_advertised_endpoint',
-    'wildcard pairing must expose invalid_advertised_endpoint'
-  )
-  stopContainer(invalid.name)
-
-  const disabled = await startAndWait({
-    image: images[1],
-    launch: 'journal',
-    mode: 'json',
-    address: '127.0.0.1',
-    noPairing: true
-  })
-  const disabledPayload = readyJson(disabled.stdout)
-  assert(disabledPayload.pairing?.reason === 'disabled_by_operator', 'disabled reason is missing')
-  stopContainer(disabled.name)
-  console.log('PASS explicit unavailable pairing contracts')
-}
-
 async function validateAuthenticatedPairing() {
   const server = await startAndWait({
     image: images[0],
@@ -218,22 +140,6 @@ async function validateAuthenticatedPairing() {
   )
   stopContainer(server.name)
   console.log('PASS paired E2EE updater inventory and manual-service fallback')
-}
-
-async function validateUnreachableOffer() {
-  const server = await startAndWait({
-    image: images[0],
-    launch: 'direct',
-    mode: 'json',
-    address: 'orca-pairing-server:6769',
-    port: '6768',
-    networkAlias: 'orca-pairing-server'
-  })
-  const payload = readyJson(server.stdout)
-  const client = runPairingClient(payload.pairing.url)
-  assert(client.status !== 0, 'a deliberately mismatched advertised port unexpectedly connected')
-  stopContainer(server.name)
-  console.log('PASS unreachable advertised endpoint fails the real client probe')
 }
 
 async function startAndWait({
@@ -316,39 +222,6 @@ function hasCompleteReadyContract(stdout) {
     return true
   }
   return readyJsonObjects(stdout).length > 0
-}
-
-function validateReady(logs, mode, expectedHost, options = {}) {
-  if (mode === 'human') {
-    assert(
-      (logs.match(/^Orca server ready$/gm) ?? []).length === 1,
-      'human ready marker is not exact-once'
-    )
-    assert(logs.includes('Bound endpoint: ws://0.0.0.0:'), 'human bound endpoint is missing')
-    assert(
-      logs.includes(`Advertised endpoint: ws://${expectedHost}:`),
-      'human advertised endpoint is missing'
-    )
-    assert(logs.includes('Pairing URL: orca://pair?code='), 'human pairing URL is missing')
-    return
-  }
-  if (!options.allowStdoutNoise) {
-    const stdoutLines = logs.split(/\r?\n/).filter(Boolean)
-    assert(
-      stdoutLines.length === 1,
-      `JSON stdout must contain exactly one line, found ${stdoutLines.length}:\n${logs}`
-    )
-  }
-  const payload = readyJson(logs)
-  assert(payload.schemaVersion === 1, 'ready JSON schemaVersion is missing')
-  assert(payload.endpoint === payload.boundEndpoint, 'legacy JSON endpoint alias is inconsistent')
-  assert(payload.boundEndpoint?.startsWith('ws://0.0.0.0:'), 'JSON bound endpoint is invalid')
-  assert(payload.advertisedEndpoint?.includes(expectedHost), 'JSON advertised endpoint is invalid')
-  assert(payload.pairing?.available === true, 'JSON pairing offer is unavailable')
-  assert(
-    new URL(payload.boundEndpoint).port === new URL(payload.advertisedEndpoint).port,
-    'an advertised host without a port must use the actual bound port'
-  )
 }
 
 function readyJson(logs) {

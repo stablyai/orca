@@ -17,7 +17,7 @@ export function buildPluginWorkerSpawnSpec(
     // Dev roots survive manifest changes; include revision to prevent stale worker reuse.
     manifestRevision: JSON.stringify(plugin.manifest),
     reviewedContentHash: plugin.contentHash ?? plugin.consentContentHash ?? null,
-    ...(plugin.isDev ? { devRevision: plugin.devRevision ?? null } : {}),
+    ...(plugin.isDev ? { devRevision: plugin.devRevision ?? null, allowProposed: true } : {}),
     ...(pluginNeedsResidentWorker(plugin.manifest) ? { keepWarm: true as const } : {}),
     grantedCapabilities
   }

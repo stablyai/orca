@@ -15,13 +15,13 @@ import {
   Sparkles,
   Trash2
 } from 'lucide-react-native'
-import type { PRComment } from '../../../../src/shared/github/comment-types'
+import type { PRComment } from '../../../../src/shared/github/comments/comment-types'
 import {
   getPRCommentGroupRoot,
   type PRCommentGroup
 } from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { isBotPRComment } from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
-import { threadDiffLines } from '../../../../src/shared/github/pr-comment-diff-hunk'
+import { threadDiffLines } from '../../../../src/shared/github/comments/pr-comment-diff-hunk'
 import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

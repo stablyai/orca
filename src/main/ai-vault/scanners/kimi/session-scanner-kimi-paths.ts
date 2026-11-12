@@ -1,4 +1,7 @@
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -8,8 +11,8 @@ import {
   wslGatedStat
 } from '../../../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractString } from '../../session-scanner-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
 import { KimiSessionIndexCache } from './session-scanner-kimi-index-cache'
 
 export function resolveKimiSessionsDir(override?: string): string {

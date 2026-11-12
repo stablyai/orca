@@ -47,7 +47,7 @@ vi.mock('../window/focus-existing-window', () => ({
 }))
 vi.mock('../window/dashboard-popout-window', () => ({ getDashboardPopoutWindow: () => null }))
 vi.mock('../window/createMainWindow', () => ({ loadMainWindow: vi.fn() }))
-vi.mock('./windows-install-dir-acl-recovery', () => ({
+vi.mock('./windows-install-permissions/windows-install-dir-acl-recovery', () => ({
   describeInstallDirAclPoison: vi.fn(),
   isBlockingInstallDirAclRepairInFlight: vi.fn()
 }))

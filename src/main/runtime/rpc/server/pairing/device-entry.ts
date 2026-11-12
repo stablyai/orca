@@ -3,8 +3,8 @@ import type { MobilePairingConnectionMode } from '../../../../../shared/remote-r
 import type { MobilePushRegistration } from '../../../../../shared/mobile-push-contract'
 import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
-import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
-import type { NetworkSourceClass } from '../../network-source-class'
+import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
+import type { NetworkSourceClass } from '../../transports/websocket/source-admission/network-source-class'
 
 export type DeviceEntry = {
   deviceId: string
