@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { nativeChatTranscriptRange } from '../../viewport/virtualization/native-chat-pinned-rows'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 
@@ -19,13 +19,18 @@ export function useNativeChatToolRunPins({
   rows,
   rowIndexByKey,
   revealRowKey,
+  heldRowKey,
   drawsEveryRow,
+  isVisible,
   scrollerRef
 }: {
   rows: readonly NativeChatToolRunRow[]
   rowIndexByKey: ReadonlyMap<string, number>
   revealRowKey: string | undefined
+  /** The row a returning reader is being restored to; drawn until they move. */
+  heldRowKey: string | undefined
   drawsEveryRow: boolean
+  isVisible: boolean
   scrollerRef: React.RefObject<HTMLDivElement | null>
 }): {
   rangeExtractor: (range: WindowRange) => number[]
@@ -37,11 +42,31 @@ export function useNativeChatToolRunPins({
   const [focusedKey, setFocusedKey] = useState<string | null>(null)
   const [selectionSpan, setSelectionSpan] = useState<readonly [number, number] | null>(null)
   const rowIndexByKeyRef = useRef(rowIndexByKey)
-  rowIndexByKeyRef.current = rowIndexByKey
-  const focusableIndexes = useMemo(
-    () => rows.flatMap((row, index) => (row.focusable ? [index] : [])),
-    [rows]
-  )
+  useLayoutEffect(() => {
+    rowIndexByKeyRef.current = rowIndexByKey
+  }, [rowIndexByKey])
+  // Each row's previous and next focusable rows, built once per row list so a focus move is a lookup.
+  const focusNeighbors = useMemo(() => {
+    const previous = new Int32Array(rows.length).fill(-1)
+    const next = new Int32Array(rows.length).fill(-1)
+    let last = -1
+    for (let index = 0; index < rows.length; index++) {
+      previous[index] = last
+      if (rows[index]?.focusable) {
+        last = index
+      }
+    }
+    last = -1
+    for (let index = rows.length - 1; index >= 0; index--) {
+      next[index] = last
+      if (rows[index]?.focusable) {
+        last = index
+      }
+    }
+    const first = rows[0]?.focusable ? 0 : (next[0] ?? -1)
+    const final = rows.at(-1)?.focusable ? rows.length - 1 : (previous[rows.length - 1] ?? -1)
+    return { previous, next, first, final }
+  }, [rows])
 
   // The ends (Tab's way in from either side, the tail), the reveal target, interacted rows and the focused row's next stops.
   const pinned = useMemo(() => {
@@ -52,26 +77,36 @@ export function useNativeChatToolRunPins({
       }
     }
     add(rows.length - 1)
-    add(focusableIndexes[0])
-    add(focusableIndexes.at(-1))
-    for (const key of [revealRowKey, ...interactionKeys]) {
+    add(focusNeighbors.first)
+    add(focusNeighbors.final)
+    for (const key of [revealRowKey, heldRowKey, ...interactionKeys]) {
       add(key === undefined ? undefined : rowIndexByKey.get(key))
     }
     const focused = focusedKey === null ? undefined : rowIndexByKey.get(focusedKey)
     if (focused !== undefined) {
-      add(focusableIndexes.findLast((index) => index < focused))
-      add(focusableIndexes.find((index) => index > focused))
+      add(focusNeighbors.previous[focused])
+      add(focusNeighbors.next[focused])
     }
     return indexes
-  }, [focusableIndexes, focusedKey, interactionKeys, revealRowKey, rowIndexByKey, rows.length])
+  }, [
+    focusNeighbors,
+    focusedKey,
+    heldRowKey,
+    interactionKeys,
+    revealRowKey,
+    rowIndexByKey,
+    rows.length
+  ])
 
+  // Only a visible windowed run tracks selection: a hidden one cannot be copied from, and one drawing every row needs no span.
+  const tracksSelection = isVisible && !drawsEveryRow
   const rangeExtractor = useCallback(
     (range: WindowRange) => {
       if (drawsEveryRow) {
         return Array.from({ length: range.count }, (_, index) => index)
       }
       const indexes = nativeChatTranscriptRange(range, pinned)
-      if (!selectionSpan) {
+      if (!selectionSpan || !tracksSelection) {
         return indexes
       }
       const spanned = new Set(indexes)
@@ -81,11 +116,14 @@ export function useNativeChatToolRunPins({
       }
       return Array.from(spanned).sort((a, b) => a - b)
     },
-    [drawsEveryRow, pinned, selectionSpan]
+    [drawsEveryRow, pinned, selectionSpan, tracksSelection]
   )
 
   // An end outside the run (or on a spacer) reaches the run's matching edge.
   useEffect(() => {
+    if (!tracksSelection) {
+      return
+    }
     const onSelectionChange = (): void => {
       const scroller = scrollerRef.current
       const selection = document.getSelection()
@@ -109,7 +147,7 @@ export function useNativeChatToolRunPins({
     }
     document.addEventListener('selectionchange', onSelectionChange)
     return () => document.removeEventListener('selectionchange', onSelectionChange)
-  }, [scrollerRef])
+  }, [scrollerRef, tracksSelection])
 
   const retainInteractedRow = useCallback((event: React.SyntheticEvent) => {
     const key = rowKeyOf(event.target)

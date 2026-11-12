@@ -15,7 +15,7 @@ import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 
 /** One drawn row of an opened run. `focusable`: it renders a control, so keyboard order can land on it. */
 export type NativeChatToolRunRow =
-  | { kind: 'aside'; key: string; focusable: true; element: React.JSX.Element }
+  | { kind: 'aside'; key: string; focusable: boolean; element: React.JSX.Element }
   | { kind: 'tasks'; key: string; focusable: boolean; taskList: NativeChatTaskListRow }
   | {
       kind: 'edit'
@@ -32,6 +32,18 @@ export type NativeChatToolRunRow =
       result: NativeChatToolResultBlock | undefined
       lineIdentity: string
     }
+
+/** A thought with no words draws nothing, so keyboard order cannot land on it. */
+function asideDrawsControl(element: React.JSX.Element): boolean {
+  const props: unknown = element.props
+  return !(
+    typeof props === 'object' &&
+    props !== null &&
+    'markdown' in props &&
+    typeof props.markdown === 'string' &&
+    props.markdown.trim() === ''
+  )
+}
 
 /** The run's rows in drawing order, with today's keys; pairing and grouping run once over the whole run. */
 export function buildNativeChatToolRunRows({
@@ -57,7 +69,12 @@ export function buildNativeChatToolRunRows({
   const rows: NativeChatToolRunRow[] = []
   const pushAsides = (elements: readonly React.JSX.Element[] | undefined): void => {
     for (const element of elements ?? []) {
-      rows.push({ kind: 'aside', key: String(element.key), focusable: true, element })
+      rows.push({
+        kind: 'aside',
+        key: String(element.key),
+        focusable: asideDrawsControl(element),
+        element
+      })
     }
   }
   for (const [blockIndex, block] of headerBlocks.entries()) {

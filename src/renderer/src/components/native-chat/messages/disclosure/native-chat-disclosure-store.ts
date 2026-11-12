@@ -8,6 +8,8 @@ export type NativeChatRunScroll = {
   anchor: VirtualizedScrollAnchor
   top: number
   followsEnd: boolean
+  /** Measured heights of details opened in rows the window no longer draws, so the box keeps their room. */
+  detailHeights: ReadonlyMap<string, number>
 }
 
 export type NativeChatDisclosureStore = {
