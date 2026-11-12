@@ -10,7 +10,7 @@ import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remot
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { useAgentSignInGate } from '@/lib/agent-sign-in/agent-sign-in-gate-store'
-import { useCloudAgentHold } from '@/lib/orca-cloud/cloud-agent-launch-hold'
+import { cloudTabHoldKey, useCloudAgentHold } from '@/lib/orca-cloud/cloud-agent-launch-hold'
 import {
   orcaCloudAgentAccountsLoadedAt,
   useOrcaCloudAgentAccounts
@@ -101,7 +101,11 @@ export function CloudRunningStripPortal({
     expired,
     orcaCloudAgentAccountsLoadedAt()
   )
-  const hold = useCloudAgentHold(paneKey)
+  // DUP-EXPIRED-STRIP: a host-published launch holds its whole tab (cloudTabHoldKey); its strip
+  // is the one to show, never this one stacked beside it.
+  const paneHold = useCloudAgentHold(paneKey)
+  const tabHold = useCloudAgentHold(cloudTabHoldKey(tabId))
+  const hold = paneHold ?? tabHold
   const gate = useAgentSignInGate(paneKey)
   const held = hold !== null || gate !== null
   const attempt = cloudAgentRestartAttempt(paneKey, revision)

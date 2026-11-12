@@ -113,6 +113,8 @@ type HoldRequest = Omit<CloudAgentHold, 'reason' | 'awaiting'> & {
 type Entry = CloudAgentHold & { release: (outcome: 'proceed' | 'cancel') => void }
 
 const holds = new Map<string, Entry>()
+/** Each live hold's outcome, so a second launch for the same key joins it instead of holding twice. */
+const settling = new Map<string, Promise<'proceed' | 'cancel'>>()
 const listeners = new Set<() => void>()
 
 /** Every current hold, as one stable snapshot for subscribers (rebuilt on each change). */
@@ -248,7 +250,7 @@ export async function holdCloudAgentLaunch({
   const accountsRead = readOrcaCloudAgentAccounts().load.kind === 'ready'
   const awaiting =
     reason === 'awaitingStart' ? (accountsRead ? ('covered' as const) : ('unread' as const)) : null
-  return new Promise((resolve) => {
+  const settled = new Promise<'proceed' | 'cancel'>((resolve) => {
     const stop = subscribeOrcaCloudAgentAccounts(() => {
       // Renewed (or a key now covers it): every pane held on recovery starts. A first-time setup
       // waits for its "Start {{agent}}" click instead (PC-3b), so it never starts unasked.
@@ -288,10 +290,21 @@ export async function holdCloudAgentLaunch({
       }
       stop()
       holds.delete(hold.paneKey)
+      settling.delete(hold.paneKey)
       notify()
       resolve(outcome)
     }
     holds.set(hold.paneKey, { ...hold, reason, ...(awaiting ? { awaiting } : {}), release: finish })
     notify()
   })
+  settling.set(hold.paneKey, settled)
+  return settled
+}
+
+/**
+ * The outcome of the hold already placed under this key, or null. V3-01b: a structured chat's hold
+ * put back at startup is joined by its launch's retry, so one Start (or Cancel) settles both.
+ */
+export function joinCloudAgentHold(paneKey: string): Promise<'proceed' | 'cancel'> | null {
+  return settling.get(paneKey) ?? null
 }

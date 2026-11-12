@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { useCloudHeldChatUnavailable } from '@/lib/orca-cloud/cloud-structured-launch-hold'
 import { useNativeChatHostSetup } from '../../host-access/native-chat-host-setup'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
@@ -76,7 +77,8 @@ export function useNativeChatStructuredPaneNotices({
     onRechecked
   })
   const availability = useNativeChatAvailabilityNotice({
-    unavailable: controller.unavailable,
+    // V3-01b: a chat held on its Orca Cloud strip says what to do there, not the generic sign-in.
+    unavailable: useCloudHeldChatUnavailable(props.sessionId, controller.unavailable),
     setup,
     agent: props.agent,
     wslDistro: continuation.view.wslDistro,
