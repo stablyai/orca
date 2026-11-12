@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-virtual'
 import { VIRTUALIZED_LIST_OVERSCAN } from '@/components/virtualized-list'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 
 /** A tool line's `min-h-6.5`; measured rows replace it. */
@@ -41,8 +42,7 @@ export function useNativeChatToolRunWindow({
   /** Every real measurement, attach and resize alike, so the cap and follow see them all. */
   onMeasure: (element: HTMLDivElement) => void
 }) {
-  const onMeasureRef = useRef(onMeasure)
-  onMeasureRef.current = onMeasure
+  const onMeasured = useLatestHandler(onMeasure)
   // Stable per row list: a new key function makes the virtualizer rebuild every row's measurement.
   const getItemKey = useCallback((index: number) => rows[index]?.key ?? index, [rows])
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
@@ -56,7 +56,7 @@ export function useNativeChatToolRunWindow({
     useCachedMeasurements: !isVisible,
     measureElement: (element, entry, instance) => {
       const size = measureElement(element, entry, instance)
-      onMeasureRef.current(element)
+      onMeasured(element)
       return size
     },
     // Mark every write the virtualizer makes so the reader's own scrolling stays distinguishable.
