@@ -28,6 +28,9 @@ export function hostWorktreeActionMountAdapters(
         typeof import('../../../host-screen/use-host-worktree-actions')
       >('mobile/src/host-screen/use-host-worktree-actions.ts').useHostWorktreeActions
       const state = observableModel(context, {
+        clientRef: { current: context.client },
+        viewRef: { current: {} },
+        servedProjectSections: null,
         pinnedIds: new Set<string>(),
         worktrees: [ROW],
         lastKnownWorktrees: [ROW],
@@ -83,7 +86,11 @@ export function hostWorktreeActionMountAdapters(
         },
         state: () =>
           projectObservable({
-            ...Object.fromEntries(Object.entries(state).filter(([key]) => !key.endsWith('Ref'))),
+            ...Object.fromEntries(
+              Object.entries(state).filter(
+                ([key]) => !key.endsWith('Ref') && key !== 'servedProjectSections'
+              )
+            ),
             archiveTrustPrompt: actions?.archiveTrustRequest?.prompt ?? null,
             archiveHookFailure: actions?.archiveHookFailure?.message ?? null
           }),

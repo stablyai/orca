@@ -51,17 +51,23 @@ export const projectOrderChoices = (t: Translate) =>
   workspaceOptionChoices(
     viewOptions.WORKSPACE_PROJECT_ORDER_CHOICES,
     {
+      name: t('hostScreen.workspaceOptionControls.name', 'Name'),
+      frequent: t('hostScreen.workspaceOptionControls.frequent', 'Frequently used'),
       manual: t('hostScreen.workspaceOptionControls.manual', 'Manual'),
       recent: t('hostScreen.workspaceOptionControls.recent', 'Recent')
     },
     {
+      frequent: t(
+        'hostScreen.workspaceOptionControls.frequentProjectOrderDescription',
+        'Most project openings by you'
+      ),
       manual: t(
         'hostScreen.workspaceOptionControls.manualProjectOrderDescription',
         'Drag projects to arrange them'
       ),
       recent: t(
-        'hostScreen.workspaceOptionControls.recentProjectOrderDescription',
-        'Most recent workspace activity'
+        'hostScreen.workspaceOptionControls.recentProjectOpeningDescription',
+        'Most recently opened by you'
       )
     }
   )

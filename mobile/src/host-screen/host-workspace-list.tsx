@@ -1,25 +1,17 @@
-import { memo, useCallback, useEffect, useMemo, type ReactElement } from 'react'
-import {
-  ActivityIndicator,
-  Animated,
-  Platform,
-  Pressable,
-  RefreshControl,
-  Text,
-  View
-} from 'react-native'
-import { ChevronRight, FolderTree, Pin } from 'lucide-react-native'
+import { HostSectionHeader } from './host-section-header'
+import { useCallback, useEffect, useMemo, type ReactElement } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { resolveProjectPreferenceKey } from '../../../src/shared/project-preference-identity'
+import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
+import { Animated, Platform, RefreshControl, View } from 'react-native'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
 import { Presence } from '../components/AutoHeight'
-import { DisclosureChevron } from '../components/DisclosureChevron'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
 import { HostOfflineBanner, useHostOfflineBanner } from '../components/HostOfflineBanner'
 import { isConnectionOutage } from '../transport/connection/connection-health'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
-import { MobileRepoIcon } from '../components/MobileRepoIcon'
 import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
 import { WorktreeListRow } from '../components/WorktreeListRow'
-import { WORKTREE_ROW_LAYOUT } from '../components/worktree-list-row-layout'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
@@ -32,12 +24,10 @@ import type { Section, WorkspaceListItem, Worktree } from '../worktree/workspace
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../src/shared/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { hostScreenStyles as styles } from './host-screen-styles'
-import { useRepoLookById, type RepoLook } from './host-repo-looks'
-import { HostPendingCreationRow } from './host-pending-creation-row'
+import { useRepoLookById } from './host-repo-looks'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { useHostMutationDrafts } from '../query/host-mutation-drafts'
 import { workspaceRenameDraftKey } from './workspace-rename-sheet'
-import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostWorkspaceList({
@@ -51,6 +41,7 @@ export function HostWorkspaceList({
   /** The host name at the top of the list, folding into the bar as it scrolls. */
   pageTitle?: { element: ReactElement; collapsing: CollapsingTitle }
 }) {
+  const t = useMobileTranslation()
   const colorScheme = useMobileColorScheme()
   const {
     actions,
@@ -125,6 +116,17 @@ export function HostWorkspaceList({
   const renderSectionHeader = useCallback(
     ({ section }: { section: Section }) => {
       const collapseKey = section.collapseKey ?? section.key
+      const projectKey =
+        section.repo && controller.projectCatalog
+          ? resolveProjectPreferenceKey(
+              section.repo.id,
+              controller.projectCatalog.setups,
+              getRepoExecutionHostId(section.repo)
+            )
+          : null
+      const pinned = projectKey
+        ? state.view.personalProjectOrder?.projects[projectKey]?.pinned === true
+        : false
       return (
         <HostSectionHeader
           title={section.title}
@@ -139,10 +141,30 @@ export function HostWorkspaceList({
           groupByRepo={groupBy === 'repo'}
           repoLook={groupBy === 'repo' && section.repo ? repoLookById.get(section.repo.id) : null}
           onToggle={toggleCollapsed}
+          pinRepo={projectKey && settings.supportsPersonalProjectOrder ? section.repo : undefined}
+          pinLabel={
+            pinned
+              ? t('hostScreen.project.unpin', 'Unpin project')
+              : t('hostScreen.project.pin', 'Pin project')
+          }
+          projectPinned={pinned}
+          onToggleProjectPin={settings.toggleProjectPin}
         />
       )
     },
-    [collapsedGroups, sectionCounts, pendingCollapseKeys, groupBy, repoLookById, toggleCollapsed]
+    [
+      collapsedGroups,
+      sectionCounts,
+      pendingCollapseKeys,
+      groupBy,
+      repoLookById,
+      toggleCollapsed,
+      controller.projectCatalog,
+      state.view.personalProjectOrder,
+      settings.supportsPersonalProjectOrder,
+      settings.toggleProjectPin,
+      t
+    ]
   )
 
   const renderItem = useCallback(
@@ -326,78 +348,6 @@ function unsavedRename(
   const draft = hostId ? drafts.get(workspaceRenameDraftKey(hostId, row)) : undefined
   return draft?.trim() && draft !== row.displayName ? draft : undefined
 }
-
-// Takes the header's own fields, not the section, so a poll that rebuilds sections skips unchanged headers.
-const HostSectionHeader = memo(function HostSectionHeader(props: {
-  title: string
-  icon: Section['icon']
-  isProjectGroup: boolean | undefined
-  projectGroupDepth: number | undefined
-  pendingCreations: Section['pendingCreations']
-  collapseKey: string
-  collapsed: boolean
-  count: number
-  pending: boolean
-  groupByRepo: boolean
-  repoLook: RepoLook | null | undefined
-  onToggle: (collapseKey: string) => void
-}) {
-  useMobileColorScheme()
-  const pendingCreations = props.pendingCreations?.map((creation) => (
-    <HostPendingCreationRow key={creation.key} creation={creation} />
-  ))
-  if (!props.title) {
-    return pendingCreations ? <>{pendingCreations}</> : null
-  }
-  return (
-    <>
-      <Pressable
-        style={({ pressed }) => [
-          styles.sectionHeader,
-          props.projectGroupDepth
-            ? {
-                paddingLeft:
-                  WORKTREE_ROW_LAYOUT.indicatorInset +
-                  projectGroupHeaderIndent(props.projectGroupDepth)
-              }
-            : null,
-          pressed && { backgroundColor: colors.translucentFill }
-        ]}
-        onPress={() => props.onToggle(props.collapseKey)}
-      >
-        <View style={styles.sectionChevron}>
-          <DisclosureChevron expanded={!props.collapsed} collapsedDeg={0} expandedDeg={90}>
-            <ChevronRight size={12} color={colors.textMuted} />
-          </DisclosureChevron>
-        </View>
-        {props.icon === 'pin' && (
-          <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
-        )}
-        {props.groupByRepo && props.isProjectGroup ? (
-          <FolderTree size={12} color={colors.textPrimary} style={styles.sectionIcon} />
-        ) : props.groupByRepo ? (
-          <View style={styles.sectionRepoIcon}>
-            <MobileRepoIcon
-              repoIcon={props.repoLook?.icon ?? null}
-              size={14}
-              color={props.repoLook?.color ?? colors.textSecondary}
-            />
-          </View>
-        ) : null}
-        <Text style={styles.sectionTitle}>{props.title}</Text>
-        <Text style={styles.sectionCount}>{props.count}</Text>
-        {props.pending && (
-          <ActivityIndicator
-            size="small"
-            color={colors.textMuted}
-            style={styles.sectionPendingSpinner}
-          />
-        )}
-      </Pressable>
-      {pendingCreations}
-    </>
-  )
-})
 
 function ListSeparator() {
   useMobileColorScheme()

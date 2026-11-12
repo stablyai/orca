@@ -17,7 +17,10 @@ import {
 import type { Repo } from '../../../../../../shared/repo-types'
 
 export function createProjectHeaderDragSession(args: {
-  event: PointerEvent<HTMLElement>
+  event: Pick<
+    PointerEvent<HTMLElement>,
+    'button' | 'target' | 'currentTarget' | 'pointerId' | 'clientX' | 'clientY'
+  >
   repo: Repo
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
   rootProjectHeaderKeys?: readonly string[]
@@ -32,7 +35,6 @@ export function createProjectHeaderDragSession(args: {
   if (isRepoHeaderActionTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
-  const bucketKey = getProjectHeaderDragBucketKey(args.repo)
   const rootProjectHeaderHostId = args.rootProjectHeaderKeys?.some((key) => key.startsWith('host:'))
     ? args.event.currentTarget.dataset.rootProjectHeaderHost
     : undefined
@@ -41,6 +43,23 @@ export function createProjectHeaderDragSession(args: {
     `repo:${args.repo.id}`,
     rootProjectHeaderHostId
   )
+  const membershipBucketKey = getProjectHeaderDragBucketKey(args.repo)
+  const renderedBucketKey = args.event.currentTarget.getAttribute('data-repo-header-bucket')
+  const candidates = [
+    membershipBucketKey,
+    JSON.stringify([membershipBucketKey, true]),
+    JSON.stringify([membershipBucketKey, false])
+  ].filter((key) => args.sidebarRepoHeaderIdsByBucket.get(key)?.includes(args.repo.id))
+  const bucketKey = renderedBucketKey
+    ? candidates.find((key) => key === renderedBucketKey)
+    : candidates.length === 1
+      ? candidates[0]
+      : rootProjectHeaderKeys
+        ? membershipBucketKey
+        : undefined
+  if (!bucketKey) {
+    return null
+  }
   const sidebarRepoHeaderIds =
     rootProjectHeaderKeys ?? args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
   // A lone project cannot move within its bucket; preserve the collapse click instead.
@@ -56,6 +75,8 @@ export function createProjectHeaderDragSession(args: {
   return {
     repo: args.repo,
     bucketKey,
+    membershipBucketKey,
+    fixedPinTier: bucketKey !== membershipBucketKey,
     sidebarRepoHeaderIds,
     pointerId: args.event.pointerId,
     rootProjectHeaderKeys,

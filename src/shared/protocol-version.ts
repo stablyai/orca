@@ -3,6 +3,7 @@ import {
   PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
 } from './project-group-order-capability'
 import { EMULATOR_RUNTIME_CAPABILITIES } from './emulator-runtime-capabilities'
+import { PERSONAL_PROJECT_ORDER_CAPABILITY } from './personal-project-order'
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
 import * as agentLaunchCapabilities from './agent-launch/contracts/agent-launch-runtime-capability'
 import {
@@ -92,6 +93,7 @@ export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
   [
     ...EMULATOR_RUNTIME_CAPABILITIES,
     SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
+    PERSONAL_PROJECT_ORDER_CAPABILITY,
     ...HOST_RUNTIME_CAPABILITIES,
     ...DEVICE_KEY_RUNTIME_CAPABILITIES,
     E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY,

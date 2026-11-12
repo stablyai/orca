@@ -112,7 +112,56 @@ export function getManualOrderAnchorRepo<R extends ProjectSectionRepo>(
   return anchor
 }
 
-/** Order headers by canonical repo order or newest visible workspace activity; inactive projects trail, then manual rank and label break ties. */
+export function compareProjectEntries<
+  T extends readonly [string, ProjectSectionEntry<ActivityItem, ProjectSectionRepo>]
+>(
+  a: T,
+  b: T,
+  mode: ProjectOrderBy,
+  manualRank: (entry: T) => number,
+  rankForEntry: (entry: T) => RecentRank = recentRankForEntry
+): number {
+  const pa = a[1].projectPreference
+  const pb = b[1].projectPreference
+  const pinned = Number(pb?.pinned === true) - Number(pa?.pinned === true)
+  if (pinned) {
+    return pinned
+  }
+  const byName = () => compareSidebarText(a[1].label, b[1].label) || compareCodePoints(a[0], b[0])
+  if (mode === 'name') {
+    return byName()
+  }
+  if (mode === 'frequent') {
+    const count = (pb?.openCount ?? 0) - (pa?.openCount ?? 0)
+    if (count) {
+      return count
+    }
+  }
+  if (mode === 'recent' || mode === 'frequent') {
+    const personalTier = Number(pb !== undefined) - Number(pa !== undefined)
+    if (mode === 'recent' && personalTier) {
+      return personalTier
+    }
+    if (pa !== undefined || pb !== undefined || mode === 'frequent') {
+      const recent = (pb?.lastOpenedAt ?? 0) - (pa?.lastOpenedAt ?? 0)
+      if (recent) {
+        return recent
+      }
+      if (mode === 'frequent' && ((pa?.openCount ?? 0) > 0 || (pb?.openCount ?? 0) > 0)) {
+        return byName()
+      }
+    } else {
+      const recent = compareRecentRank(rankForEntry(a), rankForEntry(b))
+      if (recent) {
+        return recent
+      }
+    }
+  }
+  const rankA = manualRank(a)
+  const rankB = manualRank(b)
+  return (rankA === rankB ? 0 : rankA - rankB) || byName()
+}
+
 export function sortProjectEntries<
   T extends readonly [string, ProjectSectionEntry<ActivityItem, ProjectSectionRepo>]
 >(
@@ -120,35 +169,27 @@ export function sortProjectEntries<
   projectOrderBy: ProjectOrderBy,
   repoOrder: ReadonlyMap<string, number> | undefined
 ): T[] {
-  if (projectOrderBy === 'recent') {
-    if (entries.length < 2) {
-      return [...entries]
-    }
-    const getRecentRank = createRecentRankLookup<T>()
-    return [...entries].sort((a, b) => {
-      const byRecent = compareRecentRank(getRecentRank(a), getRecentRank(b))
-      if (byRecent !== 0) {
-        return byRecent
-      }
-      const ma = manualRankForEntry(a, repoOrder)
-      const mb = manualRankForEntry(b, repoOrder)
-      if (ma !== mb) {
-        return ma - mb
-      }
-      return compareSidebarText(a[1].label, b[1].label) || compareCodePoints(a[0], b[0])
-    })
-  }
-  if (!repoOrder) {
+  if (
+    projectOrderBy === 'manual' &&
+    !repoOrder &&
+    !entries.some(([, group]) => group.projectPreference?.pinned)
+  ) {
     return entries
   }
-  return [...entries].sort((a, b) => {
-    const ra = manualRankForEntry(a, repoOrder)
-    const rb = manualRankForEntry(b, repoOrder)
-    if (ra !== rb) {
-      return ra - rb
-    }
-    return compareSidebarText(a[1].label, b[1].label) || compareCodePoints(a[0], b[0])
-  })
+  const rankForEntry = createRecentRankLookup<T>()
+  const encounter = new Map(entries.map((entry, index) => [entry, index]))
+  return [...entries].sort((a, b) =>
+    compareProjectEntries(
+      a,
+      b,
+      projectOrderBy,
+      (entry) =>
+        repoOrder
+          ? manualRankForEntry(entry, repoOrder)
+          : (encounter.get(entry) ?? Number.POSITIVE_INFINITY),
+      rankForEntry
+    )
+  )
 }
 
 /** Anchor headers on the leading manual repo so dragging/actions and row sorting share the persisted ordering source. */
@@ -165,7 +206,11 @@ export function orderProjectSections<
     section.repo = getManualOrderAnchorRepo(section, repoMap, repoOrder)
   }
   // Project header order is independent of workspace sortBy.
-  return sortProjectEntries(Array.from(sections.entries()), projectOrderBy, repoOrder)
+  return sortProjectEntries(
+    withRepoSectionDisplayLabels(Array.from(sections.entries())),
+    projectOrderBy,
+    repoOrder
+  )
 }
 
 /** Each repo id's rank in catalog order; the first occurrence wins across hosts. */

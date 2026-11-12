@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import {
   DEFAULT_STATUS_BAR_USAGE_FORMAT,
   normalizeStatusBarUsageFormat
@@ -57,9 +59,14 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     sortBy: 'recent',
     setSortBy: (s) => set({ sortBy: s }),
 
-    // Why: bare set — persists only via the debounced window.api.ui.set writer in App.tsx, not on its own.
     projectOrderBy: 'manual',
-    setProjectOrderBy: (p) => set({ projectOrderBy: p }),
+    setProjectOrderBy: (p) => {
+      void import('@/runtime/personal-project-order-client')
+        .then(({ writeProjectOrderMode }) => writeProjectOrderMode(p))
+        .catch(() =>
+          toast.error(translate('sidebar.projectOrder.saveFailed', 'Could not save project order'))
+        )
+    },
 
     showActiveOnly: false,
     setShowActiveOnly: (v) => set({ showActiveOnly: v }),

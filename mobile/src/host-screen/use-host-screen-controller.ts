@@ -63,7 +63,6 @@ export function useHostScreenController({
   const { hostCapabilities, statusReadable, floatingWorkspaceEnabled, hostInstallationId } =
     useHostProtocolGates()
   const state = useHostScreenState(hostId, peekStoredHost(hostId))
-  const settings = useHostViewSettings({ client, connState, state })
   const connectionVerdict = classifyConnection({
     state: connState,
     reconnectAttempts,
@@ -79,6 +78,17 @@ export function useHostScreenController({
 
   useHostScreenIdentity({ client, hostId, state })
   const sidebarFeed = useSwitchedHostSidebarFeed(client, hostId)
+  const projectCatalog =
+    sidebarFeed?.feed.kind === 'ready'
+      ? (sidebarFeed.feed.domains.projectCatalog ?? state.servedProjectSections)
+      : state.servedProjectSections
+  const settings = useHostViewSettings({
+    client,
+    connState,
+    state,
+    hostCapabilities,
+    projectCatalog
+  })
   const catalog = useHostWorktreeCatalog({
     client,
     connState,
@@ -104,6 +114,7 @@ export function useHostScreenController({
     connState,
     embedded,
     fetchWorktrees: catalog.fetchWorktrees,
+    projectCatalog,
     forgetHostClient,
     hostCapabilities,
     hostId,
@@ -149,6 +160,7 @@ export function useHostScreenController({
     collapsedGroups,
     feed,
     projectOrderBy,
+    projectCatalog,
     client,
     connectionVerdict,
     connState,
