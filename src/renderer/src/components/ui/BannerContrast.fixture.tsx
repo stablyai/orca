@@ -24,56 +24,93 @@ const ACTIONS = {
   cancel: noop
 }
 
-function stripModel(status: CloudStripStatus, title: string, detail: string): CloudStripModel {
+type StripRow = {
+  status: CloudStripStatus
+  title: string
+  detail: string
+  /** The real strip's action for that state; null where it has none (restarting). */
+  action: string | null
+  noClose?: boolean
+}
+
+function stripModel(row: StripRow): CloudStripModel {
   return {
-    status,
-    title,
-    detail,
+    status: row.status,
+    title: row.title,
+    detail: row.detail,
     description: null,
-    primary: {
-      label: status === 'warning' ? 'Renew' : 'Set up once',
-      action: { kind: 'setUpOnce' }
-    },
+    primary: row.action
+      ? { label: row.action, action: { kind: row.status === 'warning' ? 'renew' : 'setUpOnce' } }
+      : null,
     code: null,
     paste: null,
     otherWays: false,
-    announcement: title
+    noClose: row.noClose,
+    announcement: row.title
   }
 }
 
-const STRIPS: [CloudStripStatus, string, string][] = [
-  ['warning', 'Your Claude sign-in expired', 'Renew to keep working. Your conversation is kept.'],
-  ['setup', 'Claude isn’t set up for Orca Cloud', 'Set up once. Every cloud workspace uses it.'],
-  ['error', 'Couldn’t restart Claude', 'Try again. Your conversation is kept.'],
-  ['busy', 'Restarting…', 'Your files are kept, and Orca resumes your agents once it is back.']
+// The real states' copy and actions (sign-in strip, RA-11 restart, PC-3b setup).
+const STRIPS: StripRow[] = [
+  {
+    status: 'warning',
+    title: 'Your Claude sign-in expired',
+    detail: 'Renew to keep working. Your conversation is kept.',
+    action: 'Renew'
+  },
+  {
+    status: 'setup',
+    title: 'Claude isn’t set up for Orca Cloud',
+    detail: 'Set up once. Every cloud workspace uses it.',
+    action: 'Set up once'
+  },
+  {
+    status: 'error',
+    title: 'Couldn’t restart Claude',
+    detail: 'Your conversation is kept.',
+    action: 'Try again'
+  },
+  {
+    status: 'busy',
+    title: 'Restarting Claude…',
+    detail: 'Your conversation is kept.',
+    action: null,
+    noClose: true
+  }
 ]
 
 function Variants(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-3">
-      {STRIPS.map(([status, title, detail]) => (
-        <div key={status} className="relative" data-banner-variant={`strip-${status}`}>
-          <CloudAgentSignInStrip
-            model={stripModel(status, title, detail)}
-            prompt={null}
-            actions={ACTIONS}
-          />
+      {STRIPS.map((row) => (
+        <div key={row.status} className="relative" data-banner-variant={`strip-${row.status}`}>
+          <CloudAgentSignInStrip model={stripModel(row)} prompt={null} actions={ACTIONS} />
         </div>
       ))}
+      {/* Warning tone: the Codex shared-server notice's real copy. */}
       <div className="relative [&_.pane-top-banner]:!static" data-banner-variant="pane-warning">
         <PaneTopWarningBanner
-          title="Orca woke this workspace"
-          body="2 processes were running before it slept."
-          primaryAction={<Button size="xs">Show</Button>}
+          title="This Codex is sharing a server with your other Codex tabs"
+          body="Codex sessions that share a server can end together, and agent status can be wrong."
+          primaryAction={
+            <Button size="xs" variant="outline">
+              Fix
+            </Button>
+          }
           onDismiss={noop}
         />
       </div>
+      {/* Neutral tone: the shipped Woke-up bar (CloudWokeProcessesNotice). */}
       <div className="relative [&_.pane-top-banner]:!static" data-banner-variant="pane-neutral">
         <PaneTopWarningBanner
           tone="neutral"
-          title="This pane runs on Dev server"
-          body="Its terminal history stays there."
-          primaryAction={<Button size="xs">Open</Button>}
+          title="Woke up · processes stopped while asleep"
+          primaryAction={
+            <Button size="xs" variant="outline">
+              Rerun <span className="font-mono">pnpm dev</span>
+            </Button>
+          }
+          onDismiss={noop}
         />
       </div>
       <div className="flex gap-3">
