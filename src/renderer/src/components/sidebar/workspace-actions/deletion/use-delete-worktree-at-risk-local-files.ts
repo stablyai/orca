@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getRuntimeWorktreeAtRiskLocalFiles } from '@/runtime/source-control/git/runtime-git-status-client'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
@@ -37,20 +38,28 @@ export function useDeleteWorktreeAtRiskLocalFiles({
         continue
       }
       const identity = getWorktreeHostIdentity(target)
-      // Older hosts lack the method; their dialog simply shows no ignored-file warning.
+      const publish = (files: WorktreeAtRiskLocalFiles): void =>
+        setResult((current) => ({
+          generation,
+          files: new Map(current.generation === generation ? current.files : []).set(
+            identity,
+            files
+          )
+        }))
       void getRuntimeWorktreeAtRiskLocalFiles(gitContext, signal)
         .then((files) => {
           if (!signal.aborted && hasWorktreeAtRiskLocalFiles(files)) {
-            setResult((current) => ({
-              generation,
-              files: new Map(current.generation === generation ? current.files : []).set(
-                identity,
-                files
-              )
-            }))
+            publish(files)
           }
         })
-        .catch(() => {})
+        .catch((error: unknown) => {
+          // Older hosts lack the method and keep today's dialog; any other failure is an unchecked result.
+          const unsupported =
+            error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
+          if (!signal.aborted && !unsupported) {
+            publish({ count: 0, samplePaths: [], complete: false })
+          }
+        })
     }
   })
 

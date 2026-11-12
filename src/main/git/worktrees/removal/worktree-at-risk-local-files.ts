@@ -109,6 +109,9 @@ export async function readWorktreeAtRiskLocalFiles(args: {
   const signal = abortSignalWithTimeout(parentSignal, deadlineMs)
   // File reads cannot all take a signal; racing the deadline keeps a stalled mount from hanging the scan.
   const deadline = new Promise<'unknown'>((resolve) => {
+    if (signal.aborted) {
+      resolve('unknown')
+    }
     signal.addEventListener('abort', () => resolve('unknown'), { once: true })
   })
   const worktreeRealPath = await Promise.race([

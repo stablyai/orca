@@ -48,24 +48,31 @@ describe('readWorktreeAtRiskLocalFiles (real git)', () => {
     })
   })
 
-  it('ignores regenerable output, identical copies and symlinks', async () => {
-    await mkdir(join(worktreePath, 'node_modules', 'pkg'), { recursive: true })
-    await writeFile(join(worktreePath, 'node_modules', 'pkg', 'index.js'), 'x\n')
-    await writeFile(join(worktreePath, 'debug.log'), 'x\n')
-    await writeFile(join(worktreePath, '.env'), 'TOKEN=main\n')
-    await writeFile(join(mainPath, '.env.local'), 'LOCAL=1\n')
-    await symlink(join(mainPath, '.env.local'), join(worktreePath, '.env.local'))
+  // File symlinks need Developer Mode or admin rights on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'ignores regenerable output, identical copies and symlinks',
+    async () => {
+      await mkdir(join(worktreePath, 'node_modules', 'pkg'), { recursive: true })
+      await writeFile(join(worktreePath, 'node_modules', 'pkg', 'index.js'), 'x\n')
+      await writeFile(join(worktreePath, 'debug.log'), 'x\n')
+      await writeFile(join(worktreePath, '.env'), 'TOKEN=main\n')
+      await writeFile(join(mainPath, '.env.local'), 'LOCAL=1\n')
+      await symlink(join(mainPath, '.env.local'), join(worktreePath, '.env.local'))
 
-    await expect(read()).resolves.toEqual({ count: 0, samplePaths: [], complete: true })
-  })
+      await expect(read()).resolves.toEqual({ count: 0, samplePaths: [], complete: true })
+    }
+  )
 
-  it('does not count a main-checkout symlink into the worktree as a copy', async () => {
-    await rm(join(mainPath, '.env'))
-    await writeFile(join(worktreePath, '.env'), 'TOKEN=feature\n')
-    await symlink(join(worktreePath, '.env'), join(mainPath, '.env'))
+  it.skipIf(process.platform === 'win32')(
+    'does not count a main-checkout symlink into the worktree as a copy',
+    async () => {
+      await rm(join(mainPath, '.env'))
+      await writeFile(join(worktreePath, '.env'), 'TOKEN=feature\n')
+      await symlink(join(worktreePath, '.env'), join(mainPath, '.env'))
 
-    await expect(read()).resolves.toEqual({ count: 1, samplePaths: ['.env'], complete: true })
-  })
+      await expect(read()).resolves.toEqual({ count: 1, samplePaths: ['.env'], complete: true })
+    }
+  )
 
   it('reports a directory past its comparison budget as unchecked, not safe', async () => {
     await mkdir(join(worktreePath, 'local'))
