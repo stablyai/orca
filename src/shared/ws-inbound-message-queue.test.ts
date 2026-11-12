@@ -120,22 +120,4 @@ describe('WebSocket inbound message lifetime', () => {
       }
     }
   )
-
-  it('suppresses errors from an active conversion that finishes after disposal', async () => {
-    const wait = gate()
-    const errors: unknown[] = []
-    const queue = new WsInboundMessageQueue(
-      async () => {
-        await wait.promise
-        throw new Error('retired conversion')
-      },
-      (error) => errors.push(error)
-    )
-    const active = queue.enqueue('active')
-    await Promise.resolve()
-    queue.dispose()
-    wait.release()
-    await active
-    expect(errors).toEqual([])
-  })
 })

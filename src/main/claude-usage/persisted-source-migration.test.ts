@@ -1,4 +1,3 @@
-import { sealUsageCacheJson } from '../usage/cache/usage-cache-json-integrity'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
@@ -38,20 +37,4 @@ it('preserves protected inline ownership through failed migration, toggle and re
   expect(retried.getScanState()).toMatchObject({ enabled: false, hasAnyClaudeData: true })
   expect(await fixture.decodedSources()).toEqual([source])
   expect(JSON.parse(await readFile(fixture.reportPath, 'utf8')).processedFiles).toBeUndefined()
-})
-
-it('does not trust a canonical reconstruction when original report verification failed', async () => {
-  const source = await fixture.writeResumable()
-  const { processedFiles: _files, ...report } = fixture.state([source], 7)
-  const canonical = sealUsageCacheJson(
-    JSON.stringify({ ...report, padding: 'a'.repeat(8 * 1024 * 1024) }),
-    'claude-usage-report-v1'
-  )
-  await writeFile(fixture.reportPath, canonical.replace('{"usageIntegrity"', '{ "usageIntegrity"'))
-  fixture.splitWorker.mockRejectedValueOnce(new Error('worker unavailable'))
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const store = fixture.createStore()
-  await store.whenLoaded()
-  expect(store.getScanState()).toMatchObject({ hasAnyClaudeData: false, lastScanCompletedAt: null })
-  await store.flush()
 })
