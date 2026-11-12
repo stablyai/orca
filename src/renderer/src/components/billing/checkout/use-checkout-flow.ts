@@ -50,7 +50,7 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
     const setupSessionId = activeCloudSetupSessionId()
     void window.api.orcaProfiles
       .billingOpenCheckout({
-        plan: 'team',
+        plan: order.planId,
         interval: order.interval,
         seats: order.seats,
         ...(setupSessionId ? { setupSessionId } : {})

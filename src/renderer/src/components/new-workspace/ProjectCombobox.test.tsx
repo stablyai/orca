@@ -158,4 +158,35 @@ describe('ProjectCombobox', () => {
     expect(onCloudRepoSelected).toHaveBeenCalledWith('acme/infra')
     expect(onValueChange).not.toHaveBeenCalled()
   })
+
+  // PROJ-MENU: a short "GitHub" header, one line per repository, and the cloud-only fact in each
+  // row's accessible name (never only in the badge).
+  it('lists cloud-only repositories under "GitHub", one line each, named for screen readers', () => {
+    act(() => {
+      renderField(
+        <ProjectCombobox
+          options={projects}
+          value={null}
+          onValueChange={vi.fn()}
+          cloudRepos={[
+            { fullName: 'acme/infra', url: 'https://github.com/acme/infra', private: true },
+            { fullName: 'acme/site', url: 'https://github.com/acme/site', private: false }
+          ]}
+          onCloudRepoSelected={vi.fn()}
+        />
+      )
+    })
+    openList()
+    type('acme')
+    const group = document.querySelector('[role="group"][aria-label="GitHub"]')
+    expect(group).not.toBeNull()
+    expect(group?.textContent).not.toContain('No copy on this computer')
+    const names = [...(group?.querySelectorAll('[role="option"]') ?? [])].map((option) =>
+      option.getAttribute('aria-label')
+    )
+    expect(names).toContain('acme/infra, private, cloud only')
+    expect(names).toContain('acme/site, cloud only')
+    expect(group?.querySelectorAll('[data-cloud-only-badge]')).toHaveLength(2)
+    type('')
+  })
 })

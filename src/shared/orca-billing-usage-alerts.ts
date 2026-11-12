@@ -99,11 +99,11 @@ export function decideUsageAlert(
 }
 
 /** "$50", "$25", "$0.75" in the given locale (shared by the plans page and the usage alert). */
-export function formatCents(cents: number, locale: string): string {
+export function formatCents(cents: number, locale: string, currency = 'usd'): string {
   const whole = cents % 100 === 0
   return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: 'USD',
+    currency: currency.toUpperCase(),
     minimumFractionDigits: whole ? 0 : 2,
     maximumFractionDigits: whole ? 0 : 2
   }).format(cents / 100)

@@ -3,7 +3,6 @@ import { CircleSlash } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import type { Translate } from '@/i18n/use-translate'
 import { Progress } from '@/components/ui/progress'
-import { Skeleton } from '@/components/ui/skeleton'
 import { StepIcon } from './WorktreeSetupSteps'
 import type { VmBuildStep } from './vm-build-steps'
 import {
@@ -14,47 +13,21 @@ import {
 import { formatElapsedTime } from './worktree-creation-clock'
 import { stepLabel, stepStateLabel } from './vm-build-sheet-copy'
 
-/** The boot plan usually answers within this; only a slower answer shows the placeholder. */
-const PLACEHOLDER_DELAY_MS = 150
-
-/** True once `active` has held for `delayMs` (the row's mode is unknown only once per create). */
-function useDelayedFlag(active: boolean, delayMs: number): boolean {
-  const [due, setDue] = React.useState(false)
-  React.useEffect(() => {
-    if (!active) {
-      return
-    }
-    const timer = window.setTimeout(() => setDue(true), delayMs)
-    return () => window.clearTimeout(timer)
-  }, [active, delayMs])
-  return active && due
-}
-
 /** One timed row of the build checklist; the failure card, not the row, carries the red. */
 export function VmBuildStepRow({
   step,
   cloud,
   detail,
   timing,
-  stopped = false,
-  t,
-  waitedMs = 0
+  t
 }: {
   step: VmBuildStep
   cloud: boolean
-  /** The build stopped (a failure card shows): an undecided clone/update never will be decided. */
-  stopped?: boolean
   /** The step's measured duration, when there is one. */
   timing: VmBuildStepTiming | null
   /** What the running step is doing right now, in plain words. */
   detail: string | null
   t: Translate
-  /**
-   * How long the create has been running (the sandbox step's time). Past PLACEHOLDER_DELAY_MS the
-   * boot plan had its chance to answer, so a still-unknown row shows its placeholder at once: no
-   * blank row, also not in a fixture or a remount.
-   */
-  waitedMs?: number
 }): React.JSX.Element {
   const labelId = React.useId()
   // A live percent already says how far along the step is.
@@ -65,11 +38,9 @@ export function VmBuildStepRow({
     timing?.p95Ms ?? (cloud && step.id === 'provision' ? SLOW_WITHOUT_MEASURE_MS : null)
   const slow =
     measuring && slowAfterMs !== null && step.elapsedMs !== null && step.elapsedMs > slowAfterMs
+  // Clone or update is known once the boot plan answers; until then (or for good, if the start
+  // failed first) the row reads "Get repository" with its empty circle, then switches in place.
   const undecided = cloud && step.id === 'clone' && step.state === 'pending' && !step.cloneMode
-  // N-12: once the start has failed, the mode stays unknown for good: name the step neutrally.
-  const modeUnknown = undecided && !stopped
-  const placeholderDelayed = useDelayedFlag(modeUnknown, PLACEHOLDER_DELAY_MS)
-  const placeholderDue = modeUnknown && (placeholderDelayed || waitedMs >= PLACEHOLDER_DELAY_MS)
 
   return (
     <li
@@ -89,29 +60,9 @@ export function VmBuildStepRow({
             (step.state === 'pending' || step.skipped) && 'text-muted-foreground'
           )}
         >
-          {modeUnknown ? (
-            // Clone or update is decided in a moment (boot plan): a placeholder, never a guessed label.
-            // Usually decided within ~150 ms, so the placeholder shows only after that (no blink).
-            <>
-              <span className="sr-only">
-                {t(
-                  'auto.components.worktree.creation.VmBuildSheet.repositoryPending',
-                  'Repository'
-                )}
-              </span>
-              {placeholderDue ? (
-                <Skeleton className="inline-block h-3 w-28 align-middle" />
-              ) : (
-                <span aria-hidden className="invisible">
-                  {'\u00a0'}
-                </span>
-              )}
-            </>
-          ) : undecided ? (
-            t('auto.components.worktree.creation.VmBuildSheet.getRepository', 'Get repository')
-          ) : (
-            stepLabel(step, cloud, t)
-          )}
+          {undecided
+            ? t('auto.components.worktree.creation.VmBuildSheet.getRepository', 'Get repository')
+            : stepLabel(step, cloud, t)}
         </span>
         <span className="sr-only">
           {step.skipped

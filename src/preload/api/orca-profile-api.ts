@@ -49,6 +49,7 @@ import type {
   OrcaBillingUsageHistoryResult
 } from '../../shared/orca-billing'
 import type { OrcaCloudSetupReturn } from '../../shared/orca-cloud-setup-link'
+import type { OrcaPlanCatalogResult } from '../../shared/orca-billing-plans'
 
 export type OrcaProfileApi = {
   list: () => Promise<OrcaProfileListResult>
@@ -105,6 +106,8 @@ export type OrcaProfileApi = {
   onCloudSetupReturn: (callback: (event: OrcaCloudSetupReturn) => void) => () => void
   /** Plan & billing for the signed-in account (Orca Cloud billing service). */
   billingStatus: () => Promise<OrcaBillingStatusResult>
+  /** Billing's public plan catalog: prices (Stripe's), features, seat bounds. */
+  billingPlans: () => Promise<OrcaPlanCatalogResult>
   /** Opens hosted Stripe Checkout in the browser. */
   billingOpenCheckout: (args: OrcaBillingCheckoutArgs) => Promise<OrcaBillingOpenResult>
   /** Starts Orca Cloud setup: one browser tab for sign-in, team, plan and GitHub. */

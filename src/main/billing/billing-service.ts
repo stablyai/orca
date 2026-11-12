@@ -3,6 +3,7 @@ import { withCloudBuildDefaults } from '../cloud-build-defaults'
 // throws, so the renderer can show a precise state. A billing-service refusal never signs the
 // user out; only Orca Cloud auth rejecting the session does (via runWithFreshOrcaCloudSession).
 import { appendFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { app, shell } from 'electron'
 import type {
   OrcaBillingCheckoutArgs,
@@ -14,6 +15,9 @@ import type {
   OrcaBillingTrialClaimResult,
   OrcaBillingUsageHistoryResult
 } from '../../shared/orca-billing'
+import type { OrcaPlanCatalogResult } from '../../shared/orca-billing-plans'
+import { loadPlanCatalog } from './plan-catalog-client'
+import { openResultForError } from './billing-open-result'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
@@ -131,6 +135,36 @@ export async function withBillingToken<T>(
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
+/** The billing service origin, without needing a signed-in session (the plan catalog is public). */
+function billingApiUrl(): string | null {
+  const env = withCloudBuildDefaults(process.env)
+  if (getBillingDevKeyFile(process.env, app.isPackaged)) {
+    return cleanCloudServiceUrl(env.ORCA_BILLING_API_URL, true) || null
+  }
+  const auth = getOrcaCloudAuthConfig()
+  if (!auth.configured) {
+    return null
+  }
+  return getBillingEndpoints(auth.config, env, app.isPackaged)?.billingApiUrl ?? null
+}
+
+/** Billing's public plan catalog (prices from Stripe), with the last good copy for offline. */
+export async function getOrcaPlanCatalog(userDataPath: string): Promise<OrcaPlanCatalogResult> {
+  const url = billingApiUrl()
+  if (!url) {
+    return { status: 'unconfigured' }
+  }
+  try {
+    return await loadPlanCatalog({
+      billingApiUrl: url,
+      cacheFile: join(userDataPath, 'orca-cloud-plan-catalog.json'),
+      now: Date.now()
+    })
+  } catch (error) {
+    return { status: 'failed', error: message(error) }
+  }
+}
+
 export async function getOrcaBillingStatus(userDataPath: string): Promise<OrcaBillingStatusResult> {
   const ready = prepare(userDataPath)
   if (!ready.ok) {
@@ -181,24 +215,6 @@ export async function getOrcaBillingTeamPlans(
   } catch (error) {
     return { status: 'failed', error: message(error) }
   }
-}
-
-function openResultForError(error: unknown): OrcaBillingOpenResult {
-  if (error instanceof BillingServiceError) {
-    if (error.statusCode === 403) {
-      return { status: 'forbidden' }
-    }
-    if (error.errorCode === 'already_subscribed') {
-      return { status: 'already-subscribed' }
-    }
-    if (error.errorCode === 'no_billing_account') {
-      return { status: 'no-billing-account' }
-    }
-    if (error.errorCode === 'team_required') {
-      return { status: 'team-required' }
-    }
-  }
-  return { status: 'failed', error: message(error) }
 }
 
 async function openHosted(
