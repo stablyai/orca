@@ -3,7 +3,7 @@ import { forkTestSource } from './structured-agent-session-fork.test-fixture'
 import { resolveUncommittedStructuredCreate } from '../../../../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-precommit-refusal'
 import { handleStructuredAgentSessionCreate } from '../../../../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create-handler'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../../agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../../../testing/agent-session-record-test-fixture'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { prepareStructuredAgentSessionFork } from '../structured-agent-session-fork'
 import {

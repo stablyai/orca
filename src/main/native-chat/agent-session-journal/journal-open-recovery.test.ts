@@ -5,7 +5,7 @@ import { journalDomainSubmission } from './journal-domain-status-inputs'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { JournalSqlScope } from './journal-sql-scope'
 import { nextJournalDomainQueueCard } from './journal-domain-submission-consume'
-import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
 import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import { readJournalDomainQueuePauses } from './journal-domain-queue-reads'
 

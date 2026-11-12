@@ -429,6 +429,7 @@
       "remove": "Remove…",
       "empty": "No extensions are on for this profile",
       "visitWebStore": "Visit Chrome Web Store",
+      "openWebStoreFailed": "Couldn't open the Chrome Web Store.",
       "manage": "Manage extensions"
     },
     "history": {
@@ -6490,7 +6491,9 @@
           "updateSkipped": "Update skipped: {{value0}}",
           "updateAvailable": "Update available",
           "repairAvailable": "Repair available",
-          "installAvailable": "Install available"
+          "installAvailable": "Install available",
+          "otherBuild": "Installed by another Orca version",
+          "otherBuildKept": "Kept: written by another Orca version"
         },
         "installResult": {
           "installed": "Installed and verified.",
@@ -18126,6 +18129,14 @@
                     "logins": {
                       "title": "Stay logged in",
                       "body": "Bring your existing logins into Orca to stay signed in immediately."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome extensions",
+                        "body": "Install from the Chrome Web Store and pin them next to the address bar.",
+                        "action": "Open Web Store",
+                        "secondaryAction": "Got it"
+                      }
                     }
                   },
                   "tasks": {

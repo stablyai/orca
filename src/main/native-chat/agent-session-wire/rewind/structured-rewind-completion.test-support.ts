@@ -1,5 +1,5 @@
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { agentSessionRecordFixture } from '../../agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../../testing/agent-session-record-test-fixture'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore

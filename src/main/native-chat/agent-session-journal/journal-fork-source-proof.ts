@@ -6,7 +6,7 @@ import {
 } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { decodePersistedAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
-import { agentConversationCopyRefusal } from '../agent-conversation-copy-error'
+import { agentConversationCopyRefusal } from '../conversation-adoption/agent-conversation-copy-error'
 import { structuredAgentSessionForkBoundary } from '../agent-session-wire/acquisition/structured-agent-session-fork-boundary'
 import { readJournalDomainForkBoundary } from './journal-domain-fork-reads'
 import { JournalSqlScope } from './journal-sql-scope'

@@ -43,7 +43,7 @@
     "src/main/plugins/testing/plugin-test-hooks.ts",
     "src/main/plugins/testing/plugin-test-register.ts",
     "src/main/ai-vault/scan-service/session-scanner-service-entry.ts",
-    "src/main/native-chat/wsl-transcript-fs-process-entry.ts",
+    "src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-entry.ts",
     "src/main/usage/scan-worker/usage-scan-worker-entry.ts",
     "src/main/workspaces/space-analysis/workspace-space-scan-worker-entry.ts",
     "src/main/claude-accounts/profiles/setup/claude-profile-setup-worker-entry.ts",

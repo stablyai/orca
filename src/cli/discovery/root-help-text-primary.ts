@@ -186,6 +186,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  computer list-apps        List running apps available to computer-use',
   '  computer list-windows     List visible windows for a target app',
   '  computer get-app-state    Capture a compact accessibility snapshot of an app',
+  '  computer wait             Wait until an app shows text, enables a control, or opens a window',
   '  computer click            Click an app element or window coordinate',
   '  computer perform-secondary-action Run an advertised accessibility action',
   '  computer scroll           Scroll an app element',

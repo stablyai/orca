@@ -3,7 +3,7 @@ import { seedJournalForkSource } from '../../../agent-session-journal/journal-fo
 import { vi } from 'vitest'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { agentSessionRecordFixture } from '../../../agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../../../testing/agent-session-record-test-fixture'
 import {
   claudeProviderHandle,
   codexProviderHandle

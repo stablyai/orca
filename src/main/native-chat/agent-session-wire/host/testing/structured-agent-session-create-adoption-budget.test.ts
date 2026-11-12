@@ -1,8 +1,10 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdir, realpath, writeFile, rm, symlink } from 'node:fs/promises'
 vi.mock(
   '../../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
   async (original) => {
-    const query = await import('../../../transcript-opencode-sqlite-query')
+    const query =
+      await import('../../../transcript-history/opencode/transcript-opencode-sqlite-query')
     return {
       ...(await original<object>()),
       readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
@@ -17,7 +19,10 @@ import {
   createTestParams,
   CREATE_TEST_CALLER as CALLER
 } from './structured-agent-session-create.test-fixture'
-import { HOST_TEST_THREAD as THREAD } from './structured-agent-session-host-test-data.test-fixture'
+import {
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as THREAD
+} from './structured-agent-session-host-test-data.test-fixture'
 import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { adoptedDirectoryProbes } from '../../../agent-session-journal/history-import/adopted-directory-probe'
 
@@ -70,7 +75,16 @@ it('uses current selected ancestors, then refuses retargeted/foreign sources bef
   expect(fixture.rig.store.listRecords()).toEqual([])
   await rm(registered)
   await symlink(physical, registered, process.platform === 'win32' ? 'junction' : 'dir')
-  expect(await fixture.rig.host.create(CALLER, params)).toMatchObject({ ok: true })
+  const created = await fixture.rig.host.create(CALLER, params)
+  expect(created.ok).toBe(true)
+  if (!created.ok) {
+    throw new Error('selected ancestor adoption failed')
+  }
+  const snapshot = await readTestHostJournal(fixture.rig.host, SESSION)
+  expect(snapshot.items.map(({ body }) => body)).toEqual([
+    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'ancestor context' }] }
+  ])
+  expect(created.value.page.items).toEqual(snapshot.items)
   expect(probe).toHaveBeenLastCalledWith(workspaceCwd, sourceCwd, expect.any(AbortSignal))
   expect(await fixture.rig.host.create(CALLER, params)).toMatchObject({ ok: true, replayed: true })
 })

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
 import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type {

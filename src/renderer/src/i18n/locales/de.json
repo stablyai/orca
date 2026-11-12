@@ -401,7 +401,8 @@
       "remove": "Entfernen…",
       "empty": "Für dieses Profil sind keine Erweiterungen aktiviert",
       "visitWebStore": "Chrome Web Store besuchen",
-      "manage": "Erweiterungen verwalten"
+      "manage": "Erweiterungen verwalten",
+      "openWebStoreFailed": "Der Chrome Web Store konnte nicht geöffnet werden."
     },
     "history": {
       "clear": "Browserverlauf löschen",
@@ -17205,6 +17206,14 @@
                     "logins": {
                       "title": "Angemeldet bleiben",
                       "body": "Bestehende Anmeldungen in Orca übernehmen, um sofort angemeldet zu bleiben."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome-Erweiterungen",
+                        "body": "Installiere Erweiterungen aus dem Chrome Web Store und hefte sie neben der Adressleiste an.",
+                        "action": "Web Store öffnen",
+                        "secondaryAction": "Verstanden"
+                      }
                     }
                   },
                   "tasks": {

@@ -1233,7 +1233,8 @@
       "remove": "Remover…",
       "empty": "Nenhuma extensão está ativada para este perfil",
       "visitWebStore": "Visitar a Chrome Web Store",
-      "manage": "Gerenciar extensões"
+      "manage": "Gerenciar extensões",
+      "openWebStoreFailed": "Não foi possível abrir a Chrome Web Store."
     },
     "viewport": {
       "mobile-s": "Celular P — 320 × 568",
@@ -19578,6 +19579,14 @@
                     "logins": {
                       "title": "Continue conectado",
                       "body": "Traga seus logins existentes para o Orca e continue conectado imediatamente."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Extensões do Chrome",
+                        "body": "Instale extensões pela Chrome Web Store e fixe-as ao lado da barra de endereços.",
+                        "action": "Abrir Web Store",
+                        "secondaryAction": "Entendi"
+                      }
                     }
                   },
                   "tasks": {

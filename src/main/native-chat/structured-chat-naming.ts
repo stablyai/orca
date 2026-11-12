@@ -1,5 +1,12 @@
+import type {
+  StructuredChatNameGeneration,
+  StructuredChatNamingDeps
+} from './conversation-naming/structured-chat-naming-types'
 import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
-import { createStructuredChatNamingWork, type NamingRequest } from './structured-chat-naming-work'
+import {
+  createStructuredChatNamingWork,
+  type NamingRequest
+} from './conversation-naming/structured-chat-naming-work'
 import type { StructuredAgentSessionStatusObserverOptions } from './agent-session-wire/observations/structured-agent-session-status-observation'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
@@ -9,8 +16,6 @@ import {
 } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { hasStructuredChatPromptText } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
 import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import {
   formatAgentGenerationFailureOutputForDisplay,
   type AgentGenerationFailureOutput
@@ -19,37 +24,7 @@ import type {
   StructuredAgentSessionConversationNaming,
   StructuredChatNamingFailure
 } from './agent-session-wire/host/structured-agent-session-host-types'
-import {
-  neverThrowingStructuredAgentSessionLogger,
-  type StructuredAgentSessionLogger
-} from './agent-session-wire/host/structured-agent-session-logger'
-
-/** null means unavailable/canceled: no failure to display or retry. */
-export type StructuredChatNameGeneration =
-  | { name: string }
-  | { error: string; errorCode?: string; failureOutput?: AgentGenerationFailureOutput }
-  | null
-
-export type StructuredChatNamingDeps = {
-  getStore: () => Pick<
-    AgentSessionRecordStore,
-    'getRecord' | 'compareAndSetConversationName' | 'setUserConversationName'
-  > | null
-  getSettings: () => Pick<GlobalSettings, 'nativeChatAutoName'>
-  readFirstPrompt: (sessionId: string, hostStartedAt: number) => Promise<string>
-  /** The current context's first prompt, for a name the user asked for again. */
-  readJournalFirstPrompt: (sessionId: string) => Promise<string>
-  now?: () => number
-  workerTaskTitle: (record: AgentSessionRecord) => { title: string } | null
-  generate: (
-    record: AgentSessionRecord,
-    firstPrompt: string,
-    shouldExecute?: () => boolean
-  ) => Promise<StructuredChatNameGeneration>
-  onNamed: (workspaceId: string, sessionId: string) => void
-  logger: StructuredAgentSessionLogger
-  wait?: (ms: number) => Promise<void>
-}
+import { neverThrowingStructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
 
 const GENERATION_RETRY_DELAYS_MS = [2000, 4000]
 const NAMING_ERROR_LIMIT = 1024

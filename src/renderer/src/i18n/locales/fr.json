@@ -210,7 +210,8 @@
       "remove": "Supprimer…",
       "empty": "Aucune extension n'est activée pour ce profil",
       "visitWebStore": "Visiter le Chrome Web Store",
-      "manage": "Gérer les extensions"
+      "manage": "Gérer les extensions",
+      "openWebStoreFailed": "Impossible d’ouvrir le Chrome Web Store."
     },
     "viewport": {
       "mobile-s": "Mobile S — 320 × 568",
@@ -17179,6 +17180,14 @@
                     "logins": {
                       "title": "Restez connecté",
                       "body": "Importez vos connexions existantes dans Orca pour rester connecté immédiatement."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Extensions Chrome",
+                        "body": "Installez des extensions depuis le Chrome Web Store et épinglez-les à côté de la barre d’adresse.",
+                        "action": "Ouvrir le Web Store",
+                        "secondaryAction": "Compris"
+                      }
                     }
                   },
                   "tasks": {

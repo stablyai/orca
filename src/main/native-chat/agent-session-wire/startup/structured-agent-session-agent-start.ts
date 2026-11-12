@@ -6,7 +6,7 @@ import type {
   ProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionArgumentProblem } from '../../../../shared/agent-session/agent-session-argument-problem'
-import { argumentProblemOf } from '../../structured-agent-arguments-error'
+import { argumentProblemOf } from '../../agent-launch/structured-agent-arguments-error'
 import {
   agentSessionRefusalFromReference,
   isAgentSessionRefusalError,
@@ -29,7 +29,7 @@ import {
   provenAgentSessionStartFailure,
   retryableAgentSessionAcquisition
 } from './structured-agent-session-start-failure'
-import { agentCliInstallationProblemOf } from '../../agent-cli-installation-error'
+import { agentCliInstallationProblemOf } from '../../agent-launch/agent-cli-installation-error'
 import { failedCreateRefusal } from '../acquisition/structured-agent-session-failed-create-refusal'
 import { startFailureDiagnosticOf } from './structured-agent-session-failure-text'
 import {

@@ -10,7 +10,7 @@ import * as domain from './database/journal-domain-database'
 import { JournalSqlCommand } from './journal-sql-command'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import type { JournalSqlReaderReply, JournalSqlReaderRequest } from './journal-sql-reader-protocol'
-import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
 
 it('commits fork installation with FULL durability and restores NORMAL before acknowledgement', async () => {
   const db = new Database(':memory:')

@@ -1,4 +1,4 @@
-import { projectSavedChatContextItems } from '../../agent-session-saved-prompt-text'
+import { projectSavedChatContextItems } from '../../conversation-context/agent-session-saved-prompt-text'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionContinuationContext } from '../../../../shared/agent-session/agent-session-wire'
 import { buildAgentSessionHandoffContext } from '../../../../shared/agent-session-handoff-context'
@@ -6,7 +6,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { formatWorkerTranscriptMessage } from '../../../../shared/worker-transcript-text'
 import { toLinuxPath } from '../../../../shared/wsl-paths'
-import { writeAgentSessionContextSnapshot } from '../../agent-session-context-snapshots'
+import { writeAgentSessionContextSnapshot } from '../../conversation-context/agent-session-context-snapshots'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession

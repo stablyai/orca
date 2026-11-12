@@ -4,16 +4,18 @@ import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import { NO_WORKSPACE_ROW_FILTERS } from '../workspace-view/workspace-row-filters'
 import { ALL_GROUP_KEY } from './group-keys'
+import { IDLE_WORKSPACE_ACTIVITY } from './workspace-activity-facts'
+import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import type { HostSectionRow } from './host-section-rows'
 import { normalizePairedServerRow } from './paired-server-rows'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import {
   buildSidebarFeedRows,
+  planSidebarFeedRows,
   type SidebarFeedCatalog,
   type SidebarFeedView
 } from './sidebar-feed-rows'
-import { IDLE_WORKSPACE_ACTIVITY } from './workspace-activity-facts'
-import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import { indexSidebarFeed, rankSidebarFeedWorktrees } from './sidebar-feed-index'
 
 function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   return { id, path: `/${id}`, displayName: id, badgeColor: '', addedAt: 0, ...overrides }
@@ -69,6 +71,73 @@ function outline(rows: readonly HostSectionRow[]): string[] {
     return row.type === 'host-header' ? [`## ${row.label}`] : []
   })
 }
+
+it('retires only recorded deletions through paired feed, pins, forced reveal and lineage', () => {
+  const rows = [
+    normalizePairedServerRow('runtime:a', {
+      worktreeId: 'r::/p',
+      repoId: 'r',
+      worktreeInstanceId: 'p',
+      isPinned: true,
+      removing: true,
+      removalRecorded: true
+    }),
+    normalizePairedServerRow('runtime:a', {
+      worktreeId: 'r::/c',
+      repoId: 'r',
+      worktreeInstanceId: 'c',
+      parentWorktreeId: 'r::/p',
+      lineageWorktreeInstanceId: 'c',
+      parentWorktreeInstanceId: 'p'
+    }),
+    normalizePairedServerRow('runtime:a', {
+      worktreeId: 'r::/legacy',
+      repoId: 'r',
+      removing: true
+    }),
+    normalizePairedServerRow('runtime:a', {
+      worktreeId: 'r::/failed',
+      repoId: 'r',
+      removalError: 'Cleanup failed. Retry deletion.'
+    }),
+    normalizePairedServerRow('runtime:b', { worktreeId: 'r::/p', repoId: 'r' })
+  ].flatMap((row) => row ?? [])
+  const repos = [
+    repo('r', { executionHostId: 'runtime:a' }),
+    repo('r', { executionHostId: 'runtime:b' })
+  ]
+  const inputs = domains({
+    pairedServerHosts: new Map(
+      ['runtime:a', 'runtime:b'].map((hostId) => [
+        hostId,
+        { freshness: 'live' as const, host: null }
+      ])
+    ),
+    pairedServerRows: new Map(rows.map((row) => [row.key, row]))
+  })
+  const settings = view({ pinnedDisplayPolicy: 'duplicate-in-groups' })
+  const index = indexSidebarFeed(inputs, repos)
+  const planned = planSidebarFeedRows(
+    inputs,
+    index,
+    catalog(repos),
+    settings,
+    rankSidebarFeedWorktrees(index, 'recent'),
+    { forcedVisibleWorktreeIds: ['r::/p'] }
+  )
+  expect(planned.visibleWorktrees.map((row) => `${row.hostId}|${row.id}`).sort()).toEqual([
+    'runtime:a|r::/c',
+    'runtime:a|r::/failed',
+    'runtime:a|r::/legacy',
+    'runtime:b|r::/p'
+  ])
+  const built = buildSidebarFeedRows(inputs, catalog(repos), settings)
+  expect(outline(built.sectionRows)).toContain('runtime:a|r::/c@0')
+  expect(outline(built.sectionRows)).not.toContain('runtime:a|r::/p@0')
+  expect(built.visibleWorktrees.find((row) => row.id === 'r::/failed')?.removalError).toBe(
+    'Cleanup failed. Retry deletion.'
+  )
+})
 
 describe('buildSidebarFeedRows nests each paired server’s own lineage', () => {
   const serverRows = (hostId: 'runtime:a' | 'runtime:b', recentAt: number) =>

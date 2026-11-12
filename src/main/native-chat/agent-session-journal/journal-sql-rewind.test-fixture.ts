@@ -17,7 +17,7 @@ import {
   agentSessionOperationKey,
   pendingAgentSessionOperationRow
 } from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
-import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
 import { domainLifecycleFixture } from './journal-domain-lifecycle.test-fixture'
 import { planJournalDomainRewindCut } from './journal-domain-rewind-cut'
 import { JournalSqlScope } from './journal-sql-scope'

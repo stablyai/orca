@@ -14,7 +14,7 @@ import { installOrcadBundle } from './orcad-remote-install'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../../shared/orcad-profile-preflight'
-import { materializeOrcadArtifact } from '../../orcad/orcad-artifact-materializer'
+import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import { readOrcadBundleTarget } from './orcad-deployment-target'
 import { resolveOrcadRuntimeTarget } from '../lifecycle/orcad-runtime-target'
 import {

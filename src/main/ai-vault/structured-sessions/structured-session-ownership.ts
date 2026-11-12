@@ -32,7 +32,7 @@ import {
   sessionHistoryBinaryNames,
   type StructuredAgentResumeInvocation,
   type StructuredAgentSessionHistory
-} from '../../native-chat/structured-agent-cli-conversations'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import type { StructuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import { commandName, commandProgramIndex, shellCommands } from './shell-command-words'
