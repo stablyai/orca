@@ -10,7 +10,7 @@ const RESET_WARNING =
 export async function resetServeHostIdentity(userDataPath: string): Promise<void> {
   // Lazy: only this command needs orcad's lock code.
   const { resetHostIdentityUnderLock } =
-    await import('../../main/orcad/orcad-host-identity-reset.js')
+    await import('../../main/orcad/profile-state/orcad-host-identity-reset.js')
   const result = resetHostIdentityUnderLock(userDataPath)
   if (result.status === 'missing') {
     throw new RuntimeClientError('not_found', `No Orca data at ${userDataPath}; nothing to reset.`)

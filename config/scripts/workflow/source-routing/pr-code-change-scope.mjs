@@ -130,10 +130,10 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
 ]
 
 const ORCAD_BROWSER_PREFIXES = [
-  'src/main/orcad/external-chromium-',
-  'src/main/orcad/orcad-browser-provider',
-  'src/main/orcad/orcad-agent-browser-binary',
-  'src/main/orcad/electron-serve-browser-process'
+  'src/main/orcad/browser-providers/chromium/external-chromium-',
+  'src/main/orcad/browser-providers/orcad-browser-provider',
+  'src/main/orcad/browser-providers/orcad-agent-browser-binary',
+  'src/main/orcad/browser-providers/electron/electron-serve-browser-process'
 ]
 
 // Include page build/verification/manifest/packaging, entry/routes/imported mobile sources and render-check shell policy.
