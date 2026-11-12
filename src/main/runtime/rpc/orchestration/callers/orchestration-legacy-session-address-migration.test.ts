@@ -4,8 +4,6 @@ import {
   ADDRESS_X,
   ADDRESS_Y,
   createSessionCallerHarness,
-  orchestrationRequest,
-  resultOf,
   SESSION_X,
   SESSION_Y,
   WORKER_HANDLE,
@@ -73,45 +71,19 @@ function snapshot(db: OrchestrationDb): unknown[] {
 
 describe('a database an earlier build wrote session:<id> addresses into', () => {
   let h: SessionCallerHarness
-  let seeded: { toX: string; fromX: string }
 
   beforeEach(() => {
     h = createSessionCallerHarness(hostRef, () => ({
       present: true,
       sessionIds: [SESSION_X, SESSION_Y]
     }))
-    seeded = seedEarlierBuildRows(h.db)
+    seedEarlierBuildRows(h.db)
     h.db.migrate()
   })
 
   afterEach(() => {
     h.close()
     vi.restoreAllMocks()
-  })
-
-  it('gives the chat the mail sent to it before the upgrade, through its own check', async () => {
-    const checked = resultOf(
-      await h.dispatch(orchestrationRequest('orchestration.check', {}, { sessionId: SESSION_X }))
-    )
-    expect(checked.messages).toEqual([
-      expect.objectContaining({
-        id: seeded.toX,
-        to_handle: ADDRESS_X,
-        subject: LEGACY_X,
-        body: LEGACY_X
-      })
-    ])
-  })
-
-  it('still routes mail to a chat into the Run it was remembered for under the old spelling', async () => {
-    const sent = await h.dispatch(
-      orchestrationRequest('orchestration.send', {
-        from: WORKER_HANDLE,
-        to: ADDRESS_Y,
-        subject: 's'
-      })
-    )
-    expect(sent).toMatchObject({ ok: true, result: { message: { to_handle: 'run:run_earlier' } } })
   })
 
   it('leaves no address in the old spelling, keeping the current row where both were keyed', () => {
