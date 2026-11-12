@@ -1,7 +1,9 @@
-// Price math for the plans page. Every number comes from the billing service's offers.
-import type { OrcaBillingInterval, OrcaBillingOffers } from '../../../../../shared/orca-billing'
+// Price math for the plans page. Every number comes from the billing service: its plan catalog
+// (Stripe's prices), or an older service's offers.
+import type { OrcaBillingInterval } from '../../../../../shared/orca-billing'
 
-type TeamOffer = OrcaBillingOffers['team']
+/** Per-seat prices in cents; null where billing has no price for that interval. */
+type TeamOffer = { monthlyPriceCentsPerSeat: number | null; annualPriceCentsPerSeat: number | null }
 
 /** What one seat costs per month on this interval (annual shown as its monthly equivalent). */
 export function perSeatMonthlyCents(team: TeamOffer, interval: OrcaBillingInterval): number | null {
@@ -38,10 +40,10 @@ export function annualSavingsPercent(team: TeamOffer): number | null {
 export { formatCents } from '../../../../../shared/orca-billing-usage-alerts'
 
 /** A per-hour rate always shows cents ("$1.00", "$0.75"), unlike whole-dollar prices. */
-export function formatRateCents(cents: number, locale: string): string {
+export function formatRateCents(cents: number, locale: string, currency = 'usd'): string {
   return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: 'USD',
+    currency: currency.toUpperCase(),
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(cents / 100)

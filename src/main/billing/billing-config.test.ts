@@ -32,14 +32,19 @@ describe('billing config', () => {
 })
 
 describe('billing IPC args', () => {
-  it('accepts Team checkout with an interval and 1..500 seats', () => {
+  it('accepts a catalog plan id with an interval and 1..500 seats', () => {
     expect(billingCheckoutArgsFromUnknown({ plan: 'team', interval: 'year', seats: 5 })).toEqual({
       plan: 'team',
       interval: 'year',
       seats: 5
     })
+    // Billing's catalog names the plans (billing decides what it sells); the shape is checked here.
+    expect(billingCheckoutArgsFromUnknown({ plan: 'pro', interval: 'month', seats: 1 }).plan).toBe(
+      'pro'
+    )
     for (const bad of [
-      { plan: 'pro', interval: 'month', seats: 1 },
+      { plan: 'Pro Plan', interval: 'month', seats: 1 },
+      { plan: '', interval: 'month', seats: 1 },
       { plan: 'team', interval: 'week', seats: 1 },
       { plan: 'team', interval: 'month', seats: 0 },
       { plan: 'team', interval: 'month', seats: 501 },

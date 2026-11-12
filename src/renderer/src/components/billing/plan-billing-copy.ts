@@ -133,6 +133,11 @@ export function openFailureCopy(result: OrcaBillingOpenResult, t: Translate): st
         'auto.components.billing.openSignedOut2',
         'Sign in to Orca again to manage your team.'
       )
+    case 'plan-unavailable':
+      return t(
+        'auto.components.billing.openPlanUnavailable',
+        'Checkout for this plan isn’t working right now. Try again in a few minutes, or contact us and we’ll set you up.'
+      )
     case 'unconfigured':
       return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
     case 'failed':

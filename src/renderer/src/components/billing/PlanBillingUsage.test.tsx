@@ -82,6 +82,29 @@ describe('spend cap field', () => {
     expect(screen.queryByText(/\d+%/)).toBeNull()
   })
 
+  // Today's dev billing (before #507): offers with every number but no warnAtPercent.
+  it('keeps the cap and rate but states no alert levels when billing sends none', () => {
+    const { warnAtPercent: _levels, ...olderTeam } = sampleTeam.offers!.team
+    const onSetOverage = vi.fn()
+    render(
+      <OverageControls
+        entitlement={{ ...overageOn, offers: { ...sampleTeam.offers!, team: olderTeam } }}
+        busy={false}
+        onSetOverage={onSetOverage}
+      />
+    )
+    expect(
+      screen.getByText(
+        'Owners and admins are alerted in Orca as your team’s sandbox hours run low.'
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText(/\d+%/)).toBeNull()
+    expect(capField().value).toBe('40')
+    expect(
+      screen.getByText('$1.00 per sandbox hour after your included hours, billed by the minute.')
+    ).toBeTruthy()
+  })
+
   it('shows members the setting as text', () => {
     render(
       <OverageControls

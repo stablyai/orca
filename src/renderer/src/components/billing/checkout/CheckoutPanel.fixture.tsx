@@ -3,9 +3,10 @@ import { Dialog } from '@/components/ui/dialog'
 import { sampleOffers, sampleTeam } from '../plan-billing-fixtures'
 import { PlansDialogContent } from '../plans/PlansDialogContent'
 import { CheckoutPanel, type CheckoutPanelProps } from './CheckoutPanel'
+import { sampleCatalogResult } from '../plans/plan-catalog-fixtures'
 
 const NOW = Date.UTC(2026, 10, 18, 15)
-const order = { interval: 'month' as const, seats: 3 }
+const order = { planId: 'team', interval: 'month' as const, seats: 3 }
 const width = 1280
 
 function Page({ phase }: { phase: CheckoutPanelProps['phase'] }): React.JSX.Element {
@@ -13,6 +14,7 @@ function Page({ phase }: { phase: CheckoutPanelProps['phase'] }): React.JSX.Elem
     <Dialog open modal={false}>
       <PlansDialogContent
         result={{ status: 'ok', entitlement: sampleTeam }}
+        catalog={sampleCatalogResult}
         busy={false}
         notice={null}
         seats={3}
@@ -28,6 +30,8 @@ function Page({ phase }: { phase: CheckoutPanelProps['phase'] }): React.JSX.Elem
             onReopen={() => {}}
             onKeepWaiting={() => {}}
             onBack={() => {}}
+            contactUrl="https://onorca.dev/contact-sales"
+            onContact={() => {}}
           />
         }
       />
@@ -68,6 +72,19 @@ export const openFailed = defineFixture({
 export const annual = defineFixture({
   width,
   render: () => (
-    <Page phase={{ kind: 'awaiting-payment', order: { interval: 'year', seats: 5 }, since: NOW }} />
+    <Page
+      phase={{
+        kind: 'awaiting-payment',
+        order: { planId: 'team', interval: 'year', seats: 5 },
+        since: NOW
+      }}
+    />
+  )
+})
+/** Billing's 409 plan_unavailable: Stripe has no price on sale. Try again, or contact us. */
+export const planUnavailable = defineFixture({
+  width,
+  render: () => (
+    <Page phase={{ kind: 'open-failed', order, result: { status: 'plan-unavailable' } }} />
   )
 })

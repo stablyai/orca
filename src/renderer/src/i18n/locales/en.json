@@ -20782,7 +20782,6 @@
           "vpRunningTitle": "Agents keep running",
           "vpWakeTitle": "Wake in seconds",
           "loading": "Loading plans…",
-          "loadFailed": "Could not load plans. Try again in a moment.",
           "currentPlan": "Current plan",
           "billedMonthly": "Billed monthly",
           "checkout": "Continue to checkout",
@@ -20807,7 +20806,6 @@
           "featureHours4": "{{value0}} sandbox hours per seat each month, pooled across your team",
           "featureSpec": "Every sandbox gets {{value0}} vCPU · {{value1}} GB",
           "featureOverage7": "Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set ({{cap}} by default)",
-          "footTerms4": "Prices in USD, before tax. Overage is off until an owner or admin turns it on. Cancel anytime; your plan runs to the end of the billing period.",
           "lockedBody2": "Only an owner or admin of your team can choose a plan. Ask one of them to open Plan & billing in Orca.",
           "vpSecretsBody4": "API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.",
           "vpSecretsTitle3": "API keys stay out of the sandbox",
@@ -20821,7 +20819,14 @@
           "totalPerYear": "{{total}} per year",
           "sandboxHoursLeftResets_one": "{{count}} sandbox hour left · resets {{date}}",
           "sandboxHoursLeftResets_other": "{{count}} sandbox hours left · resets {{date}}",
-          "vpWakeBody3": "Idle sandboxes sleep to save sandbox hours and wake with your files as you left them."
+          "vpWakeBody3": "Idle sandboxes sleep to save sandbox hours and wake with your files as you left them.",
+          "footTerms5": "Prices in {{currency}}, before tax. Overage is off until an owner or admin turns it on. Cancel anytime; your plan runs to the end of the billing period.",
+          "loadFailed2": "Couldn’t load plans. Try again in a moment.",
+          "priceUnavailable": "Price unavailable",
+          "checkoutUnavailable": "This plan isn’t available right now. Try again later.",
+          "featureKeepRunning": "Agents keep running when you close your laptop",
+          "featureIdleSleep": "Sandboxes sleep when idle, so you only use hours while they work",
+          "featureOverageNoRate": "Optional overage up to a monthly spend cap you set"
         },
         "capLabel2": "Monthly spend cap",
         "capSaved": "Saved",
@@ -20857,7 +20862,9 @@
           "lineItemMonthly_one": "{{seats}} × {{price}} per seat per month",
           "lineItemMonthly_other": "{{seats}} × {{price}} per seat per month",
           "lineItemYearly_one": "{{seats}} × {{price}} per seat, billed yearly",
-          "lineItemYearly_other": "{{seats}} × {{price}} per seat, billed yearly"
+          "lineItemYearly_other": "{{seats}} × {{price}} per seat, billed yearly",
+          "planUnavailableTitle": "This plan isn’t available right now",
+          "contactUs": "Contact us"
         },
         "health": {
           "ending": "Ending",
@@ -20965,7 +20972,8 @@
           "deletedWorkspaces_other": "{{count}} deleted workspaces"
         },
         "usageAlertsNoteLevels": "Owners and admins are alerted in Orca at {{levels}} of your team’s sandbox hours.",
-        "usageAlertsNoteGeneric": "Owners and admins are alerted in Orca as your team’s sandbox hours run low."
+        "usageAlertsNoteGeneric": "Owners and admins are alerted in Orca as your team’s sandbox hours run low.",
+        "openPlanUnavailable": "Checkout for this plan isn’t working right now. Try again in a few minutes, or contact us and we’ll set you up."
       },
       "ports": {
         "RuntimePortAutoForwarder": {

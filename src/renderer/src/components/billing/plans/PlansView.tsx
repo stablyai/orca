@@ -1,12 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Cloud, KeyRound, Zap } from 'lucide-react'
-import { InlineError } from '@/components/ui/inline-error'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   isOrcaCloudTrial,
-  ORCA_BILLING_MAX_SEATS,
   type OrcaBillingEntitlement,
   type OrcaBillingInterval,
   type OrcaBillingStatusResult
@@ -24,17 +20,22 @@ import {
 } from '../plan-billing-usage-copy'
 import { TrialPlanSummary } from '../TrialPlanSummary'
 import { EnterprisePlanCard } from './EnterprisePlanCard'
+import { PlansLoadError, PlansSkeleton, ValueProps } from './PlansViewParts'
 import { PlansIntervalToggle } from './PlansIntervalToggle'
 import { TeamPlanCard, type TeamPlanCardMode } from './TeamPlanCard'
 import { annualSavingsPercent, clampSeats } from './plans-pricing'
+import { resolvePlansModel } from './plans-model'
+import type { OrcaPlanCatalogResult } from '../../../../../shared/orca-billing-plans'
 
 export type PlansViewProps = {
   result: OrcaBillingStatusResult | null
+  /** Billing's plan catalog (GET /v1/plans); null while it loads. */
+  catalog: OrcaPlanCatalogResult | null
   busy: boolean
   notice: PlanBillingNotice | null
   /** Seats Checkout will bill: org members, or 1 for a personal account. */
   seats: number
-  onCheckout: (args: { interval: OrcaBillingInterval; seats: number }) => void
+  onCheckout: (args: { planId: string; interval: OrcaBillingInterval; seats: number }) => void
   onManage: () => void
   onContactSales: (url: string) => void
   onRetry: () => void
@@ -45,52 +46,6 @@ export function isSubscribed(result: OrcaBillingStatusResult | null): boolean {
     result?.status === 'ok' &&
     result.entitlement.plan !== null &&
     result.entitlement.status !== 'canceled'
-  )
-}
-
-function ValueProps(): React.JSX.Element {
-  const t = useTranslate()
-  // Same promises as the marketing site's /cloud page.
-  const items = [
-    {
-      icon: Cloud,
-      title: t('auto.components.billing.plans.vpRunningTitle', 'Agents keep running'),
-      body: t(
-        'auto.components.billing.plans.vpRunningBody2',
-        'Sandboxes keep working while you are away and report back when they finish.'
-      )
-    },
-    {
-      icon: Zap,
-      title: t('auto.components.billing.plans.vpWakeTitle', 'Wake in seconds'),
-      body: t(
-        'auto.components.billing.plans.vpWakeBody3',
-        'Idle sandboxes sleep to save sandbox hours and wake with your files as you left them.'
-      )
-    },
-    {
-      icon: KeyRound,
-      title: t('auto.components.billing.plans.vpSecretsTitle3', 'API keys stay out of the sandbox'),
-      body: t(
-        'auto.components.billing.plans.vpSecretsBody4',
-        'API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.'
-      )
-    }
-  ]
-  return (
-    <ul className="grid gap-4 sm:grid-cols-3 [@media(max-height:900px)]:hidden">
-      {items.map((item) => (
-        <li key={item.title} className="flex items-start gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-            <item.icon className="size-4" />
-          </span>
-          <div className="space-y-0.5">
-            <p className="text-sm font-medium">{item.title}</p>
-            <p className="text-xs leading-5 text-muted-foreground text-pretty">{item.body}</p>
-          </div>
-        </li>
-      ))}
-    </ul>
   )
 }
 
@@ -157,88 +112,20 @@ function CurrentPlanStrip({
   )
 }
 
-function SkeletonLine({ className }: { className: string }): React.JSX.Element {
-  return <Skeleton className={className} />
-}
-
-function SkeletonCard({
-  lines,
-  seatRow = false
-}: {
-  lines: number
-  seatRow?: boolean
-}): React.JSX.Element {
-  return (
-    <div className="flex h-full flex-col gap-5 rounded-xl border border-border bg-card p-5 shadow-xs">
-      <SkeletonLine className="h-4 w-24" />
-      <div className="space-y-2">
-        <SkeletonLine className="h-8 w-32" />
-        <SkeletonLine className="h-3 w-28" />
-      </div>
-      {seatRow ? <SkeletonLine className="h-9 w-full" /> : null}
-      <div className="flex-1 space-y-3">
-        {Array.from({ length: lines }, (_, index) => (
-          <SkeletonLine key={index} className={index % 2 ? 'h-3 w-4/5' : 'h-3 w-11/12'} />
-        ))}
-      </div>
-      <div className="min-h-[6rem] space-y-2 border-t border-border/60 pt-4">
-        <SkeletonLine className="h-9 w-full" />
-        <SkeletonLine className="mx-auto h-3 w-3/5" />
-      </div>
-    </div>
-  )
-}
-
-/** Same geometry as the loaded page (value props, toggle, two cards) so nothing jumps (review M4). */
-function PlansSkeleton(): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <div
-      className="space-y-6"
-      role="status"
-      aria-label={t('auto.components.billing.plans.loading', 'Loading plans…')}
-    >
-      <ValueProps />
-      <div className="flex justify-center">
-        <Skeleton shape="circle" className="h-8 w-72" />
-      </div>
-      <div className="grid items-stretch gap-4 md:grid-cols-2">
-        <SkeletonCard lines={5} seatRow />
-        <SkeletonCard lines={4} />
-      </div>
-      <div className="mx-auto max-w-xl space-y-1.5">
-        <Skeleton className="mx-auto h-3 w-2/3" />
-        <Skeleton className="mx-auto h-3 w-5/6" />
-      </div>
-    </div>
-  )
-}
-
-function PlansLoadError({ onRetry }: { onRetry: () => void }): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <div className="space-y-6">
-      <ValueProps />
-      <InlineError
-        className="mx-auto my-16 max-w-md"
-        title={t('auto.components.billing.plans.loadFailedTitle', 'Plans didn’t load')}
-        detail={t(
-          'auto.components.billing.plans.loadFailed',
-          'Could not load plans. Try again in a moment.'
-        )}
-        retryLabel={t('auto.components.billing.plans.retry', 'Try again')}
-        onRetry={onRetry}
-      />
-    </div>
-  )
+/** The interval to show: the one picked when it is on sale, else the first one that is. */
+export function shownInterval(
+  picked: OrcaBillingInterval,
+  intervals: readonly OrcaBillingInterval[]
+): OrcaBillingInterval {
+  return intervals.includes(picked) ? picked : (intervals[0] ?? picked)
 }
 
 export function PlansView(props: PlansViewProps): React.JSX.Element {
   const t = useTranslate()
-  const [interval, setInterval] = useState<OrcaBillingInterval>('month')
-  const seats = clampSeats(props.seats, ORCA_BILLING_MAX_SEATS)
+  const [picked, setInterval] = useState<OrcaBillingInterval>('month')
   const result = props.result
-  const ready = result?.status === 'ok'
+  const plans = resolvePlansModel(props.catalog, result)
+  const ready = result?.status === 'ok' && plans.state === 'ready'
   // Once plans load (or after "Back to plans"), land on the dialog heading, never on a buy button
   // (Enter would start Checkout): Tab then reaches the interval toggle before the cards. Only when
   // focus is on the dialog or nowhere; never steal it from something the user picked.
@@ -264,12 +151,16 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
       </p>
     )
   }
-  if (!result || result.status !== 'ok' || !result.entitlement.offers) {
-    return result === null ? <PlansSkeleton /> : <PlansLoadError onRetry={props.onRetry} />
+  if (result === null || (result.status === 'ok' && plans.state === 'loading')) {
+    return <PlansSkeleton />
+  }
+  if (result.status !== 'ok' || plans.state !== 'ready') {
+    // Never a guessed price: without billing's catalog (or offers) there is nothing to show.
+    return <PlansLoadError onRetry={props.onRetry} />
   }
 
   const entitlement = result.entitlement
-  const offers = result.entitlement.offers
+  const { team, enterprise } = plans.model
   const subscribed = isSubscribed(result)
   const mode: TeamPlanCardMode = subscribed
     ? 'current'
@@ -277,6 +168,8 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
       ? 'choose'
       : 'locked'
   const paymentIssue = entitlement.payment.pastDueSince !== null
+  const interval = shownInterval(picked, team.intervals)
+  const seats = Math.max(team.seats.min, clampSeats(props.seats, team.seats.max))
 
   return (
     <div className="space-y-6">
@@ -297,30 +190,29 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
       ) : (
         <ValueProps />
       )}
-      {mode === 'choose' ? (
+      {mode === 'choose' && team.intervals.length > 1 ? (
         <PlansIntervalToggle
           value={interval}
-          savingsPercent={annualSavingsPercent(offers.team)}
+          savingsPercent={annualSavingsPercent(team)}
           disabled={props.busy}
           onChange={setInterval}
         />
       ) : null}
-      <div className="grid items-stretch gap-4 md:grid-cols-2">
+      <div className={enterprise ? 'grid items-stretch gap-4 md:grid-cols-2' : 'mx-auto max-w-md'}>
         <TeamPlanCard
-          team={offers.team}
+          team={team}
           interval={subscribed && entitlement.interval ? entitlement.interval : interval}
           seats={seats}
           mode={mode}
           busy={props.busy}
           notice={props.notice}
           hideManage={paymentIssue}
-          onCheckout={() => props.onCheckout({ interval, seats })}
+          onCheckout={() => props.onCheckout({ planId: team.planId, interval, seats })}
           onManage={props.onManage}
         />
-        <EnterprisePlanCard
-          enterprise={offers.enterprise}
-          onContactSales={() => props.onContactSales(offers.enterprise.contactUrl)}
-        />
+        {enterprise ? (
+          <EnterprisePlanCard enterprise={enterprise} onContactSales={props.onContactSales} />
+        ) : null}
       </div>
       <div className="space-y-1 text-center text-xs text-muted-foreground text-pretty">
         <p>
@@ -331,8 +223,9 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
         </p>
         <p>
           {t(
-            'auto.components.billing.plans.footTerms4',
-            'Prices in USD, before tax. Overage is off until an owner or admin turns it on. Cancel anytime; your plan runs to the end of the billing period.'
+            'auto.components.billing.plans.footTerms5',
+            'Prices in {{currency}}, before tax. Overage is off until an owner or admin turns it on. Cancel anytime; your plan runs to the end of the billing period.',
+            { currency: team.currency.toUpperCase() }
           )}
         </p>
       </div>
