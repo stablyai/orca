@@ -64,28 +64,36 @@ it.each([40, 400])(
       if (!/search_inventory_(sources|entries|activity|epochs|staging)/.test(sql)) {
         return statement
       }
-      return new Proxy(statement, {
-        get(target, property) {
-          const method = Reflect.get(target, property)
-          if (typeof method !== 'function') {
-            return method
-          }
-          return (...args: Parameters<typeof statement.run>) => {
-            if (['get', 'all', 'iterate', 'run'].includes(String(property))) {
-              const payload = args.find(
-                (value) => typeof value === 'string' && value.startsWith('[')
-              )
-              const rows =
-                sql.includes('json_each(?)') && typeof payload === 'string'
-                  ? JSON.parse(payload).length
-                  : 1
-              // Reclaim probes the activity row and three witnesses before its physical update.
-              localRows += rows * (sql.includes('WITH live AS MATERIALIZED') ? 5 : 1)
-            }
-            return Reflect.apply(method, target, args)
-          }
+      const count = (args: Parameters<typeof statement.run>) => {
+        const payload = args.find((value) => typeof value === 'string' && value.startsWith('['))
+        const rows =
+          sql.includes('json_each(?)') && typeof payload === 'string'
+            ? JSON.parse(payload).length
+            : 1
+        // Reclaim probes the activity row and three witnesses before its physical update.
+        localRows += rows * (sql.includes('WITH live AS MATERIALIZED') ? 5 : 1)
+      }
+      return {
+        get(...args) {
+          count(args)
+          return statement.get(...args)
+        },
+        all(...args) {
+          count(args)
+          return statement.all(...args)
+        },
+        iterate(...args) {
+          count(args)
+          return statement.iterate(...args)
+        },
+        run(...args) {
+          count(args)
+          return statement.run(...args)
+        },
+        setReadBigInts(enabled) {
+          statement.setReadBigInts(enabled)
         }
-      })
+      }
     })
     const request = async (command: SessionSearchCatalogCommand) => {
       envelopes++
