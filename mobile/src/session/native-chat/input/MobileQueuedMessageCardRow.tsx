@@ -49,6 +49,8 @@ type QueuedMessageCardRowProps = {
   onSend: () => void
   onMore: () => void
   onEditorLayout: (row: LayoutRectangle) => void
+  /** The compact row's height, so the list can scroll to a row that needs attention. */
+  onRowHeight?: (height: number) => void
 }
 
 export function MobileQueuedMessageCardRow({
@@ -85,6 +87,7 @@ function QueuedMessageCardContents({
   onToggleExpanded,
   onSend,
   onMore,
+  onRowHeight,
   dragHandle
 }: Omit<QueuedMessageCardRowProps, 'editor' | 'onEditorLayout'>): React.JSX.Element {
   useMobileColorScheme()
@@ -102,6 +105,7 @@ function QueuedMessageCardContents({
     <View
       testID="queued-card-row"
       style={[styles.card, divided && styles.divided, lit && styles.lit]}
+      onLayout={onRowHeight && ((event) => onRowHeight(event.nativeEvent.layout.height))}
     >
       <View style={[styles.row, dragHandle ? styles.rowWithHandle : null]}>
         {dragHandle}
@@ -182,9 +186,10 @@ function QueuedMessageCardContents({
             hitSlop={STEER_HIT_SLOP}
             style={({ pressed }) => [
               styles.steerPill,
-              pressed && pressedStyle,
               // Filled like the composer's primary while Steer queued would press it.
               lit && styles.litAction,
+              // Opacity, so a lit pill still answers a press.
+              pressed && pressedStyle,
               (busy || steerHeld) && styles.disabled
             ]}
             disabled={busy || steerHeld}

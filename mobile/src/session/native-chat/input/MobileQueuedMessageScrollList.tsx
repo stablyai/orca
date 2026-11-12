@@ -39,8 +39,12 @@ export function MobileQueuedMessageScrollList({
   /** The newest card has no sender: the person just queued it, so the list shows it. */
   newestIsPersons: boolean
   inlineEditorActive?: boolean
-  /** Rows, given `reveal` to keep an edited row in view. */
-  children: (reveal: (row: LayoutRectangle) => void, drag: MobileQueueDragViewport) => ReactNode
+  /** Rows, given `reveal` to keep an edited row in view and `show` to scroll the list to a row. */
+  children: (
+    reveal: (row: LayoutRectangle) => void,
+    drag: MobileQueueDragViewport,
+    show: (row: LayoutRectangle) => void
+  ) => ReactNode
 }): React.JSX.Element {
   const scrollRef = useAnimatedRef<Animated.ScrollView>()
   const narrow = useWindowDimensions().width < QUEUED_ROW_NARROW_WIDTH
@@ -67,6 +71,10 @@ export function MobileQueuedMessageScrollList({
     const above = m.offset > 1
     const below = m.offset + m.viewport < m.content - 1
     setCues((prev) => (prev.above === above && prev.below === below ? prev : { above, below }))
+    const pending = pendingShow.current
+    if (pending && m.viewport > 0 && m.content >= pending.y + pending.height) {
+      show(pending)
+    }
     if (!flashed.current && m.viewport > 0 && m.content > m.viewport + 1) {
       flashed.current = true
       if (Platform.OS === 'ios') {
@@ -75,12 +83,15 @@ export function MobileQueuedMessageScrollList({
     }
   }
   // The nearest scroll that shows the whole row, as desktop's editor does, clear of the edge fades.
-  const reveal = (row: LayoutRectangle) => {
-    if (lowerRegion) {
-      lowerRegion.layoutChanged()
+  const pendingShow = useRef<LayoutRectangle | null>(null)
+  const show = (row: LayoutRectangle) => {
+    const { offset, viewport, content } = metrics.current
+    // A list that just opened may not have measured itself yet; show the row once it has.
+    if (viewport === 0 || content < row.y + row.height) {
+      pendingShow.current = row
       return
     }
-    const { offset, viewport, content } = metrics.current
+    pendingShow.current = null
     if (viewport === 0) {
       return
     }
@@ -93,6 +104,14 @@ export function MobileQueuedMessageScrollList({
     } else if (bottom > offset + viewport) {
       scrollRef.current?.scrollTo({ y: bottom - viewport, animated: false })
     }
+  }
+  // An inline editor inside a lower region lets that region scroll instead.
+  const reveal = (row: LayoutRectangle) => {
+    if (lowerRegion) {
+      lowerRegion.layoutChanged()
+      return
+    }
+    show(row)
   }
   return (
     // Always shrinkable: under a height limit the list gives up rows (and scrolls) before the box
@@ -117,12 +136,16 @@ export function MobileQueuedMessageScrollList({
           measure({ content: height })
         }}
       >
-        {children(reveal, {
-          scrollRef,
-          scrollOffsetY,
-          scrollContentHeight,
-          onDragActiveChange: setDragging
-        })}
+        {children(
+          reveal,
+          {
+            scrollRef,
+            scrollOffsetY,
+            scrollContentHeight,
+            onDragActiveChange: setDragging
+          },
+          show
+        )}
       </Animated.ScrollView>
       {cues.above ? <MobileEdgeFade edge="top" /> : null}
       {cues.below ? <MobileEdgeFade edge="bottom" /> : null}

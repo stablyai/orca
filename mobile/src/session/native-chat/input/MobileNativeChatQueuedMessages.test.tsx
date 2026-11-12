@@ -10,6 +10,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
 import type { ActionSheetAction } from '../../../components/ActionSheetModal'
 import { MobileNativeChatQueueAbovePromptContext } from '../mobile-native-chat-lower-region-context'
+import { createMobileQueuedHeadLight } from './mobile-queued-head-light'
+import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
+import { pressedStyle } from '../../../theme/mobile-theme'
 
 let fontScale = 1
 let windowWidth = 390
@@ -305,6 +308,61 @@ describe('MobileNativeChatQueuedMessages', () => {
       mounted.update(element({ cards: [card({ messageId: 'a' }), failed('b'), failed('c')] }, true))
     )
     expect(rows(mounted)).toHaveLength(3)
+  })
+
+  it('scrolls a failure that opens a short list into view', async () => {
+    const scrollTo = vi.fn()
+    const mounted = create(createElement('View'), {
+      createNodeMock: (node) =>
+        node.type === 'ScrollView'
+          ? { scrollTo, scrollToEnd: vi.fn(), flashScrollIndicators: vi.fn() }
+          : null
+    })
+    renderer = mounted
+    await act(async () => mounted.update(element({ cards: three() }, true)))
+    const failedThird = [
+      card({ messageId: 'a' }),
+      card({ messageId: 'b' }),
+      card({ messageId: 'c', needsAttention: true, caption: "Couldn't send" })
+    ]
+    await act(async () => mounted.update(element({ cards: failedThird }, true)))
+    expect(rows(mounted)).toHaveLength(3)
+    // Rows report before the list knows its own size, as when it has just opened.
+    await act(async () => {
+      rows(mounted).forEach((row, index) =>
+        row.props.onLayout({ nativeEvent: { layout: { height: index === 2 ? 80 : 60 } } })
+      )
+    })
+    expect(scrollTo).not.toHaveBeenCalled()
+    const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+    await act(async () => {
+      scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } })
+      scroll.props.onContentSizeChange(0, 200)
+    })
+    // The failed row spans 120–200 of a 100pt list, so the list scrolls to its end.
+    expect(scrollTo).toHaveBeenCalledWith({ y: 100, animated: false })
+  })
+
+  it("fills the head's Steer pill while the composer previews Steer queued", async () => {
+    const headLight = createMobileQueuedHeadLight()
+    const mounted = await mount({ cards: three(), agentWorking: true, headLight })
+    const pills = () =>
+      mounted.root.findAll(
+        (node) =>
+          typeof node.type === 'string' &&
+          node.props.accessibilityLabel === 'Submit without interrupting the model'
+      )
+    const label = (pill: ReturnType<typeof pills>[number]) =>
+      pill.find((node) => String(node.type) === 'Text').props.style
+    expect(pills()[0]!.props.style({ pressed: false })).not.toContain(styles.litAction)
+    await act(async () => headLight.set(true))
+    const [head, second] = pills()
+    expect(head!.props.style({ pressed: false })).toContain(styles.litAction)
+    expect(label(head!)).toContain(styles.litActionLabel)
+    // A press still dims the filled pill.
+    const pressed = head!.props.style({ pressed: true })
+    expect(pressed.indexOf(pressedStyle)).toBeGreaterThan(pressed.indexOf(styles.litAction))
+    expect(second!.props.style({ pressed: false })).not.toContain(styles.litAction)
   })
 
   it('keeps a folded list folded when a whole new queue replaces it', async () => {

@@ -1,7 +1,7 @@
 import { MobileNativeChatQueueFrame } from './MobileNativeChatQueueFrame'
 import { DragReorderList } from '../../../components/DragReorderList'
 import type { DragReorderMove } from '../../../components/drag-reorder-positions'
-import { useContext, useLayoutEffect, useState, type ReactNode } from 'react'
+import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Pressable, Text, View, type LayoutRectangle } from 'react-native'
 import { ChevronDown, ChevronUp, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
@@ -22,6 +22,7 @@ import type { MobileQueuedMessageEdit } from './use-mobile-structured-queued-mes
 import type { MobileQueuedMessageInlineEditor } from './mobile-queued-message-edit-draft'
 import { MobileQueuedMessageCardRow } from './MobileQueuedMessageCardRow'
 import { MobileQueuedMessageScrollList } from './MobileQueuedMessageScrollList'
+import { queuedRowFrame } from './mobile-queued-row-frame'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
 import {
   MobileNativeChatQueueAbovePromptContext,
@@ -106,6 +107,11 @@ export function MobileNativeChatQueuedMessages({
   const liveKey = `${liveIds.join('\u0000')}\u0001${attentionIds.join('\u0000')}`
   const [seen, setSeen] = useState({ key: liveKey, ids: liveIds, attentionIds })
   const largeText = useLargeSystemText()
+  // The card a failure just opened the list for, scrolled into view once every row has a height.
+  const [showId, setShowId] = useState<string | null>(
+    () => cards?.slice(1).find((card) => card.needsAttention)?.messageId ?? null
+  )
+  const rowHeights = useRef(new Map<string, number>())
   if (liveKey !== seen.key) {
     setSeen({ key: liveKey, ids: liveIds, attentionIds })
     const newest = cards?.at(-1)
@@ -121,12 +127,12 @@ export function MobileNativeChatQueuedMessages({
     }
     // A card that newly needs attention (failed or returned) behind the fold opens the list,
     // so its own Send is in reach.
-    if (
-      attentionIds.some(
-        (messageId) => messageId !== liveIds[0] && !seen.attentionIds.includes(messageId)
-      )
-    ) {
+    const failedBehindFold = attentionIds.find(
+      (messageId) => messageId !== liveIds[0] && !seen.attentionIds.includes(messageId)
+    )
+    if (failedBehindFold !== undefined) {
       setOpenChoice({ open: true, abovePrompt })
+      setShowId(failedBehindFold)
     }
     // Forget expanded ids of cards that left the queue.
     if ([...expandedIds].some((messageId) => !liveIds.includes(messageId))) {
@@ -216,9 +222,18 @@ export function MobileNativeChatQueuedMessages({
     : hiddenCount === 1
       ? t('chat.queuedMessages.moreCount_one', '{{count}} more', { count: hiddenCount })
       : t('chat.queuedMessages.moreCount_other', '{{count}} more', { count: hiddenCount })
+  const measureRow = (messageId: string, height: number, show: (row: LayoutRectangle) => void) => {
+    rowHeights.current.set(messageId, height)
+    const frame = showAll ? queuedRowFrame(messageIds, rowHeights.current, showId) : null
+    if (frame) {
+      setShowId(null)
+      show(frame)
+    }
+  }
   const renderRow = (
     card: MobileQueuedMessageCard,
     reveal: (row: LayoutRectangle) => void,
+    show: (row: LayoutRectangle) => void,
     handle?: ReactNode
   ) => {
     const first = card.messageId === cards[0]!.messageId
@@ -253,6 +268,7 @@ export function MobileNativeChatQueuedMessages({
         onSend={() => void run(card.messageId, onSend)}
         onMore={() => setMenuFor(card.messageId)}
         onEditorLayout={reveal}
+        onRowHeight={(height) => measureRow(card.messageId, height, show)}
       />
     )
   }
@@ -298,7 +314,7 @@ export function MobileNativeChatQueuedMessages({
           newestIsPersons={!cards.at(-1)?.from}
           inlineEditorActive={editor !== undefined}
         >
-          {(reveal, drag) => {
+          {(reveal, drag, show) => {
             // Order matters only with two or more cards in view, so the grip shows only then.
             return onMove && !editor && showAll && cards.length > 1 ? (
               <DragReorderList
@@ -307,12 +323,12 @@ export function MobileNativeChatQueuedMessages({
                 isMoveDisabled={(card) => busyIds.has(MOVE_KEY) || busyIds.has(card.messageId)}
                 rowPresentation="plain"
                 liftFromRow
-                renderRow={(card, handle) => renderRow(card, reveal, handle)}
+                renderRow={(card, handle) => renderRow(card, reveal, show, handle)}
                 onMove={(move) => run(move.movedId, () => onMove(move), [MOVE_KEY])}
                 {...drag}
               />
             ) : (
-              shownCards.map((card) => renderRow(card, reveal))
+              shownCards.map((card) => renderRow(card, reveal, show))
             )
           }}
         </MobileQueuedMessageScrollList>
@@ -322,7 +338,10 @@ export function MobileNativeChatQueuedMessages({
             accessibilityRole="button"
             accessibilityState={{ expanded: showAll }}
             style={({ pressed }) => [styles.foldToggle, pressed && styles.pressed]}
-            onPress={() => setOpenChoice({ open: !showAll, abovePrompt })}
+            onPress={() => {
+              setShowId(null)
+              setOpenChoice({ open: !showAll, abovePrompt })
+            }}
           >
             <Text
               style={styles.foldLabel}
