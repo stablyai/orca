@@ -28,6 +28,7 @@ export type NativeChatPendingWitness = {
   requires: number
   proof: 'source' | 'legacy'
   glue?: boolean
+  glueMembers?: Set<number>
   advanced: Set<string>
 }
 
@@ -115,12 +116,14 @@ export function nativeChatPendingWitnesses(
     )
   )
   const candidates = new Map<string, NativeChatPendingWitness[]>()
+  const exactLegacyRows = new Map<number, Set<number>>()
   function offer(
     row: NativeChatReceiptRow,
     members: number[],
     proof: 'source' | 'legacy',
     requires = 0,
-    glue = false
+    glue = false,
+    glueMembers?: Set<number>
   ): void {
     if (options.onlyRows && !options.onlyRows.has(row.message.id)) {
       return
@@ -145,11 +148,27 @@ export function nativeChatPendingWitnesses(
       return
     }
     const mask = members.reduce((value, index) => value | pendingReceiptBit(index, count), 0)
-    const signature = `${proof}:${mask}:${requires}:${glue}`
+    const partition = glueMembers
+      ? members
+          .map(
+            (index) =>
+              `${index}:${glueMembers.has(index)}:${row.index < (glueMembers.has(index) ? lastGlueAdvance : lastAdvance)[index]}`
+          )
+          .join(',')
+      : ''
+    const signature = `${proof}:${mask}:${requires}:${glue}:${partition}`
     const alternatives = candidates.get(signature) ?? []
     if (alternatives.length >= count) {
       return
     }
+    const advanced = new Set(
+      members
+        .filter(
+          (index) =>
+            row.index < ((glueMembers?.has(index) ?? glue) ? lastGlueAdvance : lastAdvance)[index]
+        )
+        .map((index) => pending[index].id)
+    )
     alternatives.push({
       row,
       members,
@@ -157,11 +176,8 @@ export function nativeChatPendingWitnesses(
       requires,
       proof,
       glue,
-      advanced: new Set(
-        members
-          .filter((index) => row.index < (glue ? lastGlueAdvance : lastAdvance)[index])
-          .map((index) => pending[index].id)
-      )
+      glueMembers,
+      advanced
     })
     candidates.set(signature, alternatives)
   }
@@ -171,6 +187,7 @@ export function nativeChatPendingWitnesses(
       ? [{ entry: { ...entry, sourceAgent: undefined }, index }]
       : []
   )
+  const hasLegacyImages = legacy.some(({ entry }) => entry.imagePaths?.length)
   for (const [index, entry] of pending.entries()) {
     const projected = { ...entry, sourceAgent: undefined }
     const key = nativeChatPendingMatchKey(projected)
@@ -197,6 +214,11 @@ export function nativeChatPendingWitnesses(
         occurrence++
         // Qualify in the original stream, before spent ownership is subtracted.
         if (occurrence >= (entry.sourceAgent ? 1 : rank)) {
+          if (hasLegacyImages && pending[index].sourceReceipt?.sessionId !== sessionId) {
+            const exact = exactLegacyRows.get(row.index) ?? new Set<number>()
+            exact.add(index)
+            exactLegacyRows.set(row.index, exact)
+          }
           offer(row, [index], 'legacy')
         }
       }
@@ -222,6 +244,40 @@ export function nativeChatPendingWitnesses(
     }
     for (let residual = 1; residual < 1 << legacy.length; residual++) {
       const remaining = legacy.filter((_, index) => residual & (1 << index))
+      const requires = legacy.reduce(
+        (mask, member, index) =>
+          residual & (1 << index) ? mask : mask | pendingReceiptBit(member.index, count),
+        0
+      )
+      if (hasLegacyImages) {
+        const exact = remaining.filter(({ index }) => exactLegacyRows.get(row.index)?.has(index))
+        const rest = remaining.filter(({ index }) => !exactLegacyRows.get(row.index)?.has(index))
+        if (
+          exact.length &&
+          rest.length &&
+          remaining.some(({ entry }) => entry.imagePaths?.length)
+        ) {
+          const glued = selectPendingIndicesRepresentedByUserRows(
+            rest.map(({ entry }) => entry),
+            [
+              {
+                id: row.message.id,
+                text,
+                representablePendingIndices: new Set(
+                  rest.flatMap(({ index }, at) => (glueWindows[index](row) ? [at] : []))
+                )
+              }
+            ]
+          )
+          const glueMembers = new Set([...glued].map((at) => rest[at].index))
+          const members = remaining.flatMap(({ index }) =>
+            exactLegacyRows.get(row.index)?.has(index) || glueMembers.has(index) ? [index] : []
+          )
+          if (glueMembers.size && members.some((index) => pending[index].imagePaths?.length)) {
+            offer(row, members, 'legacy', requires, false, glueMembers)
+          }
+        }
+      }
       const represented = selectPendingIndicesRepresentedByUserRows(
         remaining.map(({ entry }) => entry),
         [
@@ -238,11 +294,6 @@ export function nativeChatPendingWitnesses(
         continue
       }
       const members = [...represented].map((at) => remaining[at].index)
-      const requires = legacy.reduce(
-        (mask, member, index) =>
-          residual & (1 << index) ? mask : mask | pendingReceiptBit(member.index, count),
-        0
-      )
       offer(row, members, 'legacy', requires, true)
     }
   }

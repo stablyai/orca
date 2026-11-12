@@ -186,7 +186,6 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
       const pending = {
         id: 'pending',
         text,
-        imagePaths: images,
         sourceAgent: 'codex' as const,
         sentAt: 0
       }

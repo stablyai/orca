@@ -1,7 +1,7 @@
 import type { WriteSettlement } from './terminal/pty/lifecycle/pty-write-settlement'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
-export type TerminalChatPrompt = { agent: TuiAgent; text: string; imagePaths?: string[] }
+export type TerminalChatPrompt = { agent: TuiAgent; text: string }
 
 export type RuntimeTerminalSend = {
   handle: string

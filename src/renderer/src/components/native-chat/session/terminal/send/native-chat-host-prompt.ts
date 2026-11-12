@@ -40,12 +40,7 @@ export function sendNativeChatHostPrompt({
   onEvidenceMode: (source: boolean) => void
 }): NativeChatSendHandle {
   const deadline = performance.now() + OBSERVATION_MS
-  const bytes =
-    getTerminalInputByteLength(initialPrompt.text) +
-    (initialPrompt.imagePaths ?? []).reduce(
-      (sum, path) => sum + getTerminalInputByteLength(JSON.stringify(path)) + 1,
-      0
-    )
+  const bytes = getTerminalInputByteLength(initialPrompt.text)
   const reservation = reserveNativeChatPtyDispatch(ptyId, bytes)
   if (!reservation) {
     return {

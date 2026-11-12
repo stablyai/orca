@@ -135,9 +135,15 @@ export function appendPendingSendCache(
   const requestKey = (input: NativeChatPendingSend) =>
     JSON.stringify([input.text, input.imagePaths ?? []])
   const contentKey = requestKey(entry)
+  const legacyKey = nativeChatPendingContentKey(entry)
   // Why: a resend replaces its failed copy; kept, that copy would claim the resend's row and pin it.
   const existing = readPendingSendCache(scope).filter(
-    (candidate) => !candidate.delivery || requestKey(candidate) !== contentKey
+    (candidate) =>
+      !candidate.delivery ||
+      (requestKey(candidate) !== contentKey &&
+        (candidate.sourceAgent ||
+          entry.sourceAgent ||
+          nativeChatPendingContentKey(candidate) !== legacyKey))
   )
   const owner = pendingSendCache.get(pendingSendScopeKey(scope))
   const boundary = owner?.boundary

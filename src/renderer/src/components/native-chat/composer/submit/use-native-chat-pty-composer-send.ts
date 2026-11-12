@@ -123,14 +123,10 @@ export function useNativeChatPtyComposerSend(args: {
             }
           : launchSendOptions
       let pendingHandle: NativeChatSendHandle | null = null
-      let sourceEvidence = classification === 'chat' && isTuiAgent(args.agent)
+      let sourceEvidence =
+        classification === 'chat' && imagePaths.length === 0 && isTuiAgent(args.agent)
       const legacySend = (dispatchScope: NativeChatPtyDispatchScope) =>
-        imagePaths.length > 0
-          ? sendNativeChatMessageWithImageAttachments(args.agent, target.ptyId, text, imagePaths, {
-              ...sendOptions,
-              dispatchScope
-            })
-          : sendNativeChatMessage(target.ptyId, text, { ...sendOptions, dispatchScope })
+        sendNativeChatMessage(target.ptyId, text, { ...sendOptions, dispatchScope })
       // Why: slash-like text must not silently drop its attached images.
       if (sourceEvidence && isTuiAgent(args.agent)) {
         pendingHandle = sendNativeChatHostPrompt({
@@ -139,7 +135,7 @@ export function useNativeChatPtyComposerSend(args: {
           worktreeId:
             chatWorkspaceByTabId(useAppStore.getState().tabsByWorktree, args.terminalTabId) ??
             undefined,
-          prompt: { agent: args.agent, text, imagePaths },
+          prompt: { agent: args.agent, text },
           onLegacy: legacySend,
           onEvidenceMode: (source) => {
             sourceEvidence = source

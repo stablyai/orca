@@ -42,6 +42,53 @@ function gluePending(id: string, text: string): NativeChatPendingSend {
   }
 }
 
+it('preserves legacy image caption matching followed by residual text on the same row', () => {
+  const pending = [
+    { ...gluePending('image', 'a b'), imagePaths: ['/tmp/a.png'] },
+    gluePending('a', 'a'),
+    gluePending('b', 'b')
+  ]
+  const row = userMessage('image-row', 'a b', 6000)
+  const messages = [GLUE_BOUNDARY, row]
+  expect(pendingSendsAsMessages(pending, messages)).toEqual([])
+  const retained = prunePendingSends(pending, messages)
+  expect(retained.map((entry) => entry.id)).toEqual(['image', 'a', 'b'])
+  expect(
+    prunePendingSends(retained, [...messages, assistantMessage('reply', 'done', 6100)])
+  ).toEqual([])
+})
+
+it('matches a legacy caption after the CLI echoes its attached file path', () => {
+  const pending = [{ ...gluePending('image', 'look'), imagePaths: ['/tmp/a.png'] }]
+  const messages = [
+    GLUE_BOUNDARY,
+    userMessage('image-row', '@/tmp/a.png look', 6000),
+    assistantMessage('reply', 'done', 6100)
+  ]
+  expect(prunePendingSends(pending, messages)).toEqual([])
+})
+
+it.each([false, true])(
+  'requires a real row before skipping an intervening legacy obligation, other row first: %s',
+  (first) => {
+    const pending = [
+      { ...gluePending('image', 'a b'), imagePaths: ['/tmp/a.png'] },
+      gluePending('other', 'z'),
+      gluePending('a', 'a'),
+      gluePending('b', 'b')
+    ]
+    const x = userMessage('x', 'a b', 6000)
+    const z = userMessage('z', 'z', 6000)
+    const answer = assistantMessage('reply', 'done', 6100)
+    expect(prunePendingSends(pending, [GLUE_BOUNDARY, x, answer]).map((entry) => entry.id)).toEqual(
+      ['other', 'a', 'b']
+    )
+    expect(
+      prunePendingSends(pending, [GLUE_BOUNDARY, ...(first ? [z, x] : [x, z]), answer])
+    ).toEqual([])
+  }
+)
+
 describe('glued rapid sends', () => {
   // Every send carries its own boundary, including later sends in a glued row.
   const mixedAgeGlue = (): { messages: NativeChatMessage[]; pending: NativeChatPendingSend[] } => {

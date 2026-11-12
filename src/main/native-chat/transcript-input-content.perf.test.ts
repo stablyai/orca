@@ -172,23 +172,30 @@ it.each([1000, 10000])('does no glue work on %i rows preceding live legacy bound
 })
 
 it.each([
-  [8, 'continue'],
-  [80, 'continue'],
-  [8, 'continue continue'],
-  [80, 'continue continue']
+  [8, 'continue', false],
+  [80, 'continue', false],
+  [8, 'continue continue', false],
+  [80, 'continue continue', false],
+  [8, 'continue continue', true],
+  [80, 'continue continue', true]
 ] as const)(
   'bounds allocation work for eight identical legacy sends across %i eligible rows of %s',
-  (rows, text) => {
+  (rows, text, image) => {
     const count = 8
     const pending: NativeChatPendingSend[] = Array.from({ length: count }, (_, index) => ({
       id: `same-${index}`,
-      text: 'continue',
+      text: image && index < 2 ? 'continue continue' : 'continue',
+      imagePaths: image && index === 0 ? ['/tmp/i.png'] : undefined,
       sentAt: 1
     }))
     const messages = [
       ...Array.from({ length: rows }, (_, index) => user(text, `same-row-${index}`)),
       { ...user('', 'reply'), role: 'assistant' as const }
     ]
+    if (image) {
+      const group = [pending[0], pending[2], pending[3]]
+      expect(visibleNativeChatPendingSends(group, [messages[0]])).toEqual([])
+    }
     const BaseMap = globalThis.Map
     let writes = 0
     let lookups = 0
@@ -211,8 +218,10 @@ it.each([
       expect(remaining).toEqual([])
       // Eight legal row alternatives per signature; each state assigns, requires or omits each send.
       const states = 3 ** count
-      const witnessesPerRow = 2 ** count - 1 + count
-      const maxAllocationWrites = count * states * (witnessesPerRow + 1)
+      const witnessesPerRow = (image ? 2 : 1) * (2 ** count - 1) + count
+      // This corpus has two exact-rank patterns and one advance pattern; each signature keeps at most P rows.
+      const exactPatterns = image ? 2 : 1
+      const maxAllocationWrites = count * exactPatterns * states * (witnessesPerRow + 1)
       expect(writes).toBeLessThanOrEqual(maxAllocationWrites + rows + 2 ** count)
       // Every candidate allocates before its next-state lookup, including candidates never written.
       expect(allocationLookups).toBeLessThanOrEqual(maxAllocationWrites + rows * count + 2 ** count)
