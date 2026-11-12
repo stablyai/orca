@@ -249,6 +249,8 @@ export type StripePrice = {
   unit_amount?: number | null
   unit_amount_decimal?: string | null
   lookup_key?: string | null
+  /** `orca_plan` names the catalog plan this price sells (the join key, set on every price we create). */
+  metadata?: Record<string, string> | null
   product?: string | { id: string } | null
   recurring?: { interval?: string; usage_type?: string } | null
 }

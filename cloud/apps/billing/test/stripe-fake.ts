@@ -23,6 +23,7 @@ type FakePrice = {
   unit_amount?: number | null
   unit_amount_decimal?: string | null
   lookup_key?: string | null
+  metadata?: Record<string, string>
   product?: string
   recurring: { interval?: string; usage_type: 'licensed' | 'metered' }
 }
@@ -38,8 +39,8 @@ type FakeItem = {
 /** The test-mode catalog the harness env names (STRIPE_PRICE_*), like stripe-test-setup.ts makes. */
 export function defaultFakePrices(): FakePrice[] {
   return [
-    { id: 'price_team_month', active: true, currency: 'usd', unit_amount: 5000, unit_amount_decimal: '5000', lookup_key: 'orca_team_seat_monthly', product: 'prod_team', recurring: { interval: 'month', usage_type: 'licensed' } },
-    { id: 'price_team_year', active: true, currency: 'usd', unit_amount: 48000, unit_amount_decimal: '48000', lookup_key: 'orca_team_seat_annual', product: 'prod_team', recurring: { interval: 'year', usage_type: 'licensed' } },
+    { id: 'price_team_month', active: true, currency: 'usd', unit_amount: 5000, unit_amount_decimal: '5000', lookup_key: 'orca_team_seat_monthly', metadata: { orca_plan: 'team' }, product: 'prod_team', recurring: { interval: 'month', usage_type: 'licensed' } },
+    { id: 'price_team_year', active: true, currency: 'usd', unit_amount: 48000, unit_amount_decimal: '48000', lookup_key: 'orca_team_seat_annual', metadata: { orca_plan: 'team' }, product: 'prod_team', recurring: { interval: 'year', usage_type: 'licensed' } },
     { id: 'price_overage', active: true, currency: 'usd', unit_amount: null, unit_amount_decimal: '1.666666666667', lookup_key: 'orca_sandbox_overage_per_minute', product: 'prod_overage', recurring: { interval: 'month', usage_type: 'metered' } }
   ]
 }

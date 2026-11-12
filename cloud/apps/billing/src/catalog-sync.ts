@@ -4,7 +4,8 @@
 // - records every seat price a subscription is seen on (price history), so a subscriber on an
 //   older price keeps mapping to its plan after the lookup key moves to a new price;
 // - maps a subscription item's price to a plan + interval: the configured env ids, any price we
-//   have seen for the plan, a price holding the plan's lookup key, or one on the plan's product.
+//   have seen for the plan, the price's metadata.orca_plan (the join key every Orca price carries),
+//   a price holding the plan's lookup key, or one on the plan's product.
 import { invalidateCatalog, loadCatalog, type Catalog, type PlanPriceRow } from './catalog'
 import type { Env } from './env'
 import { BILLING_INTERVALS, PLAN_IDS, planForPrice, type BillingInterval, type PlanId } from './plans'
@@ -63,6 +64,15 @@ export function seatPriceMatch(env: Env, catalog: Catalog | null, price: StripeP
   const interval = asInterval(price.recurring?.interval)
   if (!interval) {
     return null
+  }
+  // The join key: metadata.orca_plan on the Price (Stripe metadata is ours; customers can't edit it).
+  const tagged = price.metadata?.orca_plan
+  if (tagged) {
+    const plan = catalog.plans.get(tagged)
+    const id = plan?.kind === 'self_serve' ? asPlan(plan.id) : null
+    if (id) {
+      return { plan: id, interval }
+    }
   }
   for (const plan of catalog.plans.values()) {
     const id = asPlan(plan.id)
@@ -192,6 +202,11 @@ export async function syncCatalogPrices(
     if (!price) {
       missing.push(entry.key)
       continue
+    }
+    if (price.metadata?.orca_plan && price.metadata.orca_plan !== entry.planId) {
+      // The lookup key says one plan, the price's own tag another: a Stripe setup mistake. The
+      // lookup key wins for Checkout; say so loudly.
+      console.error(JSON.stringify({ error: 'catalog_price_plan_mismatch', lookupKey: entry.key, plan: entry.planId, tagged: price.metadata.orca_plan }))
     }
     statements.push(
       priceStatement(db, { price, planId: entry.planId, role: entry.role, interval: entry.interval, checkout: true, setCheckout: true, now }),
