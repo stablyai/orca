@@ -151,4 +151,45 @@ test.describe('tab-group divider beside a narrow browser group', () => {
       .poll(() => groupWidth(orcaPage, fixture.browserGroupId))
       .toBeGreaterThan(shrunkWidth + 20)
   })
+
+  test('keeps a narrow browser toolbar from scrolling when a clipped control takes focus', async ({
+    orcaPage
+  }) => {
+    await orcaPage.setViewportSize({ width: 1000, height: 700 })
+    const fixture = await createTerminalBrowserSplit(orcaPage, server.pageUrl('clip', 1))
+    await waitForBrowserGuestRegistration(orcaPage, fixture.browserTabId, fixture.browserPageId)
+    // Size the browser group to about 150px, narrower than its toolbar.
+    await orcaPage.evaluate(({ terminalGroupId, browserGroupId }) => {
+      const width = (id: string): number =>
+        document
+          .querySelector<HTMLElement>(`[data-tab-group-body-id="${id}"]`)!
+          .getBoundingClientRect().width
+      const row = width(terminalGroupId) + width(browserGroupId)
+      const state = window.__store!.getState()
+      state.setTabGroupSplitRatio(state.activeWorktreeId!, '', 1 - 150 / row)
+    }, fixture)
+    await expect.poll(() => groupWidth(orcaPage, fixture.browserGroupId)).toBeLessThan(160)
+
+    const overlay = orcaPage.locator(`[data-browser-overlay-tab-id="${fixture.browserTabId}"]`)
+    const menu = overlay.getByRole('button', { name: 'Browser menu' })
+    await overlay.getByRole('button', { name: 'Reload' }).focus()
+    await expect(async () => {
+      await orcaPage.keyboard.press('Tab')
+      await expect(menu).toBeFocused({ timeout: 200 })
+    }).toPass({ timeout: 10_000 })
+
+    // Nothing between the focused control and the document may scroll sideways to reveal it.
+    const scrolled = await menu.evaluate((button) => {
+      const offsets: string[] = []
+      for (let node: Element | null = button; node; node = node.parentElement) {
+        if (node.scrollLeft !== 0) {
+          offsets.push(
+            `${node.tagName.toLowerCase()}.${String(node.className).slice(0, 40)}=${node.scrollLeft}`
+          )
+        }
+      }
+      return offsets
+    })
+    expect(scrolled).toEqual([])
+  })
 })
