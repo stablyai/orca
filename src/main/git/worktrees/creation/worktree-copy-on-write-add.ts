@@ -29,6 +29,14 @@ function supportsHookRun(repoPath: string, options: AddWorktreeOptions): Promise
   )
 }
 
+/** These steps ran outside `worktree add`, so keep its guidance for raising the limit. */
+function withWorktreeAddTimeoutMessage(error: unknown): unknown {
+  if (error instanceof GitCommandTimeoutError) {
+    error.message = worktreeAddTimeoutMessage(error.timeoutMs)
+  }
+  return error
+}
+
 /**
  * `addWorktree`, but on APFS and reflink filesystems files that match the main checkout are
  * cloned from it instead of written, so they share disk blocks until either side changes.
@@ -66,13 +74,14 @@ export async function addWorktreeWithCopyOnWriteCheckout(
   const checkoutProgress = options.onCheckoutProgress
     ? createWorktreeCheckoutProgressReader(options.onCheckoutProgress)
     : null
+  // Only materialization rolls back; like `worktree add`, a failing hook leaves the worktree.
+  let head: string
   try {
     const [checkoutWorkersArgs] = await Promise.all([
       checkoutWorkersGitArgs(worktreePath, options),
       cloneMainCheckoutIntoWorktree(method, repoPath, worktreePath, 'HEAD', options)
     ])
-    // Materialize and run post-checkout exactly as `worktree add` does: a reset that leaves
-    // submodules unpopulated, then the hook with a null previous HEAD to mark a new checkout.
+    // Materialize as `worktree add` does: a reset that leaves submodules unpopulated.
     await gitExecFileAsync(
       [
         ...checkoutWorkersArgs,
@@ -91,28 +100,24 @@ export async function addWorktreeWithCopyOnWriteCheckout(
       ['rev-parse', 'HEAD'],
       gitExecOptions(worktreePath, options)
     )
-    const head = stdout.trim()
-    await gitExecFileAsync(
-      [
-        'hook',
-        'run',
-        '--ignore-missing',
-        'post-checkout',
-        '--',
-        '0'.repeat(head.length),
-        head,
-        '1'
-      ],
-      { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
-    )
-    return addResult
+    head = stdout.trim()
   } catch (error) {
-    // The checkout ran outside `worktree add`, so keep its guidance for raising the limit.
-    if (error instanceof GitCommandTimeoutError) {
-      error.message = worktreeAddTimeoutMessage(error.timeoutMs)
-    }
-    throw await rollBackCreatedWorktree(repoPath, worktreePath, branch, options, error)
+    throw await rollBackCreatedWorktree(
+      repoPath,
+      worktreePath,
+      branch,
+      options,
+      withWorktreeAddTimeoutMessage(error)
+    )
   } finally {
     checkoutProgress?.close()
   }
+  // A null previous HEAD marks a new checkout, as `worktree add` passes it.
+  await gitExecFileAsync(
+    ['hook', 'run', '--ignore-missing', 'post-checkout', '--', '0'.repeat(head.length), head, '1'],
+    { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
+  ).catch((error: unknown) => {
+    throw withWorktreeAddTimeoutMessage(error)
+  })
+  return addResult
 }
