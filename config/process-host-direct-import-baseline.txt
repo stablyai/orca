@@ -57,7 +57,6 @@ src/main/network/macos-tailscale-dns-diagnostic.ts
 src/main/plugins/workers/parent-process/plugin-host-process.ts
 src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
 src/main/ports/port-scan-command-execution.ts
-src/main/providers/macos-login-session-pty-probe.ts
 src/main/providers/process-cwd.ts
 src/main/pty/process-retirement/pty-descendant-fresh-table.ts
 src/main/rate-limits/providers/gemini/gemini-cli-oauth-extractor.ts
