@@ -2,6 +2,7 @@
 // (Xvnc + noVNC on the VM's loopback), then the paired runtime connection forwards its port here.
 // No public route: the desktop is reachable only through this computer's localhost, and each
 // WebSocket to it needs a single-use ticket that main hands the page (remote-desktop-guest.ts).
+import { cloudPairedSandboxesByEnvironment } from '../cloud-workspaces/cloud-paired-environment-ids'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import {
   cloudRemoteDesktopUrl,
@@ -59,6 +60,12 @@ export function cloudSandboxesByEnvironment(userDataPath: string): Map<string, s
     const sandboxId = handle?.driverState.sandboxId
     if (typeof sandboxId === 'string' && sandboxId) {
       sandboxes.set(runtime.runtimeEnvironmentId, sandboxId)
+    }
+  }
+  // Paired workspaces (opened here, created elsewhere) are Orca Cloud sandboxes too (PAIRED-AWARE).
+  for (const [environmentId, sandboxId] of cloudPairedSandboxesByEnvironment()) {
+    if (!sandboxes.has(environmentId)) {
+      sandboxes.set(environmentId, sandboxId)
     }
   }
   return sandboxes

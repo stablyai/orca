@@ -26,6 +26,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
 import { removeRedundantManagedPairing } from './runtime-environment-redundant-managed-removal'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
+import { cloudPairedEnvironmentIds } from '../../cloud-workspaces/cloud-paired-environment-ids'
 import { verifyAddAndPublishPairing } from './runtime-environment-verified-pairing-publish'
 import {
   closeRemoteRuntimeRequestConnection,
@@ -81,7 +82,14 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       (environment) => !isGatedOffWslHost(environment)
     )
     readSettingsWithRuntimeEnvironmentPreference(store, getUserDataPath())
-    return environments.map(publicRuntimeEnvironmentWithHostKey)
+    // Paired Orca Cloud workspaces' servers are Orca Cloud for every renderer check (PAIRED-AWARE).
+    const paired = cloudPairedEnvironmentIds()
+    return environments.map((environment) => {
+      const published = publicRuntimeEnvironmentWithHostKey(environment)
+      return paired.has(environment.id)
+        ? { ...published, orcaCloudPaired: true as const }
+        : published
+    })
   })
   ipcMain.handle(
     'runtimeEnvironments:addFromPairingCode',
