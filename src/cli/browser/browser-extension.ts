@@ -4,7 +4,7 @@ import type {
 } from '../../shared/browser/extensions/browser-extension-types'
 import type { CommandHandler } from '../dispatch'
 import { getPresentStringFlag } from '../flags'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 
 export const BROWSER_EXTENSION_HANDLERS: Record<string, CommandHandler> = {

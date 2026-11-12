@@ -7,7 +7,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { RuntimeClientError } from '../runtime-client'
 import { getRequiredWorktreeSelector } from '../selectors'
 

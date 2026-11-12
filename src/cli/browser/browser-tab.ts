@@ -12,7 +12,7 @@ import {
   formatTabListWithProfiles,
   formatTabShow
 } from './browser-format'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,

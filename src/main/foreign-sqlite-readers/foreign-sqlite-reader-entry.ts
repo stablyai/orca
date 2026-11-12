@@ -11,7 +11,7 @@ import type SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import { openOpenCodeDatabaseReadonly } from '../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open'
 import { buildHermesSqliteCandidatePath } from '../ai-vault/scanners/hermes/session-scanner-hermes-sqlite-paths'
-import { SessionNewestFiles } from '../ai-vault/session-newest-files'
+import { SessionNewestFiles } from '../ai-vault/discovery/session-newest-files'
 import { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import {
   readSessionRow,

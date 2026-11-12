@@ -1,8 +1,8 @@
 import { basename, delimiter, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { wslGatedAccess } from '../../../native-chat/wsl-transcript-fs-access'
-import { discoverFiles } from '../../session-scanner-discovery'
-import { AI_VAULT_AGENT_SOURCES } from '../../session-scanner-agent-sources'
+import { discoverFiles } from '../../discovery/session-scanner-discovery'
+import { AI_VAULT_AGENT_SOURCES } from '../../discovery/session-scanner-agent-sources'
 import {
   listHermesSqliteSessionIds,
   listHermesSqliteSessions
@@ -12,8 +12,8 @@ import type {
   FileWithMtime,
   SessionFileDiscovery
 } from '../../session-scanner-types'
-import { scopeWalksAgentFiles } from '../../session-scope-cwd'
-import { throwIfAiVaultScanCancelled } from '../../ai-vault-scan-cancellation'
+import { scopeWalksAgentFiles } from '../../scope/session-scope-cwd'
+import { throwIfAiVaultScanCancelled } from '../../scan-lifecycle/ai-vault-scan-cancellation'
 
 /**
  * Resolves existing Hermes state.db file paths across host and WSL environments.

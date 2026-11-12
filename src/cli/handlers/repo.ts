@@ -1,6 +1,7 @@
 import type { RuntimeRepoList, RuntimeRepoSearchRefs } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
-import { formatRepoList, formatRepoRefs, formatRepoShow, printResult } from '../format'
+import { formatRepoList, formatRepoRefs, formatRepoShow } from '../workspace-format'
+import { printResult } from '../command-result-output'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalRepoKind,

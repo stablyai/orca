@@ -20,9 +20,9 @@ import {
   formatProjectHostSetupList,
   formatProjectHostSetupResult,
   formatProjectHostSetupUpdateResult,
-  formatProjectList,
-  printResult
-} from '../format'
+  formatProjectList
+} from '../project-format'
+import { printResult } from '../command-result-output'
 import {
   hostFilterMatchesHostId,
   parseHostFlag,

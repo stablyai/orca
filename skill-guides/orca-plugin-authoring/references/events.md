@@ -6,14 +6,14 @@
 
 List each in `contributes.events` (`{ "on": "<event>" }`), with `main`, the `trusted-worker` profile and the capability shown; then `orca.events.on(event, handler)` in `activate(orca)` returns `{ dispose() }`. Payloads:
 
-- `workspace.created` (capability `workspace:read`; since 1.4.245): A worktree workspace was created.
-  `{ workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }`
-- `workspace.removed` (capability `workspace:read`; since 1.4.245): A worktree workspace was removed.
-  `{ workspaceId: string; kind: "worktree" | "folder"; path: string }`
-- `agent.status.changed` (capability `agent:read`; since 1.4.160): An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it.
-  `{ workspaceId: string | null; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }`
-- `workspace.changed` (capability `workspace:read`; since 1.4.246): The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context.
-  `{ context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }`
+- `workspace.created` (capability `workspace:read`; since 1.4.245): A worktree workspace was created; `workspaceListId` (host API 1.7) is the id `workspace.list` gives it.
+  `{ workspaceId: string; workspaceListId?: string; kind: "worktree" | "folder"; path: string; branch: string }`
+- `workspace.removed` (capability `workspace:read`; since 1.4.245): A worktree workspace was removed; `workspaceListId` (host API 1.7) is the id `workspace.list` gave it.
+  `{ workspaceId: string; workspaceListId?: string; kind: "worktree" | "folder"; path: string }`
+- `agent.status.changed` (capability `agent:read`; since 1.4.160): An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, `workspaceListId` (host API 1.7) is the id `workspace.list` gives that workspace, and `terminalId` names its terminal when Orca lists it.
+  `{ workspaceId: string | null; workspaceListId?: string; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }`
+- `workspace.changed` (capability `workspace:read`; since 1.4.246): The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers, its `workspaceId` included. Each new subscriber first gets the current context.
+  `{ context: { workspaceId?: string; branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }`
 - `editor.typography.changed` (no capability; since 1.4.256): What Orca's file editor uses changed (a setting or the editor zoom); the payload is what `editor.readTypography` now answers. Needs no capability.
   `{ fontFamily: string; cssFontFamily: string; fontSize: number; fontWeight: string; lineHeight: number; fontLigatures: boolean; wordWrap: "on" | "off"; minimap: boolean }`
 

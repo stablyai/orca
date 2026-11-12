@@ -3,7 +3,9 @@ import type {
   RuntimeWorktreeTerminalCloseResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
-import { formatTerminalClose, reportCliError, printResult } from '../format'
+import { formatTerminalClose } from '../terminal-format'
+import { reportCliError } from '../cli-error'
+import { printResult } from '../command-result-output'
 import { RuntimeClientError } from '../runtime-client'
 import { getRequiredWorktreeSelector, getTerminalHandle } from '../selectors'
 import { describeUnconfirmedCloseStop } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'

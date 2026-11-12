@@ -5,12 +5,10 @@ import {
   type NativeChatEditPatchHunk,
   type NativeChatMessage
 } from '../../shared/native-chat/native-chat-types'
-import {
-  asRecord,
-  extractString,
-  parseJsonObject,
-  timestampMs
-} from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import { extractString } from '../../shared/trimmed-string'
+import { parseJsonObject } from '../ai-vault/parsing/session-json-object'
+import { timestampMs } from '../ai-vault/parsing/session-record-time'
 import { imageSourcePathFromText } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { claudeContentBlocks } from './transcript-record-blocks'
 import { isKnownRasterImageMimeType } from '../../shared/file-preview/raster-image-preview-limits'

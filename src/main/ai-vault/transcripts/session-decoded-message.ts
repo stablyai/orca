@@ -1,5 +1,5 @@
 import type { AiVaultSessionPreviewMessage } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { asRecord } from '../session-scanner-record-value'
+import { asRecord } from '../parsing/session-record-fields'
 import {
   isClaudeToolUseContent,
   isClaudeToolResultContent,

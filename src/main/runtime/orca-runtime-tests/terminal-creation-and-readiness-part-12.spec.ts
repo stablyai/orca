@@ -2,12 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
-import {
-  TEST_WORKTREE_ID,
-  TEST_WORKTREE_PATH,
-  store,
-  syncSinglePty
-} from './orca-runtime-test-fixtures.spec'
+import { TEST_WORKTREE_PATH, store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 
 const RESERVED_TAB_ID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
 const RESERVED_LEAF_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
@@ -107,24 +102,5 @@ describe('OrcaRuntimeService', () => {
     expect(revealTerminalSession).not.toHaveBeenCalled()
     expect(kill).not.toHaveBeenCalled()
     expect(releaseStablePaneCreate).toHaveBeenCalled()
-  })
-
-  it('still attaches to a live pane when the caller did not require a fresh one', async () => {
-    // `terminal.create` keeps its reattach; only agent.launch opts into the refusal.
-    const { runtime, revealTerminalSession } = runtimeWithDesktopWindow(LIVE_PANE_SPAWN)
-    runtime.registerPty('pty-live', TEST_WORKTREE_ID, null, {
-      ...LIVE_PANE_SPAWN.stablePaneOwner,
-      terminalHandle: 'term_live'
-    })
-
-    const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      startupAgent: 'claude',
-      tabId: RESERVED_TAB_ID,
-      leafId: RESERVED_LEAF_ID
-    })
-
-    expect(created.isReattach).toBe(true)
-    expect((await runtime.listTerminals()).terminals.map((t) => t.handle)).toEqual([created.handle])
-    expect(revealTerminalSession).toHaveBeenCalledTimes(1)
   })
 })

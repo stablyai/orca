@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../dispatch'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { getRequiredWorktreeSelector } from '../selectors'
 import { folderIdOfSelector } from '../../shared/workspace-scope'
 import { refuseFolderWorkspaceActivation } from './folder-workspace-mutations'

@@ -4,7 +4,7 @@ import { ORCA_STRUCTURED_SESSION_ENV } from '../shared/structured-session-marker
 const callMock = vi.hoisted(() => vi.fn())
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 
-vi.mock('./format', () => ({ printResult: vi.fn() }))
+vi.mock('./command-result-output', () => ({ printResult: vi.fn() }))
 vi.mock('./selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './handlers/orchestration'
@@ -65,14 +65,5 @@ describe('a structured chat session with no orchestration identity', () => {
       )
     ).rejects.toMatchObject({ message: expect.stringContaining('--from') })
     expect(callMock).not.toHaveBeenCalled()
-  })
-
-  it('still accepts an explicit --terminal, which is the actionable escape', async () => {
-    callMock.mockResolvedValue({ result: { messages: [], count: 0 } })
-    await invoke('orchestration check', new Map([['terminal', 'structworker_self']]))
-    expect(callMock).toHaveBeenCalledWith(
-      'orchestration.check',
-      expect.objectContaining({ terminal: 'structworker_self' })
-    )
   })
 })

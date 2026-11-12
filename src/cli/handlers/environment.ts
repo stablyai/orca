@@ -1,12 +1,7 @@
 import type { CommandHandler } from '../dispatch'
-import {
-  formatEnvironment,
-  formatEnvironmentList,
-  formatHostList,
-  formatHostName,
-  printResult,
-  type HostNameResult
-} from '../format'
+import { formatEnvironment, formatEnvironmentList } from '../workspace-format'
+import { formatHostList, formatHostName, type HostNameResult } from '../hosts/host-format'
+import { printResult } from '../command-result-output'
 import { parseHostFlag } from '../execution-host-flag'
 import {
   fetchSshTargetSummaries,

@@ -2,16 +2,17 @@ import type {
   AiVaultScanIssue,
   AiVaultSession
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { errorMessage } from '../../../../shared/error-message'
 import {
   createAccumulator,
   finalizeSession,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
 import { buildHermesSqliteCandidatePath } from './session-scanner-hermes-sqlite-paths'
 import type { SessionFileCandidate } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
-import { errorMessage, extractContentText } from '../../session-scanner-values'
+import { extractContentText } from '../../parsing/session-scanner-text-normalization'
 import { readHermesSessions } from '../../../foreign-sqlite-readers/foreign-sqlite-reader-spawn'
 import { timestampMs } from '../../../foreign-sqlite-readers/hermes-sessions-result'
 

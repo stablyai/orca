@@ -12,12 +12,11 @@ const NODE_RUNTIME_INCLUDE = [
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',
   'src/main/ai-vault-search/storage/session-search-index-writer.test.ts',
-  'src/main/ai-vault/session-scanner-unlimited-dedup.test.ts',
+  'src/main/ai-vault/parsing/session-scanner-unlimited-dedup.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-antigravity-upgrade.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
-  'src/main/ai-vault/session-scanner-scope-cwd-facts.test.ts',
-  'src/main/ai-vault/session-scanner-scope-walk.test.ts',
+  'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts',
   // The forced-probe handoff race opens only under V8's promise scheduling, which Electron main uses.
   'src/main/github/rate-limit.test.ts',
   // Electron main bridges streams with Node's implementation.
