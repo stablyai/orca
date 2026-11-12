@@ -161,7 +161,7 @@ export function sharePage(kind: SharePageKind, options: { port?: number | null; 
     : ''
   const aside =
     action === 'open_in_orca'
-      ? '<p class="aside">Don’t have Orca? <a href="https://www.onorca.dev/">Get Orca</a>, or ask the owner for a public link.</p>'
+      ? '<p class="aside">Don’t have Orca? <a href="https://orca.dev/">Get Orca</a>, or ask the owner for a public link.</p>'
       : ''
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${escapeHtml(title)} · Orca</title><style>${STYLE}</style></head>
 <body><main aria-labelledby="t"><div class="brand">${LOGO}<span>Orca preview</span></div><h1 id="t" tabindex="-1">${escapeHtml(title)}</h1><p id="b">${escapeHtml(body)}</p>${actions}${aside}</main>${
