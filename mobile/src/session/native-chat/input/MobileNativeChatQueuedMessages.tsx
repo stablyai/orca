@@ -1,7 +1,7 @@
 import { MobileNativeChatQueueFrame } from './MobileNativeChatQueueFrame'
 import { DragReorderList } from '../../../components/DragReorderList'
 import type { DragReorderMove } from '../../../components/drag-reorder-positions'
-import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useContext, useLayoutEffect, useState, type ReactNode } from 'react'
 import { Pressable, Text, View, type LayoutRectangle } from 'react-native'
 import { ChevronDown, ChevronUp, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
@@ -22,7 +22,7 @@ import type { MobileQueuedMessageEdit } from './use-mobile-structured-queued-mes
 import type { MobileQueuedMessageInlineEditor } from './mobile-queued-message-edit-draft'
 import { MobileQueuedMessageCardRow } from './MobileQueuedMessageCardRow'
 import { MobileQueuedMessageScrollList } from './MobileQueuedMessageScrollList'
-import { queuedRowFrame } from './mobile-queued-row-frame'
+import { useQueuedRowShow } from './mobile-queued-row-frame'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
 import {
   MobileNativeChatQueueAbovePromptContext,
@@ -107,11 +107,10 @@ export function MobileNativeChatQueuedMessages({
   const liveKey = `${liveIds.join('\u0000')}\u0001${attentionIds.join('\u0000')}`
   const [seen, setSeen] = useState({ key: liveKey, ids: liveIds, attentionIds })
   const largeText = useLargeSystemText()
-  // The card a failure just opened the list for, scrolled into view once every row has a height.
-  const [showId, setShowId] = useState<string | null>(
-    () => cards?.slice(1).find((card) => card.needsAttention)?.messageId ?? null
+  // The card a failure opened the list for, scrolled into view once its row lays out.
+  const { showRow, measureRow } = useQueuedRowShow(
+    cards?.slice(1).find((card) => card.needsAttention)?.messageId ?? null
   )
-  const rowHeights = useRef(new Map<string, number>())
   if (liveKey !== seen.key) {
     setSeen({ key: liveKey, ids: liveIds, attentionIds })
     const newest = cards?.at(-1)
@@ -132,7 +131,7 @@ export function MobileNativeChatQueuedMessages({
     )
     if (failedBehindFold !== undefined) {
       setOpenChoice({ open: true, abovePrompt })
-      setShowId(failedBehindFold)
+      showRow(failedBehindFold)
     }
     // Forget expanded ids of cards that left the queue.
     if ([...expandedIds].some((messageId) => !liveIds.includes(messageId))) {
@@ -222,14 +221,6 @@ export function MobileNativeChatQueuedMessages({
     : hiddenCount === 1
       ? t('chat.queuedMessages.moreCount_one', '{{count}} more', { count: hiddenCount })
       : t('chat.queuedMessages.moreCount_other', '{{count}} more', { count: hiddenCount })
-  const measureRow = (messageId: string, height: number, show: (row: LayoutRectangle) => void) => {
-    rowHeights.current.set(messageId, height)
-    const frame = showAll ? queuedRowFrame(messageIds, rowHeights.current, showId) : null
-    if (frame) {
-      setShowId(null)
-      show(frame)
-    }
-  }
   const renderRow = (
     card: MobileQueuedMessageCard,
     reveal: (row: LayoutRectangle) => void,
@@ -268,7 +259,7 @@ export function MobileNativeChatQueuedMessages({
         onSend={() => void run(card.messageId, onSend)}
         onMore={() => setMenuFor(card.messageId)}
         onEditorLayout={reveal}
-        onRowHeight={(height) => measureRow(card.messageId, height, show)}
+        onRowHeight={(height) => measureRow({ messageIds, showAll }, card.messageId, height, show)}
       />
     )
   }
@@ -339,7 +330,7 @@ export function MobileNativeChatQueuedMessages({
             accessibilityState={{ expanded: showAll }}
             style={({ pressed }) => [styles.foldToggle, pressed && styles.pressed]}
             onPress={() => {
-              setShowId(null)
+              showRow(null)
               setOpenChoice({ open: !showAll, abovePrompt })
             }}
           >

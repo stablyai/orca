@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Platform, StyleSheet, View, useWindowDimensions, type LayoutRectangle } from 'react-native'
 import Animated, {
   useAnimatedRef,
@@ -25,6 +25,9 @@ export type MobileQueueDragViewport = {
   scrollContentHeight: SharedValue<number>
   onDragActiveChange: (active: boolean) => void
 }
+
+/** A list that has not measured itself by then has moved on (folded, or the row left). */
+const SHOW_PENDING_MS = 1000
 
 type Metrics = { offset: number; viewport: number; content: number }
 
@@ -56,11 +59,22 @@ export function MobileQueuedMessageScrollList({
   const shownIds = useRef<ReadonlySet<string>>(new Set(messageIds))
   const flashed = useRef(false)
   const [cues, setCues] = useState({ above: false, below: false })
+  // A list that just opened may not have measured itself yet; show the row once it has, if soon.
+  const pendingShow = useRef<LayoutRectangle | null>(null)
+  const pendingExpiry = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(pendingExpiry.current), [])
   useLayoutEffect(() => {
     const newest = messageIds.at(-1)
     const appended =
       shownIds.current.size > 0 && newest !== undefined && !shownIds.current.has(newest)
+    const changed =
+      messageIds.length !== shownIds.current.size ||
+      messageIds.some((messageId) => !shownIds.current.has(messageId))
     shownIds.current = new Set(messageIds)
+    // A row asked for before the queue changed is not where it was.
+    if (changed) {
+      pendingShow.current = null
+    }
     // Reveal the committed own append even when a simultaneous removal keeps content size equal.
     if (appended && newestIsPersons) {
       scrollRef.current?.scrollToEnd({ animated: false })
@@ -83,15 +97,8 @@ export function MobileQueuedMessageScrollList({
     }
   }
   // The nearest scroll that shows the whole row, as desktop's editor does, clear of the edge fades.
-  const pendingShow = useRef<LayoutRectangle | null>(null)
-  const show = (row: LayoutRectangle) => {
+  const scrollIntoView = (row: LayoutRectangle) => {
     const { offset, viewport, content } = metrics.current
-    // A list that just opened may not have measured itself yet; show the row once it has.
-    if (viewport === 0 || content < row.y + row.height) {
-      pendingShow.current = row
-      return
-    }
-    pendingShow.current = null
     if (viewport === 0) {
       return
     }
@@ -105,13 +112,27 @@ export function MobileQueuedMessageScrollList({
       scrollRef.current?.scrollTo({ y: bottom - viewport, animated: false })
     }
   }
+  const show = (row: LayoutRectangle) => {
+    const { viewport, content } = metrics.current
+    if (viewport === 0 || content < row.y + row.height) {
+      pendingShow.current = row
+      clearTimeout(pendingExpiry.current)
+      pendingExpiry.current = setTimeout(() => {
+        pendingShow.current = null
+      }, SHOW_PENDING_MS)
+      return
+    }
+    pendingShow.current = null
+    clearTimeout(pendingExpiry.current)
+    scrollIntoView(row)
+  }
   // An inline editor inside a lower region lets that region scroll instead.
   const reveal = (row: LayoutRectangle) => {
     if (lowerRegion) {
       lowerRegion.layoutChanged()
       return
     }
-    show(row)
+    scrollIntoView(row)
   }
   return (
     // Always shrinkable: under a height limit the list gives up rows (and scrolls) before the box

@@ -11,6 +11,7 @@ import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages
 import type { ActionSheetAction } from '../../../components/ActionSheetModal'
 import { MobileNativeChatQueueAbovePromptContext } from '../mobile-native-chat-lower-region-context'
 import { createMobileQueuedHeadLight } from './mobile-queued-head-light'
+import { QUEUED_ROW_SHOW_SETTLE_MS } from './mobile-queued-row-frame'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
 import { pressedStyle } from '../../../theme/mobile-theme'
 
@@ -341,6 +342,61 @@ describe('MobileNativeChatQueuedMessages', () => {
     })
     // The failed row spans 120–200 of a 100pt list, so the list scrolls to its end.
     expect(scrollTo).toHaveBeenCalledWith({ y: 100, animated: false })
+  })
+
+  it('scrolls to a failure the list mounts open for, and settles when no row lays out again', async () => {
+    vi.useFakeTimers()
+    try {
+      const scrollTo = vi.fn()
+      const mounted = create(createElement('View'), {
+        createNodeMock: (node) =>
+          node.type === 'ScrollView'
+            ? { scrollTo, scrollToEnd: vi.fn(), flashScrollIndicators: vi.fn() }
+            : null
+      })
+      renderer = mounted
+      const failed = (messageId: string) =>
+        card({ messageId, needsAttention: true, caption: "Couldn't send" })
+      const lay = async (heights: number[]) => {
+        const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+        await act(async () => {
+          scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } })
+          scroll.props.onContentSizeChange(0, 200)
+          rows(mounted).forEach((row, index) =>
+            row.props.onLayout({ nativeEvent: { layout: { height: heights[index] } } })
+          )
+        })
+      }
+      // Mounted above a prompt with a failure behind the fold: open, and its row is shown.
+      const opened = [card({ messageId: 'a' }), card({ messageId: 'b' }), failed('c')]
+      await act(async () => mounted.update(element({ cards: opened }, true)))
+      expect(rows(mounted)).toHaveLength(3)
+      await lay([60, 60, 80])
+      expect(scrollTo).toHaveBeenLastCalledWith({ y: 100, animated: false })
+      // Open above the composer, a row fails without changing height: no row lays out again,
+      // so the request settles on the heights the list already has.
+      await act(async () =>
+        mounted.update(
+          element({
+            cards: [card({ messageId: 'p' }), card({ messageId: 'q' }), card({ messageId: 'r' })]
+          })
+        )
+      )
+      await lay([60, 60, 80])
+      scrollTo.mockClear()
+      await act(async () =>
+        mounted.update(
+          element({ cards: [card({ messageId: 'p' }), card({ messageId: 'q' }), failed('r')] })
+        )
+      )
+      expect(scrollTo).not.toHaveBeenCalled()
+      await act(async () => {
+        vi.advanceTimersByTime(QUEUED_ROW_SHOW_SETTLE_MS)
+      })
+      expect(scrollTo).toHaveBeenCalledWith({ y: 100, animated: false })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("fills the head's Steer pill while the composer previews Steer queued", async () => {
