@@ -14,6 +14,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection, SettingsNavTarget } from '@/lib/settings-navigation-types'
+import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles'
 import {
   BookOpenText,
   Boxes,
@@ -181,7 +182,7 @@ export function gatherOrcaCloudSettingsGroup(
     .map((section) => ({
       ...section,
       group: 'orca-cloud' as const,
-      title: translate('settings.accountBilling.title', 'Account + Billing'),
+      title: translate('settings.accountBilling.title2', 'Account & billing'),
       // Matches the page's own description (settings-setup-workflow-section-renderers).
       description: translate(
         'settings.accountBilling.description',
@@ -197,18 +198,54 @@ export function gatherOrcaCloudSettingsGroup(
   return [...rest.slice(0, at), ...leads, ...rest.slice(at)]
 }
 
+/** Signed in with billing turned on for the account: the combined page has a billing half. */
+export function hasOrcaBillingAccount(state: {
+  orcaProfileAuthStatus: OrcaProfileAuthStatus | null
+}): boolean {
+  const status = state.orcaProfileAuthStatus
+  return status?.state === 'connected' && status.capabilities?.flags.billing === true
+}
+
+/**
+ * Neil: the combined page is "Account & billing", and just "Account" when there's no billing to
+ * show (signed out, or an account without billing). Only the Orca Cloud group's account is renamed.
+ */
+export function labelAccountBilling(
+  sections: SettingsNavSection[],
+  hasBilling: boolean
+): SettingsNavSection[] {
+  if (hasBilling) {
+    return sections
+  }
+  return sections.map((section) =>
+    section.id === 'orca-account' && section.group === 'orca-cloud'
+      ? {
+          ...section,
+          title: translate('settings.accountBilling.accountOnly', 'Account'),
+          description: translate(
+            'settings.accountBilling.accountOnlyDescription',
+            'Your Orca account.'
+          )
+        }
+      : section
+  )
+}
+
 /**
  * Old Plan & billing links (pane 'cloud-billing') open the combined page at its Plan & billing part.
  * Only when the combined page exists (desktop with Orca Cloud); otherwise the target is unchanged.
  */
-export function resolveAccountBillingTarget<T extends { pane: SettingsNavTarget; sectionId?: string }>(
-  target: T,
-  combined: boolean
-): T {
+export function resolveAccountBillingTarget<
+  T extends { pane: SettingsNavTarget; sectionId?: string }
+>(target: T, combined: boolean): T {
   if (!combined || target.pane !== 'cloud-billing') {
     return target
   }
-  return { ...target, pane: 'orca-account', sectionId: target.sectionId ?? ACCOUNT_BILLING_PLAN_ANCHOR }
+  return {
+    ...target,
+    pane: 'orca-account',
+    sectionId: target.sectionId ?? ACCOUNT_BILLING_PLAN_ANCHOR
+  }
 }
 
 /** True for an Orca Cloud group page (team-level, so host-free): the cloud pages and the Orca account. */

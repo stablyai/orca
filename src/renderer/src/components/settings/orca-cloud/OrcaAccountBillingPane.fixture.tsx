@@ -46,8 +46,12 @@ const signedOut: OrcaProfileAuthStatus = {
   persistence: 'none'
 }
 
-/** Account + Billing as Settings draws it: one page, account on top, Plan & billing below. */
+/** Account & billing as Settings draws it: one page, account on top, Plan & billing below. */
 function page(status: OrcaProfileAuthStatus, billing: React.ReactNode) {
+  const title = billing ? 'Account & billing' : 'Account'
+  const description = billing
+    ? 'Your Orca account, plan, sandbox hours and payment.'
+    : 'Your Orca account.'
   return defineFixture({
     width: 760,
     store: { orcaProfileAuthStatus: status },
@@ -67,8 +71,8 @@ function page(status: OrcaProfileAuthStatus, billing: React.ReactNode) {
       <div className="bg-background px-8 py-6">
         <SettingsSection
           id="orca-account"
-          title="Account + Billing"
-          description="Your Orca account, plan, sandbox hours and payment."
+          title={title}
+          description={description}
           forceVisible
           bodyClassName={BARE_BODY}
         >
