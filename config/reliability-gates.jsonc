@@ -13203,26 +13203,14 @@
         "shellcheck config/docker/headless-serve-shutdown/run-signal-case.sh",
         "shellcheck config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh",
         "node config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage",
-        "node config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/startup/ensure-virtual-display.test.ts --maxWorkers=2 --reporter=dot"
+        "node config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64"
       ],
       "testFiles": [
-        "src/main/startup/ensure-virtual-display.test.ts",
         "config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs",
         "config/docker/headless-serve-shutdown/run-signal-case.sh",
         "config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh"
       ],
       "assertionRefs": [
-        {
-          "file": "src/main/startup/ensure-virtual-display.test.ts",
-          "assertions": [
-            "owned Xvfb starts with terminate-after-last-client semantics",
-            "owned Xvfb uses an independent process group so terminal Ctrl-C cannot preempt Electron teardown",
-            "owned Xvfb retains an early-process-exit guard until Electron is ready",
-            "owned Xvfb is not stopped from Electron's cancelable will-quit event",
-            "external displays and non-Linux startup remain untouched"
-          ]
-        },
         {
           "file": "config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs",
           "assertions": [
@@ -13295,6 +13283,7 @@
         "Keep exact listener, Xvfb, descendant, fatal-evidence, and canary identity assertions green."
       ],
       "knownGaps": [
+        "The portable startup unit suite was removed after a source value audit; its mocked display admission, ownership, bind-race and protocol-selection alarms were deliberately dropped. Recorded unit runs are historical evidence only. The retained packaged signal journey does not replace those unit alarms.",
         "The local arm64 Docker host uses Rosetta for amd64 containers; native amd64 PR CI supplies the non-emulated repeat of the same extracted-AppRun PID contract.",
         "Ubuntu 20.04 is covered by the packaged native-binary glibc floor gate; this lifecycle journey runs on the reported Ubuntu 26.04 topology.",
         "Systemd units that override or omit the documented KillMode=mixed policy can still terminate owned Xvfb before Electron disconnects.",
