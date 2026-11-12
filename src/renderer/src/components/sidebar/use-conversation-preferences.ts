@@ -69,7 +69,13 @@ export function useConversationPreferences() {
     try {
       await refresh()
       if (!supported) {
-        throw new Error('host-update-required')
+        toast.error(
+          t(
+            'projectConversations.saveFailed',
+            'Could not save chat preferences. Update Orca or try again.'
+          )
+        )
+        return
       }
       const reply = await callRuntimeRpc<{ preferences: ConversationPreferences }>(
         { kind: 'local' },
@@ -94,7 +100,13 @@ export function useConversationPreferences() {
     try {
       await refresh()
       if (!projectVisibilitySupported) {
-        throw new Error('host-update-required')
+        toast.error(
+          t(
+            'projectConversations.visibilityFailed',
+            'Could not save project visibility. Update Orca or try again.'
+          )
+        )
+        return
       }
       const reply = await callRuntimeRpc<{ preferences: ConversationPreferences }>(
         { kind: 'local' },

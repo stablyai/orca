@@ -45,11 +45,7 @@ export function ProjectConversationRow({
       return
     }
     setBusy(true)
-    try {
-      await onPreference(patch)
-    } finally {
-      setBusy(false)
-    }
+    await onPreference(patch).finally(() => setBusy(false))
   }
   return (
     <div
