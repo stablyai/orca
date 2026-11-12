@@ -138,6 +138,8 @@ export async function performAttach(
             !params.fork &&
             !params.providerHandle &&
             input.adapter.supportsAdvisoryPolicy?.(params.location, params.agent) === true)) &&
+        (!params.executionPolicy ||
+          input.adapter.supportsExecutionPolicy?.(params.location, params.agent) === true) &&
         input.agents.definition(params.agent) !== null &&
         adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)
       : hostCanStartRecord(input, record)

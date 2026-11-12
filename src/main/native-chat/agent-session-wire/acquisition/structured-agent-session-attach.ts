@@ -60,6 +60,7 @@ export type AgentSessionAttachParams = {
   }
   options?: Readonly<Record<string, string>>
   advisoryPolicy?: AgentSessionRecord['advisoryPolicy']
+  executionPolicy?: AgentSessionRecord['executionPolicy']
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string
   launchArgs?: string[]
@@ -98,6 +99,7 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     // Adoption changes identity; transcript location is transient and excluded.
     adoptedProviderHandle: params.adopt?.providerHandle,
     advisoryPolicy: params.advisoryPolicy,
+    executionPolicy: params.executionPolicy,
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
 }
@@ -215,6 +217,7 @@ export function reserveRequestFor(input: {
     provider: params.provider,
     accountHome: params.accountHome,
     ...(params.advisoryPolicy ? { advisoryPolicy: params.advisoryPolicy } : {}),
+    ...(params.executionPolicy ? { executionPolicy: params.executionPolicy } : {}),
     ...(params.options ? { options: params.options, models: input.models } : {}),
     ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId
       ? { surfaceTabId: params.surfaceTabId }

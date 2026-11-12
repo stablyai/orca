@@ -157,7 +157,15 @@ export async function openCodexStructuredSession(
         : undefined
       : (opened.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
   const catalogAccess = codexAcquireCatalogAccess(deps, launch, sessionId)
+  attempt.window.nativeExecutionSettings = {
+    ...opened,
+    modelProvider: opened.modelProvider ?? opened.thread?.modelProvider,
+    sandboxPolicy: opened.sandbox
+  }
   const session: CodexSession = {
+    get nativeExecutionSettings() {
+      return attempt.window.nativeExecutionSettings
+    },
     ...(typeof opened.thread?.modelProvider === 'string'
       ? { modelProvider: opened.thread.modelProvider }
       : {}),

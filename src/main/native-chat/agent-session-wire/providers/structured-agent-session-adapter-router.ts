@@ -36,6 +36,8 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   supportsAdvisoryPolicy = (location: AgentSessionExecutionLocation, agent: string): boolean =>
     this.agents.registration(agent)?.adapter.supportsAdvisoryPolicy?.(location, agent) ?? false
+  supportsExecutionPolicy = (location: AgentSessionExecutionLocation, agent: string): boolean =>
+    this.agents.registration(agent)?.adapter.supportsExecutionPolicy?.(location, agent) ?? false
 
   /** Closure is permanent; late acquisition must never reopen routing to closed adapters. */
   async acquire(input: Parameters<Adapter['acquire']>[0]) {

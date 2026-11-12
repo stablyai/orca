@@ -7,6 +7,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import { createStructuredWorkerSession } from '../structured-workers/orchestration-structured-worker-session'
 import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import type { AgentSessionAdvisoryPolicy } from '../../../../../../shared/agent-session/agent-session-advisory-policy'
+import type { AgentSessionExecutionPolicy } from '../../../../../../shared/agent-session/agent-session-execution-policy'
 
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
@@ -96,6 +97,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   agent: TuiAgent
   dispatchId: string
   advisoryPolicy?: AgentSessionAdvisoryPolicy
+  executionPolicy?: AgentSessionExecutionPolicy
   /** `--model`/`--effort`; the session seeds them exactly as a saved selection is seeded. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
@@ -107,6 +109,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
     agent: args.agent,
     dispatchId: args.dispatchId,
     ...(args.advisoryPolicy ? { advisoryPolicy: args.advisoryPolicy } : {}),
+    ...(args.executionPolicy ? { executionPolicy: args.executionPolicy } : {}),
     ...(options ? { options } : {})
   })
   args.effects.push({

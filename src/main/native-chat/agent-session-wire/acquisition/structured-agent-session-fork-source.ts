@@ -70,11 +70,11 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
       )
     }
     const record = host.deps.store.requireWritableRecord(input.sessionId)
-    if (record.advisoryPolicy) {
+    if (record.advisoryPolicy || record.executionPolicy) {
       throw agentConversationCopyRefusal(
         'agent_session_operation_invalid',
         { reason: 'advisoryOperationUnsupported' },
-        'An advisory conversation cannot be forked.'
+        'A bounded conversation cannot be forked.'
       )
     }
     const metadata = structuredAgentRuntimeMetadata(input.agent)

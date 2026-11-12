@@ -133,6 +133,7 @@ export type CodexStructuredSessionAdapterDeps = {
 }
 
 export type CodexSession = {
+  readonly nativeExecutionSettings?: Record<string, unknown>
   modelProvider?: string
   readonly authRevision?: number
   events?: StructuredAgentSessionEventSink

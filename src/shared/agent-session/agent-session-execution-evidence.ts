@@ -12,14 +12,15 @@ export type AgentSessionExecutionEvidence = {
   effort: string
   account: { type: 'chatgpt'; fingerprint: string; plan: string }
   permissions: {
+    activeProfile?: { id: string }
     approvalPolicy: string
     approvalsReviewer: string
     sandbox: {
       type: 'readOnly' | 'workspaceWrite'
       networkAccess: false
-      readableRoots: string[]
-      writableRoots: string[]
-      includePlatformDefaults: boolean
+      readableRoots?: string[]
+      writableRoots?: string[]
+      includePlatformDefaults?: boolean
     }
   }
 }

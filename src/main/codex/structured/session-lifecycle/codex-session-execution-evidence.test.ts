@@ -14,7 +14,8 @@ async function executionFixture(
     email: 'private@invalid.test',
     planType: 'pro'
   },
-  modelProvider = 'openai'
+  modelProvider = 'openai',
+  settings: Record<string, unknown> = {}
 ) {
   const codex = fakeCodex({
     'account/read': () => ({ account }),
@@ -33,7 +34,8 @@ async function executionFixture(
           readableRoots: ['/work/effective'],
           includePlatformDefaults: true
         }
-      }
+      },
+      ...settings
     })
   })
   const adapter = adapterFor(codex)
@@ -97,6 +99,44 @@ it('refuses paid/API or unknown account evidence', async () => {
 it('does not grant included-account evidence to a different model provider', async () => {
   const { adapter } = await executionFixture(undefined, 'custom-provider')
   try {
+    expect(await adapter.readExecutionEvidence({ sessionId: 'session-1', fence: 7 })).toBeNull()
+  } finally {
+    await adapter.closeAll()
+  }
+})
+
+it('reports an observed named profile without inventing observed read roots', async () => {
+  const { adapter } = await executionFixture(undefined, 'openai', {
+    activePermissionProfile: { id: 'orca-bounded' },
+    sandbox: { type: 'readOnly', networkAccess: false }
+  })
+  try {
+    const captured = await adapter.readExecutionEvidence({ sessionId: 'session-1', fence: 7 })
+    expect(captured?.evidence.permissions).toMatchObject({
+      activeProfile: { id: 'orca-bounded' },
+      sandbox: { type: 'readOnly', networkAccess: false }
+    })
+    expect(captured?.evidence.permissions.sandbox).not.toHaveProperty('readableRoots')
+  } finally {
+    await adapter.closeAll()
+  }
+})
+
+it('does not reissue stale permission evidence after a native settings update', async () => {
+  const { adapter, codex } = await executionFixture()
+  try {
+    codex.connections[0]!.handlers.onNotification?.('thread/settings/updated', {
+      threadId: THREAD_ID,
+      threadSettings: {
+        model: 'gpt-live',
+        effort: 'low',
+        cwd: '/work/effective',
+        modelProvider: 'openai',
+        sandboxPolicy: { type: 'dangerFullAccess' },
+        approvalPolicy: 'never',
+        approvalsReviewer: 'user'
+      }
+    })
     expect(await adapter.readExecutionEvidence({ sessionId: 'session-1', fence: 7 })).toBeNull()
   } finally {
     await adapter.closeAll()

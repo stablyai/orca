@@ -233,6 +233,7 @@ function workerSurfaceFactory(
         agent,
         dispatchId: args.dispatchId,
         ...(args.params.advisoryPolicy ? { advisoryPolicy: args.params.advisoryPolicy } : {}),
+        ...(args.params.executionPolicy ? { executionPolicy: args.params.executionPolicy } : {}),
         ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
         effects: args.effects
       })
@@ -244,8 +245,8 @@ function workerSurfaceFactory(
       }
     },
     createTerminalAgent: async ({ worktreeId }) => {
-      if (args.params.advisoryPolicy) {
-        throw new Error('Advisory terminal fallback refused.')
+      if (args.params.advisoryPolicy || args.params.executionPolicy) {
+        throw new Error('Bounded worker terminal fallback refused.')
       }
       recordSurfaceStage(worktreeId)
       const terminal = await createExistingWorktreeWorkerTerminal({

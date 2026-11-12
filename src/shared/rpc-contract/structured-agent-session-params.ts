@@ -25,6 +25,7 @@ import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
 import { SOURCE_FIELDS, ResumeWriterAdmission } from './structured-agent-session-resume-params'
 import { agentSessionAdvisoryPolicySchema } from '../agent-session/agent-session-advisory-policy'
+import { agentSessionExecutionPolicySchema } from '../agent-session/agent-session-execution-policy'
 
 export {
   SendBlock,
@@ -148,6 +149,7 @@ export const CreateIntentParams = z
       .optional(),
     options: AgentSessionOptions.optional(),
     optionsMode: z.literal('replace-model-selection').optional(),
+    executionPolicy: agentSessionExecutionPolicySchema.optional(),
     advisoryPolicy: agentSessionAdvisoryPolicySchema.optional()
   })
   .strict()

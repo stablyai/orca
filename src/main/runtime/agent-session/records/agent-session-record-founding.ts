@@ -6,9 +6,11 @@ import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-l
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION,
+  AGENT_SESSION_EXECUTION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionAdvisoryPolicySchema } from '../../../../shared/agent-session/agent-session-advisory-policy'
+import { agentSessionExecutionPolicySchema } from '../../../../shared/agent-session/agent-session-execution-policy'
 import { normalizeAgentSessionConversationName } from '../../../../shared/agent-session/agent-session-conversation-name'
 
 export type AgentSessionRecordIdentity = Pick<
@@ -19,6 +21,7 @@ export type AgentSessionRecordIdentity = Pick<
   | 'accountHome'
   | 'options'
   | 'advisoryPolicy'
+  | 'executionPolicy'
   | 'launchArgs'
   | 'launchDirectory'
   | 'forkedFrom'
@@ -40,9 +43,15 @@ export function agentSessionRecordIdentityFields(
   if (advisory && !advisory.success) {
     throw new Error('agent_session_advisory_policy_invalid')
   }
-  const schemaVersion: AgentSessionRecord['schemaVersion'] = advisory
-    ? AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION
-    : AGENT_SESSION_RECORD_SCHEMA_VERSION
+  const execution =
+    identity.executionPolicy === undefined
+      ? null
+      : agentSessionExecutionPolicySchema.parse(identity.executionPolicy)
+  const schemaVersion: AgentSessionRecord['schemaVersion'] = execution
+    ? AGENT_SESSION_EXECUTION_RECORD_SCHEMA_VERSION
+    : advisory
+      ? AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION
+      : AGENT_SESSION_RECORD_SCHEMA_VERSION
   return {
     schemaVersion,
     sessionId: identity.sessionId,
@@ -52,6 +61,7 @@ export function agentSessionRecordIdentityFields(
     ...(identity.forkedFrom ? { forkedFrom: identity.forkedFrom } : {}),
     ...(Object.keys(options).length > 0 ? { options } : {}),
     ...(advisory?.success ? { advisoryPolicy: advisory.data } : {}),
+    ...(execution ? { executionPolicy: execution } : {}),
     ...(permissionMode ? { permissionMode } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
     // /clear retains its tab and launch directory.

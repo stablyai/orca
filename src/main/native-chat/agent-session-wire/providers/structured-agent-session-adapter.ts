@@ -185,6 +185,7 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Absent means the adapter cannot enforce a bounded advisory launch. */
   supportsAdvisoryPolicy?(location: AgentSessionExecutionLocation, agent: string): boolean
+  supportsExecutionPolicy?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Keep runtime/location support in adapter data for remote enablement. */
   supportsLocation?(location: AgentSessionExecutionLocation): boolean
   /** Spawn once per reservation; use its token/fence because the store rejects mismatched handles. */

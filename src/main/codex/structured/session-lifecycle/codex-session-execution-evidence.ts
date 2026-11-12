@@ -3,6 +3,7 @@ import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { AgentSessionExecutionEvidence } from '../../../../shared/agent-session/agent-session-execution-evidence'
 import type { CodexSession } from './codex-structured-session-state'
+import { readCodexSandboxPolicy } from '../launch/codex-structured-sandbox-policy'
 
 const INCLUDED_PLANS = new Set(['pro', 'promax', 'plus', 'business', 'team', 'enterprise', 'edu'])
 const text = (value: unknown): value is string =>
@@ -16,16 +17,34 @@ function sandboxEvidence(
   session: CodexSession
 ): AgentSessionExecutionEvidence['permissions'] | null {
   const permissions = session.permissions
-  const sandbox = permissions?.acquiredSandbox
+  const native = session.nativeExecutionSettings
+  const sandbox = native
+    ? readCodexSandboxPolicy(native.sandboxPolicy)
+    : permissions?.acquiredSandbox
+  const approvalPolicy = native ? native.approvalPolicy : permissions?.approvalPolicy
+  const approvalsReviewer = native ? native.approvalsReviewer : permissions?.approvalsReviewer
   if (
     !permissions?.launchSandboxIntact ||
     !sandbox ||
     sandbox.networkAccess !== false ||
-    !text(permissions.approvalPolicy) ||
-    !text(permissions.approvalsReviewer) ||
+    !text(approvalPolicy) ||
+    !text(approvalsReviewer) ||
     (sandbox.type !== 'readOnly' && sandbox.type !== 'workspaceWrite')
   ) {
     return null
+  }
+  const profile = readRecord(native?.activePermissionProfile)
+  if (text(profile.id)) {
+    return {
+      approvalPolicy,
+      approvalsReviewer,
+      activeProfile: { id: profile.id },
+      sandbox: {
+        type: sandbox.type,
+        networkAccess: false,
+        ...(sandbox.type === 'workspaceWrite' ? { writableRoots: [...sandbox.writableRoots] } : {})
+      }
+    }
   }
   const access = readRecord(sandbox.type === 'readOnly' ? sandbox.access : sandbox.readOnlyAccess)
   if (
@@ -39,8 +58,8 @@ function sandboxEvidence(
     return null
   }
   return {
-    approvalPolicy: permissions.approvalPolicy,
-    approvalsReviewer: permissions.approvalsReviewer,
+    approvalPolicy,
+    approvalsReviewer,
     sandbox: {
       type: sandbox.type,
       networkAccess: false,
@@ -57,12 +76,14 @@ export function readCodexSessionExecutionEvidence(
 ): NonNullable<StructuredAgentSessionAdapter['readExecutionEvidence']> {
   return async ({ sessionId, fence, signal }) => {
     const session = sessions.get(sessionId)
+    const native = session?.nativeExecutionSettings
     const settings = session?.appliedSettings?.read()
     const permissions = session && sandboxEvidence(session)
-    const cwd = session?.permissions?.reportedCwd
+    const cwd = native ? native.cwd : session?.permissions?.reportedCwd
+    const provider = native ? native.modelProvider : session?.modelProvider
     if (
       !session ||
-      session.modelProvider !== 'openai' ||
+      provider !== 'openai' ||
       session.ended ||
       session.connection.closed ||
       session.fence !== fence ||
@@ -83,11 +104,11 @@ export function readCodexSessionExecutionEvidence(
       sessions.get(sessionId) === session &&
       !session.ended &&
       !session.connection.closed &&
-      session.modelProvider === 'openai' &&
+      session.nativeExecutionSettings === native &&
       session.authRevision === revision &&
       session.acquisitionGeneration === generation &&
       session.fence === fence &&
-      session.permissions?.reportedCwd === cwd &&
+      (native ? native.cwd : session.permissions?.reportedCwd) === cwd &&
       session.appliedSettings?.read() === settings &&
       JSON.stringify(sandboxEvidence(session)) === JSON.stringify(permissions)
     try {

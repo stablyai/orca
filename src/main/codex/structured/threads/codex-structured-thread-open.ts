@@ -18,6 +18,8 @@ import {
 } from '../launch/codex-structured-sandbox-policy'
 
 export type CodexOpenedThread = {
+  activePermissionProfile?: { id: string }
+  modelProvider?: string
   cwd?: string
   approvalPolicy?: string
   approvalsReviewer?: string
@@ -148,6 +150,7 @@ export async function openCodexThread(
     throw new Error(`codex app-server resumed ${threadId} instead of ${resumeThreadId}`)
   }
   const result = opened as Record<string, unknown>
+  const profile = result.activePermissionProfile
   const thread =
     typeof result.thread === 'object' && result.thread !== null
       ? (result.thread as Record<string, unknown>)
@@ -161,6 +164,10 @@ export async function openCodexThread(
   const approvalPolicy = nonEmptyString(result.approvalPolicy ?? result.approval_policy)
   const approvalsReviewer = nonEmptyString(result.approvalsReviewer ?? result.approvals_reviewer)
   return {
+    ...(profile && typeof profile === 'object' && 'id' in profile && typeof profile.id === 'string'
+      ? { activePermissionProfile: { id: profile.id } }
+      : {}),
+    ...(typeof result.modelProvider === 'string' ? { modelProvider: result.modelProvider } : {}),
     ...(cwd ? { cwd } : {}),
     ...(approvalPolicy ? { approvalPolicy } : {}),
     ...(approvalsReviewer ? { approvalsReviewer } : {}),

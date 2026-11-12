@@ -41,6 +41,11 @@ export function workerStartOptionsAdvisoryPolicyFingerprint(json: string): strin
   return typeof value === 'string' ? value : null
 }
 
+export function workerStartOptionsExecutionPolicyFingerprint(json: string): string | null {
+  const value = startOptions(json).executionPolicyFingerprint
+  return typeof value === 'string' ? value : null
+}
+
 /** Enrich the existing launch concept without rewriting the person's selector or preferences. */
 export function mergeWorkerLaunchObservation(json: string, observation: unknown): string {
   let options: Record<string, unknown>

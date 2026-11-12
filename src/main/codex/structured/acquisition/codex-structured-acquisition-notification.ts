@@ -38,6 +38,7 @@ export function codexAcquisitionNotificationHandler(input: {
     }
     if (method === 'thread/settings/updated' && threadId && threadId === input.primaryThreadId()) {
       const settings = readRecord(readRecord(params).threadSettings)
+      input.acquisition.nativeExecutionSettings = settings
       if (
         typeof settings.model === 'string' &&
         (typeof settings.effort === 'string' || settings.effort === null)

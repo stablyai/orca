@@ -1,8 +1,12 @@
-import { isOptionalUsageLimitContinueCancel } from './agent-session-usage-limit-continue'
 import {
-  agentSessionAdvisoryPolicySchema,
-  type AgentSessionAdvisoryPolicy
-} from '../agent-session-advisory-policy'
+  type AGENT_SESSION_RECORD_SCHEMA_VERSION,
+  type AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION,
+  type AGENT_SESSION_EXECUTION_RECORD_SCHEMA_VERSION,
+  isAgentSessionPolicyRecord
+} from './agent-session-record-policy'
+import { isOptionalUsageLimitContinueCancel } from './agent-session-usage-limit-continue'
+import type { AgentSessionExecutionPolicy } from '../agent-session-execution-policy'
+import type { AgentSessionAdvisoryPolicy } from '../agent-session-advisory-policy'
 import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
@@ -38,9 +42,11 @@ import {
   type AgentSessionAccountHome
 } from './agent-session-account-home'
 
-export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
-// Older writers must set constrained rows aside rather than resume them without their policy.
-export const AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION = 3 as const
+export {
+  AGENT_SESSION_RECORD_SCHEMA_VERSION,
+  AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION,
+  AGENT_SESSION_EXECUTION_RECORD_SCHEMA_VERSION
+} from './agent-session-record-policy'
 
 export type AgentSessionWorkspaceKind = 'git-worktree' | 'folder'
 
@@ -119,6 +125,7 @@ export type AgentSessionRecord = {
   schemaVersion:
     | typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
     | typeof AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION
+    | typeof AGENT_SESSION_EXECUTION_RECORD_SCHEMA_VERSION
   sessionId: string
   location: AgentSessionExecutionLocation
   /** The agent this session names, whether this build can run it or not. */
@@ -133,6 +140,7 @@ export type AgentSessionRecord = {
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
   options?: Record<string, string>
   advisoryPolicy?: AgentSessionAdvisoryPolicy
+  executionPolicy?: AgentSessionExecutionPolicy
   /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
   permissionMode?: string
   usageLimitContinueCancel?: { turnItemId: string; resetsAt: number }
@@ -298,10 +306,7 @@ export function isPersistedAgentSessionObservationRecord(
   const record = value
   if (
     !(
-      ((record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&
-        !Object.hasOwn(record, 'advisoryPolicy')) ||
-        (record.schemaVersion === AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION &&
-          agentSessionAdvisoryPolicySchema.safeParse(record.advisoryPolicy).success)) &&
+      isAgentSessionPolicyRecord(record) &&
       isAgentSessionId(record.sessionId) &&
       isAgentSessionExecutionLocation(record.location) &&
       isStructuredAgentId(record.provider) &&

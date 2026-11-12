@@ -8,6 +8,7 @@ export const MAX_CODEX_ACQUISITION_BUFFER_OPERATIONS = 1024
 export const MAX_CODEX_ACQUISITION_BUFFER_BYTES = 4 * 1024 * 1024
 
 export class CodexAcquisitionWindow {
+  nativeExecutionSettings?: Record<string, unknown>
   authRevision = 0
   readonly appliedSettings = new CodexAppliedSettings()
   readonly prompts = new CodexPromptRegistry()

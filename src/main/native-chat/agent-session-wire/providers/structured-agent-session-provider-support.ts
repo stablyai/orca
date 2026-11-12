@@ -57,6 +57,8 @@ export function hostCanStartRecord(
   record: AgentSessionRecord
 ): boolean {
   return (
+    (!record.executionPolicy ||
+      deps.adapter.supportsExecutionPolicy?.(record.location, record.provider) === true) &&
     (!record.advisoryPolicy ||
       (record.location.workspaceKind === 'folder' &&
         deps.adapter.supportsAdvisoryPolicy?.(record.location, record.provider) === true)) &&
@@ -83,7 +85,7 @@ function structuredAgentSessionCreateMalformed(params: AgentSessionAttachParams)
     params.envelope.expectedRuntimeFence !== null ||
     params.agent !== params.provider ||
     Boolean(
-      params.advisoryPolicy &&
+      (params.advisoryPolicy || params.executionPolicy) &&
       (params.adopt ||
         params.fork ||
         params.providerHandle ||
@@ -105,6 +107,8 @@ export function structuredAgentSessionCreateRefusal(
     )
   }
   const unsupported =
+    (params.executionPolicy &&
+      deps.adapter.supportsExecutionPolicy?.(params.location, params.agent) !== true) ||
     (params.advisoryPolicy &&
       deps.adapter.supportsAdvisoryPolicy?.(params.location, params.agent) !== true) ||
     (prior

@@ -7,14 +7,14 @@ export function advisorySendRefusal(
   journal: AgentSessionJournal,
   operationId: string
 ) {
-  return record?.advisoryPolicy &&
+  return (record?.advisoryPolicy || record?.executionPolicy) &&
     journal.submissions().some((submission) => submission.clientMessageId !== operationId)
     ? unsupportedAdvisoryOperation()
     : null
 }
 
 export function advisoryOperationRefusal(record: AgentSessionRecord | null, method: string) {
-  return record?.advisoryPolicy &&
+  return (record?.advisoryPolicy || record?.executionPolicy) &&
     method !== 'agentSession.send' &&
     method !== 'agentSession.cancel'
     ? unsupportedAdvisoryOperation()
@@ -25,6 +25,6 @@ function unsupportedAdvisoryOperation() {
   return refuse(
     'agent_session_operation_invalid',
     { reason: 'advisoryOperationUnsupported' },
-    'This advisory session only accepts its original question and Stop.'
+    'This bounded session only accepts its original task and Stop.'
   )
 }

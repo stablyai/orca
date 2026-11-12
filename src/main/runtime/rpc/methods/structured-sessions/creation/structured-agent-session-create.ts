@@ -1,5 +1,6 @@
 import type { StructuredSessionSurface } from '../../../../agent-session/structured-agent-session-close'
 import type { AgentSessionAdvisoryPolicy } from '../../../../../../shared/agent-session/agent-session-advisory-policy'
+import type { AgentSessionExecutionPolicy } from '../../../../../../shared/agent-session/agent-session-execution-policy'
 import { structuredAgentSessionTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { seededPermissionMode } from '../../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
@@ -75,18 +76,19 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
   advisoryPolicy?: AgentSessionAdvisoryPolicy
+  executionPolicy?: AgentSessionExecutionPolicy
   /** Use the caller-reserved tab id at publication; absent, derive the legacy id. Keep it outside launch fingerprints. */
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   atRest?: boolean
 }): Promise<PreparedStructuredAgentSessionCreate> {
   const fork = args.forkFrom
-  if (args.advisoryPolicy && (fork || args.resumeFrom)) {
+  if ((args.advisoryPolicy || args.executionPolicy) && (fork || args.resumeFrom)) {
     throw agentSessionRefusalError('agent_session_operation_invalid', {
       reason: 'requestMalformed'
     })
   }
-  if (args.advisoryPolicy) {
+  if (args.advisoryPolicy || args.executionPolicy) {
     const conflict = agentSessionFingerprintConflict(
       args.envelope,
       structuredAgentSessionCreateIntentFingerprint(args)
@@ -137,6 +139,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     priorOperation?.fingerprint === attachFingerprint
   const atRest =
     args.advisoryPolicy !== undefined ||
+    args.executionPolicy !== undefined ||
     (args.atRest !== undefined &&
       (priorOperation?.fingerprint === args.envelope.payloadFingerprint ||
         (args.atRest === true && !legacyReplay)))
@@ -167,6 +170,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     attachParams: {
       ...resolvedAttach,
       ...(args.advisoryPolicy ? { advisoryPolicy: args.advisoryPolicy } : {}),
+      ...(args.executionPolicy ? { executionPolicy: args.executionPolicy } : {}),
       ...(picked ? { options: picked } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
@@ -281,23 +285,12 @@ export async function commitStructuredAgentSessionCreate(args: {
   return tabId ? { ...result, value: { ...result.value, tabId } } : result
 }
 
-export async function createStructuredAgentSessionForWorktree(args: {
-  runtime: OrcaRuntimeService
-  ensureHost: () => Promise<StructuredAgentSessionHost>
-  caller: StructuredAgentSessionCaller
-  envelope: AgentSessionMutationEnvelope
-  worktree: string
-  agent: StructuredAgentId
-  activate: boolean
-  optionsMode?: 'replace-model-selection'
-  options?: Readonly<Record<string, string>>
-  advisoryPolicy?: AgentSessionAdvisoryPolicy
-  tabId?: string
-  /** Create without starting the agent; its first message starts it. */
-  atRest?: true
-  firstMessage?: StructuredAgentSessionFirstMessage
-  signal?: AbortSignal
-}): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+export async function createStructuredAgentSessionForWorktree(
+  args: Omit<
+    Parameters<typeof prepareStructuredAgentSessionCreateForWorktree>[0],
+    'forkFrom' | 'resumeFrom' | 'structuredAgentCliSourceEvidence' | 'atRest'
+  > & { activate: boolean; atRest?: true; signal?: AbortSignal }
+): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   // An at-rest create's ledger row is keyed by its intent, as a client's create is.
   const envelope = args.atRest
     ? {

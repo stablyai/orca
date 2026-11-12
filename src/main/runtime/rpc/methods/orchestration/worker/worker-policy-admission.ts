@@ -11,24 +11,28 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 function refuse(): never {
   throw new OrchestrationError(
     'agent_unconfigured',
-    'Advisory workers require a supported constrained adapter and an empty local folder workspace. No effects were applied.',
+    'Bounded workers require a supported constrained adapter and an exact local folder workspace. Advisors require an empty folder. No effects were applied.',
     { effectsApplied: false }
   )
 }
 
-export function assertAdvisoryWorkerRequest(params: WorkerStartInput, followUp: boolean) {
-  if (params.advisoryPolicy && (followUp || !WorkerStartParams.safeParse(params).success)) {
+export function assertBoundedWorkerRequest(params: WorkerStartInput, followUp: boolean) {
+  if (
+    (params.advisoryPolicy || params.executionPolicy) &&
+    (followUp || !WorkerStartParams.safeParse(params).success)
+  ) {
     refuse()
   }
 }
 
-export async function assertAdvisoryWorkerPlacement(
+export async function assertBoundedWorkerPlacement(
   params: WorkerStartInput,
   workspace: (Pick<Worktree, 'id'> & Partial<Pick<Worktree, 'path' | 'hostId'>>) | undefined,
   mode: AgentLaunchModeReceipt,
   runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>
 ) {
-  if (!params.advisoryPolicy) {
+  const policy = params.advisoryPolicy ?? params.executionPolicy
+  if (!policy) {
     return
   }
   if (!workspace || !workspace.path) {
@@ -45,19 +49,26 @@ export async function assertAdvisoryWorkerPlacement(
     parseWorkspaceKey(workspace.id)?.type !== 'folder' ||
     workspace.hostId !== 'local' ||
     mode.mode !== 'structured' ||
-    params.advisoryPolicy.deadlineAt <= now ||
-    params.advisoryPolicy.deadlineAt - now > 300_000 ||
-    host?.deps.adapter.supportsAdvisoryPolicy?.(
+    policy.deadlineAt <= now ||
+    policy.deadlineAt - now > 300_000 ||
+    (params.executionPolicy
+      ? host?.deps.adapter.supportsExecutionPolicy
+      : host?.deps.adapter.supportsAdvisoryPolicy
+    )?.call(
+      host?.deps.adapter,
       {
         executionHostId: 'local',
         workspaceId: workspace.id,
         workspaceKind: 'folder',
         wslDistro: null
       },
-      'claude'
+      params.executionPolicy ? 'codex' : 'claude'
     ) !== true
   ) {
     refuse()
+  }
+  if (!params.advisoryPolicy) {
+    return
   }
   // No ambient project instructions may supplement the admitted snapshot context.
   try {

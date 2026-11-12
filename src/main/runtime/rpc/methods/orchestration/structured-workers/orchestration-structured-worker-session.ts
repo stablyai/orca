@@ -43,6 +43,7 @@ import {
 } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { createStructuredAgentSessionForWorktree } from '../../structured-sessions/creation/structured-agent-session-create'
 import type { AgentSessionAdvisoryPolicy } from '../../../../../../shared/agent-session/agent-session-advisory-policy'
+import type { AgentSessionExecutionPolicy } from '../../../../../../shared/agent-session/agent-session-execution-policy'
 
 // The worker's handle, keyed by its root session: a reused worker outlives the Dispatch that created it.
 // Its mail waits on journal edges only while mail is parked, through that mail's own watch.
@@ -92,6 +93,7 @@ export async function createStructuredWorkerSession(args: {
   agent: TuiAgent
   dispatchId: string
   advisoryPolicy?: AgentSessionAdvisoryPolicy
+  executionPolicy?: AgentSessionExecutionPolicy
   /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
   options?: Readonly<Record<string, string>>
 }): Promise<{
@@ -131,6 +133,7 @@ export async function createStructuredWorkerSession(args: {
       worktree: `id:${args.worktreeId}`,
       agent: args.agent,
       ...(args.advisoryPolicy ? { advisoryPolicy: args.advisoryPolicy } : {}),
+      ...(args.executionPolicy ? { executionPolicy: args.executionPolicy } : {}),
       // Absent, the host seeds the user's saved selection — the same fallback a chat gets.
       ...(args.options ? { options: args.options } : {}),
       // Dispatching a worker is background work; it must not pull the surface away from the user.
