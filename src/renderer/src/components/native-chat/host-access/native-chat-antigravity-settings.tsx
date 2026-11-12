@@ -1,7 +1,7 @@
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { openAntigravitySignInSettings } from '@/components/provider-accounts/open-antigravity-sign-in-settings'
 import { agentSessionSetupFor } from '../../../../../shared/agent-session/lifecycle/agent-session-setup-commands'
 import { NativeChatActionButton } from '../composer/controls/NativeChatActionButton'
 
@@ -31,15 +31,7 @@ export function nativeChatAntigravitySignInContent(
           <NativeChatActionButton
             primary
             href="#accounts-antigravity"
-            onClick={() => {
-              const { openSettingsTarget, openSettingsPage } = useAppStore.getState()
-              openSettingsTarget({
-                pane: 'accounts',
-                repoId: null,
-                sectionId: 'accounts-antigravity'
-              })
-              openSettingsPage()
-            }}
+            onClick={openAntigravitySignInSettings}
           />
         )
       }}

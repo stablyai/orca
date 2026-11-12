@@ -1,7 +1,10 @@
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useTranslate } from '@/i18n/use-translate'
-import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
+import {
+  antigravityChatSignInRunning,
+  type AntigravityChatSignInView
+} from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import {
   useManagedRuntimeInstall,
   type ManagedRuntimeInstallObservation
@@ -81,6 +84,7 @@ export function ChatUnavailableOnWindowsNote({ label }: { label: string }): Reac
 /** This computer's install of the program Orca downloads for an agent's chats. */
 export function useAgentChatRuntimeInstall(agent: TuiAgent): {
   runtime: ManagedRuntimeInstallObservation
+  signIn: AntigravityChatSignInView
   signInRunning: boolean
 } {
   const runtime = useManagedRuntimeInstall(CHAT_HOST, agent, true)
@@ -88,7 +92,7 @@ export function useAgentChatRuntimeInstall(agent: TuiAgent): {
   const signIn = useAntigravityChatSignIn(
     agent === 'antigravity' && runtime.kind === 'active' ? CHAT_HOST : null
   )
-  return { runtime, signInRunning: antigravityChatSignInRunning(signIn.flow) }
+  return { runtime, signIn, signInRunning: antigravityChatSignInRunning(signIn.flow) }
 }
 
 /** The program Orca downloads for an agent's chats, apart from its CLI; mounted only while its row is open. */

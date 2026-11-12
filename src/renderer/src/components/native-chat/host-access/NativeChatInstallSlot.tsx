@@ -10,6 +10,16 @@ import {
 } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import type { ManagedRuntimeInstallState } from '../../../../../shared/managed-runtime-install'
 import { NativeChatInstallStrip } from './NativeChatInstallStrip'
+import {
+  NativeChatSignInStrip,
+  nativeChatSignInTitle,
+  type NativeChatSignInStripState
+} from './NativeChatSignInStrip'
+import { useAntigravityChatSignIn } from '@/components/provider-accounts/use-antigravity-chat-sign-in'
+import {
+  antigravityChatSignInPrompt,
+  antigravityOrcaRuntimeSignsIn
+} from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useStructuredAgentSessionHostProgram } from '../session/status/structured-agent-session-status-hooks'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 
@@ -36,22 +46,37 @@ export function useNativeChatInstallSlot(
   layout: ManagedRuntimeInstallLayout
 ): {
   slot: NativeChatInstallSlotState
+  signIn: NativeChatSignInStripState | null
   sendBlockedReason: string | null
   unavailableHint: string | undefined
 } {
   const t = useTranslate()
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
-  const slot = nativeChatInstallSlotState(
-    useManagedRuntimeInstall(props.target, props.agent, props.isVisible && !hostProgram),
-    layout,
-    hostProgram
+  const observation = useManagedRuntimeInstall(
+    props.target,
+    props.agent,
+    props.isVisible && !hostProgram
   )
+  const slot = nativeChatInstallSlotState(observation, layout, hostProgram)
+  // Once Orca's own runtime is ready, chats still need its sign-in; the host's agy signs itself in.
+  const signsIn =
+    props.agent === 'antigravity' &&
+    props.isVisible &&
+    slot.kind === 'none' &&
+    observation.kind === 'active' &&
+    antigravityOrcaRuntimeSignsIn(observation)
+  const signInView = useAntigravityChatSignIn(signsIn ? props.target : null)
+  const prompt = signsIn ? antigravityChatSignInPrompt(signInView) : null
+  const signIn = prompt === null ? null : { prompt, view: signInView, agent: props.agent }
   const unavailableHint =
     slot.kind === 'install'
       ? managedRuntimeInstallCard(slot.state, agentLabel, slot.layout, undefined, t).title
-      : undefined
+      : signIn
+        ? nativeChatSignInTitle(agentLabel, t)
+        : undefined
   return {
     slot,
+    signIn,
     sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
     unavailableHint
   }
@@ -98,17 +123,23 @@ function installSlotSendBlockedReason(
 
 /** Setup stays reachable whenever the empty pane is not showing the hero. */
 export function NativeChatInstallSlot(props: {
-  slot: NativeChatInstallSlotState
+  install: { slot: NativeChatInstallSlotState; signIn: NativeChatSignInStripState | null }
   agentLabel: string
 }): React.JSX.Element | null {
-  const { slot } = props
-  if (slot.kind !== 'install' || slot.layout !== 'strip') {
+  const { slot, signIn } = props.install
+  const strip =
+    slot.kind === 'install' && slot.layout === 'strip' ? (
+      <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
+    ) : signIn ? (
+      <NativeChatSignInStrip state={signIn} agentLabel={props.agentLabel} />
+    ) : null
+  if (!strip) {
     return null
   }
   return (
     <div className="min-h-0 shrink overflow-hidden bg-chat-pane">
       <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4">
-        <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
+        {strip}
       </div>
     </div>
   )
