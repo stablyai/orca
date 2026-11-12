@@ -1852,7 +1852,6 @@
       "src/main/github/client-issue-source.test.ts": 663,
       "src/main/github/client-merge-queue-auto-merge.test.ts": 848,
       "src/main/github/client-pr-check-details.test.ts": 440,
-      "src/main/github/client-pr-conversation-requests.test.ts": 533,
       "src/main/github/client-pr-fallback-number.test.ts": 577,
       "src/main/github/client-pr-linked-lookup.test.ts": 574,
       "src/main/github/client-pr-local-runtime.test.ts": 577,

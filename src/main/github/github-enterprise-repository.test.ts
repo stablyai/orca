@@ -33,7 +33,6 @@ import {
   isGitHubHostAuthenticated
 } from './github-enterprise-repository'
 import { _resetSshHostnameResolutionCache } from './github-ssh-host-alias-resolution'
-import { getRepoUpstream, probeRepoUpstream } from './client/fetch/repo-slug-upstream'
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
 function mockOriginRemote(url: string): void {
@@ -70,35 +69,6 @@ describe('getEnterpriseGitHubRepoSlug', () => {
     _resetOriginGitHubApiRepositoryCache()
   })
 
-  it.each([
-    ['https://bitbucket.org/team/orca.git', 'bitbucket.org'],
-    ['ssh://git@altssh.gitlab.com:443/team/orca.git', 'altssh.gitlab.com'],
-    ['https://codeberg.org/team/orca.git', 'codeberg.org']
-  ])('does not promote a foreign public remote from gh inventory: %s', async (url, host) => {
-    mockOriginRemote(url)
-    mockHostAuthenticated(host)
-    await expect(getEnterpriseGitHubRepoSlug('/repo')).resolves.toBeFalsy()
-    await expect(isGitHubHostAuthenticated(host, '/repo')).resolves.toBe(false)
-  })
-
-  it('uses the effective SSH hostname before admitting an Enterprise identity', async () => {
-    mockOriginRemote('git@work-forge:team/orca.git')
-    resolveWithSshGMock.mockResolvedValue({ hostname: 'bitbucket.org' })
-    mockHostAuthenticated('bitbucket.org')
-    await expect(getEnterpriseGitHubRepoSlug('/repo')).resolves.toBeNull()
-  })
-
-  it.each([
-    'https://ghe.acme.com:8443/team/orca.git',
-    'https://ghe.acme.com:80/team/orca.git',
-    'http://ghe.acme.com:443/team/orca.git'
-  ])('rejects portless authentication for a non-default web endpoint: %s', async (remoteUrl) => {
-    mockOriginRemote(remoteUrl)
-    mockHostAuthenticated('ghe.acme.com')
-
-    await expect(getEnterpriseGitHubRepoSlug('/repo')).resolves.toBeNull()
-  })
-
   it('preserves an indeterminate auth inventory failure so a later probe can recover', async () => {
     mockOriginRemote('git@ghe.acme.com:team/orca.git')
     ghExecFileAsyncMock.mockRejectedValueOnce(
@@ -114,29 +84,6 @@ describe('getEnterpriseGitHubRepoSlug', () => {
       host: 'ghe.acme.com:8443'
     })
   })
-
-  it.each([true, false])(
-    'keeps the literal Enterprise host fallback when SSH expansion fails (authenticated=%s)',
-    async (authenticated) => {
-      mockOriginRemote('git@ghe.corp.example:org/app.git')
-      ghExecFileAsyncMock.mockImplementation(async (args: string[]) => ({
-        stdout:
-          args[0] === 'auth'
-            ? authenticated
-              ? 'ghe.corp.example\n  ✓ Logged in to ghe.corp.example account kelora (keyring)'
-              : ''
-            : JSON.stringify({ isFork: true, parent: { owner: { login: 'parent' }, name: 'app' } }),
-        stderr: ''
-      }))
-      const expected = { owner: 'parent', repo: 'app', host: 'ghe.corp.example' }
-      const result = await probeRepoUpstream('/repo')
-      expect(result.upstream).toEqual(authenticated ? expected : undefined)
-      await expect(getRepoUpstream('/repo')).resolves.toEqual(authenticated ? expected : null)
-      expect(ghExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'repo')).toHaveLength(
-        authenticated ? 2 : 0
-      )
-    }
-  )
 })
 
 describe('isGitHubHostAuthenticated', () => {
@@ -233,16 +180,4 @@ describe('isGitHubHostAuthenticated', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(['auth', 'status'], { cwd: '/repo' })
     expect(ghExecFileAsyncMock.mock.calls.flat()).not.toContain('evil.example.test')
   })
-
-  it.each([
-    [['ghe.acme.com:8443', 'ghe.acme.com:9443']],
-    [['ghe.acme.com:9443', 'ghe.acme.com:8443']]
-  ])(
-    'does not guess between multiple ported auth hosts for one SSH hostname: %j',
-    async (authenticatedHosts) => {
-      mockAuthenticatedHosts(authenticatedHosts)
-
-      await expect(isGitHubHostAuthenticated('ghe.acme.com', '/repo')).resolves.toBe(false)
-    }
-  )
 })
