@@ -88,15 +88,28 @@ export async function showWorkspaceForFile(
   paths: readonly string[],
   fallbackFolder: string
 ): Promise<PluginEditorWorkspace | null> {
-  const find = (): PluginEditorWorkspace | null => {
+  const find = (): PluginEditorWorkspace | null | 'removing' => {
     const state = useAppStore.getState()
     const rows = [
       ...Object.values(selectWorktreesByRepo(state) ?? {}).flat(),
       ...folderWorkspaceRows(selectFolderWorkspaces(state))
     ]
+    if (
+      rows.some(
+        (row) =>
+          (row.hostId === undefined || row.hostId === LOCAL_EXECUTION_HOST_ID) &&
+          isWorktreeRetiredByRemoval(row) &&
+          paths.some((path) => toWorktreeRelativePath(path, row.path) !== null)
+      )
+    ) {
+      return 'removing'
+    }
     return findWorkspaceShowingFile(rows, paths, state.activeWorktreeId)
   }
   let found = find()
+  if (found === 'removing') {
+    return null
+  }
   let addedRepoId: string | undefined
   if (!found) {
     const state = useAppStore.getState()
@@ -109,7 +122,7 @@ export async function showWorkspaceForFile(
     addedRepoId = repo.id
     found = find()
   }
-  if (!found) {
+  if (!found || found === 'removing') {
     return null
   }
   const state = useAppStore.getState()
