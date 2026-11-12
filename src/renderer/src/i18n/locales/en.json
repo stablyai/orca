@@ -28419,7 +28419,10 @@
       "skill": "{{agent}} skill",
       "prompt": "Codex prompt",
       "command": "{{agent}} command",
-      "project": "{{kind}}, this project"
+      "project": "{{kind}}, this project",
+      "agent": "Claude subagent",
+      "outputStyle": "Claude output style",
+      "memory": "{{agent}} memory"
     },
     "summary": {
       "none": "None found in Claude or Codex on this computer",
@@ -28449,7 +28452,11 @@
       "keptHost": "The sandbox has its own {{name}}, so it’s left alone",
       "noProject": "The sandbox has no project checkout for it",
       "failed": "Couldn’t write it in the sandbox",
-      "offPending": "Off. Removed from the sandbox at the next sync"
+      "offPending": "Off. Removed from the sandbox at the next sync",
+      "localRefs_one": "Imports 1 file from elsewhere on this computer; it isn’t copied",
+      "localRefs_other": "Imports {{count}} files from elsewhere on this computer; those aren’t copied",
+      "memoryOff": "Your personal instructions stay on this computer until you turn this on",
+      "hostOutdated": "This workspace was created before this could sync. A new workspace gets it."
     },
     "state": {
       "synced": "Synced",

@@ -41,9 +41,15 @@ export function agentConfigRoot(
         return join(projectPath, '.claude', 'commands')
       case 'agents-skill':
         return join(projectPath, '.agents', 'skills')
-      // Codex reads prompts and its older skills folder from home only.
+      case 'claude-agent':
+        return join(projectPath, '.claude', 'agents')
+      // Home only: Codex prompts and its older skills folder; output styles; memory (a project's
+      // CLAUDE.md is committed, and CLAUDE.local.md is per-machine by design).
       case 'codex-skill':
       case 'codex-prompt':
+      case 'claude-output-style':
+      case 'claude-memory':
+      case 'codex-memory':
         return null
     }
   }
@@ -58,6 +64,15 @@ export function agentConfigRoot(
       return join(homes.codexDir, 'skills')
     case 'codex-prompt':
       return join(homes.codexDir, 'prompts')
+    case 'claude-agent':
+      return join(homes.claudeDir, 'agents')
+    case 'claude-output-style':
+      return join(homes.claudeDir, 'output-styles')
+    // Memory sits in the config folder itself as <name>.md (CLAUDE.md, AGENTS.md).
+    case 'claude-memory':
+      return homes.claudeDir
+    case 'codex-memory':
+      return homes.codexDir
   }
 }
 

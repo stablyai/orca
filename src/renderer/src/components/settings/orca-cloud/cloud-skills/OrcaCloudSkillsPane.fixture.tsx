@@ -78,12 +78,14 @@ const EXCLUDED = new Set(['user:claude-skill:scratch'])
 const ON: CloudAgentConfigSyncPreferences = {
   autoSync: true,
   shareAcrossAgents: true,
-  excluded: []
+  excluded: [],
+  optedIn: []
 }
 const OFF: CloudAgentConfigSyncPreferences = {
   autoSync: false,
   shareAcrossAgents: false,
-  excluded: []
+  excluded: [],
+  optedIn: []
 }
 
 const ONE: OrcaCloudMcpWorkspace[] = [
@@ -248,4 +250,31 @@ export const emptyDisabled = defineFixture({
 export const emptyAll = defineFixture({
   width: 784,
   render: () => page(ON, ONE, { ...STATUS, rows: [], lastSyncedAt: null }, true, 'all')
+})
+
+/** Subagents, output styles and memory (SK1): memory is opt-in; an older sandbox can't take them. */
+const KIND_ROWS: AgentConfigSyncRow[] = [
+  row('claude-agent', 'reviewer'),
+  row('claude-agent', 'migrations', { scope: 'project' }),
+  row('claude-output-style', 'terse', { outcome: 'unchanged' }),
+  row('claude-memory', 'CLAUDE', { localRefs: 2 }),
+  row('codex-memory', 'AGENTS', { state: 'skipped', outcome: undefined, skipReason: 'turned-off' }),
+  row('claude-skill', 'deploy-preview'),
+  row('claude-agent', 'planner', {
+    state: 'skipped',
+    outcome: undefined,
+    skipReason: 'host-outdated'
+  })
+]
+export const newKinds = defineFixture({
+  width: 784,
+  render: () =>
+    page(
+      ON,
+      ONE,
+      { ...STATUS, rows: KIND_ROWS },
+      true,
+      'all',
+      new Set(['user:codex-memory:AGENTS'])
+    )
 })
