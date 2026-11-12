@@ -280,7 +280,7 @@ export function shouldBypassXtermKeyboardEvent(
     return (
       matchesClipboardBinding('Mod+C', event, 'darwin') ||
       matchesClipboardBinding('Mod+V', event, 'darwin') ||
-      isMacNativeMenuChord(event)
+      (!options.isIosWeb && isMacNativeMenuChord(event))
     )
   }
 

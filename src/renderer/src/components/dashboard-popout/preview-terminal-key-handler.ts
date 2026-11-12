@@ -2,6 +2,7 @@ import type { Terminal } from '@xterm/xterm'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { useAppStore } from '@/store'
+import { isCurrentPlatformIosWeb } from '@/app-shell/platform/ios-web-platform'
 import {
   getLayoutCharacterForCode,
   prefetchLayoutCharacters
@@ -32,8 +33,9 @@ export function installPreviewTerminalKeyHandler(args: {
   const { terminal } = args
   const platform = getShortcutPlatform()
   const consumedClipboardKeys = new Set<string>()
+  const hasNativeMenu = platform === 'darwin' && !isCurrentPlatformIosWeb()
   const isNativeMenuChord = (event: KeyboardEvent): boolean =>
-    platform === 'darwin' && isMacNativeMenuChord(event)
+    hasNativeMenu && isMacNativeMenuChord(event)
   const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
   const consumeEvent = (event: KeyboardEvent): false => {
     event.preventDefault()
@@ -101,7 +103,7 @@ export function installPreviewTerminalKeyHandler(args: {
         }
         return consumeEvent(event)
       }
-      return !isNativeMenuChord(event)
+      return true
     }
     nativeOnlyShortcutTracker.prepareKeyDown(event)
     const keybindings = useAppStore.getState().keybindings
@@ -160,7 +162,11 @@ export function installPreviewTerminalKeyHandler(args: {
     })
     if (!action) {
       // After the resolver: it is this surface's only shortcut layer, so user bindings win.
-      return !isNativeMenuChord(event)
+      if (isNativeMenuChord(event)) {
+        nativeOnlyShortcutTracker.armKeyDown(event)
+        return false
+      }
+      return true
     }
     switch (action.type) {
       case 'sendInput':
