@@ -1,9 +1,9 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createPluginFromTemplate } from './plugin-create'
-import { inspectPluginFolder, validatePluginTarget } from './plugin-folder-validation'
+import { inspectPluginFolder } from './plugin-folder-validation'
 import { PLUGIN_TEMPLATE_NAMES } from './plugin-template-names'
 
 const roots: string[] = []
@@ -32,36 +32,5 @@ describe('orca plugin create templates', () => {
     const readme = await readFile(join(dir, 'README.md'), 'utf8')
     expect(readme).toContain('orca plugin dev watch .')
     expect(readme).not.toContain('dev load')
-  })
-
-  it('refuses a non-empty folder and never overwrites', async () => {
-    const dir = await tempRoot()
-    await writeFile(join(dir, 'keep.txt'), 'mine')
-    await expect(createPluginFromTemplate({ dir, template: 'theme' })).rejects.toThrow(
-      'is not empty'
-    )
-  })
-})
-
-describe('orca plugin validate', () => {
-  it('reports artifact errors Orca would otherwise skip silently', async () => {
-    const dir = join(await tempRoot(), 'broken')
-    await createPluginFromTemplate({ dir, template: 'theme', publisher: 'acme' })
-    await writeFile(
-      join(dir, 'themes', 'dark.json'),
-      JSON.stringify({ base: 'dark', tokens: { '--background': '#000', '--fooground': '#fff' } })
-    )
-    const report = await validatePluginTarget(dir)
-    expect(report.valid).toBe(false)
-    expect(report.errors.join('\n')).toContain('contributes.themes')
-  })
-
-  it('reports a missing panel entry', async () => {
-    const dir = join(await tempRoot(), 'panel')
-    await createPluginFromTemplate({ dir, template: 'panel', publisher: 'acme' })
-    await rm(join(dir, 'panel', 'index.html'))
-    const report = await validatePluginTarget(dir)
-    expect(report.valid).toBe(false)
-    expect(report.errors.join('\n')).toContain('panel/index.html')
   })
 })

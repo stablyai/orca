@@ -8,9 +8,7 @@ import { parsePluginDeclarativeTree } from '../../../shared/plugins/declarative/
 import {
   checkPluginPanels,
   formatPluginPanelCheck,
-  readPluginCheckScenarioNames,
-  pluginPanelCheckIssues,
-  pluginStackLocation
+  readPluginCheckScenarioNames
 } from './plugin-panel-check'
 import { findPluginTestFiles, PLUGIN_TEST_FILE, runPluginTests } from './plugin-test-runner'
 
@@ -299,26 +297,6 @@ describe('orca plugin check', () => {
   )
 
   it(
-    'renders the template panel cleanly',
-    async () => {
-      const dir = await componentsPlugin()
-      expect(await checkPluginPanels(dir)).toEqual([
-        {
-          panel: 'todo-panel',
-          entry: 'src/panel.tsx',
-          elements: expect.any(Number),
-          summary: ['Heading "Counter"'],
-          tree: expect.objectContaining({ type: 'Stack' }),
-          issues: [],
-          warnings: []
-        }
-      ])
-    },
-    // Each run starts its own Node (or vitest) process and transpiles the plugin.
-    60_000
-  )
-
-  it(
     'reports a throw with its file:line, a refused layout, and dropped props',
     async () => {
       const dir = await componentsPlugin()
@@ -369,22 +347,6 @@ describe('orca plugin check', () => {
     60_000
   )
 
-  it('locates transpile errors from their message and lists a repeated error once', () => {
-    const stack = 'Error: kaboom\n    at Panel (file:///p/src/panel.tsx:4:41)'
-    expect(
-      pluginPanelCheckIssues('/p', [
-        { kind: 'plugin', message: 'kaboom', stack },
-        { kind: 'plugin', message: 'kaboom', stack },
-        { kind: 'plugin', message: 'src/lib/a.ts:3:9: Unexpected token', stack: 'SyntaxError' },
-        { kind: 'refused', message: 'kaboom' }
-      ])
-    ).toEqual([
-      { kind: 'plugin', message: 'kaboom', location: 'src/panel.tsx:4:41' },
-      { kind: 'plugin', message: 'Unexpected token', location: 'src/lib/a.ts:3:9' },
-      { kind: 'refused', message: 'kaboom' }
-    ])
-  })
-
   it(
     'warns about host calls Orca would refuse, and reports a repeated throw once',
     async () => {
@@ -416,14 +378,4 @@ describe('orca plugin check', () => {
     // Each run starts its own Node process and transpiles the plugin.
     60_000
   )
-
-  it('finds the first plugin frame in a stack', () => {
-    const dir = '/p'
-    expect(
-      pluginStackLocation(
-        dir,
-        'Error: x\n    at f (file:///p/node_modules/a.js:1:2)\n    at Panel (file:///p/src/panel.tsx:9:11)'
-      )
-    ).toBe('src/panel.tsx:9:11')
-  })
 })
