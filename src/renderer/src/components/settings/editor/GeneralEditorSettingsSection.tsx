@@ -17,6 +17,7 @@ import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { MarkdownDefaultViewSetting } from './MarkdownDefaultViewSetting'
 import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
+import { EditorJsonSchemasSetting } from './EditorJsonSchemasSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import { EditorFormatOnSaveSetting } from './EditorFormatOnSaveSetting'
 import { EditorInsertFinalNewlineSetting } from './EditorInsertFinalNewlineSetting'
@@ -160,6 +161,7 @@ export function GeneralEditorSettingsSection({
         />
         <EditorTypographySettings settings={settings} updateSettings={updateSettings} />
         <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
+        <EditorJsonSchemasSetting settings={settings} updateSettings={updateSettings} />
         <SearchableSetting
           id={GENERAL_SETTING_ANCHORS.minimap}
           title={t('auto.components.settings.GeneralEditorSettingsSection.6690b1ffb9', 'Minimap')}

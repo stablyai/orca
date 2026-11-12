@@ -86,6 +86,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   editorMinimapEnabled: boolean
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
+  editorRemoteJsonSchemas?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** View newly opened Markdown files start in (see markdown-default-view-mode.ts); absent = Rich. */

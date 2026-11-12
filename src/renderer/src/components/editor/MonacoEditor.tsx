@@ -36,6 +36,7 @@ import {
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 import { useEditorModelRekeyCarry } from './model-lifetime/identity/editor-model-rekey-carry'
+import { JsonSchemaProblems } from './JsonSchemaProblems'
 
 type MonacoEditorProps = {
   fileId: string
@@ -335,6 +336,7 @@ export default function MonacoEditor({
       />
 
       {toastNode}
+      {language === 'json' && <JsonSchemaProblems editor={mountedEditor} />}
       <MonacoGutterContextMenu
         open={gutterMenuOpen}
         onOpenChange={setGutterMenuOpen}
