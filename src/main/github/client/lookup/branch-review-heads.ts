@@ -1,13 +1,15 @@
 import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
-import { getGitHubApiRepositoryForRemoteUrl } from '../../repositories/github-api-repository-remote-probe'
+import {
+  getGitHubApiRepositoryForRemoteUrl,
+  getGitHubApiRepositoryForRemote
+} from '../../repositories/github-api-repository-remote-probe'
 import type { HostedReviewLocalGitOptions } from './../github-exec-scope'
 import { getReviewBranchSource, getTrackedUpstreamBranch } from './tracked-upstream-branch'
 import {
   shouldRetryTrackedUpstreamBranch,
   type TrackedUpstreamBranch
 } from './tracked-upstream-cache'
-import { getGitHubApiRepositoryForRemote } from '../../repositories/github-api-repository-remote-probe'
 
 export type BranchHead = { branch: TrackedUpstreamBranch; headRepo: OwnerRepo }
 
