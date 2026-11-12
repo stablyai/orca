@@ -51,6 +51,11 @@ export function observeTerminalStartupPasteOutput(
   )
 }
 
+// A restart reuses the pane's terminal object; its new shell starts without bracketed paste.
+export function resetTerminalStartupPasteWindow(terminal: StartupPasteTerminal): void {
+  startupPasteStateByTerminal.delete(terminal)
+}
+
 export function isTerminalStartingForPaste(
   terminal: StartupPasteTerminal,
   nowMs: number = Date.now()

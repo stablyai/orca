@@ -4,6 +4,7 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { connectPanePty } from '../pty-connection/connect-pane-pty'
 import { releasePaneTransportForRestart } from './pane-restart-transport-handoff'
 import { clearPaneTerminalError } from '../errors/terminal-error-accumulation'
+import { resetTerminalStartupPasteWindow } from '../input/paste/terminal-paste-startup-window'
 import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 
@@ -100,6 +101,7 @@ export function usePaneProcessRestart({
       setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
       setTerminalError(null)
       setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
+      resetTerminalStartupPasteWindow(pane.terminal)
       const newPaneBinding = connectPanePty(pane, manager, {
         tabId,
         worktreeId,

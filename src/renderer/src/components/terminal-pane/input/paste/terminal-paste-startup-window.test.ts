@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   isTerminalStartingForPaste,
-  observeTerminalStartupPasteOutput
+  observeTerminalStartupPasteOutput,
+  resetTerminalStartupPasteWindow
 } from './terminal-paste-startup-window'
 
 describe('terminal startup paste window', () => {
@@ -20,5 +21,14 @@ describe('terminal startup paste window', () => {
 
     expect(isTerminalStartingForPaste(terminal, 20_001)).toBe(true)
     expect(isTerminalStartingForPaste(terminal, 31_000)).toBe(false)
+  })
+
+  it('gives a restarted shell in the same terminal a fresh window', () => {
+    const terminal = { modes: { bracketedPasteMode: false } }
+    observeTerminalStartupPasteOutput(terminal, '\u001b[?2004h$ ', 0)
+    resetTerminalStartupPasteWindow(terminal)
+    observeTerminalStartupPasteOutput(terminal, 'loading profile', 60_000)
+
+    expect(isTerminalStartingForPaste(terminal, 60_001)).toBe(true)
   })
 })
