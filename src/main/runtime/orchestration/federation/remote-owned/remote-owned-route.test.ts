@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WorkerStartCardModule from '../../workers/launch/worker-start-card'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION,
@@ -22,6 +23,12 @@ import type {
   OrchestrationEnvironmentTransport,
   OrchestrationWorkerServer
 } from '../environment-transport'
+
+const recordStart = vi.hoisted(() => vi.fn())
+vi.mock('../../workers/launch/worker-start-card', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorkerStartCardModule>()),
+  prepareWorkerStartCard: () => recordStart
+}))
 
 const COORDINATOR_PANE = 'tab_coord:11111111-1111-4111-8111-111111111111'
 const OTHER_PANE = 'tab_other:22222222-2222-4222-8222-222222222222'
@@ -105,6 +112,7 @@ describe('commands about a worker a paired server owns', () => {
   })
 
   beforeEach(() => {
+    recordStart.mockClear()
     server = { ...DEV_B }
     sent = []
     answers = {}
@@ -173,6 +181,34 @@ describe('commands about a worker a paired server owns', () => {
       dispatchId: String(receipt.dispatchId)
     }
   }
+
+  it("shows the started worker's agent in the caller's chat only once the server readied it", async () => {
+    answers['orchestration.workerStart'] = [
+      { result: { dispatchId: 'ctx_b1', run: { id: 'run_on_b' }, agent: 'codex', state: 'ready' } },
+      { result: { dispatchId: 'ctx_b2', run: { id: 'run_on_b' }, agent: 'codex', state: 'failed' } }
+    ]
+    for (const [spec, requestId] of [
+      ['ready', REQUEST],
+      ['failed', 'a3f1e9d2-5b6c-4d7e-8f90-1a2b3c4d5e6f']
+    ]) {
+      await call(
+        'orchestration.workerStart',
+        { from: 'term_coord', on: 'devB', spec, worktree: 'new-top-level' },
+        { requestId }
+      )
+    }
+
+    expect(recordStart.mock.calls).toEqual([
+      [
+        {
+          dispatchId: 'ctx_b1',
+          workerAddress: 'dispatch:ctx_b1',
+          task: 'ready',
+          agent: 'codex'
+        }
+      ]
+    ])
+  })
 
   it('fails the Task when the server refuses the start, and keeps it fenced when the answer is lost', async () => {
     answers['orchestration.workerStart'] = [
