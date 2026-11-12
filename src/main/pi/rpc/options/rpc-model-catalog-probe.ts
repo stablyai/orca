@@ -1,7 +1,7 @@
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentCommandSettings
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { homedir } from 'node:os'
 import { z } from 'zod'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'

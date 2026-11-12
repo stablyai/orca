@@ -5,8 +5,8 @@ import {
   readNativeChatTranscriptTailFile,
   type NativeChatLineDecoder
 } from '../../../../native-chat/transcript-tail-reader'
-import { TAIL_CHUNK_BYTES } from '../../../../native-chat/transcript-tail-boundary'
-import { transcriptFallbackId } from '../../../../native-chat/transcript-fallback-id'
+import { TAIL_CHUNK_BYTES } from '../../../../native-chat/transcript-watching/transcript-tail-boundary'
+import { transcriptFallbackId } from '../../../../native-chat/transcript-streaming/transcript-fallback-id'
 import {
   localTranscriptOffsetStartsInsideRecord,
   readLocalTranscriptHandleBoundaryCheckpoint,
