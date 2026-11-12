@@ -99,6 +99,38 @@ describe('cloudRunningStrip (RA-11)', () => {
     expect(strip(accounts({ state: 'active' }), RUNNING, 3_000, 'tab:d')).toBeNull()
   })
 
+  it('a structured chat (no turnEndedAt) clears after a clean turn by its done-since time; a pane does not', () => {
+    const chat = (entry: Parameters<typeof cloudRunningStrip>[0]['entry'], paneKey: string) =>
+      cloudRunningStrip({
+        paneKey,
+        entry,
+        accounts: accounts({ state: 'active' }),
+        held: false,
+        now: 2_000,
+        usesAccount: true,
+        revision: 0,
+        turnEndedFallback: true
+      })
+    strip(accounts({ state: 'revoked' }), RUNNING, 1_000, 'chat:a')
+    expect(chat(RUNNING, 'chat:a')?.phase).toBe('renewed')
+    // Done since before the renewal: that turn is the one that failed, not a recovery.
+    expect(chat({ ...RUNNING, state: 'done', stateStartedAt: 1_500 }, 'chat:a')?.phase).toBe(
+      'renewed'
+    )
+    expect(chat({ ...RUNNING, state: 'done', stateStartedAt: 3_000 }, 'chat:a')).toBeNull()
+    // A terminal pane keeps needing turnEndedAt.
+    strip(accounts({ state: 'revoked' }), RUNNING, 1_000, 'tab:e')
+    expect(strip(accounts({ state: 'active' }), RUNNING, 2_000, 'tab:e')?.phase).toBe('renewed')
+    expect(
+      strip(
+        accounts({ state: 'active' }),
+        { ...RUNNING, state: 'done', stateStartedAt: 3_000 },
+        2_000,
+        'tab:e'
+      )?.phase
+    ).toBe('renewed')
+  })
+
   it('shows nothing new under the kill switch, for a held launch, or without a running account agent', () => {
     expect(
       strip(

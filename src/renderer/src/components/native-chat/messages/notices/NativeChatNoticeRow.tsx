@@ -1,4 +1,8 @@
 import {
+  cloudChatSignInContent,
+  useCloudChatHost
+} from '../../../agent-sign-in-strip/cloud-chat-sign-in-notice'
+import {
   CLAUDE_MODEL_FALLBACK_COPY,
   claudeModelFallbackLabels
 } from '../../../../../../shared/native-chat/claude-model-fallback'
@@ -87,6 +91,7 @@ export function NativeChatNoticeRow({
   const t = useTranslate()
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
+  const cloudHost = useCloudChatHost()
   const openForkSource = useContext(NativeChatForkedFromContext)
 
   if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
@@ -234,6 +239,7 @@ export function NativeChatNoticeRow({
     failure?.account,
     t
   )
+  const cloudSignIn = cloudChatSignInContent(cloudHost, failure?.kind, agentName, t)
   const usageLimitContinue =
     block.usageLimitTurnItemId !== undefined &&
     block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
@@ -314,7 +320,7 @@ export function NativeChatNoticeRow({
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
         <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-          {antigravitySignInContent ?? text}
+          {cloudSignIn ?? antigravitySignInContent ?? text}
         </p>
         {continueOffered ? (
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
@@ -330,7 +336,7 @@ export function NativeChatNoticeRow({
       {usageLimitContinue && orcaStopView.usageLimitAutoContinue ? (
         <NativeChatUsageLimitAutoContinue state={orcaStopView.usageLimitAutoContinue} />
       ) : null}
-      <NativeChatSetupButton failureKind={block.failure?.kind} />
+      {cloudSignIn ? null : <NativeChatSetupButton failureKind={block.failure?.kind} />}
       {block.providerFrame || detail ? (
         <ProviderFrameRow
           block={block}

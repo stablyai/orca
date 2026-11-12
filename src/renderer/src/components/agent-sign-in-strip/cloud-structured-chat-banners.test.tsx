@@ -39,6 +39,7 @@ vi.mock('@/lib/agent-sign-in/agent-sign-in-gate-store', () => ({
   useAgentSignInGate: () => null
 }))
 vi.mock('@/lib/orca-cloud/orca-cloud-agent-accounts-store', () => ({
+  orcaCloudAgentAccountsLoadedAt: () => 0,
   useOrcaCloudAgentAccounts: () => ({
     load: { kind: 'loading' },
     keyKinds: {},
@@ -73,7 +74,7 @@ const { CloudStructuredChatBanners } = await import('./CloudStructuredChatBanner
 const mount = () =>
   render(
     <TooltipProvider>
-      <CloudStructuredChatBanners tabId={TAB_ID} paneKey={PANE_KEY} />
+      <CloudStructuredChatBanners tabId={TAB_ID} paneKey={PANE_KEY} statusKey={PANE_KEY} />
     </TooltipProvider>
   )
 

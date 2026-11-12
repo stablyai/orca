@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import { CloudStructuredChatBanners } from '../../../agent-sign-in-strip/CloudStructuredChatBanners'
 import { structuredCloudHoldKey } from '@/lib/orca-cloud/cloud-structured-launch-hold'
+import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { MessageSquarePlus, SquareSplitVertical } from 'lucide-react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
@@ -150,6 +151,7 @@ export function nativeChatPaneHeader(
     <CloudStructuredChatBanners
       tabId={view.tabId}
       paneKey={structuredCloudHoldKey(view.sessionId)}
+      statusKey={structuredAgentSessionPaneKey(view.tabId, view.sessionId)}
     />
   )
   const header =
