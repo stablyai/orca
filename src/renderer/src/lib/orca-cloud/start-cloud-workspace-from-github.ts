@@ -4,12 +4,16 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { openCloudWorkspace } from '@/components/cloud-workspaces/open-cloud-workspace'
+import {
+  firstWorktreeOnHost,
+  openCloudWorkspace
+} from '@/components/cloud-workspaces/open-cloud-workspace'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { resolveDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-context'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export type StartFromGitHubRequest = {
   repoUrl: string
@@ -56,8 +60,16 @@ export async function startCloudWorkspaceFromGitHub(
     return true
   }
   toast.dismiss(toastId)
-  const worktreeId = opened.worktreeId
-  if (!worktreeId || !request.prompt.trim()) {
+  // PAIRED-HELD-STRIPS: the chosen agent starts even with no prompt (its launch is what shows
+  // "isn't set up · Set up once" when it can't run yet), and a repo still syncing is waited for
+  // rather than dropping the launch.
+  if (!request.prompt.trim() && !isTuiAgent(request.agent)) {
+    return true
+  }
+  const worktreeId =
+    opened.worktreeId ?? (opened.hostId ? await waitForFirstWorktree(opened.hostId) : null)
+  if (!worktreeId) {
+    agentNotStartedNotice(request, opened.hostId)
     return true
   }
   const agent = isTuiAgent(request.agent)
@@ -69,10 +81,75 @@ export async function startCloudWorkspaceFromGitHub(
       ...captureAgentTabLaunchContext(worktreeId),
       agent,
       worktreeId,
-      prompt: request.prompt,
-      promptDelivery: 'submit-after-ready',
+      ...(request.prompt.trim()
+        ? { prompt: request.prompt, promptDelivery: 'submit-after-ready' as const }
+        : {}),
       launchSource: 'unknown'
     })
   }
   return true
 }
+
+/** How long a freshly paired host may take to list its first worktree (the repo is cloning). */
+const FIRST_WORKTREE_WAIT_MS = 90_000
+
+function waitForFirstWorktree(
+  hostId: string,
+  waitMs: number = FIRST_WORKTREE_WAIT_MS
+): Promise<string | null> {
+  const found = firstWorktreeOnHost(hostId)
+  if (found) {
+    return Promise.resolve(found)
+  }
+  return new Promise((resolve) => {
+    const finish = (worktreeId: string | null): void => {
+      unsubscribe()
+      clearTimeout(timer)
+      resolve(worktreeId)
+    }
+    const unsubscribe = useAppStore.subscribe(() => {
+      const worktreeId = firstWorktreeOnHost(hostId)
+      if (worktreeId) {
+        finish(worktreeId)
+      }
+    })
+    const timer = setTimeout(() => finish(null), waitMs)
+  })
+}
+
+/**
+ * Never silent: the workspace opened, but its agent couldn't start because no worktree was listed
+ * in time. Not over Settings (N-03; with no worktree there is no workspace to scope it to), and gone
+ * once the workspace is ready after all.
+ */
+function agentNotStartedNotice(request: StartFromGitHubRequest, hostId: string | undefined): void {
+  console.info(
+    `[orca-cloud] ${request.fullName}: no worktree listed in time; the agent was not started`
+  )
+  if (useAppStore.getState().activeView === 'settings') {
+    return
+  }
+  const toastId = `cloud-agent-not-started:${hostId ?? request.fullName}`
+  toast(
+    translate(
+      'components.newWorkspace.cloudOnly.agentNotStarted',
+      '{{agent}} didn’t start because the workspace was still getting ready. Start it from the workspace.',
+      {
+        agent:
+          tuiAgentDisplayName(request.agent ?? '') ??
+          translate('components.newWorkspace.cloudOnly.theAgent', 'The agent')
+      }
+    ),
+    { id: toastId }
+  )
+  if (hostId) {
+    void waitForFirstWorktree(hostId, NOTICE_DISMISS_WAIT_MS).then((worktreeId) => {
+      if (worktreeId) {
+        toast.dismiss(toastId)
+      }
+    })
+  }
+}
+
+/** How long the "didn't start" notice watches for the workspace becoming ready after all. */
+const NOTICE_DISMISS_WAIT_MS = 10 * 60_000

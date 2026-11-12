@@ -22,7 +22,7 @@ import { describeError, isUnknownServerFailure } from './cloud-workspace-errors'
 
 /** On success, the worktree that was revealed (null when its projects are still syncing). */
 export type OpenOutcome =
-  | { ok: true; worktreeId: string | null }
+  | { ok: true; worktreeId: string | null; hostId?: string }
   /** `unknownServerError`: the wake failed on the server for no known reason (shared copy). */
   | { ok: false; message: string; unknownServerError?: boolean }
 
@@ -46,7 +46,7 @@ export function cloudWorkspaceTitle(
     : (repoName ?? w.workspaceId)
 }
 
-function firstWorktreeOnHost(hostId: string): string | null {
+export function firstWorktreeOnHost(hostId: string): string | null {
   const state = useAppStore.getState()
   for (const [repoId, worktrees] of Object.entries(selectWorktreesByRepo(state))) {
     const repo = state.repos.find((r) => r.id === repoId)
@@ -106,7 +106,7 @@ async function connectAndReveal(environmentId: string, name: string): Promise<Op
       )
     )
   }
-  return { ok: true, worktreeId }
+  return { ok: true, worktreeId, hostId }
 }
 
 /** Drops this device's previous pairing so re-pairing does not leave a dead server and grant. */
