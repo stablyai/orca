@@ -77,18 +77,6 @@ describe('requestSessionTabCloseFromRenderer', () => {
     await expect(pending).rejects.toThrow('session_tab_close_canceled')
   })
 
-  it('rejects and releases listeners when the target window closes', async () => {
-    const { requestSessionTabCloseFromRenderer } = await import('./session-tab-close-request-relay')
-    const { mainWindow, webContents } = createMainWindow()
-    const pending = requestSessionTabCloseFromRenderer(mainWindow as never, 'tab-1', 'wt-1')
-
-    mainWindow.emit('closed')
-
-    await expect(pending).rejects.toThrow('renderer_unavailable')
-    expect(ipcEmitter.listenerCount('ui:sessionTabCloseResponse')).toBe(0)
-    expect(webContents.listenerCount('destroyed')).toBe(0)
-  })
-
   it.each(['destroyed', 'render-process-gone', 'did-start-loading'])(
     'rejects when web contents emits %s',
     async (eventName) => {

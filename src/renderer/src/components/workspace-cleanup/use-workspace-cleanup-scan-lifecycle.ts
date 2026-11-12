@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { formatWorkspaceCleanupReadyToast } from './workspace-cleanup-scan-notice'
-import { isWorkspaceCleanupScanSupersededError } from '@/store/slices/workspace-cleanup-broad-scan-registry'
+import { isWorkspaceCleanupScanSupersededError } from '@/store/slices/workspace-cleanup/workspace-cleanup-broad-scan-registry'
 
 export type WorkspaceCleanupScanLifecycle = {
   startWorkspaceCleanupScan: (options?: { notifyWhenReady?: boolean }) => void

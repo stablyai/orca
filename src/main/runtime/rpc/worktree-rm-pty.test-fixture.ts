@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
-import type { IPtyProvider, PtyProcessInfo } from '../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { PtyProcessInfo } from '../../providers/pty-process-info'
 
 /** Only the provider's external effects are controlled; runtime teardown selects the sessions. */
 export function removalPtyProvider(initial: PtyProcessInfo[]) {

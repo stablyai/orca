@@ -4,7 +4,7 @@ import {
   guardWslUncPathAccess,
   WslDistroStoppedError,
   WslDistroUnverifiableError
-} from '../wsl/wsl-unc-access-gate'
+} from '../wsl/filesystem/wsl-unc-access-gate'
 
 /**
  * Resolves a PR start point unless its repo's WSL distro is stopped (E9): a background push-target

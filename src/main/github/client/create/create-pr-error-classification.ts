@@ -1,5 +1,5 @@
-import type { CreateHostedReviewResult } from '../../../../shared/hosted-review'
-import { extractExecError } from '../../../git/exec-error'
+import type { CreateHostedReviewResult } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
 export function classifyCreatePRError(error: unknown): CreateHostedReviewResult {
   const { stderr, stdout } = extractExecError(error)
   const message = `${stderr}\n${stdout}`.trim()

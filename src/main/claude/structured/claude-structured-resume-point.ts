@@ -2,8 +2,8 @@ import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
 } from './claude-structured-session-state'
-import { settleClaudeTurnEndWaiters } from '../claude-request-end-wait'
-import { isRootClaudeFrame } from '../claude-turn-opening'
+import { settleClaudeTurnEndWaiters } from './turns/claude-request-end-wait'
+import { isRootClaudeFrame } from './turns/claude-turn-opening'
 
 export function claudeTurnResumePointWriter(
   sessionId: string,
@@ -90,6 +90,20 @@ function persistClaudeTurnResumePoint(
       })
   }
   session.resumePointWrite = write
+}
+
+/** A dispatch or a turn end since launch; without either, acquisition's saved cursor is still current. */
+export function claudeSessionHasTurnWork(
+  session: Pick<
+    ClaudeSession,
+    'dispatchSequence' | 'resumePointWrite' | 'turnEndLeafUuid' | 'initialization'
+  >
+): boolean {
+  return (
+    session.dispatchSequence !== 0 ||
+    session.resumePointWrite !== undefined ||
+    session.turnEndLeafUuid !== session.initialization.history.leafUuid
+  )
 }
 
 /** Drain turn-end writes before close or exit persists the final cursor. */

@@ -2,9 +2,9 @@
 
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { bumpPtyBindingGeneration } from '../loading-store/pty-binding-generations'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { bumpPtyBindingGeneration } from '../loading-store/terminal-bindings/pty-binding-generations'
 import type {
   DurableProfileStateMutation,
   StoreRuntimeState

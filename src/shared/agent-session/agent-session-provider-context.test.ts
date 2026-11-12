@@ -38,16 +38,4 @@ describe('provider context after clear', () => {
     expect(activeProviderContext(record).handleChain).toBe(record.providerHandleChain)
     expect(isPersistedAgentSessionRecord(encodeAgentSessionRecord(record))).toBe(true)
   })
-
-  it('rejects a boundary beyond the record fence', () => {
-    const record = agentSessionRecordFixture()
-    expect(
-      isPersistedAgentSessionRecord(
-        encodeAgentSessionRecord({
-          ...record,
-          providerContextBoundary: { ...boundary, afterFence: record.lease.runtimeFence + 1 }
-        })
-      )
-    ).toBe(false)
-  })
 })

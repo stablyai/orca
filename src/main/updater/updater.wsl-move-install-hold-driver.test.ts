@@ -15,11 +15,11 @@ import type { WslMoveResult } from '../../shared/wsl-move/wsl-move-driver-types'
 import { loadUpdaterModule, warmUpdaterModule } from './testing/updater-test-module-loader'
 import { updaterMainWindow } from './testing/updater-test-main-window'
 import type * as RigModule from '../persistence/__fixtures__/wsl-mover/wsl-move-kill-rig'
-import type * as RewriteStores from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
+import type * as RewriteStores from '../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite-stores'
 import type * as Driver from '../persistence/moving-wsl-projects/wsl-move-driver'
-import type * as RunningMoves from '../persistence/moving-wsl-projects/wsl-move-running-moves'
-import type * as ReleaseHere from '../ipc/wsl-move-release-here'
-import type * as Retention from '../persistence/moving-wsl-projects/wsl-move-retention'
+import type * as RunningMoves from '../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
+import type * as ReleaseHere from '../ipc/wsl/wsl-move-release-here'
+import type * as Retention from '../persistence/moving-wsl-projects/cutover-recovery/wsl-move-retention'
 
 const {
   nativeUpdaterMock,
@@ -97,11 +97,12 @@ async function loadMover(): Promise<Mover> {
     rig: fixture.createWslMoveKillRig(),
     fixture,
     driver: await import('../persistence/moving-wsl-projects/wsl-move-driver'),
-    moves: await import('../persistence/moving-wsl-projects/wsl-move-running-moves'),
+    moves: await import('../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'),
     rewriteStores:
-      await import('../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'),
-    releaseHere: await import('../ipc/wsl-move-release-here'),
-    retention: await import('../persistence/moving-wsl-projects/wsl-move-retention')
+      await import('../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite-stores'),
+    releaseHere: await import('../ipc/wsl/wsl-move-release-here'),
+    retention:
+      await import('../persistence/moving-wsl-projects/cutover-recovery/wsl-move-retention')
   }
   mover = loaded
   return loaded

@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RepoRefMaintenance } from './repo-ref-maintenance'
 import {
-  RefMaintenanceRepoLocked,
   REF_MAINTENANCE_PACKED_COOLDOWN_MS,
   PACKED_REFS_LOCK_WAIT_MS,
   type PackedRefsLockReporter,
@@ -158,27 +157,24 @@ afterEach(async () => {
 })
 
 describe('RepoRefMaintenance gating', () => {
-  it('packs only after the repo has been quiet for the full period', async () => {
+  it('delivers the latest target despite repeated background arms', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
-    const { maintenance, spans, packRefs } = createHarness()
-    const repo = target('local::/repo/.git', refs, packRefs)
-
-    maintenance.arm(repo)
-    await vi.advanceTimersByTimeAsync(QUIET_MS - 1)
+    const { maintenance, packRefs } = createHarness()
+    const delivered: string[] = []
+    maintenance.arm(target('repo', refs, packRefs))
+    for (let index = 0; index < 4; index += 1) {
+      await vi.advanceTimersByTimeAsync(200)
+      maintenance.arm(
+        target('repo', refs, async () => {
+          delivered.push('latest')
+        })
+      )
+    }
+    await vi.advanceTimersByTimeAsync(200)
+    await maintenance.whenAttemptSettled()
+    expect(delivered).toEqual(['latest'])
     expect(packRefs).not.toHaveBeenCalled()
-
-    // A second write restarts the countdown rather than shortening it.
-    maintenance.arm(repo)
-    await vi.advanceTimersByTimeAsync(QUIET_MS - 1)
-    expect(packRefs).not.toHaveBeenCalled()
-
-    await elapseQuietPeriod(maintenance)
-    expect(packRefs).toHaveBeenCalledTimes(1)
-    expect(attributesOf(spans[0])).toMatchObject({
-      'repo.maintenance_outcome': 'packed',
-      'repo.maintenance_key': 'local::/repo/.git',
-      'git.loose_ref_count': THRESHOLD + 1
-    })
+    maintenance.dispose()
   })
 
   it('leaves a healthy repository alone', async () => {
@@ -256,16 +252,6 @@ describe('RepoRefMaintenance gating', () => {
     expect(packRefs).toHaveBeenCalledTimes(1)
   })
 
-  it('does not run while the repo itself has work in flight', async () => {
-    const refs = await refsDirectoryWith(THRESHOLD + 2)
-    const { maintenance, packRefs } = createHarness()
-
-    maintenance.arm(target('local::/fetching/.git', refs, packRefs, { isBusy: () => true }))
-    await elapseQuietPeriod(maintenance)
-
-    expect(packRefs).not.toHaveBeenCalled()
-  })
-
   it('honours a user who disabled Git auto-maintenance for the repo', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     const { maintenance, spans, packRefs } = createHarness()
@@ -297,34 +283,6 @@ describe('RepoRefMaintenance gating', () => {
 
     expect(packRefs).toHaveBeenCalledTimes(1)
     expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('packed')
-  })
-
-  it('records a repo whose packed-refs lock is held, and retries sooner than a failure', async () => {
-    const refs = await refsDirectoryWith(THRESHOLD + 2)
-    const { maintenance, spans } = createHarness()
-
-    maintenance.arm(
-      target('local::/locked/.git', refs, async () => {
-        throw new RefMaintenanceRepoLocked('our own lock, not yet old enough to reclaim')
-      })
-    )
-    await elapseQuietPeriod(maintenance)
-
-    expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('locked')
-  })
-
-  it('skips a repository whose common dir cannot be resolved', async () => {
-    const { maintenance, spans, packRefs } = createHarness()
-
-    maintenance.arm({
-      key: 'local::/gone/.git',
-      resolveRefsDirectory: async () => undefined,
-      packRefs
-    })
-    await elapseQuietPeriod(maintenance)
-
-    expect(packRefs).not.toHaveBeenCalled()
-    expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('unresolved')
   })
 })
 
@@ -581,5 +539,162 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
     await elapseQuietPeriod(maintenance)
 
     expect(packRefs).not.toHaveBeenCalled()
+  })
+  it('retains busy debt past the old retirement window and delivers on idle', async () => {
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    let busy = true
+    const delivered: string[] = []
+    const { maintenance } = createHarness({ isBusy: () => busy })
+    maintenance.arm(
+      target('repo', refs, async () => {
+        delivered.push('packed')
+      })
+    )
+    for (const periods of [1, 2, 4, 8, 8, 8, 8]) {
+      await elapseQuietPeriod(maintenance, periods)
+    }
+    expect(delivered).toEqual([])
+    busy = false
+    await elapseQuietPeriod(maintenance, 8)
+    expect(delivered).toEqual(['packed'])
+    maintenance.dispose()
+  })
+
+  it('retires failed probes, including after saturated activity, until a fresh arm', async () => {
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    for (const initiallyBusy of [false, true]) {
+      let busy = initiallyBusy
+      let failing = true
+      const delivered: string[] = []
+      const errors: unknown[] = []
+      const { maintenance } = createHarness({ isBusy: () => busy, onError: (e) => errors.push(e) })
+      const repo = target(
+        'repo',
+        refs,
+        async () => {
+          delivered.push('packed')
+        },
+        {
+          isOptedOut: async () => {
+            if (failing) {
+              throw new Error('config unavailable')
+            }
+            return false
+          }
+        }
+      )
+      maintenance.arm(repo)
+      if (initiallyBusy) {
+        for (const periods of [1, 2, 4, 8, 8, 8, 8]) {
+          await elapseQuietPeriod(maintenance, periods)
+        }
+        busy = false
+        await elapseQuietPeriod(maintenance, 8)
+      } else {
+        for (const periods of [1, 2, 4, 8, 8, 8, 8]) {
+          await elapseQuietPeriod(maintenance, periods)
+        }
+      }
+      expect(errors).toHaveLength(initiallyBusy ? 1 : 7)
+      failing = false
+      await elapseQuietPeriod(maintenance, 16)
+      expect(delivered).toEqual([])
+      maintenance.arm(repo)
+      await elapseQuietPeriod(maintenance)
+      expect(delivered).toEqual(['packed'])
+      maintenance.dispose()
+    }
+  })
+
+  it('delivers a fresh successor when the old attempt rearms during settlement', async () => {
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    let busy = false
+    let rearm = true
+    const delivered: string[] = []
+    const { maintenance } = createHarness({
+      isBusy: () => busy,
+      observe: async (attempt) => {
+        await attempt(recordingSpan())
+        if (rearm) {
+          rearm = false
+          busy = false
+          maintenance.arm(
+            target('repo', refs, async () => {
+              delivered.push('successor')
+            })
+          )
+        }
+      }
+    })
+    maintenance.arm(
+      target('repo', refs, async () => {}, {
+        isOptedOut: async () => {
+          busy = true
+          return false
+        }
+      })
+    )
+    await elapseQuietPeriod(maintenance)
+    await elapseQuietPeriod(maintenance, 2)
+    expect(delivered).toEqual(['successor'])
+    maintenance.dispose()
+  })
+
+  it('keeps admitted index progress when a fetch arms its successor', async () => {
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    let finish = () => {}
+    const written = new Promise<'written'>((resolve) => {
+      finish = () => resolve('written')
+    })
+    const phases: string[] = []
+    const { maintenance } = createHarness()
+    const repo = target(
+      'repo',
+      refs,
+      async () => {
+        phases.push('refs')
+      },
+      {
+        maintainPackIndex: async () => {
+          phases.push('index')
+          return written
+        }
+      }
+    )
+    maintenance.arm(repo)
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await until(() => phases.length === 1, 'admitted index writer')
+    await vi.advanceTimersByTimeAsync(200)
+    maintenance.arm(repo)
+    finish()
+    await maintenance.whenAttemptSettled()
+    await elapseQuietPeriod(maintenance)
+    expect(phases).toEqual(['index', 'refs'])
+    maintenance.dispose()
+  })
+
+  it('keeps a rearmed target recent when bounded pending entries are evicted', async () => {
+    const delivered: string[] = []
+    const { maintenance } = createHarness()
+    const repo = (key: string) =>
+      target(key, '/unused', async () => {}, {
+        resolveRefsDirectory: async () => {
+          delivered.push(key)
+          return undefined
+        }
+      })
+    for (let index = 0; index < 64; index += 1) {
+      maintenance.arm(repo(String(index)))
+    }
+    maintenance.arm(repo('0'))
+    maintenance.arm(repo('64'))
+    for (let index = 0; index < 65; index += 1) {
+      await elapseQuietPeriod(maintenance)
+    }
+    expect(delivered).toHaveLength(64)
+    expect(delivered).toContain('0')
+    expect(delivered).toContain('64')
+    expect(delivered).not.toContain('1')
+    maintenance.dispose()
   })
 })

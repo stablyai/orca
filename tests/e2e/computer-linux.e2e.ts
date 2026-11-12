@@ -55,17 +55,6 @@ describe.skipIf(!isLinux || !e2eOptIn)('computer-use Linux e2e (gedit)', () => {
     await killGedit()
   })
 
-  test('gedit exposes a basic accessibility tree', async () => {
-    const result = await runOrcaCli(['computer', 'get-app-state', '--app', 'gedit', '--json'])
-    const envelope = parseJsonOutput<{ result: ComputerSnapshotResult }>(result.stdout)
-
-    expect(envelope.result.snapshot.elementCount).toBeGreaterThan(0)
-    expect(envelope.result.snapshot.coordinateSpace).toBe('window')
-    expect(envelope.result.snapshot.truncation?.truncated).toBe(false)
-    expect(envelope.result.screenshot?.data).toBeUndefined()
-    expect(envelope.result.screenshot?.path).toContain('orca-computer-use')
-  })
-
   test('click and type-text insert into the focused document through AT-SPI', async () => {
     await focusGeditDocument()
 

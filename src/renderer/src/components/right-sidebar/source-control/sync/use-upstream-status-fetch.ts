@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { getConnectionId } from '@/lib/connection-context'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 
@@ -20,12 +20,13 @@ export function useSourceControlUpstreamStatusFetch({
   isFolder: boolean
   worktreePath: string | null
 }): void {
+  const scope = useSourceControlScope()
   useEffect(() => {
     // Avoid Git subprocesses while the sidebar is hidden.
     if (!activeWorktreeId || !worktreePath || isFolder || !isBranchVisible) {
       return
     }
-    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
     void fetchUpstreamStatus(
       activeWorktreeId,
       worktreePath,
@@ -34,6 +35,7 @@ export function useSourceControlUpstreamStatusFetch({
       { runtimeTarget: activeRepoTarget }
     )
   }, [
+    scope,
     activeRepoTarget,
     activeWorktree?.pushTarget,
     activeWorktreeId,

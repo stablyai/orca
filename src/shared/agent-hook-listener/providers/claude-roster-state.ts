@@ -1,19 +1,24 @@
+import {
+  AGENT_MODEL_MAX_LENGTH,
+  normalizeOptionalField
+} from '../../agent-status/contracts/agent-status-field-normalization'
+import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type {
-  AgentMainAgentStatus,
   AgentStatusState,
-  AgentSubagentSnapshot,
   AgentWorkingMode
-} from '../../agent-status-types'
-import { continueMainAgentStatus, mainAgentTurnInterrupted } from '../../agent-lead-status-fold'
+} from '../../agent-status/contracts/agent-status-types'
+import type { AgentSubagentSnapshot } from '../../agent-status/contracts/agent-status-subagent-snapshot'
+import {
+  continueMainAgentStatus,
+  mainAgentTurnInterrupted
+} from '../../agent-status/lifecycle/agent-lead-status-fold'
 import type { ClaudeSubagentRoster } from '../../claude-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
-import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
+import type { HookListenerState } from '../listener-state'
+import type { ClaudeLeadTurnState } from '../main-agent-turn-state'
 import { readString } from '../tool-input-preview'
+import { CLAUDE_NEW_SESSION_START_SOURCES } from './claude-session-start-sources'
 import { resolveClaudePaneStatus } from './claude-pane-hold-evidence'
-export {
-  resolveClaudePaneStatus,
-  type ClaudePaneStatusResolution
-} from './claude-pane-hold-evidence'
 
 /** Only attributable lead events may re-anchor ownership; unknown/child events void nothing. */
 const CLAUDE_SESSION_OWNER_EVENTS: ReadonlySet<string> = new Set([
@@ -47,9 +52,7 @@ export function voidClaimsOfReplacedClaudeSession(
   // Ignored compact/unknown SessionStart must not advance ownership or hide the next real replacement.
   if (
     eventName === 'SessionStart' &&
-    hookPayload['source'] !== 'startup' &&
-    hookPayload['source'] !== 'resume' &&
-    hookPayload['source'] !== 'clear'
+    !CLAUDE_NEW_SESSION_START_SOURCES.has(hookPayload['source'])
   ) {
     return
   }
@@ -108,6 +111,10 @@ export function updateClaudeRunningNonAgentTask(
   }
 }
 
+export function readClaudeLeadModel(hookPayload: Record<string, unknown>): string | undefined {
+  return normalizeOptionalField(hookPayload.model, AGENT_MODEL_MAX_LENGTH)
+}
+
 /** Keep same-state lead clocks continuous; explicit restored stash times take precedence. */
 export function setClaudeMainAgentTurnState(
   state: HookListenerState,
@@ -116,10 +123,13 @@ export function setClaudeMainAgentTurnState(
   now = Date.now()
 ): ClaudeLeadTurnState {
   const previous = state.claudeLeadStateByPaneKey.get(paneKey)
-  const { state: nextState, outcome, stateStartedAt, ...rest } = next
+  const { state: nextState, outcome, stateStartedAt, model, ...rest } = next
+  // Lead events that omit the model keep the last reported one.
+  const retainedModel = model || previous?.model
   const record: ClaudeLeadTurnState = {
     ...rest,
-    ...continueMainAgentStatus(previous, { state: nextState, outcome, stateStartedAt }, now)
+    ...continueMainAgentStatus(previous, { state: nextState, outcome, stateStartedAt }, now),
+    ...(retainedModel ? { model: retainedModel } : {})
   }
   state.claudeLeadStateByPaneKey.set(paneKey, record)
   return record

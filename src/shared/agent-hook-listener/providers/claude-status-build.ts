@@ -3,12 +3,12 @@ import {
   type AgentStatusState,
   type AgentWorkingMode,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
+} from '../../agent-status/contracts/agent-status-types'
 import { claudeRosterToSnapshots } from '../../claude-subagent-roster'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import type { HookListenerState } from '../listener-state'
-import { mainAgentTurnInterrupted } from '../../agent-lead-status-fold'
+import { mainAgentTurnInterrupted } from '../../agent-status/lifecycle/agent-lead-status-fold'
 import { claudeMainAgentStatusForPayload } from './claude-roster-state'
 
 export function buildClaudeStatusPayload(
@@ -44,6 +44,7 @@ export function buildClaudeStatusPayload(
       resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)
     }),
     agentType: 'claude',
+    model: mainAgentRecord?.model,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,

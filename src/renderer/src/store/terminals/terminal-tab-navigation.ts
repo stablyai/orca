@@ -1,7 +1,8 @@
-import { resolveActiveTabOwnerWorktreeId } from '../slices/active-tab-owner-worktree'
-import { getTerminalTabOwnerWorktreeId } from '../slices/terminal-tab-owner-index'
+import { resolveActiveTabOwnerWorktreeId } from './active-tab-owner-worktree'
+import { getTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import { ownsGlobalSelection } from '../global-selection-owner'
+import { ownsGlobalSelection } from '../workspaces/selection/global-selection-owner'
+import { replaceTabBuckets } from '../keyed-record-transitions'
 
 export function createTerminalTabNavigationActions(
   set: TerminalStoreSet,
@@ -26,7 +27,7 @@ export function createTerminalTabNavigationActions(
           ...missingTabs
         ].map((tab, i) => ({ ...tab, sortOrder: i }))
         return {
-          tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: reordered }
+          tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, [[worktreeId, reordered]])
         }
       })
     },
@@ -48,7 +49,7 @@ export function createTerminalTabNavigationActions(
         ].map((tab, i) => ({ ...tab, sortOrder: i }))
         return {
           tabBarOrderByWorktree: newTabBarOrder,
-          tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: updatedTabs }
+          tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, [[worktreeId, updatedTabs]])
         }
       })
     },

@@ -1,5 +1,5 @@
 import { parseExecutionHostId } from '../../../src/shared/execution-host'
-import { assertFileMutationOwnershipCapability } from '../../../src/shared/file-mutation-ownership'
+import { assertFileMutationOwnershipCapability } from '../../../src/shared/file-write/file-mutation-ownership'
 import type { SshConnectionState, SshMutationExpectation } from '../../../src/shared/ssh-types'
 import { translate } from '../i18n/mobile-i18n'
 import {

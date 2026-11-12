@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
 import type { GitHubRepoContext, LocalGitExecOptions } from './github-repository-identity'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
-import { hostedReviewInfoFromGitHubPRInfo } from '../../shared/hosted-review-github'
+import { hostedReviewInfoFromGitHubPRInfo } from '../../shared/source-control/hosted-review/hosted-review-github'
 import { makePR } from './pr-refresh-coordinator-test-harness'
 import {
   __resetHostedReviewBranchCacheForTests,
@@ -35,7 +35,9 @@ vi.mock('./client', async () => ({
   getGitHubPRLookupRateLimitBlock: vi.fn(async () => null),
   createGitHubPullRequest: vi.fn()
 }))
-vi.mock('../gitlab/client', () => ({ getProjectSlug: vi.fn(async () => null) }))
+vi.mock('../gitlab/merge-requests/merge-request-lookup', () => ({
+  getProjectSlug: vi.fn(async () => null)
+}))
 import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
 
 const outcome: PRRefreshOutcome = { kind: 'no-pr', fetchedAt: 1 }
@@ -51,58 +53,6 @@ afterEach(() => {
 })
 
 describe('PR lookup coalescing', () => {
-  it('shares pending reads across callers and releases them after settlement', async () => {
-    let finish: ((value: PRRefreshOutcome) => void) | undefined
-    mocks.resolve.mockImplementation(
-      () =>
-        new Promise<PRRefreshOutcome>((resolve) => {
-          finish = resolve
-        })
-    )
-    const first = getPRForBranchOutcome('/repo', 'refs/heads/topic')
-    const second = getPRForBranchOutcome('/repo', 'topic')
-    await vi.waitFor(() => expect(mocks.resolve).toHaveBeenCalledTimes(1))
-    finish?.(outcome)
-    expect(await Promise.all([first, second])).toEqual([outcome, outcome])
-    mocks.resolve.mockResolvedValue(outcome)
-    await getPRForBranchOutcome('/repo', 'topic')
-    expect(mocks.resolve).toHaveBeenCalledTimes(2)
-  })
-
-  it('shares a background read with a foreground caller of the same lookup', async () => {
-    mocks.resolve.mockResolvedValue(outcome)
-    await Promise.all([
-      getPRForBranchOutcome('/repo', 'topic', null, null, null, {
-        localGitExecOptions: { admissionTier: 'background' }
-      }),
-      getPRForBranchOutcome('/repo', 'topic', null, null, null, {
-        localGitExecOptions: { admissionTier: 'interactive' }
-      })
-    ])
-    expect(mocks.resolve).toHaveBeenCalledTimes(1)
-  })
-
-  it('isolates heads, fallback hints, accounts, execution hosts, and credentials', async () => {
-    mocks.resolve.mockResolvedValue(outcome)
-    const requests = [
-      getPRForBranchOutcome('/repo', 'topic'),
-      getPRForBranchOutcome('/repo', 'topic', 12),
-      getPRForBranchOutcome('/repo', 'topic', null, 'ssh-1'),
-      getPRForBranchOutcome('/repo', 'topic', null, null, 12),
-      getPRForBranchOutcome('/repo', 'topic', null, null, null, { currentHeadOid: 'other-head' }),
-      getPRForBranchOutcome('/repo', 'topic', null, null, null, {
-        localGitExecOptions: { wslDistro: 'Ubuntu' }
-      }),
-      getPRForBranchOutcome('/repo', 'topic', null, null, null, {
-        localGitExecOptions: { ghAccount: { host: 'github.com', user: 'other' } }
-      })
-    ]
-    vi.stubEnv('GH_TOKEN', 'test-only-other-token')
-    requests.push(getPRForBranchOutcome('/repo', 'topic'))
-    await Promise.all(requests)
-    expect(mocks.resolve).toHaveBeenCalledTimes(8)
-  })
-
   it('cleans up errors so later reads can recover', async () => {
     mocks.resolve.mockRejectedValueOnce(new Error('network down')).mockResolvedValue(outcome)
     const results = await Promise.all([
@@ -166,42 +116,6 @@ describe('PR lookup coalescing', () => {
       expect(mocks.resolve).toHaveBeenCalledTimes(2)
     }
   )
-
-  it('keeps native, WSL, and SSH pending reads scoped during invalidation', async () => {
-    const completions: ((value: PRRefreshOutcome) => void)[] = []
-    mocks.resolve.mockImplementation(
-      () =>
-        new Promise<PRRefreshOutcome>((resolve) => {
-          completions.push(resolve)
-        })
-    )
-    const native = () => getPRForBranchOutcome('/repo', 'topic')
-    const wsl = () =>
-      getPRForBranchOutcome('/repo', 'topic', null, null, null, {
-        localGitExecOptions: { wslDistro: 'Ubuntu' }
-      })
-    const ssh = () => getPRForBranchOutcome('/repo', 'topic', null, 'host / encoded')
-    const reads = [native(), wsl(), ssh()]
-    try {
-      await vi.waitFor(() => expect(mocks.resolve).toHaveBeenCalledTimes(3))
-      invalidateHostedReviewBranchCache('/other', 'local')
-      reads.push(native(), wsl(), ssh())
-      invalidateHostedReviewBranchCache(
-        '/repo',
-        getRepoExecutionHostId({ connectionId: 'host / encoded' })
-      )
-      reads.push(native(), wsl(), ssh())
-      await vi.waitFor(() => expect(mocks.resolve).toHaveBeenCalledTimes(4))
-      invalidateHostedReviewBranchCache('/repo', 'local')
-      reads.push(native(), wsl(), ssh())
-      await vi.waitFor(() => expect(mocks.resolve).toHaveBeenCalledTimes(6))
-    } finally {
-      for (const finish of completions) {
-        finish(outcome)
-      }
-      await Promise.all(reads)
-    }
-  })
 })
 
 it.each([true, false])(

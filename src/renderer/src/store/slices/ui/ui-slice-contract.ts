@@ -8,23 +8,6 @@ import type {
   UISliceSurfaces
 } from './ui-slice-contract-preferences'
 
-export type {
-  AgentSendPopoverTargetMode,
-  NewWorkspaceDraft,
-  OpenAgentSendPopoverTargetModeArgs,
-  PendingSidebarRowReveal,
-  PendingSidebarWorktreeReveal,
-  TaskPageData,
-  UISliceCore,
-  UiViewHistory
-} from './ui-slice-contract-core'
-export type { UISliceContextual } from './ui-slice-contract-contextual'
-export type {
-  UISlicePersistence,
-  UISlicePreferences,
-  UISliceSurfaces
-} from './ui-slice-contract-preferences'
-
 export type UISlice = UISliceCore &
   UISliceContextual &
   UISlicePreferences &

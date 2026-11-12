@@ -2,8 +2,7 @@ import type React from 'react'
 import { Smartphone } from 'lucide-react'
 import { CommandItem } from '@/components/ui/command'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserPaletteItem, SimulatorPaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import {
@@ -13,7 +12,7 @@ import {
   PaletteRowShortcutBadge
 } from './worktree-jump-palette-primitives'
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
-import { resolvePaletteRepoForWorktree } from '@/lib/palette-repo-resolution'
+import { resolvePaletteRepoForWorktree } from '@/lib/workspace/search/palette-repo-resolution'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
@@ -26,6 +25,7 @@ export function WorktreeJumpPaletteSimulatorRow({
   renderKey: string
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
+  const t = useTranslate()
   const result = entry.result
   const simulatorWorktree = controller.resolveWorktree(result.worktreeId, result.executionHostId)
   const simulatorRepo = simulatorWorktree
@@ -43,17 +43,15 @@ export function WorktreeJumpPaletteSimulatorRow({
   )
   const simulatorSessionAge = formatPaletteSessionAge(
     result.lastActiveAt ?? null,
-    controller.paletteNowMs
+    controller.paletteNowMs,
+    t
   )
 
   return (
     <CommandItem
       value={renderKey}
       onSelect={() => controller.handleSelectItem(entry)}
-      className={cn(
-        'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-        'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-      )}
+      shape="palette-row"
     >
       <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
         <Smartphone className="size-3.5" aria-hidden="true" />
@@ -72,15 +70,12 @@ export function WorktreeJumpPaletteSimulatorRow({
                 <>
                   {result.isCurrentTab && (
                     <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                      {translate('auto.components.WorktreeJumpPalette.52404f8096', 'Current Tab')}
+                      {t('auto.components.WorktreeJumpPalette.52404f8096', 'Current Tab')}
                     </span>
                   )}
                   {!result.isCurrentTab && result.isCurrentWorktree && (
                     <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                      {translate(
-                        'auto.components.WorktreeJumpPalette.c5081f2814',
-                        'Current Worktree'
-                      )}
+                      {t('auto.components.WorktreeJumpPalette.c5081f2814', 'Current Worktree')}
                     </span>
                   )}
                 </>
@@ -121,6 +116,7 @@ export function WorktreeJumpPaletteBrowserRow({
   renderKey: string
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
+  const t = useTranslate()
   const result = entry.result
   const browserWorktree = controller.resolveWorktree(result.worktreeId, result.executionHostId)
   const browserRepo = browserWorktree
@@ -138,17 +134,15 @@ export function WorktreeJumpPaletteBrowserRow({
   )
   const browserSessionAge = formatPaletteSessionAge(
     result.lastActiveAt ?? null,
-    controller.paletteNowMs
+    controller.paletteNowMs,
+    t
   )
 
   return (
     <CommandItem
       value={renderKey}
       onSelect={() => controller.handleSelectItem(entry)}
-      className={cn(
-        'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-        'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-      )}
+      shape="palette-row"
     >
       <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
         <BrowserFavicon faviconUrl={result.faviconUrl} className="size-3.5" />
@@ -168,15 +162,12 @@ export function WorktreeJumpPaletteBrowserRow({
                 <>
                   {result.isCurrentPage && (
                     <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                      {translate('auto.components.WorktreeJumpPalette.52404f8096', 'Current Tab')}
+                      {t('auto.components.WorktreeJumpPalette.52404f8096', 'Current Tab')}
                     </span>
                   )}
                   {!result.isCurrentPage && result.isCurrentWorktree && (
                     <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                      {translate(
-                        'auto.components.WorktreeJumpPalette.c5081f2814',
-                        'Current Worktree'
-                      )}
+                      {t('auto.components.WorktreeJumpPalette.c5081f2814', 'Current Worktree')}
                     </span>
                   )}
                 </>

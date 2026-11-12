@@ -1,6 +1,7 @@
 // Share envelopes across CLI/desktop/non-Electron clients without client-to-client imports.
 import { z } from 'zod'
-import type { OrchestrationCompatibilityEvidence } from './orchestration-compatibility-evidence'
+import type { OrchestrationCompatibilityEvidence } from './orchestration/orchestration-compatibility-evidence'
+import type { RemoteOwnedPeerRun } from './orchestration/remote-owned-wire'
 
 // Independently updated peers may add envelope fields; strip unknown fields while validating known ones.
 const MetaSuccess = z
@@ -76,6 +77,8 @@ export type RuntimeOrchestrationEnvelope = {
   orchestrationCapability?: string
   orchestrationContractVersion?: number
   orchestrationRequestId?: string
+  /** A paired Orca acting as the coordinator of one of its Runs on this server. */
+  orchestrationPeerRun?: RemoteOwnedPeerRun
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
 }
@@ -116,3 +119,10 @@ export type RuntimeRequestSelection = {
   paramsForStatus: (status: unknown) => unknown
   onDispatch?: () => void
 }
+
+/** Internal preparation on the exact sending socket; never serialized or given credentials. */
+export type RuntimeRequestPreparation = (request: {
+  params: unknown
+  envelope: RuntimeOrchestrationEnvelope | undefined
+  measure: (params: unknown, envelope: RuntimeOrchestrationEnvelope | undefined) => number
+}) => { params: unknown; envelope: RuntimeOrchestrationEnvelope | undefined }

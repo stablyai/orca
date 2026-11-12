@@ -1,9 +1,10 @@
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { WslMoveProjectionInput } from '../../moving-wsl-projects/wsl-move-state-projection'
+import type { WslMoveProjectionInput } from '../../moving-wsl-projects/manifest-scope/wsl-move-state-projection'
 import {
   project,
   repo,

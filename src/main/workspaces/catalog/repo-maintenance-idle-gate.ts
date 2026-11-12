@@ -1,9 +1,9 @@
-import { app, powerMonitor } from 'electron'
+import { powerMonitor } from 'electron'
 import {
   disposeLocalRepoRefMaintenance,
   postponeRepoRefMaintenance,
   setRepoMaintenanceActivityProbe
-} from '../../git/local-repo-ref-maintenance'
+} from '../../git/refs/maintenance/local-repo-ref-maintenance'
 import { hasWorktreeRemovalsInFlight } from '../../ipc/worktrees/worktree-ipc-context'
 import { hasPendingWorktreeCreatePreparations } from '../creation/preparation/worktree-create-preparation'
 import { hasPendingWorktreeRemovals } from '../removal/worktree-removal-table'
@@ -30,13 +30,8 @@ export function installRepoMaintenanceIdleGate(
   const onBattery = (): void => {
     postponeRepoRefMaintenance()
   }
-  const onFocus = (): void => {
-    postponeRepoRefMaintenance()
-  }
   powerMonitor.on('on-battery', onBattery)
-  app.on('browser-window-focus', onFocus)
   return () => {
-    app.off('browser-window-focus', onFocus)
     powerMonitor.off('on-battery', onBattery)
     // Stop armed timers before removing the activity probe.
     const stopped = disposeLocalRepoRefMaintenance()

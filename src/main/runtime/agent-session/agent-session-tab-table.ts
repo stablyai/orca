@@ -1,4 +1,4 @@
-import { AgentSessionRecordPublication } from '../agent-session-record-publication'
+import { AgentSessionRecordPublication } from './records/agent-session-record-publication'
 import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session/view/agent-session-surface-tab-id'
 import type { AgentSessionReserveRequest } from './ownership/agent-session-reservation-admission'
 import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'

@@ -9,7 +9,7 @@ import {
   sendClientGuestPointerInput
 } from './helpers/client-hosted-browser-observer'
 import { expect, test } from './helpers/orca-app'
-import type { BrowserTabListResult } from '../../src/shared/runtime-browser-contracts'
+import type { BrowserTabListResult } from '../../src/shared/browser/runtime/runtime-browser-contracts'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
 import {
   createRuntimeDesktopPairingOffer,

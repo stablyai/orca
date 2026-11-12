@@ -1,5 +1,7 @@
-import type { Store } from '../../persistence/loading-store/store'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { isFolderRepo } from '../../../shared/repo-kind'
+import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../../shared/repo-types'
 import type { GitWorktreeInfo, Worktree } from '../../../shared/worktree/types'
@@ -9,7 +11,7 @@ import type {
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanError,
   WorkspaceCleanupScanResult
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   handleRepoWorktreeListError,
   listCleanupGitWorktrees
@@ -45,6 +47,7 @@ import {
   hasTargetedWorkspaceCleanupScan
 } from './workspace-cleanup-scan-targets'
 import { isWorktreeMetaOwnedByRepo } from '../../workspaces/catalog/worktree-metadata-ownership'
+import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 // Overlap repo scans to avoid summing SSH listing round-trip latency.
@@ -57,7 +60,7 @@ type WorkspaceCleanupScanRepoProgress = {
 }
 
 export async function scanWorkspaceCleanup(
-  store: Store,
+  store: RuntimeStore,
   args: WorkspaceCleanupScanArgs = {},
   options: WorkspaceCleanupScanOptions = {}
 ): Promise<WorkspaceCleanupScanResult> {
@@ -68,14 +71,18 @@ export async function scanWorkspaceCleanup(
     return { scannedAt, candidates: [], errors: [] }
   }
   const allRepos = store.getRepos()
+  // Hidden source rows (an SSH host now served by its own orcad) are that server's to scan.
+  const visibleRepos = runtimeVisibleRepos(store)
   const repos =
     targetWorktreeIdsByRepo.size > 0
-      ? allRepos.filter((repo) => targetWorktreeIdsByRepo.has(repo.id))
-      : allRepos
+      ? visibleRepos.filter((repo) => targetWorktreeIdsByRepo.has(repo.id))
+      : visibleRepos
   const repoOwnerCountById = new Map<string, number>()
   for (const repo of allRepos) {
     repoOwnerCountById.set(repo.id, (repoOwnerCountById.get(repo.id) ?? 0) + 1)
   }
+  // One snapshot per scan: merged-review evidence reads it without the network.
+  const prCache = store.getGitHubCache().pr
   const progress = createWorkspaceCleanupProgressEmitter(args.scanId, scannedAt, options)
   const errors: WorkspaceCleanupScanResult['errors'] = []
   const candidates: WorkspaceCleanupCandidate[] = []
@@ -91,6 +98,7 @@ export async function scanWorkspaceCleanup(
           repo,
           repoOwnerCount: repoOwnerCountById.get(repo.id) ?? 1,
           scannedAt,
+          prCache,
           targetWorktreeIds: targetWorktreeIdsByRepo.get(repo.id),
           refreshTargetActivity: args.worktreeId !== undefined || args.refreshActivity === true,
           includeAllWorkspaces: args.includeAllWorkspaces === true,
@@ -114,10 +122,11 @@ export async function scanWorkspaceCleanup(
 
 async function scanRepoWorkspaces(
   args: {
-    store: Store
+    store: RuntimeStore
     repo: Repo
     repoOwnerCount: number
     scannedAt: number
+    prCache: PRCacheView<PRInfo>
     targetWorktreeIds?: ReadonlySet<string>
     refreshTargetActivity: boolean
     includeAllWorkspaces: boolean
@@ -130,6 +139,7 @@ async function scanRepoWorkspaces(
     repo,
     repoOwnerCount,
     scannedAt,
+    prCache,
     targetWorktreeIds,
     refreshTargetActivity,
     includeAllWorkspaces,
@@ -248,6 +258,7 @@ async function scanRepoWorkspaces(
         worktree: worktreeWithActivity,
         scannedAt,
         route,
+        prCache,
         // Defer Git for active rows during fleet scans; forced removal preflight reads fresh evidence.
         skipGit: skipGitWorktreeIds.has(worktreeWithActivity.id) || !isInactive,
         forceGitCheck: Boolean(targetWorktreeIds),

@@ -1,22 +1,18 @@
-import { memo } from 'react'
+import { lazy, Suspense } from 'react'
 import { View, StyleSheet } from 'react-native'
-import { MobileSourceControlPanel } from '../source-control/MobileSourceControlPanel'
-import { MobileFileExplorerPanel } from '../files/MobileFileExplorerPanel'
 import { mobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileDockResize } from './use-mobile-dock-resize'
-import type { ActivePanel } from './session-panel-host'
+import type { SessionDockPanelContentProps } from './SessionDockPanelContent'
 
-type Props = {
-  activePanel: Exclude<ActivePanel, null>
-  hostId: string
-  worktreeId: string
-  name: string
-  availableWidth: number
-  onRequestClose: () => void
-}
+type Props = SessionDockPanelContentProps & { availableWidth: number }
 
-type DockPanelContentProps = Omit<Props, 'availableWidth'>
+// Panels load with the first dock open so phone sessions, which never dock, skip Source Control and Files code.
+const SessionDockPanelContent = lazy(() =>
+  import('./SessionDockPanelContent').then((module) => ({
+    default: module.SessionDockPanelContent
+  }))
+)
 
 // Keep drag width state in this subtree; terminal refits follow frame onLayout and need no width prop.
 export function SessionDockColumn({
@@ -34,48 +30,19 @@ export function SessionDockColumn({
       {/* Dedicated drag handle over the dock's left border — a leaf overlay so the
           inner ScrollView can't intercept the gesture on Android. */}
       <View style={styles.resizeHandle} {...panHandlers} />
-      <DockPanelContent
-        activePanel={activePanel}
-        hostId={hostId}
-        worktreeId={worktreeId}
-        name={name}
-        onRequestClose={onRequestClose}
-      />
+      {/* The column frame paints at once; its panel fills in from local disk with no spinner. */}
+      <Suspense fallback={null}>
+        <SessionDockPanelContent
+          activePanel={activePanel}
+          hostId={hostId}
+          worktreeId={worktreeId}
+          name={name}
+          onRequestClose={onRequestClose}
+        />
+      </Suspense>
     </View>
   )
 }
-
-// Width-independent panel props let memo skip content rerenders during resize.
-const DockPanelContent = memo(function DockPanelContent({
-  activePanel,
-  hostId,
-  worktreeId,
-  name,
-  onRequestClose
-}: DockPanelContentProps) {
-  // Reuse the source-control hub so dock icon switches retain commit draft, visited tabs and scroll.
-  if (activePanel === 'sourceControl' || activePanel === 'pr') {
-    return (
-      <MobileSourceControlPanel
-        hostId={hostId}
-        worktreeId={worktreeId}
-        name={name}
-        embedded
-        initialTab={activePanel === 'pr' ? 'pr' : 'changes'}
-        onRequestClose={onRequestClose}
-      />
-    )
-  }
-  return (
-    <MobileFileExplorerPanel
-      hostId={hostId}
-      worktreeId={worktreeId}
-      name={name}
-      embedded
-      onRequestClose={onRequestClose}
-    />
-  )
-})
 
 const RESIZE_EDGE_WIDTH = 24
 

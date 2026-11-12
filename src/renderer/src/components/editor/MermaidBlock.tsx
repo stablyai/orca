@@ -6,6 +6,7 @@ import { getMermaidConfig } from './mermaid-config'
 import { sanitizeMermaidSvg } from './mermaid-sanitize'
 import { readMermaidThemeColors } from './mermaid-theme-colors'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type MermaidApi = typeof mermaidNamespace
 
@@ -54,6 +55,7 @@ export default function MermaidBlock({
   onRenderComplete,
   onExpand
 }: MermaidBlockProps): React.JSX.Element {
+  const t = useTranslate()
   const id = useId().replace(/:/g, '_')
   const [rendered, setRendered] = useState<{
     content: string
@@ -135,8 +137,7 @@ export default function MermaidBlock({
     result && 'error' in result ? (
       <div className="mermaid-block">
         <div className="mermaid-error">
-          {translate('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')}{' '}
-          {result.error}
+          {t('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')} {result.error}
         </div>
         <pre>
           <code>{content}</code>
@@ -160,8 +161,9 @@ function ExpandableDiagram({
   diagram: RenderedMermaidDiagram
   onExpand: (diagram: RenderedMermaidDiagram) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const buttonRef = useRef<HTMLButtonElement>(null)
-  const label = translate('auto.components.editor.MermaidBlock.expand', 'Expand diagram')
+  const label = t('auto.components.editor.MermaidBlock.expand', 'Expand diagram')
   return (
     <div
       className="group/diagram relative cursor-zoom-in"

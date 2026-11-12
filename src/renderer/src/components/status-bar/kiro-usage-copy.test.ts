@@ -13,11 +13,8 @@ vi.mock('@/i18n/i18n', () => ({
 
 import { getExtraUsageLabel } from './provider-extra-usage-section'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
-import {
-  getProviderDisplayName,
-  getProviderUsageErrorMessage,
-  getProviderUsageStatusLabel
-} from './usage-error-copy'
+import { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
+import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
 
 function kiro(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
   return {

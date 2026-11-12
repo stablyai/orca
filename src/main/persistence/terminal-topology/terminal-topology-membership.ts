@@ -4,9 +4,9 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
+import { layoutContainsLeafId } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export function advanceTerminalTopologyRevision(
   session: WorkspaceSessionState,

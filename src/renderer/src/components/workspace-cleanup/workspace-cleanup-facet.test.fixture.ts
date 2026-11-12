@@ -1,7 +1,7 @@
-import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/workspace-activity-facts'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import {
   buildWorkspaceCleanupFacets,
   type WorkspaceCleanupFacetSources,
@@ -24,9 +24,7 @@ export function makeFacetCandidate(
     displayName: 'alpha',
     branch: 'refs/heads/alpha',
     path: '/repo/alpha',
-    tier: 'ready',
-    selectedByDefault: true,
-    reasons: ['idle-clean'],
+    reasons: ['inactive'],
     blockers: [],
     lastActivityAt: FACET_NOW - 40 * DAY,
     localContext: {

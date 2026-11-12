@@ -5,8 +5,8 @@ import { initTccPromptNotice } from '../macos-permissions/macos-tcc-prompt-notic
 import { resolveUpdateInstallMode } from '../updater/updater-service'
 import { desktopConnectorCloud } from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
-import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
-import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
+import { prepareCodexAiVaultSessionResume } from '../codex/history/resume/codex-ai-vault-session-resume'
+import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
 import { preserveAgentAuthBeforeRestart } from '../providers/accounts/agent-auth-restart-preservation'
 import { preserveStateBeforeUpdateRestart } from '../updater/update-restart-preservation'
 import {
@@ -15,7 +15,7 @@ import {
   handlePtyExit
 } from './main-process-pty-startup'
 import { prepareCodexRuntimeHomeForLaunch } from './codex-launch-preparation'
-import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
+import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import {
   prepareCodexPinnedLaunchHome,
   prepareCodexSessionResumeForLaunch
@@ -34,10 +34,6 @@ export function attachMainWindowCoreServices(
   const store = state.store
   const runtime = state.runtime
   const stats = state.stats
-  const claudeUsage = state.claudeUsage
-  const codexUsage = state.codexUsage
-  const openCodeUsage = state.openCodeUsage
-  const museUsage = state.museUsage
   const codexAccounts = state.codexAccounts
   const claudeAccounts = state.claudeAccounts
   const rateLimits = state.rateLimits
@@ -49,10 +45,6 @@ export function attachMainWindowCoreServices(
     !store ||
     !runtime ||
     !stats ||
-    !claudeUsage ||
-    !codexUsage ||
-    !openCodeUsage ||
-    !museUsage ||
     !codexAccounts ||
     !claudeAccounts ||
     !rateLimits ||
@@ -69,10 +61,6 @@ export function attachMainWindowCoreServices(
     store,
     runtime,
     stats,
-    claudeUsage,
-    codexUsage,
-    openCodeUsage,
-    museUsage,
     codexAccounts,
     claudeAccounts,
     rateLimits,
@@ -130,7 +118,6 @@ export function attachMainWindowCoreServices(
         }
       : undefined
   )
-  automations.setWebContents(window.webContents)
   automations.start()
   attachMainWindowServices(
     window,
@@ -161,6 +148,4 @@ export function attachMainWindowCoreServices(
   // Attach durable diagnostic pulls now, defer process launch past first paint.
   initTccPromptNotice(window, { deferWatchUntilReadyToShow: true })
   rateLimits.attach(window)
-  // Quota probes spawn CLIs/use network; defer to show/focus refresh so they do not compete with first paint.
-  rateLimits.start({ fetchImmediately: false })
 }

@@ -1,13 +1,19 @@
-import type { GitStatusEntry } from '../../../shared/git-status-types'
+import type {
+  GitStatusEntry,
+  GitBranchLineTotal
+} from '../../../shared/git/status/git-status-types'
 import {
   computeGitBranchLineTotal,
   readGitBranchLineTotalMergeBaseParam,
-  GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS,
-  type GitBranchLineTotal
-} from '../../../shared/git-branch-line-total'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitReadOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
+  GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS
+} from '../../../shared/git/status/git-branch-line-total'
+
+import {
+  type GitRuntimeOptions,
+  gitReadOptionsForWorktree
+} from '../command-runner/git-runtime-options'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
+import { gitOptionalLocksDisabledEnv } from '../command-runner/git-environment/git-process-env'
 import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 import type { GetStatusOptions } from './get-status-options'
 
@@ -48,6 +54,12 @@ export function createBranchLineTotalInput(
         ...(options.signal ? { signal: options.signal } : {})
       })
   }
+}
+
+/** True for a status key (line-stats or read lease) of `worktreePath` under any execution host. */
+export function isStatusKeyForWorktreePath(key: string, worktreePath: string): boolean {
+  const scoped = key.slice(key.indexOf('\0') + 1)
+  return scoped === worktreePath || scoped.startsWith(`${worktreePath}\0`)
 }
 
 export function getStatusLineStatsCacheKey(

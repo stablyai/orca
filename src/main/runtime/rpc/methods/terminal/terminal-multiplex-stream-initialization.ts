@@ -1,11 +1,11 @@
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { recordYieldedTerminalQueries } from './terminal-multiplex-yielded-queries'
-import { EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE } from '../../../../../shared/terminal-reply-query-scan'
+import { EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
 import { iterateTerminalOutputFrameChunks } from '../../terminal-output-frame-chunks'
-import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
+import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { createTerminalOutputBatcher } from './terminal-output-batcher'
 import { appendPendingMultiplexOutput } from './terminal-stream-replay'
 import { updateViewportForClient } from './terminal-viewport-update'
@@ -27,6 +27,10 @@ export async function initializeMultiplexStream(
   const { runtime, connectionId, streams, registerBinaryStreamHandler } = state
   const isMobile = request.client?.type === 'mobile'
   const remoteDesktopSubscriptionKey = `multiplex:${connectionId}:${request.streamId}`
+  const supportsOutputCadence =
+    request.capabilities?.outputCadence === 1 &&
+    // Field rollback without a release: clients then see a host without the capability.
+    process.env.ORCA_DISABLE_TERMINAL_OUTPUT_CADENCE !== '1'
   const stream: TerminalMultiplexStream = {
     streamId: request.streamId,
     terminal: request.terminal,
@@ -45,6 +49,7 @@ export async function initializeMultiplexStream(
       request.capabilities?.writeUnavailable === 1 && request.capabilities.endpointLossNotice === 1,
     inputSessionId: request.capabilities?.inputAck === 1 ? (request.inputSessionId ?? null) : null,
     outputPaused: false,
+    supportsOutputCadence,
     supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,
     desktopClaimTail: Promise.resolve(true),
     registeredRemoteDesktopDriver: false,
@@ -56,6 +61,10 @@ export async function initializeMultiplexStream(
     ackPendingOutputBytes: 0,
     ackPendingOutputOverflowed: false,
     ackRecoverySnapshotInFlight: false,
+    ackRecoveryAwaitedBytes: 0,
+    ackPendingHoldbackBytes: 0,
+    ackAdmittedPacedWindowBytes: null,
+    ackOutputWaited: false,
     yieldedQueries: [],
     yieldedQueryScan: EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
     ackRecoveryHistoryOwed: false,
@@ -64,19 +73,22 @@ export async function initializeMultiplexStream(
     pendingOutputOverflowed: false,
     lastResizeCols: undefined,
     resizeGeneration: 0,
-    outputBatcher: createTerminalOutputBatcher((data, meta) => {
-      if (meta?.cwd !== undefined) {
-        state.sendFrame(
-          request.streamId,
-          TerminalStreamOpcode.Metadata,
-          encodeTerminalStreamJson({ cwd: meta.cwd }),
-          meta.seq
-        )
-      }
-      for (const chunk of iterateTerminalOutputFrameChunks(data, meta, 'span')) {
-        state.queueOrSendOutput(stream, chunk)
-      }
-    }),
+    outputBatcher: createTerminalOutputBatcher(
+      (data, meta) => {
+        if (meta?.cwd !== undefined) {
+          state.sendFrame(
+            request.streamId,
+            TerminalStreamOpcode.Metadata,
+            encodeTerminalStreamJson({ cwd: meta.cwd }),
+            meta.seq
+          )
+        }
+        for (const chunk of iterateTerminalOutputFrameChunks(data, meta, 'span')) {
+          state.queueOrSendOutput(stream, chunk)
+        }
+      },
+      supportsOutputCadence ? request.outputCadence : undefined
+    ),
     unsubscribeData: () => {},
     unsubscribeResize: () => {},
     unsubscribeFit: () => {},
@@ -98,18 +110,24 @@ export async function initializeMultiplexStream(
       notePausedOutputDropped(state, stream)
       return
     }
-    recordYieldedTerminalQueries(runtime, stream, data, meta)
+    const yieldedQuery = recordYieldedTerminalQueries(runtime, stream, data, meta)
     if (stream.buffering) {
       appendPendingMultiplexOutput(stream, data, meta)
       return
     }
     stream.outputBatcher.push(data, meta)
+    if (yieldedQuery) {
+      // Why: this view answers the query; a background coalescing window would stall the app's reply wait.
+      stream.outputBatcher.flush()
+    }
   })
   // Remote xterm answers delivered queries; paused streams and unelected phones return reply authority to main.
   const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(
     ptyId,
     () => stream.outputPaused,
-    isMobile ? request.client?.id : undefined
+    isMobile ? request.client?.id : undefined,
+    stream.supportsOutputPause && request.capabilities?.paneVisibility === 1,
+    state.viewerDeviceId
   )
   // Report daemon death now, before the next refused keystroke.
   const unsubscribeEndpointLoss = stream.supportsEndpointLossNotice

@@ -1,24 +1,23 @@
-import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/layout-serialization'
-import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/terminal-pane-title-sanitization'
+import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/layout/terminal-layout-normalization'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-title-sanitization'
 import type { AppState } from '@/store/types'
-import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   isNativeChatTabWideFallbackSafe,
   nativeChatLaunchAgentForLeaf
-} from '../../components/native-chat/native-chat-leaf-routing'
+} from '../../components/native-chat/pane/routing/native-chat-leaf-routing'
 import type { MobileSessionWorktreeInputs } from './types'
+import { isClaudeManagementTitle } from '../../../../shared/agent-status/title/agent-title-core'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
-  isClaudeManagementTitle,
-  isTerminalLeafId,
-  makePaneKey,
   mobileTerminalSurfaceId,
   getRuntimeLeafIdsForTerminal,
   resolveMobileTabWideAgentHintLeafId,
   isUnifiedTabActiveInActiveGroup
 } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
-import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
+import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
 
 export function buildMobileTerminalSurfaceTabs(
   inputs: MobileSessionWorktreeInputs,
@@ -110,8 +109,12 @@ export function buildMobileTerminalSurfaceTabs(
       ...(tabWideFallbackSafe && terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),
-      ...(tabWideFallbackSafe && terminal.aiVaultTitle?.title.trim()
-        ? { aiVaultTitle: terminal.aiVaultTitle }
+      // This window's title sync owns the tab's session name; null tells paired desktops it has none.
+      ...(tabWideFallbackSafe
+        ? {
+            aiVaultTitle: terminal.aiVaultTitle?.title.trim() ? terminal.aiVaultTitle : null,
+            resolvesSessionTitle: true as const
+          }
         : {}),
       ...(tabWideFallbackSafe && inputs.generatedTitlesEnabled && terminal.generatedTitle?.trim()
         ? { generatedTitle: terminal.generatedTitle.trim() }

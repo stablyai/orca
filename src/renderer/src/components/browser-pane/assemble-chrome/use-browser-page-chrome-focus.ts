@@ -20,7 +20,7 @@ import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import type { BrowserAddressBarSelection } from './browser-address-bar-edit-session'
 import type { BrowserPageGuestFocus } from './browser-page-guest-focus'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { useBrowserHistoryShortcut } from '../history/use-browser-history-shortcut'
 import { useWebviewDragPassthroughActive } from '../host-guest/use-webview-drag-passthrough-active'
 

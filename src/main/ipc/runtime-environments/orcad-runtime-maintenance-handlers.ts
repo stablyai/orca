@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { registerManagedServerActions } from '../../runtime/managed-server-actions-registry'
+import { registerManagedServerActions } from '../../runtime/hosts/management/managed-server-actions-registry'
 import {
   createManagedOrcadActions,
   reclaimManagedOrcadStaleLock,

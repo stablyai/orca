@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, type HostInstance } from 'react-native'
 import {
   CalendarClock,
   ChevronLeft,
@@ -10,21 +10,23 @@ import {
   UserCircle
 } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
+import { hostDiagnosticsAction, hostEditAction } from '../host-list-action-sheet-actions'
 import { NavBar, NavBarSubtitleText } from '../components/nav-bar/NavBar'
 import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { StatusDot } from '../components/StatusDot'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useRefreshHint } from '../query/refresh-hint'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useCalmConnectionState } from '../transport/calm-connection-state'
+import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
 import {
   isConnectionOutage,
   verdictDisplayLabel,
   type ConnectionVerdict
-} from '../transport/connection-health'
+} from '../transport/connection/connection-health'
 import type { HostScreenController } from './use-host-screen-controller'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
@@ -43,7 +45,9 @@ export function HostConnectionStatus({ controller }: { controller: HostScreenCon
   const statusText = isErrorVerdict(connectionVerdict)
     ? verdictDisplayLabel(connectionVerdict)
     : presentedConnState === 'connected'
-      ? (hostDisplay.descriptorLine ?? t('connection.connectionHealth.connected', 'Connected'))
+      ? (hostDisplay.machineLine ??
+        hostDisplay.descriptorLine ??
+        t('connection.connectionHealth.connected', 'Connected'))
       : connectionVerdict.label
   return (
     <>
@@ -88,10 +92,12 @@ export function HostScreenHeader({
     floatingWorkspaceEnabled,
     hostId,
     hostDisplay,
-    onHideSidebar
+    onHideSidebar,
+    router
   } = controller
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const showRefreshLine = useRefreshHint(controller.catalog.revalidating)
   const disconnected = connState !== 'connected'
   const hostPath = `/h/${encodeURIComponent(hostId)}`
 
@@ -133,6 +139,11 @@ export function HostScreenHeader({
         ]
       : [])
   ]
+  // Unlike the screens above, these work on the saved host, so they stay offered while disconnected.
+  const hostGroup: ActionSheetAction[] = [
+    hostEditAction(() => actions.navigateFromHostList(`${hostPath}/edit`)),
+    hostDiagnosticsAction(() => router.push({ pathname: '/connection-log', params: { hostId } }))
+  ]
   return (
     <>
       <NavBar
@@ -154,6 +165,7 @@ export function HostScreenHeader({
         }
         title={hostDisplay.title}
         subtitle={<HostConnectionStatus controller={controller} />}
+        refreshing={showRefreshLine}
         titleOpacity={collapsingTitle?.barTitleOpacity}
         dividerOpacity={collapsingTitle?.barDividerOpacity}
         trailing={
@@ -169,7 +181,7 @@ export function HostScreenHeader({
       <PullDownMenu
         visible={menuOpen}
         anchorRef={moreRef}
-        groups={[navigationGroup]}
+        groups={[navigationGroup, hostGroup]}
         onClose={() => setMenuOpen(false)}
       />
     </>

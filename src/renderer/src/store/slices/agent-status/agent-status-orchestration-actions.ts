@@ -2,18 +2,18 @@ import {
   canonicalOrchestrationForRow,
   recordOrchestrationProducer,
   orchestrationProducer
-} from '@/runtime/visible-agent-orchestration'
+} from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
-} from '../../../../../shared/agent-status-types'
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import {
   getAgentRowGeneratedTitleText,
   orchestrationLabelsMatchLiveDispatch
-} from '../../../../../shared/agent-row-primary-text'
+} from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import {
   mergeCurrentOrchestrationContext,
   orchestrationContextsEqual

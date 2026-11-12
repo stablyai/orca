@@ -1,7 +1,7 @@
 import {
   requireOrchestrationAdmission,
   type OrchestrationAdmission
-} from '../../../../orchestration/orchestration-admission'
+} from '../../../../orchestration/addressing/orchestration-admission'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 
 /** Existing-Run authority is shared; binding/creation and placement remain command effects. */

@@ -1,11 +1,11 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { useAppStore } from '@/store'
-import type { DiffContent, FileContent } from './editor-panel-content-types'
+import type { DiffContent, FileContent, ReloadContentOptions } from './editor-panel-content-types'
 import {
   useEditorPanelExternalContentEvents,
   usePruneClosedEditorContent
-} from './useEditorPanelExternalContentEvents'
+} from './external-changes/useEditorPanelExternalContentEvents'
 import { useEditorPanelFileLoadRetry } from './useEditorPanelFileLoadRetry'
 import { useLocalLogTail } from './useLocalLogTail'
 import { useEditorPanelFileContentLoader } from './useEditorPanelFileContentLoader'
@@ -28,7 +28,7 @@ type UseEditorPanelContentStateParams = {
 type UseEditorPanelContentStateResult = {
   fileContents: Record<string, FileContent>
   diffContents: Record<string, DiffContent>
-  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
+  reloadContent: (file: OpenFile, options?: ReloadContentOptions) => void
 }
 
 export function useEditorPanelContentState({
@@ -42,6 +42,7 @@ export function useEditorPanelContentState({
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
   const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>({})
   const diffContentsRef = useRef(diffContents)
+  const fileContentsRef = useRef(fileContents)
   const fileLoadRetryAttemptsRef = useRef<Record<string, number>>({})
   // Generation fences keep slow superseded reads from overwriting newer content.
   const fileReadGenerationRef = useRef<Record<string, number>>({})
@@ -63,11 +64,12 @@ export function useEditorPanelContentState({
   useLayoutEffect(() => {
     // Why: event-driven readers must only observe state from committed renders.
     diffContentsRef.current = diffContents
+    fileContentsRef.current = fileContents
     openFilesRef.current = openFiles
     editorViewModeRef.current = editorViewMode
     isVisibleRef.current = isVisible
     activeContentFileIdRef.current = activeContentFileId
-  }, [activeContentFileId, diffContents, editorViewMode, isVisible, openFiles])
+  }, [activeContentFileId, diffContents, editorViewMode, fileContents, isVisible, openFiles])
 
   const invalidateFileContent = useCallback((fileIds: string[]): void => {
     const uniqueIds = new Set(fileIds)
@@ -136,7 +138,7 @@ export function useEditorPanelContentState({
 
   // Route explicit reloads by mode so diff banners refresh diff bodies instead of plain-file caches.
   const reloadContent = useCallback(
-    (file: OpenFile, options?: { wakeWslDistro?: boolean }): void => {
+    (file: OpenFile, options?: ReloadContentOptions): void => {
       if (file.mode === 'diff') {
         setDiffContents((prev) => {
           if (!prev[file.id]) {
@@ -150,6 +152,10 @@ export function useEditorPanelContentState({
           force: true,
           ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
         })
+        return
+      }
+      // Why: the WSL retry may already have reloaded it when the host turned ready; a second read would flash.
+      if (options?.onlyIfFailed && !fileContentsRef.current[file.id]?.loadError) {
         return
       }
       delete fileLoadRetryAttemptsRef.current[file.id]

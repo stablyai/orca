@@ -1,12 +1,48 @@
 import { realpath } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import { toWindowsWslPath } from '../../../shared/wsl-paths'
-import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
+import { getRepoHostIdentity, type RepoHostTarget } from '../../../shared/repo-host-identity'
 
 type InFlightWorktreeCreate = { repoId: string; paths: string[] }
 
 const inFlightCreates = new Set<InFlightWorktreeCreate>()
 const claimedCreatePaths = new Set<string>()
+const openCreatesByProject = new Map<string, number>()
+
+export class ProjectWorktreeCreateInProgressError extends Error {
+  readonly code = 'worktree_create_in_progress'
+  constructor() {
+    super('A workspace is still being created in this project. Try again when it finishes.')
+    this.name = 'ProjectWorktreeCreateInProgressError'
+  }
+}
+
+/** Call in the same tick the create reads its project row, so removal sees every create that could land a workspace. */
+export async function withProjectWorktreeCreate<T>(
+  repo: RepoHostTarget,
+  create: () => Promise<T>
+): Promise<T> {
+  const key = getRepoHostIdentity(repo)
+  openCreatesByProject.set(key, (openCreatesByProject.get(key) ?? 0) + 1)
+  try {
+    return await create()
+  } finally {
+    const remaining = (openCreatesByProject.get(key) ?? 1) - 1
+    if (remaining === 0) {
+      openCreatesByProject.delete(key)
+    } else {
+      openCreatesByProject.set(key, remaining)
+    }
+  }
+}
+
+/** A create that outlives its project lands a workspace no project owns. */
+export function assertNoProjectWorktreeCreate(repo: RepoHostTarget): void {
+  if (openCreatesByProject.has(getRepoHostIdentity(repo))) {
+    throw new ProjectWorktreeCreateInProgressError()
+  }
+}
 
 export type WorktreeCreatePathClaim = {
   /** Synchronous, so the path check that calls it cannot interleave with another create's. */
@@ -43,7 +79,7 @@ export function openWorktreeCreatePathClaim(): WorktreeCreatePathClaim {
 }
 
 // Git lists real paths even when creation uses a symlink and the leaf does not exist yet.
-async function resolveCreatePathAlias(worktreePath: string): Promise<string> {
+export async function resolveCreatePathAlias(worktreePath: string): Promise<string> {
   let ancestor = worktreePath
   const missing: string[] = []
   for (;;) {

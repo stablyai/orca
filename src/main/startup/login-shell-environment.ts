@@ -6,6 +6,8 @@ import {
   resolveProfileLoadingFallbackShell,
   resolveProfileLoadingShell
 } from './hydrate-shell-path'
+import { shellProbeDetached } from './shell-path-probe'
+import { bindShellProbeLifetime } from './shell-probe-lifetime'
 
 const START_MARKER = '__ORCA_LOGIN_SHELL_ENV_START__'
 const END_MARKER = '__ORCA_LOGIN_SHELL_ENV_END__'
@@ -19,6 +21,7 @@ export type LoginShellEnvironmentCapture = {
 type CachedEnvironment = {
   /** The last good result: a fallback stays only until a capture replaces it. */
   last?: LoginShellEnvironmentCapture
+  lastStartedAt: number
   /** When the newest finished run started; an older run finishing later is ignored. */
   attemptedAt: number
   running?: { capture: Promise<LoginShellEnvironmentCapture>; startedAt: number }
@@ -26,6 +29,13 @@ type CachedEnvironment = {
 
 const environmentCache = new Map<string, CachedEnvironment>()
 const MAX_CACHED_ENVIRONMENTS = 8
+/** Moves whenever a cached capture is replaced or dropped. */
+let cacheRevision = 0
+
+/** Lets a reader of the cached capture tell, synchronously, that what it read is still current. */
+export function loginShellEnvironmentRevision(): number {
+  return cacheRevision
+}
 
 function cachedEnvironment(key: string): CachedEnvironment {
   const existing = environmentCache.get(key)
@@ -38,8 +48,9 @@ function cachedEnvironment(key: string): CachedEnvironment {
       break
     }
     environmentCache.delete(oldest)
+    cacheRevision++
   }
-  const entry: CachedEnvironment = { attemptedAt: -Infinity }
+  const entry: CachedEnvironment = { attemptedAt: -Infinity, lastStartedAt: -Infinity }
   environmentCache.set(key, entry)
   return entry
 }
@@ -127,21 +138,19 @@ function spawnShellAndReadEnvironment(
   return new Promise((resolve) => {
     let settled = false
     const chunks: Buffer[] = []
-    const child = spawnProcess({ program: shell, args, env })
+    const child = spawnProcess({ program: shell, args, env, detached: shellProbeDetached() })
+    const lifetime = bindShellProbeLifetime(child)
     const finish = (value: NodeJS.ProcessEnv | null): void => {
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timer)
+      lifetime.release()
       resolve(value)
     }
     const timer = setTimeout(() => {
-      try {
-        child.kill('SIGKILL')
-      } catch {
-        // Best-effort timeout cleanup.
-      }
+      lifetime.kill()
       finish(null)
     }, timeoutMs)
     child.stdin.on('error', () => {})
@@ -165,7 +174,7 @@ function spawnShellAndReadEnvironment(
 export type ResolveLoginShellEnvironmentOptions = {
   /** Reads the last capture or process fallback without starting or awaiting shell work. */
   cachedOnly?: boolean
-  /** Only a run that started at or after this time answers; one is started if none has. */
+  /** Only a run that started at or after this time answers, running or finished; one is started if none has. */
   startedAfter?: number
   /** Serves the last result, rerunning the shell in the background once the last run is older. */
   refreshAfterMs?: number
@@ -220,6 +229,8 @@ export function captureLoginShellEnvironment(
       entry.attemptedAt = startedAt
       if (result.status === 'captured' || entry.last?.status !== 'captured') {
         entry.last = result
+        entry.lastStartedAt = startedAt
+        cacheRevision++
       }
     })
     return capture
@@ -229,7 +240,11 @@ export function captureLoginShellEnvironment(
     return Promise.resolve(last ?? fellBack)
   }
   if (options.startedAfter !== undefined) {
-    return running && running.startedAt >= options.startedAfter ? running.capture : run()
+    if (running && running.startedAt >= options.startedAfter) {
+      return running.capture
+    }
+    // Strictly later: a same-millisecond run may predate the request.
+    return last && entry.lastStartedAt > options.startedAfter ? Promise.resolve(last) : run()
   }
   if (!last) {
     return running?.capture ?? run()
@@ -252,4 +267,5 @@ export function resolveLoginShellEnvironment(
 
 export function resetLoginShellEnvironmentCacheForTests(): void {
   environmentCache.clear()
+  cacheRevision++
 }

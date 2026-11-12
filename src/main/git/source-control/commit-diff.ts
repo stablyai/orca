@@ -1,6 +1,6 @@
-import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import { stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 import { gitRuntimeOptionsKey } from './git-runtime-options-cache-key'
 import { gitDiffReadDedupe } from './git-read-cache-invalidation'
 import { buildDiffResult } from './diff-result'

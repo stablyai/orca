@@ -1,17 +1,15 @@
-import type {
-  WorkspaceCleanupBlocker,
-  WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
 import {
-  applyWorkspaceCleanupPolicy,
-  WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT
-} from '../../../../shared/workspace-cleanup'
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+  type WorkspaceCleanupBlocker,
+  type WorkspaceCleanupCandidate,
+  type WorkspaceCleanupReason,
+  WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT as WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import type {
   WorkspaceCleanupFilterState,
   WorkspaceCleanupSortField,
   WorkspaceCleanupSortState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 /** Broad scans may defer Git reads; resolve unknown rows on demand before trusting Git-based filtering or sorting. */
 export function hasWorkspaceCleanupGitEvidence(candidate: WorkspaceCleanupCandidate): boolean {
@@ -27,7 +25,7 @@ const GIT_DERIVED_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'unknown-base'
 ])
 
-export const WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS = WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT
+const GIT_DERIVED_REASONS: ReadonlySet<WorkspaceCleanupReason> = new Set(['merged', 'unchanged'])
 
 export function needsWorkspaceCleanupGitEvidence(
   filters: WorkspaceCleanupFilterState,
@@ -57,7 +55,12 @@ export function selectWorkspaceCleanupGitEvidenceTargets(
     if (targets.length >= max) {
       break
     }
-    if (!hasWorkspaceCleanupGitEvidence(candidate) && !resolved.has(candidate.worktreeId)) {
+    // An unreachable host has no evidence to give until a fresh scan reaches it.
+    if (
+      !hasWorkspaceCleanupGitEvidence(candidate) &&
+      !resolved.has(candidate.worktreeId) &&
+      !candidate.blockers.includes('ssh-disconnected')
+    ) {
       targets.push(candidate.worktreeId)
     }
   }
@@ -81,13 +84,17 @@ export function applyWorkspaceCleanupGitEvidence(
     ) {
       return candidate
     }
-    return applyWorkspaceCleanupPolicy({
+    return {
       ...candidate,
+      reasons: [
+        ...candidate.reasons.filter((reason) => !GIT_DERIVED_REASONS.has(reason)),
+        ...evidence.reasons.filter((reason) => GIT_DERIVED_REASONS.has(reason))
+      ],
       blockers: [
         ...candidate.blockers.filter((blocker) => !GIT_DERIVED_BLOCKERS.has(blocker)),
         ...evidence.blockers.filter((blocker) => GIT_DERIVED_BLOCKERS.has(blocker))
       ],
       git: evidence.git
-    })
+    }
   })
 }

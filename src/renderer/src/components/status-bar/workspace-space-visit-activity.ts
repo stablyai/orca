@@ -1,6 +1,6 @@
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { getWorkspaceLastActiveAt } from '../../../../shared/workspace-last-active'
-import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 
 /** Rows with visits counted as activity (switch on; `visits` is undefined otherwise). */
 export function withWorkspaceSpaceVisitActivity(

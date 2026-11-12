@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitBranchCompare } from '@/runtime/runtime-git-diff-client'
-import { useAppStore } from '@/store'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
+import { getRuntimeGitBranchCompare } from '@/runtime/source-control/git/runtime-git-diff-client'
+import { useAppStore } from '@/store/index'
 import { createLoadingBranchCompareSummary } from '@/store/slices/editor/git/branch-compare-state'
-import type { GitUpstreamStatus } from '../../../../../../shared/git-status-types'
-import { shouldClearBranchCompareForMissingBase } from '../../../../../../shared/source-control-base-ref-resolution'
-import { slowTaskRequiredIdleMs } from '../../coalesced-poll-runner'
+import type { GitUpstreamStatus } from '../../../../../../shared/git/status/git-status-types'
+import { shouldClearBranchCompareForMissingBase } from '../../../../../../shared/source-control/decisions/source-control-base-ref-resolution'
+import { slowTaskRequiredIdleMs } from '../../../../lib/source-control/refresh/coalesced-poll-runner'
 import { useBranchCompareRefreshTriggers } from './use-branch-compare-refresh-triggers'
 
 // Slow polls idle for their own duration; explicit mutation/base/manual refreshes remain immediate.
@@ -39,9 +39,7 @@ export function useSourceControlBranchCompare({
   activeGitStatusHead: string | null
   remoteStatus: GitUpstreamStatus | undefined
 }) {
-  const beginGitBranchCompareRequest = useAppStore((s) => s.beginGitBranchCompareRequest)
-  const setGitBranchCompareResult = useAppStore((s) => s.setGitBranchCompareResult)
-  const clearGitBranchCompare = useAppStore((s) => s.clearGitBranchCompare)
+  const scope = useSourceControlScope()
   const branchCompareInFlightRef = useRef(false)
   const branchCompareRerunRef = useRef<BranchCompareRefreshKind | null>(null)
   const branchCompareRunPromiseRef = useRef<Promise<void> | null>(null)
@@ -63,9 +61,11 @@ export function useSourceControlBranchCompare({
       }
       const requestKey = `${activeWorktreeId}:${compareBaseRef}:${Date.now()}`
       const summary = useAppStore.getState().gitBranchCompareSummaryByWorktree[activeWorktreeId]
-      beginGitBranchCompareRequest(activeWorktreeId, requestKey, compareBaseRef, {
-        preserveExistingSummary: !!summary && summary.baseRef === compareBaseRef
-      })
+      useAppStore
+        .getState()
+        .beginGitBranchCompareRequest(activeWorktreeId, requestKey, compareBaseRef, {
+          preserveExistingSummary: !!summary && summary.baseRef === compareBaseRef
+        })
       try {
         const result = await getRuntimeGitBranchCompare(
           {
@@ -73,14 +73,14 @@ export function useSourceControlBranchCompare({
             target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
-            connectionId: getConnectionId(activeWorktreeId) ?? undefined
+            connectionId: sourceControlConnectionId(scope, activeWorktreeId)
           },
           compareBaseRef,
           kind === 'interval' ? 'background' : 'interactive'
         )
-        setGitBranchCompareResult(activeWorktreeId, requestKey, result)
+        useAppStore.getState().setGitBranchCompareResult(activeWorktreeId, requestKey, result)
       } catch (error) {
-        setGitBranchCompareResult(activeWorktreeId, requestKey, {
+        useAppStore.getState().setGitBranchCompareResult(activeWorktreeId, requestKey, {
           summary: {
             ...createLoadingBranchCompareSummary(compareBaseRef),
             compareRef: branchName,
@@ -91,16 +91,7 @@ export function useSourceControlBranchCompare({
         })
       }
     },
-    [
-      activeRepoTarget,
-      activeWorktreeId,
-      beginGitBranchCompareRequest,
-      branchName,
-      compareBaseRef,
-      isFolder,
-      setGitBranchCompareResult,
-      worktreePath
-    ]
+    [scope, activeRepoTarget, activeWorktreeId, branchName, compareBaseRef, isFolder, worktreePath]
   )
 
   const clearBranchComparePollTimer = useCallback((): void => {
@@ -244,6 +235,7 @@ export function useSourceControlBranchCompare({
       run: () => void startBranchCompareRef.current('interval'),
       runOnVisible: () => void recoverBranchCompareRef.current(),
       jitterOnVisible: true,
+      slowWhileUnfocused: true,
       intervalMs: BRANCH_REFRESH_INTERVAL_MS
     })
     return () => {
@@ -272,8 +264,8 @@ export function useSourceControlBranchCompare({
     ) {
       return
     }
-    clearGitBranchCompare(activeWorktreeId)
-  }, [activeWorktreeId, clearGitBranchCompare, compareBaseRef, isFolder, remoteStatus])
+    useAppStore.getState().clearGitBranchCompare(activeWorktreeId)
+  }, [activeWorktreeId, compareBaseRef, isFolder, remoteStatus])
 
   return { refreshBranchCompare, refreshBranchCompareRef }
 }

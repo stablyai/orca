@@ -1,19 +1,11 @@
 import { basename } from 'node:path'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
-import type { Store } from '../../persistence/loading-store/store'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { Repo } from '../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import {
-  applyWorkspaceCleanupPolicy,
-  createWorkspaceCleanupFingerprint,
-  type WorkspaceCleanupCandidate
-} from '../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../shared/workspace-cleanup/workspace-cleanup'
+import { createUnreachableHostCleanupCandidate } from '../../../shared/workspace-cleanup/workspace-cleanup-unreachable-host-candidate'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import {
-  getNewestWorkspaceCleanupDiffCommentAt,
-  getWorkspaceCleanupInactivityReasonsForWorkspace,
-  isWorkspaceInactiveForCleanup
-} from './workspace-cleanup-candidate'
 import {
   getRepoOwnedWorktreeMeta,
   isWorktreeMetaOwnedByRepo
@@ -24,7 +16,7 @@ import {
 } from '../../persistence/host-qualified-worktree-meta'
 
 export function synthesizeDisconnectedSshCleanupCandidates(
-  store: Store,
+  store: RuntimeStore,
   repo: Repo,
   scannedAt: number,
   repoOwnerCount: number,
@@ -58,22 +50,13 @@ export function synthesizeDisconnectedSshCleanupCandidates(
     if (!Object.hasOwn(allMeta, worktreeId) || !worktreeId.startsWith(repoWorktreePrefix)) {
       continue
     }
-    const owned = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)
-    const meta = owned && withTerminalUse(owned)
-    if (!meta || (!includeAllWorkspaces && !isWorkspaceInactiveForCleanup(meta, scannedAt))) {
-      continue
+    const meta = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)
+    const candidate = meta && createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta)
+    if (candidate && (includeAllWorkspaces || candidate.reasons.length > 0)) {
+      candidates.push(candidate)
     }
-    candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
   }
   return candidates
-}
-
-// A terminal used on any device counts, even while its host is unreachable. Unlike the live scan, createdAt is not counted here.
-function withTerminalUse(meta: WorktreeMeta): WorktreeMeta {
-  const usedAt = meta.lastTerminalUseAt
-  return usedAt !== undefined && Number.isFinite(usedAt) && usedAt > meta.lastActivityAt
-    ? { ...meta, lastActivityAt: usedAt }
-    : meta
 }
 
 function createDisconnectedSshCandidate(
@@ -84,39 +67,16 @@ function createDisconnectedSshCandidate(
 ): WorkspaceCleanupCandidate {
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   const path = parsed?.worktreePath ?? worktreeId
-  const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(meta, scannedAt)
-  return applyWorkspaceCleanupPolicy({
-    worktreeId,
-    repoId: repo.id,
-    repoName: repo.displayName,
-    connectionId: repo.connectionId ?? null,
-    executionHostId: normalizeExecutionHostId(meta.hostId) ?? getRepoExecutionHostId(repo),
-    displayName: meta.displayName || basename(path),
-    branch: basename(path),
-    path,
-    reasons,
-    blockers: ['ssh-disconnected'],
-    lastActivityAt: meta.lastActivityAt,
-    ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
-    localContext: {
-      terminalTabCount: 0,
-      cleanEditorTabCount: 0,
-      browserTabCount: 0,
-      diffCommentCount: meta.diffComments?.length ?? 0,
-      newestDiffCommentAt: getNewestWorkspaceCleanupDiffCommentAt(meta.diffComments),
-      retainedDoneAgentCount: 0
+  return createUnreachableHostCleanupCandidate(
+    repo,
+    normalizeExecutionHostId(meta.hostId) ?? getRepoExecutionHostId(repo),
+    {
+      ...meta,
+      worktreeId,
+      path,
+      displayName: meta.displayName || basename(path),
+      branch: basename(path)
     },
-    git: {
-      clean: null,
-      upstreamAhead: null,
-      upstreamBehind: null,
-      checkedAt: null
-    },
-    fingerprint: createWorkspaceCleanupFingerprint({
-      branch: basename(path),
-      head: '',
-      gitClean: null,
-      lastActivityAt: meta.lastActivityAt
-    })
-  })
+    scannedAt
+  )
 }

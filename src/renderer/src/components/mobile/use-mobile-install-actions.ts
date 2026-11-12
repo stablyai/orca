@@ -4,7 +4,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import type { Platform } from './MobileHero'
 import { ANDROID_INSTALL_GUIDE_URL, getInstallCopy } from './mobile-platform-copy'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function useMobileInstallActions(platform: Platform): {
   copyInstallUrl: () => Promise<void>

@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type TabGroupPaneActionsMenuProps = {
   isFocused: boolean
@@ -18,6 +18,7 @@ export function TabGroupPaneActionsMenu({
   isFocused,
   onCloseGroup
 }: TabGroupPaneActionsMenuProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   // Why: the strip stays mounted when focus or the workspace moves away; close so it can't act on a stale group.
   if (!isFocused && open) {
@@ -31,10 +32,7 @@ export function TabGroupPaneActionsMenu({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              aria-label={translate(
-                'auto.components.tab.group.TabGroupPanel.9acaf92093',
-                'Pane Actions'
-              )}
+              aria-label={t('auto.components.tab.group.TabGroupPanel.9acaf92093', 'Pane Actions')}
               onClick={(event) => {
                 event.stopPropagation()
               }}
@@ -56,15 +54,12 @@ export function TabGroupPaneActionsMenu({
         >
           <DropdownMenuItem variant="destructive" onSelect={() => onCloseGroup()}>
             <X className="size-4" />
-            {translate(
-              'auto.components.tab.group.TabGroupPanel.closePaneColumn',
-              'Close split pane'
-            )}
+            {t('auto.components.tab.group.TabGroupPanel.closePaneColumn', 'Close split pane')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <TooltipContent side="bottom" sideOffset={6}>
-        {translate('auto.components.tab.group.TabGroupPanel.9acaf92093', 'Pane Actions')}
+        {t('auto.components.tab.group.TabGroupPanel.9acaf92093', 'Pane Actions')}
       </TooltipContent>
     </Tooltip>
   )

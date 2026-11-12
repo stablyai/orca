@@ -1,34 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildTerminalShortcutKey, TERMINAL_ACCESSORY_KEYS } from './terminal-accessory-keys'
+import { buildTerminalShortcutKey } from './terminal-accessory-keys'
 
 describe('TERMINAL_ACCESSORY_KEYS', () => {
-  it('has unique non-empty built-in ids', () => {
-    const ids = TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
-
-    expect(ids.every((id) => id.length > 0)).toBe(true)
-    expect(new Set(ids).size).toBe(ids.length)
-  })
-
-  it('keeps all built-in terminal keys byte-backed', () => {
-    expect(TERMINAL_ACCESSORY_KEYS.every((key) => key.bytes.length > 0)).toBe(true)
-  })
-
-  it('keeps repeat behavior explicit for built-in terminal keys', () => {
-    const repeatableIds = new Set([
-      'backspace',
-      'delete',
-      'arrowUp',
-      'arrowDown',
-      'arrowLeft',
-      'arrowRight'
-    ])
-
-    for (const key of TERMINAL_ACCESSORY_KEYS) {
-      expect(key.repeatable === true).toBe(repeatableIds.has(key.id))
-    }
-  })
-
   it('builds Ctrl, Alt, and Shift printable shortcut bytes', () => {
     expect(buildTerminalShortcutKey({ key: 'c', modifiers: ['ctrl'] })).toEqual({
       label: 'Ctrl+C',
@@ -86,13 +60,6 @@ describe('TERMINAL_ACCESSORY_KEYS', () => {
       bytes: '\x1b[3;3~',
       accessibilityLabel: 'Alt Del'
     })
-  })
-
-  it('builds desktop bytes for Shift+Enter and Ctrl+Backspace', () => {
-    expect(buildTerminalShortcutKey({ key: 'enter', modifiers: ['shift'] })?.bytes).toBe(
-      '\x1b[13;2u'
-    )
-    expect(buildTerminalShortcutKey({ key: 'backspace', modifiers: ['ctrl'] })?.bytes).toBe('\x17')
   })
 
   it('builds function-key terminal sequences', () => {

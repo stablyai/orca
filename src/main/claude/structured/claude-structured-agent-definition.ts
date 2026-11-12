@@ -1,4 +1,4 @@
-import type { DirectoryAccountAgentDefinition } from '../../native-chat/agent-session-wire/structured-agent-definition'
+import type { DirectoryAccountAgentDefinition } from '../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import { CLAUDE_STRUCTURED_HANDLE_NAMESPACE } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { isClaudeStructuredOptionKey } from './launch/claude-structured-options'
 import { claudeFallbackModelOptions } from './launch/claude-structured-session-options'
@@ -9,6 +9,7 @@ export const CLAUDE_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   accountHomeVariable: 'CLAUDE_CONFIG_DIR',
   capabilities: {
     rewind: true,
+    fork: 'checkpoint',
     compact: true,
     compactInstructions: true,
     threadGoal: false,

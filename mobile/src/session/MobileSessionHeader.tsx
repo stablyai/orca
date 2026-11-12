@@ -1,13 +1,15 @@
-import { useRef, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { useRef, useState, useSyncExternalStore } from 'react'
+import { StyleSheet, View, type HostInstance } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, GitBranch, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
-import { NavBar } from '../components/nav-bar/NavBar'
+import { ChevronLeft, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import { NavBar, NavBarRefreshLine } from '../components/nav-bar/NavBar'
+import { useRefreshHint } from '../query/refresh-hint'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
-import { MobileSessionTabStrip } from './MobileSessionTabStrip'
+import { MobileSourceControlButton } from './MobileSourceControlButton'
+import { MobileSessionTabBar } from './tabs/MobileSessionTabBar'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
-import type { SessionTitleCard } from './use-session-title-card'
+import type { SessionTitleCard } from './tabs/use-session-title-card'
 import { styles } from './mobile-session-styles'
 import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -29,7 +31,7 @@ export function MobileSessionHeader({
   const t = useMobileTranslation()
   const {
     hostId,
-    isFolderWorkspaceRoute,
+    worktreeId,
     isFloatingWorkspaceRoute,
     presentedConnState,
     forceReconnectHost,
@@ -41,26 +43,30 @@ export function MobileSessionHeader({
     showConnectionRetry,
     connectionEscalated,
     terminalSummary,
-    handlePanelTap
+    handlePanelTap,
+    terminalResume,
+    connState
   } = controller
+  // A switched-back terminal shows its last screen at once; only a slow catch-up shows the refresh line.
+  const catchingUp = useSyncExternalStore(terminalResume.subscribe, terminalResume.anyCatchingUp)
+  // While offline the header already says so; a resume queued for the reconnect isn't a refresh.
+  const showRefreshLine = useRefreshHint(catchingUp && connState === 'connected')
   const layout = useResponsiveLayout()
   const [headerWidth, setHeaderWidth] = useState<number | null>(null)
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const revealSidebar = useHostSidebarReveal()
   const topChrome = useTopChromeSpace()
   const sideRail = useShellSideRail()
   // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
   const hasTabs = visibleTabs.length > 0
   const tabsInTopBar = (layout.isLandscapePhone || sideRail) && hasTabs
-  // Bar buttons otherwise leave less than two readable tabs on a narrow header.
+  // Bar buttons otherwise leave the tab bar too narrow to read on a narrow header.
   const actionsCollapsed = tabsInTopBar && (headerWidth ?? layout.width) < 600
-  const sourceControlInBar =
-    !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && !actionsCollapsed
+  const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed
   const tabStrip = hasTabs ? (
-    <MobileSessionTabStrip
+    <MobileSessionTabBar
       controller={controller}
       inTopBar={tabsInTopBar}
-      details={details.tabDetails}
       actionsCollapsed={actionsCollapsed}
     />
   ) : null
@@ -104,10 +110,10 @@ export function MobileSessionHeader({
   const trailing = (
     <>
       {sourceControlInBar ? (
-        <NavBarButton
+        <MobileSourceControlButton
+          hostId={hostId}
+          worktreeId={worktreeId}
           active={activePanel === 'sourceControl'}
-          accessibilityLabel={t('session.header.openSourceControl', 'Open source control')}
-          icon={GitBranch}
           onPress={() => handlePanelTap('sourceControl')}
         />
       ) : null}
@@ -162,6 +168,7 @@ export function MobileSessionHeader({
           )}
         </View>
         {tabsInTopBar ? null : tabStrip}
+        {showRefreshLine ? <NavBarRefreshLine /> : null}
       </SafeAreaView>
       <MobileSessionHeaderMoreMenu
         controller={controller}

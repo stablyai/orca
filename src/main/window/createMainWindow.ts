@@ -1,17 +1,19 @@
 import { app, BrowserWindow, nativeTheme, powerMonitor, screen } from 'electron'
 import { release } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { installRendererHangStackPolicy } from '../hang-watchdog/renderer-hang-stack-policy'
 import { getAppIconPath } from './desktop-integration/app-icon'
-import { browserManager } from '../browser/browser-manager'
-import { getBrowserClientHostId } from '../browser/browser-client-host-id'
-import { formatBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
+import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
+import { formatBrowserClientHostIdArgument } from '../../shared/browser/client-hosting/browser-client-host-id-argument'
 import { formatWindowMaterialArgument, resolveWindowMaterial } from '../../shared/window-material'
 import { windowMaterialOptions } from './window-material-options'
 import { rememberWindowMaterial } from './window-material-suppression'
-import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { markSystemSessionEnding } from '../crash-reporting/process-exits/expected-teardown-state'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
-import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
+import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 import type { Store } from '../persistence/loading-store/store'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { closeWorkspaceSpaceWindow } from './workspace-space-window'
@@ -24,8 +26,9 @@ import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
 import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
+import { installMainWindowActivityRelay } from './main-window-activity'
 import { stopHiddenWindowFramePumpOnShow } from './hidden-window-frame-pump'
-import { wslHostsWindowArguments } from '../wsl/wsl-host-gate'
+import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
   formatHiddenWindowFramePumpArgument,
   shouldPumpHiddenWindowFrames
@@ -41,12 +44,18 @@ import {
 } from './main-window-visual-lifecycle'
 import { installMainWindowWebviewSecurity } from './main-window-webview-security'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
-import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
+import { installWindowsPathRegistryChangeListener } from '../pty/environment/windows-path-registry-change'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
 
 export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
 
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
+  installRendererHangStackPolicy(
+    mainWindow.webContents,
+    !app.isPackaged && process.env.ELECTRON_RENDERER_URL
+      ? process.env.ELECTRON_RENDERER_URL
+      : pathToFileURL(join(__dirname, '../renderer/index.html')).href
+  )
   const load =
     !app.isPackaged && process.env.ELECTRON_RENDERER_URL
       ? mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -87,6 +96,7 @@ export function createMainWindow(
     )
   }
   const savedMaximized = store?.getUI().windowMaximized ?? false
+  const savedFullScreen = store?.getUI().windowFullScreen ?? false
   // Fill the primary work area on first launch; later launches honor saved bounds.
   const defaultBounds = (() => {
     try {
@@ -99,8 +109,9 @@ export function createMainWindow(
 
   const settings = store?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
-    // Webview guests have no safe transcript target; yield the dictation shortcut to the page.
-    return false
+    const voice = store?.getSettings().voice
+    // Chromium drops a page's key releases after a press cancelled here, so Hold can't see its release; the page keeps the key then.
+    return voice?.enabled === true && voice.dictationMode !== 'hold'
   })
   const windowMaterial = resolveWindowMaterial(
     settings,
@@ -201,9 +212,11 @@ export function createMainWindow(
     mainWindow,
     revealOnDidFinishLoad: opts?.revealOnDidFinishLoad === true,
     savedMaximized,
+    savedFullScreen,
     store
   })
   installMainWindowWebviewSecurity(mainWindow)
+  const activity = installMainWindowActivityRelay(mainWindow)
   if (pumpHiddenFrames) {
     stopHiddenWindowFramePumpOnShow(mainWindow)
   }
@@ -231,6 +244,7 @@ export function createMainWindow(
     closeWorkspaceSpaceWindow()
     state.clearInitialRevealFallbackTimer()
     closeLifecycle.dispose()
+    activity.dispose()
     focus.dispose()
     browserManager.setDictationShortcutForwardingPredicate(null)
     powerMonitor.removeListener('resume', onSystemResume)

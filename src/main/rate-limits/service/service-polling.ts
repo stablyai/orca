@@ -8,9 +8,9 @@ import {
   normalizePollingInterval,
   type ActiveProviderState,
   type ActiveRateLimitProvider,
-  type ActiveWindowRefreshPlan,
-  type ProviderRateLimits
+  type ActiveWindowRefreshPlan
 } from './service-types'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 
 export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue {
   setPollingInterval(ms: number): void {
@@ -42,7 +42,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     this.clearDeferredStartupRefresh()
     this.deferredStartupRefreshTimer = setTimeout(() => {
       this.deferredStartupRefreshTimer = null
-      void this.refreshIfWindowActive()
+      void this.refreshIfWatched()
     }, DEFERRED_STARTUP_ACTIVE_REFRESH_MS)
   }
 
@@ -54,6 +54,10 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
   }
 
   protected shouldBackgroundPoll(): boolean {
+    // Poll only while someone watches: a paired client's stream, or the focused desktop window.
+    if (this.usageViewers > 0) {
+      return true
+    }
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return false
     }
@@ -77,12 +81,37 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       antigravity: this.state.antigravity,
       cursor: this.state.cursor,
       zcode: this.state.zcode,
+      muse: this.state.muse,
       kiro: this.state.kiro
     }
-    return Object.entries(byProvider).map(([provider, limits]) => ({
-      provider: provider as ActiveRateLimitProvider,
-      limits
-    }))
+    // A hidden Muse meter keeps an idle snapshot, which must not force a full refresh on every focus.
+    const museEnabled = this.museUsageEnabledResolver?.() ?? true
+    return Object.entries(byProvider)
+      .filter(([provider]) => provider !== 'muse' || museEnabled)
+      .map(([provider, limits]) => ({
+        provider: provider as ActiveRateLimitProvider,
+        limits
+      }))
+  }
+
+  /** When a provider's reading was last checked; Claude counts its last completed check. */
+  protected providerCheckedAt(
+    provider: ActiveRateLimitProvider,
+    limits: ProviderRateLimits
+  ): number | null {
+    return provider === 'claude' ? this.lastClaudeCheckCompletedAt : limits.updatedAt
+  }
+
+  /** Whether a failing provider's backoff allows another automatic read now. */
+  protected failureRetryDue(provider: ActiveRateLimitProvider, now: number): boolean {
+    const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
+      ? Math.min(
+          ACTIVE_FAILURE_REFETCH_MS *
+            2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
+          MAX_ACTIVE_FAILURE_REFETCH_MS
+        )
+      : MIN_REFETCH_MS
+    return now - this.lastActiveFailureRetryAtByProvider[provider] >= throttleMs
   }
 
   protected getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {
@@ -95,7 +124,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
         if (this.shouldSkipAutomatedFetch(provider, limits)) {
           continue
         }
-        const checkedAt = provider === 'claude' ? this.lastClaudeCheckCompletedAt : limits.updatedAt
+        const checkedAt = this.providerCheckedAt(provider, limits)
         if (checkedAt === null || now - checkedAt >= MIN_REFETCH_MS) {
           return { kind: 'full' }
         }
@@ -107,15 +136,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
         if (this.isRetryAfterActive(limits)) {
           continue
         }
-        const lastRetryAt = this.lastActiveFailureRetryAtByProvider[provider]
-        const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
-          ? Math.min(
-              ACTIVE_FAILURE_REFETCH_MS *
-                2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
-              MAX_ACTIVE_FAILURE_REFETCH_MS
-            )
-          : MIN_REFETCH_MS
-        if (now - lastRetryAt >= throttleMs) {
+        if (this.failureRetryDue(provider, now)) {
           retryableFailures.push(provider)
         }
       }
@@ -175,7 +196,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     }
   }
 
-  protected async refreshIfWindowActive(): Promise<void> {
+  protected async refreshIfWatched(): Promise<void> {
     if (!this.shouldBackgroundPoll()) {
       return
     }

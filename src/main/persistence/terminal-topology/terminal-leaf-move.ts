@@ -1,17 +1,20 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { collectLeafIds } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import {
   terminalLeafMovePaneKeys,
   type TerminalLeafMoveRequest,
   type TerminalLeafMoveResult
-} from '../../../shared/terminal-leaf-move'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { retireLeavesFromTerminalLayout } from '../../../shared/terminal-layout-leaf-retirement'
+} from '../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { retireLeavesFromTerminalLayout } from '../../../shared/workspace-layout/terminal-topology/terminal-layout-leaf-retirement'
 import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'
-import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
+import { layoutContainsLeafId } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { writeRestorable } from './restorable-write'
 import type { TerminalTopologyCommitContext } from './terminal-topology-commit'
 import {

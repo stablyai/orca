@@ -9,8 +9,8 @@ import {
   DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
   DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
   RendererRecoveryCircuitBreaker
-} from '../crash-reporting/renderer-recovery-circuit-breaker'
-import { createLowCommitOomRecoveryGate } from '../crash-reporting/low-commit-oom-recovery-gate'
+} from '../crash-reporting/recovery/renderer-recovery-circuit-breaker'
+import { createLowCommitOomRecoveryGate } from '../crash-reporting/recovery/low-commit-oom-recovery-gate'
 import {
   buildEditableContextMenuTemplate,
   matchingRichMarkdownContextMenuTableTarget,
@@ -18,11 +18,11 @@ import {
 } from './editable-context-menu'
 import { createEditableContextMenuPopup } from './editable-context-menu-popup'
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
-import { browserRouteWebContentsRegistry } from '../browser/browser-route-session-runtime'
+import { browserRouteWebContentsRegistry } from '../browser/routing/sessions/browser-route-session-runtime'
 import {
   attachBrowserClientPageRenderer,
   retireBrowserClientPageRenderer
-} from '../browser/browser-client-page-renderer-runtime'
+} from '../browser/client-pages/renderer/browser-client-page-renderer-runtime'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRendererRecoveryReloadWatchdog } from './renderer-recovery-reload-watchdog'
 import { createRendererLaunchFailureBackoff } from './renderer-launch-failure-backoff'
@@ -208,8 +208,7 @@ export function installMainWindowFocusLifecycle(args: {
       return
     }
     const launchFailed = details.reason === 'launch-failed'
-    const useLaunchBackoff = launchFailed && process.platform !== 'win32'
-    const launchRetryDelayMs = useLaunchBackoff ? launchFailureBackoff.nextDelayMs() : null
+    const launchRetryDelayMs = launchFailed ? launchFailureBackoff.nextDelayMs() : null
     const goneAt = Date.now()
     // Read commit at death; the next sampler tick would see memory the dead renderer released.
     const lowCommit = lowCommitOomGate.assess(details, goneAt)
@@ -237,7 +236,7 @@ export function installMainWindowFocusLifecycle(args: {
         return
       }
       // Spawn refusal needs its own bounded backoff, independent of crash-loop accounting.
-      if (useLaunchBackoff) {
+      if (launchFailed) {
         const subject = { details, recentRecoveryCount: launchFailureBackoff.attempts() }
         if (launchRetryDelayMs === null) {
           recoveryReloadWatchdog.escalate(subject, 'launch-failed')
@@ -251,7 +250,7 @@ export function installMainWindowFocusLifecycle(args: {
         // Stop repeated crashes through the one-prompt watchdog; it also watches manual retry so another stall cannot strand a blank window.
         recoveryReloadWatchdog.escalate(
           { details, recentRecoveryCount: recovery.recentRecoveryCount },
-          launchFailed ? 'launch-failed' : 'crash-loop'
+          'crash-loop'
         )
         return
       }

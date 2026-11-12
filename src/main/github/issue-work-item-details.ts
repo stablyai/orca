@@ -1,3 +1,9 @@
+import {
+  GITHUB_BODY_MEDIA_TYPE,
+  githubBodyImageUrls,
+  removeFailedGitHubBodyHtml
+} from './body-image-urls'
+import { extractExecError } from '../git/command-runner/process-capture/exec-error'
 import type { GitHubIssueTimelineItem, PRComment } from '../../shared/github/comment-types'
 import type { GitHubAssignableUser } from '../../shared/github/pull-request-types'
 import {
@@ -8,15 +14,23 @@ import {
 import { mapIssueWorkItem } from './client/map/work-item'
 import { restIssueActor } from './client/map/issue-actor'
 import type { MainWorkItem } from './client/map/work-item-field-coercion'
-import { ghExecFileAsync, ghRepoExecOptions, githubRepoContext } from './gh-utils'
-import type { LocalGitExecOptions } from './gh-utils'
+import {
+  ghExecFileAsync,
+  ghRepoExecOptions,
+  githubRepoContext,
+  type LocalGitExecOptions
+} from './gh-utils'
+
 import { githubHostExecOptions, type GitHubApiRepository } from './github-api-repository'
 import { getIssueTimelineItems } from './issue-timeline'
+import { readViewerLogin } from './client/fetch/authenticated-viewer'
+import { viewerAuthorship } from '../source-control/comment-viewer-authorship'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from './rate-limit'
 
 export type CollapsedIssueDetails = {
   item?: MainWorkItem
   body: string
+  bodyImageUrls?: Record<string, string>
   comments: PRComment[]
   assignees: string[]
   assigneeUsers: GitHubAssignableUser[]
@@ -45,25 +59,33 @@ export async function getIssueDetailsViaGraphQL(
   }
   try {
     noteRepositoryRateLimitSpend(repository, 'graphql', 1, ghOptions)
-    const { stdout } = await ghExecFileAsync(
-      [
-        'api',
-        'graphql',
-        '-f',
-        `query=${ISSUE_DETAILS_QUERY}`,
-        '-f',
-        `owner=${repository.owner}`,
-        '-f',
-        `repo=${repository.repo}`,
-        '-F',
-        `number=${issueNumber}`,
-        '-F',
-        `includeItem=${includeItem}`
-      ],
-      ghOptions
-    )
-    const parsed = JSON.parse(stdout) as GraphQLIssueDetailsResponse
-    if (parsed.errors && parsed.errors.length > 0) {
+    let stdout: string
+    let rejected = false
+    try {
+      ;({ stdout } = await ghExecFileAsync(
+        [
+          'api',
+          'graphql',
+          '-f',
+          `query=${ISSUE_DETAILS_QUERY}`,
+          '-f',
+          `owner=${repository.owner}`,
+          '-f',
+          `repo=${repository.repo}`,
+          '-F',
+          `number=${issueNumber}`,
+          '-F',
+          `includeItem=${includeItem}`
+        ],
+        ghOptions
+      ))
+    } catch (error) {
+      stdout = extractExecError(error).stdout
+      rejected = true
+    }
+    const parsed: GraphQLIssueDetailsResponse = JSON.parse(stdout)
+    const errors = removeFailedGitHubBodyHtml(parsed.data, parsed.errors)
+    if (errors?.length || (rejected && !parsed.errors?.length)) {
       return null
     }
     const issue = parsed.data?.repository?.issue
@@ -83,15 +105,19 @@ export async function getIssueDetailsViaGraphQL(
       return null
     }
     const comments: PRComment[] = (issue.comments?.nodes ?? [])
-      .filter((comment) => typeof comment.databaseId === 'number')
+      .filter(
+        (comment): comment is NonNullable<typeof comment> => typeof comment?.databaseId === 'number'
+      )
       .map((comment) => ({
         id: comment.databaseId as number,
         author: comment.author?.login ?? 'ghost',
         authorAvatarUrl: comment.author?.avatarUrl ?? '',
         body: comment.body ?? '',
+        bodyImageUrls: githubBodyImageUrls(comment.body, comment.bodyHTML),
         createdAt: comment.createdAt ?? '',
         url: comment.url ?? '',
-        isBot: comment.author?.__typename === 'Bot'
+        isBot: comment.author?.__typename === 'Bot',
+        ...(comment.viewerDidAuthor === true ? { viewerDidAuthor: true } : {})
       }))
     const assigneeUsers: GitHubAssignableUser[] = (issue.assignees?.nodes ?? [])
       .filter((assignee): assignee is { login: string; avatarUrl?: string; name?: string | null } =>
@@ -109,7 +135,7 @@ export async function getIssueDetailsViaGraphQL(
         name: user.name ?? null,
         avatarUrl: user.avatarUrl ?? ''
       }))
-    return {
+    const details: CollapsedIssueDetails = {
       ...(itemData?.success
         ? {
             item: mapIssueWorkItem({
@@ -122,12 +148,14 @@ export async function getIssueDetailsViaGraphQL(
           }
         : {}),
       body: issue.body ?? '',
+      bodyImageUrls: githubBodyImageUrls(issue.body, issue.bodyHTML),
       comments,
       assignees: assigneeUsers.map((assignee) => assignee.login),
       assigneeUsers,
       participants,
       timelineItems: await getIssueTimelineItems(repository, issueNumber, ghOptions, fresh)
     }
+    return details
   } catch {
     return null
   }
@@ -140,7 +168,9 @@ export async function getIssueBodyAndComments(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
   fresh = false
-): Promise<Pick<CollapsedIssueDetails, 'body' | 'comments' | 'assignees' | 'timelineItems'>> {
+): Promise<
+  Pick<CollapsedIssueDetails, 'body' | 'bodyImageUrls' | 'comments' | 'assignees' | 'timelineItems'>
+> {
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(repository)
@@ -153,12 +183,13 @@ export async function getIssueBodyAndComments(
         }
         return { body: '', comments: [], assignees: [], timelineItems: [] }
       }
-      noteRepositoryRateLimitSpend(repository, 'core', 2, ghOptions)
-      const [issueResult, commentsResult, timelineItems] = await Promise.all([
+      noteRepositoryRateLimitSpend(repository, 'core', 3, ghOptions)
+      const [issueResult, commentsResult, timelineItems, viewerLogin] = await Promise.all([
         ghExecFileAsync(
           [
             'api',
-            ...(fresh ? [] : ['--cache', '60s']),
+            '-H',
+            GITHUB_BODY_MEDIA_TYPE,
             `repos/${repository.owner}/${repository.repo}/issues/${issueNumber}`
           ],
           ghOptions
@@ -166,22 +197,26 @@ export async function getIssueBodyAndComments(
         ghExecFileAsync(
           [
             'api',
-            ...(fresh ? [] : ['--cache', '60s']),
+            '-H',
+            GITHUB_BODY_MEDIA_TYPE,
             ...(fresh ? ['--paginate', '--slurp'] : []),
             `repos/${repository.owner}/${repository.repo}/issues/${issueNumber}/comments?per_page=100`
           ],
           ghOptions
         ),
-        getIssueTimelineItems(repository, issueNumber, ghOptions, fresh)
+        getIssueTimelineItems(repository, issueNumber, ghOptions, fresh),
+        readViewerLogin(ghOptions)
       ])
-      const issue = JSON.parse(issueResult.stdout) as {
+      const issue: {
         body?: string | null
+        body_html?: unknown
         assignees?: { login: string }[]
-      }
+      } = JSON.parse(issueResult.stdout)
       type RESTComment = {
         id: number
         user: { login: string; avatar_url: string; type?: string } | null
         body: string
+        body_html?: unknown
         created_at: string
         html_url: string
       }
@@ -195,16 +230,20 @@ export async function getIssueBodyAndComments(
         author: comment.user?.login ?? 'ghost',
         authorAvatarUrl: comment.user?.avatar_url ?? '',
         body: comment.body ?? '',
+        bodyImageUrls: githubBodyImageUrls(comment.body, comment.body_html),
         createdAt: comment.created_at,
         url: comment.html_url,
-        isBot: comment.user?.type === 'Bot'
+        isBot: comment.user?.type === 'Bot',
+        ...viewerAuthorship(comment.user?.login, viewerLogin)
       }))
-      return {
+      const details = {
         body: issue.body ?? '',
+        bodyImageUrls: githubBodyImageUrls(issue.body, issue.body_html),
         comments,
         assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
         timelineItems
       }
+      return details
     }
     if (connectionId) {
       // A connection-backed lookup must not use ambient local GH_REPO/GH_HOST.
@@ -214,23 +253,25 @@ export async function getIssueBodyAndComments(
       ['issue', 'view', String(issueNumber), '--json', 'body,comments,assignees'],
       ghOptions
     )
-    const data = JSON.parse(stdout) as {
+    const data: {
       body?: string
       comments?: {
         author: { login: string }
         body: string
         createdAt: string
         url: string
+        viewerDidAuthor?: boolean
       }[]
       assignees?: { login: string }[]
-    }
+    } = JSON.parse(stdout)
     const comments = (data.comments ?? []).map((comment, index): PRComment => ({
       id: index,
       author: comment.author?.login ?? 'ghost',
       authorAvatarUrl: '',
       body: comment.body ?? '',
       createdAt: comment.createdAt,
-      url: comment.url ?? ''
+      url: comment.url ?? '',
+      ...(comment.viewerDidAuthor === true ? { viewerDidAuthor: true } : {})
     }))
     return {
       body: data.body ?? '',

@@ -10,7 +10,7 @@ import { win32 } from 'node:path'
 import { readFileSync, realpathSync, statSync } from 'node:fs'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { resolveProjectExecutionRuntime } from '../../../shared/project-execution-runtime'
+import { resolveProjectExecutionRuntime } from '../../../shared/execution-host/project-execution-runtime'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Project } from '../../../shared/project-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
@@ -20,19 +20,19 @@ import {
   setBackgroundWslGitGate,
   setLocalGitRuntimeRouter,
   type LocalGitRuntimeRouter
-} from '../../git/command-runner/local-git-runtime-route'
-import { isWslDistroRunningForBackgroundWork } from '../../wsl-background-distro-gate'
+} from '../../git/command-runner/host-routing/local-git-runtime-route'
+import { isWslDistroRunningForBackgroundWork } from '../../wsl/discovery/wsl-background-distro-gate'
 import {
   onWslHostsNewWorkChanged,
   wslHostsGateOpen,
   wslHostsOptedIn
-} from '../../wsl/wsl-host-gate'
+} from '../../wsl/host-lifecycle/wsl-host-gate'
 import {
   followWslAutomountRoots,
   knownWslAutomountRoots,
   onWslAutomountRootsChanged,
   wslDrivePathUnderRoots
-} from '../../wsl/wsl-automount-root'
+} from '../../wsl/filesystem/wsl-automount-root'
 
 export type ProjectRuntimeGitRouterStore = {
   getRepos: () => Repo[]

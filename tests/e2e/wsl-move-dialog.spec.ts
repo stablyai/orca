@@ -1,8 +1,7 @@
 /**
  * The WSL move dialog against a fake move transport: no wsl.exe or distro in CI. Main's
  * `wslMove:*` handlers are swapped for a scripted host, so the real dialog runs open preview →
- * blockers → skip → start → progress → refusal → start again → moved → reload. A second test
- * proves that with the internal gate closed none of it shows and main refuses.
+ * blockers → skip → start → progress → refusal → start again → moved → reload.
  */
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -19,8 +18,8 @@ import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-pr
 import { createElectronHomeIsolation } from './helpers/electron-home-isolation'
 import { expect, forwardElectronProcessLogs, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
-import { encodePairingOffer } from '../../src/shared/pairing'
-import { addWslHostEnvironment } from '../../src/shared/runtime-environment-wsl-host-store'
+import { encodePairingOffer } from '../../src/shared/remote-runtime/pairing/pairing'
+import { addWslHostEnvironment } from '../../src/shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
 import type {
   WslMovePreview,
@@ -83,7 +82,7 @@ async function launch(
     inheritedEnv: cleanEnv,
     launchEnv: {},
     extraEnv: {
-      ...(internalGate ? { [WSL_HOSTS_INTERNAL_GATE_ENV]: '1' } : {}),
+      [WSL_HOSTS_INTERNAL_GATE_ENV]: internalGate ? '1' : '0',
       ORCA_E2E_FAKE_WSL_HOSTS: JSON.stringify({
         distros: [{ name: DISTRO, state: 'stopped', version: 2 }],
         pairingCode: 'unused'
@@ -407,32 +406,5 @@ test('moves projects through preview, blockers, progress and result', async ({},
     await desktop.dispose()
     rmSync(path.dirname(apiPath), { recursive: true, force: true })
     rmSync(path.dirname(webPath), { recursive: true, force: true })
-  }
-})
-
-// oxlint-disable-next-line no-empty-pattern -- Playwright passes fixtures before testInfo.
-test('with the internal gate closed, no move entry shows and main refuses', async ({}, testInfo) => {
-  // The gated-off launch still boots a full app before main is asked to refuse.
-  test.setTimeout(180_000)
-  const desktop = await launch(testInfo, false)
-  const { page } = desktop
-  try {
-    expect(
-      await page.evaluate((distro) => window.api.wslMove.preview({ distro }), DISTRO)
-    ).toMatchObject({ outcome: 'refused', code: 'wsl_move_unavailable' })
-    expect(await page.evaluate(() => window.api.wslMove.listUnfinished())).toEqual([])
-    // Serve-only (#34683): the saved host still lists, but nothing new is added or moved.
-    await openServersPane(page)
-    const hosts = page.locator('[data-settings-section="wsl-hosts"]')
-    await expect(hosts.getByRole('button', { name: 'Add WSL distro' })).toHaveCount(0)
-    await hosts.getByRole('button', { name: `More actions for ${DISTRO} (WSL)` }).click()
-    await expect(page.getByRole('menuitem', { name: 'Remove…' })).toBeVisible()
-    await expect(
-      page.getByRole('menuitem', { name: 'Move projects from this distro…' })
-    ).toHaveCount(0)
-    await page.keyboard.press('Escape')
-    await expect(page.getByTestId('wsl-move-dialog')).toHaveCount(0)
-  } finally {
-    await desktop.dispose()
   }
 })

@@ -1,54 +1,68 @@
+import { wireRecipeWorkspaceRemoval } from '../ephemeral-vm/recipe-workspace-removal-wiring'
+import { wireGitHubIssueLinkTitleFill } from '../github/github-issue-link-title-wiring'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
 } from '../ai-vault-search/session-search-enablement'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { sessionSearchScopeCatalogFromStore } from '../ai-vault-search/session-search-store-scope-catalog'
+import { sessionSearchScopeCatalogFromStore } from '../ai-vault-search/scope/session-search-store-scope-catalog'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { app } from 'electron'
 import { translateMain } from '../i18n/main-i18n'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'
-import { browserManager } from '../browser/browser-manager'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { loadAgentSessionClaimSigner } from '../runtime/agent-session/ownership/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
+import { codexAiVaultSessionResumePreparation } from '../codex/history/resume/codex-ai-vault-session-resume'
 import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
-import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
-import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
-import { getDaemonProvider } from '../daemon/daemon-provider-state'
-import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
-import type { OrchestrationEnvironmentTransport } from '../runtime/orchestration/environment-transport'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
-import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
-import { pairedOrchestrationPeers } from '../runtime/orchestration/environment-transport'
+import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
+import { agentHookRuntimeDeps } from '../agent-hooks/runtime/agent-hook-runtime-deps'
+import { getDaemonProvider } from '../daemon/providers/lifecycle/daemon-provider-state'
+import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
+import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
+import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environments/orchestration-environment-transport'
+import { trackRuntimeEnvironmentVerifiedTransitions } from '../ipc/runtime-environments/runtime-environment-verified-transitions'
+import { onRuntimeEnvironmentStatusPublished } from '../ipc/runtime-environments/runtime-environment-status-owner'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
+import {
+  acceptEphemeralVmWorkspaceWake,
+  resumeEphemeralVmWorkspace
+} from '../ephemeral-vm/workspace-resume'
+import { registerRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
+import { setSshHostAsleepCheck } from '../ssh/connection/ssh-host-sleep-hold'
+import {
+  isRecipeVmSshTargetAsleep,
+  setRecipeVmAsleepStoreRoot
+} from '../ephemeral-vm/recipe-vm-asleep'
+import { openRecipeVmEnvironment } from '../ipc/runtime-environments/runtime-environment-recipe-vm-wake'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
   prepareCodexRuntimeHomeForLaunch
 } from './codex-launch-preparation'
-import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
+import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
-import { SkillCloudService } from '../skills/skill-cloud-service'
-import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
+import { SkillCloudService } from '../skills/cloud/skill-cloud-package-service'
+import { isArtifactSharingEnabled } from '../../shared/artifacts/artifact-sharing-gate'
 import {
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
-} from '../runtime/agent-status-observed-pane-identity'
+} from '../runtime/terminal/identity/agent-status-observed-pane-identity'
 import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
-import { openOffscreenBrowserPageLink } from '../runtime/browser/offscreen-browser-page-link'
+import { openOffscreenBrowserPageLink } from '../runtime/browser/commands/offscreen-browser-page-link'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -64,28 +78,6 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   const stats = state.stats
   if (!store || !stats) {
     throw new Error('Store and stats must be initialized before runtime')
-  }
-  const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
-    resolve: (selector) => {
-      const environment = resolveEnvironment(getRuntimeEnvironmentRegistryRoot(), selector)
-      const connection = getPreferredPairedRuntimeConnection(environment)
-      return {
-        environmentId: environment.id,
-        name: environment.name,
-        ...pairedOrchestrationPeers(connection.hostPublicKeyB64, connection.credential.deviceToken),
-        pairingRevision: environment.pairingRevision ?? environment.createdAt
-      }
-    },
-    call: (selector, method, params, timeoutMs, envelope, expectedPairingRevision) =>
-      callRuntimeEnvironment(
-        getRuntimeEnvironmentRegistryRoot(),
-        selector,
-        method,
-        params,
-        timeoutMs,
-        expectedPairingRevision,
-        envelope
-      )
   }
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
@@ -131,7 +123,11 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         homePath,
         resolveTuiAgentLaunchEnv('codex', store.getSettings())
       ),
-    orchestrationEnvironmentTransport,
+    orchestrationEnvironmentTransport: {
+      ...createOrchestrationEnvironmentTransport(),
+      onEnvironmentVerified: (listener) =>
+        onRuntimeEnvironmentStatusPublished(trackRuntimeEnvironmentVerifiedTransitions(listener))
+    },
     workspaceSleepPlatform: {
       callEnvironment: (environmentId, method, params, timeoutMs) =>
         callRuntimeEnvironment(
@@ -141,7 +137,11 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
           params,
           timeoutMs
         ),
-      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId)
+      ownsVm: (workspaceId) =>
+        findWorkspaceEphemeralVmRuntime(app.getPath('userData'), workspaceId) !== undefined,
+      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId),
+      acceptWake: (workspaceId) => acceptEphemeralVmWorkspaceWake(workspaceId),
+      resumeVm: (workspaceId, request) => resumeEphemeralVmWorkspace(store, workspaceId, request)
     },
     // Paired/local settings writes must reconcile the scanner child through the same path.
     applySessionSearchSettings: applySessionSearchSettingsChange,
@@ -159,12 +159,31 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   startAgentStateRulesLiveUpdates(store, (rules) =>
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
+  wireRecipeWorkspaceRemoval(runtime, store, () => app.getPath('userData'))
+  // Each host titles its own workspaces' untitled GitHub issue links once, when they are linked.
+  const disposeIssueLinkTitleFill = wireGitHubIssueLinkTitleFill(store, runtime)
+  app.once('will-quit', disposeIssueLinkTitleFill)
   state.runtime = runtime
+  // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
+  registerRecipeVmWaker({
+    state: (workspaceId, suspended) => runtime.workspaceVmState(workspaceId, suspended),
+    noteOpened: (workspaceId) => runtime.noteWorkspaceReopened(workspaceId),
+    holdOpen: (workspaceId, suspended, timeoutMs, signal) =>
+      runtime.holdWorkspaceVmOpen(workspaceId, suspended, timeoutMs, signal),
+    openEnvironment: (selector) => {
+      const root = getRuntimeEnvironmentRegistryRoot()
+      return openRecipeVmEnvironment(root, resolveEnvironment(root, selector))
+    }
+  })
+  // A sleeping VM's SSH host takes no background login until its workspace wakes (#36363).
+  setRecipeVmAsleepStoreRoot(getRuntimeEnvironmentRegistryRoot)
+  setSshHostAsleepCheck((targetId) => isRecipeVmSshTargetAsleep(app.getPath('userData'), targetId))
   runtime.attachAgentStatusStore(agentHookServer)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
   )
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
+  agentHookServer.setClaudePermissionHolds(runtime.terminalWorkerApprovals)
   // Main records pane resume state from accepted status.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     agentHookServer.subscribeEnrichedStatus((enriched) =>
@@ -185,6 +204,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     )
   )
   browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
+  runtime.startupWorkerAuthority.begin()
   return runtime
 }
 

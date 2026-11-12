@@ -1,10 +1,10 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import {
   resolveLocalWindowsTerminalRuntimeOptions,
   type LocalWindowsTerminalRuntimeOptions
 } from '../../../shared/local-windows-terminal-runtime'
-import { resolveManagedSshHostLoginShell } from '../../pty/managed-ssh-host-login-shell'
+import { resolveManagedSshHostLoginShell } from '../../pty/shell-startup/managed-ssh-host-login-shell'
 
 export type LocalPtySettings = Partial<
   Pick<GlobalSettings, 'terminalWindowsShell' | 'terminalWindowsWslDistro' | 'terminalDefaultShell'>

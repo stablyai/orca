@@ -1,26 +1,29 @@
 import { ipcMain } from 'electron'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { resolveAppImageCacheKey } from '../cli/appimage-extracted-root'
+import { resolveAppImageCacheKey } from '../../shared/appimage-cache-identity'
 import { CliInstaller } from '../cli/cli-installer'
-import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import {
   forgetWslCliRegistration,
   recordWslCliRegistrationInstalled,
   recordWslCliRegistrationRemoved
-} from '../cli/wsl-cli-registration-registry'
-import { WslCliInstaller } from '../cli/wsl-cli-installer'
+} from '../cli/wsl/wsl-cli-registration-registry'
+import { WslCliInstaller } from '../cli/wsl/wsl-cli-installer'
 import {
   deletedDistroWslCliStatus,
   notRunningWslCliStatus,
   unreachableWslCliStatus,
   WslCliUnreachableError
-} from '../cli/wsl-cli-status'
-import { runSerializedWslCliRegistrationOperation } from '../cli/wsl-cli-registration-operation'
+} from '../cli/wsl/wsl-cli-status'
+import { runSerializedWslCliRegistrationOperation } from '../cli/wsl/wsl-cli-registration-operation'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
-import { getDefaultWslDistro } from '../wsl'
-import { blockedWslDistroForExec, runAsWslExecUserAct } from '../wsl/wsl-background-exec-gate'
-import { isWslDistroNotFoundFailure } from '../wsl/wsl-distro-unsupported'
+import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
+import {
+  blockedWslDistroForExec,
+  runAsWslExecUserAct
+} from '../wsl/discovery/wsl-background-exec-gate'
+import { isWslDistroNotFoundFailure } from '../wsl/discovery/wsl-distro-unsupported'
 import { resolveAppImageRuntimeIdentity } from '../updater/linux-package/appimage-runtime-identity'
 
 const APPIMAGE_REPAIR_RETRY_MS = 30_000

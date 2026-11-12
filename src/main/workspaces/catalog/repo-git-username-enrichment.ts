@@ -1,8 +1,8 @@
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
-import { resolveLocalGitUsernameDetailed } from '../../git/git-username'
-import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/wsl-unc-access-gate'
-import { outsideWslUserAct } from '../../wsl/wsl-user-act-scope'
+import { resolveLocalGitUsernameDetailed } from '../../git/repositories/git-username'
+import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
+import { outsideWslUserAct } from '../../wsl/discovery/wsl-user-act-scope'
 
 type RepoUsernameStore = {
   getRepos(): Repo[]

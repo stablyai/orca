@@ -1,5 +1,5 @@
-import type { GitUpstreamStatus } from '../../../shared/git-status-types'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitUpstreamStatus } from '../../../shared/git/status/git-status-types'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
 import { resolvedUpstreamNameCache } from './resolved-upstream-name-cache'
 

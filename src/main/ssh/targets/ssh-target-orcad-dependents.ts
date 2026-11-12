@@ -4,7 +4,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { GLOBAL_WORKSPACE_SESSION_FIELDS } from '../../../shared/workspace-session-host-field-ownership'
+import { GLOBAL_WORKSPACE_SESSION_FIELDS } from '../../../shared/workspace-session/workspace-session-host-field-ownership'
 import {
   ORCAD_MIGRATION_DEPENDENCY_KINDS,
   type OrcadMigrationBlocker,

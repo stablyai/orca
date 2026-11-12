@@ -1,6 +1,6 @@
 import { getTrackedWebSessionTabsWorktrees } from './tracking'
 import { getWebSessionTabsTrackingGeneration } from './tracking-lifecycle'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import type { VisibilityResumeOmission } from './state'
 import type {
   MirroredRuntimeEnvironment,

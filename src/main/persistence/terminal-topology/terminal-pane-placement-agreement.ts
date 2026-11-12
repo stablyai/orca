@@ -1,6 +1,6 @@
-import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placement'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
+import type { TerminalPanePlacement } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { layoutContainsLeafId } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 /** Low-cardinality span attribute; absent tracks new leaves relying on legacy mint/graft placement. */
 export type TerminalPanePlacementAgreement =

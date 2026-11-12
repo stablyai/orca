@@ -1,9 +1,10 @@
-import type { ParsedAgentStatusPayload } from '../../agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
+import { CLAUDE_NEW_SESSION_START_SOURCES } from './claude-session-start-sources'
 import {
   heldTurnCountsAsFinished,
   isAgentStatusHeldOpenByChildWork
-} from '../../agent-lead-status-fold'
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+} from '../../agent-status/lifecycle/agent-lead-status-fold'
+import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
 import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inventory'
 import {
   claudeRosterHasRestoredSnapshotSubagent,
@@ -23,16 +24,18 @@ import {
 } from './claude-lifecycle-events'
 import {
   getOrCreateClaudeSubagentRoster,
-  resolveClaudePaneStatus,
+  readClaudeLeadModel,
   setClaudeMainAgentTurnState,
   updateClaudeRunningNonAgentTask,
   voidClaimsOfReplacedClaudeSession
 } from './claude-roster-state'
 import {
+  resolveClaudePaneStatus,
   claudePaneHasRunningChildWork,
   claudeRowHasUnlistedLiveWork
 } from './claude-pane-hold-evidence'
 import { buildClaudeStatusPayload } from './claude-status-build'
+import { claudeWaitRequest, settleClaudeToolBatch } from './claude-tool-request-wait'
 import { trackClaudeTaskNotificationDelivery } from './claude-task-notification-delivery'
 import { recordClaudeTeammateSpawn } from './claude-teammate-spawn'
 
@@ -54,15 +57,11 @@ export function normalizeClaudeEvent(
     return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
   voidClaimsOfReplacedClaudeSession(state, eventName, eventAgentId, paneKey, hookPayload)
+  const leadModel = eventAgentId === undefined ? readClaudeLeadModel(hookPayload) : undefined
   if (eventName === 'SessionStart') {
     // SessionStart supplies resume identity before prompts; mark idle/sessionBoundary to avoid phantom work/completion notifications (STA-3386).
     const sessionStartSource = hookPayload['source']
-    if (
-      eventAgentId !== undefined ||
-      (sessionStartSource !== 'startup' &&
-        sessionStartSource !== 'resume' &&
-        sessionStartSource !== 'clear')
-    ) {
+    if (eventAgentId !== undefined || !CLAUDE_NEW_SESSION_START_SOURCES.has(sessionStartSource)) {
       // Only known idle sources qualify; compact restarts and child SessionStart cannot settle a live lead.
       return null
     }
@@ -72,7 +71,11 @@ export function normalizeClaudeEvent(
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
     state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
     // New sessions start a new main-agent clock.
-    setClaudeMainAgentTurnState(state, paneKey, { state: 'done', stateStartedAt: Date.now() })
+    setClaudeMainAgentTurnState(state, paneKey, {
+      state: 'done',
+      stateStartedAt: Date.now(),
+      model: leadModel
+    })
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       stateName: 'done',
       updateToolSnapshot: true,
@@ -128,6 +131,9 @@ export function normalizeClaudeEvent(
       ...resolveClaudePaneStatus(state, paneKey, restored),
       updateToolSnapshot: true
     })
+  }
+  if (eventName === 'PostToolBatch') {
+    return settleClaudeToolBatch(state, eventName, promptText, paneKey, hookPayload, eventAgentId)
   }
   const reportedStateName =
     eventName === 'UserPromptSubmit' ||
@@ -204,9 +210,8 @@ export function normalizeClaudeEvent(
       eventToolUseId !== undefined &&
       eventToolUseId !== lead.waitingToolUseId
     if (isParallelSiblingCompletionDuringChildQuestion) {
-      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
-        workingChildEvidence: true
-      })
+      // Restating the wait would replace the prompt row a receiver holds against other agents.
+      return null
     }
     // Approval clears the card and restores the displaced lead; inventing working cannot later fold back to done.
     const restored = setClaudeMainAgentTurnState(
@@ -260,7 +265,6 @@ export function normalizeClaudeEvent(
                 : {})
             }
         : undefined
-  const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
 
   if (isManualCompactCompletion) {
     // Manual compact invalidates snapshot-only child liveness; confirmed children/shells/crons still hold the pane (STA-2915).
@@ -305,9 +309,10 @@ export function normalizeClaudeEvent(
     ...(taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
     ...(outcome ? { outcome } : {}),
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
-    ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
+    ...claudeWaitRequest(eventName, isAskUserQuestionWait, eventToolUseId, previousLead),
     ...(stateBeforeWait ? { stateBeforeWait } : {}),
-    ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {})
+    ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),
+    model: leadModel
   })
 
   const effectiveRoster = state.claudeSubagentRosterByPaneKey.get(paneKey)

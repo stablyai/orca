@@ -4,16 +4,16 @@
  * browser tabs are retained on disk for a downgrade, but the host's partition now holds the live
  * copies under the same tab ids, so they must leave before the host partitions merge in.
  */
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../../shared/workspace-scope'
 import {
   filterWorkspaceRows,
   workspaceIdsNamedByPartition
-} from '../../../../shared/workspace-session-stranded-partition-adoption'
-import { filterWorkspaceSessionTabs } from '../../../../shared/workspace-session-tab-filter'
+} from '../../../../shared/workspace-session/workspace-session-stranded-partition-adoption'
+import { filterWorkspaceSessionTabs } from '../../../../shared/workspace-session/workspace-session-tab-filter'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
-import { mergeWorkspaceSessionRecordField } from '../../../../shared/workspace-session-host-records'
+import { mergeWorkspaceSessionRecordField } from '../../../../shared/workspace-session/workspace-session-host-records'
 import { isWslMovedChatTab, movedProjectForKey } from './wsl-moved-projects'
 
 // The tab bar alone: hydration picks a chat-only workspace's focus from its groups.

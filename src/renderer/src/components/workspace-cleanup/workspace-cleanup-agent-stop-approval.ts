@@ -1,7 +1,4 @@
-import {
-  applyWorkspaceCleanupPolicy,
-  type WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 
 /** Stamp explicit agent-stop consent; scan live-agent labels alone are not approval and must be rewritten before final dispatch. */
 export function withWorkspaceCleanupAgentStopApproval(
@@ -12,10 +9,10 @@ export function withWorkspaceCleanupAgentStopApproval(
   if (hasApproval === approved) {
     return candidate
   }
-  return applyWorkspaceCleanupPolicy({
+  return {
     ...candidate,
     blockers: approved
       ? [...candidate.blockers, 'live-agent']
       : candidate.blockers.filter((blocker) => blocker !== 'live-agent')
-  })
+  }
 }

@@ -1,3 +1,5 @@
+import type * as MobileClipboardImageModule from '../../../files/attachments/mobile-clipboard-image'
+import type * as MobileImageAttachmentModule from '../../../files/attachments/mobile-image-attachment'
 import type * as MobileNativeChatImageAttachment from '../../../session/native-chat/composer/mobile-native-chat-image-attachment'
 import type * as MobileNativeChatImageSend from '../../../session/native-chat/composer/mobile-native-chat-image-send'
 import type { MountAdapter } from '../recording-scenario'
@@ -15,8 +17,8 @@ export function clipboardImageMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'clipboard.image-upload': ({ client }) => {
-      const save = modules.load<typeof import('../../../session/mobile-clipboard-image')>(
-        'mobile/src/session/mobile-clipboard-image.ts'
+      const save = modules.load<typeof MobileClipboardImageModule>(
+        'mobile/src/files/attachments/mobile-clipboard-image.ts'
       ).saveMobileClipboardImageAsTempFile
       let path: unknown = 'unsaved'
       let failure: unknown = null
@@ -39,8 +41,8 @@ export function clipboardImageMountAdapters(
       }
     },
     'clipboard.image-terminal-attachment': ({ client, effect }) => {
-      const attach = modules.load<typeof import('../../../session/mobile-image-attachment')>(
-        'mobile/src/session/mobile-image-attachment.ts'
+      const attach = modules.load<typeof MobileImageAttachmentModule>(
+        'mobile/src/files/attachments/mobile-image-attachment.ts'
       ).attachMobileImageToTerminal
       let attached: unknown = 'unattached'
       let failure: unknown = null
@@ -51,10 +53,9 @@ export function clipboardImageMountAdapters(
             mountFixture<Parameters<typeof attach>[1]>({
               client,
               terminal: TERMINAL,
-              deviceToken: name === 'anonymous' ? null : DEVICE_TOKEN,
+              deviceToken: DEVICE_TOKEN,
               getConnectionId: () => Promise.resolve(CONNECTION),
-              pickImage: () =>
-                Promise.resolve(name === 'cancelled' ? null : { base64: IMAGE_BASE64 }),
+              pickImage: () => Promise.resolve({ base64: IMAGE_BASE64 }),
               onUploadStart: () => effect('upload-start', {}),
               beforeTerminalSend: (terminal: string) => {
                 effect('before-terminal-send', { terminal })
@@ -89,11 +90,9 @@ export function clipboardImageMountAdapters(
               client,
               getConnectionId: () => Promise.resolve(CONNECTION),
               pickImages: () =>
-                name === 'cancelled'
-                  ? []
-                  : name === 'two'
-                    ? [{ base64: IMAGE_BASE64 }, { base64: IMAGE_BASE64, uri: 'file:///b.png' }]
-                    : [{ base64: IMAGE_BASE64, uri: 'file:///a.png' }],
+                name === 'two'
+                  ? [{ base64: IMAGE_BASE64 }, { base64: IMAGE_BASE64, uri: 'file:///b.png' }]
+                  : [{ base64: IMAGE_BASE64, uri: 'file:///a.png' }],
               onUploadStart: () => effect('upload-start', {}),
               onImageUploaded: (image) => effect('image-uploaded', image)
             })
@@ -123,10 +122,9 @@ export function clipboardImageMountAdapters(
             mountFixture<Parameters<typeof paste>[0]>({
               client,
               terminal: TERMINAL,
-              deviceToken: name === 'anonymous' ? null : DEVICE_TOKEN,
+              deviceToken: DEVICE_TOKEN,
               imagePaths: name === 'two' ? ['/tmp/a.png', '/tmp/b.png'] : ['/tmp/a.png'],
-              followedByText: name !== 'trailing',
-              ...(name === 'burst' ? { clearInput: '' } : {})
+              followedByText: true
             })
           ).then(
             (value: unknown) => {

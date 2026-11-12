@@ -1,8 +1,7 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import type { FolderWorkspacePathStatusRequest } from '../../../shared/folder-workspace-path-status'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
+import type { FolderWorkspacePathStatusRequest } from '../../../shared/folder-workspaces/folder-workspace-path-status'
 import {
   assertFolderWorkspacePathUsable,
   getFolderWorkspacePathStatus,
@@ -17,12 +16,12 @@ import {
   FolderWorkspaceUpdateArgs,
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
-import { visibleFolderWorkspaces } from '../../ssh/orcad-retained-source'
+import { visibleFolderWorkspaces } from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
 import { createFolderWorkspaceWithPluginHooks } from '../../plugins/hooks/workspace-create-plugin-hook'
 import {
   isLocalWslMoveRow,
   shouldDropWslMoveProjectUpdate
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export function registerFolderWorkspaceHandlers(
   mainWindow: BrowserWindow,

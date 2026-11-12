@@ -1,22 +1,24 @@
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync } from '../runner'
+import {
+  type GitRuntimeOptions,
+  gitOptionsForWorktree
+} from '../command-runner/git-runtime-options'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
 import { gitReportedPath, literalPathspec } from './git-pathspec'
-import { encodeGitPathspecs } from '../../../shared/git-pathspec-stdin'
+import { encodeGitPathspecs } from '../../../shared/git/paths/git-pathspec-stdin'
 import {
   getConflictResolutions,
   type ConflictResolution
-} from '../../../shared/source-control-entry-actions'
-import { parseUnmergedEntry } from '../../../shared/git-status-conflict-entries'
+} from '../../../shared/source-control/listing/source-control-entry-actions'
+import { parseUnmergedEntry } from '../../../shared/git/status/git-status-conflict-entries'
 import {
   stageGitWorktreeScope,
   type GitStageWorktreeScope,
   type GitStageWorktreeScopeReceipt
-} from '../../../shared/git-stage-worktree-scope'
-import { findExistingWorktreeSymlinkPaths } from '../worktree-symlink-detection'
+} from '../../../shared/git/paths/git-stage-worktree-scope'
+import { findExistingWorktreeSymlinkPaths } from '../worktrees/content-paths/worktree-symlink-detection'
 import { redoWriteForDriveCheckoutSuspects } from './drive-checkout-suspect-writes'
-import { runWithGitWorktreeOperationLock } from '../../../shared/git-worktree-operation-lock'
+import { runWithGitWorktreeOperationLock } from '../../../shared/git/worktrees/git-worktree-operation-lock'
 
 const STAGE_WRITE = ['add', '--update'] as const
 

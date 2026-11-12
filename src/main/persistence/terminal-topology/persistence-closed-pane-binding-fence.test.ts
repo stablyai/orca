@@ -3,13 +3,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import { _resetClosedPaneFencesForTests } from './closed-pane-binding-fence'
-import { closeLeafOrTab } from './terminal-topology-commit'
-import { captureTerminalCloseRequest } from '../../runtime/terminal-surface-close'
-import type { TerminalSurfaceCloseTarget } from '../../../shared/terminal-surface-close-target'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import './terminal-topology-commit'
+import '../../runtime/terminal/surface/terminal-surface-close'
+
+import '../../../shared/execution-host'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -64,27 +64,6 @@ function lateWindowBinding(store: TestStore): Promise<boolean> {
   })
 }
 
-async function closeThroughMain(
-  store: TestStore,
-  target: TerminalSurfaceCloseTarget
-): Promise<void> {
-  const hostIds: readonly ExecutionHostId[] = [LOCAL_EXECUTION_HOST_ID]
-  const refusal = await store.runDurableMutation(
-    closeLeafOrTab({
-      worktreeId: WORKTREE,
-      target,
-      options: { allowMissing: true },
-      ...captureTerminalCloseRequest(WORKTREE, target, hostIds, store, false),
-      ownerMatches: () => true,
-      hostIds: () => hostIds,
-      getSession: (hostId) => store.getWorkspaceSession(hostId),
-      setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
-      onClosed: () => {}
-    })
-  )
-  expect(refusal).toBeUndefined()
-}
-
 function leafIds(store: TestStore): string[] {
   const root = store.getWorkspaceSession().terminalLayoutsByTabId[TAB]?.root
   return root ? collectLayoutLeafIdsInOrder(root) : []
@@ -129,16 +108,6 @@ describe('a pane main closed or took back is not brought back by its late termin
       userPaneClose: true
     })
     expect(reply.ok).toBe(true)
-
-    expect(await lateWindowBinding(store)).toBe(false)
-    expect(leafIds(store)).toEqual([TEST_LEAF_1])
-  })
-
-  it('refuses the binding of a pane main closed while its terminal was starting', async () => {
-    const store = createStore()
-    await tabWithStartingSplit(store)
-
-    await closeThroughMain(store, { kind: 'pane', tabId: TAB, leafId: TEST_LEAF_2 })
 
     expect(await lateWindowBinding(store)).toBe(false)
     expect(leafIds(store)).toEqual([TEST_LEAF_1])

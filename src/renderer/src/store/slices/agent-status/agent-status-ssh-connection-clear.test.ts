@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppState } from '../../types'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 
 describe('agent status cleanup for a lost SSH connection', () => {
   afterEach(() => {

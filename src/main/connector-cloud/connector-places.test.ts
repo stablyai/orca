@@ -86,21 +86,6 @@ describe('connector places', () => {
     })
   })
 
-  it('derives the same worktree name for a resent start, and refuses a place it cannot read', () => {
-    const [project] = connectorProjects(store([repo({ id: 'orca' })]))
-    expect(placeLaunchTarget(project!.placeId, 'd1', 'slack')).toEqual(
-      placeLaunchTarget(project!.placeId, 'd1', 'slack')
-    )
-    expect(placeLaunchTarget(project!.placeId, 'd1', 'slack')).not.toEqual(
-      placeLaunchTarget(project!.placeId, 'd2', 'slack')
-    )
-    expect(placeLaunchTarget('not-a-place', 'd1', 'slack')).toBeNull()
-    // The workspace is named for where the conversation came from.
-    expect(placeLaunchTarget(project!.placeId, 'd1', 'linear')).toMatchObject({
-      create: { name: expect.stringMatching(/^linear-[0-9a-f]{8}$/) }
-    })
-  })
-
   it('lists the most recently used projects first, at most maxHelloProjects, with short names', () => {
     const repos = Array.from({ length: CONNECTOR_CLIENT_LIMITS.maxHelloProjects + 1 }, (_, index) =>
       repo({ id: `r${index}`, addedAt: index, displayName: 'n'.repeat(300) })

@@ -1,14 +1,14 @@
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentChildWorkStopAcknowledgement } from '../../../shared/agent-child-work-stop-targets'
-import type { ClaudePromptClaim } from '../claude-prompt-registry'
+import type { AgentChildWorkStopAcknowledgement } from '../../../shared/agent-status/child-work/agent-child-work-stop-targets'
+import type { ClaudePromptClaim } from './permissions/claude-prompt-registry'
 import {
   ClaudeControlRequestError,
   ClaudeControlRequestTimeoutError
-} from '../claude-agent-sdk-control-requests'
+} from '../sdk-transport/claude-agent-sdk-control-requests'
 import { settleCancelledClaudeDispatchWaiters } from './claude-structured-dispatch'
-import type { ClaudeLateDispatchSettlement } from '../claude-replay-turn-resolution'
+import type { ClaudeLateDispatchSettlement } from './turns/claude-replay-turn-resolution'
 import type { ClaudeSession } from './claude-structured-session-state'
-import { CLAUDE_STOP_GRACE_MS } from '../claude-request-end-wait'
+import { CLAUDE_STOP_GRACE_MS } from './turns/claude-request-end-wait'
 
 const INTERRUPT_CANCEL_QUEUED_CAPABILITY = 'interrupt_cancel_queued_v1'
 

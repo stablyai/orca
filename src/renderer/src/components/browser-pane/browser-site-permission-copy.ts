@@ -4,40 +4,35 @@ import {
   type BrowserSitePermission
 } from '../../../../shared/browser-site-permission'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 /** The setting's name, e.g. in Settings → Browser → Site permissions. */
-export function browserSitePermissionLabel(permission: BrowserSitePermission): string {
+export function browserSitePermissionLabel(
+  permission: BrowserSitePermission,
+  t: Translate = translate
+): string {
   switch (permission) {
     case 'camera':
-      return translate('auto.components.browserPane.sitePermission.label.camera', 'Camera')
+      return t('auto.components.browserPane.sitePermission.label.camera', 'Camera')
     case 'microphone':
-      return translate('auto.components.browserPane.sitePermission.label.microphone', 'Microphone')
+      return t('auto.components.browserPane.sitePermission.label.microphone', 'Microphone')
     case 'location':
-      return translate('auto.components.browserPane.sitePermission.label.location', 'Location')
+      return t('auto.components.browserPane.sitePermission.label.location', 'Location')
     case 'notifications':
-      return translate(
-        'auto.components.browserPane.sitePermission.label.notifications',
-        'Notifications'
-      )
+      return t('auto.components.browserPane.sitePermission.label.notifications', 'Notifications')
     case 'clipboard':
-      return translate('auto.components.browserPane.sitePermission.label.clipboard', 'Clipboard')
+      return t('auto.components.browserPane.sitePermission.label.clipboard', 'Clipboard')
     case 'midi':
-      return translate('auto.components.browserPane.sitePermission.label.midi', 'MIDI devices')
+      return t('auto.components.browserPane.sitePermission.label.midi', 'MIDI devices')
     case 'window-management':
-      return translate(
+      return t(
         'auto.components.browserPane.sitePermission.label.windowManagement',
         'Window management'
       )
     case 'idle-detection':
-      return translate(
-        'auto.components.browserPane.sitePermission.label.idleDetection',
-        'Device use'
-      )
+      return t('auto.components.browserPane.sitePermission.label.idleDetection', 'Device use')
     case 'local-network':
-      return translate(
-        'auto.components.browserPane.sitePermission.label.localNetwork',
-        'Local network'
-      )
+      return t('auto.components.browserPane.sitePermission.label.localNetwork', 'Local network')
   }
 }
 
@@ -90,9 +85,9 @@ export function browserSitePermissionRequestLine(permission: BrowserSitePermissi
 }
 
 /** The origin as people read it: the host for https, the full origin otherwise. */
-export function browserSitePermissionSiteName(origin: string): string {
+export function browserSitePermissionSiteName(origin: string, t: Translate = translate): string {
   if (origin === BROWSER_SITE_PERMISSION_LOCAL_FILES_ORIGIN) {
-    return translate('auto.components.browserPane.sitePermission.localFiles', 'Local files')
+    return t('auto.components.browserPane.sitePermission.localFiles', 'Local files')
   }
   return origin.startsWith('https://') ? origin.slice('https://'.length) : origin
 }

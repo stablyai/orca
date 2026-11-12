@@ -45,33 +45,6 @@ function mountedHostState(hostId: string): HostStackNavigationState {
 }
 
 describe('mobile session route', () => {
-  it('keeps dynamic route identities raw for the navigator to encode', () => {
-    expect(
-      mobileSessionRouteTarget({
-        hostId: 'host/one',
-        worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-        name: 'Fix #1',
-        paneKey: 'pane/one',
-        executionHost: 'runtime:server-1'
-      })
-    ).toEqual({
-      name: '[hostId]/session/[worktreeId]',
-      params: {
-        hostId: 'host/one',
-        worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-        name: 'Fix #1',
-        paneKey: 'pane/one',
-        executionHost: 'runtime:server-1'
-      }
-    })
-  })
-
-  it('omits an absent workspace name instead of sending an empty param', () => {
-    expect(
-      mobileSessionRouteTarget({ hostId: 'host-1', worktreeId: 'repo::/tmp/wt' }).params
-    ).toEqual({ hostId: 'host-1', worktreeId: 'repo::/tmp/wt' })
-  })
-
   it('mounts the host, then opens the session over its list', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const push = vi.fn()

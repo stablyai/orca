@@ -2,12 +2,12 @@ import { useEffect, useMemo } from 'react'
 import type {
   HostedReviewCreationEligibility,
   HostedReviewInfo
-} from '../../../../../../shared/hosted-review'
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   buildLoadingHostedReviewCreationEligibility,
   resolveHostedReviewCreationProviderForTarget
 } from './hosted-review-creation-eligibility-snapshot'
-import { resolveProvisionalHostedReviewProvider } from './primary-create-pr-intent-action'
+import { resolveProvisionalHostedReviewProvider } from './provisional-hosted-review-provider'
 import { parseRemoteRepo } from './remote-repo'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'

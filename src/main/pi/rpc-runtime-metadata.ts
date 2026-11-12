@@ -2,12 +2,12 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { agentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
-import type { StructuredAgentRuntimeMetadata } from '../runtime/structured-agent-runtime-registration-types'
+import type { StructuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import { PI_RPC_AGENT } from './rpc-agent-definition'
-import { PI_RPC_MINIMUM_VERSIONS, resolvePiRpcCommand } from './rpc-launch-resolution'
-import { createPiModelCatalogProbe } from './rpc-model-catalog-probe'
-import { PI_SESSION_HISTORY } from './pi-session-history'
-import { PI_TRANSCRIPT_IMPORT } from './pi-transcript-import'
+import { PI_RPC_MINIMUM_VERSIONS, resolvePiRpcCommand } from './rpc/launch/rpc-launch-resolution'
+import { createPiModelCatalogProbe } from './rpc/options/rpc-model-catalog-probe'
+import { PI_SESSION_HISTORY } from './transcripts/pi-session-history'
+import { PI_TRANSCRIPT_IMPORT } from './transcripts/pi-transcript-import'
 
 export const PI_RPC_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
   definition: PI_RPC_AGENT,

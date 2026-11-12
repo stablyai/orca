@@ -582,7 +582,7 @@
   cursor: pointer !important;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
-  text-underline-offset: 2px;
+  text-underline-offset: 0.25em;
   transition: text-decoration-color 150ms;
 }
 

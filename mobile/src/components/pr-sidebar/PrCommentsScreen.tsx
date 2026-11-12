@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View, type HostInstance } from 'react-native'
 import { Bot, ListFilter } from 'lucide-react-native'
 import { colors, pressedStyle, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -10,11 +10,11 @@ import {
   getPRCommentGroupId,
   getPRCommentGroupRoot,
   type PRCommentGroup
-} from '../../../../src/shared/pr-comment-groups'
-import { isBotPRComment } from '../../../../src/shared/pr-comment-audience'
-import { canAddRootComment } from '../../session/pr-comment-actions'
-import { buildPRCommentsResolutionPrompt } from '../../../../src/shared/github/pr-comments-resolution-prompt'
-import { useMobileLaunchAgentLabel } from '../../session/use-mobile-launch-agent-label'
+} from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
+import { isBotPRComment } from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
+import { canAddRootComment } from '../../source-control/review/pr-comment-actions'
+import { buildPRCommentsResolutionPrompt } from '../../../../src/shared/source-control/review-comments/pr-comments-resolution-prompt'
+import { useMobileLaunchAgentLabel } from '../../session/agent-launch/use-mobile-launch-agent-label'
 import { useHostProtocolGates } from '../host-protocol-gates-context'
 import { AgentLaunchNotice } from '../AgentLaunchNotice'
 import { useNow } from '../../hooks/use-now'
@@ -38,6 +38,7 @@ const COMMENT_PAGE = 12
 export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: ScreenProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  // The tab keeps the PR it shows through reloads, so the open thread and typed comments stay with it.
   const data = readyPrData(tab)
   const details = livePrDetails(data?.details ?? null)
   const now = useNow(60_000)
@@ -48,7 +49,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
   )
   const [hideBots, setHideBots] = useState(false)
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
-  const filterRef = useRef<View>(null)
+  const filterRef = useRef<HostInstance>(null)
   const [showResolved, setShowResolved] = useState(false)
   const [resolvedLimit, setResolvedLimit] = useState(COMMENT_PAGE)
   const [openThreadId, setOpenThreadId] = useState<string | null>(null)
@@ -90,6 +91,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
             isResolveBusy: commentActions.isResolveBusy,
             isEditBusy: commentActions.isEditBusy,
             isDeleteBusy: commentActions.isDeleteBusy,
+            draftKey: commentActions.draftKey,
             prRepo: data?.pr.prRepo ?? null
           }
         : undefined,
@@ -194,6 +196,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
                   })}
                   submitLabel={t('pullRequest.commentsSection.comment', 'Comment')}
                   submitting={commentActions.isRootBusy}
+                  draftKey={commentActions.draftKey(null)}
                   onSubmit={commentActions.addRootComment}
                   inline
                 />

@@ -1,7 +1,7 @@
 import { expect, type MockInstance } from 'vitest'
 import type { createOrchestrationRpcHarness } from './rpc-test-harness'
-import type { QueuedMessageTestRig } from '../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
-import { closeTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import type { QueuedMessageTestRig } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { closeTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { projectStructuredAgentStartItem } from '../../../../../shared/structured-agent-start-projection'
 import { projectStructuredAgentSessionStatusSummary } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
@@ -9,7 +9,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { readFile } from 'node:fs/promises'
-import '../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+import '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import { COORD } from './worker-start-card-contract-test-fixture'
 
 export async function verifyWorkerStartCardScenario(input: {

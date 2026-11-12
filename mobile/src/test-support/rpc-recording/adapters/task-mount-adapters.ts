@@ -1,3 +1,6 @@
+import type * as UseMobileTasksProjectMetadataActionsModule from '../../../tasks/project-board/use-mobile-tasks-project-metadata-actions'
+import type * as UseMobileTasksItemDetailLoadingModule from '../../../tasks/item-detail/use-mobile-tasks-item-detail-loading'
+import type * as UseMobileTasksClientSettingsActionsModule from '../../../tasks/screen-state/use-mobile-tasks-client-settings-actions'
 import { hookMount } from '../hook-mount'
 import type { MountOptions } from '../mounted-operation-module'
 import { observableModel } from '../observable-model'
@@ -10,10 +13,8 @@ export function taskMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'project.update-metadata': (context) => {
-      const useMetadata = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-project-metadata-actions')
-      >(
-        'mobile/src/tasks/use-mobile-tasks-project-metadata-actions.tsx'
+      const useMetadata = modules.load<typeof UseMobileTasksProjectMetadataActionsModule>(
+        'mobile/src/tasks/project-board/use-mobile-tasks-project-metadata-actions.tsx'
       ).useMobileTasksProjectMetadataActions
       const row = {
         id: 'item-1',
@@ -67,9 +68,9 @@ export function taskMountAdapters(
       }
     },
     'linear.issue-detail': (context) => {
-      const useDetail = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-item-detail-loading')
-      >('mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx').useMobileTasksItemDetailLoading
+      const useDetail = modules.load<typeof UseMobileTasksItemDetailLoadingModule>(
+        'mobile/src/tasks/item-detail/use-mobile-tasks-item-detail-loading.tsx'
+      ).useMobileTasksItemDetailLoading
       const model = observableModel(context, {
         actionItem: {
           provider: 'linear',
@@ -84,6 +85,7 @@ export function taskMountAdapters(
         client: context.client,
         tasksSupported: true,
         detailRefreshSeq: 0,
+        detailRefreshRequested: { current: false },
         detailRequestItem: model.actionItem,
         hydrateActionItem: model.setActionItem
       })
@@ -124,10 +126,8 @@ export function taskMountAdapters(
       }
     },
     'settings.task-preferences': (context) => {
-      const usePreferences = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-client-settings-actions')
-      >(
-        'mobile/src/tasks/use-mobile-tasks-client-settings-actions.tsx'
+      const usePreferences = modules.load<typeof UseMobileTasksClientSettingsActionsModule>(
+        'mobile/src/tasks/screen-state/use-mobile-tasks-client-settings-actions.tsx'
       ).useMobileTasksClientSettingsActions
       const model = observableModel(context, {
         defaultGitHubPreset: 'all',
@@ -136,6 +136,7 @@ export function taskMountAdapters(
       Object.assign(model, {
         client: context.client,
         clientRef: { current: context.client },
+        hostId: 'host-1',
         taskUiReady: true,
         githubProjectFieldVisibilityScope: null,
         taskResumeRef: { current: {} },

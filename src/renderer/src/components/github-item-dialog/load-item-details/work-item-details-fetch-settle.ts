@@ -10,10 +10,14 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-item-types'
-import type { GitHubTaskRecordCache, TaskBinding } from '@/store/github/task-record-cache'
-import { githubTaskRpcOptions, type GitHubTaskTarget } from '@/lib/github-task-target'
+import type { GitHubTaskRecordCache } from '@/store/github/task-records/task-record-cache'
+import type { TaskBinding } from '@/store/github/task-records/task-record-model'
+import {
+  githubTaskRpcOptions,
+  type GitHubTaskTarget
+} from '@/lib/work-items/github/github-task-target'
 import { useAppStore } from '@/store'
-import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
+import { lookupGitHubWorkItemDetailsForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import {
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
   WORK_ITEM_DETAILS_FRESH_MS,

@@ -1,6 +1,6 @@
 import { getAgentSessionOptionCatalog } from '../../agent-session/options/agent-session-option-catalog'
 import type { CatalogModel } from '../../agent-session/options/agent-session-option-catalog-types'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface,
@@ -86,6 +86,7 @@ export function createNativeChatPtySessionOptions(
   let snapshot = buildNativeChatSessionOptionSnapshot({
     catalog,
     models: activeModels(),
+    legacyInventory: models,
     record,
     mode: args.mode,
     modelLabel: args.modelLabel,
@@ -98,6 +99,7 @@ export function createNativeChatPtySessionOptions(
     snapshot = buildNativeChatSessionOptionSnapshot({
       catalog,
       models: activeModels(),
+      legacyInventory: models,
       record,
       mode: args.mode,
       modelLabel: args.modelLabel,

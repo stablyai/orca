@@ -1,10 +1,10 @@
 import { Buffer } from 'buffer/index.js'
-import { z } from 'zod'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import * as z from 'zod'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import type { MobileFileMedia } from './mobile-file-media'
-import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
+import { isMobileMethodUnavailableError } from '../transport/rpc/mobile-method-unavailable'
 
 export const MOBILE_MEDIA_CHUNK_BYTES = 384 * 1024
 export const MOBILE_MEDIA_MAX_BYTES = 256 * 1024 * 1024

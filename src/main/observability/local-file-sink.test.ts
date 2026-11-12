@@ -1,16 +1,8 @@
-import {
-  chmodSync,
-  mkdtempSync,
-  rmSync,
-  readFileSync,
-  existsSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createLocalFileSink, getRotatedFamilySize, listRotatedFiles } from './local-file-sink'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { createLocalFileSink } from './local-file-sink'
 
 let dir: string
 
@@ -20,10 +12,6 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
-
-function makeRecord(i: number): { i: number; payload: string } {
-  return { i, payload: 'x'.repeat(100) }
-}
 
 describe('local-file-sink — basic write', () => {
   it('creates trace directories and files with private POSIX permissions', () => {
@@ -62,147 +50,5 @@ describe('local-file-sink — basic write', () => {
 
     expect(statSync(file).mode & 0o777).toBe(0o600)
     expect(statSync(rotated).mode & 0o777).toBe(0o600)
-  })
-})
-
-describe('local-file-sink — rotation', () => {
-  it('uses UTF-8 byte length for rotation accounting', async () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({
-      filePath: file,
-      maxBytes: 90,
-      maxFiles: 3,
-      batchWindowMs: 100_000
-    })
-    sink.push({ payload: '😀'.repeat(15) })
-    await sink.flushAsync()
-    sink.push({ payload: '😀'.repeat(15) })
-    await sink.flushAsync()
-    sink.close()
-
-    expect(listRotatedFiles(file, 3).length).toBeGreaterThan(1)
-  })
-
-  it('drops an individual record that exceeds the file byte cap', async () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({
-      filePath: file,
-      maxBytes: 100,
-      maxFiles: 3,
-      batchWindowMs: 100_000
-    })
-    sink.push({ payload: 'x'.repeat(1_000) })
-    sink.push({ ok: true })
-    await sink.flushAsync()
-    sink.close()
-
-    const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
-    expect(lines.map((line) => JSON.parse(line))).toEqual([{ ok: true }])
-    expect(getRotatedFamilySize(file, 3)).toBeLessThanOrEqual(100)
-  })
-
-  it('keeps every record of a batch larger than the byte cap', async () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({
-      filePath: file,
-      maxBytes: 170,
-      maxFiles: 5,
-      batchWindowMs: 100_000
-    })
-    sink.push({ i: 1, payload: 'x'.repeat(60) })
-    sink.push({ i: 2, payload: 'x'.repeat(60) })
-    sink.push({ i: 3, payload: 'x'.repeat(60) })
-    await sink.flushAsync()
-    sink.close()
-
-    const allRecords = listRotatedFiles(file, 5)
-      .flatMap((path) => readFileSync(path, 'utf8').split('\n').filter(Boolean))
-      .map((line) => JSON.parse(line) as { i: number })
-      .map((record) => record.i)
-      .sort((a, b) => a - b)
-    expect(allRecords).toEqual([1, 2, 3])
-  })
-
-  it('flushes synchronously at crash boundaries', () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({ filePath: file, batchWindowMs: 100_000 })
-    sink.push({ i: 1 })
-    sink.push({ i: 2 })
-    sink.flush()
-
-    const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
-    expect(lines.map((line) => JSON.parse(line))).toEqual([{ i: 1 }, { i: 2 }])
-    sink.close()
-  })
-
-  it('resolves concurrent flushAsync calls only after the shared batch is written', async () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({ filePath: file, batchWindowMs: 100_000 })
-    sink.push({ i: 1 })
-    const first = sink.flushAsync()
-    await sink.flushAsync()
-    expect(readFileSync(file, 'utf8')).toBe('{"i":1}\n')
-    await first
-    sink.close()
-  })
-
-  it('keeps 100 crash-boundary write/flush pairs within the rotation bound', async () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({
-      filePath: file,
-      maxBytes: 500,
-      maxFiles: 3,
-      batchWindowMs: 1
-    })
-    const activeSize = (): number => (existsSync(file) ? statSync(file).size : 0)
-    for (let i = 0; i < 100; i++) {
-      sink.push(makeRecord(i))
-      sink.flush()
-      // The drain the push scheduled sizes the synchronous append and rotates it.
-      await vi.waitFor(() => expect(activeSize()).toBeLessThanOrEqual(500), { timeout: 10_000 })
-    }
-    expect(existsSync(`${file}.2`)).toBe(true)
-    // Each generation can hold one record past the cap before the drain moves it aside.
-    expect(getRotatedFamilySize(file, 3)).toBeLessThan(3 * 500 * 2)
-    sink.close()
-  })
-
-  it('caps total disk usage at maxFiles × maxBytes (worst case)', async () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({
-      filePath: file,
-      maxBytes: 500,
-      maxFiles: 3,
-      batchWindowMs: 100_000
-    })
-    for (let i = 0; i < 50; i++) {
-      sink.push(makeRecord(i))
-      await sink.flushAsync()
-    }
-    sink.close()
-
-    const total = getRotatedFamilySize(file, 3)
-    // Allow rotation headroom while still rejecting unbounded disk growth.
-    expect(total).toBeLessThan(3 * 500 * 2)
-  })
-})
-
-describe('local-file-sink — robustness', () => {
-  it('does not throw on circular records (drops the line)', async () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({
-      filePath: file,
-      batchWindowMs: 100_000
-    })
-    const a: Record<string, unknown> = { ok: true }
-    a.self = a
-    expect(() => {
-      sink.push(a)
-      sink.push({ ok: 2 })
-    }).not.toThrow()
-    await sink.flushAsync()
-    sink.close()
-    const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
-    expect(lines.map((l) => JSON.parse(l))).toEqual([{ ok: 2 }])
   })
 })

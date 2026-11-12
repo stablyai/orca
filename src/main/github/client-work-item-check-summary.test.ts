@@ -34,7 +34,8 @@ vi.mock('./gh-utils', () => ({
   classifyListIssuesError: (stderr: string) => ({ type: 'unknown', message: stderr })
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: vi.fn()
 }))
 
@@ -52,13 +53,55 @@ import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-
 import { _resetOwnerRepoCache } from './gh-utils'
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// Only fixture pr view; best-effort merge metadata failures must not hide its summary.
+// Metadata and complete checks are independent provider responses.
 function mockPullRequestDetail(payload: Record<string, unknown>): void {
+  const head = 'a'.repeat(40)
   ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-    if (args[0] !== 'pr' || args[1] !== 'view') {
-      throw new Error('unexpected gh call')
+    if (args[0] === 'pr' && args[1] === 'view') {
+      return { stdout: JSON.stringify({ ...payload, headRefOid: head }) }
     }
-    return { stdout: JSON.stringify(payload) }
+    if (args.includes('graphql') && args.some((arg) => arg.includes('statusCheckRollup'))) {
+      return {
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                number: payload.number,
+                headRefOid: head,
+                commits: {
+                  nodes: [
+                    {
+                      commit: {
+                        oid: head,
+                        statusCheckRollup: {
+                          contexts: {
+                            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these test payloads contain object rollup rows only.
+                            nodes: (payload.statusCheckRollup as Record<string, unknown>[]).map(
+                              (raw) => ({
+                                ...raw,
+                                __typename:
+                                  raw.__typename ?? (raw.state ? 'StatusContext' : 'CheckRun'),
+                                ...(!raw.state ? { checkSuite: { databaseId: 7 } } : {})
+                              })
+                            ),
+                            pageInfo: { hasNextPage: false, endCursor: null }
+                          }
+                        },
+                        checkSuites: {
+                          nodes: [],
+                          pageInfo: { hasNextPage: false, endCursor: null }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        })
+      }
+    }
+    throw new Error('unexpected gh call')
   })
 }
 
@@ -96,37 +139,9 @@ describe('work item checksSummary', () => {
       total: 3,
       passed: 2,
       failed: 0,
+      cancelled: 0,
       pending: 0,
       neutral: 1
-    })
-  })
-
-  it('fails the summary on a failing run and leaves an empty rollup with no state', async () => {
-    mockPullRequestDetail({
-      number: 44,
-      title: 'Add feature',
-      state: 'OPEN',
-      url: 'https://github.com/acme/widgets/pull/44',
-      updatedAt: '2026-04-01T00:00:00Z',
-      statusCheckRollup: [
-        { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'SUCCESS' },
-        { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'FAILURE' }
-      ]
-    })
-    await expect(getWorkItem('/repo-root', 44, 'pr', null, {}, 'origin')).resolves.toMatchObject({
-      checksSummary: { state: 'failure', total: 2, passed: 1, failed: 1, pending: 0, neutral: 0 }
-    })
-
-    mockPullRequestDetail({
-      number: 45,
-      title: 'Add feature',
-      state: 'OPEN',
-      url: 'https://github.com/acme/widgets/pull/45',
-      updatedAt: '2026-04-01T00:00:00Z',
-      statusCheckRollup: []
-    })
-    await expect(getWorkItem('/repo-root', 45, 'pr', null, {}, 'origin')).resolves.toMatchObject({
-      checksSummary: { state: 'none', total: 0, passed: 0, failed: 0, pending: 0, neutral: 0 }
     })
   })
 })

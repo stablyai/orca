@@ -1,7 +1,7 @@
 import type { BrowserPageConversionOrigin } from '../../../../shared/browser-workspace-types'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
-import { getKnownExecutionHostIdForWorktree } from '../../lib/worktree-runtime-owner'
-import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner-state'
+import { getKnownExecutionHostIdForWorktree } from '../../lib/workspace/ownership/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '../../lib/workspace/ownership/worktree-runtime-owner-state'
 import type { AppState } from '../types'
 
 function preserveLocalUrlOrigin(

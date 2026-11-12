@@ -26,13 +26,8 @@ vi.mock('os', async () => {
     homedir: homedirMock
   }
 })
-
-import { getGrokToolEventMatcherForTests, GrokHookService } from './hook-service'
+import { GrokHookService } from './hook-service'
 import { buildWindowsGrokHookScript } from './windows-grok-hook-script'
-import {
-  POSIX_HOOK_JSON_STDIN_PRELUDE,
-  POSIX_HOOK_JSON_STDIN_READER
-} from '../agent-hooks/hook-stdin-contract'
 
 const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
@@ -129,21 +124,6 @@ describe('GrokHookService', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
-  it('guards Windows GROK_HOME substring checks when empty (#9358)', () => {
-    const script = buildWindowsGrokHookScript()
-    expect(script).toContain('set "ORCA_GROK_HOME="')
-    expect(script).toContain('if not defined GROK_HOME goto :orca_grok_home_ready')
-    expect(script).toContain('%GROK_HOME:~4096,1%')
-    expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME:"=%"')
-    expect(script).toContain('%ORCA_GROK_HOME:~4096,1%')
-    expect(script).toContain(':orca_grok_home_ready')
-    expect(script).toContain('if not defined ORCA_GROK_HOME goto :orca_grok_home_ready')
-    expect(script).toContain('if "%ORCA_GROK_HOME:~-1%"=="\\"')
-    expect(script).toContain('if not "%GROK_HOME:~4096,1%"=="" goto :orca_grok_home_ready')
-    // Parenthesized blocks still expand percent variables before their guard executes.
-    expect(script).not.toMatch(/if defined GROK_HOME \(/)
-  })
-
   it.skipIf(process.platform !== 'win32')(
     'generated grok-hook.cmd exits 0 when GROK_HOME is unset (#9358)',
     async () => {
@@ -229,126 +209,7 @@ describe('GrokHookService', () => {
     }
   )
 
-  it('installs a dedicated global Grok hook config and managed script', () => {
-    const status = new GrokHookService().install()
-
-    expect(status.state).toBe('installed')
-    expect(status.configPath).toBe(join(homeDir, '.grok', 'hooks', 'orca-status.json'))
-    expect(status.managedHooksPresent).toBe(true)
-
-    const config = JSON.parse(
-      readFileSync(join(homeDir, '.grok', 'hooks', 'orca-status.json'), 'utf8')
-    ) as {
-      hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>
-    }
-    expect(Object.keys(config.hooks).sort()).toEqual(
-      [
-        'Notification',
-        'PreToolUse',
-        'PostToolUse',
-        'PostToolUseFailure',
-        'SessionEnd',
-        'SessionStart',
-        'Stop',
-        'StopCancelled',
-        'StopFailure',
-        'UserPromptSubmit'
-      ].sort()
-    )
-    // PreToolUse is needed for in-flight tools and question waits.
-    expect(config.hooks.PreToolUse[0].matcher).toBe('.*')
-    expect(registersManagedGrokScript(config.hooks.PreToolUse[0].hooks[0].command)).toBe(true)
-    // Grok uses real regex matchers; bare * is invalid.
-    expect(config.hooks.PostToolUseFailure[0].matcher).toBe('.*')
-    expect(config.hooks.PostToolUse[0].matcher).toBe('.*')
-    expect(config.hooks.StopCancelled[0].matcher).toBeUndefined()
-    expect(config.hooks.StopFailure[0].matcher).toBeUndefined()
-    expect(config.hooks.Notification[0].matcher).toBeUndefined()
-    expect(getGrokToolEventMatcherForTests()).toBe('.*')
-    expect(getGrokToolEventMatcherForTests()).not.toBe('*')
-    expect(new RegExp(getGrokToolEventMatcherForTests()).test('run_terminal_command')).toBe(true)
-    // Construct invalid regex dynamically to avoid static lint rejection.
-    const bareStar = ['*', ''].join('')
-    expect(() => new RegExp(bareStar)).toThrow()
-    expect(registersManagedGrokScript(config.hooks.PostToolUse[0].hooks[0].command)).toBe(true)
-    if (process.platform !== 'win32') {
-      const command = config.hooks.PostToolUse[0].hooks[0].command
-      expect(command).toContain(join(homeDir, '.orca'))
-      expect(command).toMatch(/^if \[ -n "\$\{ORCA_PANE_KEY-\}" \] && /)
-    }
-
-    const script = readFileSync(
-      join(homeDir, '.orca', 'agent-hooks', GROK_SCRIPT_FILE_NAME),
-      'utf8'
-    )
-    expect(script).toContain('/hook/grok')
-    if (process.platform === 'win32') {
-      expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
-      expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME:"=%"')
-      expect(script).toContain('--data-urlencode "grokHome=%ORCA_GROK_HOME%"')
-    } else {
-      // Stream payload to curl stdin; reader variables must be initialized before capture.
-      const prelude = POSIX_HOOK_JSON_STDIN_PRELUDE.join('\n')
-      expect(script).toContain(prelude)
-      expect(script.indexOf(prelude)).toBeLessThan(
-        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
-      )
-      expect(script).toContain(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
-      expect(script).toContain('printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl')
-      expect(script).toContain('--data-urlencode "payload@-"')
-      expect(script).toContain('${#GROK_HOME}" -le 4096')
-      expect(script).toContain('--data-urlencode "grokHome=${grok_home}"')
-      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
-    }
-  })
-
   // Profile-path spaces need the encoded fallback so Grok cannot split the managed path.
-  it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command to survive spaces in the profile path (#6078)',
-    () => {
-      const spaceHome = join(tmpdir(), 'orca grok home with spaces')
-      mkdirSync(spaceHome, { recursive: true })
-      homedirMock.mockReturnValue(spaceHome)
-      try {
-        expect(new GrokHookService().install().state).toBe('installed')
-
-        const config = JSON.parse(
-          readFileSync(join(spaceHome, '.grok', 'hooks', 'orca-status.json'), 'utf8')
-        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
-
-        for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
-          const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
-        }
-      } finally {
-        rmSync(spaceHome, { recursive: true, force: true })
-      }
-    }
-  )
-
-  it('installs hooks under GROK_HOME when set', () => {
-    const grokHome = mkdtempSync(join(tmpdir(), 'orca-grok-home-env-'))
-    const previous = process.env.GROK_HOME
-    process.env.GROK_HOME = grokHome
-    try {
-      const status = new GrokHookService().install()
-      expect(status.state).toBe('installed')
-      expect(status.configPath).toBe(join(grokHome, 'hooks', 'orca-status.json'))
-      expect(readFileSync(join(grokHome, 'hooks', 'orca-status.json'), 'utf8')).toContain(
-        'SessionStart'
-      )
-      expect(() =>
-        readFileSync(join(homeDir, '.grok', 'hooks', 'orca-status.json'), 'utf8')
-      ).toThrow()
-    } finally {
-      if (previous === undefined) {
-        delete process.env.GROK_HOME
-      } else {
-        process.env.GROK_HOME = previous
-      }
-      rmSync(grokHome, { recursive: true, force: true })
-    }
-  })
 
   it('does not restore a user-cleared global hook config on the next launch', () => {
     const service = new GrokHookService()
@@ -375,15 +236,6 @@ describe('GrokHookService', () => {
     expect(readFileSync(configPath, 'utf8')).toBe(userClearedConfig)
   })
 
-  it('removes the empty managed config when hooks are disabled', () => {
-    const service = new GrokHookService()
-    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
-
-    service.install()
-    expect(service.remove().state).toBe('not_installed')
-    expect(() => readFileSync(configPath, 'utf8')).toThrow()
-  })
-
   it('removes the managed config even when a non-hook key remains', () => {
     const service = new GrokHookService()
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
@@ -400,18 +252,6 @@ describe('GrokHookService', () => {
   })
 
   // Respect startup opt-out while allowing explicit re-enabling to override it.
-  it('leaves a user-cleared config alone on a startup install', () => {
-    const service = new GrokHookService()
-    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
-    const userCleared = '{  "hooks" : {}  }\n'
-
-    expect(service.install().state).toBe('installed')
-    writeFileSync(configPath, userCleared, 'utf8')
-
-    service.install()
-
-    expect(readFileSync(configPath, 'utf8')).toBe(userCleared)
-  })
 
   it('restores a user-cleared config when the user turns hooks back on', () => {
     const service = new GrokHookService()

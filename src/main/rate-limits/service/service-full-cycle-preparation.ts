@@ -1,26 +1,24 @@
-import { fetchClaudeRateLimits } from '../claude-fetcher'
-import { fetchCodexRateLimits } from '../codex-fetcher'
-import { fetchGeminiRateLimits } from '../gemini-usage-fetcher'
-import { fetchGrokRateLimits } from '../grok-fetcher'
-import { readGrokAuthSession } from '../grok-auth'
-import { fetchCursorRateLimits } from '../cursor-fetcher'
-import { readCursorAuthSession } from '../cursor-auth'
-import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
-import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
-import { antigravityUsageDisabledSnapshot } from '../antigravity-usage-snapshot'
+import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
+import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
+import { fetchGeminiRateLimits } from '../providers/gemini/gemini-usage-fetcher'
+import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
+import { readGrokAuthSession } from '../providers/grok/grok-auth'
+import { fetchCursorRateLimits } from '../providers/cursor/cursor-fetcher'
+import { readCursorAuthSession } from '../providers/cursor/cursor-auth'
+import { fetchZcodeRateLimits } from '../providers/zcode/zcode-usage-fetcher'
+import { fetchAntigravityRateLimits } from '../providers/antigravity/antigravity-usage-fetcher'
+import { antigravityUsageDisabledSnapshot } from '../providers/antigravity/antigravity-usage-snapshot'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/zcode-plan-sites'
-import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
+import { fetchMiniMaxRateLimits } from '../providers/minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
-import { fetchOpenCodeGoUsage } from '../opencode-go-usage-source-selection'
-import { RateLimitServiceFetchPolicy, type KiroUsageFetch } from './service-fetch-policy'
+import { fetchOpenCodeGoUsage } from '../providers/opencode-go/opencode-go-usage-source-selection'
+import { RateLimitServiceAntigravityAccounts } from './service-antigravity-accounts'
 import type { SettledProviderResult } from './service-sibling-provider-result'
-import type {
-  ClaudeRuntimeAuthPreparation,
-  InternalRateLimitState,
-  NormalizedClaudeAccountSelectionTarget,
-  NormalizedCodexAccountSelectionTarget,
-  ProviderRateLimits
-} from './service-types'
+import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
+import type { InternalRateLimitState } from './service-types'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
+import type { NormalizedCodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 
 export type FetchAllCyclePrepared = {
   claudeTarget: NormalizedClaudeAccountSelectionTarget
@@ -32,6 +30,7 @@ export type FetchAllCyclePrepared = {
   codexFetchGated: boolean
   codexStateBeforeFetch: ProviderRateLimits | null
   codexProvenance: string | null
+  codexHomePath: string | null
   codexGeneration: number
   opencodeConfigChanged: boolean
   opencodeGeneration: number
@@ -53,10 +52,9 @@ export type FetchAllCyclePrepared = {
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
   antigravityResultPromise: Promise<SettledProviderResult>
-  kiroFetch: KiroUsageFetch
 }
 
-export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceFetchPolicy {
+export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceAntigravityAccounts {
   protected async prepareFetchAllCycle(
     signal: AbortSignal,
     options?: { force?: boolean }
@@ -78,8 +76,18 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const codexGeneration = this.codexFetchGeneration
     // Gate only Codex, never siblings, when its runtime is skipped (#STA-4422).
     const codexHome = await this.resolveCodexHome(codexTarget)
+    const antigravityFetchAllowed =
+      (this.antigravityUsageEnabledResolver?.() ?? true) &&
+      (options?.force || !this.shouldSkipAutomatedFetch('antigravity', this.state.antigravity))
+    // A login change seen here invalidates before the baseline below, so this read still counts.
+    const recorder = antigravityFetchAllowed ? this.antigravityAccountUsageRecorder : null
+    const antigravityRead = recorder ? await this.beginAntigravityAccountRead(recorder) : null
+    if (signal.aborted) {
+      return null
+    }
     const previousState = this.state
     const antigravityGeneration = this.antigravityFetchGeneration
+    const antigravityTarget = this.antigravityFetchTarget
     const codexFetchGated = codexHome.skip
     const codexHomePath = codexHome.homePath
     const codexStateBeforeFetch =
@@ -124,10 +132,6 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
-    const antigravityFetchAllowed =
-      (this.antigravityUsageEnabledResolver?.() ?? true) &&
-      (options?.force || !this.shouldSkipAutomatedFetch('antigravity', previousState.antigravity))
-
     const zcodePlanConfigResult = this.resolveZcodePlanConfig()
     const zcodePlanApiKey = zcodePlanConfigResult.config.apiKey
     // Hash credentials because only changes matter, never retain the raw key here.
@@ -146,7 +150,6 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
           baseUrl: ZCODE_PLAN_SITE_BASE_URLS[zcodePlanConfigResult.config.site]
         }
       : null
-    const kiroFetch = this.startKiroUsageFetch(signal, previousState.kiro)
 
     this.updateState({
       ...previousState,
@@ -170,8 +173,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
-        : this.withFetchingStatus(previousState.zcode, 'zcode'),
-      kiro: kiroFetch.pending
+        : this.withFetchingStatus(previousState.zcode, 'zcode')
     })
 
     // Async Keychain/worker DB reads must not delay other providers.
@@ -197,7 +199,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
     const antigravityResultPromise = (
       antigravityFetchAllowed
-        ? fetchAntigravityRateLimits({ signal })
+        ? fetchAntigravityRateLimits({ signal, target: antigravityTarget }).then((limits) =>
+            this.attributeAntigravityReading(antigravityRead, antigravityGeneration, limits)
+          )
         : Promise.resolve(previousState.antigravity ?? antigravityUsageDisabledSnapshot())
     ).then(
       (value) => ({ status: 'fulfilled', value }) as const,
@@ -222,7 +226,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       await Promise.allSettled([
         claudeFetchGated
           ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchClaudeRateLimits({
+          : fetchActiveClaudeRateLimits({
               authPreparation: claudeAuthPreparation,
               allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
               allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
@@ -294,6 +298,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       codexFetchGated,
       codexStateBeforeFetch,
       codexProvenance,
+      codexHomePath,
       codexGeneration,
       opencodeConfigChanged,
       opencodeGeneration,
@@ -314,8 +319,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
-      antigravityResultPromise,
-      kiroFetch
+      antigravityResultPromise
     }
   }
 }

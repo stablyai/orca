@@ -3,7 +3,7 @@ import {
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupScanArgs,
   type WorkspaceCleanupScanResult
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   readSidecarSnapshot,
   sidecarSnapshotFile,
@@ -21,7 +21,7 @@ import {
 } from './workspace-snapshot-prune-index'
 
 const SNAPSHOT_FILE_NAME = 'orca-workspace-cleanup-scan.json'
-const SNAPSHOT_VERSION = 2
+const SNAPSHOT_VERSION = 3
 
 export type WorkspaceCleanupScanSnapshotPruneTarget = WorkspaceSnapshotPruneTarget
 

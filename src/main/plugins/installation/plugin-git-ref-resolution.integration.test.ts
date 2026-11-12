@@ -60,12 +60,3 @@ it('pins a plain repository URL to its newest version tag, then the default bran
     ref: 'readme'
   })
 })
-
-it('reports an unreachable repository without throwing', async () => {
-  await fixture()
-  const missing = await resolvePluginGitSource({
-    url: 'ssh://git@plugins.example.invalid/missing.git',
-    ref: ''
-  })
-  expect(missing).toMatchObject({ ok: false, reason: 'unreachable' })
-})

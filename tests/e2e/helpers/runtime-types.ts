@@ -1,6 +1,7 @@
 import type { AppState } from '../../../src/renderer/src/store/types'
 import type { PaneManager } from '../../../src/renderer/src/lib/pane-manager/pane-manager'
-import type { OpenFile, RightSidebarTab } from '../../../src/renderer/src/store/slices/editor'
+import type { OpenFile } from '../../../src/renderer/src/store/slices/editor/types/open-file'
+import type { RightSidebarTab } from '../../../src/shared/ui-chrome-types'
 import type {
   ManagedPane,
   ManagedPaneInternal,
@@ -10,7 +11,7 @@ import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import type { BrowserWorkspace } from '../../../src/shared/browser-workspace-types'
 import type { Repo } from '../../../src/shared/repo-types'
 import type { WorkspaceVisibleTabType } from '../../../src/shared/tab-types'
-import type { TerminalTab } from '../../../src/shared/terminal-tab-types'
+import type { TerminalTab } from '../../../src/shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../src/shared/worktree/types'
 import type { DictationMeterState } from '../../../src/shared/dictation-audio-meter'
 import type { ReactCommitHook } from './tab-render-recorder'

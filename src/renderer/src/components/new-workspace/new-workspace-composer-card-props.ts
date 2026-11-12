@@ -1,13 +1,17 @@
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
 import type { ComposerAgentRows } from '@/hooks/composer-state/composer-agent-rows-target'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import type {
   NeedsSetupProjectHostOption,
   ProjectHostSetupOption
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import type { SetupConfig } from '../../../../shared/orca-hook-setup-config'
-import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
+import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace/creation/workspace-create-error-format'
 import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type SmartWorkspaceNameField from './SmartWorkspaceNameField'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
@@ -18,8 +22,9 @@ import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
+import type { AddRepoDialogEntryRequest } from '@/components/sidebar/project-admission/dialog/add-repo-dialog-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
@@ -40,15 +45,16 @@ export type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   agentSurfaceRows?: AgentComboboxSurfaceRows
+  agentPickerDraft?: AgentPickerDraft
+  agentSetupDisabled?: boolean
   onQuickAgentChange: (
     agent: TuiAgent | null,
-    surface?: AgentComboboxSurfaceRows['surface']
+    surface?: AgentComboboxSurfaceRows['surface'],
+    draft?: AgentPickerDraft,
+    entry?: AgentPickerEntry
   ) => void
   /** Where the quick agent would start; null keeps the picker's plain agent list. */
   agentRows?: ComposerAgentRows | null
-  /** Cleared picker: skip the agent and the extra shell when setup runs. */
-  quickSetupOnly?: boolean
-  onQuickSetupOnlySelect?: () => void
   eligibleRepos: readonly RepoOption[]
   selectedRepo?: RepoOption | null
   repoId: string
@@ -107,8 +113,10 @@ export type NewWorkspaceComposerCardProps = {
   smartNameJiraSourceContext?: TaskSourceContext | null
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
-  onOpenAgentSettings: () => void
+  onOpenAgentSettings: (invoker: HTMLButtonElement) => void
   advancedOpen: boolean
+  setupChoiceRevealRequest: number
+  onSetupChoiceRevealed: () => void
   onToggleAdvanced: () => void
   createDisabled: boolean
   projectError: string | null
@@ -138,6 +146,7 @@ export type NewWorkspaceComposerCardProps = {
   onSparseSelectPreset: (preset: SparsePreset | null) => void
   sparseControlsEnabled?: boolean
   onAddProjectOverride?: () => void
+  onAddProjectEntryRequest?: (request: AddRepoDialogEntryRequest) => void
   onNestedDialogOpenChange?: (open: boolean) => void
 }
 

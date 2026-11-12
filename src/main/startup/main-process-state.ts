@@ -1,24 +1,22 @@
-import type { BrowserWindow, Tray } from 'electron'
-import { app } from 'electron'
+import type { BackendSupervisor } from '../backend-desktop/backend-supervisor'
+import type { AutomationUsageClient } from '../../shared/backend-service-contract'
+import { type BrowserWindow, type Tray, app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
-import type { ClaudeUsageStore } from '../claude-usage/store'
-import type { CodexUsageStore } from '../codex-usage/store'
-import type { OpenCodeUsageStore } from '../opencode-usage/store'
-import type { MuseUsageStore } from '../muse-usage/store'
+import type { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RateLimitService } from '../rate-limits/service'
-import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
+import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 import type { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-relay-service'
 import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay/desktop-relay-service-installer'
 import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
 import type { AgentAwakeService } from '../power/agent-awake-service'
-import type { CrashReportStore } from '../crash-reporting/crash-report-store'
+import type { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
 import type { AutomationService } from '../automations/service'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
@@ -28,11 +26,11 @@ import type { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update
 import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-service'
 import type { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
 import type { KeybindingService } from '../keybindings/keybinding-service'
-import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
+import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
 import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-fallback-marker'
-import type { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
+import type { createCodexSessionMigrationScheduler } from '../codex/history/backfill/codex-session-migration-scheduler'
 import type { getDevInstanceIdentity } from './dev-instance-identity'
 import type { createServeDesktopActivationGate } from './serve-desktop-activation'
 import type { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
@@ -46,11 +44,11 @@ import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
   GpuCrashFallbackTracker
-} from '../crash-reporting/gpu-crash-fallback-decision'
-import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-diagnostics'
+} from '../crash-reporting/recovery/gpu-crash-fallback-decision'
+import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/capture/gpu-crash-diagnostics'
 import { createWebContentsTimedFlag } from './web-contents-timed-flag'
-import type { ProfileStateStorageClassification } from '../persistence/profile-state/profile-state-storage-classification'
-import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
+import type { ProfileStateStorageClassification } from '../persistence/profile-state/database/profile-state-storage-classification'
+import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/access/profile-state-access'
 
 export type ProfileStateStartupMetadata = {
   backend: 'sqlite'
@@ -67,6 +65,14 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
   return undefined
 }
 
+function createInitialBackendServices(): {
+  backend: BackendSupervisor | null
+  claudeUsage: AutomationUsageClient | null
+  codexUsage: AutomationUsageClient | null
+} {
+  return { backend: null, claudeUsage: null, codexUsage: null }
+}
+
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 const desktopRelayStatus: MobileRelayStatusDetail = { status: 'offline' }
 
@@ -80,11 +86,9 @@ export const mainProcessState = {
   profileStateStartup: createInitialProfileStateStartup(),
   profileStateAdmission: createInitialProfileStateAdmission(),
   stats: null as StatsCollector | null,
-  claudeUsage: null as ClaudeUsageStore | null,
-  codexUsage: null as CodexUsageStore | null,
-  openCodeUsage: null as OpenCodeUsageStore | null,
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the store type assigned by main-process-observers.
-  museUsage: null as MuseUsageStore | null,
+  ...createInitialBackendServices(),
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot assigned by main-process-observers.
+  usageWorktreeHistory: null as UsageWorktreeHistory | null,
   codexAccounts: null as CodexAccountService | null,
   codexRuntimeHome: null as CodexRuntimeHomeService | null,
   codexSessionMigration: null as ReturnType<typeof createCodexSessionMigrationScheduler> | null,

@@ -1,32 +1,35 @@
 import { ipcMain } from 'electron'
-import { DegradedDaemonPtyProvider } from '../../daemon/degraded-daemon-pty-provider'
-import type { DaemonPtyAdapter } from '../../daemon/daemon-pty-adapter'
+import { DegradedDaemonPtyProvider } from '../../daemon/providers/routing/degraded-daemon-pty-provider'
+import type { DaemonPtyAdapter } from '../../daemon/providers/adapter/daemon-pty-adapter'
 import {
   getCurrentDaemonMacTccAttributionHealth,
   getDaemonProvider
-} from '../../daemon/daemon-provider-state'
-import { restartDaemon } from '../../daemon/daemon-provider-restart'
+} from '../../daemon/providers/lifecycle/daemon-provider-state'
+import { restartDaemon } from '../../daemon/providers/lifecycle/daemon-provider-restart'
 import {
   readSeveredDaemonStatus,
   restartSeveredDaemon,
   type SeveredDaemonIncarnation,
   type SeveredDaemonRestartResult
-} from '../../daemon/daemon-host-image-state'
-import { getAllDaemonAdapters, getCurrentDaemonAdapter } from '../../daemon/daemon-provider-routing'
-import { isHoldingForNewerProtocolDaemon } from '../../daemon/daemon-newer-protocol-hold'
+} from '../../daemon/providers/lifecycle/daemon-host-image-state'
+import {
+  getAllDaemonAdapters,
+  getCurrentDaemonAdapter
+} from '../../daemon/providers/lifecycle/daemon-provider-routing'
+import { isHoldingForNewerProtocolDaemon } from '../../daemon/providers/routing/daemon-newer-protocol-hold'
 import {
   getDaemonFolderAccessMismatch,
   refreshDaemonFolderAccessProbe,
   type DaemonFolderAccessMismatchNotice
-} from '../../daemon/daemon-folder-access-mismatch'
+} from '../../daemon/permissions/daemon-folder-access-mismatch'
 import {
   resetFolderAccessForDaemon,
   type DaemonFolderAccessResetResult
-} from '../../daemon/daemon-folder-access-reset'
-import type { MacDaemonTccAttributionHealth } from '../../daemon/daemon-tcc-attribution'
-import type { DaemonEndpointIdentity } from '../../daemon/daemon-hello-protocol'
-import { sameEndpointIdentity } from '../../daemon/daemon-endpoint-incarnation'
-import type { DaemonSessionInfo } from '../../daemon/daemon-session-info'
+} from '../../daemon/permissions/daemon-folder-access-reset'
+import type { MacDaemonTccAttributionHealth } from '../../daemon/permissions/daemon-tcc-attribution'
+import type { DaemonEndpointIdentity } from '../../daemon/protocol/daemon-hello-protocol'
+import { sameEndpointIdentity } from '../../daemon/endpoint/identity/daemon-endpoint-incarnation'
+import type { DaemonSessionInfo } from '../../daemon/protocol/daemon-session-info'
 import type { DaemonAsyncIoStatus } from '../../../shared/daemon-async-io-health'
 
 // Poll beyond the daemon's 5s SIGTERM-to-SIGKILL ladder to avoid false refusal reports.

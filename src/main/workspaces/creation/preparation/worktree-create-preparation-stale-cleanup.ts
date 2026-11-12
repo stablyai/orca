@@ -5,13 +5,13 @@ import {
   parseWorktreePreparationPathOwnerPid
 } from '../../../../shared/worktree/create-preparation'
 import { orcadDataRootIsOnLocalDisk } from '../../../orcad/orcad-data-root-locality'
-import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/profile-state-access-identity'
-import type { AddWorktreeOptions } from '../../../git/worktree-operation-options'
-import { listWorktreeGraph } from '../../../git/worktree-scan-cache'
+import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/access/profile-state-access-identity'
+import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
+import { listWorktreeGraph } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import {
   discardPreparedWorktree,
   unlockPreparedWorktree
-} from '../../../git/worktree-create-preparation'
+} from '../../../git/worktrees/creation/worktree-create-preparation'
 import { retryPendingPreparationDiscards } from './worktree-preparation-discard-retry'
 
 const STALE_PREPARATION_CLEANUP_CONCURRENCY = 4
@@ -64,12 +64,12 @@ export async function startStalePreparationCleanup(
   repoPath: string,
   options: AddWorktreeOptions
 ): Promise<void> {
+  void retryPendingPreparationDiscards(cleanupKey)
   const existing = staleCleanupInFlight.get(cleanupKey)
   if (existing) {
     await existing.scanned.catch(() => {})
     return
   }
-  void retryPendingPreparationDiscards(cleanupKey)
   // Reclaim in background to avoid blocking creates; retain caller priority for the scan they await.
   const reclaimOptions: AddWorktreeOptions = { ...options, admissionTier: 'background' }
   const scan = listWorktreeGraph(repoPath, {

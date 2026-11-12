@@ -1,4 +1,4 @@
-import type { RuntimeFileOpenResult } from '../../shared/runtime-types'
+import type { RuntimeFileOpenResult } from '../../shared/file-access/runtime-editor-file-open'
 import type { HandlerContext } from '../dispatch'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 

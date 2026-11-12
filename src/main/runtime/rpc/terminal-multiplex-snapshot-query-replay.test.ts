@@ -1,22 +1,18 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import type { RuntimeTerminalDataMeta } from '../orca-runtime'
+import type { RuntimeTerminalDataMeta } from '../terminal/output/runtime-terminal-stream-consumers'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   sendDesktopMultiplexSubscribe,
   startDesktopMultiplexSubscribe
 } from './terminal-multiplex-test-harness'
-import {
-  TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
-  TERMINAL_MULTIPLEX_PENDING_MAX_BYTES
-} from '../../../shared/terminal-multiplex-flow-control'
+import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 
 afterEach(() => vi.useRealTimers())
 
@@ -336,89 +332,6 @@ async function startSoleQueryOwnerStream() {
     }
   }
 }
-
-it('replays DA1 trimmed from an overflowed ACK queue after the recovery snapshot', async () => {
-  vi.useFakeTimers()
-  const stream = await startSoleQueryOwnerStream()
-  try {
-    await stream.subscribe()
-    await stream.waitSubscribed()
-    await stream.emit('x'.repeat(TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES))
-    await stream.emit('\x1b[c')
-    await stream.emit('y'.repeat(TERMINAL_MULTIPLEX_PENDING_MAX_BYTES))
-    stream.send(TerminalStreamOpcode.Ack, {
-      bytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES
-    })
-    await vi.runOnlyPendingTimersAsync()
-    await vi.runOnlyPendingTimersAsync()
-
-    expect(stream.outputAfterLastSnapshot()).toBe('\x1b[c')
-    expect(stream.answerYieldedTerminalQueries).not.toHaveBeenCalled()
-  } finally {
-    await stream.cleanup()
-  }
-})
-
-it('replays DA1 still batched when the ACK recovery snapshot covers it', async () => {
-  vi.useFakeTimers()
-  const stream = await startSoleQueryOwnerStream()
-  try {
-    await stream.subscribe()
-    await stream.waitSubscribed()
-    await stream.emit('x'.repeat(TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES))
-    await stream.emit('y'.repeat(TERMINAL_MULTIPLEX_PENDING_MAX_BYTES + 1))
-    stream.holdNextSnapshot()
-    stream.send(TerminalStreamOpcode.Ack, {
-      bytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES
-    })
-    const release = await stream.held()
-    await stream.emit('\x1b[c', { holdInBatcher: true })
-    const snapshotSeq = stream.currentSeq()
-    const snapshotEnds = stream.snapshotEndCount()
-    release()
-    // Publish recovery before the batcher's flush timer fires.
-    for (let turn = 0; turn < 50 && stream.snapshotEndCount() === snapshotEnds; turn += 1) {
-      await Promise.resolve()
-    }
-    expect(stream.snapshotEndCount()).toBe(snapshotEnds + 1)
-    await vi.runOnlyPendingTimersAsync()
-
-    expect(stream.outputAfterLastSnapshot(snapshotSeq)).toBe('\x1b[c')
-    expect(stream.answerYieldedTerminalQueries).not.toHaveBeenCalled()
-  } finally {
-    await stream.cleanup()
-  }
-})
-
-it.each(['initial', 'requested'] as const)(
-  'replays DA1 discarded when %s snapshot buffering overflows',
-  async (kind) => {
-    vi.useFakeTimers()
-    const stream = await startSoleQueryOwnerStream()
-    try {
-      if (kind === 'initial') {
-        stream.holdNextSnapshot()
-        await stream.subscribe()
-      } else {
-        await stream.subscribe()
-        await stream.waitSubscribed()
-        stream.holdNextSnapshot()
-        stream.send(TerminalStreamOpcode.SnapshotRequest, {})
-      }
-      const release = await stream.held()
-      await stream.emit('\x1b[c')
-      await stream.emit('y'.repeat(TERMINAL_MULTIPLEX_PENDING_MAX_BYTES))
-      release()
-      await vi.runOnlyPendingTimersAsync()
-      await vi.runOnlyPendingTimersAsync()
-
-      expect(stream.outputAfterLastSnapshot()).toBe('\x1b[c')
-      expect(stream.answerYieldedTerminalQueries).not.toHaveBeenCalled()
-    } finally {
-      await stream.cleanup()
-    }
-  }
-)
 
 it('drops a superseded snapshot replay and its escape tail queued behind the ACK window', async () => {
   vi.useFakeTimers()

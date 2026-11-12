@@ -1,5 +1,5 @@
-import type { AgentStatusState } from '../agent-status-types'
-import type { AgentTurnOutcome } from '../agent-turn-outcome'
+import type { AgentStatusState } from '../agent-status/contracts/agent-status-types'
+import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
 
 /** The Claude main agent's own turn record, published on every row as `mainAgent`. */
 export type ClaudeLeadTurnState = {
@@ -16,6 +16,8 @@ export type ClaudeLeadTurnState = {
   waitingToolUseId?: string
   /** End time retained while background work holds working, then repeated on all-clear done. */
   turnCompletedAt?: number
+  /** Claude hook model. Later events that omit it keep the last reported value. */
+  model?: string
   /** Restore the lead state displaced by a child wait; inventing working cannot later fold back to done. */
   stateBeforeWait?: Pick<
     ClaudeLeadTurnState,

@@ -1,9 +1,14 @@
 import { ipcMain } from 'electron'
-import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoDialableSshTargetId,
+  isRepoOnCatalogHost,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
+import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../workspace-hooks/hooks'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
-import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
 export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): void {
@@ -23,7 +28,8 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
           mayNeedUpdate: false
         }
       }
-      if (isFolderRepo(repo)) {
+      // A folder owned by another host has no hooks here; its own host reports them.
+      if (isFolderRepo(repo) && !isRepoOnCatalogHost(repo)) {
         return { status: 'ok', hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
 
@@ -53,7 +59,7 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
       }
 
       const has = hasHooksFile(repo.path)
-      const hooks = has ? loadHooks(repo.path) : null
+      const hooks = scopeHooksToRepoKind(repo, has ? loadHooks(repo.path) : null)
       // Well-formed unknown keys may come from a newer Orca; suggest updating instead of parse repair.
       const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
       return {

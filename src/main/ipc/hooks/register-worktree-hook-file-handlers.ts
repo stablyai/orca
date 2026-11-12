@@ -2,7 +2,7 @@ import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-ho
 import { ipcMain } from 'electron'
 import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
+import { joinWorktreeRelativePath } from '../../runtime/files/paths/runtime-relative-paths'
 import {
   readIssueCommandUnlessWslStopped,
   writeIssueCommandUnlessWslStopped
@@ -10,7 +10,7 @@ import {
 import { broadcastWhenWslDistroRunning } from '../preflight-wsl-refusal-retry'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
-import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 /** Route private command overrides to the owning host without changing shared hook settings. */
 export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): void {
@@ -43,7 +43,8 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
       }
       // Settings renders read this; only a launch (`wakeWslDistro`) may start a stopped distro.
       const result = await readIssueCommandUnlessWslStopped(repo.path, {
-        wakeWslDistro: args.wakeWslDistro
+        wakeWslDistro: args.wakeWslDistro,
+        gitOptions: () => getLocalProjectWorktreeGitOptions(store, repo)
       })
       if (result.refusedWslDistro) {
         // The Settings editor re-reads on this signal instead of staying read-only (#35778's pattern).

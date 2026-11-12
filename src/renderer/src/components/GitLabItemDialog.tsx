@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../shared/work-items/task-source-context'
 import { GitLabItemDialogView } from './gitlab-item-dialog/gitlab-item-dialog-view'
 import type {
   GitLabDialogRepoSelector,

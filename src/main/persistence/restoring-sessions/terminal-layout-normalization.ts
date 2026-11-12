@@ -2,18 +2,12 @@ import { randomUUID } from 'node:crypto'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../../shared/terminal-tab-types'
-import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import { isTerminalLeafId } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   collectLayoutLeafIdsInOrder,
   firstLayoutLeafId
-} from '../../../shared/workspace-layout/terminal-pane-tree'
-
-export {
-  collectLayoutLeafIdsInOrder,
-  firstLayoutLeafId,
-  layoutContainsLeafId
-} from '../../../shared/workspace-layout/terminal-pane-tree'
+} from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export type LayoutLeafNormalization = {
   snapshot: TerminalLayoutSnapshot

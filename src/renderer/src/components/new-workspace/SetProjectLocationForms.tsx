@@ -1,4 +1,6 @@
 import { ArrowLeft, FolderOpen, LoaderCircle } from 'lucide-react'
+import { CloneFolderNameField } from '../sidebar/project-admission/clone-folder/CloneFolderNameField'
+import type { CloneFolderOverride } from '../sidebar/project-admission/clone-folder/use-clone-folder-override'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -8,8 +10,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import type { RepoKind } from '../../../../shared/repo-types'
 
 export function ExistingFolderForm({
@@ -31,20 +33,18 @@ export function ExistingFolderForm({
   onBrowse: () => void
   onSubmit: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-3">
       <StepBackButton
         onBack={onBack}
-        label={translate(
-          'auto.components.settings.RepositoryPane.existingFolder',
-          'Existing folder'
-        )}
+        label={t('auto.components.settings.RepositoryPane.existingFolder', 'Existing folder')}
       />
       <div className="flex gap-2">
         <Input
           value={setupPath}
           onChange={(event) => onPathChange(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.settings.RepositoryPane.setupExistingFolderPathPlaceholder',
             '/path/to/project/on/host'
           )}
@@ -57,7 +57,7 @@ export function ExistingFolderForm({
           size="icon"
           className="size-9 shrink-0"
           onClick={onBrowse}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
             'Browse host filesystem'
           )}
@@ -71,10 +71,10 @@ export function ExistingFolderForm({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="git">
-            {translate('auto.components.settings.RepositoryPane.setupKindGit', 'Git repo')}
+            {t('auto.components.settings.RepositoryPane.setupKindGit', 'Git repo')}
           </SelectItem>
           <SelectItem value="folder">
-            {translate('auto.components.settings.RepositoryPane.setupKindFolder', 'Folder')}
+            {t('auto.components.settings.RepositoryPane.setupKindFolder', 'Folder')}
           </SelectItem>
         </SelectContent>
       </Select>
@@ -87,8 +87,8 @@ export function ExistingFolderForm({
         >
           {isSubmitting ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
           {isSubmitting
-            ? translate('auto.components.settings.RepositoryPane.settingUpHost', 'Importing...')
-            : translate(
+            ? t('auto.components.settings.RepositoryPane.settingUpHost', 'Importing...')
+            : t(
                 'auto.components.new.workspace.SetProjectLocationDialog.saveLocation',
                 'Set location'
               )}
@@ -105,6 +105,8 @@ export function CloneForm({
   onBack,
   onCloneUrlChange,
   onCloneDestinationChange,
+  cloneFolder,
+  onCloneFolderNameChange,
   onBrowse,
   onSubmit
 }: {
@@ -114,19 +116,22 @@ export function CloneForm({
   onBack: () => void
   onCloneUrlChange: (value: string) => void
   onCloneDestinationChange: (value: string) => void
+  cloneFolder: CloneFolderOverride | null
+  onCloneFolderNameChange: (name: string) => void
   onBrowse: () => void
   onSubmit: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-3">
       <StepBackButton
         onBack={onBack}
-        label={translate('auto.components.settings.RepositoryPane.cloneFromUrl', 'Clone from URL')}
+        label={t('auto.components.settings.RepositoryPane.cloneFromUrl', 'Clone from URL')}
       />
       <Input
         value={cloneUrl}
         onChange={(event) => onCloneUrlChange(event.target.value)}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.settings.RepositoryPane.cloneUrlPlaceholder',
           'Repository URL'
         )}
@@ -137,7 +142,7 @@ export function CloneForm({
         <Input
           value={cloneDestination}
           onChange={(event) => onCloneDestinationChange(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.settings.RepositoryPane.cloneDestinationPlaceholder',
             '/destination/on/host'
           )}
@@ -150,7 +155,7 @@ export function CloneForm({
           size="icon"
           className="size-9 shrink-0"
           onClick={onBrowse}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
             'Browse host filesystem'
           )}
@@ -158,17 +163,29 @@ export function CloneForm({
           <FolderOpen className="size-4" />
         </Button>
       </div>
+      {cloneFolder ? (
+        <CloneFolderNameField
+          cloneFolder={cloneFolder}
+          disabled={isSubmitting}
+          onChange={onCloneFolderNameChange}
+        />
+      ) : null}
       <div className="flex justify-end">
         <Button
           type="button"
           size="sm"
-          disabled={!cloneUrl.trim() || !cloneDestination.trim() || isSubmitting}
+          disabled={
+            !cloneUrl.trim() ||
+            !cloneDestination.trim() ||
+            cloneFolder?.name.trim() === '' ||
+            isSubmitting
+          }
           onClick={onSubmit}
         >
           {isSubmitting ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
           {isSubmitting
-            ? translate('auto.components.settings.RepositoryPane.cloningHost', 'Cloning...')
-            : translate('auto.components.settings.RepositoryPane.cloneHost', 'Clone')}
+            ? t('auto.components.settings.RepositoryPane.cloningHost', 'Cloning...')
+            : t('auto.components.settings.RepositoryPane.cloneHost', 'Clone')}
         </Button>
       </div>
     </div>

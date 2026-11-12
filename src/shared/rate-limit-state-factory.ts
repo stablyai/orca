@@ -13,6 +13,7 @@ export function createEmptyRateLimitState(overrides: Partial<RateLimitState> = {
     grok: null,
     cursor: null,
     zcode: null,
+    muse: null,
     kiro: null,
     minimaxCookieConfigured: false,
     minimaxApiKeyConfigured: false,
@@ -24,6 +25,7 @@ export function createEmptyRateLimitState(overrides: Partial<RateLimitState> = {
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
     inactiveCodexAccounts: [],
+    antigravityAccounts: [],
     ...overrides
   }
 }

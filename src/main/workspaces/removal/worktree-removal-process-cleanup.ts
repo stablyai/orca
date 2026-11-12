@@ -1,7 +1,7 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { advertisedUrlWatcher } from '../../ports/advertised-url-watcher'
 import { localhostWorktreeLabelProxy } from '../../ports/workspace-labels/localhost-worktree-label-proxy'
-import { deleteWorktreeHistoryDir } from '../../terminal-history-deletion'
+import { deleteWorktreeHistoryDir } from '../../pty/history/terminal-history-deletion'
 import { recordWorkspaceCleanupRemovalSnapshotPrune } from '../cleanup/workspace-cleanup-removal-snapshot-prune'
 import { pruneWorkspaceCleanupScanSnapshot } from '../cleanup/workspace-cleanup-scan-snapshot'
 import { pruneWorkspaceSpaceAnalysisSnapshot } from '../space-analysis/workspace-space-analysis-snapshot'
@@ -10,7 +10,15 @@ import { pruneWorkspaceSpaceAnalysisSnapshot } from '../space-analysis/workspace
 export function dropRemovedWorktreeProcessState(worktreeId: string): void {
   advertisedUrlWatcher.forgetWorktree(worktreeId)
   localhostWorktreeLabelProxy.unregisterWorktree(worktreeId)
-  deleteWorktreeHistoryDir(worktreeId)
+  // Guarded here: removal purges must degrade, not reject, when AppEnvironment
+  // is uninitialized and the history root cannot be resolved.
+  try {
+    deleteWorktreeHistoryDir(worktreeId)
+  } catch (err) {
+    console.warn(
+      `[pty:history] Failed to delete history dir: ${err instanceof Error ? err.message : String(err)}`
+    )
+  }
 }
 
 /** Removed workspaces must never resurrect from the persisted cleanup/space scan snapshots. */

@@ -1,20 +1,21 @@
-import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
-import type * as WorktreeListingModule from '../../git/worktree-listing'
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parsePairingCode, type PairingOffer } from '../../../shared/pairing'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   createEnvironmentFromPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { DeviceRegistry } from '../../runtime/device-registry'
+import { DeviceRegistry } from '../../runtime/rpc/server/pairing/device-registry'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../runtime/runtime-rpc'
-import { verifyRuntimePairingIdentity } from '../../runtime/runtime-environment-identity-verification'
+import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
+import { verifyRuntimePairingIdentity } from '../../runtime/hosts/identity/runtime-environment-identity-verification'
 import { buildServePairingReadiness } from '../../server/serve-pairing-readiness'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { ManagedOrcadPairingRepairs } from './orcad-managed-pairing-repair'
@@ -22,28 +23,32 @@ import {
   OrcadManagedIdentityError,
   verifyManagedOrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
-import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
+import { unusedOrcadHostTransport } from '../testing/managed-host-transport.test-fixture'
 
-vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeScanCacheModule>()),
     listWorktrees: facade.listWorktrees
   }
 })
 
-vi.mock('../../git/worktree-listing', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
     listWorktreesStrict: facade.listWorktreesStrict
   }
 })
 
-vi.mock('../../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 const servers: OrcaRuntimeRpcServer[] = []
 afterEach(async () => {

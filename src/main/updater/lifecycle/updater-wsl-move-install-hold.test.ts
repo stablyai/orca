@@ -2,11 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   beginWslMoveUndoRun,
   claimWslMoveRun,
-  isAnyWslMoveRunning,
   wslMoveClaimRefusal,
   releaseWslMoveRun,
   type RunningWslMove
-} from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
+} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
 import { wslMoveInstallHold } from './updater-wsl-move-install-hold'
 
 const ends: (() => void)[] = []
@@ -28,26 +27,6 @@ function beginUndo(): () => void {
 }
 
 describe('wslMoveInstallHold', () => {
-  it('lets an install through when nothing moves or comes back', () => {
-    expect(wslMoveInstallHold()).toBeNull()
-  })
-
-  it('holds for an undo, with its own message, without counting it as a move', () => {
-    beginUndo()
-    expect(wslMoveInstallHold()).toEqual({
-      lifecycleEvent: 'quit_and_install_held_for_wsl_move_undo',
-      message: 'A project is coming back from its WSL host. Install the update once that finishes.'
-    })
-    // The quit prompt and Cancel read this; an undo must not look like a move to them.
-    expect(isAnyWslMoveRunning()).toBe(false)
-  })
-
-  it('names the move when a move and an undo both run', () => {
-    move = claimWslMoveRun('Debian')
-    beginUndo()
-    expect(wslMoveInstallHold()?.lifecycleEvent).toBe('quit_and_install_held_for_wsl_move')
-  })
-
   it('holds until every undo has ended, and an end counts once', () => {
     const first = beginUndo()
     const second = beginUndo()

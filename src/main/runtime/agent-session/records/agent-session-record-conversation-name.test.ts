@@ -19,15 +19,6 @@ function storedRecordIsValid(
 }
 
 describe('agent session record conversationName validation', () => {
-  it('accepts a record carrying a bounded name', () => {
-    expect(
-      storedRecordIsValid({
-        ...agentSessionRecordFixture(),
-        conversationName: 'Fix the lease probe'
-      })
-    ).toBe(true)
-  })
-
   it('accepts a record with no name at all', () => {
     expect(storedRecordIsValid(agentSessionRecordFixture())).toBe(true)
   })

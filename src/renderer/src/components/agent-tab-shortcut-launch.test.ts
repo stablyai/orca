@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { launchFloatingWorkspaceAgentShortcut } from './agent-tab-shortcut-launch'
 
 const mocks = vi.hoisted(() => {
@@ -18,8 +18,10 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('../store', () => ({ useAppStore: { getState: () => mocks.state } }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launchAgentInNewTab }))
-vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => ({
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
+}))
+vi.mock('@/components/native-chat/composer/focus/native-chat-composer-focus-intent', () => ({
   captureNativeChatComposerFocusIntent: () => ({
     request: vi.fn(),
     cancel: mocks.cancelFocusIntent

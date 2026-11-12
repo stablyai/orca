@@ -1,5 +1,5 @@
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/journal-row-writer'
+import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import { commitAgentSessionFounding } from './agent-session-founding-admission'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 import { draftAgentSessionStoreState } from './agent-session-store-draft'

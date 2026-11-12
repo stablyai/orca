@@ -1,5 +1,5 @@
 import { forkProcess } from '@orca/process-host/fork-process'
-import type { SpawnedProcess } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 
 const CONPTY_PROCESS_LIST_TIMEOUT_MS = 3_000
 
@@ -9,7 +9,7 @@ type ForkConsoleListAgent = (
   modulePath: string,
   args: string[],
   options: { silent: true }
-) => SpawnedProcess
+) => ChildProcess
 
 const forkConsoleListAgent: ForkConsoleListAgent = (modulePath, args) =>
   forkProcess({ modulePath, args, stdio: ['pipe', 'pipe', 'pipe', 'ipc'] })
@@ -33,7 +33,7 @@ export function readWindowsConsoleAttachedProcessIds(
   if (!Number.isSafeInteger(rootPid) || rootPid <= 0) {
     return Promise.resolve(null)
   }
-  let child: SpawnedProcess
+  let child: ChildProcess
   try {
     child = (deps.forkProcess ?? forkConsoleListAgent)(
       (deps.resolveAgentPath ?? resolveNodePtyConsoleListAgent)(),

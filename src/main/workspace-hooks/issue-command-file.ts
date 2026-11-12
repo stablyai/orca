@@ -2,13 +2,14 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadHooks } from './hooks'
-import type { GitRuntimeOptions } from '../git/git-runtime-options'
-import { checkIgnoredPaths } from '../git/check-ignored-paths'
+import type { GitRuntimeOptions } from '../git/command-runner/git-runtime-options'
+import { checkIgnoredPaths } from '../git/source-control/check-ignored-paths'
+import { listTrackedPathSpecs } from '../git/source-control/discard-changes'
 import {
   guardWslUncPathAccess,
   WslDistroStoppedError,
   WslDistroUnverifiableError
-} from '../wsl/wsl-unc-access-gate'
+} from '../wsl/filesystem/wsl-unc-access-gate'
 
 type IssueCommandGitOptions = GitRuntimeOptions | (() => GitRuntimeOptions)
 
@@ -29,6 +30,8 @@ export type ResolvedIssueCommand = {
   effectiveContent: string | null
   localFilePath: string
   source: 'local' | 'shared' | 'none'
+  /** Set only once Git confirms the local file is not committed; a committed file came from the repo. */
+  localUntracked?: true
 }
 
 export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
@@ -63,12 +66,25 @@ export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
  */
 export async function readIssueCommandUnlessWslStopped(
   repoPath: string,
-  options: { wakeWslDistro?: boolean } = {}
+  options: { wakeWslDistro?: boolean; gitOptions?: IssueCommandGitOptions } = {}
 ): Promise<ResolvedIssueCommand & { status?: 'error'; refusedWslDistro?: string }> {
   try {
-    return await guardWslUncPathAccess(repoPath, async () => readIssueCommand(repoPath), {
-      wake: options.wakeWslDistro === true
-    })
+    return await guardWslUncPathAccess(
+      repoPath,
+      async () => {
+        const result = readIssueCommand(repoPath)
+        // Only launches gate on trust, so Settings renders skip the Git spawn.
+        if (
+          result.source === 'local' &&
+          options.wakeWslDistro &&
+          (await isIssueCommandUntracked(repoPath, options.gitOptions))
+        ) {
+          return { ...result, localUntracked: true as const }
+        }
+        return result
+      },
+      { wake: options.wakeWslDistro === true }
+    )
   } catch (error) {
     if (error instanceof WslDistroStoppedError || error instanceof WslDistroUnverifiableError) {
       return {
@@ -139,6 +155,23 @@ export async function writeIssueCommand(
   } catch (err) {
     console.error('[hooks] Failed to write issue command:', err)
     throw err
+  }
+}
+
+async function isIssueCommandUntracked(
+  repoPath: string,
+  options: IssueCommandGitOptions = {}
+): Promise<boolean> {
+  try {
+    const tracked = await listTrackedPathSpecs(
+      repoPath,
+      [`${ORCA_DIR}/${ISSUE_COMMAND_FILENAME}`],
+      typeof options === 'function' ? options() : options
+    )
+    return tracked.length === 0
+  } catch (error) {
+    // Folder workspaces have no Git, so nothing can be committed; any other failure still asks.
+    return error instanceof Error && /not a git repository/i.test(error.message)
   }
 }
 

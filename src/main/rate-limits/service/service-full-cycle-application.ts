@@ -1,13 +1,37 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
-import { isZcodeUsageCredentialCurrent } from '../zcode-usage-credentials'
-import { settleSiblingProviderResult } from './service-sibling-provider-result'
-import type { ProviderRateLimits } from './service-types'
+import { isZcodeUsageCredentialCurrent } from '../providers/zcode/zcode-usage-credentials'
+import {
+  settleSiblingProviderResult,
+  type SettledProviderResult
+} from './service-sibling-provider-result'
+import { disabledUsageSnapshot } from './disabled-usage-snapshot'
+import { prepareMuseUsageFetch } from './service-muse-usage-fetch'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+
+function hasKnownProvenanceChange(
+  previous: ProviderRateLimits | null,
+  fresh: ProviderRateLimits
+): boolean {
+  const previousProvenance = previous?.usageMetadata?.authProvenance
+  const freshProvenance = fresh.usageMetadata?.authProvenance
+  return (
+    previousProvenance !== undefined &&
+    freshProvenance !== undefined &&
+    previousProvenance !== freshProvenance
+  )
+}
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
   protected async runFetchAllCycle(
     signal: AbortSignal,
     options?: { force?: boolean }
   ): Promise<void> {
+    const museBeforeFetch = this.state.muse
+    const museResultPromise = this.startMuseUsageFetch(signal)
+    // Like Muse, Kiro starts before the shared preparation awaits; its result still joins the sibling batch.
+    const kiroBeforeFetch = this.state.kiro
+    const kiroFetch = this.startKiroUsageFetch(signal, kiroBeforeFetch)
+    this.updateState({ ...this.state, kiro: kiroFetch.pending })
     const prepared = await this.prepareFetchAllCycle(signal, options)
     if (!prepared) {
       return
@@ -41,8 +65,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
-      antigravityResultPromise,
-      kiroFetch
+      antigravityResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -155,9 +178,13 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
+      const home = prepared.claudeAuthPreparation?.configDir
+      this.rememberUsageReadingAccount('claude', claudeTarget, home, claudeProvenance)
     }
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
+      const home = prepared.codexHomePath
+      this.rememberUsageReadingAccount('codex', codexTarget, home, codexProvenance)
     }
     this.trackActiveFailureStreak('gemini', gemini)
     if (shouldApplyOpencode) {
@@ -222,12 +249,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
     const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
     // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
-    const previousCursorAccount = previousState.cursor?.usageMetadata?.authProvenance
-    const cursorAccount = cursor.usageMetadata?.authProvenance
-    const cursorAccountChanged =
-      previousCursorAccount !== undefined &&
-      cursorAccount !== undefined &&
-      previousCursorAccount !== cursorAccount
+    const cursorAccountChanged = hasKnownProvenanceChange(previousState.cursor, cursor)
     const previousZcodeAccount = previousState.zcode?.usageMetadata?.authProvenance
     const zcodeAccount = zcode.usageMetadata?.authProvenance
     const sameZcodeAccount =
@@ -235,12 +257,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       zcodeAccount !== undefined &&
       previousZcodeAccount === zcodeAccount
     // Like Cursor: a different kiro-cli profile must not inherit the old account's reading.
-    const previousKiroAccount = previousState.kiro?.usageMetadata?.authProvenance
-    const kiroAccount = kiro.usageMetadata?.authProvenance
-    const kiroAccountChanged =
-      previousKiroAccount !== undefined &&
-      kiroAccount !== undefined &&
-      previousKiroAccount !== kiroAccount
+    const kiroAccountChanged = hasKnownProvenanceChange(kiroBeforeFetch, kiro)
     this.trackActiveFailureStreak('grok', grok)
     this.trackActiveFailureStreak('cursor', cursor)
     if (kiroFetch.enabled) {
@@ -263,13 +280,39 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : zcode.status === 'error' && !sameZcodeAccount
             ? zcode
             : this.applyStalePolicy(zcode, previousState.zcode),
-      antigravity: shouldApplyAntigravity
-        ? this.applyStalePolicy(antigravity, previousState.antigravity)
-        : this.state.antigravity,
+      // Another runtime's last reading must not stand in for this runtime's failure.
+      antigravity: !shouldApplyAntigravity
+        ? this.state.antigravity
+        : hasKnownProvenanceChange(previousState.antigravity, antigravity)
+          ? antigravity
+          : this.applyStalePolicy(antigravity, previousState.antigravity),
       kiro:
         !kiroFetch.enabled || kiroAccountChanged
           ? kiro
-          : this.applyStalePolicy(kiro, previousState.kiro)
+          : this.applyStalePolicy(kiro, kiroBeforeFetch)
     })
+
+    // Published separately so a slow Muse CLI never delays the sibling batch above.
+    const museSettled = await museResultPromise
+    if (signal.aborted) {
+      return
+    }
+    const muse = settleSiblingProviderResult('muse', museSettled)
+    this.trackActiveFailureStreak('muse', muse)
+    this.updateState({
+      ...this.state,
+      muse: this.applyStalePolicy(muse, museBeforeFetch)
+    })
+  }
+
+  // Started before the shared preparation awaits; hidden meters skip the CLI spawn entirely.
+  private startMuseUsageFetch(signal: AbortSignal): Promise<SettledProviderResult> {
+    const enabled = this.museUsageEnabledResolver?.() ?? true
+    const previous = this.state.muse
+    const beforeFetch = enabled
+      ? this.withFetchingStatus(previous, 'muse')
+      : (previous ?? disabledUsageSnapshot('muse'))
+    this.updateState({ ...this.state, muse: beforeFetch })
+    return prepareMuseUsageFetch(signal, enabled, beforeFetch)
   }
 }

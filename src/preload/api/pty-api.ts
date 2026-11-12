@@ -1,42 +1,43 @@
+import type { RuntimeTerminalAttention } from '../../shared/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
-} from '../../shared/pty-fenced-termination'
+} from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
-import type { SpawnIntent } from '../../shared/host-spawn-admission'
+import type { SpawnIntent } from '../../shared/terminal/pty/admission/spawn-admission-contract'
 import type {
   SavedResumeDecision,
   TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session/lifecycle/agent-session-resume'
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../shared/terminal-leaf-move'
-import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+} from '../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import type {
   PtyListedSession,
   PtySessionListScope,
   PtySessionLifecycle
-} from '../../shared/pty-listed-session'
-import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
-import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
+} from '../../shared/terminal/pty/lifecycle/pty-listed-session'
+import type { PtyMainDeliveryDiagnostics } from '../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
+import type { PtyModelRestoreNeededEvent } from '../../shared/terminal/replay/pty-model-restore-marker'
 import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
-} from '../../shared/pty-renderer-delivery-health'
+} from '../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
-import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
-import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
-import type { TuiAgent } from '../../shared/tui-agent'
-import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
-import type { AgentPaneLaunchRequest } from '../../shared/agent-pane-launch-request'
+import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
+import type { TerminalViewAttributes } from '../../shared/terminal/protocol/queries/terminal-view-attributes'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
+import type { AgentPaneLaunchRequest } from '../../shared/agent-launch/contracts/agent-pane-launch-request'
 import type { PtyManagementApi } from './pty-management-api'
-import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
+import type { TerminalProcessInspection } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { CodexSharedServerStatus } from '../../shared/codex-shared-server-command'
 import type { NewerDaemonHeldScreen, NewerDaemonReopenResult } from '../../shared/newer-daemon-hold'
 
@@ -54,6 +55,7 @@ export type PtyApi = {
     resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
+    trustWorktreeId?: string
     startupCommandDelivery?: StartupCommandDelivery
     connectionId?: string | null
     worktreeId?: string
@@ -111,16 +113,20 @@ export type PtyApi = {
     shellReadyArmed?: boolean
   }>
   write: (id: string, data: string, inputKind: TerminalInputKind) => void
+  /** Genuine xterm input admitted by a local or remote transport; carries no terminal bytes. */
+  noteUserInput?: () => void
   /** `requireWriteSettlement` waits for the provider's acknowledgment on any provider. */
   writeAccepted: (
     id: string,
     data: string,
     inputKind: TerminalInputKind,
-    options?: { requireWriteSettlement?: true }
+    options?: { requireWriteSettlement?: true; requireStartupDialog?: string }
   ) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void
+  /** Who besides this window is viewing or typing into these PTYs; empty for unknown ids. */
+  getTerminalAttention: (ids: string[]) => Promise<Record<string, RuntimeTerminalAttention>>
   reportGeometry: (id: string, cols: number, rows: number) => void
   signal: (id: string, signal: string) => void
   clearBuffer: (id: string) => void
@@ -192,6 +198,8 @@ export type PtyApi = {
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>
+  /** Local sessions the provider answers are absent; omitted where no local main owns sessions. */
+  getGoneSessionIds?: (ids: string[]) => Promise<string[]>
   hasPty: (id: string) => Promise<boolean | null>
   moveLeafToNewTab: (request: TerminalLeafMoveRequest) => Promise<TerminalLeafMoveResult>
   getMainBufferSnapshot: (
@@ -253,7 +261,7 @@ export type PtyApi = {
       transformed?: boolean
       background?: boolean
       droppedOutput?: boolean
-      gapEscapeState?: string
+      midEscape?: true | 'unknown'
     }) => void
   ) => () => void
   onReplay: (callback: (data: { id: string; data: string }) => void) => () => void

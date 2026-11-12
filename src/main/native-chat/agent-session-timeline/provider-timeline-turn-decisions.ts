@@ -7,7 +7,7 @@ import {
   agentJournalTurnBody,
   readAgentJournalTurn
 } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
+import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import {
   agentJournalTurnRowReservedBytes,
   resolveAgentJournalTurnRowWrite
@@ -81,7 +81,8 @@ export function decideTurnOpen(
                 {
                   turns: [superseded],
                   end: { state: 'interrupted', completedAt: event.at, outcome: 'superseded' }
-                }
+                },
+                state.liveRequestRows(superseded.itemId)
               )
           }
         }
@@ -98,7 +99,7 @@ export function decideTurnOpen(
     ],
     commit: (next) => {
       if (superseded) {
-        next.endTurn(superseded)
+        next.endTurn(superseded, journal ?? undefined)
       }
       if (pending) {
         next.inputs = next.inputs.filter((each) => each !== pending)
@@ -140,14 +141,20 @@ export function decideTurnEnd(
     settle: {
       what: 'turn-end',
       resolve: (journal) =>
-        providerTimelineSettlement(journal, { turnItemId: turn.itemId }, { turns: [turn], end })
+        providerTimelineSettlement(
+          journal,
+          { turnItemId: turn.itemId },
+          { turns: [turn], end },
+          state.liveRequestRows(turn.itemId)
+        )
     },
-    commit: (next) => next.endTurn(turn)
+    commit: (next) => next.endTurn(turn, journal ?? undefined)
   }
 }
 
 /** External settlement ends text/prompts; calls wait for provider end, a newer turn or session end. */
 export function decideTurnSettled(
+  input: ProviderTimelineDecisionInput,
   event: Extract<ProviderTimelineDecidedEvent, { type: 'turn.settled' }>
 ): ProviderTimelineDecision {
   const { turn } = event
@@ -155,7 +162,14 @@ export function decideTurnSettled(
     ends: { turnItemId: turn.itemId, current: true },
     settle: {
       what: 'turn-settled',
-      resolve: (journal) => providerTimelineSettlement(journal, { turnItemId: turn.itemId })
+      // Live requests end by their own answer or withdrawal, which Stop sends first.
+      resolve: (journal) =>
+        providerTimelineSettlement(
+          journal,
+          { turnItemId: turn.itemId },
+          undefined,
+          input.state.liveRequestRows(turn.itemId)
+        )
     },
     commit: (next) => next.stopTurn(turn)
   }

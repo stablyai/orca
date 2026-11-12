@@ -1,17 +1,17 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import {
   readCanonicalPtyOwners,
   resolveCanonicalPtyClaim
-} from '../../../shared/workspace-layout/legacy-terminal-row-claims'
+} from '../../../shared/workspace-layout/terminal-topology/legacy-terminal-row-claims'
 import {
   liveAtShutdown,
   sweepUnattachedTerminalRows
-} from '../../../shared/workspace-layout/unattached-terminal-row-sweep'
+} from '../../../shared/workspace-layout/terminal-topology/unattached-terminal-row-sweep'
 
 /** Removed leaves cannot claim terminal ownership. */
 function mountedPtyIds(layout: TerminalLayoutSnapshot): string[] {

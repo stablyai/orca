@@ -4,32 +4,33 @@ import { applyElectronProxySettings } from '../network/proxy-settings'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
 import { handleElectronProxyLogin } from '../network/electron-proxy-credentials'
 import { setNodeDistMirrorSettingReader } from '../node-runtime/node-dist-mirror-setting'
-import { handleBrowserGuestLogin } from '../browser/browser-http-auth-prompt'
+import { handleBrowserGuestLogin } from '../browser/guest-lifecycle/prompts/browser-http-auth-prompt'
 import { installMainThreadHangWatchdog } from '../hang-watchdog/main-thread-hang-watchdog'
 import { preservePreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
-import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
-import { browserSiteDisplayController } from '../browser/browser-site-display-controller'
+import {
+  browserCertificateTrustController,
+  browserManager
+} from '../browser/guest-lifecycle/manager/browser-manager'
+import { browserSiteDisplayController } from '../browser/site-settings/display/browser-site-display-controller'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { startWslMoveStartup } from '../persistence/moving-wsl-projects/wsl-move-startup'
-import { startWslHostsPolicyLiveUpdates } from '../wsl/wsl-hosts-policy-live-update'
-import { runPendingWslDriveUncConversions } from '../wsl/wsl-drive-unc-conversion-startup'
-import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
+import { loadWslMoveFence } from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { startWslMoveStartup } from '../persistence/moving-wsl-projects/startup/wsl-move-startup'
+import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
+import { runPendingWslDriveUncConversions } from '../wsl/filesystem/wsl-drive-unc-conversion-startup'
+import { createProfileStateStoreForStartup } from '../persistence/profile-state/startup/profile-state-startup-authority'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { initializeBrowserClientHostId } from '../browser/browser-client-host-id'
+import { initializeBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
 import { withholdUnreachableKeychainForServe } from '../host/serve-keychain-guard'
-import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
-import { initOrcadHeldFenceTokenFile } from '../ssh/orcad-held-fence-tokens'
-import { neutralizeLegacyTerminalShimDir } from '../pty/legacy-terminal-shim-dir'
+import { initSshHostKeyStoreFile } from '../ssh/host-keys/ssh-host-key-store'
+import { initOrcadHeldFenceTokenFile } from '../managed-server/activation/orcad-held-fence-tokens'
+import { neutralizeLegacyTerminalShimDir } from '../pty/shell-startup/legacy-terminal-shim-dir'
 import { createWindowsShellPathHydration } from './windows-shell-path-hydration'
-import {
-  configureWindowsHostGitEnvironmentReadiness,
-  setDefaultWslDistroOverride
-} from '../git/runner'
-import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import { configureWindowsHostGitEnvironmentReadiness } from '../git/command-runner/host-routing/windows-host-git-environment'
+import { setDefaultWslDistroOverride } from '../git/command-runner/host-routing/wsl-command-resolution'
+import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import {
   shouldSuppressDevEducation,
@@ -38,18 +39,18 @@ import {
 import {
   awaitBrowserSessionProxies,
   setBrowserNetworkProxySettingsResolver
-} from '../browser/browser-session-proxy'
-import { installDocPreviewProtocolHandler } from '../browser/doc-preview-protocol'
+} from '../browser/sessions/proxy/browser-session-proxy'
+import { installDocPreviewProtocolHandler } from '../browser/document-preview/doc-preview-protocol'
 import { installMediaPreviewProtocolHandler } from '../media/media-preview-protocol'
 import { installJiraImageProtocolHandler } from '../jira/attachments/image-protocol'
 import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
-import { initializeBrowserSessionsForApp } from '../browser/browser-session-startup'
+import { initializeBrowserSessionsForApp } from '../browser/sessions/browser-session-startup'
 import {
   initializeBrowserExtensionSupport,
   switchBrowserExtensionSupport
 } from '../browser/extensions/browser-extension-startup'
-import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/browser-extension-session-loader'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { logStartupMilestone } from './startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
@@ -58,13 +59,13 @@ import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
 import {
   logWslCliReconciliationResults,
   reconcileManagedWslCliRegistrations
-} from '../cli/wsl-cli-registration-reconciliation'
+} from '../cli/wsl/wsl-cli-registration-reconciliation'
 import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
-import { agentHookServer } from '../agent-hooks/server'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reportProfileStateWriteFailure } from './profile-state-write-failure'
 import { reportProfileStateSaveDelay } from './profile-state-save-delay'
-import { preloadSsh2 } from '../ssh/ssh2-module-load'
+import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
@@ -160,6 +161,7 @@ export async function initializeReadyFoundation(): Promise<void> {
     databaseFile: profile.stateDatabaseFile,
     profileId: profile.profile.id,
     runtime: 'desktop',
+    initializeHomeWorkspace: !state.isServeMode,
     storageAuthority: state.isServeMode ? 'runtime' : 'desktop',
     onPersistenceFailure: reportProfileStateWriteFailure,
     onPersistenceSaveDelayChanged: reportProfileStateSaveDelay
@@ -265,8 +267,8 @@ export async function initializeReadyFoundation(): Promise<void> {
         )
       }
     }
-    if ('experimentalBrowserExtensions' in updates) {
-      void switchBrowserExtensionSupport(settings.experimentalBrowserExtensions === true)
+    if ('browserExtensionsEnabled' in updates) {
+      void switchBrowserExtensionSupport(settings.browserExtensionsEnabled !== false)
     }
     if ('showMenuBarIcon' in updates) {
       // Store owns settings mutations; sync every menu-bar toggle through this listener.
@@ -295,7 +297,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   registerDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({
-    enabled: store.getSettings().experimentalBrowserExtensions === true,
+    enabled: store.getSettings().browserExtensionsEnabled !== false,
     savedBrowserTabs: store
   })
   // Desktop webviews and runtime commands share sessions; initialize without waiting for renderer IPC.

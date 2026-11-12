@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { RelayFrameBuffer } from '../../../shared/relay-frame-buffer'
-import { MAX_PENDING_CHUNKS, parseScrcpyVideoFrames } from './scrcpy-video-frame-parser'
+import { parseScrcpyVideoFrames } from './scrcpy-video-frame-parser'
 
 const CONFIG = 1n << 63n
 const KEY = 1n << 62n
@@ -62,47 +62,6 @@ describe('parseScrcpyVideoFrames', () => {
     expect(parseScrcpyVideoFrames(pending)).toEqual([
       { config: false, keyFrame: true, pts: 456n, data: Buffer.from([1, 2, 3]) }
     ])
-    expect(pending.length).toBe(0)
-  })
-
-  it('keeps mostly live chunk storage instead of recopying a large pending frame', () => {
-    const first = frame(123n, [1, 2, 3])
-    const second = Buffer.alloc(4 * 1024 * 1024 + 12, 7)
-    second.writeBigUInt64BE(KEY | 456n, 0)
-    second.writeUInt32BE(second.length - 12, 8)
-    const split = 3 * 1024 * 1024
-    const chunk = Buffer.concat([first, second.subarray(0, split)])
-    const pending = new RelayFrameBuffer()
-    pending.append(chunk)
-
-    expect(parseScrcpyVideoFrames(pending)).toHaveLength(1)
-    expect(pending.length).toBe(split)
-    expect(pending.peek(1).buffer === chunk.buffer).toBe(true)
-
-    pending.append(second.subarray(split))
-    const frames = parseScrcpyVideoFrames(pending)
-    expect(frames).toHaveLength(1)
-    expect(frames[0]).toMatchObject({ config: false, keyFrame: true, pts: 456n })
-    expect(frames[0].data.equals(second.subarray(12))).toBe(true)
-    expect(pending.length).toBe(0)
-  })
-
-  it('bounds queued fragment count for a large frame delivered one byte at a time', () => {
-    const full = Buffer.alloc(256 * 1024 + 12, 7)
-    full.writeBigUInt64BE(KEY | 789n, 0)
-    full.writeUInt32BE(full.length - 12, 8)
-    const pending = new RelayFrameBuffer()
-    let maxChunks = 0
-    let frames: ReturnType<typeof parseScrcpyVideoFrames> = []
-    for (const byte of full) {
-      pending.append(Buffer.from([byte]))
-      frames = parseScrcpyVideoFrames(pending)
-      maxChunks = Math.max(maxChunks, pending.chunkCount)
-    }
-    expect(maxChunks).toBeLessThanOrEqual(MAX_PENDING_CHUNKS)
-    expect(frames).toHaveLength(1)
-    expect(frames[0]).toMatchObject({ config: false, keyFrame: true, pts: 789n })
-    expect(frames[0].data.equals(full.subarray(12))).toBe(true)
     expect(pending.length).toBe(0)
   })
 

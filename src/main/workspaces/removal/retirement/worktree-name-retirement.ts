@@ -5,7 +5,6 @@ import {
   parseExecutionHostId
 } from '../../../../shared/execution-host'
 import {
-  creatureNameTier,
   EMPTY_RETIRED_NAME_REGISTRY,
   isEmptyRetiredNameRegistry,
   mergeRetiredNameRegistries,
@@ -29,8 +28,8 @@ import {
 } from './worktree-retirement-namespace'
 import { discoverRetiredWorktreeNames } from './worktree-retirement-discovery'
 import { runRetirementBackfillScan } from './worktree-retirement-backfill-scan'
-import { hasCachedWslHome } from '../../../wsl-home-cache'
-import { parseWslPath } from '../../../wsl'
+import { hasCachedWslHome } from '../../../wsl/discovery/wsl-home-cache'
+import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { getWorktreeMirrorDistro } from '../../execution-host/project-runtime-git-options'
 import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
 
@@ -74,11 +73,7 @@ function withMirrorDistro(
   return distro ? { ...settings, wslMirrorDistro: distro } : settings
 }
 
-/** Persist canonical generator names only; repeat-suffixed collision fallbacks cannot be generated again. */
-export function normalizeRetirableGeneratedName(name: string): string | null {
-  const normalized = name.trim().toLowerCase()
-  return normalized.length <= 256 && creatureNameTier(normalized) !== null ? normalized : null
-}
+export { normalizeRetirableGeneratedName } from './retirable-generated-name'
 
 /** Failed sparse rollback can leave the rejected create's path occupied. */
 export function failedWorktreeCreationNeedsRetirement(error: unknown): boolean {
