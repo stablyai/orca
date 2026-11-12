@@ -1,5 +1,5 @@
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { HiddenRepoRows } from '../../../../../../shared/hidden-projects'
+import type { HiddenProjects } from '../../../../../../shared/hidden-projects'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -30,7 +30,7 @@ export type VisibleWorktreeOptions = {
   pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
   alwaysShowDefaultBranchWorkspace?: boolean
   repoMap: Map<string, Repo>
-  hiddenRepoRows: HiddenRepoRows
+  hiddenProjects: HiddenProjects
   workspaceHostScope: ExecutionHostScope
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
   defaultHostId: ExecutionHostId

@@ -1,5 +1,5 @@
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
-import { indexHiddenRepoRows } from '../../../../../../shared/hidden-projects'
+import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
@@ -144,7 +144,7 @@ export function useVisibleSidebarWorktrees(args: {
       pairedDeviceIdsByEnvironment,
       alwaysShowDefaultBranchWorkspace,
       repoMap,
-      hiddenRepoRows: indexHiddenRepoRows(repos, defaultHostId),
+      hiddenProjects: indexHiddenProjects(repos, defaultHostId),
       workspaceHostScope,
       visibleWorkspaceHostIds,
       defaultHostId,

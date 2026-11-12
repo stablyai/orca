@@ -5,6 +5,7 @@ import {
   resolveNewWorkspaceDialogGitRepoId,
   resolveNewWorkspaceDialogRepoId
 } from './new-workspace-dialog-repo'
+import { pickerRepos } from './hidden-projects'
 
 function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {
@@ -62,5 +63,19 @@ describe('new workspace dialog repo selection', () => {
         focusedHostScope: 'ssh:win-vm'
       })
     ).toBe('local-repo')
+  })
+
+  it('targets a hidden project named explicitly, while the picker lists and defaults past it', () => {
+    const repos = [makeRepo('hidden', { hiddenAt: 1 }), makeRepo('listed')]
+    const eligibleRepos = getNewWorkspaceDialogEligibleRepos(repos)
+
+    expect(resolveNewWorkspaceDialogRepoId({ eligibleRepos, initialRepoId: 'hidden' })).toBe(
+      'hidden'
+    )
+    expect(pickerRepos(eligibleRepos).map((repo) => repo.id)).toEqual(['listed'])
+    expect(pickerRepos(eligibleRepos, 'hidden').map((repo) => repo.id)).toEqual([
+      'hidden',
+      'listed'
+    ])
   })
 })

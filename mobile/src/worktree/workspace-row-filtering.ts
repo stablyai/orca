@@ -1,8 +1,8 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import {
-  hiddenProjectRowFact,
-  NO_HIDDEN_REPO_ROWS,
-  type HiddenRepoRows
+  hiddenProjectRowFacts,
+  NO_HIDDEN_PROJECTS,
+  type HiddenProjects
 } from '../../../src/shared/hidden-projects'
 import {
   filterWorkspaceRows,
@@ -33,13 +33,11 @@ function guessDefaultBranchWorkspace(w: Worktree): boolean {
 
 function phoneRowFacts(
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>,
-  hiddenRepoRows: HiddenRepoRows
+  hiddenProjects: HiddenProjects
 ): WorkspaceRowFactReader<Worktree> {
   return {
     isArchived: (w) => w.isArchived === true,
-    isInHiddenProject: hiddenProjectRowFact(hiddenRepoRows, (w) =>
-      resolveWorktreeHostId(w, repoHostIdByRepoId)
-    ),
+    ...hiddenProjectRowFacts(hiddenProjects),
     isFolderWorkspace: (w) => w.workspaceKind === 'folder-workspace',
     repoId: (w) => w.repoId,
     hostId: (w) => resolveWorktreeHostId(w, repoHostIdByRepoId),
@@ -59,12 +57,12 @@ export function filterWorktrees(
   filters: FilterState,
   search: string,
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map(),
-  hiddenRepoRows: HiddenRepoRows = NO_HIDDEN_REPO_ROWS
+  hiddenProjects: HiddenProjects = NO_HIDDEN_PROJECTS
 ): Worktree[] {
   const result = filterWorkspaceRows(
     worktrees,
     filters,
-    phoneRowFacts(repoHostIdByRepoId, hiddenRepoRows)
+    phoneRowFacts(repoHostIdByRepoId, hiddenProjects)
   )
   const q = search.trim().toLowerCase()
   if (!q) {

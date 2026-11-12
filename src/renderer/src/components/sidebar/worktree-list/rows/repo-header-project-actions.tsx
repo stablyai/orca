@@ -83,11 +83,14 @@ export type RepoHeaderProjectActions = {
 // Memoized: the sidebar re-renders every header row when the active workspace changes.
 export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjectActionsMenu({
   repo,
+  hostRepos,
   label,
   projectGroups,
   actions
 }: {
   repo: Repo
+  /** A header spanning hosts: every copy it shows, which Hide hides together. */
+  hostRepos?: ReadonlyMap<string, Repo>
   label: string
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
@@ -183,9 +186,13 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
         ) : null}
         <WslMoveProjectMenuItem repo={repo} />
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void setProjectHidden(repo, true)}>
+        <DropdownMenuItem
+          onSelect={() =>
+            void setProjectHidden(hostRepos ? [...hostRepos.values()] : [repo], true, label)
+          }
+        >
           <EyeOff className="size-3.5" />
-          {t('sidebar.hiddenProjects.hideProject', 'Hide Project')}
+          {t('sidebar.hiddenProjects.hideFromSidebar', 'Hide from Sidebar')}
         </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => actions.onRemoveProject(repo)}>
           <Trash2 className="size-3.5" />

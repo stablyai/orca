@@ -101,7 +101,7 @@ orca repo unhide --repo id:<repoId> --json
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
 
-`repo hide` takes a project out of the sidebar, project pickers and the workspace switcher without stopping anything: its terminals, agents and automations keep running, `repo list` still lists it with `hiddenAt` set, and commands that name it keep working. Add `--host <host>` to hide one host's copy of a project set up on several. `repo unhide`, or the Hidden projects list at the bottom of the sidebar, shows it again.
+`repo hide` takes a project out of the sidebar, project pickers and the workspace switcher without stopping anything: its terminals, agents and automations keep running, `repo list` still lists it with `hiddenAt` set, and commands that name it keep working. Hiding applies to one host's copy of a project; add `--host <host>` to pick which copy when it is set up on several. On a paired Orca server the setting lives on that server, so hiding a project there hides it for everyone connected to it. `repo unhide`, or the Hidden projects list at the bottom of the sidebar, shows it again.
 
 `repo add` defaults to `--kind git`. Use `--kind folder` to open an ordinary directory, including a repo-tool root containing separate Git repositories, as a folder workspace without Git worktrees or source control. With `--environment`, use an absolute path on that Orca server.
 

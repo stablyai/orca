@@ -44,7 +44,8 @@ export function selectVisibleSidebarWorktrees({
   forcedVisibleWorktreeIds
 }: VisibleSidebarWorktreeInputs): Worktree[] {
   // Keep valid nonarchived ancestors despite ordinary filters so children retain their hierarchy.
-  const selectedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
+  const listedFilterIds = filterRepoIds.filter((id) => !facts.isProjectHidden(id))
+  const selectedRepoIds = listedFilterIds.length > 0 ? new Set(listedFilterIds) : null
   // Hidden projects are no filter: neither a reveal nor a child's lineage brings their rows back.
   const ancestorByIdentity = withoutHiddenProjectRows(everyAncestorByIdentity, facts)
 

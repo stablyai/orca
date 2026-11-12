@@ -14,13 +14,16 @@ import {
 import { isWorkspaceOwnedBySomeoneElse } from '../../../../../../shared/workspace-creator-visibility'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { hiddenProjectRowFact, type HiddenRepoRows } from '../../../../../../shared/hidden-projects'
+import {
+  hiddenProjectRowFacts,
+  type HiddenProjects
+} from '../../../../../../shared/hidden-projects'
 import { isInactiveWorkspace } from '@/lib/workspace/activity/worktree-activity-state'
 
 export type DesktopWorkspaceRowFactInputs = {
   repoMap: ReadonlyMap<string, Repo>
-  /** indexHiddenRepoRows over every repo row; repoMap keeps one row per id. */
-  hiddenRepoRows: HiddenRepoRows
+  /** indexHiddenProjects over every repo row; repoMap keeps one row per id. */
+  hiddenProjects: HiddenProjects
   defaultHostId: ExecutionHostId
   pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
   tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
@@ -41,7 +44,7 @@ export function buildDesktopWorkspaceRowFactReader(
   }
   return {
     isArchived: (worktree) => worktree.isArchived,
-    isInHiddenProject: hiddenProjectRowFact(inputs.hiddenRepoRows, hostId),
+    ...hiddenProjectRowFacts(inputs.hiddenProjects),
     isFolderWorkspace: (worktree) => parseWorkspaceKey(worktree.id)?.type === 'folder',
     repoId: (worktree) => worktree.repoId,
     hostId,

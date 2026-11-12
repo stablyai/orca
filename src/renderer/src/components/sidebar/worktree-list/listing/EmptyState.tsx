@@ -3,6 +3,7 @@ import { CircleX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
+import { isRepoHidden } from '../../../../../../shared/hidden-projects'
 
 export function SidebarWorktreeListEmptyState({
   hasFilters,
@@ -13,6 +14,7 @@ export function SidebarWorktreeListEmptyState({
 }): React.JSX.Element {
   const t = useTranslate()
   const discoveryCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
+  const everyProjectHidden = useAppStore((s) => s.repos.length > 0 && s.repos.every(isRepoHidden))
   return (
     <div
       data-worktree-sidebar-container
@@ -24,6 +26,14 @@ export function SidebarWorktreeListEmptyState({
           {discoveryCompleted && (
             <span>
               {t('auto.components.sidebar.WorktreeList.b7acbf038b', 'No workspaces found')}
+            </span>
+          )}
+          {everyProjectHidden && (
+            <span>
+              {t(
+                'sidebar.hiddenProjects.allHidden',
+                'Every project is hidden. Show one from Hidden projects below.'
+              )}
             </span>
           )}
           {hasFilters && (

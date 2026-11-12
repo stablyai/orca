@@ -30,7 +30,7 @@ export function getRepositoryPresenceSearchEntries(
     title: t('sidebar.hiddenProjects.settingsTitle', 'Hide from sidebar'),
     description: t(
       'sidebar.hiddenProjects.settingsDescription',
-      'Keeps this project out of the sidebar, project pickers and the workspace switcher. Its terminals, agents and automations keep running.'
+      "Hides this host's copy of the project from the sidebar, project pickers and the workspace switcher. Its terminals, agents and automations keep running. On a paired Orca server, this hides it for everyone connected to that server."
     ),
     keywords: [
       repo.displayName,

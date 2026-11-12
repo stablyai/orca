@@ -29,7 +29,7 @@ import { hostSortsByStamps, sortWorktrees } from './workspace-list-ordering'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 import { NO_WORKTREE_HOST_CONTEXT } from './worktree-host-context-labels'
 import type { WorktreeHostContextOf } from './worktree-host-context-labels'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../src/shared/execution-host'
 import {
   buildProjectGroupingIndex,
   buildProjectSections,
@@ -39,7 +39,7 @@ import {
 import { withRepoSectionDisplayLabels } from '../../../src/shared/project-section-order'
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
 import { translate } from '../i18n/mobile-i18n'
-import { indexHiddenRepoRows, isRepoHidden } from '../../../src/shared/hidden-projects'
+import { indexHiddenProjects, isRepoHidden } from '../../../src/shared/hidden-projects'
 import { filterWorktrees } from './workspace-row-filtering'
 
 export type { FilterState, Section, SectionRepo, Worktree } from './workspace-list-types'
@@ -131,7 +131,7 @@ export function buildMobileWorkspacePlan(
     filters,
     search,
     repoHostIdByRepoId,
-    indexHiddenRepoRows(projectCatalog.repos)
+    indexHiddenProjects(projectCatalog.repos, LOCAL_EXECUTION_HOST_ID)
   )
   const sorted = sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees))
   const childrenByParentIdentity = getMobileWorkspaceLineageChildren(

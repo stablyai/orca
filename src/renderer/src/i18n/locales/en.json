@@ -230,23 +230,25 @@
       "existingAccept": "Add on host"
     },
     "hiddenProjects": {
-      "hideProject": "Hide Project",
       "hidden": "{{name}} hidden",
       "hiddenDescription": "Its terminals and agents keep running. Show it again from Hidden projects below the list.",
       "undo": "Undo",
       "hideFailed": "Couldn't hide {{name}}. Its host may need an Orca update.",
       "showFailed": "Couldn't show {{name}} again.",
-      "count_one": "{{count}} hidden project",
-      "count_other": "{{count}} hidden projects",
       "listLabel": "Hidden projects",
       "show": "Show",
       "showAriaLabel": "Show {{name}} in the sidebar",
       "settingsTitle": "Hide from sidebar",
-      "settingsDescription": "Keeps this project out of the sidebar, project pickers and the workspace switcher. Its terminals, agents and automations keep running.",
+      "settingsDescription": "Hides this host's copy of the project from the sidebar, project pickers and the workspace switcher. Its terminals, agents and automations keep running. On a paired Orca server, this hides it for everyone connected to that server.",
       "settingsToggleLabel": "Hide {{name}} from the sidebar",
       "keywordHide": "hide",
       "keywordHidden": "hidden",
-      "keywordSidebar": "sidebar"
+      "keywordSidebar": "sidebar",
+      "hideFromSidebar": "Hide from Sidebar",
+      "sectionTitle": "Hidden projects ({{count}})",
+      "allHidden": "Every project is hidden. Show one from Hidden projects below.",
+      "undoGone": "{{name}} was removed from Orca.",
+      "settingsGroup": "Sidebar"
     }
   },
   "app": {

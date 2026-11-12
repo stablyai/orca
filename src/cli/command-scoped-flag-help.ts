@@ -68,6 +68,12 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'file open-changed': {
     focus: FILE_OPEN_FOCUS_HELP
   },
+  'repo hide': {
+    host: "--host <host>          Which host's copy to hide: local, ssh:<target-id>, runtime:<id>, or a host name"
+  },
+  'repo unhide': {
+    host: "--host <host>          Which host's copy to show: local, ssh:<target-id>, runtime:<id>, or a host name"
+  },
   'skills install': {
     agent: '--agent <names>        Comma-separated install targets; default is detected agents'
   },

@@ -14,6 +14,7 @@ import type { ComposerDecisions } from './composer-decisions'
 import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectAllKnownWorkspaceStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
+import { pickerRepos } from '../../../../shared/hidden-projects'
 
 export type ComposerStateInput = {
   initialRepoId?: string
@@ -157,7 +158,11 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
   )
 
   const seedActiveRepoId = useMemo(
-    () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId, runtimeEnvironments),
+    () =>
+      // The active workspace seeds the default; a hidden project's never does.
+      pickerRepos(repos).some((repo) => repo.id === activeRepoId)
+        ? resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId, runtimeEnvironments)
+        : null,
     [repos, eligibleRepos, activeRepoId, runtimeEnvironments]
   )
 
