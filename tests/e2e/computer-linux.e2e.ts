@@ -17,7 +17,9 @@ import {
 const isLinux = process.platform === 'linux'
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 
-const GEDIT_TEXT_ROLE = /^\s*(\d+)\s+(text|text entry|entry|document|edit area)(?:\s|$)/im
+// Why: gedit's first text node is its hidden, read-only overview map; the editor sits in a scroll pane.
+const GEDIT_TEXT_ROLE =
+  /^\s*\d+\s+scroll pane[^\n]*\n\s*(\d+)\s+(?:text|document|edit area)(?:\s|$)/im
 
 async function geditState(windowArgs: string[], restore: boolean): Promise<ComputerSnapshotResult> {
   return parseJsonOutput<{ result: ComputerSnapshotResult }>(
