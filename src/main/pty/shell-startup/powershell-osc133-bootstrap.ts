@@ -101,6 +101,7 @@ export function isPowerShellExecutableName(shellName: string): boolean {
   const normalized = shellName.toLowerCase()
   return (
     normalized === 'pwsh' ||
+    normalized === 'pwsh-preview' ||
     normalized === 'pwsh.exe' ||
     normalized === 'powershell' ||
     normalized === 'powershell.exe'

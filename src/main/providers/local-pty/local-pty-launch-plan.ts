@@ -3,6 +3,10 @@ import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-stat
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
 import { resolveUnixPaneShellPath } from '../../daemon/shell-readiness/shell-ready'
+import {
+  needsPosixPaneShellResolution,
+  resolvePosixPaneShellPath
+} from '../../pty/shell-startup/posix-pwsh'
 import { getDefaultWslDistro } from '../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import {
@@ -22,6 +26,20 @@ import { buildWindowsPowerShellSpawnAttempts } from '../windows-shell-fallback-c
 import { resolveWindowsShellLaunchArgs } from '../windows-shell-args'
 import { assertSafeAgentStartupCwd } from '../pty-default-cwd'
 import type { PtySpawnOptions } from '../pty-provider-contract'
+import { stripLegacyTerminalShimEnv } from '../../pty/shell-startup/legacy-terminal-shim-dir'
+
+/** The spawn PATH without the legacy shim dirs finalization strips, so pwsh never resolves from one. */
+function posixPwshResolverPath(env: Record<string, string> | undefined): string {
+  const scrubbed: Record<string, string> = {}
+  for (const key of ['PATH', 'ORCA_ATTRIBUTION_SHIM_DIR']) {
+    const value = env?.[key] ?? process.env[key]
+    if (value !== undefined) {
+      scrubbed[key] = value
+    }
+  }
+  stripLegacyTerminalShimEnv(scrubbed, process.platform)
+  return scrubbed.PATH ?? ''
+}
 
 type WslLaunchContext = { distro: string; treatPosixCwdAsWsl: true }
 type LocalPtyLaunchSeed = {
@@ -59,11 +77,17 @@ export type LocalPtyLaunchPlan = {
   launchWslDistro: string | null
 }
 
-export class DeferredLocalPtyLaunchPlan {
+export class DeferredLocalPtyLaunchPlan<T = boolean> {
   constructor(
-    readonly availability: boolean | Promise<boolean>,
-    readonly finish: (available: boolean) => LocalPtyLaunchPlan
+    private readonly input: T | Promise<T>,
+    private readonly finish: (input: T) => LocalPtyLaunchPlan
   ) {}
+
+  /** Awaits the async input; the caller rechecks cancellation before building the plan. */
+  async settle(): Promise<() => LocalPtyLaunchPlan> {
+    const input = await this.input
+    return () => this.finish(input)
+  }
 }
 
 function finalizeLocalPtyLaunchPlan(
@@ -191,7 +215,7 @@ function createWindowsLocalPtyLaunchPlan(
 export function createLocalPtyLaunchPlan(
   args: PtySpawnOptions,
   getOptions: () => LocalPtyProviderOptions
-): LocalPtyLaunchPlan | DeferredLocalPtyLaunchPlan {
+): LocalPtyLaunchPlan | DeferredLocalPtyLaunchPlan | DeferredLocalPtyLaunchPlan<string> {
   const startupAgentRecognition = args.command
     ? recognizeAgentProcessFromCommandLine(args.command)
     : null
@@ -235,19 +259,26 @@ export function createLocalPtyLaunchPlan(
   if (process.platform === 'win32') {
     return createWindowsLocalPtyLaunchPlan(seed, getOptions)
   }
-  const shellPath = resolveUnixPaneShellPath(
+  const requestedShellPath = resolveUnixPaneShellPath(
     args.env ?? {},
     args.shellOverride,
     getOptions().getDefaultShell?.()
   )
-  return finalizeLocalPtyLaunchPlan(seed, {
-    shellPath,
-    // shellOverride already includes settings resolution; only spawn-supplied args identify the profile launch.
-    shellArgs:
-      !args.command && !args.launchAgent && args.terminalShellArgs !== undefined
-        ? args.terminalShellArgs
-        : ['-l'],
-    effectiveCwd: cwd,
-    validationCwd: cwd
-  })
+  const finish = (shellPath: string): LocalPtyLaunchPlan =>
+    finalizeLocalPtyLaunchPlan(seed, {
+      shellPath,
+      // shellOverride already includes settings resolution; only spawn-supplied args identify the profile launch.
+      shellArgs:
+        !args.command && !args.launchAgent && args.terminalShellArgs !== undefined
+          ? args.terminalShellArgs
+          : ['-l'],
+      effectiveCwd: cwd,
+      validationCwd: cwd
+    })
+  return needsPosixPaneShellResolution(requestedShellPath)
+    ? new DeferredLocalPtyLaunchPlan(
+        resolvePosixPaneShellPath(requestedShellPath, posixPwshResolverPath(args.env)),
+        finish
+      )
+    : finish(requestedShellPath)
 }
