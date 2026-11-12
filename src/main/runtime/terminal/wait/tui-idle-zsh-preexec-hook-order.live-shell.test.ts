@@ -139,6 +139,7 @@ async function captureLaunch(hookCase: HookCase): Promise<Capture> {
   })
   const chunks: Chunk[] = []
   let output = ''
+  let answeredCompinit = false
   const exited = new Promise<void>((resolve) => {
     proc.onExit(() => resolve())
   })
@@ -151,6 +152,13 @@ async function captureLaunch(hookCase: HookCase): Promise<Capture> {
       proc.onData((data) => {
         chunks.push({ data, at: Date.now() })
         output += data
+        // Ubuntu's global zshrc runs a plain compinit, which stops at its insecure-directory prompt
+        // on CI runners before zle exists; answer it as zsh-startup-hook-pty-harness.ts does. The
+        // bytes land before Orca's OSC 133;C marker, so stream-offset attribution never sees them.
+        if (!answeredCompinit && output.includes('Ignore insecure directories')) {
+          answeredCompinit = true
+          proc.write('y\r')
+        }
         if (output.includes(CLAUDE_COMPOSER_PROMPT)) {
           clearTimeout(timer)
           resolve()
