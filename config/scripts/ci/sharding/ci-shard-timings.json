@@ -1213,7 +1213,6 @@
       "src/main/codex-accounts/runtime-home/wsl/runtime-home-wsl-managed-accounts.test.ts": 1199,
       "src/main/codex-accounts/runtime-home/wsl/runtime-home-wsl-session-bridge.test.ts": 1018,
       "src/main/codex-accounts/runtime-home/wsl/runtime-home-wsl-system-default.test.ts": 758,
-      "src/main/codex-accounts/account-management/service-account-selection-and-removal.test.ts": 1020,
       "src/main/codex-accounts/account-management/service-system-default-identity.test.ts": 624,
       "src/main/codex-accounts/account-management/service-wsl-accounts.test.ts": 780,
       "src/main/codex-accounts/account-management/service.test.ts": 866,
