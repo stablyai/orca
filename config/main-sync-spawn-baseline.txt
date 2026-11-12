@@ -40,7 +40,6 @@
 2 src/main/startup/cli-launch-redirect.ts
 1 src/main/startup/linux-secret-service-probe.ts
 2 src/main/window/desktop-integration/macos-press-and-hold-default.ts
-1 src/main/workspace-hooks/worktree-runner-script.ts
 3 src/main/wsl/discovery/distro-catalog.ts
 1 src/shared/fish-binary-requirement.ts
 1 src/shared/openssh-default-shell.ts
