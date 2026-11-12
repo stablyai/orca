@@ -33,7 +33,7 @@ function serializePlanReviewPrompt(hookPayload: Record<string, unknown>): string
 function isPiCompatibleAskTool(agentKind: PiAgentKind, toolName: string | undefined): boolean {
   return agentKind === 'omp'
     ? toolName === 'ask'
-    : agentKind === 'pi' && isAskUserQuestionTool(toolName)
+    : (agentKind === 'pi' || agentKind === 'gentle-shell') && isAskUserQuestionTool(toolName)
 }
 
 export function extractPiToolFields(
