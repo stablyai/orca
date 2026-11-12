@@ -12,7 +12,9 @@ const mocks = vi.hoisted(() => {
     launches: { agent: string; prompt?: string; worktreeId: string }[]
     toasts: string[]
     dismissed: string[]
+    cloud: boolean
   } = {
+    cloud: true,
     opened: { ok: true, worktreeId: 'wt-1' },
     worktree: null,
     launches: [],
@@ -47,6 +49,9 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
     mocks.launches.push({ agent: args.agent, prompt: args.prompt, worktreeId: args.worktreeId })
   }
 }))
+vi.mock('./orca-cloud-environment-id', () => ({
+  isOrcaCloudEnvironmentForLaunch: async () => mocks.cloud
+}))
 vi.mock('@/components/agent-tab-launch-context', () => ({
   captureAgentTabLaunchContext: () => ({})
 }))
@@ -69,6 +74,7 @@ beforeEach(() => {
   mocks.launches = []
   mocks.toasts = []
   mocks.dismissed = []
+  mocks.cloud = true
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
@@ -122,6 +128,30 @@ describe('startCloudWorkspaceFromGitHub', () => {
       'Claude didn’t start because the workspace was still getting ready. Start it from the workspace.'
     )
     expect(info).toHaveBeenCalledWith(expect.stringContaining('agent was not started'))
+    info.mockRestore()
+  })
+
+  it('FAIL-CLOSED: a host never confirmed as Orca Cloud gets no agent, and says so', async () => {
+    vi.useFakeTimers()
+    mocks.opened = { ok: true, worktreeId: 'wt-1', hostId: 'runtime:env-1' }
+    mocks.cloud = false
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const started = startCloudWorkspaceFromGitHub(request(''))
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(mocks.launches).toEqual([])
+    mocks.cloud = true
+    await vi.advanceTimersByTimeAsync(1_000)
+    await started
+    expect(mocks.launches).toEqual([{ agent: 'claude', prompt: undefined, worktreeId: 'wt-1' }])
+    mocks.launches = []
+    mocks.cloud = false
+    const never = startCloudWorkspaceFromGitHub(request(''))
+    await vi.advanceTimersByTimeAsync(91_000)
+    await never
+    expect(mocks.launches).toEqual([])
+    expect(mocks.toasts.at(-1)).toContain(
+      'didn’t start because the workspace was still getting ready'
+    )
     info.mockRestore()
   })
 

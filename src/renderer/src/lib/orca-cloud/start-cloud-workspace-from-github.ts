@@ -13,6 +13,8 @@ import { createNonSecureContextUuid } from '../../../../shared/non-secure-contex
 import { resolveDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-context'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { isOrcaCloudEnvironmentForLaunch } from './orca-cloud-environment-id'
 import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export type StartFromGitHubRequest = {
@@ -66,9 +68,17 @@ export async function startCloudWorkspaceFromGitHub(
   if (!request.prompt.trim() && !isTuiAgent(request.agent)) {
     return true
   }
+  const deadline = Date.now() + FIRST_WORKTREE_WAIT_MS
   const worktreeId =
     opened.worktreeId ?? (opened.hostId ? await waitForFirstWorktree(opened.hostId) : null)
-  if (!worktreeId) {
+  // FAIL-CLOSED (#568): the agent goes to a paired host only once it is known as Orca Cloud (so its
+  // launch is held when the agent isn't set up), within the same wait; otherwise it isn't started.
+  const host = parseExecutionHostId(opened.hostId)
+  const confirmed =
+    !worktreeId ||
+    host?.kind !== 'runtime' ||
+    (await waitForOrcaCloudEnvironment(host.environmentId, deadline))
+  if (!worktreeId || !confirmed) {
     agentNotStartedNotice(request, opened.hostId)
     return true
   }
@@ -86,6 +96,19 @@ export async function startCloudWorkspaceFromGitHub(
         : {}),
       launchSource: 'unknown'
     })
+  }
+  return true
+}
+
+async function waitForOrcaCloudEnvironment(
+  environmentId: string,
+  deadline: number
+): Promise<boolean> {
+  while (!(await isOrcaCloudEnvironmentForLaunch(environmentId))) {
+    if (Date.now() >= deadline) {
+      return false
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
   }
   return true
 }
