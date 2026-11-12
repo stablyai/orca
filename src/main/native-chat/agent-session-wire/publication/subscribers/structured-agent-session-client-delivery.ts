@@ -28,7 +28,6 @@ import {
   sendSettlementReading
 } from '../../delivery/structured-agent-session-send-settlement'
 import { readHostStructuredAgentSessionWork } from '../../observations/structured-agent-session-read-work'
-import { projectedStructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-host-current-work'
 import { structuredAgentSessionConversationFence } from '../../host/structured-agent-session-provider-child'
 import type { StructuredAgentSessionStatusFeed } from '../../observations/structured-agent-session-status-feed'
 import type { StructuredAgentSessionStatusSubscriber as StatusSubscriber } from '../../observations/structured-agent-session-status-feed-deps'
@@ -112,17 +111,16 @@ export class StructuredAgentSessionClientDelivery {
       readForkMarker: (sessionId) => readForkMarker(this.deps().store, sessionId),
       readCommands: (sessionId, commandsOnRequest) =>
         this.readCommands(sessionId, commandsOnRequest),
-      readQueuePublication: (sessionId) =>
-        tryReadQueuePublication(sessions.get(sessionId)?.journal, async (journal) =>
+      readQueuePublication: (sessionId, work, onWork) =>
+        tryReadQueuePublication(
+          sessions.get(sessionId)?.journal,
           structuredQueueSendGate(
             { store: this.deps().store, sessions },
             sessionId,
-            (await this.currentWork(
-              sessionId,
-              journal,
-              this.statusFeed.journalProjection.current(sessionId, journal)
-            )) ?? undefined
-          )(journal)
+            now,
+            onWork,
+            work
+          )
         ),
       readBackgroundTasks,
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal),
@@ -315,13 +313,8 @@ export class StructuredAgentSessionClientDelivery {
   }
 
   // Called inside queue admission too: misses must use direct readers, never admit/readInOrder.
-  private currentWork(
-    sessionId: string,
-    journal: AgentSessionJournal,
-    projection = this.statusFeed.journalProjection(sessionId, journal)
-  ) {
-    const host = { store: this.deps().store, sessions: this.sessions }
-    return projectedStructuredAgentSessionCurrentWork(host, sessionId, journal, projection)
+  private currentWork(sessionId: string, journal: AgentSessionJournal) {
+    return this.statusFeed.journalProjection.work(sessionId, journal)
   }
 
   private settlementReading(sessionId: string, journal: AgentSessionJournal) {

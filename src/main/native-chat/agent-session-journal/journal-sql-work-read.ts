@@ -1,12 +1,14 @@
+import { readJournalSqlCurrentWork } from './journal-sql-current-work'
+export { readJournalSqlCurrentWork } from './journal-sql-current-work'
+import {
+  journalDomainInputEligibility,
+  selectJournalEligibleQueueCard
+} from './journal-domain-input-eligibility'
+import { journalSqlFailure } from './journal-sql-failure'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { latestStructuredAgentSessionTurn } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
-import {
-  StructuredAgentSessionWorkPolicy,
-  structuredAgentSessionLiveFence,
-  structuredAgentSessionOwnerUnverifiable
-} from '../agent-session-wire/observations/structured-agent-session-work-policy'
-import { journalWroteBeforeOpen } from './replay/journal-cursor'
+import type { StructuredAgentSessionWorkPolicy } from '../agent-session-wire/observations/structured-agent-session-work-policy'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
 import type { JournalCurrentWorkAuthority, JournalObserverResult } from './journal-observer-read'
 import type {
@@ -18,48 +20,6 @@ import type {
 import { journalInputAttemptEndedFromFacts } from './input-order/journal-input-attempt-ended'
 import { readJournalSqlInput } from './journal-sql-input-reads'
 
-export function readJournalSqlCurrentWork(
-  context: JournalSqlStatusContext,
-  authority: JournalCurrentWorkAuthority
-) {
-  const handingOver = new Set(authority.handingOver)
-  const continuing = new Set(authority.continuingUnadmitted)
-  const finalizing = new Set(authority.finalizing)
-  const held =
-    authority.child?.heldSends === undefined ? undefined : new Set(authority.child.heldSends)
-  const evidence = {
-    record: authority.record,
-    ended: authority.ended,
-    replaced: authority.replaced,
-    child:
-      authority.child === null
-        ? null
-        : authority.child === undefined
-          ? undefined
-          : { fence: authority.child.fence }
-  }
-  return new StructuredAgentSessionWorkPolicy(
-    {
-      item: context.displayed,
-      itemFence: context.itemFence,
-      runningTurn: context.runningTurn,
-      recoverableSubmissions: context.recoverableSubmissions,
-      wroteBeforeOpen: (sequence) =>
-        journalWroteBeforeOpen({ epoch: context.scope.epoch }, authority.openedThrough, sequence),
-      continuingInput: (id) =>
-        continuing.has(id) && context.submission(id)?.dispatchState === 'pending',
-      finalizingInput: (id) => finalizing.has(id),
-      handingOver: (id) => handingOver.has(id)
-    },
-    structuredAgentSessionLiveFence(evidence),
-    authority.operationalRevision,
-    authority.ended,
-    authority.replaced,
-    structuredAgentSessionOwnerUnverifiable(evidence),
-    () => held
-  )
-}
-
 /** The same finished work state serves observers and action readers. */
 export function readJournalSqlWorkState(
   context: JournalSqlStatusContext,
@@ -70,8 +30,7 @@ export function readJournalSqlWorkState(
     const displayed = work.isCurrentItem(item.itemId) ? context.displayed(item.itemId) : null
     return displayed ? [displayed] : []
   })
-  const floor =
-    context.select({ kind: 'clear' })[Symbol.iterator]().next().value?.item.sequence ?? 0
+  const floor = context.commandFloor()
   const owed = context
     .recoverableSubmissions()
     .filter((send) => (floor === 0 || (send.acceptedSequence ?? 0) > floor) && work.owesSend(send))
@@ -103,32 +62,40 @@ function owedPhaseSubmissions(
   work: StructuredAgentSessionWorkPolicy,
   kind: 'entered-submissions' | 'sending-submissions'
 ) {
-  const result = readJournalSqlInput(context.scope, { kind })
-  if (result.kind !== kind) {
-    throw new Error('journal phase read returned a different answer')
-  }
-  return result.submissions.filter((send) => work.owesSend(send))
+  const submissions =
+    kind === 'entered-submissions' ? context.enteredSubmissions() : context.sendingSubmissions()
+  return submissions.filter((send) => work.owesSend(send))
 }
 
 export function readJournalSqlWork(
   context: JournalSqlStatusContext,
   input: JournalSqlWorkRead
 ): JournalSqlWorkResult {
+  if (input.operation.kind === 'state' || input.operation.kind === 'input') {
+    context.prepareWork()
+  }
   const work = readJournalSqlCurrentWork(context, input.authority)
   return {
     cursor: { epoch: context.epoch, sequence: context.sequence },
     physicalCursor: { epoch: context.scope.epoch, sequence: context.sequence },
     authority: input.authority,
-    result: readWork(context, work, input.operation)
+    result: readWork(context, work, input.operation, input.authority)
   }
 }
 
 function readWork(
   context: JournalSqlStatusContext,
   work: StructuredAgentSessionWorkPolicy,
-  operation: JournalWorkRead
+  operation: JournalWorkRead,
+  authority: JournalCurrentWorkAuthority
 ): JournalWorkReadResult {
   switch (operation.kind) {
+    case 'input': {
+      const state = readJournalSqlWorkState(context, work)
+      return readJournalSqlWorkInput(context, authority, operation, state, () =>
+        journalDomainInputEligibility(context.scope, authority, context, work)
+      )
+    }
     case 'opening-send':
       return { kind: 'opening-send', opening: journalOpeningSend(context, work, operation.fence) }
     case 'state':
@@ -173,6 +140,29 @@ function readWork(
           })
       }
     }
+  }
+}
+
+/** Mandatory work survives the existing optional queue publication boundary. */
+export function readJournalSqlWorkInput(
+  context: JournalSqlStatusContext,
+  authority: JournalCurrentWorkAuthority,
+  operation: Extract<JournalWorkRead, { kind: 'input' }>,
+  state: JournalObserverResult['work'],
+  eligibility: () => Omit<ReturnType<typeof journalDomainInputEligibility>, 'work'>
+): Extract<JournalWorkReadResult, { kind: 'input' }> {
+  try {
+    const pick = selectJournalEligibleQueueCard(
+      context.scope,
+      authority,
+      operation.now,
+      operation.facts,
+      operation.allowSteer,
+      eligibility()
+    )
+    return { kind: 'input', state, queue: { card: pick.kind === 'selected' ? pick.card : null } }
+  } catch (error) {
+    return { kind: 'input', state, queue: { failure: journalSqlFailure(error) } }
   }
 }
 

@@ -111,12 +111,11 @@ export class StructuredAgentSessionBackgroundTaskChannel {
 
   /** What a waiter decides from, from the sources history pages state, without building a page. */
   async workState(sessionId: string): Promise<AgentSessionWorkState> {
-    await this.conversation(sessionId)
-    const work = await this.currentWork(sessionId)
+    const { journal } = await this.conversation(sessionId)
+    const { work, queue } = await this.subscribers.readWorkAndQueue(sessionId, journal)
     if (!work) {
       throw new AgentSessionRefusalError(AGENT_SESSION_NOT_ATTACHED)
     }
-    const queue = await this.subscribers.readQueuePublication(sessionId)
     const fence = this.deps.store.getConversation(sessionId)?.currentFence
     return {
       working: work.working(),

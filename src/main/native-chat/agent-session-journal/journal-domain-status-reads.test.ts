@@ -1,4 +1,5 @@
-import { afterEach, expect, it } from 'vitest'
+import { readJournalSqlPoint } from './journal-sql-point-read'
+import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
@@ -90,6 +91,108 @@ it('answers opening and owed phase membership in one work snapshot and honors a 
   db.exec(`UPDATE journal_items SET hidden=1,turn_marker=1,context_clear=0,root=1,
     sequence=99 WHERE item_id='orca:send'`)
   expect(read(1)).toEqual({ kind: 'opening-send', opening: false })
+  const sql = vi.spyOn(db, 'prepare')
+  const input = readJournalSqlPoint(db, {
+    sessionId: 'chat',
+    operation: {
+      kind: 'work',
+      input: {
+        authority,
+        operation: { kind: 'input', now: 100, facts: { reopenFloor: null }, allowSteer: false }
+      }
+    }
+  })
+  expect(input).toMatchObject({
+    kind: 'work',
+    answer: { result: { kind: 'input', state: { working: true }, queue: { card: null } } }
+  })
+  const seeks = [
+    ...new Set(
+      sql.mock.calls
+        .map(([query]) => query)
+        .filter(
+          (query) =>
+            query.includes('raw_boundary AS') ||
+            query.includes('AS work_floor') ||
+            query.includes('payload_json FROM journal_submission_attempts')
+        )
+    )
+  ]
+  sql.mockRestore()
+  const plans = seeks.map((query) =>
+    db
+      .prepare(`EXPLAIN QUERY PLAN ${query}`)
+      .all()
+      .map((row) => String(row.detail))
+      .join('\n')
+  )
+  expect(plans.join('\n')).toContain('journal_items_raw_turn_marker')
+  expect(plans.join('\n')).toContain('journal_items_turn_marker')
+  expect(plans.join('\n')).toContain('journal_items_status_pending')
+  expect(plans.join('\n')).toContain('journal_items_context_clear')
+  expect(plans.join('\n')).toContain('journal_items_raw_context_clear')
+  expect(plans.join('\n')).toContain('journal_submission_unsettled')
+  for (const plan of plans) {
+    expect(plan).not.toMatch(/SCAN (?:journal_items|item|source)\b|TEMP B-TREE/)
+  }
+  const resolved = readJournalSqlWork(context(), { authority, operation: { kind: 'state' } })
+  const resolvedQueue = () =>
+    readJournalSqlPoint(db, {
+      sessionId: 'chat',
+      operation: {
+        kind: 'queue',
+        operation: {
+          kind: 'eligible-input-card',
+          authority,
+          now: 100,
+          facts: { reopenFloor: null },
+          allowSteer: false,
+          resolved
+        }
+      }
+    })
+  expect(resolvedQueue()).toMatchObject({
+    kind: 'queue',
+    result: {
+      kind: 'eligible-input-card',
+      card: null,
+      work: { result: { kind: 'input', state: { working: true }, queue: { card: null } } }
+    }
+  })
+  db.prepare(
+    "INSERT INTO agent_session_records(session_id,record_json) VALUES ('chat','unreadable')"
+  ).run()
+  expect(
+    readJournalSqlPoint(db, {
+      sessionId: 'chat',
+      operation: {
+        kind: 'work',
+        input: {
+          authority,
+          operation: { kind: 'input', now: 100, facts: { reopenFloor: null }, allowSteer: false }
+        }
+      }
+    })
+  ).toMatchObject({
+    kind: 'work',
+    answer: {
+      result: {
+        state: { working: true },
+        queue: { failure: { message: expect.stringContaining('JSON') } }
+      }
+    }
+  })
+  expect(resolvedQueue()).toMatchObject({
+    kind: 'queue',
+    result: {
+      work: {
+        result: {
+          state: { working: true },
+          queue: { failure: { message: expect.stringContaining('JSON') } }
+        }
+      }
+    }
+  })
 })
 const cleanup: Database.Database[] = []
 afterEach(() => {

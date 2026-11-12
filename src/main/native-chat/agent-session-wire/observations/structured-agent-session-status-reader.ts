@@ -1,4 +1,5 @@
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
+import { StructuredAgentSessionObservedWork } from './structured-agent-session-observed-work'
 import { captureStructuredAgentSessionWorkAuthority } from './structured-agent-session-work-authority'
 import type { StructuredAgentSessionStatusFeedDeps } from './structured-agent-session-status-feed-deps'
 import {
@@ -40,23 +41,6 @@ export function createStructuredAgentSessionStatusReader(
     )
   }
 
-  async function current(sessionId: string, journal: SqlAgentSessionJournal) {
-    const saved = projections.savedStop(
-      journal,
-      deps.getConversation(sessionId)?.providerContextBoundary?.operationId ?? null
-    )
-    return saved
-      ? projections.currentSql(
-          journal,
-          captureStructuredAgentSessionWorkAuthority(journal, sessionId, deps, {
-            cursor: journal.cursor(),
-            revision: journal.stopMarks.revision(),
-            latest: journal.stopMarks.withCurrentSettlement(saved.value)
-          })
-        )
-      : null
-  }
-
   async function read(
     sessionId: string,
     journal?: SqlAgentSessionJournal,
@@ -67,5 +51,27 @@ export function createStructuredAgentSessionStatusReader(
     return source ? readSql(sessionId, source, refresh, observed) : null
   }
 
-  return Object.assign(read, { current })
+  const work = async (sessionId: string, journal: SqlAgentSessionJournal) => {
+    const answer = await projections.readWorkSql(journal, () =>
+      captureStructuredAgentSessionWorkAuthority(journal, sessionId, deps, {
+        cursor: journal.cursor(),
+        revision: journal.stopMarks.revision(),
+        latest: null
+      })
+    )
+    if (!answer) {
+      return null
+    }
+    if (answer.result.kind !== 'state') {
+      throw new Error('journal work reader returned another answer')
+    }
+    return new StructuredAgentSessionObservedWork(
+      journal,
+      answer.result.state,
+      answer.cursor,
+      answer
+    )
+  }
+
+  return Object.assign(read, { work })
 }

@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { subscriberDeliveryPort } from './agent-session-subscriber-delivery-port'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
@@ -155,6 +156,16 @@ export class AgentSessionSubscribers {
 
   async readQueuePublication(sessionId: string): Promise<QueuePublication | undefined> {
     return this.hooks.readQueuePublication?.(sessionId)
+  }
+
+  async readWorkAndQueue(sessionId: string, journal: AgentSessionJournal) {
+    let work: StructuredAgentSessionObservedWork | null = null
+    const queue = await this.hooks.readQueuePublication?.(sessionId, undefined, (value) => {
+      work = value
+    })
+    // Discovery may fail before work was read; queue unavailability never erases valid work.
+    work ??= (await this.hooks.readCurrentWork?.(sessionId, journal)) ?? null
+    return { work, queue }
   }
 
   deliverFrames(

@@ -1,10 +1,9 @@
 import { AgentSessionSubscribers } from '../agent-session-wire/publication/subscribers/structured-agent-session-subscribers'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import Database from '../../sqlite/sync-database'
-import { StructuredAgentSessionJournalProjections } from '../agent-session-wire/observations/structured-agent-session-status-journal-projection'
 import { StructuredAgentSessionStatusFeed } from '../agent-session-wire/observations/structured-agent-session-status-feed'
 import type { StatusFeedSession } from '../agent-session-wire/observations/structured-agent-session-status-feed-deps'
-import type { JournalWorkAuthority, JournalCurrentWorkAuthority } from './journal-observer-read'
+import type { JournalCurrentWorkAuthority } from './journal-observer-read'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -298,85 +297,6 @@ it('preserves a corrupt database on worker startup refusal', async () => {
     refusal: { details: { reason: 'journalCorrupt' } }
   })
   expect(await readFile(path)).toEqual(bytes)
-})
-
-it('discards row-free authority changes before publishing an asynchronous observer answer', async () => {
-  const { journal } = await fixture()
-  const projections = new StructuredAgentSessionJournalProjections()
-  let revision = 0
-  const held: string[] = []
-  const capture = () => {
-    const authority: JournalWorkAuthority = {
-      handle: journal.observationHandle(),
-      record: {
-        currentFence: 1,
-        ownerObservation: { claimStatus: 'live', unreconciled: false, handoffStage: null }
-      },
-      child: { fence: 1, heldSends: held },
-      handingOver: [],
-      continuingUnadmitted: [],
-      finalizing: [],
-      openedThrough: journal.openingCursor(),
-      reopenFloor: null,
-      operationalRevision: revision,
-      stopRevision: 0,
-      stop: null
-    }
-    return { authority, contextId: null }
-  }
-  const reached = Promise.withResolvers<void>()
-  const release = Promise.withResolvers<void>()
-  const read = journal.reads.observer.bind(journal.reads)
-  const observer = vi.spyOn(journal.reads, 'observer').mockImplementation(async (input) => {
-    const result = await read(input)
-    reached.resolve()
-    await release.promise
-    return result
-  })
-  const invalidated: string[] = []
-  const observed: unknown[] = []
-  const pending = Promise.all(
-    ['first', 'second'].map((reader) =>
-      projections.readSql(
-        journal,
-        capture,
-        () => invalidated.push(reader),
-        (projection) => observed.push(projection)
-      )
-    )
-  )
-  await reached.promise
-  revision = 1
-  held.push('new-live-owner')
-  release.resolve()
-  expect(await pending).toEqual([null, null])
-  expect(invalidated).toEqual(['first', 'second'])
-  expect(observed).toEqual([])
-  observer.mockRestore()
-  const current = await projections.readSql(journal, capture, () => {})
-  expect(current).toMatchObject({
-    workRevision: 1,
-    authority: { child: { heldSends: ['new-live-owner'] } }
-  })
-  held.push('later-owner')
-  expect(current?.authority?.child?.heldSends).toEqual(['new-live-owner'])
-  expect(await projections.readSql(journal, capture, () => {})).toMatchObject({
-    authority: { child: { heldSends: ['later-owner', 'new-live-owner'] } }
-  })
-  revision = 2
-  const failed = Promise.withResolvers<Awaited<ReturnType<typeof read>>>()
-  const failure = new Error('observer read failed')
-  vi.spyOn(journal.reads, 'observer').mockImplementationOnce(() => failed.promise)
-  const failures = Promise.allSettled([
-    projections.readSql(journal, capture, () => {}),
-    projections.readSql(journal, capture, () => {})
-  ])
-  failed.reject(failure)
-  expect(await failures).toEqual([
-    { status: 'rejected', reason: failure },
-    { status: 'rejected', reason: failure }
-  ])
-  expect(await projections.readSql(journal, capture, () => {})).toMatchObject({ workRevision: 2 })
 })
 
 it('rechecks row-free owner death before answering an attempt-end action read', async () => {

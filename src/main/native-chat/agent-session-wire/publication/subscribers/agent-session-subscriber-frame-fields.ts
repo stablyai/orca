@@ -39,7 +39,8 @@ export type SubscriberFieldHooks = {
   ) => AgentSessionSlashCommand[] | undefined
   readQueuePublication?: (
     sessionId: string,
-    work?: StructuredAgentSessionObservedWork
+    work?: StructuredAgentSessionObservedWork,
+    onWork?: (work: StructuredAgentSessionObservedWork) => void
   ) => QueuePublication | undefined | Promise<QueuePublication | undefined>
   /** Read expensive child-derived rosters only when a frame owes them. */
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null

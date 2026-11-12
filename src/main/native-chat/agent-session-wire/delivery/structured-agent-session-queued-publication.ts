@@ -1,3 +1,4 @@
+import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
@@ -13,16 +14,10 @@ import {
   type DerivedQueuePause
 } from '../../agent-session-journal/queued-messages/queued-message-pause'
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
-import {
-  nextStructuredQueuedMessage,
-  type StructuredQueueGateInput
-} from './structured-agent-session-queued-gate'
-import {
-  heldStructuredAgentSessionCurrentWork,
-  type StructuredAgentSessionCurrentWorkHost
-} from '../observations/structured-agent-session-host-current-work'
+import type { StructuredQueueGateInput } from './structured-agent-session-queued-gate'
+import type { StructuredAgentSessionCurrentWorkHost } from '../observations/structured-agent-session-host-current-work'
 import { captureHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
-import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
+import { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import { journalSubmissionIsPersonal } from '../../agent-session-journal/submissions/journal-submission-fold'
 
 export type QueuePublication = {
@@ -33,9 +28,13 @@ export type QueuePublication = {
 }
 
 export type QueueSendGate = (
-  journal: AgentSessionJournal
+  journal: AgentSessionJournal,
+  cards: readonly QueuedMessageRow[]
 ) => Promise<
-  StructuredQueueGateInput & { state: ReturnType<StructuredAgentSessionObservedWork['queueState']> }
+  StructuredQueueGateInput & {
+    state: ReturnType<StructuredAgentSessionObservedWork['queueState']>
+    selected: QueuedMessageRow | null
+  }
 >
 
 export function structuredQueueSendGate(
@@ -43,22 +42,32 @@ export function structuredQueueSendGate(
     store: Pick<AgentSessionRecordStore, 'getRecord'>
   },
   sessionId: string,
-  capturedWork?: StructuredAgentSessionObservedWork
+  now: () => number,
+  onWork?: (work: StructuredAgentSessionObservedWork) => void,
+  resolved?: StructuredAgentSessionObservedWork
 ): QueueSendGate {
-  return async (journal) => {
-    const work =
-      capturedWork ??
-      (await heldStructuredAgentSessionCurrentWork(
-        host.store,
-        sessionId,
-        journal,
-        host.sessions.get(sessionId)
-      ))
+  return async (journal, cards) => {
+    const answer = await journal.readWork(
+      () => captureHostStructuredAgentSessionWork(host, sessionId, journal),
+      {
+        kind: 'input',
+        resolved: resolved?.readSource,
+        allowSteer: false,
+        now: now(),
+        facts: journal.queuedMessages.facts(journal.queuedMessages.answerMail(cards))
+      }
+    )
+    const work = new StructuredAgentSessionObservedWork(journal, answer.state, journal.cursor())
+    onWork?.(work)
+    if ('failure' in answer.queue) {
+      throw restoreJournalSqlFailure(answer.queue.failure)
+    }
     return {
       record: host.store.getRecord(sessionId),
       authority: captureHostStructuredAgentSessionWork(host, sessionId, journal),
       work,
-      state: work.queueState()
+      state: work.queueState(),
+      selected: answer.queue.card
     }
   }
 }
@@ -168,7 +177,7 @@ export async function readQueuePublication(
     const personal = { queue: { cards: new Map(cardRows.map((row) => [row.messageId, row])) } }
     const resumable = silent ? null : resumableQueuePause(pauses, cardRows)
     // The input order indexes pending sends, so a held queue never rescans history.
-    const input = await gate(journal)
+    const input = await gate(journal, cardRows)
     const { state } = input
     const sending = state.owedSendingSubmissions
     const pause =
@@ -186,8 +195,7 @@ export async function readQueuePublication(
       pause?.reason === 'stopped' || (pause?.reason === 'failed' && !working)
         ? { reason: pause.reason }
         : null
-    const nextQueuedMessageId =
-      (await nextStructuredQueuedMessage({ journal, ...input, cards: cardRows }))?.messageId ?? null
+    const nextQueuedMessageId = input.selected?.messageId ?? null
     const previous = publications.get(journal)
     if (
       previous &&

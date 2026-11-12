@@ -1,3 +1,4 @@
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type Database from '../../sqlite/sync-database'
 import { journalMailSenderKey, type JournalMailCustody } from './journal-writer-host-facts'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
@@ -40,7 +41,8 @@ export type JournalDomainQueuePick =
 export function nextJournalDomainQueueCard(
   db: Database.Database,
   target: JournalDomainSubmissionTarget,
-  selection: JournalDomainQueueSelection
+  selection: JournalDomainQueueSelection,
+  pauseHead?: SqliteRow
 ): JournalDomainQueuePick {
   const { steer, automatic } = selection
   let after: { position: number; messageId: string } | undefined
@@ -52,6 +54,13 @@ export function nextJournalDomainQueueCard(
         WHERE lease.session_id=card.session_id AND lease.epoch=card.epoch
           AND lease.message_id=card.message_id AND lease.card_revision=card.revision
           AND lease.expires_at>?) AS edit_held
+      ${
+        pauseHead
+          ? `,EXISTS(SELECT 1 FROM journal_queue_clear_members member
+        WHERE member.session_id=card.session_id AND member.epoch=card.epoch
+          AND member.message_id=card.message_id) AS clear_member`
+          : ''
+      }
       FROM journal_queue_cards AS card WHERE card.session_id=? AND card.epoch=?
         AND card.state IN ('waiting','returned')
         ${after ? 'AND (card.position,card.message_id)>(?,?)' : ''}
@@ -69,7 +78,15 @@ export function nextJournalDomainQueueCard(
       db,
       target,
       selection.reopenFloor,
-      rows.map((row) => String(row.message_id))
+      rows.map((row) => String(row.message_id)),
+      pauseHead
+        ? {
+            head: pauseHead,
+            clearMembers: new Set(
+              rows.filter((row) => row.clear_member).map((row) => String(row.message_id))
+            )
+          }
+        : undefined
     )
     for (const row of rows) {
       if (automatic && row.edit_held) {

@@ -94,7 +94,15 @@ function read(
     case 'work':
       return {
         kind: 'work',
-        answer: readJournalSqlWork(new JournalSqlStatusContext(scope), operation.input)
+        answer: readJournalSqlWork(
+          new JournalSqlStatusContext(
+            scope,
+            operation.input.operation.kind === 'state' || operation.input.operation.kind === 'input'
+              ? operation.input.operation.kind
+              : undefined
+          ),
+          operation.input
+        )
       }
     case 'observer':
       return {

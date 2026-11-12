@@ -1,3 +1,10 @@
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
+import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
+import {
+  readJournalDomainStopStates,
+  resolveJournalDomainDisplay,
+  journalDomainDisplayTurnState
+} from './journal-domain-item-display'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalStatusItem, JournalStatusItemSelection } from './journal-status-items'
@@ -113,4 +120,25 @@ export function* sqlJournalStatusItems(
     }
     after = columns.map((column) => Number(last[column]))
   }
+}
+
+export function sqlJournalStatusItem(
+  scope: JournalSqlScope,
+  row: SqliteRow,
+  id: string,
+  states?: ReturnType<typeof readJournalDomainStopStates>
+) {
+  scope.examined(row)
+  const item = scope.decode<AgentJournalRenderItem>(row.payload_json)
+  const stopStates =
+    row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
+      ? undefined
+      : (states ?? readJournalDomainStopStates(scope.db, scope, [id]))
+  const displayed = resolveJournalDomainDisplay(
+    item,
+    row.wire_version,
+    row.wire_json,
+    stopStates && journalDomainDisplayTurnState(item, stopStates)
+  )
+  return { item, displayed, hidden: Boolean(row.hidden), fence: Number(row.fence) }
 }

@@ -4,6 +4,7 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
 import type { JournalObserverResult } from '../../agent-session-journal/journal-observer-read'
+import type { JournalSqlWorkResult } from '../../agent-session-journal/journal-work-read'
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { currentRequestsProjection } from './agent-session-current-requests'
 
@@ -14,7 +15,8 @@ export class StructuredAgentSessionObservedWork {
   constructor(
     private readonly journal: Pick<SqlAgentSessionJournal, 'cursor'>,
     private readonly work: JournalObserverResult['work'],
-    private readonly cursor: AgentJournalCursor
+    private readonly cursor: AgentJournalCursor,
+    readonly readSource?: JournalSqlWorkResult
   ) {
     this.restated = new Map(work.restatedSubmissions.map((send) => [send.clientMessageId, send]))
   }

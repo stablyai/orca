@@ -1,3 +1,5 @@
+import { StructuredAgentSessionJournalProjections } from '../structured-agent-session-status-journal-projection'
+import type { JournalWorkAuthority } from '../../../agent-session-journal/journal-observer-read'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -114,4 +116,111 @@ describe('structured status canonical owner re-entry', () => {
       })
     ])
   })
+})
+
+it('discards row-free authority changes before publishing an asynchronous observer answer', async () => {
+  const journal = await openJournal()
+  const projections = new StructuredAgentSessionJournalProjections()
+  let revision = 0
+  let attached = true
+  const held: string[] = []
+  const capture = () => {
+    if (!attached) {
+      return null
+    }
+    const authority: JournalWorkAuthority = {
+      handle: journal.observationHandle(),
+      record: {
+        currentFence: 1,
+        ownerObservation: { claimStatus: 'live', unreconciled: false, handoffStage: null }
+      },
+      child: { fence: 1, heldSends: held },
+      handingOver: [],
+      continuingUnadmitted: [],
+      finalizing: [],
+      openedThrough: journal.openingCursor(),
+      reopenFloor: null,
+      operationalRevision: revision,
+      stopRevision: 0,
+      stop: null
+    }
+    return { authority, contextId: null }
+  }
+  const narrow = await projections.readWorkSql(journal, capture)
+  expect(narrow?.result.kind).toBe('state')
+  expect(projections.currentSql(journal, capture())).toBeNull()
+  expect(projections.savedStop(journal, null)).toBeUndefined()
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'work-turn' },
+    { kind: 'turn', turnId: 'work-turn', state: 'running' },
+    { fence: 1, turnScope: { kind: 'thread' } }
+  )
+  expect(await projections.readWorkSql(journal, capture)).toMatchObject({
+    cursor: journal.cursor(),
+    result: { kind: 'state', state: { latestTurn: { turn: { state: 'running' } } } }
+  })
+  expect(narrow?.cursor).not.toEqual(journal.cursor())
+  attached = false
+  expect(await projections.readWorkSql(journal, capture)).toBeNull()
+  attached = true
+  const reattachFailure = new Error('reattached work read failed')
+  vi.spyOn(journal.reads, 'work').mockRejectedValueOnce(reattachFailure)
+  await expect(projections.readWorkSql(journal, capture)).rejects.toBe(reattachFailure)
+  await projections.readWorkSql(journal, capture)
+  const reached = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const read = journal.reads.observer.bind(journal.reads)
+  const observer = vi.spyOn(journal.reads, 'observer').mockImplementation(async (input) => {
+    const result = await read(input)
+    reached.resolve()
+    await release.promise
+    return result
+  })
+  const invalidated: string[] = []
+  const observed: unknown[] = []
+  const pending = Promise.all(
+    ['first', 'second'].map((reader) =>
+      projections.readSql(
+        journal,
+        capture,
+        () => invalidated.push(reader),
+        (projection) => observed.push(projection)
+      )
+    )
+  )
+  await reached.promise
+  revision = 1
+  held.push('new-live-owner')
+  release.resolve()
+  expect(await pending).toEqual([null, null])
+  expect(invalidated).toEqual(['first', 'second'])
+  expect(observed).toEqual([])
+  observer.mockRestore()
+  const current = await projections.readSql(journal, capture, () => {})
+  expect(current).toMatchObject({
+    workRevision: 1,
+    authority: { child: { heldSends: ['new-live-owner'] } }
+  })
+  await projections.readWorkSql(journal, capture)
+  expect(projections.currentSql(journal, capture())).toBe(current)
+  expect(projections.savedStop(journal, null)).toEqual({ value: null })
+  held.push('later-owner')
+  expect(current?.authority?.child?.heldSends).toEqual(['new-live-owner'])
+  expect(await projections.readSql(journal, capture, () => {})).toMatchObject({
+    authority: { child: { heldSends: ['later-owner', 'new-live-owner'] } }
+  })
+  revision = 2
+  const failed = Promise.withResolvers<Awaited<ReturnType<typeof read>>>()
+  const failure = new Error('observer read failed')
+  vi.spyOn(journal.reads, 'observer').mockImplementationOnce(() => failed.promise)
+  const failures = Promise.allSettled([
+    projections.readSql(journal, capture, () => {}),
+    projections.readSql(journal, capture, () => {})
+  ])
+  failed.reject(failure)
+  expect(await failures).toEqual([
+    { status: 'rejected', reason: failure },
+    { status: 'rejected', reason: failure }
+  ])
+  expect(await projections.readSql(journal, capture, () => {})).toMatchObject({ workRevision: 2 })
 })

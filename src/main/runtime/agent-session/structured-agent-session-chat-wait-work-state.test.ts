@@ -1,6 +1,6 @@
+import { SqlJournalQueuedMessages } from '../../native-chat/agent-session-journal/journal-sql-queued-messages'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../rpc/core'
-import { StructuredAgentSessionJournalProjections } from '../../native-chat/agent-session-wire/observations/structured-agent-session-status-journal-projection'
 import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import { RuntimeClient, RuntimeClientError } from '../../../cli/runtime-client'
 import { CHAT_HANDLERS } from '../../../cli/handlers/chat'
@@ -98,7 +98,6 @@ describe('chat send --wait over the real host', () => {
     harness = await openStructuredCodexRpcHarness([], {}, { localCli: true })
     await harness.ok('agentSession.create', harness.createIntentParams())
     await seedRunningTurn(1, 16)
-    vi.spyOn(StructuredAgentSessionJournalProjections.prototype, 'readSql').mockResolvedValue(null)
     const response = await harness.call('agentSession.workState', { sessionId: SESSION })
     expect(response).toMatchObject({
       ok: true,
@@ -117,6 +116,25 @@ describe('chat send --wait over the real host', () => {
         limit: 1
       })
     ).toMatchObject({ ok: true, result: { page: { working: true } } })
+  })
+
+  it('keeps work available when optional queue discovery fails', async () => {
+    harness = await openStructuredCodexRpcHarness([], {}, { localCli: true })
+    await harness.ok('agentSession.create', harness.createIntentParams())
+    await seedRunningTurn(1, 16)
+    vi.spyOn(SqlJournalQueuedMessages.prototype, 'answerMail').mockImplementation(() => {
+      throw new Error('queue discovery unavailable')
+    })
+    const response = await harness.call('agentSession.workState', { sessionId: SESSION })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { working: true, actionablePrompt: false, fence: expect.any(Number) }
+    })
+    if (!response.ok) {
+      throw new Error('workState failed')
+    }
+    expect(response.result).not.toHaveProperty('queuedMessageIds')
+    expect(response.result).not.toHaveProperty('nextQueuedMessageId')
   })
 
   it('returns the completed turn when the host lacks agentSession.workState', async () => {

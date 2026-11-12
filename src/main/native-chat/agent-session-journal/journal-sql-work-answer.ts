@@ -43,7 +43,7 @@ export async function readJournalSqlWorkAnswer<K extends JournalWorkRead['kind']
   capture: () => JournalCurrentWorkAuthority,
   operation: Extract<JournalWorkRead, { kind: K }>
 ): Promise<JournalWorkAnswer<K>> {
-  const requested = structuredClone(operation)
+  const requested: JournalWorkRead = structuredClone(operation)
   for (;;) {
     if (journal.isClosed) {
       throw new AgentSessionJournalError(
@@ -52,7 +52,23 @@ export async function readJournalSqlWorkAnswer<K extends JournalWorkRead['kind']
       )
     }
     const authority = copyJournalCurrentWorkAuthority(capture())
-    const answer = await journal.reads.work({ authority, operation: requested })
+    let answer: JournalSqlWorkResult
+    if (requested.kind === 'input' && requested.resolved) {
+      const queue = await journal.reads.queue({
+        kind: 'eligible-input-card',
+        authority,
+        allowSteer: requested.allowSteer,
+        now: requested.now,
+        facts: requested.facts,
+        resolved: requested.resolved
+      })
+      if (queue.kind !== 'eligible-input-card' || !queue.work) {
+        throw new Error('journal queue reader omitted its resolved work answer')
+      }
+      answer = queue.work
+    } else {
+      answer = await journal.reads.work({ authority, operation: requested })
+    }
     if (journalSqlWorkAnswerIsCurrent(journal, capture, authority, answer)) {
       if (answer.result.kind !== operation.kind) {
         throw new Error(`journal work reader answered ${answer.result.kind} for ${operation.kind}`)

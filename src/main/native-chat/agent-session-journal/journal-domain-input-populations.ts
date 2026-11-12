@@ -27,14 +27,14 @@ export function* journalDomainUnsettledInputs(scope: JournalSqlScope, pendingOnl
   let after: [number, string] = [-1, '']
   for (;;) {
     const rows = scope.db
-      .prepare(`SELECT message_id,ordinal FROM journal_submission_attempts
+      .prepare(`SELECT message_id,ordinal,payload_json FROM journal_submission_attempts
       WHERE session_id=? AND epoch=? AND current=1 AND dispatch_state IN ('pending','unknown')
       ${pendingOnly ? "AND dispatch_state='pending'" : ''}
       AND (ordinal,message_id)>(?,?) ORDER BY ordinal,message_id LIMIT ?`)
       .all(...scope.prefix, ...after, PAGE)
     for (const row of rows) {
       scope.examined(row)
-      const input = journalDomainSubmission(scope, String(row.message_id))
+      const input = scope.decode<AgentJournalSubmission>(row.payload_json)
       if (input) {
         yield input
       }

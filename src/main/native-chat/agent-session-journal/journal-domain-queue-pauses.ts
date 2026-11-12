@@ -5,7 +5,8 @@ import {
   createQueuePauseContext,
   type QueuePauseContext
 } from './queued-messages/queued-message-pause'
-import { readJournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
+import { JOURNAL_SQL_ACCEPTED_INPUT_COLUMNS } from './journal-sql-accepted-inputs'
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { readJournalDomainQueueFailure } from './journal-domain-queue-failures'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 
@@ -16,15 +17,19 @@ export function readJournalDomainQueuePauseContext(
   db: Database.Database,
   target: Target,
   reopenFloor: AgentJournalCursor | null,
-  messageIds: readonly string[]
+  messageIds: readonly string[],
+  snapshot?: { head: SqliteRow; clearMembers: ReadonlySet<string> }
 ): QueuePauseContext {
   const prefix = [target.sessionId, target.epoch] as const
-  const head = db
-    .prepare(`SELECT queue_latest_stop_json, queue_manual_stop_json,
+  const head =
+    snapshot?.head ??
+    db
+      .prepare(`SELECT queue_latest_stop_json, queue_manual_stop_json,
     queue_resumed_sequence, queue_reopened_sequence, queue_clear_sequence,
-    queue_clear_operation_id, queue_clear_lifted FROM journal_chat_state
+    queue_clear_operation_id, queue_clear_lifted, ${JOURNAL_SQL_ACCEPTED_INPUT_COLUMNS}
+    FROM journal_chat_state head
     WHERE session_id=? AND epoch=?`)
-    .get(...prefix)
+      .get(...prefix)
   if (!head) {
     throw new Error('journal queue pause targets a retired chat epoch')
   }
@@ -47,15 +52,20 @@ export function readJournalDomainQueuePauseContext(
           }
         })
   }
-  const clearMembers = new Set(
-    db
-      .prepare(`SELECT member.message_id FROM json_each(?) wanted
+  const clearMembers =
+    snapshot?.clearMembers ??
+    new Set(
+      db
+        .prepare(`SELECT member.message_id FROM json_each(?) wanted
     CROSS JOIN journal_queue_clear_members member WHERE member.session_id=? AND member.epoch=?
       AND member.message_id=wanted.value`)
-      .all(JSON.stringify(messageIds), ...prefix)
-      .map((row) => String(row.message_id))
-  )
-  const accepted = readJournalSqlAcceptedInputs(db, prefix)
+        .all(JSON.stringify(messageIds), ...prefix)
+        .map((row) => String(row.message_id))
+    )
+  const accepted = {
+    latestAcceptedTurnSequence: Number(head.latest_accepted ?? 0),
+    latestPersonAcceptedSequence: Number(head.latest_person_accepted ?? 0)
+  }
   return createQueuePauseContext(
     {
       epoch: target.epoch,

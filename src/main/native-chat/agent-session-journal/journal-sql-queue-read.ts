@@ -1,5 +1,13 @@
 import type { JournalCurrentWorkAuthority } from './journal-observer-read'
-import { selectJournalEligibleQueueCard } from './journal-domain-input-eligibility'
+import {
+  selectJournalEligibleQueueCard,
+  journalDomainResolvedInputEligibility
+} from './journal-domain-input-eligibility'
+import { JournalSqlStatusContext } from './journal-sql-status-context'
+import { readJournalSqlWork, readJournalSqlWorkInput } from './journal-sql-work-read'
+import { sameJournalCursor } from './replay/journal-cursor'
+import { copyJournalCurrentWorkAuthority } from './journal-observer-read'
+import type { JournalSqlWorkResult, JournalWorkRead } from './journal-work-read'
 import type { JournalMailCustody } from './journal-writer-host-facts'
 import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -29,6 +37,7 @@ export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
       authority: JournalCurrentWorkAuthority
       allowSteer: boolean
       now: number
+      resolved?: JournalSqlWorkResult
     }
   | { kind: 'list' }
   | { kind: 'get'; messageId: string }
@@ -42,7 +51,7 @@ export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
 )
 
 export type JournalSqlQueueReadResult =
-  | { kind: 'eligible-input-card'; card: QueuedMessageRow | null }
+  | { kind: 'eligible-input-card'; card: QueuedMessageRow | null; work?: JournalSqlWorkResult }
   | { kind: 'list'; cards: QueuedMessageRow[] }
   | { kind: 'get'; card: QueuedMessageRow | null }
   | { kind: 'revision'; revision: string }
@@ -64,6 +73,44 @@ export function readJournalSqlQueue(
   const { facts } = operation
   switch (operation.kind) {
     case 'eligible-input-card': {
+      if (operation.resolved) {
+        const context = new JournalSqlStatusContext(read, 'input')
+        const prior = operation.resolved
+        const cursor = { epoch: context.epoch, sequence: context.sequence }
+        const physicalCursor = { epoch: read.epoch, sequence: context.sequence }
+        const input: Extract<JournalWorkRead, { kind: 'input' }> = {
+          kind: 'input',
+          now: operation.now,
+          facts,
+          allowSteer: operation.allowSteer
+        }
+        const state = prior.result.kind === 'state' ? prior.result.state : undefined
+        const reusable =
+          state &&
+          sameJournalCursor(prior.cursor, cursor) &&
+          sameJournalCursor(prior.physicalCursor, physicalCursor) &&
+          JSON.stringify(copyJournalCurrentWorkAuthority(prior.authority)) ===
+            JSON.stringify(operation.authority)
+        const work =
+          reusable && state
+            ? {
+                cursor,
+                physicalCursor,
+                authority: operation.authority,
+                result: readJournalSqlWorkInput(context, operation.authority, input, state, () =>
+                  journalDomainResolvedInputEligibility(context, state)
+                )
+              }
+            : readJournalSqlWork(context, { authority: operation.authority, operation: input })
+        if (work.result.kind !== 'input') {
+          throw new Error('journal queue work answer changed kind')
+        }
+        return {
+          kind: operation.kind,
+          card: 'card' in work.result.queue ? work.result.queue.card : null,
+          work
+        }
+      }
       const selected = selectJournalEligibleQueueCard(
         read,
         operation.authority,
