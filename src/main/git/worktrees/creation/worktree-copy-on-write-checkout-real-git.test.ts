@@ -87,6 +87,22 @@ describe.runIf(process.platform === 'darwin')('copy-on-write worktree checkout',
     expect(await readFile(hookLog, 'utf8')).toBe('ran\n')
   })
 
+  it('leaves submodules unpopulated when submodule.recurse is set', async () => {
+    const { repoPath, root } = await createRepo()
+    const subPath = join(root, 'sub')
+    execFileSync('git', ['init', '--quiet', subPath])
+    git(subPath, ['commit', '--quiet', '--allow-empty', '-m', 'sub', '--author', 'T <t@e.x>'])
+    git(repoPath, ['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', subPath, 'sub'])
+    git(repoPath, ['commit', '--quiet', '-m', 'submodule'])
+    git(repoPath, ['config', 'submodule.recurse', 'true'])
+    const worktreePath = join(root, 'feature')
+
+    await addWorktreeWithCopyOnWriteCheckout(repoPath, worktreePath, 'feature', 'main', false)
+
+    expect(hasCloneMarker(join(worktreePath, 'shared.txt'))).toBe(true)
+    expect(existsSync(join(worktreePath, 'sub', '.git'))).toBe(false)
+  })
+
   it('lets Git write files that a checkout filter would change', async () => {
     const { repoPath, root } = await createRepo()
     git(repoPath, ['config', 'filter.tag.clean', "sed 's/^SMUDGE://'"])

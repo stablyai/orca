@@ -53,8 +53,15 @@ export async function addWorktreeWithCopyOnWriteCheckout(
       cloneMainCheckoutIntoWorktree(method, repoPath, worktreePath, 'HEAD', options)
     ])
     // A checkout, not reset, so post-checkout hooks still run as they do for `worktree add`.
+    // Like `worktree add`, leave submodules unpopulated even when submodule.recurse is set.
     await gitExecFileAsync(
-      [...checkoutWorkersArgs, ...windowsLongPathGitArgs(worktreePath), 'checkout', '-f'],
+      [
+        ...checkoutWorkersArgs,
+        ...windowsLongPathGitArgs(worktreePath),
+        'checkout',
+        '-f',
+        '--no-recurse-submodules'
+      ],
       {
         ...gitExecOptions(worktreePath, options),
         timeout: resolveWorktreeAddTimeoutMs(),
