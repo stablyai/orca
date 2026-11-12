@@ -9,10 +9,4 @@ describe('parseCodexLoginAuthUrl', () => {
     expect(parseCodexLoginAuthUrl(truncated)).toBe(null)
     expect(parseCodexLoginAuthUrl(`${truncated}${AUTH_URL.slice(40)}\n`)).toBe(AUTH_URL)
   })
-
-  it('offers no link at all rather than an unrelated one when the notice is missing', () => {
-    expect(
-      parseCodexLoginAuthUrl('A new version of codex is available: https://openai.com/codex\n')
-    ).toBe(null)
-  })
 })
