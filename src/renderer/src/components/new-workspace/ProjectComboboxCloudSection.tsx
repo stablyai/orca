@@ -1,8 +1,9 @@
-// The Project picker's "On GitHub · Orca Cloud only" section (cloud-start D4): repositories Orca
+// The Project picker's "GitHub" section (cloud-start D4, PROJ-MENU): repositories Orca
 // Cloud can reach with no clone on this computer, plus a way to give it access to more. Shown only
 // while Orca Cloud is the Run on target.
 import React, { useEffect, useRef } from 'react'
-import { Check, ChevronDown, Github, Plus } from 'lucide-react'
+import { Check, ChevronDown, Cloud, Github, Lock, Plus } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
@@ -92,11 +93,20 @@ export function ProjectComboboxCloudSection({
   if (repos.length === 0 && !showMoreAccess) {
     return null
   }
-  const heading = t('components.newWorkspace.cloudOnly.heading', 'On GitHub · Orca Cloud only')
-  const row = (key: string, children: React.ReactNode): React.JSX.Element => (
+  const heading = t('components.newWorkspace.cloudOnly.headingShort', 'GitHub')
+  const cloudOnly = t(
+    'components.newWorkspace.cloudOnly.badge',
+    'Cloud only. Orca Cloud clones it, so no copy on this computer is needed.'
+  )
+  const row = (
+    key: string,
+    children: React.ReactNode,
+    accessibleName?: string
+  ): React.JSX.Element => (
     <div
       key={key}
       role="option"
+      aria-label={accessibleName}
       id={armedKey === key ? armedId : undefined}
       aria-selected={armedKey === key}
       data-armed={armedKey === key || undefined}
@@ -113,40 +123,42 @@ export function ProjectComboboxCloudSection({
   )
   return (
     <div role="group" aria-label={heading}>
-      <div aria-hidden="true" className="px-2 pt-2.5 pb-1">
-        <div className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-          {heading}
-        </div>
-        {/* Said once for the section; rows carry what tells them apart. */}
-        <div className="text-xs text-muted-foreground">
-          {t(
-            'components.newWorkspace.cloudOnly.detail',
-            'Orca Cloud clones it. No copy on this computer needed.'
-          )}
-        </div>
+      {/* Same style as the picker's other group headers; each row's badge says "cloud only". */}
+      <div
+        aria-hidden="true"
+        className="px-2 pt-2.5 pb-1 text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase"
+      >
+        {heading}
       </div>
       {repos.map((repo) => {
         const key = cloudRepoKey(repo.fullName)
         const current = value === key
+        // One line per row (PROJ-MENU): the name, a lock when private, and the cloud badge. The
+        // row's accessible name says all of it, so the badge is never the only signal.
+        const accessibleName = repo.private
+          ? t('components.newWorkspace.cloudOnly.rowPrivate', '{{repo}}, private, cloud only', {
+              repo: repo.fullName
+            })
+          : t('components.newWorkspace.cloudOnly.rowPublic', '{{repo}}, cloud only', {
+              repo: repo.fullName
+            })
         return row(
           key,
           <>
             <span className="flex h-5 w-4 shrink-0 items-center justify-center">
               <Github aria-hidden className="size-3.5 text-muted-foreground" />
             </span>
-            <span className="flex min-w-0 flex-1 flex-col">
+            {/* The lock follows the name so every name starts at the same x. */}
+            <span className="flex min-w-0 flex-1 items-center gap-1">
               <span className={cn('min-w-0 truncate', current && 'font-medium')}>
                 {repo.fullName}
               </span>
-              <span className="min-w-0 truncate text-xs text-muted-foreground">
-                {repo.private
-                  ? t('components.newWorkspace.cloudOnly.private', '{{owner}} · Private', {
-                      owner: repo.fullName.split('/')[0] ?? repo.fullName
-                    })
-                  : t('components.newWorkspace.cloudOnly.public', '{{owner}} · Public', {
-                      owner: repo.fullName.split('/')[0] ?? repo.fullName
-                    })}
-              </span>
+              {repo.private ? (
+                <Lock
+                  aria-label={t('components.newWorkspace.cloudOnly.privateLabel', 'Private')}
+                  className="size-3 shrink-0 text-muted-foreground"
+                />
+              ) : null}
             </span>
             {current ? (
               <span className="flex h-5 shrink-0 items-center">
@@ -156,7 +168,20 @@ export function ProjectComboboxCloudSection({
                 </span>
               </span>
             ) : null}
-          </>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  data-cloud-only-badge=""
+                  aria-label={cloudOnly}
+                  className="flex h-5 shrink-0 items-center text-muted-foreground"
+                >
+                  <Cloud aria-hidden className="size-3.5" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="right">{cloudOnly}</TooltipContent>
+            </Tooltip>
+          </>,
+          accessibleName
         )
       })}
       {showMoreRepos
