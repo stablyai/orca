@@ -15,7 +15,7 @@ import {
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../flags'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import {
   assertReferenceWritesSupported,
   parseReferenceInputs,

@@ -2,7 +2,7 @@ import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pan
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { cloneLayoutNode } from '../../restoring-sessions/terminal-layout-normalization'
-import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { createMinimalPersistedTerminalTab } from '../../restoring-sessions/session-owner-fields'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { placedSplitRoot } from '../../terminal-topology/terminal-pane-placement-graft'

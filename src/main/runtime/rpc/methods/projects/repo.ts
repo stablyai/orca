@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { resolveReplySnapshot } from '../../content-snapshot-id'
+import { resolveReplySnapshot } from '../../workspace-client-views/content-snapshot-id'
 import { PROJECT_GROUP_METHODS } from './project-group-rpc-methods'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from '../workspaces/folder-workspace'
@@ -17,7 +17,7 @@ import { repoHooksCheckIsBackground } from '../../../../../shared/repo-hooks-che
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient
-} from '../../repo-visibility-projection'
+} from '../../workspace-client-views/repo-visibility-projection'
 import {
   RepoClone,
   RepoCreate,

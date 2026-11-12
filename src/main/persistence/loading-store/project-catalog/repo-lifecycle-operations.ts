@@ -3,7 +3,6 @@ import { REMOVE_PROJECT_DOMAINS, REPO_CATALOG_DOMAINS } from '../../profile-save
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../../shared/repo-host-identity'
-import type { GhAccountBinding } from '../../../../shared/github/account-binding'
 import {
   removeRepoFromHostWorkspaceSessions,
   removeRepoFromWorkspaceSession
@@ -171,43 +170,7 @@ export class RepoLifecycleOperations {
 
   updateRepo(
     target: RepoHostTarget,
-    updates: Partial<
-      Pick<
-        Repo,
-        | 'displayName'
-        | 'badgeColor'
-        | 'repoIcon'
-        | 'upstream'
-        | 'gitRemoteIdentity'
-        | 'defaultJiraProject'
-        | 'hookSettings'
-        | 'editorFormatter'
-        | 'worktreeBaseRef'
-        | 'worktreeBasePath'
-        | 'kind'
-        | 'folderUpgradeGitRootPath'
-        | 'executionHostId'
-        | 'symlinkPaths'
-        | 'dictationTerms'
-        | 'issueSourcePreference'
-        | 'forkSyncMode'
-        | 'agentWorkspaceTrust'
-        | 'externalWorktreeVisibilityPromptDismissedAt'
-        | 'externalWorktreeInboxBaselinePaths'
-        | 'importedExternalWorktreePaths'
-        | 'customWorktreeVisibilitySources'
-        | 'worktreeVisibilitySourcePreferences'
-        | 'projectGroupId'
-        | 'projectHostSetupMethod'
-      >
-    > & {
-      projectGroupOrder?: number | null
-      externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
-      agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
-      sourceControlAi?: Repo['sourceControlAi'] | null
-      externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
-      ghAccount?: GhAccountBinding | null
-    }
+    updates: Parameters<RepoUpdatePersistenceOperations['updateRepo']>[1]
   ): Repo | null {
     return getRepoUpdateOperations(this).updateRepo(target, updates)
   }

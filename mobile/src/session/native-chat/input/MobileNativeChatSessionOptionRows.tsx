@@ -222,11 +222,12 @@ export function descriptorRowElements(
     />
   )
   // No search here: search-only aliases follow a More models toggle, as compact pickers show them.
-  const more = moreChoices ? choices.filter((choice) => choice.searchOnly) : []
+  const more = moreChoices ? choices.filter((choice) => choice.legacy) : []
   return [
-    ...choices.filter((choice) => !choice.searchOnly).map(choiceRow),
+    ...choices.filter((choice) => !choice.legacy).map(choiceRow),
     ...(more.length > 0 && moreChoices
       ? [
+          ...(moreChoices.shown ? more.map(choiceRow) : []),
           <ListRow
             key="more-choices"
             title={
@@ -235,8 +236,7 @@ export function descriptorRowElements(
                 : t('chat.sessionOptionRows.moreModels', 'More models')
             }
             onPress={moreChoices.onToggle}
-          />,
-          ...(moreChoices.shown ? more.map(choiceRow) : [])
+          />
         ]
       : [])
   ]

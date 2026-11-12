@@ -1,8 +1,8 @@
 import {
   AiVaultLocalScanError,
   listAiVaultSessions as listCachedLocalAiVaultSessions
-} from '../../ai-vault/cached-session-list'
-import { aiVaultScanIssueResult } from '../../ai-vault/session-list-results'
+} from '../../ai-vault/listing/cached-session-list'
+import { aiVaultScanIssueResult } from '../../ai-vault/listing/session-list-results'
 import { classifyAiVaultScanError } from '../../../shared/ai-vault/scanning/ai-vault-scan-error-message'
 import {
   isAiVaultScanCancelledError,

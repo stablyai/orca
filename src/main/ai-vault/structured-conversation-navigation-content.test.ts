@@ -15,9 +15,9 @@ import Database from '../sqlite/sync-database'
 import {
   projectStructuredAiVaultSessions,
   OPENS_EVERY_STRUCTURED_CHAT
-} from './structured-session-ownership'
-import { listResult } from './structured-session-ownership.test-support'
-import { parseAiVaultListResult } from './session-list-result-validation'
+} from './structured-sessions/structured-session-ownership'
+import { listResult } from './structured-sessions/structured-session-ownership.test-support'
+import { parseAiVaultListResult } from './listing/session-list-result-validation'
 
 const EMPTY: AiVaultListResult = { sessions: [], issues: [], scannedAt: '2026-10-26T00:00:00Z' }
 const EPOCH = 'epoch-1'

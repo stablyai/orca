@@ -15,7 +15,7 @@ import {
 import type { HandlerContext } from './dispatch'
 import { type RuntimeClient, RuntimeClientError } from './runtime-client'
 import { getOptionalStringFlag, getRepeatedStringFlag } from './flags'
-import { resolveJiraTarget } from './jira-target'
+import { resolveJiraTarget } from './jira/jira-target'
 
 type ReferenceInput = { key: string } | { item: WorkspaceAttachment }
 

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ghExecFileAsync } from '../../gh-utils'
-import { extractExecError } from '../../../git/exec-error'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
 import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import type { GhExecOptions } from '../github-exec-scope'

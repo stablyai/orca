@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { projectConversations } from '../../shared/project-conversation-list'
 import { scanAiVaultSessions } from './session-scanner'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './transcripts/session-transcript-record-budget'
-import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
+import { isolatedScanRoots, writeJsonlFile } from './scanner-fixtures/session-scanner-test-fixtures'
 
 const roots: string[] = []
 const caveat = '<local-command-caveat>Local command output follows</local-command-caveat>'

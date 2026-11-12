@@ -22,6 +22,7 @@ import {
 import { AgentChoiceMenu } from './AgentChoiceMenu'
 import { sourceControlActionRouteHint } from './agent-choice-route-hint'
 import { useTranslate } from '@/i18n/use-translate'
+import { legacyAgentModelIds } from '../../../../../shared/legacy-agent-models'
 
 const AGENT_DEFAULT_VALUE = '__agent_default__'
 
@@ -104,6 +105,7 @@ export function AgentChoiceFields({
   const listedModels = live
     ? (menu?.rows ?? agentPickerModels(live)).filter((row) => !('hidden' in row && row.hidden))
     : (catalog?.models ?? [])
+  const legacyModels = legacyAgentModelIds(agent, listedModels)
   const unlistedModel =
     selected?.model && !(live ? listedModels.some(({ id }) => id === selected.model) : model)
       ? selected.model
@@ -148,7 +150,11 @@ export function AgentChoiceFields({
                 defaultLabels?.model ??
                 t('settings.sourceControl.actionModel.agentDefault', 'Agent default')
             },
-            ...listedModels.map(({ id, label }) => ({ value: id, label })),
+            ...listedModels.map(({ id, label }) => ({
+              value: id,
+              label,
+              legacy: legacyModels.has(id)
+            })),
             ...(unlistedModel ? [{ value: unlistedModel, label: unlistedModel }] : [])
           ]}
           onChange={(model) => onSelect({ model: model === AGENT_DEFAULT_VALUE ? null : model })}
