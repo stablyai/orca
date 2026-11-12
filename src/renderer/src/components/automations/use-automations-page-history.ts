@@ -66,20 +66,21 @@ export function useAutomationsPageFocus(
 ): void {
   const previousRef = useRef<AutomationsPageFocusTarget | null>(null)
   const key = target?.key ?? null
+  const page = target?.page ?? null
+  const parents = target?.parents.join(',') ?? ''
+  const returnSelector = target?.returnSelector ?? null
   useLayoutEffect(() => {
     // Why: resolving states (loading, deep link) have no target; keep the last real page.
-    if (!target) {
+    if (key === null || page === null) {
       return
     }
     const previous = previousRef.current
-    previousRef.current = target
-    if (!previous || previous.key === target.key) {
+    previousRef.current = { key, page, parents: parents.split(','), returnSelector }
+    if (!previous || previous.key === key) {
       return
     }
     const selector =
-      previous.returnSelector && previous.parents.includes(target.page)
-        ? previous.returnSelector
-        : null
+      previous.returnSelector && previous.parents.includes(page) ? previous.returnSelector : null
     let frame = 0
     let handle = 0
     const attempt = (): void => {
@@ -97,12 +98,12 @@ export function useAutomationsPageFocus(
         element.focus({ preventScroll: false })
         return
       }
-      if (frame++ < FOCUS_RETRY_FRAMES) {
+      frame += 1
+      if (frame <= FOCUS_RETRY_FRAMES) {
         handle = requestAnimationFrame(attempt)
       }
     }
     attempt()
     return () => cancelAnimationFrame(handle)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- focus follows page identity only.
-  }, [key])
+  }, [key, page, parents, returnSelector, containerRef])
 }
