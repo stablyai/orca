@@ -113,7 +113,8 @@ export function createMockHost(
   const data = createMockPluginData(options)
   const surfaceMethods: Record<Surface, readonly PluginHostMethodName[]> = {
     panel: pluginFrameMethodsFor('panel', true),
-    worker: pluginHostMethodsFor('worker')
+    // The plugin under test is a development plugin, which may call proposed methods.
+    worker: pluginHostMethodsFor('worker', true)
   }
   const calls: MockHostCall[] = []
   const refusals: MockHostRefusal[] = []

@@ -33,6 +33,8 @@ export type ExecutePluginHostCallInput = {
   surface: PluginSurface
   /** Consented capability kinds; null = unknown/disabled/consent-stale. */
   grantedCapabilities: readonly PluginCapabilityKind[] | null
+  /** A development plugin, which may call proposed methods. */
+  allowProposed?: boolean
   services: PluginHostServices | null
   audit?: Pick<PluginAuditLog, 'record'>
   /** Re-checked right before the side effect; absent only in tests and the relay suite. */
@@ -46,7 +48,11 @@ export async function executePluginHostCall(
     return { ok: false, code: 'invalid_request', error: 'invalid qualified plugin key' }
   }
   const gate = decidePluginHostCall(
-    { grantedCapabilities: input.grantedCapabilities, surface: input.surface },
+    {
+      grantedCapabilities: input.grantedCapabilities,
+      surface: input.surface,
+      allowProposed: input.allowProposed
+    },
     input.method
   )
   if (!gate.granted) {

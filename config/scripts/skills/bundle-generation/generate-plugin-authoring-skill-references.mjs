@@ -208,7 +208,7 @@ function hookLines({ hooks, hookContribution, typeText }) {
 
 function renderHostApi(sources, { frame, worker }) {
   const { hostApi, hostDoc, capabilities } = sources
-  const names = hostApi.PLUGIN_HOST_METHOD_NAMES
+  const names = hostApi.PLUGIN_STABLE_HOST_METHOD_NAMES
   const methodsFor = (surface) => hostApi.pluginHostMethodsFor(surface).map(code).join(', ')
   const methods = names.map((name) => {
     const spec = hostApi.PLUGIN_HOST_API[name]

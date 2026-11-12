@@ -1,4 +1,5 @@
 import { getPluginHostMethodSpec } from '../workers/plugin-host-api'
+import { pluginHostMethodOffered } from '../workers/plugin-host-method-spec'
 import type { PluginCapabilityKind } from './plugin-capabilities'
 import type { PluginSurface } from '../frames/plugin-protocol'
 
@@ -28,12 +29,21 @@ export type PluginGateSubject = {
   grantedCapabilities: readonly PluginCapabilityKind[] | null
   /** Frames (panels, editors) have fewer callable methods than workers. */
   surface: PluginSurface
+  /** Development plugins may call proposed (not yet frozen) methods. */
+  allowProposed?: boolean
 }
 
 export function gatePluginHostCall(subject: PluginGateSubject, method: string): PluginGateDecision {
   const spec = getPluginHostMethodSpec(method)
   if (!spec) {
     return { granted: false, code: 'unknown_method', error: `unknown host method: ${method}` }
+  }
+  if (!pluginHostMethodOffered(spec, subject.allowProposed === true)) {
+    return {
+      granted: false,
+      code: 'not_permitted',
+      error: `method ${method} is proposed; development plugins only`
+    }
   }
   if (!spec.surfaces.includes(subject.surface)) {
     return {
