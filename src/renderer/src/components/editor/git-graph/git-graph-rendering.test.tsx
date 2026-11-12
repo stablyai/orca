@@ -92,47 +92,6 @@ const renderTab = () =>
   )
 const loadedCount = () => gitGraphHistoryForTab(workspaceId).view.getState().result?.items.length
 
-it('shows agent sessions on the branch of the workspace showing the graph', async () => {
-  const tabId = 'tab-1'
-  const paneKey = `${tabId}:11111111-1111-4111-8111-111111111111`
-  useAppStore.setState({
-    tabsByWorktree: {
-      [workspaceId]: [
-        {
-          id: tabId,
-          ptyId: null,
-          worktreeId: workspaceId,
-          title: 'claude',
-          customTitle: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 0
-        }
-      ]
-    },
-    agentStatusByPaneKey: {
-      [paneKey]: {
-        paneKey,
-        worktreeId: workspaceId,
-        tabId,
-        agentType: 'claude',
-        state: 'working',
-        prompt: 'Ship it',
-        updatedAt: 0,
-        stateStartedAt: 0,
-        stateHistory: []
-      }
-    }
-  })
-  getHistory.mockReset().mockResolvedValue({
-    ...result,
-    currentRef: { id: local.branch, name: 'main' },
-    items: [{ ...result.items[0], references: [{ id: local.branch, name: 'main' }] }]
-  })
-  await renderTab()
-  expect(container.querySelector('[aria-label^="Agents in this workspace"]')).not.toBeNull()
-})
-
 it('releases replaced history while the pane stays mounted', async () => {
   const count = 500_000
   viewport.rows = 40
@@ -253,3 +212,45 @@ async function expectReleased(obsolete: WeakRef<object>[]) {
     expect(value.deref()).toBeUndefined()
   }
 }
+
+// Why: last in the file because the release test above only passes as the file's first render.
+it('shows agent sessions on the branch of the workspace showing the graph', async () => {
+  const tabId = 'tab-1'
+  const paneKey = `${tabId}:11111111-1111-4111-8111-111111111111`
+  useAppStore.setState({
+    tabsByWorktree: {
+      [workspaceId]: [
+        {
+          id: tabId,
+          ptyId: null,
+          worktreeId: workspaceId,
+          title: 'claude',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 0
+        }
+      ]
+    },
+    agentStatusByPaneKey: {
+      [paneKey]: {
+        paneKey,
+        worktreeId: workspaceId,
+        tabId,
+        agentType: 'claude',
+        state: 'working',
+        prompt: 'Ship it',
+        updatedAt: 0,
+        stateStartedAt: 0,
+        stateHistory: []
+      }
+    }
+  })
+  getHistory.mockReset().mockResolvedValue({
+    ...result,
+    currentRef: { id: local.branch, name: 'main' },
+    items: [{ ...result.items[0], references: [{ id: local.branch, name: 'main' }] }]
+  })
+  await renderTab()
+  expect(container.querySelector('[aria-label^="Agents in this workspace"]')).not.toBeNull()
+})
