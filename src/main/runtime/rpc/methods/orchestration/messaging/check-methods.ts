@@ -23,7 +23,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
       kind: 'writes',
       caller: 'terminal',
       callerPane: 'terminalPaneKey',
-      targets: { run: 'run', ack: 'message' },
+      targets: { run: 'run', ack: 'message', ackIds: 'message' },
       collection: true
     },
     permission: 'workspace',
@@ -76,7 +76,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
           recordMutationReceipt
         })
         return releasing(
-          consumingCheck && !(params.ack && !params.wait)
+          consumingCheck && !params.ackIds && !(params.ack && !params.wait)
             ? await withRunCheckNext(runtime, result)
             : result
         )
@@ -133,8 +133,36 @@ export const ORCHESTRATION_CHECK_METHODS = [
         )
       }
       return releasing(
-        await checkDirectMailbox({ params, runtime, db, handle, typeFilter, signal })
+        await checkDirectMailbox({
+          params,
+          runtime,
+          db,
+          handle,
+          typeFilter,
+          signal,
+          recordMutationReceipt
+        })
       )
+    }
+  }),
+  defineOrchestrationMethod({
+    name: 'orchestration.ackMessages',
+    permission: 'workspace',
+    params: CheckParams,
+    access: {
+      kind: 'writes',
+      caller: 'terminal',
+      callerPane: 'terminalPaneKey',
+      targets: { run: 'run', ackIds: 'message' },
+      collection: true
+    },
+    handler: (params, ctx): Promise<unknown> => {
+      if (!params.ackIds) {
+        throw new OrchestrationError('invalid_argument', 'ackMessages requires ackIds.', {
+          effectsApplied: false
+        })
+      }
+      return ORCHESTRATION_CHECK_METHODS[0]!.handler(params, ctx)
     }
   })
 ]

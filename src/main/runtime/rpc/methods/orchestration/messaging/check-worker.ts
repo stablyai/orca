@@ -11,6 +11,7 @@ import { interruptedAcknowledgedCheck } from '../routing'
 import { currentDispatchAssigneeRun } from './recipient-routing'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import type { z } from 'zod'
+import { acknowledgeSelectedMessages } from './selective-message-ack'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
 type ActiveDispatch = NonNullable<ReturnType<OrchestrationDb['getActiveDispatchForIdentity']>>
@@ -178,6 +179,12 @@ export async function checkWorkerMailbox(args: {
   }
   await revalidateWorkerMailbox()
   args.revalidateConsumer?.()
+  if (params.ackIds) {
+    return {
+      ...mailboxIdentity,
+      ...acknowledgeSelectedMessages(db, address, params.ackIds, args.recordMutationReceipt)
+    }
+  }
   let acknowledged
   try {
     acknowledged = params.ack
