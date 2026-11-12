@@ -24,7 +24,7 @@ export function renderOrcaAccountSettingsSection(
       title={t('auto.components.settings.orcaAccount.title', 'Orca account')}
       description={
         model.orcaCloudApiAvailable
-          ? t('settings.orcaAccount.descriptionIdentity', 'The Orca account you’re signed in with.')
+          ? t('settings.orcaAccount.descriptionAccount', 'Sign in to Orca and see which account and team you use.')
           : t(
               'auto.components.settings.orcaAccount.description',
               'Share work instantly and reach your desktop from Orca Mobile wherever you are.'

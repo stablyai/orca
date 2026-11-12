@@ -1404,7 +1404,8 @@
       "orcaCloud": "Orca Cloud"
     },
     "orcaAccount": {
-      "descriptionIdentity": "The Orca account you’re signed in with."
+      "descriptionIdentity": "The Orca account you’re signed in with.",
+      "descriptionAccount": "Sign in to Orca and see which account and team you use."
     },
     "agentAccounts": {
       "searchTitle": "Agent accounts",
@@ -20610,7 +20611,6 @@
         "overageNoPlan": "Overage needs an active plan.",
         "resets": "Hours reset {{value0}}",
         "overageTitle": "Overage",
-        "overageSpent": "{{value0}} of {{value1}} monthly cap spent",
         "saveCap": "Save",
         "monthly": "Monthly",
         "annual": "Annual",
@@ -20918,9 +20918,6 @@
         "teamPlanTitle": "{{team}} · {{plan}} plan",
         "planTitle": "{{plan}} plan",
         "overage": {
-          "capHint": "{{rate}} per sandbox hour after your included hours, billed by the minute. $0 keeps overage off.",
-          "memberOn": "On, up to {{cap}} a month.",
-          "memberOff2": "Off. Ask an owner or admin to turn it on.",
           "turnOn": "Turn on with a {{cap}} cap"
         },
         "usage": {
@@ -23711,6 +23708,17 @@
         "sendBlockedFailedCloud": "Retry creating the workspace to send",
         "sendBlockedHeldCloud": "Sends when the workspace is ready"
       }
+    },
+    "billing": {
+      "overage": {
+        "capHint2": "{{rate}} per sandbox hour after your included hours, billed by the minute.",
+        "offStatus2": "Overage is off. Running sandboxes go to sleep and new ones can’t start when your team runs out of sandbox hours.",
+        "turnOff": "Turn off overage",
+        "memberOn5": "Overage is on, up to your {{cap}} spend cap.",
+        "memberOff5": "Off until an owner or admin turns it on."
+      },
+      "overageUsed": "{{value0}} of {{value1}} used",
+      "capZero2": "Set a spend cap above $0, or turn overage off."
     }
   },
   "dashboardPopout": {

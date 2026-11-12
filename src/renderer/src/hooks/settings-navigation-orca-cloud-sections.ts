@@ -168,7 +168,15 @@ export function gatherOrcaCloudSettingsGroup(
   const leads = leadIds
     .map((id) => sections.find((section) => section.id === id))
     .filter((section): section is SettingsNavSection => section !== undefined)
-    .map((section) => ({ ...section, group: 'orca-cloud' as const }))
+    .map((section) => ({
+      ...section,
+      group: 'orca-cloud' as const,
+      // Matches the page's own description (settings-setup-workflow-section-renderers).
+      description: translate(
+        'settings.orcaAccount.descriptionAccount',
+        'Sign in to Orca and see which account and team you use.'
+      )
+    }))
   const rest = sections.filter((section) => !leadIds.includes(section.id))
   const firstCloud = rest.findIndex((section) => section.group === 'orca-cloud')
   const at = firstCloud === -1 ? rest.length : firstCloud

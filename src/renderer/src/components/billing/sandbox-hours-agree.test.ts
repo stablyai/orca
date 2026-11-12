@@ -1,6 +1,8 @@
 // JA-07: home, Plan & billing, the composer and the account menu once showed four numbers for the
 // same hours. Every surface now goes through one rounding rule; these pin it.
 import { describe, expect, it } from 'vitest'
+import type { Translate } from '@/i18n/use-translate'
+import type { OrcaBillingUsageHistory } from '../../../../shared/orca-billing'
 import { getOrcaCloudHoursLeft } from '../new-workspace/orca-cloud-run-target-access'
 import { formatHoursUsed, sandboxHoursLeft, sandboxHoursUsed } from './plan-billing-format'
 import { sandboxHoursCount } from './plan-billing-usage-copy'
@@ -39,4 +41,23 @@ describe('sandbox hours: one rule on every surface', () => {
       expect(Math.round(total * 10) / 10).toBe(180)
     }
   })
+
+  // JA-07 re-run: member page showed "18 used" beside "17.9 in 30 days" for the same usage.
+  it('usage amounts on Plan & billing round like "used"', async () => {
+    const { usageWindowTotalLine, yourUsageLine } = await import('./plan-billing-usage-history')
+    const t: Translate = (_key, fallback, values) =>
+      fallback.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(values?.[name] ?? ''))
+    const seconds = 17.94 * HOUR
+    const history: OrcaBillingUsageHistory = {
+      days: [],
+      totalSeconds: seconds,
+      yourSeconds: seconds,
+      members: null,
+      sandboxes: null
+    }
+    expect(formatHoursUsed(seconds)).toBe('18')
+    expect(usageWindowTotalLine(seconds, t)).toContain('18 sandbox hours in 30 days')
+    expect(yourUsageLine(history, t)).toContain('You used 18 of')
+  })
 })
+

@@ -59,6 +59,10 @@ describe('Orca Cloud settings group', () => {
     expect(setup.find((section) => section.id === 'orca-account')?.description).toBe(
       'The Orca account you’re signed in with.'
     )
+    const gathered = gatherOrcaCloudSettingsGroup(setup, options({}))
+    expect(gathered.find((section) => section.id === 'orca-account')?.description).toBe(
+      'Sign in to Orca and see which account and team you use.'
+    )
     const local = buildSetupSettingsSections(options({ isOrcaCloudApiAvailable: false }))
     expect(local.find((section) => section.id === 'orca-account')?.description).not.toMatch(
       /Orca Cloud/

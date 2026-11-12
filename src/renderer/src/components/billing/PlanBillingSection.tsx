@@ -44,11 +44,13 @@ export function PlanBillingSection(): React.JSX.Element | null {
   const entitlement = result?.status === 'ok' ? result.entitlement : null
   const hasPlan =
     entitlement !== null && entitlement.plan !== null && entitlement.status !== 'canceled'
-  // Re-read the history with every billing read (it re-reads on window focus).
+  // Re-read the history with every billing read (it re-reads on window focus). The first read
+  // starts with the page, not after the plan read answers, so the chart isn't a second behind it.
+  // Main reads for the active profile; without the account summary yet, key it as that profile so
+  // the chart still loads instead of waiting on a key that never comes.
+  const accountKey = cloud ? `${cloud.userId}:${cloud.activeOrgId ?? ''}` : 'active-profile'
   const usage = usePlanBillingUsageHistory(
-    hasPlan && cloud
-      ? `${cloud.userId}:${cloud.activeOrgId ?? ''}|${entitlement.usedSeconds}`
-      : null,
+    hasPlan || result === null ? `${accountKey}|${entitlement?.usedSeconds ?? ''}` : null,
     cloud?.activeOrgId ?? null,
     cloud?.userId ?? null,
     entitlement?.canManageBilling === true
