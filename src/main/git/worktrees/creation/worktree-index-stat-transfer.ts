@@ -2,10 +2,13 @@ import { createHash } from 'node:crypto'
 import type { BigIntStats } from 'node:fs'
 import { lstat, open, readFile, rename, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
+import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { gitExecOptions, type GitWorktreeExecOptions } from '../worktree-operation-options'
 
 const LIST_MAX_BUFFER = 512 * 1024 * 1024
+// Bounds in-flight lstats so large repos do not flood libuv's pool for the whole main process.
+export const STAT_CONCURRENCY = 32
 const NS_PER_S = 1_000_000_000n
 const UINT32 = 0xffffffffn
 // An index Git writes in the one layout this module patches: fixed-size v2 entries, no shared
@@ -247,32 +250,30 @@ async function recordCleanStats(
   }
 
   let recorded = 0
-  await Promise.all(
-    targets.map(async (target) => {
-      const source = sources.get(target.path)
-      if (
-        !source ||
-        source.oid !== target.oid ||
-        source.mode !== target.mode ||
-        target.path.includes('�') ||
-        !(await isSourceClean(join(repoPath, target.path), source, indexMtime))
-      ) {
-        return
-      }
-      const clone = await lstat(join(worktreePath, target.path), { bigint: true }).catch(() => null)
-      // A clone keeps its source's size and mtime; anything else was not cloned from that file.
-      if (
-        !clone?.isFile() ||
-        fileMode(clone.mode) !== target.mode ||
-        (clone.size & UINT32) !== source.size ||
-        !same(split(clone.mtimeNs), source.mtime)
-      ) {
-        return
-      }
-      writeStat(index, target.offset, clone)
-      recorded++
-    })
-  )
+  await forEachWithConcurrency(targets, STAT_CONCURRENCY, async (target) => {
+    const source = sources.get(target.path)
+    if (
+      !source ||
+      source.oid !== target.oid ||
+      source.mode !== target.mode ||
+      target.path.includes('�') ||
+      !(await isSourceClean(join(repoPath, target.path), source, indexMtime))
+    ) {
+      return
+    }
+    const clone = await lstat(join(worktreePath, target.path), { bigint: true }).catch(() => null)
+    // A clone keeps its source's size and mtime; anything else was not cloned from that file.
+    if (
+      !clone?.isFile() ||
+      fileMode(clone.mode) !== target.mode ||
+      (clone.size & UINT32) !== source.size ||
+      !same(split(clone.mtimeNs), source.mtime)
+    ) {
+      return
+    }
+    writeStat(index, target.offset, clone)
+    recorded++
+  })
   if (recorded > 0) {
     createHash(hashLength === 32 ? 'sha256' : 'sha1')
       .update(index.subarray(0, index.length - hashLength))

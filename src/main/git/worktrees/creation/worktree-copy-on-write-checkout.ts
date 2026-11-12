@@ -4,7 +4,12 @@ import { dirname, join } from 'node:path'
 import { canCloneWithApfs } from '../../../ipc/worktree-apfs-clone'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { gitExecOptions, type GitWorktreeExecOptions } from '../worktree-operation-options'
-import { readTreeIntoPlainIndex, transferCleanIndexStats } from './worktree-index-stat-transfer'
+import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import {
+  readTreeIntoPlainIndex,
+  STAT_CONCURRENCY,
+  transferCleanIndexStats
+} from './worktree-index-stat-transfer'
 import { canReflinkIntoDirectory } from './worktree-reflink-probe'
 
 /** `git config orca.copyOnWriteCheckout false` (repo or global) turns cloned checkouts off. */
@@ -171,16 +176,12 @@ async function withFreshCheckoutStat(
   // Git creates the worktree's `.git` file like a checked-out file: 0666 minus the umask.
   const regular = (await lstat(join(worktreePath, '.git'))).mode & 0o777
   const executable = regular | ((regular & 0o444) >> 2)
-  const keep = await Promise.all(
-    paths.map(async (path) => {
-      const stat = await lstat(join(repoPath, path)).catch(() => null)
-      const file = files.get(path)
-      const expected = file?.mode === '100755' ? executable : regular
-      return (
-        stat?.isFile() === true && (stat.mode & 0o7777) === expected && stat.size === file?.size
-      )
-    })
-  )
+  const keep = await mapWithConcurrency(paths, STAT_CONCURRENCY, async (path) => {
+    const stat = await lstat(join(repoPath, path)).catch(() => null)
+    const file = files.get(path)
+    const expected = file?.mode === '100755' ? executable : regular
+    return stat?.isFile() === true && (stat.mode & 0o7777) === expected && stat.size === file?.size
+  })
   return paths.filter((_, i) => keep[i])
 }
 
