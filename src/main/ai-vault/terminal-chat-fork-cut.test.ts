@@ -1,4 +1,4 @@
-import '../claude/claude-conversation-worker.test-fixture'
+import '../claude/transcripts/claude-conversation-worker.test-fixture'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
