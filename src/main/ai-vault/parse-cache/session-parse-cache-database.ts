@@ -24,7 +24,7 @@ import {
   type SkippedTranscriptRecord
 } from '../transcripts/session-transcript-record-budget'
 
-// Bump for row-layout or cached-semantic changes; mismatched databases are discarded.
+// Bump for row-layout or cached-semantic changes; each version keeps its own database file.
 export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 9
 
 const SCHEMA_SQL = `

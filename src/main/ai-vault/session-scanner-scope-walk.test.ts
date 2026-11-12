@@ -34,6 +34,7 @@ import {
   writeAntigravityTranscript,
   writeAntigravityHistory
 } from './session-scanner-test-fixtures'
+import { sessionParseCacheDatabasePath } from './parse-cache/session-parse-cache-version-files'
 
 let tempRoots: string[] = []
 
@@ -79,7 +80,7 @@ it.each(['prefetch', 'read'] as const)('keeps an evicted parse from %s', async (
     if (boundary === 'read') {
       await flushSessionParseCachePersist()
     }
-    const db = new SyncDatabase(join(root, 'session-parse-cache.sqlite'))
+    const db = new SyncDatabase(sessionParseCacheDatabasePath(root))
     expect(db.prepare('SELECT path FROM rows WHERE path = ?').get(path) !== undefined).toBe(
       boundary === 'read'
     )

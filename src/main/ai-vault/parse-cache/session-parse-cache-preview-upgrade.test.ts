@@ -15,6 +15,7 @@ import {
 import { createSessionParseStats, parseAgentSessionFileCached } from './session-scanner-parse-cache'
 
 import type { SessionFileCandidate } from '../session-scanner-types'
+import { sessionParseCacheDatabasePath } from './session-parse-cache-version-files'
 
 let root: string | undefined
 
@@ -58,7 +59,7 @@ it('reparses unchanged transcripts whose cached previews included reasoning', as
   if (!entry?.session) {
     throw new Error('Expected parsed session')
   }
-  const dbPath = join(root, 'session-parse-cache.sqlite')
+  const dbPath = sessionParseCacheDatabasePath(root)
   const cache = new SessionParseCacheDatabase(dbPath)
   try {
     cache.write(

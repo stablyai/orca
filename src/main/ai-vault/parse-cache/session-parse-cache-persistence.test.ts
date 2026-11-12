@@ -33,6 +33,7 @@ import { parseClaudeSessionFile } from '../scanners/claude/session-scanner-prima
 import { parseSessionCandidate } from '../session-scanner-candidate-parse'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from '../transcripts/session-transcript-record-budget'
 import type { FileWithMtime, SessionFileCandidate } from '../session-scanner-types'
+import { sessionParseCacheDatabasePath } from './session-parse-cache-version-files'
 
 const hooks = vi.hoisted(() => {
   const state: { beforeParse: (() => Promise<void>) | null } = { beforeParse: null }
@@ -135,7 +136,7 @@ function simulateRestart(cacheFile: string): void {
 }
 
 function databaseRows(cacheFile: string): { path: string; seen_at: number }[] {
-  const db = new SyncDatabase(join(dirname(cacheFile), 'session-parse-cache.sqlite'))
+  const db = new SyncDatabase(sessionParseCacheDatabasePath(dirname(cacheFile)))
   try {
     return db
       .prepare('SELECT path, seen_at FROM rows ORDER BY path')
@@ -147,7 +148,7 @@ function databaseRows(cacheFile: string): { path: string; seen_at: number }[] {
 }
 
 function setSeenAt(cacheFile: string, path: string, seenAt: number): void {
-  const db = new SyncDatabase(join(dirname(cacheFile), 'session-parse-cache.sqlite'))
+  const db = new SyncDatabase(sessionParseCacheDatabasePath(dirname(cacheFile)))
   db.prepare('UPDATE rows SET seen_at = ? WHERE path = ?').run(seenAt, path)
   db.close()
 }
@@ -175,7 +176,7 @@ describe('session parse cache persistence', () => {
     resetSessionParseCachePersistenceForTests()
     resetSessionParseCacheForTests()
 
-    const database = new SessionParseCacheDatabase(join(root, 'session-parse-cache.sqlite'))
+    const database = new SessionParseCacheDatabase(sessionParseCacheDatabasePath(root))
     try {
       const stored = database.readScopeCwds(paths).found
       expect(stored.size).toBe(paths.length)
@@ -205,6 +206,50 @@ describe('session parse cache persistence', () => {
     const reused = await parseAgentSessionFileCached(candidate, process.platform, reusedStats)
     expect(reusedStats).toMatchObject({ reused: 1, fullParses: 0, incremental: 0, bytesRead: 0 })
     expect(reused).toEqual(first)
+  })
+
+  it('keeps its rows while builds on other schema versions share the folder, and prunes all but one of theirs not in use', async () => {
+    const root = await makeTempDir()
+    const cacheFile = join(root, 'session-parse-cache.json')
+    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
+    const transcript = await writeTranscript(root)
+    await parse(transcript)
+    await flushSessionParseCachePersist()
+    resetSessionParseCachePersistenceForTests()
+    // A pre-versioning build replaces its file with its own schema on start; two older ones were used before it.
+    const otherBuild = (name: string, version: number, usedAt: number) => {
+      const db = new SyncDatabase(join(root, name))
+      db.exec('CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+      db.prepare("INSERT INTO meta VALUES ('schema_version', ?)").run(String(version))
+      db.close()
+      return utimes(join(root, name), usedAt, usedAt)
+    }
+    await rm(join(root, 'session-parse-cache.sqlite'), { force: true })
+    await otherBuild('session-parse-cache.sqlite', 8, 3_000)
+    await otherBuild('session-parse-cache.v7.sqlite', 7, 2_000)
+    await otherBuild('session-parse-cache.v6.sqlite', 6, 1_000)
+    await otherBuild('session-parse-cache.v5.sqlite', 5, 500)
+    const running = new SyncDatabase(join(root, 'session-parse-cache.v5.sqlite'))
+    running.pragma('journal_mode = WAL')
+    running.prepare('SELECT * FROM meta').all()
+    // Still open, yet the least recently written: only the open check keeps it.
+    for (const suffix of ['', '-wal']) {
+      await utimes(join(root, `session-parse-cache.v5.sqlite${suffix}`), 500, 500)
+    }
+
+    try {
+      simulateRestart(cacheFile)
+      expect(await parse(transcript)).toMatchObject({ reused: 1, fullParses: 0 })
+      expect((await readdir(root)).filter((name) => name.endsWith('.sqlite')).sort()).toEqual(
+        [
+          'session-parse-cache.sqlite',
+          'session-parse-cache.v5.sqlite',
+          `session-parse-cache.v${SESSION_PARSE_CACHE_SCHEMA_VERSION}.sqlite`
+        ].sort()
+      )
+    } finally {
+      running.close()
+    }
   })
 
   it('scanAiVaultSessions reads the database and writes after parsing', async () => {
@@ -246,7 +291,7 @@ describe('session parse cache persistence', () => {
     )
     const candidate = await claudeCandidate(transcript)
     const session = await parseAgentSessionFileCached(candidate, process.platform)
-    const oldDatabase = new SyncDatabase(join(root, 'session-parse-cache.sqlite'))
+    const oldDatabase = new SyncDatabase(sessionParseCacheDatabasePath(root))
     oldDatabase.exec(`
       CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
       INSERT INTO meta VALUES ('schema_version', '8');
@@ -374,7 +419,7 @@ describe('session parse cache persistence', () => {
   it('rebuilds a corrupt database instead of failing the scan', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
-    await writeFile(join(root, 'session-parse-cache.sqlite'), 'not a database at all'.repeat(512))
+    await writeFile(sessionParseCacheDatabasePath(root), 'not a database at all'.repeat(512))
     vi.spyOn(console, 'debug').mockImplementation(() => {})
     initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
     const transcript = await writeTranscript(root)

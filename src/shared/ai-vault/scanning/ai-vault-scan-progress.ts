@@ -22,6 +22,8 @@ export type AiVaultScanWork = {
   agents: AiVaultScanAgentProgress[]
   /** Fixed candidate workload; settled work is done + skipped. */
   read: AiVaultScanReadingProgress
+  /** Transcript bytes this scan read from disk (parses and scope cwd probes); cache hits add none. */
+  contentBytesRead: number
 }
 
 /** One local Session History scan entry, as main pushes it to windows. */
