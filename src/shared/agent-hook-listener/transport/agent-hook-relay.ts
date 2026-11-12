@@ -29,6 +29,7 @@ const AGENT_HOOK_SOURCES = [
   'pi',
   'omp',
   'prime-agent',
+  'gentle-shell',
   'droid',
   'command-code',
   'grok',

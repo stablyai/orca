@@ -5,25 +5,32 @@ import { extractAgentLaunchCommand } from './agent-launch/startup/agent-command-
 
 /** Pi-compatible agents share PI_CODING_AGENT_DIR and extension APIs but have separate user directories.
  * Never cross-fallback: switching agents must not shadow the other agent’s extensions. */
-export type PiAgentKind = 'pi' | 'omp' | 'prime-agent'
+export type PiAgentKind = 'pi' | 'omp' | 'prime-agent' | 'gentle-shell'
 
 export const PRIMARY_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>> = {
   pi: 'PI_CODING_AGENT_DIR',
   omp: 'PI_CODING_AGENT_DIR',
-  'prime-agent': 'PRIME_AGENT_CODING_AGENT_DIR'
+  'prime-agent': 'PRIME_AGENT_CODING_AGENT_DIR',
+  'gentle-shell': 'PI_CODING_AGENT_DIR'
 }
 
 export const SOURCE_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>> = {
   pi: 'ORCA_PI_SOURCE_AGENT_DIR',
   omp: 'ORCA_OMP_SOURCE_AGENT_DIR',
-  'prime-agent': 'ORCA_PRIME_AGENT_SOURCE_AGENT_DIR'
+  'prime-agent': 'ORCA_PRIME_AGENT_SOURCE_AGENT_DIR',
+  'gentle-shell': 'ORCA_GENTLE_SHELL_SOURCE_AGENT_DIR'
 }
 
 /** Pi-compatible agents emit agent_end milestones while still working; do not treat every event as turn completion. */
 export function isPiCompatibleAgentType(
   agentType: string | null | undefined
 ): agentType is PiAgentKind {
-  return agentType === 'pi' || agentType === 'omp' || agentType === 'prime-agent'
+  return (
+    agentType === 'pi' ||
+    agentType === 'omp' ||
+    agentType === 'prime-agent' ||
+    agentType === 'gentle-shell'
+  )
 }
 
 function getLaunchBinary(command: string): string {
@@ -35,6 +42,7 @@ function getLaunchBinary(command: string): string {
 const PI_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.pi.launchCmd)
 const OMP_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.omp.launchCmd)
 const PRIME_AGENT_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG['prime-agent'].launchCmd)
+const GENTLE_SHELL_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG['gentle-shell'].launchCmd)
 
 export function detectExplicitPiAgentKindFromCommand(
   command: string | undefined
@@ -49,6 +57,9 @@ export function detectExplicitPiAgentKindFromCommand(
   }
   if (binary === PRIME_AGENT_LAUNCH_BINARY) {
     return 'prime-agent'
+  }
+  if (binary === GENTLE_SHELL_LAUNCH_BINARY) {
+    return 'gentle-shell'
   }
   return binary === PI_LAUNCH_BINARY ? 'pi' : null
 }

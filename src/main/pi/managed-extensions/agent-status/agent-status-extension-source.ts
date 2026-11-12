@@ -10,9 +10,11 @@ export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
 
 /** Self-contained source runs inside Pi-family agents without Orca module imports. */
 export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): string {
+  // gentle-shell wraps Pi: it reports on its own route but follows Pi event semantics.
+  const behavior = kind === 'gentle-shell' ? 'pi' : kind
   // OMP resumes by id; its persistent file path lets native chat skip discovery.
   const sessionMetadataSourceLines =
-    kind !== 'omp'
+    behavior !== 'omp'
       ? [
           'let sessionMetadata: Record<string, unknown> = {}',
           'let runtimeOmpSessionMetadata: Record<string, unknown> = {}',
@@ -105,7 +107,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
 
   // Pi resumes by transcript; OMP resumes by session ID (#8962).
   const payloadLine =
-    kind !== 'omp'
+    behavior !== 'omp'
       ? '    payload: { hook_event_name: hookEventName, ...(ompRuntime ? metadata : getPersistedSessionMetadata(metadata)), ...subagents, ...extra },'
       : '    payload: { hook_event_name: hookEventName, ...metadata, ...subagents, ...extra },'
 
@@ -116,8 +118,8 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     'let warnedBadEndpoint = false',
     '// Pi awaits handlers; deliver asynchronously with bounded pending state to avoid blocking turns.',
     'const HOOK_POST_TIMEOUT_MS = 1000',
-    ...getPiAgentStatusPostQueueSourceLines(kind),
-    ...(kind === 'pi' ? ['let piUiPromptDepth = 0', 'let piTurnInFlight = false'] : []),
+    ...getPiAgentStatusPostQueueSourceLines(behavior),
+    ...(behavior === 'pi' ? ['let piUiPromptDepth = 0', 'let piTurnInFlight = false'] : []),
     ...modelMetadataSourceLines,
     '',
     ...getPiSubagentSnapshotSourceLines(),
@@ -195,7 +197,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '    delivered: false,',
     "    hookEventName: ompRuntime && hookEventName === 'model_select' && previousCompletion ? 'agent_end' : hookEventName,",
     // Every coalesced snapshot must retain current modal state.
-    kind === 'pi'
+    behavior === 'pi'
       ? '    extra: { ...extra, ...(!ompRuntime && piUiPromptDepth > 0 ? { ui_prompt_active: true } : {}) },'
       : '    extra,',
     '    metadata,',
@@ -260,6 +262,6 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '}',
     '',
     ...getPiAgentStatusWslCurlSourceLines(),
-    ...getPiAgentStatusHandlerSourceLines(kind)
+    ...getPiAgentStatusHandlerSourceLines(behavior)
   ].join('\n')
 }

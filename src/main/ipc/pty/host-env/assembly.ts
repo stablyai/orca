@@ -24,6 +24,7 @@ import type { BuildPtyHostEnvOptions } from './types'
 import { stripInheritedOrcaCodexHomeOverride } from './codex-home'
 import {
   clearPiAgentShadowEnv,
+  exposeGentleShellStatusExtension,
   exposePiManagedExtensionEnv,
   isMimoLaunchCommand,
   resolveMimocodeSourceConfigDir,
@@ -174,6 +175,7 @@ export function buildPtyHostEnv(
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
     clearPiAgentShadowEnv(baseEnv, 'prime-agent')
+    clearPiAgentShadowEnv(baseEnv, 'gentle-shell')
     // Bare shells must not create agent homes; use existing Pi/OMP directories or userData for OMP status (#10196).
     if (shouldInstallPiExtensions && piAgentKind === 'pi') {
       const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi', {
@@ -199,6 +201,10 @@ export function buildPtyHostEnv(
       // Keep guarded OMP launches supplied with a fresh config even when its
       // managed status extension is disabled.
       Object.assign(baseEnv, piTitlebarExtensionService.buildFreshOmpEnv())
+    }
+
+    if (!opts.isWsl && isTuiAgentEnabled('gentle-shell', opts.disabledTuiAgents)) {
+      exposeGentleShellStatusExtension(baseEnv, piAgentKind, hasLaunchCommand)
     }
 
     if (shouldInstallPrimeAgentExtensions && piAgentKind === 'prime-agent' && !opts.isWsl) {
@@ -229,6 +235,7 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
+    delete baseEnv.ORCA_GENTLE_SHELL_STATUS_EXTENSION
   }
 
   if (opts.isWsl && opts.agentStatusHooksEnabled) {

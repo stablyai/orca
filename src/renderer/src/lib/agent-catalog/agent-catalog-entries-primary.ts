@@ -133,6 +133,12 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://github.com/PrimeIntellect-ai/prime-agent'
     },
     {
+      id: 'gentle-shell',
+      label: translate('auto.lib.agent.catalog.d95becfa2a', 'gentle-shell'),
+      cmd: 'gentle-shell',
+      homepageUrl: 'https://github.com/Gentleman-Programming/gentle-shell'
+    },
+    {
       id: 'gemini',
       label: translate('auto.lib.agent.catalog.12e6baa4f7', 'Gemini'),
       cmd: 'gemini',

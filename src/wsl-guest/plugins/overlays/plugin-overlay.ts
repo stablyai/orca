@@ -26,7 +26,7 @@ import {
   openCodeTuiPluginDirName,
   writeOpenCodeTuiPlugin
 } from '../../../shared/opencode-tui-plugin-install'
-type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent' | 'gentle-shell'>
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
 const OPENCODE2_OVERLAY_SUBDIR = 'opencode2-overlays'
@@ -55,7 +55,8 @@ function withOrcaManagedPiExtensionMarker(source: string): string {
 const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
-  'prime-agent': '.prime'
+  'prime-agent': '.prime',
+  'gentle-shell': '.gentle-shell'
 }
 function safeDirName(input: string): string {
   // Hash pane keys into portable directory names because embedded tab ids can contain unsafe characters.
@@ -83,7 +84,8 @@ export class PluginOverlayManager {
   private piExtensionSources: Record<PiAgentKind, string | null> = {
     pi: null,
     omp: null,
-    'prime-agent': null
+    'prime-agent': null,
+    'gentle-shell': null
   }
   private homeDir: string
   private opencodeRoot: string

@@ -11,6 +11,15 @@ describe('detectExplicitPiAgentKindFromCommand', () => {
     expect(detectExplicitPiAgentKindFromCommand('python3 script.py')).toBeNull()
   })
 
+  it('identifies gentle-shell launches by executable name', () => {
+    expect(detectExplicitPiAgentKindFromCommand('gentle-shell')).toBe('gentle-shell')
+    expect(detectExplicitPiAgentKindFromCommand('/opt/bin/gentle-shell --resume')).toBe(
+      'gentle-shell'
+    )
+    expect(detectExplicitPiAgentKindFromCommand('GENTLE-SHELL.CMD')).toBe('gentle-shell')
+    expect(detectExplicitPiAgentKindFromCommand('gentle-shell "compare pi"')).toBe('gentle-shell')
+  })
+
   it('classifies the launched agent instead of mentions in its arguments', () => {
     expect(detectExplicitPiAgentKindFromCommand('pi "compare omp"')).toBe('pi')
     expect(detectExplicitPiAgentKindFromCommand('omp "compare pi"')).toBe('omp')
@@ -21,7 +30,10 @@ describe('detectExplicitPiAgentKindFromCommand', () => {
 })
 
 describe('detectExplicitPiAgentKindFromCommand after a sleep prefix', () => {
-  it.each(['pi', 'omp', 'prime-agent'] as const)('prepares the %s integration', (agent) => {
-    expect(detectExplicitPiAgentKindFromCommand(`sleep 30 && ${agent}`)).toBe(agent)
-  })
+  it.each(['pi', 'omp', 'prime-agent', 'gentle-shell'] as const)(
+    'prepares the %s integration',
+    (agent) => {
+      expect(detectExplicitPiAgentKindFromCommand(`sleep 30 && ${agent}`)).toBe(agent)
+    }
+  )
 })
