@@ -8,6 +8,7 @@ import {
   type MobileImageSource
 } from '../../platform/media-picker-contract'
 import { attachMobileImageToTerminal } from './mobile-image-attachment'
+import { fitMobileAgentImage } from './mobile-agent-image-fit'
 
 type CurrentRef<T> = {
   readonly current: T
@@ -68,6 +69,7 @@ export function useMobileImageAttachment({
           getConnectionId: getActiveWorktreeConnectionId,
           pickImage: picker.pickImage,
           onUploadStart: () => setIsAttaching(true),
+          fitImage: fitMobileAgentImage,
           beforeTerminalSend
         })
         if (sent) {

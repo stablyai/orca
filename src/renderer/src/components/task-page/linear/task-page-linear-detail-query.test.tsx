@@ -2,16 +2,16 @@
 import { reads, task } from './task-page-linear-refresh-test-fixtures'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-import { getIssue } from '../../../../../main/linear/linear-issue-lookups'
-import { createLinearClient, loadLinearSdk } from '../../../../../main/linear/linear-sdk'
-import { ISSUE_QUERY } from '../../../../../main/linear/issue-context/raw'
+import { getIssue } from '../../../../../main/linear/issues/linear-issue-lookups'
+import { createLinearClient, loadLinearSdk } from '../../../../../main/linear/requests/linear-sdk'
+import { ISSUE_QUERY } from '../../../../../main/linear/issues/context/issue-context-graphql'
 
 const clients = vi.hoisted(() => ({ get: vi.fn() }))
-vi.mock('../../../../../main/linear/client', () => ({
+vi.mock('../../../../../main/linear/accounts/linear-account-client', () => ({
   getClients: clients.get,
   isAuthError: (error: unknown) => error instanceof loadLinearSdk().AuthenticationLinearError
 }))
-vi.mock('../../../../../main/linear/linear-token-store', () => ({ clearToken: vi.fn() }))
+vi.mock('../../../../../main/linear/accounts/linear-token-store', () => ({ clearToken: vi.fn() }))
 
 const child = {
   id: 'child',

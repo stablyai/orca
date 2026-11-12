@@ -14,7 +14,7 @@ import {
 import { checksPanelAsyncResultKey } from './checks-panel-async-result-key'
 import { recordChecksPanelPRRefreshBreadcrumb } from './checks-panel-pr-refresh-breadcrumb'
 import { getHostedReviewManualRefreshError } from '../../hosted-review/provider-actions/github-refresh-error-copy'
-import type { PRInfo } from '../../../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import {
   checksPanelManualRefreshProvider,
   refreshChecksPanelHostedReview,

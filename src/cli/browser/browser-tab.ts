@@ -5,23 +5,23 @@ import type {
   BrowserTabShowResult,
   BrowserTabSwitchResult
 } from '../../shared/browser/runtime/runtime-browser-contracts'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import {
   formatTabAnnotations,
   formatTabList,
   formatTabListWithProfiles,
   formatTabShow
 } from './browser-format'
-import { printResult } from '../format'
+import { printResult } from '../output/command-result-output'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
   getPresentStringFlag,
   getRequiredStringFlag
-} from '../flags'
+} from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 import { isBrowserTabSplitDirection } from '../../shared/browser-tab-split-direction'
-import { getBrowserWorktreeSelector } from '../selectors'
+import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
 import { getBrowserCommandTarget } from './browser-command-target'
 
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {

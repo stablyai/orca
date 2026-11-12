@@ -10,6 +10,7 @@ export const COMPUTER_ERROR_CODES = {
   permission_denied: 'permission_denied',
   element_not_found: 'element_not_found',
   element_not_clickable: 'element_not_clickable',
+  element_not_enabled: 'element_not_enabled',
   action_not_supported: 'action_not_supported',
   value_not_settable: 'value_not_settable',
   invalid_argument: 'invalid_argument',
@@ -107,8 +108,6 @@ export type ComputerActionVerification =
   | {
       state: 'verified'
       property: 'focusedText' | 'selection' | 'value'
-      expected?: string | null
-      actualPreview?: string | null
     }
   | {
       state: 'unverified'
@@ -122,7 +121,7 @@ export type ComputerActionVerification =
         | 'value_mismatch'
         // The accessibility call succeeded but the window and the app's windows looked the same about a second later.
         | 'suspected_noop'
-      expected?: string | null
+      // Only on value_mismatch from a non-secure field; results never repeat the requested value.
       actualPreview?: string | null
     }
 
@@ -161,6 +160,8 @@ export type ComputerProviderCapabilities = {
       ocr: boolean
       // Absent from runtimes that predate action-result tree diffs.
       treeDiff?: boolean
+      // Tree lines mark disabled elements with a `(disabled)` trait. Absent from older Linux and Windows providers.
+      disabledState?: boolean
     }
     actions: {
       click: boolean

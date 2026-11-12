@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { MobileAnimatedInterpolation } from '../platform/animated-handles'
 import {
   classifyConnection,
   isConnectionOutage,
@@ -94,7 +95,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     !scope.activeBrowserTab
   const dockBottomInset = dockShown && (sideRail || padAvailable) ? 0 : insets.bottom
   const reducedMotion = useReducedMotionEnabled()
-  const toastRise = useMemo(
+  const toastRise = useMemo<MobileAnimatedInterpolation | 0>(
     () =>
       reducedMotion === false
         ? toastOpacityRef.current.interpolate({

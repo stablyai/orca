@@ -1,17 +1,17 @@
-import type { AppState } from '../../types'
-import type { Worktree } from '../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../../shared/worktree/hosted-review-links'
 import {
   shouldApplyBranchMismatchedLinkedPRClear,
   shouldApplyDivergedLinkedPRClear
-} from '../../../../../shared/github/linked-pr-staleness'
+} from '../../../../../shared/github/pull-requests/refresh/linked-pr-staleness'
 import { getHostedReviewLinkMutationGeneration } from '../../slices/worktrees/metadata/hosted-review-link-mutation'
 import { tryRuntimeTargetForWorktreeOwner } from '../../slices/worktrees/listing/worktree-owner-target'
 import { hasUniqueIndexedRepositoryHost } from '@/lib/workspace/ownership/repository-owner-index'
-import { resolveReviewRepository } from '@/lib/review-owner'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import { findWorktreeById, getWorktreeLookupIndex } from '../refresh/worktree-refresh'
+import type { AppState } from '../../types'
+import type { Worktree } from '../../../../../shared/worktree/types'
+import type { Repo } from '../../../../../shared/repo-types'
 
 export type LinkedReviewClearScope = {
   repository: Repo

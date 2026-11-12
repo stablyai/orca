@@ -1,7 +1,7 @@
 import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
 import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
@@ -13,9 +13,9 @@ import {
 } from '../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import {
-  deleteHoveredWorkspaceImmediately,
-  resolveHoveredWorkspaceDeleteTarget
-} from '../components/sidebar/workspace-actions/deletion/hovered-workspace-delete'
+  deleteActiveWorkspaceFromShortcut,
+  resolveActiveWorkspaceDeleteTarget
+} from '../components/sidebar/workspace-actions/deletion/active-workspace-delete'
 import { useAppStore } from '../store/index'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -230,12 +230,12 @@ export function createAppCommandHandlers(
           return false
         }
         const store = useAppStore.getState()
-        const target = resolveHoveredWorkspaceDeleteTarget(store)
+        const target = resolveActiveWorkspaceDeleteTarget(store)
         if (!target) {
           return false
         }
         return claim('workspace.delete', () => {
-          deleteHoveredWorkspaceImmediately(store, target)
+          deleteActiveWorkspaceFromShortcut(store, target)
         })
       }
     ],

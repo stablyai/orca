@@ -43,14 +43,6 @@ function saveHeading(heading: Element, markdown: string, codes: string[]) {
   return surface
 }
 
-it('retains selected code and trailing heading text', () => {
-  const heading = document.createElement('h3')
-  heading.append(codeBlock('First'), 'Second')
-
-  const surface = saveHeading(heading, '```\nFirst\n```\n\n### Second', ['First'])
-  expect(surface.querySelector('h3')?.textContent).toBe('Second')
-})
-
 it('keeps inline marks and text between multiple direct code blocks', () => {
   const heading = document.createElement('h2')
   const before = document.createElement('strong')

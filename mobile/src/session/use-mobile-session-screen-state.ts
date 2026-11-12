@@ -2,6 +2,7 @@ import { useState, useRef, useMemo } from 'react'
 import { useTerminalSplitLayout } from '../terminal/session/use-terminal-split-layout'
 import { createLiveInputCapture } from '../terminal/session/live-input-capture'
 import { Animated } from 'react-native'
+import type { MobileAnimatedValue } from '../platform/animated-handles'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
 import {
@@ -98,7 +99,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [dictationMode, setDictationMode] = useState<string | undefined>('toggle')
   const [dictationEnabled, setDictationEnabled] = useState(true)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const toastOpacityRef = useRef(new Animated.Value(0))
+  const toastOpacityRef = useRef<MobileAnimatedValue>(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const toastSeqRef = useRef(0)
   return {

@@ -1,8 +1,10 @@
-import '@/store/slices/linear/linear-issue-read'
-import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
-import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
+import {
+  registerLinearLinkedIssueRefresh,
+  refreshDefaultLinkedLinearIssue
+} from './linear-linked-issue-refresh'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
 import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
+import { applyHostWorkspaceRowEvent } from './worktree-metadata-set-events'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
@@ -48,6 +50,7 @@ export function registerRuntimeClientIpcBridge(
   worktreeRuntime: WorktreeEventRuntime
 ): () => void {
   const { worktreeChangeRefreshQueue, activateNotifiedWorktree } = worktreeRuntime
+  const linearRefresh = registerLinearLinkedIssueRefresh(unsubs)
   let stopped = false
   unsubs.push(() => {
     stopped = true
@@ -111,8 +114,7 @@ export function registerRuntimeClientIpcBridge(
         )
       return
     }
-    if (event.type === 'worktreeTerminalSleepState') {
-      applyHostWorktreeTerminalSleepState(environmentId, event)
+    if (applyHostWorkspaceRowEvent(environmentId, event)) {
       return
     }
     if (event.type === 'terminalSideEffects') {
@@ -179,11 +181,8 @@ export function registerRuntimeClientIpcBridge(
       return
     }
     if (event.type === 'linearLinkedIssueUpdated') {
-      void consumeLinearIssueRead(
-        useAppStore.getState().refreshLinearIssue(event.identifier, event.workspaceId)
-      ).catch((error) => {
-        console.error('Failed to refresh updated Linear issue:', error)
-      })
+      refreshDefaultLinkedLinearIssue(event)
+      linearRefresh.handle(endpoint, event)
       return
     }
     // This window builds its sidebar from its own store, never from a host's phone feed.
@@ -237,7 +236,7 @@ export function registerRuntimeClientIpcBridge(
   const runtimeClientEventsSync = createRuntimeClientEventsSync({
     getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),
-    subscribe: (environmentId, onEvent, onError, isCurrent) => {
+    subscribe: (environmentId, onEvent, onError, isCurrent, onClose) => {
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
@@ -272,10 +271,10 @@ export function registerRuntimeClientIpcBridge(
               useAppStore.getState().markEnvironmentSshStateStale(environmentId),
             hydrateEnvironmentSshState: () =>
               hydrateRuntimeEnvironmentSshState(environmentId, { force: true }),
-            sync: runtimeClientEventsSync.sync
+            sync: () => runtimeClientEventsSync.sync([environmentId])
           })
         },
-        { hostsBrowserPages: hostsBrowserPagesFor(environmentId) }
+        { hostsBrowserPages: hostsBrowserPagesFor(environmentId), onClose }
       )
       return subscription
     },

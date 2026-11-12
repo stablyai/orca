@@ -1,10 +1,10 @@
-import type { IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
+import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-request-types'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../shared/workspace-session/workspace-session-state-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 
 export type WorkspaceSessionApi = {
   session: {

@@ -1,17 +1,18 @@
 import './native-chat-appearance.css'
-import { useMemo, type CSSProperties } from 'react'
+import { useMemo } from 'react'
+import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { resolveNativeChatAppearanceSettings } from '../../../../../shared/native-chat/native-chat-appearance-settings'
 import { resolveConfiguredTerminalColors } from '../../../../../shared/terminal-themes/terminal-theme-selection'
 import { MATCH_TERMINAL_APP_THEME } from '../../../../../shared/plugin-theme-settings'
 import { buildFontFamily } from '../../../../../shared/monospace-font-family'
 import { buildAppFontFamily } from '@/app-shell/appearance/app-font-family'
 import { resolveEditorFontStack } from '../../../../../shared/editor/editor-typography'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import { isTerminalBackgroundLight } from '../../../../../shared/terminal-themes/terminal-title-contrast'
 import { useSystemPrefersDark } from '../../../hooks/theme/use-system-prefers-dark'
 import { terminalChatSelectionMix } from '@/app-shell/appearance/chat-selection-mix'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 
 export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat-canvas'
 // Bottom padding clears 20px control overhang; rail padding also covers its 34px overlay on macOS without scrollbar gutters.
@@ -142,7 +143,9 @@ function applyTerminalChatColors(
     '--chat-inline-code-border-mix': light ? '9%' : '8%',
     '--chat-composer-mix': light ? '0%' : '4%',
     '--chat-composer-base': light ? 'var(--chat-canvas)' : 'transparent',
-    '--chat-composer-border-mix': light ? '11%' : '9%'
+    '--chat-composer-border-mix': light ? '11%' : '9%',
+    '--question-card-border-mix': light ? '14%' : '16%',
+    '--question-option-border-mix': light ? '16%' : '12%'
   })
 }
 

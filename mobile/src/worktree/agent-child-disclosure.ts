@@ -54,7 +54,3 @@ export function toggleDisclosure(key: string): void {
     }
   }
 }
-
-export function clearDisclosuresForTests(): void {
-  openDisclosureKeys.clear()
-}

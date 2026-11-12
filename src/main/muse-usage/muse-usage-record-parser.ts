@@ -1,6 +1,7 @@
 import { record, type JsonRecord } from '../../shared/codex-rollout-jsonl-cursor'
 import { unwrapMuseLogRecords } from '../../shared/muse-session-log'
-import { ensureNumber, extractString } from '../usage/usage-record-coercion'
+import { ensureNumber } from '../usage/source-input/usage-record-coercion'
+import { extractString } from '../../shared/trimmed-string'
 import type { MuseUsageParsedEvent } from './types'
 
 export type MuseUsageParseContext = {

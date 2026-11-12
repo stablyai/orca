@@ -7,7 +7,7 @@ import {
   removeLayoutLeaf,
   samePanesIgnoringRatios,
   type PaneSide
-} from '../terminal-pane-tree'
+} from '../terminal-topology/terminal-pane-tree'
 import type { LayoutCommand } from '../workspace-layout-command-types'
 import type { LayoutTerminalTab, WorkspaceLayout } from '../workspace-layout-model'
 

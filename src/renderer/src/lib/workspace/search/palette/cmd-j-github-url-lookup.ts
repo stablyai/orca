@@ -1,5 +1,5 @@
-import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/links'
-import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
+import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
+import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '../../../work-items/github/github-work-item-source-lookup'

@@ -56,6 +56,12 @@ export function computerUseErrorRecoveryData(
         'Use a semantic alternative such as `set-value` or `click`, or install the missing desktop dependency if the error names one.'
       )
     case 'permission_denied':
+      if (message?.includes('target_elevated')) {
+        return recoverWith(
+          'Do not retry: Windows blocks input from a non-administrator Orca to an app running as administrator.',
+          'Ask the user to handle this window, or to restart Orca as administrator if they want it to control elevated apps.'
+        )
+      }
       return recoverWith(
         'Run `orca computer permissions --json`, or `orca computer permissions --id accessibility --json` / `--id screenshots --json` when the message names one missing permission.',
         'For remote or SSH targets, verify the command is running inside an active graphical desktop session.'
@@ -66,9 +72,25 @@ export function computerUseErrorRecoveryData(
         'Do not infer valid indexes from `elementCount` or reuse indexes after navigation, scrolling, focus changes, or delays.'
       )
     case 'element_not_clickable':
+      if (message?.includes(' is covered by ')) {
+        return recoverWith(
+          'Run `orca computer get-app-state --app <app> --json` and deal with what covers the element first (answer or close the dialog, sheet or popover).',
+          'Then click the element again using an index from the fresh tree; do not click by coordinates to get past the cover.'
+        )
+      }
+      if (message?.includes(' out of view')) {
+        return recoverWith(
+          "Scroll the element's container with `orca computer scroll`, then run `orca computer get-app-state --app <app> --json` and click the element using an index from the fresh tree."
+        )
+      }
       return recoverWith(
         'Choose a nearby parent or child element that has an actionable frame.',
         'If using coordinates, derive window-local coordinates from the latest screenshot/state for the same target window.'
+      )
+    case 'element_not_enabled':
+      return recoverWith(
+        'The element is disabled, so nothing was sent. Do what enables it first (for example fill required fields), then run `orca computer get-app-state --app <app> --json` and act once its line no longer lists `disabled`.',
+        'Do not retry the same action unchanged or click it by coordinates instead.'
       )
     case 'action_not_supported':
       return recoverWith(
@@ -86,6 +108,14 @@ export function computerUseErrorRecoveryData(
         'Do not retry the same command unchanged.'
       )
     case 'action_timeout':
+      if (message?.includes('window_not_responding')) {
+        return recoverWith(
+          message.includes('may already have been delivered')
+            ? 'Wait a few seconds, then run `orca computer get-app-state --app <app> --json` and check whether the action already took effect before retrying it.'
+            : 'Wait a few seconds for the app to respond, then run `orca computer get-app-state --app <app> --json` again.',
+          'If it stays unresponsive, ask the user to close or restart the app; do not keep sending it input.'
+        )
+      }
       return recoverWith(
         'Run `orca computer get-app-state --app <app> --json` before retrying so you know whether the UI changed.',
         'Retry with a simpler semantic action or `--no-screenshot` if observation is slow; do not repeat the same timed-out action blindly.'

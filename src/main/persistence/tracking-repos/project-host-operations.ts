@@ -1,3 +1,4 @@
+import type { ProfileSaveDomains } from '../profile-save-domains'
 import type {
   Project,
   ProjectHostSetup,
@@ -33,7 +34,7 @@ export type ProjectHostMutationOperations = {
     updates: ProjectHostSetupUpdateArgs['updates']
   ) => ProjectHostSetup
   removeProjectForHost: (target: RepoHostTarget) => void
-  scheduleSave: () => void
+  scheduleSave: (domains: ProfileSaveDomains) => void
 }
 
 export class ProjectHostPersistenceOperations {
@@ -70,8 +71,8 @@ export class ProjectHostPersistenceOperations {
     this.operations.removeProjectForHost(target)
   }
 
-  private scheduleSave(): void {
-    this.operations.scheduleSave()
+  private scheduleSave(domains: ProfileSaveDomains): void {
+    this.operations.scheduleSave(domains)
   }
 
   getRepos(): Repo[] {
@@ -100,7 +101,7 @@ export class ProjectHostPersistenceOperations {
       }
     }
     project.updatedAt = Date.now()
-    this.scheduleSave()
+    this.scheduleSave(['projects'])
     return { ...project }
   }
 
@@ -142,7 +143,7 @@ export class ProjectHostPersistenceOperations {
     }
     // Independent setup persistence survives future repo projection sync.
     this.state.projectHostSetups.push(setup)
-    this.scheduleSave()
+    this.scheduleSave(['projectHostSetups'])
     return { project, setup }
   }
 
@@ -197,7 +198,7 @@ export class ProjectHostPersistenceOperations {
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
     this.state.projectHostSetups = this.state.projectHostSetups.filter((entry) => entry !== setup)
-    this.scheduleSave()
+    this.scheduleSave(['projectHostSetups'])
     return { project, setup }
   }
 
@@ -234,7 +235,7 @@ export class ProjectHostPersistenceOperations {
     } else {
       delete repo.gitUsername
     }
-    this.scheduleSave()
+    this.scheduleSave(['repos'])
     return true
   }
 }

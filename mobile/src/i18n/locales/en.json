@@ -2056,9 +2056,7 @@
     },
     "queuedCardText": {
       "showLessHint": "Shows less of the message",
-      "showMoreHint": "Shows the whole message",
-      "showLess": "Show less",
-      "showMore": "Show more"
+      "showMoreHint": "Shows the whole message"
     },
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
@@ -2068,9 +2066,8 @@
       "sendHint": "Send this message",
       "steer": "Steer",
       "send": "Send",
-      "deleteHint": "Delete this queued message",
       "moreActions": "More actions",
-      "showLessHint": "Shows less of the message"
+      "you": "You"
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Commands can't be saved in a queued message.",
@@ -2544,6 +2541,10 @@
     "useAccessorySelection": {
       "copyFailed": "Couldn't copy",
       "selectionCleared": "Selection cleared (scrolled out of buffer)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Couldn't close the tab. Try again.",
+      "closeFailedDesktopNotReady": "Couldn't close the tab. Orca on your computer is still loading. Try again in a moment."
     },
     "useContentCreateActions": {
       "noteCreateFailed": "Failed to create markdown note",
@@ -3023,10 +3024,16 @@
       "clearAll": "Clear all",
       "resumeSending": "Resume sending the queued messages",
       "resume": "Resume",
-      "title": "Queued messages",
       "pausedState": "Paused",
       "queuedState": "Queued",
-      "editMessage": "Edit message"
+      "editMessage": "Edit message",
+      "showLess": "Show less",
+      "moreCount_one": "{{count}} more",
+      "moreCount_other": "{{count}} more",
+      "deleteMessage": "Delete message",
+      "queuedCount_one": "{{count}} queued message",
+      "queuedCount_other": "{{count}} queued messages",
+      "foldNeedsAttention": "{{more}}, a message needs attention"
     },
     "offlineQueue": {
       "failed": "Couldn't send — tap Send to retry",
@@ -3394,6 +3401,8 @@
     },
     "agentMessage": {
       "startedWorker": "Started worker",
+      "reopenedWorker": "Reopened worker",
+      "sentFollowUpToWorker": "Sent follow-up to worker",
       "handedOffToAgent": "Handed off to agent",
       "startedAgent": "Started agent",
       "taskFromCoordinator": "Task from coordinator",
@@ -3484,7 +3493,12 @@
       "commitThenPullPush": "Commit, then pull and push",
       "resolveConflicts": "Resolve conflicts before committing",
       "stageFile": "Stage at least one file to commit",
-      "enterMessage": "Enter a commit message to commit"
+      "enterMessage": "Enter a commit message to commit",
+      "statusConflicts": "Conflicts",
+      "statusNothingStaged": "Nothing staged",
+      "statusNeedsMessage": "Needs message",
+      "statusNotPublished": "Not published",
+      "statusNoBranch": "No branch"
     },
     "createPrAction": {
       "createReview": "Create {{titleLabel}}",
@@ -3561,7 +3575,15 @@
       "nothingToPushTo": "Nothing to push to {{upstreamName}}",
       "nothingToForcePushTo": "Nothing to force push to {{upstreamName}}",
       "rebaseFromNamedBase": "Rebase from {{baseRef}}",
-      "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}"
+      "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}",
+      "statusUpToDate": "Up to date",
+      "statusSetsUpstream": "Sets upstream",
+      "statusNotPublished": "Not published",
+      "statusNoBranch": "No branch",
+      "statusMayFail": "May fail",
+      "statusPublished": "Published",
+      "statusStashFirst": "Stash first",
+      "statusReplaces": "Replaces ↓{{behind}}"
     },
     "actions": {
       "createPr": "Create PR",
@@ -4561,6 +4583,12 @@
       "createFailed": "Failed to create workspace"
     },
     "hostedMerge": {
+      "confirmGitHubMerge": "Merge PR #{{number}}?",
+      "confirmGitHubSquash": "Squash and merge PR #{{number}}?",
+      "confirmGitHubRebase": "Rebase and merge PR #{{number}}?",
+      "confirmGitLabMerge": "Merge merge request #{{number}}?",
+      "confirmGitLabSquash": "Squash and merge merge request #{{number}}?",
+      "confirmGitLabRebase": "Rebase and merge merge request #{{number}}?",
       "merged": "Merged",
       "closed": "Closed",
       "conflicts": "Conflicts",

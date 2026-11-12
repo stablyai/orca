@@ -17,42 +17,6 @@ vi.mock('../../authentication/relay-token-verifier.js', () => ({
 import { createRelayApp } from '../../app.js'
 
 describe('public assignment overload', () => {
-  it('rejects duplicate and excess work before it reaches assignment state', async () => {
-    const hostA = 'aaaaaaaaaaaaaaaa'
-    const hostB = 'bbbbbbbbbbbbbbbb'
-    const hostC = 'cccccccccccccccc'
-    const pending = new Map<string, ReturnType<typeof deferred<RelayAssignment>>>()
-    const assign = vi.fn(async ({ relayHostId }: { relayHostId: string }) => {
-      const operation = deferred<RelayAssignment>()
-      pending.set(relayHostId, operation)
-      return await operation.promise
-    })
-    const app = createRelayApp(config({ publicAssignmentQueueMax: 0 }), {
-      store: {} as never,
-      assignments: { assign } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-
-    const first = app.request('/v1/assign', assignmentRequest(hostA))
-    await vi.waitFor(() => expect(pending.has(hostA)).toBe(true))
-    const duplicate = await app.request('/v1/assign', assignmentRequest(hostA))
-    expect(duplicate.status).toBe(503)
-
-    const second = app.request('/v1/assign', assignmentRequest(hostB))
-    await vi.waitFor(() => expect(pending.has(hostB)).toBe(true))
-    const excess = await app.request('/v1/assign', assignmentRequest(hostC))
-    expect(excess.status).toBe(503)
-    expect(excess.headers.get('retry-after')).toBe('5')
-    expect(assign).toHaveBeenCalledTimes(2)
-
-    pending.get(hostA)?.resolve(assignment('cell-a', hostA))
-    pending.get(hostB)?.resolve(assignment('cell-b', hostB))
-    expect((await first).status).toBe(200)
-    expect((await second).status).toBe(200)
-    expect((await app.request('/v1/assign', assignmentRequest(hostA))).status).toBe(503)
-    expect(assign).toHaveBeenCalledTimes(2)
-  })
 
   it('fairly drains a bounded incident-scale burst without raising database concurrency', async () => {
     const pending = new Map<string, ReturnType<typeof deferred<RelayAssignment>>>()

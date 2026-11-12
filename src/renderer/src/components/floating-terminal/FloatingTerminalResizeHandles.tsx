@@ -9,7 +9,8 @@ const RESIZE_HANDLES = [
   ['n', 'top-0 left-2 right-2 h-2 cursor-n-resize'],
   ['s', 'bottom-0 left-2 right-2 h-2 cursor-s-resize'],
   ['w', 'left-0 top-2 bottom-2 w-2 cursor-w-resize'],
-  ['e', 'right-0 top-2 bottom-2 w-2 cursor-e-resize'],
+  // Match the surface's 4px right inset so xterm's 7px scrollbar stays clear inside the panel.
+  ['e', 'right-0 top-2 bottom-2 w-1 cursor-e-resize'],
   ['nw', 'left-0 top-0 size-3 cursor-nw-resize'],
   ['ne', 'right-0 top-0 size-3 cursor-ne-resize'],
   ['sw', 'left-0 bottom-0 size-3 cursor-sw-resize'],

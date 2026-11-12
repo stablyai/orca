@@ -16,6 +16,10 @@ vi.mock('../../../../../src/shared/non-secure-context-uuid', () => ({
   createNonSecureContextUuid: () => `img-${++ids.next}`
 }))
 vi.mock('../../../platform/media-picker', () => ({ useMediaPicker: () => ({ pickImages: pick }) }))
+// The canvas fit needs a WebView; this test is about the attaching counter.
+vi.mock('../../../files/attachments/mobile-agent-image-fit', () => ({
+  fitMobileAgentImage: async (image: unknown) => image
+}))
 
 function ok(id: string, result: unknown): RpcSuccess {
   return { id, ok: true, result, _meta: { runtimeId: 'r' } }

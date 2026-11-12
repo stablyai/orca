@@ -1,5 +1,5 @@
-import type { FolderSetupSupport } from '@/lib/use-folder-setup-supported'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { FolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { OrcaHooks, SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { RetiredNameRegistry } from '../../../../shared/worktree/retired-name-registry'

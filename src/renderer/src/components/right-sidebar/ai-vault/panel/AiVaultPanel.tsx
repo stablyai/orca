@@ -234,8 +234,8 @@ export default function AiVaultPanel({
     hideEmptySessions
   })
   const searchHitHostLabels = useMemo(
-    () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions) : null),
-    [filteredSessions, hostScopeOptions, searching]
+    () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions, t) : null),
+    [filteredSessions, hostScopeOptions, searching, t]
   )
 
   useAiVaultPanelHandle(ref, {
@@ -367,7 +367,7 @@ export default function AiVaultPanel({
           />
         )}
       </AiVaultPanelSearch>
-      {launchActions.continuationRequest && (
+      {launchActions.continuationOpen && (
         <AgentSessionContinuationDialog
           open
           request={launchActions.continuationRequest}

@@ -49,8 +49,8 @@ const SidebarFeedbackDialog = lazyWithRetry(
   { reloadKey: 'sidebar-feedback-dialog' }
 )
 
-const DOCS_URL = 'https://www.onorca.dev/docs'
-const CHANGELOG_URL = 'https://onorca.dev/changelog'
+const DOCS_URL = 'https://orca.dev/docs'
+const CHANGELOG_URL = 'https://orca.dev/changelog'
 const GITHUB_URL = 'https://github.com/stablyai/orca'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
 const X_URL = 'https://x.com/orca_build'

@@ -95,9 +95,13 @@ orca repo add --path /abs/path/to/folder --kind folder --json
 orca repo show --repo id:<repoId> --json
 orca repo set-base-ref --repo id:<repoId> --ref origin/main --json
 orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
+orca repo hide --repo id:<repoId> --json
+orca repo unhide --repo id:<repoId> --json
 ```
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
+
+`repo hide` takes a project out of the sidebar, project pickers and the workspace switcher without stopping anything: its terminals, agents and automations keep running, `repo list` still lists it with `hiddenAt` set, and commands that name it keep working. Hiding applies to one host's copy of a project; add `--host <host>` to pick which copy when it is set up on several. On a paired Orca server the setting lives on that server, so hiding a project there hides it for everyone connected to it. `repo unhide`, or the Hidden projects list at the bottom of the sidebar, shows it again.
 
 `repo add` defaults to `--kind git`. Use `--kind folder` to open an ordinary directory, including a repo-tool root containing separate Git repositories, as a folder workspace without Git worktrees or source control. With `--environment`, use an absolute path on that Orca server.
 
@@ -232,21 +236,6 @@ orca chat rename --name "Migrate auth"
 ```
 
 Renames a chat tab, the same as renaming it by hand. `--session` takes the `sessionId` that `orca agent launch` prints. Run inside a chat, it defaults to that chat; with `--environment` it is required.
-
-Agents that run as chats are read and messaged with `chat` commands. `--session` takes the session id from `chat list` or the handle `agent launch` returns.
-
-```bash
-orca chat list --json
-orca chat list --state working --json
-orca chat read --session <session> --limit 10 --json
-orca chat send --session <session> --text "Run the tests, then summarize failures" --json
-orca chat send --session <session> --text "<message>" --wait --timeout-ms 600000 --json
-orca chat wait --session <session> --timeout-ms 600000 --json
-```
-
-`chat read` returns the newest messages, tool calls, errors, approvals and questions; an approval or question waiting for an answer has `pending: true`. `chat send` sends the text as your message. While the agent is working, hosts with a message queue hold it until the turn ends and report `delivery: "queued"`. A chat that restarted since it was read refuses the send. `--text-file -` reads the message from stdin.
-
-`chat send --wait` and `chat wait` return once the chat's own turn settles, in the words `chat list` uses: `settled: "done"`, or `settled: "blocked"` when an approval or question needs an answer. Background agents the chat started can still show as `working` or `waiting` in `chat list`. They print the entries since the last user message. A wait past `--timeout-ms` returns `settled: "timeout"`, and a message held in a stopped or failed queue returns `settled: "held"`; both exit 1. `chat read --json` returns a `cursor` for the newest row read, and `truncated: true` when older rows it needed were past the 200-row read. `chat list --state` takes `working`, `blocked`, `waiting` or `done`. Paired hosts (`--environment`, `--pairing-code`) can list chats but not read, send or wait yet.
 
 ## Files
 
@@ -427,7 +416,7 @@ A selection applies to every agent of that provider launched on the host after i
 
 ## Artifacts
 
-Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. **Publishing is off by default** — a human must enable **Settings → Artifacts → Allow publishing public artifact links** on the device. There is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
+Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. Publishing follows **Settings → Artifacts → Allow publishing public artifact links** on the device: on by default for new profiles, while profiles created before this default keep their previous setting. Only a human can change it; there is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
 
 ```bash
 orca artifacts share ./report.html --json

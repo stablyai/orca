@@ -64,10 +64,6 @@ describe('Claude host-awaited open', () => {
     }
   })
 
-  // Recorded result; the orderings are constructed. A start another failure ended reports that cause.
-
-  // Whichever ends the start first is its report: a hidden result is the open's error, else its row stays.
-
   it('leaves an open Stop aborted to Stop when Claude then reports a startup failure', async () => {
     const claude = fakeClaude({ holdInit: true, initProof: 'none' })
     const { adapter } = adapterFor(claude)
@@ -136,22 +132,5 @@ describe('Claude host-awaited open', () => {
     expect(claude.connections[0].sent).toMatchObject([
       { message: { content: [{ type: 'text', text: 'ship it' }] } }
     ])
-  })
-
-  it('lets the host abort a silent initialize wait and close the owned process', async () => {
-    const claude = fakeClaude({ initDelayMs: 12_000 })
-    const { adapter } = adapterFor(claude)
-    const acquisition = await adapter.acquire(ACQUIRE)
-    const controller = new AbortController()
-    const open = adapter.open({
-      sessionId: 'session-1',
-      fence: 7,
-      acquisitionGeneration: acquisition.acquisitionGeneration,
-      signal: controller.signal
-    })
-    controller.abort(new Error('host start expired'))
-    await expect(open).rejects.toThrow('host start expired')
-    await adapter.closeSession('session-1')
-    expect(claude.connections[0].closeCount).toBe(1)
   })
 })

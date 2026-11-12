@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { GitHubProjectRow } from '../../../../shared/github/project-types'
+import type { GitHubProjectRow } from '../../../../shared/github/projects/project-types'
 import ProjectCell from './ProjectCell'
 
 export function projectRelationCellText(row: GitHubProjectRow): string[] {
