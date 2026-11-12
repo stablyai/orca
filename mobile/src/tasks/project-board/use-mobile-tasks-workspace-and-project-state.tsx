@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useState } from 'react'
 import { useBottomDrawerFollowUp } from '../../components/bottom-drawer/use-bottom-drawer-follow-up'
 import type { RouteAndItemStateModel } from '../screen-state/use-mobile-tasks-route-and-item-state'
 import type { WorkspaceSshRecord } from '../../new-workspace/creation/workspace-ssh-gate'
@@ -14,7 +14,6 @@ import type { GitHubProjectIdentity as GitHubProjectRef } from '../../../../src/
 import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../src/shared/worktree/create-types'
 import type { WorkspaceAgentChoice } from '../../new-workspace/creation/workspace-agent-selection'
-import { useState } from 'react'
 import type {
   DetailPayload,
   GitHubAssignableUser,

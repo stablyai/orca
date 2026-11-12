@@ -8,9 +8,12 @@ import {
   type TextInputInstance
 } from 'react-native'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
-import { isBlockingJiraUrlIntent } from '../../../src/shared/new-workspace/smart-workspace-source-results'
+import {
+  isBlockingJiraUrlIntent,
+  type SmartWorkspaceSourceRow as SourceRow,
+  type SmartNameMode
+} from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import {
   MR_STATE_FILTER_OPTIONS,
   resolveAvailableSmartModes,
@@ -20,7 +23,6 @@ import {
   type SmartModeOption
 } from '../new-workspace/source-selection/mobile-smart-source-modes'
 import type { MrStateFilter } from '../new-workspace/source-selection/mobile-composer-source-types'
-import type { SmartNameMode } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import {
   lookupGitHubItemByOwnerRepo,
   type PasteRepoCandidate

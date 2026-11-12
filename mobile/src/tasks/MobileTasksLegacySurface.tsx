@@ -9,7 +9,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { View, Text, Pressable } from 'react-native'
 import { AlertTriangle, GitBranch } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -73,7 +73,6 @@ import {
   renderMobileTasksSetupTrustDrawer,
   renderMobileTasksOrcaYamlTrustDrawer
 } from './workspace-creation/mobile-tasks-workspace-trust-drawers'
-import { pressedStyle } from '../theme/mobile-theme'
 import {
   renderMobileTasksProjectMissingRepoDrawer,
   renderMobileTasksProjectDetailDrawer
