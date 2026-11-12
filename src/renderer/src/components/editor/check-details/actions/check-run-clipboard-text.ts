@@ -2,7 +2,7 @@ import type {
   PRCheckAnnotation,
   PRCheckJob,
   PRCheckRunDetails
-} from '../../../../../../shared/github/check-types'
+} from '../../../../../../shared/github/checks/check-types'
 
 export function formatCheckRunOutputForClipboard(
   details: Pick<PRCheckRunDetails, 'title' | 'summary' | 'text'>

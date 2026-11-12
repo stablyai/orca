@@ -6,7 +6,7 @@ import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-req
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { readConnectionStatusProbe } from '../../transport/connection/runtime-status-probe'
 import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
-import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../src/shared/github/work-item-target'
+import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../src/shared/github/work-items/work-item-target'
 
 export const GITHUB_CONNECTION_CHANGED = 'The Orca server connection changed. Try again.'
 export const GITHUB_TARGET_CHECK_TIMED_OUT = 'Timed out confirming the executing Orca server.'

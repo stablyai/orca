@@ -1,5 +1,5 @@
 import { wireRecipeWorkspaceRemoval } from '../ephemeral-vm/recipe-workspace-removal-wiring'
-import { wireGitHubIssueLinkTitleFill } from '../github/github-issue-link-title-wiring'
+import { wireGitHubIssueLinkTitleFill } from '../github/workspace-links/github-issue-link-title-wiring'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService

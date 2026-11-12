@@ -4,10 +4,8 @@ import {
   getLastConfirmedClientValue,
   setLastConfirmedClientValue as storeLastConfirmedClientValue
 } from './task-page-github-confirmed-client-values'
-import type {
-  GitHubAssignableUser,
-  GitHubOwnerRepo
-} from '../../../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import type {
   PendingOp,
   StickyHideEntry,
