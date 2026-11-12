@@ -3,12 +3,12 @@ import { createRequire } from 'node:module'
 import { act, createElement, createRef, type ComponentType, type RefObject } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it } from 'vitest'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { writeTerminalLiveInputText as writeTerminalLiveInputTextOnWeb } from './terminal-live-input-text-write.web'
 
-const refTo = (node: unknown): RefObject<TextInput | null> => ({
+const refTo = (node: unknown): RefObject<TextInputInstance | null> => ({
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the point of these cases is that a DOM node is what the native signature receives on RN Web, which is the mismatch this sibling exists for.
-  current: node as TextInput | null
+  current: node as TextInputInstance | null
 })
 
 describe('the web sibling', () => {

@@ -37,7 +37,10 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
+import {
+  isTuiAgentEnabled,
+  pickTuiAgent
+} from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import {
   agentChoiceOpensAsChat,
@@ -46,7 +49,7 @@ import {
 } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
-import { AgentDefaultSetting } from '@/components/settings/agents/launch/AgentDefaultSetting'
+import { AgentLaunchDefaultsGroup } from '@/components/settings/agents/launch/AgentLaunchDefaultsGroup'
 import { AgentDetectionCatalog } from '@/components/settings/agents/launch/AgentDetectionCatalog'
 import type { AgentCatalogRowProps } from '@/components/settings/agents/launch/AgentCatalogRow'
 import { HostAgentEnvironmentEditor } from '@/components/settings/agents/launch/HostAgentEnvironmentEditor'
@@ -145,8 +148,6 @@ export function AgentLaunchSettingsCatalog({
   })
   const chatOnly = new Set(chatOnlyKey.split(' '))
   const catalog = getAgentCatalog()
-  const detectedAgents =
-    detectedIds === null ? [] : catalog.filter((agent) => detectedIds.has(agent.id))
   const installedAgents = catalog.filter(
     (agent) => detectedIds?.has(agent.id) || chatOnly.has(agent.id)
   )
@@ -156,6 +157,13 @@ export function AgentLaunchSettingsCatalog({
       !chatOnly.has(agent.id) &&
       (detectedIds !== null || chatAgents.includes(agent.id))
   )
+  // The agent new sessions get: the saved default when usable, else Auto's pick.
+  const effectiveDefault =
+    detectedIds === null
+      ? null
+      : pickTuiAgent(chosen, detectedIds, settings.disabledTuiAgents, (agent) =>
+          Boolean(defaultOpensAsChat && agent === chosen)
+        )
   const save = (mutation: AgentLaunchSettingsMutation): void => {
     const scopedMutation =
       mutation.type === 'permissions' && nativeChatPermissionsSupported
@@ -235,7 +243,8 @@ export function AgentLaunchSettingsCatalog({
     defaultEnv: typed ? {} : getTuiAgentDefaultEnv(agent.id),
     isDetected,
     isEnabled: isTuiAgentEnabled(agent.id, settings.disabledTuiAgents),
-    isDefault: isDetected && settings.defaultTuiAgent === agent.id,
+    defaultMark: effectiveDefault !== agent.id ? null : chosen === agent.id ? 'chosen' : 'auto',
+    isSavedDefault: chosen === agent.id,
     cmdOverride: settings.agentCmdOverrides[agent.id],
     argsOverride:
       choicesSupported && settings.agentChoices
@@ -275,11 +284,7 @@ export function AgentLaunchSettingsCatalog({
             />
           )
         : undefined,
-    onSetDefault: () =>
-      save({
-        type: 'default',
-        agent: settings.defaultTuiAgent === agent.id ? 'blank' : agent.id
-      }),
+    onSetDefault: (isDefault) => save({ type: 'default', agent: isDefault ? agent.id : null }),
     onSetEnabled: (enabled) => save({ type: 'availability', agent: agent.id, enabled }),
     onSaveOverride: async (value) => {
       const changed = value !== (settings.agentCmdOverrides[agent.id] ?? '')
@@ -324,9 +329,11 @@ export function AgentLaunchSettingsCatalog({
             cliDetected: installedHere === null ? null : installedHere.includes(agent.id),
             chatProgramHere: chatOnly.has(agent.id),
             settings: local.settings,
-            updateSettings: local.updateSettings
+            updateSettings: local.updateSettings,
+            includeDisabled: true
           })
         : undefined,
+      reserveOpensAsSlot: Boolean(local),
       chatRuntime:
         chatAgents.includes(agent.id) &&
         (managedChatAgents.has(agent.id) || chatUnavailableOnThisDesktop(agent.id)) &&
@@ -337,19 +344,11 @@ export function AgentLaunchSettingsCatalog({
   }
   return (
     <>
-      <AgentDefaultSetting
-        defaultAgent={settings.defaultTuiAgent}
-        detectedIds={detectedIds}
-        enabledDetectedAgents={detectedAgents.filter((agent) =>
-          isTuiAgentEnabled(agent.id, settings.disabledTuiAgents)
-        )}
-        catalog={catalog}
+      <AgentLaunchDefaultsGroup
         description={t(
           'settings.agents.hostDefaults',
           'Defaults for new agents on the selected host.'
         )}
-        onSetDefault={(agent) => save({ type: 'default', agent })}
-        defaultOpensAsChat={defaultOpensAsChat}
         permissions={
           permissionSettings ? (
             <AllAgentsPermissionSetting

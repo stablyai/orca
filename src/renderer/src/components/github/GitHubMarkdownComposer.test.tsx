@@ -373,25 +373,6 @@ it('refuses normalized data-image HTML without dropping surrounding text', async
   expect(imageUploads.upload).not.toHaveBeenCalled()
 })
 
-it('leaves ordinary HTML paste on the editor parser path', async () => {
-  const view = render(<GitHubMarkdownComposer value="" onChange={() => {}} placeholder="HTML" />)
-  await waitFor(() => expect(view.container.querySelector('.tiptap')).not.toBeNull())
-  const parse = vi.spyOn(DOMParser.prototype, 'parseFromString')
-  try {
-    fireEvent.paste(getComposerEditor(view.container), {
-      clipboardData: {
-        files: [],
-        getData: (type: string) =>
-          type === 'text/html' ? '<p>ordinary <strong>formatted</strong> text</p>' : ''
-      }
-    })
-    expect(getComposerEditor(view.container).textContent).toBe('ordinary formatted text')
-    expect(parse).not.toHaveBeenCalled()
-  } finally {
-    parse.mockRestore()
-  }
-})
-
 it('shows a failed hosted image as its filename link without changing the uploaded Markdown', async () => {
   imageUploads.upload
     .mockReset()

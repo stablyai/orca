@@ -851,6 +851,7 @@ jobs:
             src/main/pty/history/terminal-history-fish-session.node-pty.test.ts \
             src/main/pty/shell-startup/zsh-scoped-histfile.live-shell.test.ts \
             src/main/pty/shell-startup/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
+            src/main/runtime/terminal/wait/tui-idle-zsh-preexec-hook-order.live-shell.test.ts \
             src/main/runtime/agent-session/environment/structured-session-cli-login-shell.live-shell.test.ts \
             src/main/startup/shell-probe-terminal-detach.live-shell.test.ts \
             src/main/startup/shell-probe-lifetime.live-shell.test.ts \

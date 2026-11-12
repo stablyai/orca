@@ -5,9 +5,12 @@ import { BoundedMap } from '../../../shared/bounded-map'
 import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
 import { InFlightPromiseDedupe } from '../../../shared/in-flight-promise-dedupe'
 import { iterateNulDelimitedFields } from '../../../shared/nul-delimited-fields'
-import { wslDistroForCommand } from '../command-runner/git-command-resolution'
-import { gitReadOptionsForWorktree, type GitRuntimeOptions } from '../git-runtime-options'
-import { gitExecFileAsync } from '../runner'
+import { wslDistroForCommand } from '../../../shared/wsl-paths'
+import {
+  gitReadOptionsForWorktree,
+  type GitRuntimeOptions
+} from '../command-runner/git-runtime-options'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { readStampWithinDeadline, type StampProbes } from './deadline-bounded-stamp'
 import { resolveGitCommonDir, resolveGitDir } from './resolve-git-dir'
 import {

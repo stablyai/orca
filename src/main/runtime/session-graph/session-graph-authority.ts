@@ -123,6 +123,20 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     }
   }
 
+  /** Null when no window is attached: there is no renderer to fence. A booting or reloading one throws. */
+  protected captureRendererGraphFence(): number | null {
+    return this.authoritativeWindowId === null ? null : this.captureReadyGraphEpoch()
+  }
+
+  protected assertRendererGraphFence(fence: number | null): void {
+    if (fence !== null) {
+      this.assertStableReadyGraph(fence)
+    } else if (this.authoritativeWindowId !== null) {
+      // A window attached mid-operation; its renderer owns the graph again.
+      throw new Error('runtime_unavailable')
+    }
+  }
+
   protected resolveFolderWorkspaceConnectionId(workspace: FolderWorkspace): string | null {
     const repos = this.store?.getRepos() ?? []
     const projectGroups = this.store?.getProjectGroups?.() ?? []

@@ -21,7 +21,11 @@ import {
   resolveTerminalAgentTabShortcut
 } from '../terminal-agent-tab-shortcut'
 import { launchAgentTabShortcut } from '../agent-tab-shortcut-launch'
-import { LandingItemShortcut, landingQueryMatches } from './split-pane-landing-item'
+import {
+  LandingItemShortcut,
+  landingQueryMatches,
+  useLandingResultsChange
+} from './split-pane-landing-item'
 
 /** The default agent, launched exactly as the New Agent shortcut would launch it; the chevron
  *  opens the + menu's agent list for any other. */
@@ -36,7 +40,7 @@ export function LandingDefaultAgentItem({
   groupId: string
   pickerOpen: boolean
   onPickerOpenChange: (open: boolean) => void
-  /** Hands focus back to the list instead of Radix's trigger restore. */
+  /** Hands focus back to the search field instead of Radix's trigger restore. */
   onPickerClosed: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -116,11 +120,13 @@ export function LandingDefaultAgentItem({
 export function LandingAgentResults({
   worktreeId,
   groupId,
-  query
+  query,
+  onResultsChange
 }: {
   worktreeId: string
   groupId: string
   query: string
+  onResultsChange: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const detectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
@@ -130,19 +136,20 @@ export function LandingAgentResults({
     groupId,
     onFocusTerminal: focusTerminalTabSurface
   })
-  if (model.state !== 'settled') {
-    return null
-  }
   const catalog = getAgentCatalog()
-  const matches = model.rows.filter((row) => {
-    if (row.kind === 'chat-unavailable') {
-      return false
-    }
-    const entry = catalog.find((candidate) => candidate.id === row.agent)
-    return [rowLabel(row, t), ...(entry?.searchAliases ?? [])].some((candidate) =>
-      landingQueryMatches(candidate, query)
-    )
-  })
+  const matches =
+    model.state === 'settled'
+      ? model.rows.filter((row) => {
+          if (row.kind === 'chat-unavailable') {
+            return false
+          }
+          const entry = catalog.find((candidate) => candidate.id === row.agent)
+          return [rowLabel(row, t), ...(entry?.searchAliases ?? [])].some((candidate) =>
+            landingQueryMatches(candidate, query)
+          )
+        })
+      : []
+  useLandingResultsChange(matches.map(rowId), onResultsChange)
   if (matches.length === 0) {
     return null
   }

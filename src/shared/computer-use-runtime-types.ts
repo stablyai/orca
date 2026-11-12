@@ -107,8 +107,6 @@ export type ComputerActionVerification =
   | {
       state: 'verified'
       property: 'focusedText' | 'selection' | 'value'
-      expected?: string | null
-      actualPreview?: string | null
     }
   | {
       state: 'unverified'
@@ -122,7 +120,7 @@ export type ComputerActionVerification =
         | 'value_mismatch'
         // The accessibility call succeeded but the window and the app's windows looked the same about a second later.
         | 'suspected_noop'
-      expected?: string | null
+      // Only on value_mismatch from a non-secure field; results never repeat the requested value.
       actualPreview?: string | null
     }
 

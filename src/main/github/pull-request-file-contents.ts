@@ -1,13 +1,20 @@
 import { withGitHubRepoExecution } from './github-repository-identity'
 import type { GitHubPRFile, GitHubPRFileContents } from '../../shared/github/pull-request-types'
-import { acquire, ghExecFileAsync, ghRepoExecOptions, githubRepoContext, release } from './gh-utils'
-import type { LocalGitExecOptions } from './gh-utils'
+import {
+  acquire,
+  ghExecFileAsync,
+  ghRepoExecOptions,
+  githubRepoContext,
+  release,
+  type LocalGitExecOptions
+} from './gh-utils'
+
 import {
   githubHostExecOptions,
   resolveGitHubRepoExecution,
   type GitHubApiRepository
 } from './github-api-repository'
-import { isMaxBufferOverflowError } from '../git/max-buffer-overflow'
+import { isMaxBufferOverflowError } from '../git/command-runner/process-capture/max-buffer-overflow'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from './rate-limit'
 
 const GITHUB_RAW_CONTENT_MAX_BUFFER_BYTES = 8 * 1024 * 1024

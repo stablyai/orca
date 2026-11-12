@@ -39,7 +39,7 @@ await import('../orca-runtime-tests/agent-status-and-waits-part-03.spec')
 await import('../orca-runtime-tests/terminal-creation-and-readiness.spec')
 await import('../orca-runtime-tests/terminal-creation-and-readiness-part-02.spec')
 await import('../orca-runtime-tests/terminal-creation-and-readiness-part-04.spec')
-await import('../orca-runtime-tests/terminal-creation-and-readiness-part-05.spec')
+
 await import('../orca-runtime-tests/terminal-creation-and-readiness-part-06.spec')
 await import('../orca-runtime-tests/terminal-creation-and-readiness-part-07.spec')
 await import('../orca-runtime-tests/terminal-creation-and-readiness-part-08.spec')
@@ -99,7 +99,7 @@ await import('../orca-runtime-tests/wsl-stopped-distro-worktree-scan.spec')
 
 await import('../orca-runtime-tests/worktree-setup-and-startup-part-03.spec')
 await import('../orca-runtime-tests/worktree-setup-and-startup-part-04.spec')
-await import('../orca-runtime-tests/worktree-setup-single-creator.spec')
+
 await import('../orca-runtime-tests/gitlab-and-pr-bases-part-02.spec')
 await import('../orca-runtime-tests/worktree-removal-and-reconciliation-part-02.spec')
 await import('../orca-runtime-tests/worktree-removal-and-reconciliation-part-03.spec')

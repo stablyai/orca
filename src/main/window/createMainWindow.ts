@@ -1,6 +1,8 @@
 import { app, BrowserWindow, nativeTheme, powerMonitor, screen } from 'electron'
 import { release } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { installRendererHangStackPolicy } from '../hang-watchdog/renderer-hang-stack-policy'
 import { getAppIconPath } from './desktop-integration/app-icon'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
@@ -48,6 +50,12 @@ import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/a
 export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
 
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
+  installRendererHangStackPolicy(
+    mainWindow.webContents,
+    !app.isPackaged && process.env.ELECTRON_RENDERER_URL
+      ? process.env.ELECTRON_RENDERER_URL
+      : pathToFileURL(join(__dirname, '../renderer/index.html')).href
+  )
   const load =
     !app.isPackaged && process.env.ELECTRON_RENDERER_URL
       ? mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)

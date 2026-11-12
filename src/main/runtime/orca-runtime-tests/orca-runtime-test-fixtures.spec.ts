@@ -323,7 +323,8 @@ function createFolderWorkspaceRuntimeStore(
   return {
     ...store,
     getProjectGroups: () => [projectGroup],
-    getFolderWorkspaces: () => [folderWorkspace]
+    getFolderWorkspaces: () => [folderWorkspace],
+    getFolderWorkspace: (id: string) => (id === folderWorkspace.id ? folderWorkspace : undefined)
   }
 }
 

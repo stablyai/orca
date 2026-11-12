@@ -42,7 +42,7 @@ export function useWorktreeJumpPaletteListEntries({
 }: WorktreeJumpPaletteListEntriesInput) {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
-  const listEntries = useMemo<PaletteListEntry[]>(() => {
+  const { listEntries, defaultSelectionStart } = useMemo(() => {
     const entries: PaletteListEntry[] = []
     const {
       visibleWorktreeItems,
@@ -186,13 +186,16 @@ export function useWorktreeJumpPaletteListEntries({
       if (browserNavigationItem) {
         entries.push(browserNavigationItem)
       }
-      return entries
+      return { listEntries: entries, defaultSelectionStart: 0 }
     }
     if (!hasQuery) {
+      pushExtras({ emptyQuery: 'first' })
+      // Rows above this index lead the list without taking the default selection.
+      const defaultSelectionStart = entries.length
       pushOpenTabSection()
       pushWorktreeSection()
-      pushExtras('all')
-      return entries
+      pushExtras({ emptyQuery: 'last' })
+      return { listEntries: entries, defaultSelectionStart }
     }
     if (browserNavigationItem) {
       entries.push(browserNavigationItem)
@@ -215,7 +218,7 @@ export function useWorktreeJumpPaletteListEntries({
       if (showCreateAction) {
         entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
       }
-      return entries
+      return { listEntries: entries, defaultSelectionStart: 0 }
     }
     if (middleLeadsSections) {
       pushProjectAndMiddleSections()
@@ -237,7 +240,7 @@ export function useWorktreeJumpPaletteListEntries({
     if (showCreateAction) {
       entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
     }
-    return entries
+    return { listEntries: entries, defaultSelectionStart: 0 }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [
     handleExpandSection,
@@ -269,10 +272,27 @@ export function useWorktreeJumpPaletteListEntries({
     () => getWorktreePaletteSelectionItemIds(listEntries, listEntryRenderKeys),
     [listEntries, listEntryRenderKeys]
   )
+  // null keeps the shared rule: first row, never an unasked Create.
+  const defaultSelectionItemId = useMemo(
+    () =>
+      defaultSelectionStart > 0
+        ? (getWorktreePaletteSelectionItemIds(
+            listEntries.slice(defaultSelectionStart),
+            listEntryRenderKeys.slice(defaultSelectionStart)
+          )[0] ?? null)
+        : null,
+    [defaultSelectionStart, listEntries, listEntryRenderKeys]
+  )
   useEffect(() => {
-    autoSelectedItemIdRef.current = selectionItemIds[0] ?? null
-  }, [autoSelectedItemIdRef, selectionItemIds])
-  return { listEntries, listEntryRenderKeys, selectableItems, selectionItemIds }
+    autoSelectedItemIdRef.current = defaultSelectionItemId ?? selectionItemIds[0] ?? null
+  }, [autoSelectedItemIdRef, defaultSelectionItemId, selectionItemIds])
+  return {
+    listEntries,
+    listEntryRenderKeys,
+    selectableItems,
+    selectionItemIds,
+    defaultSelectionItemId
+  }
 }
 
 export type WorktreeJumpPaletteListEntries = ReturnType<typeof useWorktreeJumpPaletteListEntries>

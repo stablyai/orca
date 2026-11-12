@@ -2,7 +2,7 @@ import '../../../../../shared/protocol-version'
 import { SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
 import type { RuntimeCapability } from '../../../../../shared/protocol-version'
 import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../../../../shared/runtime-session-contracts'
-import { retirementProofKey as proofKey } from '../../../../../shared/workspace-layout/terminal-retirement-proof-ledger'
+import { retirementProofKey as proofKey } from '../../../../../shared/workspace-layout/terminal-surfaces/terminal-retirement-proof-ledger'
 
 type ProofCarrier = {
   worktree: string

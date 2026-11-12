@@ -1,8 +1,8 @@
 import { encodePosixPrintfRecords } from '../../../shared/posix-printf-encoding'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { describe, expect, it } from 'vitest'
-import { chmodSync, existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { afterAll, describe, expect, it } from 'vitest'
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
@@ -11,6 +11,10 @@ import {
   REMOTE_COMMAND_DECODER_UNAVAILABLE_EXIT,
   wrapRemoteCommandForPosixShell
 } from './ssh-posix-command-wrapper'
+
+// csh/tcsh read ~/.tcshrc even for `-c`, zsh reads .zshenv, fish reads config.fish: test the parser, not the developer's rc files.
+const emptyShellHome = mkdtempSync(join(tmpdir(), 'orca-wrapper-shell-home-'))
+afterAll(() => rmSync(emptyShellHome, { recursive: true, force: true }))
 
 function shimDir(tools: Record<string, string>): string {
   const bin = mkdtempSync(join(tmpdir(), 'orca-wrapper-shims-'))
@@ -112,6 +116,12 @@ describe('wrapRemoteCommandForPosixShell', () => {
 function runThroughShell(shell: string, command: string, input?: string) {
   return spawnSync(shell, ['-c', wrapRemoteCommandForPosixShell(command)], {
     encoding: 'utf8',
-    input
+    input,
+    env: {
+      ...process.env,
+      HOME: emptyShellHome,
+      ZDOTDIR: emptyShellHome,
+      XDG_CONFIG_HOME: emptyShellHome
+    }
   })
 }
