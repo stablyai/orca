@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { parsePluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
-import type { PluginWorkerHandle } from './workers/plugin-host-process'
+import type { PluginWorkerHandle } from './workers/parent-process/plugin-host-process-types'
 import { invokePluginTaskSource } from './plugin-task-source-invocation'
 
 const PLUGIN_KEY = 'orca-samples.tasks'

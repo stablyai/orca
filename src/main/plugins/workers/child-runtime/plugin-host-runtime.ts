@@ -42,8 +42,6 @@ import {
   withWorkerTaskSources
 } from './plugin-worker-task-sources'
 
-export type { PluginDisposable, PluginWorkerOrcaApi } from './plugin-worker-task-sources'
-
 export type PluginHostCallError = Error & {
   code: PluginErrorCode
   retryable: boolean

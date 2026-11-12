@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createPluginWorkerRuntime, type PluginWorkerOrcaApi } from './plugin-host-runtime'
+import { createPluginWorkerRuntime } from './plugin-host-runtime'
+import type { PluginWorkerOrcaApi } from './plugin-worker-task-sources'
 
 const init = (grantedCapabilities: string[]) => ({
   orca: 1,
