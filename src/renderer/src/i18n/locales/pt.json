@@ -18013,7 +18013,6 @@
             "runningTerminalBlocker": "Processo de terminal em execução",
             "terminalLivenessUnknownBlocker": "Atividade do terminal desconhecida",
             "dirtyEditorBufferBlocker": "Buffer do editor não salvo",
-            "volatileLocalContextBlocker": "Contexto local volátil",
             "recentVisibleContextBlocker": "Abas visitadas recentemente",
             "liveAgentBlocker": "Agente ativo",
             "sshDisconnectedBlocker": "Remoto indisponível",

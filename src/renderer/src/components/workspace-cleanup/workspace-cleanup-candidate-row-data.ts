@@ -33,8 +33,12 @@ export function getCandidateFactStatuses(
   candidate: WorkspaceCleanupCandidate,
   t: Translate = translate
 ): CandidateFactStatus[] {
+  const landed = getLandedFactStatus(candidate, t)
   if (candidate.blockers.length > 0) {
-    return candidate.blockers.map(getBlockerFactStatus)
+    return [...candidate.blockers.map(getBlockerFactStatus), ...(landed ? [landed] : [])]
+  }
+  if (landed) {
+    return [landed]
   }
   if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
     return [
@@ -70,6 +74,30 @@ export function getCandidateFactStatuses(
     ]
   }
   return []
+}
+
+function getLandedFactStatus(
+  candidate: WorkspaceCleanupCandidate,
+  t: Translate
+): CandidateFactStatus | null {
+  if (candidate.reasons.includes('merged')) {
+    return {
+      label: t('auto.components.workspace.cleanup.WorkspaceCleanupDialog.mergedStatus', 'Merged'),
+      tone: 'ready',
+      git: true
+    }
+  }
+  if (candidate.reasons.includes('unchanged')) {
+    return {
+      label: t(
+        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.unchangedStatus',
+        'No new commits'
+      ),
+      tone: 'ready',
+      git: true
+    }
+  }
+  return null
 }
 
 const GIT_SAFETY_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([

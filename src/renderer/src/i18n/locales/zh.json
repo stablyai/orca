@@ -3487,7 +3487,6 @@
             "runningTerminalBlocker": "正在运行的终端进程",
             "terminalLivenessUnknownBlocker": "终端状态未知",
             "dirtyEditorBufferBlocker": "未保存的编辑器缓冲区",
-            "volatileLocalContextBlocker": "易变本地上下文",
             "recentVisibleContextBlocker": "最近访问的标签页",
             "liveAgentBlocker": "活动代理",
             "sshDisconnectedBlocker": "远程不可用",

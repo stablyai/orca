@@ -3296,7 +3296,6 @@
             "runningTerminalBlocker": "実行中のターミナルプロセス",
             "terminalLivenessUnknownBlocker": "ターミナルの状態不明",
             "dirtyEditorBufferBlocker": "未保存のエディターバッファ",
-            "volatileLocalContextBlocker": "揮発性のローカルコンテキスト",
             "recentVisibleContextBlocker": "最近表示したタブ",
             "liveAgentBlocker": "アクティブな Agent",
             "sshDisconnectedBlocker": "リモート利用不可",

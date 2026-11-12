@@ -3788,7 +3788,6 @@
             "runningTerminalBlocker": "正在執行的終端機行程",
             "terminalLivenessUnknownBlocker": "無法確認終端機是否仍在執行",
             "dirtyEditorBufferBlocker": "未儲存的編輯器緩衝區",
-            "volatileLocalContextBlocker": "易變本機上下文",
             "recentVisibleContextBlocker": "最近存取的分頁",
             "liveAgentBlocker": "執行中的代理程式",
             "sshDisconnectedBlocker": "遠端不可用",

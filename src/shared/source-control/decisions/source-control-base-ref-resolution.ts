@@ -59,7 +59,7 @@ export function resolveSourceControlPickerBaseRef(input: {
   return input.effectiveBaseRef?.trim() || pinnedBaseRef
 }
 
-function isFullGitCommitOid(value: string): boolean {
+export function isFullGitCommitOid(value: string): boolean {
   return /^[0-9a-f]{40}$/i.test(value)
 }
 

@@ -3296,7 +3296,6 @@
             "runningTerminalBlocker": "실행 중인 터미널 프로세스",
             "terminalLivenessUnknownBlocker": "터미널 상태 알 수 없음",
             "dirtyEditorBufferBlocker": "저장되지 않은 편집기 버퍼",
-            "volatileLocalContextBlocker": "휘발성 로컬 문맥",
             "recentVisibleContextBlocker": "최근 방문한 탭",
             "liveAgentBlocker": "활성 에이전트",
             "sshDisconnectedBlocker": "원격을 사용할 수 없음",

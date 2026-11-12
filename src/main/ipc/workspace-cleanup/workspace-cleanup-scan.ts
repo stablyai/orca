@@ -1,5 +1,7 @@
 import type { Store } from '../../persistence/loading-store/store'
 import { isFolderRepo } from '../../../shared/repo-kind'
+import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../../shared/repo-types'
 import type { GitWorktreeInfo, Worktree } from '../../../shared/worktree/types'
@@ -76,6 +78,8 @@ export async function scanWorkspaceCleanup(
   for (const repo of allRepos) {
     repoOwnerCountById.set(repo.id, (repoOwnerCountById.get(repo.id) ?? 0) + 1)
   }
+  // One snapshot per scan: merged-review evidence reads it without the network.
+  const prCache = store.getGitHubCache().pr
   const progress = createWorkspaceCleanupProgressEmitter(args.scanId, scannedAt, options)
   const errors: WorkspaceCleanupScanResult['errors'] = []
   const candidates: WorkspaceCleanupCandidate[] = []
@@ -91,6 +95,7 @@ export async function scanWorkspaceCleanup(
           repo,
           repoOwnerCount: repoOwnerCountById.get(repo.id) ?? 1,
           scannedAt,
+          prCache,
           targetWorktreeIds: targetWorktreeIdsByRepo.get(repo.id),
           refreshTargetActivity: args.worktreeId !== undefined || args.refreshActivity === true,
           includeAllWorkspaces: args.includeAllWorkspaces === true,
@@ -118,6 +123,7 @@ async function scanRepoWorkspaces(
     repo: Repo
     repoOwnerCount: number
     scannedAt: number
+    prCache: PRCacheView<PRInfo>
     targetWorktreeIds?: ReadonlySet<string>
     refreshTargetActivity: boolean
     includeAllWorkspaces: boolean
@@ -130,6 +136,7 @@ async function scanRepoWorkspaces(
     repo,
     repoOwnerCount,
     scannedAt,
+    prCache,
     targetWorktreeIds,
     refreshTargetActivity,
     includeAllWorkspaces,
@@ -248,6 +255,7 @@ async function scanRepoWorkspaces(
         worktree: worktreeWithActivity,
         scannedAt,
         route,
+        prCache,
         // Defer Git for active rows during fleet scans; forced removal preflight reads fresh evidence.
         skipGit: skipGitWorktreeIds.has(worktreeWithActivity.id) || !isInactive,
         forceGitCheck: Boolean(targetWorktreeIds),
