@@ -101,6 +101,28 @@ describe('a shallower replay never shrinks a cloud pane (N-02)', () => {
     expect(after.at(-1)).toBe('$')
   })
 
+  it('two sleeps before the restart: keeps everything up to the last divider, nothing doubled', async () => {
+    const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
+    const first = '── Slept 9:00–9:30 AM · processes stopped ──'
+    const second = '── Slept 10:46–10:52 AM · processes stopped ──'
+    const postWake = ['$ echo after-second', 'after-second']
+    await write(
+      terminal,
+      `${[...lines(1, 50), first, ...lines(51, 80), second, ...postWake].join('\r\n')}\r\n$ `
+    )
+
+    const kept = await shallowReplay(terminal, `${postWake.join('\r\n')}\r\n$ `)
+
+    expect(kept).toBe(true)
+    const after = rows(terminal)
+    expect(after[0]).toBe('00001 line')
+    expect(after.filter((row) => row === first)).toHaveLength(1)
+    expect(after.filter((row) => row === second)).toHaveLength(1)
+    expect(after.filter((row) => row === '00080 line')).toHaveLength(1)
+    expect(after.filter((row) => row === 'after-second')).toHaveLength(1)
+    expect(after.indexOf(first)).toBeLessThan(after.indexOf(second))
+  })
+
   it('leaves the replay alone when it does not overlap what the pane held', async () => {
     const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
     await write(terminal, `${lines(1, 3000).join('\r\n')}\r\n$ `)
