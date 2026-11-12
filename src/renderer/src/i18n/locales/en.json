@@ -28987,7 +28987,8 @@
       "tryAgain": "Try again",
       "contact": "Contact us",
       "title": "Orca Cloud isn’t turned on for your team yet",
-      "lead": "Your team has a plan, but Orca Cloud isn’t turned on for it yet. Try again in a few minutes, or contact us and we’ll turn it on."
+      "lead": "Your team has a plan, but Orca Cloud isn’t turned on for it yet. Try again in a few minutes, or contact us and we’ll turn it on.",
+      "leadNoContact": "Your team has a plan, but Orca Cloud isn’t turned on for it yet. Try again in a few minutes."
     }
   },
   "orcaCloudSignInSheet": {
