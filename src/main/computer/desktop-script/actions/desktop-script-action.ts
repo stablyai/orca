@@ -151,21 +151,25 @@ export function verifyDesktopAction(
   }
   const actual = refreshedElementValue(snapshot, targetElement, elementIndex)
   if (actual === expected) {
+    return { ...action, verification: { state: 'verified', property: 'value' } }
+  }
+  if (actual === undefined || actual === REDACTED_SECURE_VALUE) {
     return {
       ...action,
-      verification: { state: 'verified', property: 'value', expected, actualPreview: actual }
+      verification: {
+        state: 'unverified',
+        reason: actual === undefined ? 'provider_unavailable' : 'readback_unsupported'
+      }
     }
   }
   return {
     ...action,
-    verification: {
-      state: 'unverified',
-      reason: actual === undefined ? 'provider_unavailable' : 'value_mismatch',
-      expected,
-      actualPreview: actual ?? null
-    }
+    verification: { state: 'unverified', reason: 'value_mismatch', actualPreview: actual }
   }
 }
+
+// Why: runtime.ps1 and runtime.py render secure fields as this, so it cannot disprove a write.
+const REDACTED_SECURE_VALUE = '[redacted]'
 
 function refreshedElementValue(
   snapshot: BridgeSnapshot | undefined,

@@ -49,13 +49,27 @@ describe('DesktopScriptProviderClient actions', () => {
       noScreenshot: true
     })
 
-    expect(result.action).toMatchObject({
-      verification: {
-        state: 'verified',
-        property: 'value',
-        expected: 'changed',
-        actualPreview: 'changed'
-      }
+    expect(result.action?.verification).toEqual({ state: 'verified', property: 'value' })
+  })
+
+  it('does not report a redacted secure-field read-back as a failed set-value', async () => {
+    mockBridgeResponse({ ok: true, snapshot: sampleBridgeSnapshot('Login', 'initial') })
+    mockBridgeResponse({ ok: true, capabilities: sampleCapabilities() })
+    mockBridgeResponse({ ok: true, snapshot: sampleBridgeSnapshot('Login', '[redacted]') })
+
+    const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
+
+    await client.snapshot({ app: 'Login' })
+    const result = await client.action('setValue', {
+      app: 'Login',
+      elementIndex: 0,
+      value: 'hunter2',
+      noScreenshot: true
+    })
+
+    expect(result.action?.verification).toEqual({
+      state: 'unverified',
+      reason: 'readback_unsupported'
     })
   })
 })
