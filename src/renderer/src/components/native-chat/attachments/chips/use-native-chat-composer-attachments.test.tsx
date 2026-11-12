@@ -179,7 +179,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-it('clears a pending image on disable without putting its marker in prompt text', async () => {
+  it('clears a pending image on disable without putting its marker in prompt text', async () => {
     const probe = await renderProbe('structured-1', true)
     act(() => {
       probe.latest().beginPendingImageAttachment()
