@@ -45,8 +45,9 @@ const agentsListResult = z.object({
         /** The agent's own session id, which `agent.resume` takes; null when Orca has none.
          *  Absent before host API 1.8. */
         sessionId: pluginAgentSessionIdSchema.nullable().optional(),
-        /** The orchestration task Orca dispatched to this agent, with its title (empty when the
-         *  task has none); null when it runs no dispatched task. Absent before host API 1.9. */
+        /** The orchestration task Orca dispatched to this agent and that is still open, with its
+         *  title (`''` when the task has none); null when it runs none, including once its task
+         *  completed or failed. Absent before host API 1.9. */
         task: z
           .object({ title: z.string().max(PLUGIN_AGENT_TASK_TITLE_MAX) })
           .nullable()

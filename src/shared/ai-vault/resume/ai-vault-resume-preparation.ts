@@ -91,3 +91,41 @@ export function aiVaultSessionNeedsResumePreparation(
     (!session.executionHostId || session.executionHostId === LOCAL_EXECUTION_HOST_ID)
   )
 }
+
+/** What a terminal resume asks the host to prepare: a Codex home only where the session needs one
+ *  readied; the host checks who owns the session either way. Desktop and plugin resumes share it. */
+export function aiVaultTerminalResumeRequest(
+  args: AiVaultPrepareSessionResumeArgs
+): AiVaultPrepareSessionResumeArgs {
+  return aiVaultSessionNeedsResumePreparation(args) ? args : { ...args, codexHome: null }
+}
+
+/** The host's answer as a terminal resume applies it; a malformed one refuses the resume. */
+export function aiVaultTerminalResumeResult(
+  args: AiVaultPrepareSessionResumeArgs,
+  result: AiVaultPrepareSessionResumeResult | null | undefined
+): AiVaultPrepareSessionResumeResult {
+  if (
+    typeof result?.useRealCodexHome !== 'boolean' ||
+    (result.substituteCodexHome !== undefined && typeof result.substituteCodexHome !== 'string')
+  ) {
+    throw new Error('Invalid aiVault.prepareSessionResume response')
+  }
+  // Why: old desktop resumes kept the recorded home for sessions that need no readying.
+  return aiVaultSessionNeedsResumePreparation(args) ? result : { useRealCodexHome: false }
+}
+
+/** The Codex home a prepared session resumes in: null for the system home (`useRealCodexHome`),
+ *  the selected account's when the host repinned it, else the recorded one. */
+export function aiVaultSessionAfterResumePreparation<S extends Pick<AiVaultSession, 'codexHome'>>(
+  session: S,
+  result: AiVaultPrepareSessionResumeResult
+): S {
+  if (result.useRealCodexHome) {
+    return { ...session, codexHome: null }
+  }
+  if (result.substituteCodexHome) {
+    return { ...session, codexHome: result.substituteCodexHome }
+  }
+  return session
+}

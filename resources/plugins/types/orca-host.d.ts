@@ -238,7 +238,7 @@ declare module 'orca/host' {
       result: { workspaceId: string; terminalId?: string }
       surfaces: "worker"
     }
-    /** Resumes an agent's earlier session by its `sessionId` in a new terminal of a workspace, in the background; `started` is false when an Orca terminal already runs it. A past session that Agent Session History lists on this computer is prepared first, as Orca's own Resume does (from host API 1.9); only `agent:launch` is needed, since the plugin must already know the id. In WSL it uses the distro's default agent account, as `agent.launch` does. Since host API 1.8. */
+    /** Resumes an agent's earlier session by its `sessionId` in a new terminal of a workspace, in the background; `started` is false when an Orca terminal already runs it. From host API 1.9, a session no Orca pane runs that Agent Session History lists on this computer (among the workspace's own sessions and the 200 newest) is prepared and started as Orca's own Resume does, in the agent account Orca would pick; only `agent:launch` is needed, since the plugin must already know the id. Other sessions, and workspaces on another host, resume by id. In WSL it uses the distro's default agent account, as `agent.launch` does. Since host API 1.8. */
     "agent.resume": {
       params: { workspaceId: string; agent: "claude" | "codebuddy" | "codex" | "qoder" | "qoder-cn" | "qwen-code" | "gemini" | "antigravity" | "opencode" | "opencode2" | "pi" | "mimo-code" | "droid" | "grok" | "devin" | "omp" | "prime-agent" | "copilot" | "cursor" | "kimi" | "muse" | "zcode" | "dsh" | "jcode" | "kiro" | "hermes"; sessionId: string }
       result: { terminalId: string; started: boolean }
@@ -268,7 +268,7 @@ declare module 'orca/host' {
       result: { deleted: boolean; reason?: "cancelled" | "consent-unavailable" | "changed" }
       surfaces: "worker"
     }
-    /** Past agent sessions in Orca's Agent Session History on this computer, newest first: title, agent, workspace, branch, times, message and token counts, and whether a terminal runs it. Never the conversation or file paths, though a title can be the start of its first message. `agent.resume` resumes one by its `sessionId`, for agents that resume by id. Since host API 1.9. */
+    /** Past agent sessions in Orca's Agent Session History on this computer (WSL distributions included on Windows), newest first: title, agent, workspace, branch, times, message and token counts, and whether an Orca terminal here runs it. Leaves out Antigravity IDE conversations and subagent transcripts, and never gives the conversation or file paths, though a title can be the start of its first message. `agent.resume` resumes one by its `sessionId`, for agents that resume by id. Since host API 1.9. */
     "agent.listSessions": {
       params: { workspaceId?: string; limit?: number } | undefined
       result: { sessions: { sessionId: string; agent: string; title: string; workspaceId: string | null; hostId: string; branch: string | null; createdAt: number | null; updatedAt: number; messageCount: number; totalTokens: number; running: boolean }[]; truncated: boolean }

@@ -6,6 +6,7 @@ import {
 } from './plugin-runtime-binding'
 
 import { PluginPanelBridge } from './panels/plugin-panel-bridge'
+import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -27,12 +28,22 @@ function runtime(terminals: { handle: string; title: string | null; paneTitle?: 
     })),
     sendTerminal: vi.fn(),
     dispatchPluginNotification: vi.fn(),
-    listAgentTasksByPaneKey: vi.fn(
-      (): Record<string, { taskTitle?: string; dispatchId: string }> => ({
-        'tab0:worker': { taskTitle: 'Write the tests', dispatchId: 'd-1' },
-        'tab0:untitled': { dispatchId: 'd-2' }
-      })
-    )
+    listAgentTasksByPaneKey: vi.fn((): Record<string, AgentStatusOrchestrationContext> => ({
+      'tab0:worker': {
+        taskId: 't-1',
+        dispatchId: 'd-1',
+        dispatchStatus: 'dispatched',
+        taskTitle: 'Write the tests',
+        coordinatorHandle: 'h'
+      },
+      'tab0:untitled': { taskId: 't-2', dispatchId: 'd-2' },
+      'tab0:finished': {
+        taskId: 't-3',
+        dispatchId: 'd-3',
+        dispatchStatus: 'completed',
+        taskTitle: 'Done'
+      }
+    }))
   }
 }
 
@@ -108,7 +119,7 @@ describe('workspace.changed for plugins', () => {
 })
 
 describe('agents.list task titles for plugins', () => {
-  it("passes each pane's task title on, and nothing else of its dispatch", () => {
+  it("passes each open task's title on, and nothing else of its dispatch", () => {
     const titles = pluginRuntimeDelegate(runtime([]), () => []).listAgentTaskTitles?.()
     expect(titles).toEqual(
       new Map([
@@ -116,5 +127,21 @@ describe('agents.list task titles for plugins', () => {
         ['tab0:untitled', '']
       ])
     )
+  })
+
+  it('reads the orchestration projection at most once a second', () => {
+    vi.useFakeTimers()
+    try {
+      const source = runtime([])
+      const delegate = pluginRuntimeDelegate(source, () => [])
+      delegate.listAgentTaskTitles?.()
+      delegate.listAgentTaskTitles?.()
+      expect(source.listAgentTasksByPaneKey).toHaveBeenCalledOnce()
+      vi.advanceTimersByTime(1001)
+      delegate.listAgentTaskTitles?.()
+      expect(source.listAgentTasksByPaneKey).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

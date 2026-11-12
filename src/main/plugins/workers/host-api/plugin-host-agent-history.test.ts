@@ -1,4 +1,8 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { invalidateAiVaultSessionListCache } from '../../../ai-vault/listing/cached-session-list'
 import type { PluginCapabilityKind } from '../../../../shared/plugins/capabilities/plugin-capabilities'
 import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-api'
 import { PluginRuntimeRpcError } from '../../plugin-runtime-rpc'
@@ -258,6 +262,105 @@ describe('agent.listSessions', () => {
     })
   })
 
+  it('prefers a project workspace over a project-group folder of the same path', async () => {
+    const rpc = runtime({
+      'folderWorkspace.list': {
+        folderWorkspaces: [
+          { id: 'twin', name: 'Twin', folderPath: '/src/r1', executionHostId: null }
+        ]
+      },
+      'aiVault.listSessions': {
+        sessions: [vaultRow({ cwd: '/src/r1/docs' })],
+        issues: [],
+        scannedAt: 'x'
+      }
+    })
+    const outcome = await listSessions(rpc)
+    expect(outcome.ok && outcome.value).toMatchObject({
+      sessions: [{ workspaceId: 'r1::/src/r1' }]
+    })
+  })
+
+  it('maps a workspace registered through a symlink, scoped or not', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-history-')))
+    try {
+      mkdirSync(join(root, 'real'))
+      symlinkSync(join(root, 'real'), join(root, 'link'))
+      const link = join(root, 'link')
+      const rpc = runtime({
+        'worktree.list': {
+          worktrees: [
+            { id: `r1::${link}`, repoId: 'r1', displayName: 'l', path: link, hostId: 'local' }
+          ]
+        },
+        'folderWorkspace.list': { folderWorkspaces: [] },
+        // Agents record the resolved folder.
+        'aiVault.listSessions': {
+          sessions: [vaultRow({ cwd: join(root, 'real', 'src') })],
+          issues: [],
+          scannedAt: 'x'
+        }
+      })
+      const outcome = await listSessions(rpc)
+      expect(outcome.ok && outcome.value).toMatchObject({
+        sessions: [{ workspaceId: `r1::${link}` }]
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('counts OpenCode sessions running under either version as running', async () => {
+    const rpc = runtime({
+      'aiVault.listSessions': {
+        sessions: [vaultRow({ agent: 'opencode2', sessionId: 'ses_1' })],
+        issues: [],
+        scannedAt: 'x'
+      }
+    })
+    const outcome = await listSessions(
+      rpc,
+      {},
+      {
+        listAgentStatuses: () => [
+          {
+            paneKey: 't:o',
+            state: 'working',
+            stateStartedAt: 1,
+            agentType: 'opencode',
+            providerSession: { id: 'ses_1' }
+          }
+        ]
+      }
+    )
+    expect(outcome.ok && outcome.value).toMatchObject({ sessions: [{ running: true }] })
+  })
+
+  it('reports a workspace read that reached the vault budget as truncated', async () => {
+    const rpc = runtime({
+      'aiVault.listSessions': {
+        sessions: Array.from({ length: 200 }, (_, index) =>
+          vaultRow({ sessionId: `s-${index}`, cwd: '/src/r1' })
+        ),
+        issues: [],
+        scannedAt: 'x'
+      }
+    })
+    const outcome = await listSessions(rpc, { workspaceId: 'r1::/src/r1', limit: 200 })
+    expect(outcome.ok && outcome.value).toMatchObject({ truncated: true })
+  })
+
+  it('reads afresh after the history list is invalidated, as a delete does', async () => {
+    const rpc = runtime()
+    await listSessions(rpc)
+    invalidateAiVaultSessionListCache()
+    await listSessions(rpc)
+    expect(vaultCalls(rpc)).toEqual([
+      { limit: 200, afterFingerprint: null },
+      { limit: 200, afterFingerprint: null }
+    ])
+  })
+
   it('shares one read among calls, then revalidates it by fingerprint', async () => {
     vi.useFakeTimers()
     const rpc = runtime({
@@ -357,6 +460,68 @@ describe('agent.resume of a past session', () => {
     })
     expect(await resume(rpc, 'codex')).toMatchObject({ ok: true })
     expect(paramsOf(rpc, 'aiVault.prepareSessionResume')).toMatchObject({ codexHome: home })
+  })
+
+  it("starts a Codex session of account A in account B's copy when B is selected, as the desktop does", async () => {
+    const homeA = '/u/.orca/codex-accounts/a/home'
+    const homeB = '/u/.orca/codex-accounts/b/home'
+    const rollout = 'sessions/2026/01/02/rollout-2026-01-02T00-00-00-s-1.jsonl'
+    const rpc = pastRuntime({
+      'aiVault.listSessions': {
+        sessions: [vaultRow({ agent: 'codex', codexHome: homeA, filePath: `${homeA}/${rollout}` })],
+        issues: [],
+        scannedAt: 'x'
+      },
+      // The host repins a hard-linked session to the selected account's home.
+      'aiVault.prepareSessionResume': { useRealCodexHome: false, substituteCodexHome: homeB }
+    })
+    expect(await resume(rpc, 'codex')).toMatchObject({ ok: true })
+    expect(paramsOf(rpc, 'aiVault.prepareSessionResume')).toEqual({
+      agent: 'codex',
+      sessionId: 's-1',
+      filePath: `${homeA}/${rollout}`,
+      codexHome: homeA,
+      executionHostId: 'local'
+    })
+    // The launch picks the account whose home holds the transcript it is given.
+    expect(paramsOf(rpc, 'terminal.ensureAgentSession')).toMatchObject({
+      providerSession: { key: 'session_id', id: 's-1', transcriptPath: `${homeB}/${rollout}` }
+    })
+  })
+
+  it('starts a moved legacy Codex session from its copy in the system Codex home', async () => {
+    const legacy = '/u/.orca/codex-runtime-home/home'
+    const rollout = 'sessions/2026/01/02/rollout-2026-01-02T00-00-00-s-1.jsonl'
+    const rpc = pastRuntime({
+      'aiVault.listSessions': {
+        sessions: [
+          vaultRow({ agent: 'codex', codexHome: legacy, filePath: `${legacy}/${rollout}` })
+        ],
+        issues: [],
+        scannedAt: 'x'
+      },
+      'aiVault.prepareSessionResume': { useRealCodexHome: true }
+    })
+    expect(await resume(rpc, 'codex')).toMatchObject({ ok: true })
+    expect(paramsOf(rpc, 'terminal.ensureAgentSession')).toMatchObject({
+      providerSession: { transcriptPath: join(homedir(), '.codex', rollout) }
+    })
+  })
+
+  it('ignores a home answer for a session that needs no readying, as the desktop does', async () => {
+    const rpc = pastRuntime({
+      'aiVault.prepareSessionResume': { useRealCodexHome: false, substituteCodexHome: '/elsewhere' }
+    })
+    expect(await resume(rpc)).toMatchObject({ ok: true })
+    expect(paramsOf(rpc, 'terminal.ensureAgentSession')).toMatchObject({
+      providerSession: { transcriptPath: '/home/me/.claude/projects/x/s-1.jsonl' }
+    })
+  })
+
+  it('refuses a malformed preparation answer', async () => {
+    const rpc = pastRuntime({ 'aiVault.prepareSessionResume': { useRealCodexHome: 'yes' } })
+    expect(await resume(rpc)).toMatchObject({ ok: false, code: 'action_failed' })
+    expect(paramsOf(rpc, 'terminal.ensureAgentSession')).toBeUndefined()
   })
 
   it('refuses when preparation fails, before any terminal opens', async () => {

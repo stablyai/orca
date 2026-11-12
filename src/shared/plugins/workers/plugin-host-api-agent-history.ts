@@ -31,9 +31,11 @@ const agentListSessionsResult = z.object({
         /** The session's name, or a stand-in such as the start of its first message. */
         title: z.string().max(PLUGIN_AGENT_SESSION_TITLE_MAX),
         /** The workspace it ran in, as `workspace.list` gives its id; null when none of this
-         *  computer's workspaces holds the folder it ran in. */
+         *  computer's workspaces holds the folder it ran in. Workspaces on SSH hosts, and on WSL
+         *  or paired hosts Orca reaches through its runtime (`runtime:` hosts), never match. */
         workspaceId: pluginWorkspaceIdSchema.nullable(),
-        /** The host whose history lists it: `local` for this computer. */
+        /** The host whose history lists it; always `local` (this computer) for now: paired
+         *  runtime hosts' history is not listed. */
         hostId: z.string().max(PLUGIN_HOST_ID_MAX_LENGTH),
         branch: z.string().max(512).nullable(),
         /** Milliseconds since the epoch; null when the session does not record it. */
@@ -47,14 +49,15 @@ const agentListSessionsResult = z.object({
       })
     )
     .max(PLUGIN_AGENT_SESSION_LIST_LIMIT),
-  /** More sessions match than were returned. */
+  /** More sessions may match than were returned: past `limit`, or the history read stopped at
+   *  its budget (the newest 200 overall, or about 200 per agent for one workspace). */
   truncated: z.boolean()
 })
 
 export const PLUGIN_AGENT_HISTORY_API = {
   'agent.listSessions': spec({
     summary:
-      "Past agent sessions in Orca's Agent Session History on this computer, newest first: title, agent, workspace, branch, times, message and token counts, and whether a terminal runs it. Never the conversation or file paths, though a title can be the start of its first message. `agent.resume` resumes one by its `sessionId`, for agents that resume by id.",
+      "Past agent sessions in Orca's Agent Session History on this computer (WSL distributions included on Windows), newest first: title, agent, workspace, branch, times, message and token counts, and whether an Orca terminal here runs it. Leaves out Antigravity IDE conversations and subagent transcripts, and never gives the conversation or file paths, though a title can be the start of its first message. `agent.resume` resumes one by its `sessionId`, for agents that resume by id.",
     since: 9,
     scope: 'any-workspace',
     capability: 'history:read',

@@ -68,7 +68,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   )
 
   /** The task each pane was dispatched, by pane key, as `worktree.ps` rows title it. */
-  listAgentTasksByPaneKey(): Readonly<Record<string, { taskTitle?: string }>> {
+  listAgentTasksByPaneKey() {
     return this.agentOrchestrationProjection.buildByPaneKey() ?? {}
   }
 

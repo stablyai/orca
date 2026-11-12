@@ -97,7 +97,7 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'automation:write':
     'Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)',
   'history:read':
-    "Read the list of your past agent sessions that Agent Session History finds on this computer (including its running WSL distributions on Windows, but not SSH or other machines): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself"
+    "Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself"
 }
 
 /** Canonicalize order, duplicates and field order so equivalent grants preserve consent across manifest formatting changes. */

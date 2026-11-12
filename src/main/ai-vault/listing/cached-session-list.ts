@@ -38,6 +38,8 @@ import {
 
 // Desktop and runtime RPC share this cache to avoid duplicate scans when mobile and desktop open together.
 const AI_VAULT_CACHE_TTL_MS = 60_000
+// Why several: readers with other scopes (a plugin, the mobile app) must not evict the panel's list.
+const AI_VAULT_CACHE_MAX_ENTRIES = 4
 
 export class AiVaultLocalScanError extends Error {
   constructor(
@@ -55,7 +57,8 @@ type CachedAiVaultList = {
   expiresAt: number
 }
 
-let cachedList: CachedAiVaultList | null = null
+// Least recently used first.
+const cachedLists = new Map<string, CachedAiVaultList>()
 let scanCoordinator = new AiVaultScanCoordinator()
 // Reject cache writes from scans that began before invalidation, or late results can resurrect deleted sessions.
 let cacheGeneration = 0
@@ -73,12 +76,9 @@ export async function listAiVaultSessions(
   }
   // A full list for the same paths holds every row a scope-only one would, so All -> Project needs no rescan.
   const fullKey = args?.scopeOnly ? aiVaultLocalScanScopeKey({ ...args, scopeOnly: false }) : key
-  if (
-    args?.force !== true &&
-    (cachedList?.key === key || cachedList?.key === fullKey) &&
-    cachedList.expiresAt > now &&
-    aiVaultCachedDepthServes(cachedList.depth, depth, args?.scopePaths)
-  ) {
+  const cachedList =
+    args?.force === true ? undefined : servingCachedList([key, fullKey], depth, args, now)
+  if (cachedList) {
     return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
   }
   // Capture before the coordinator's start microtask so intervening invalidation still rejects the result.
@@ -121,24 +121,57 @@ export async function listAiVaultSessions(
       )
       // Return pre-invalidation results to their caller, but never repopulate the cache with them.
       if (!scanSignal.aborted && startGeneration === cacheGeneration) {
-        const current = cachedList
+        const current = cachedLists.get(key)
         if (
           args?.force === true ||
-          current?.key !== key ||
+          !current ||
           current.expiresAt <= Date.now() ||
           !aiVaultCachedDepthServes(current.depth, depth, args?.scopePaths)
         ) {
-          cachedList = {
+          rememberCachedList({
             key,
             depth,
             result,
             expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
-          }
+          })
         }
       }
       return result
     }
   })
+}
+
+/** The fresh entry for the first key that serves this depth; a hit becomes the most recent. */
+function servingCachedList(
+  keys: readonly string[],
+  depth: AiVaultSessionDepth,
+  args: AiVaultListArgs | undefined,
+  now: number
+): CachedAiVaultList | undefined {
+  for (const key of keys) {
+    const entry = cachedLists.get(key)
+    if (
+      entry &&
+      entry.expiresAt > now &&
+      aiVaultCachedDepthServes(entry.depth, depth, args?.scopePaths)
+    ) {
+      cachedLists.delete(key)
+      cachedLists.set(key, entry)
+      return entry
+    }
+  }
+  return undefined
+}
+
+function rememberCachedList(entry: CachedAiVaultList): void {
+  cachedLists.delete(entry.key)
+  cachedLists.set(entry.key, entry)
+  for (const oldest of cachedLists.keys()) {
+    if (cachedLists.size <= AI_VAULT_CACHE_MAX_ENTRIES) {
+      break
+    }
+    cachedLists.delete(oldest)
+  }
 }
 
 export function aiVaultSessionListCacheGeneration(): number {
@@ -148,7 +181,7 @@ export function aiVaultSessionListCacheGeneration(): number {
 // Invalidate cached results and disarm in-flight cache writes after deletion.
 export function invalidateAiVaultSessionListCache(): void {
   cacheGeneration++
-  cachedList = null
+  cachedLists.clear()
   // A deleted WSL session must not come back as a carried-over row.
   resetAiVaultWslSessionCarryover()
 }

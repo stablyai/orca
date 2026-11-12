@@ -8,6 +8,10 @@ import { pluginAgentSessionIdSchema } from '../../../../shared/plugins/workers/p
 import { pluginWorkspaceId } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
+  aiVaultHistoryAgents,
+  isAiVaultAgent
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import {
   bind,
   type BoundPluginHostMethod,
   type PluginHostMethodContext
@@ -61,13 +65,21 @@ async function namedWorkspace(
   return shown
 }
 
-/** Whether an Orca pane on this computer runs the session now. */
+/** The sessions Orca panes on this computer run now, by agent and session id. */
 function runningSessions(rows: readonly PluginAgentStatusRow[]): Set<string> {
   return new Set(
     rows
       .filter((row) => row.providerSessionOnly !== true && !row.connectionId && row.providerSession)
       .map((row) => `${row.agentType ?? ''}\0${row.providerSession?.id ?? ''}`)
   )
+}
+
+/** One OpenCode store holds both versions' sessions, which panes and history may label apart. */
+function isRunning(session: PluginHistorySession, running: ReadonlySet<string>): boolean {
+  const agents = isAiVaultAgent(session.agent)
+    ? aiVaultHistoryAgents(session.agent)
+    : [session.agent]
+  return agents.some((agent) => running.has(`${agent}\0${session.sessionId}`))
 }
 
 function publicSession(
@@ -86,7 +98,7 @@ function publicSession(
     updatedAt: session.updatedAt,
     messageCount: session.messageCount,
     totalTokens: session.totalTokens,
-    running: running.has(`${session.agent}\0${session.sessionId}`)
+    running: isRunning(session, running)
   }
 }
 
@@ -104,7 +116,7 @@ export const PLUGIN_AGENT_HISTORY_HANDLERS = {
     }
     const owner = ctx.services.runtimeRpc ?? call
     const history = await pluginAgentHistory(call, owner, scope?.path ?? null)
-    const workspaceOf = pluginHistoryWorkspaceMatcher(workspaces)
+    const workspaceOf = await pluginHistoryWorkspaceMatcher(workspaces)
     const running = runningSessions(ctx.services.listAgentStatuses())
     const matching = history.sessions
       .filter((session) => pluginAgentSessionIdSchema.safeParse(session.sessionId).success)

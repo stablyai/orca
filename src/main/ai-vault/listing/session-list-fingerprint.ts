@@ -9,8 +9,12 @@ export function conditionalAiVaultListResult(
   if (afterFingerprint === undefined) {
     return result
   }
+  // Why only the sessions: the scan id, time and issue wording change on every scan, so hashing
+  // them would answer an unchanged history as changed. A reused body keeps its earlier issues.
   const fingerprint = createHash('sha256')
-    .update(JSON.stringify({ ...result, scannedAt: undefined }))
+    .update(
+      JSON.stringify({ ...result, scannedAt: undefined, scanId: undefined, issues: undefined })
+    )
     .digest('hex')
   return !force && afterFingerprint === fingerprint
     ? { sessions: [], issues: [], scannedAt: result.scannedAt, fingerprint, unchanged: true }
