@@ -21218,8 +21218,9 @@
             "rateLimited": "Too many attempts. Wait a minute, then try again.",
             "forbidden": "Only owners can delete the team.",
             "failed": "Couldn’t delete the team. Try again.",
-            "deletedToast": "{{value0}} deleted"
-          }
+            "deletedToast2": "{{value0}} was deleted"
+          },
+          "leaveLastOwnerOrDelete": "You’re the only owner. Make someone else an owner first, or delete the team."
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",

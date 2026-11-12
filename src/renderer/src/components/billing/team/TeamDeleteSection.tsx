@@ -22,7 +22,7 @@ export function TeamDeleteBlockers({
   return (
     <ul className="space-y-1">
       {teamDeleteBlockerLines(blockers, t).map((line) => (
-        <li key={line.code} className="text-xs text-destructive-text text-pretty">
+        <li key={line.code} className="text-xs text-muted-foreground text-pretty">
           {line.text}{' '}
           <button
             type="button"

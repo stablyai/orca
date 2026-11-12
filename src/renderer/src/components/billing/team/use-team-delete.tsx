@@ -151,7 +151,7 @@ export function useTeamDelete({
         if (result.status === 'deleted') {
           close()
           toast.success(
-            t('auto.components.billing.team.delete.deletedToast', '{{value0}} deleted', {
+            t('auto.components.billing.team.delete.deletedToast2', '{{value0}} was deleted', {
               value0: teamName
             })
           )
