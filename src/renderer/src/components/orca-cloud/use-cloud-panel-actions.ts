@@ -5,6 +5,7 @@ import { ConfirmationDialogContext } from '@/components/confirmation-dialog-cont
 import { useWorktreeActivityStatus } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
 import { openMoveToThisComputer } from '@/lib/orca-cloud/orca-cloud-move-store'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
+import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
 import type { CloudPanelActions } from './CloudWorkspaceStatusPanel'
 import {
   runArchiveCloudWorkspace,
@@ -53,6 +54,10 @@ export function useCloudPanelActions(workspaceId: string, close: () => void): Cl
       onMoveToComputer: () => {
         close()
         openMoveToThisComputer(workspaceId, name ?? workspaceId)
+      },
+      onDelete: () => {
+        close()
+        runWorktreeDelete(workspaceId)
       }
     }),
     [workspaceId, close, agentsRunning, confirm, name]

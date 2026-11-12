@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { CloudStripPasteForm } from './CloudStripPasteForm'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { BANNER_BODY_TEXT, BANNER_TONE, type BannerSeverity } from '@/components/ui/banner-tone'
 import { useReservePaneTopSpace } from '../terminal-pane/appearance/pane-top-banner/PaneTopWarningBanner'
 import type {
   CloudStripModel,
@@ -88,6 +89,8 @@ export function CloudStripLayer({ children }: { children: React.ReactNode }): Re
 export type CloudStripActions = {
   primary: (action: CloudStripPrimary) => void
   submitCode: (code: string) => void
+  /** The code from Claude's sign-in page, for the waiting setup-token (Set up once). */
+  submitSetupCode?: (code: string) => void
   useCode: () => void
   /** From a device code to pasting a code (the gate's code fallback). */
   pasteCode: () => void
@@ -95,27 +98,32 @@ export type CloudStripActions = {
   cancel: () => void
 }
 
+/** GA-P3t: the strip's severity look; anything that isn't a warning or an error reads as info. */
+export function stripSeverity(status: CloudStripStatus): BannerSeverity {
+  return status === 'warning' ? 'warning' : status === 'error' ? 'error' : 'info'
+}
+
 function StatusSlot({ status }: { status: CloudStripStatus }): React.JSX.Element {
   const base = 'size-4 shrink-0'
   switch (status) {
     case 'need':
-      return <CircleDashed aria-hidden className={cn(base, 'text-muted-foreground')} />
+      return <CircleDashed aria-hidden className={cn(base, BANNER_TONE.info.icon)} />
     // Not set up yet (or pasting the setup token): neutral, like the agent sheet; nothing is loading.
     case 'setup':
-      return <Info aria-hidden className={cn(base, 'text-muted-foreground')} />
+      return <Info aria-hidden className={cn(base, BANNER_TONE.info.icon)} />
     case 'warning':
-      return <TriangleAlert aria-hidden className={cn(base, 'text-status-warning-text')} />
+      return <TriangleAlert aria-hidden className={cn(base, BANNER_TONE.warning.icon)} />
     case 'busy':
       return (
         <Loader2
           aria-hidden
-          className={cn(base, 'text-muted-foreground motion-safe:animate-spin')}
+          className={cn(base, BANNER_TONE.info.icon, 'motion-safe:animate-spin')}
         />
       )
     case 'error':
-      return <CircleAlert aria-hidden className={cn(base, 'text-destructive')} />
+      return <CircleAlert aria-hidden className={cn(base, BANNER_TONE.error.icon)} />
     case 'done':
-      return <CircleCheck aria-hidden className={cn(base, 'text-muted-foreground')} />
+      return <CircleCheck aria-hidden className={cn(base, BANNER_TONE.info.icon)} />
   }
 }
 
@@ -139,17 +147,29 @@ export function CloudAgentSignInStrip({
   actions: CloudStripActions
 }): React.JSX.Element {
   const sectionRef = useRef<HTMLElement | null>(null)
+  // The strip had focus and its focused control went away with a state change ("Set up once" becomes
+  // the paste step): focus stays on the strip, so Escape still cancels (it only listens inside).
+  const focusInside = useRef(false)
+  useLayoutEffect(() => {
+    const section = sectionRef.current
+    if (focusInside.current && section && document.activeElement === document.body) {
+      section.focus({ preventScroll: true })
+    }
+  })
   const width = useLiveStripWidth(sectionRef, initialWidth)
   const compact = width === 'compact'
-  // The detail leaves the line when there's no room for it beside the title: below 360 px, and on the
-  // paste step under ~560 px (its input takes the space). It stays the region's description and the
-  // title's tooltip.
-  const quietDetail = compact || (model.paste !== null && width === 'tiny')
+  // Text never truncates in these strips (design-squad): title and detail wrap (up to 3 lines each)
+  // and the strip grows from 56 px; actions stay top-right.
+  const setupCode = model.paste?.setupCode ? model.paste : null
+  // Narrow (<560 px) with the code field: stack, never truncate (design-squad): text wraps on row 1,
+  // [Paste code ……] [Finish setup] [Open again] fill row 2.
+  const stacked = setupCode !== null && (width === 'tiny' || compact)
+  const lineFit = 'line-clamp-3 break-words'
   const t = useTranslate()
   const titleId = React.useId()
   const detailId = React.useId()
-  const [code, setCode] = useState('')
-  const primary = model.primary
+  // Narrow panes keep just [Paste code] [Finish setup]; "Open again" returns with the room for it.
+  const primary = setupCode && (width === 'tiny' || compact) ? null : model.primary
   return (
     <section
       ref={sectionRef}
@@ -158,6 +178,15 @@ export function CloudAgentSignInStrip({
       aria-labelledby={titleId}
       aria-describedby={detailId}
       tabIndex={-1}
+      onFocus={() => {
+        focusInside.current = true
+      }}
+      onBlur={(event) => {
+        // A control removed under focus blurs with no next target: the strip keeps the focus.
+        if (event.relatedTarget !== null && !event.currentTarget.contains(event.relatedTarget)) {
+          focusInside.current = false
+        }
+      }}
       data-cloud-sign-in-strip
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
@@ -166,29 +195,23 @@ export function CloudAgentSignInStrip({
         }
       }}
       className={cn(
-        'grid h-14 items-center gap-2.5 border-b border-border bg-card px-3 text-foreground outline-none',
-        GRID[width]
+        // GA-P3t: a severity fill and a 1px bottom border that clear contrast on white panes and
+        // separate the strip from the terminal below it.
+        'grid gap-2.5 border-b px-3 text-foreground outline-none',
+        BANNER_TONE[stripSeverity(model.status)].surface,
+        BANNER_TONE[stripSeverity(model.status)].border,
+        'min-h-14 items-start py-2.5 [&>svg]:mt-0.5',
+        setupCode ? 'grid-cols-[16px_minmax(0,1fr)_auto]' : GRID[width]
       )}
     >
       <StatusSlot status={model.status} />
       <div data-strip-text className="flex min-w-0 flex-col">
+        <span id={titleId} className={cn(lineFit, 'text-[13px] leading-5 font-medium')}>
+          {model.title}
+        </span>
         <Tooltip>
           <TooltipTrigger asChild>
-            <span id={titleId} className="truncate text-[13px] leading-5 font-medium">
-              {compact ? (model.compactTitle ?? model.title) : model.title}
-            </span>
-          </TooltipTrigger>
-          {quietDetail && model.detail ? <TooltipContent>{model.detail}</TooltipContent> : null}
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              id={detailId}
-              className={cn(
-                'truncate text-xs leading-4 text-muted-foreground',
-                quietDetail && 'sr-only'
-              )}
-            >
+            <span id={detailId} className={cn(lineFit, 'text-xs leading-4', BANNER_BODY_TEXT)}>
               {model.detail}
               {model.description ? <span className="sr-only">. {model.description}</span> : null}
             </span>
@@ -196,7 +219,7 @@ export function CloudAgentSignInStrip({
           {model.description ? <TooltipContent>{model.description}</TooltipContent> : null}
         </Tooltip>
       </div>
-      {width === 'wide' ? (
+      {width === 'wide' && !setupCode ? (
         prompt ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -217,43 +240,18 @@ export function CloudAgentSignInStrip({
           <span />
         )
       ) : null}
-      <div data-strip-actions className="flex h-8 min-w-0 items-center justify-end gap-1.5">
+      <div data-strip-actions className="-my-0.5 flex h-8 min-w-0 items-center justify-end gap-1.5">
         {model.code ? (
           <code className="shrink-0 select-all rounded bg-muted px-1.5 font-mono text-xs tracking-wider">
             {model.code}
           </code>
         ) : null}
-        {model.paste ? (
-          <form
-            className="flex min-w-0 items-center gap-1.5"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (code.trim()) {
-                actions.submitCode(code.trim())
-              }
-            }}
-          >
-            <Input
-              aria-label={
-                model.paste.secretLabel ?? t('agentSignInStrip.pasteLabel', 'Code from claude.ai')
-              }
-              type={model.paste.secretLabel ? 'password' : undefined}
-              autoComplete={model.paste.secretLabel ? 'off' : undefined}
-              aria-invalid={model.paste.refusal ? true : undefined}
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              variant="code"
-              className="h-7 min-w-0"
-            />
-            <Button
-              type="submit"
-              size="xs"
-              aria-busy={model.paste.submitting || undefined}
-              aria-disabled={model.paste.submitting || undefined}
-            >
-              {t('agentSignInStrip.continue', 'Continue')}
-            </Button>
-          </form>
+        {model.paste && !stacked ? (
+          <CloudStripPasteForm
+            paste={model.paste}
+            onSubmitCode={actions.submitCode}
+            onSubmitSetupCode={actions.submitSetupCode}
+          />
         ) : null}
         {primary ? (
           <Button
@@ -323,6 +321,37 @@ export function CloudAgentSignInStrip({
           </Button>
         )}
       </div>
+      {stacked && setupCode ? (
+        // Row 2, under the text: [Paste code ……] [Finish setup] then "Open again" as a quiet button.
+        <div
+          data-strip-code-row
+          className="col-span-2 col-start-2 flex min-w-0 flex-wrap items-center gap-1.5"
+        >
+          <div className="min-w-0 flex-1 basis-56">
+            <CloudStripPasteForm
+              fill
+              paste={setupCode}
+              onSubmitCode={actions.submitCode}
+              onSubmitSetupCode={actions.submitSetupCode}
+            />
+          </div>
+          {model.primary ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              aria-disabled={model.primary.busy || undefined}
+              onClick={() =>
+                model.primary && !model.primary.busy
+                  ? actions.primary(model.primary.action)
+                  : undefined
+              }
+            >
+              {model.primary.label}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <span role="status" className="sr-only">
         {model.announcement}
       </span>

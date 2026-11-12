@@ -7,10 +7,12 @@ import type {
   CloudOomEvent,
   CloudWakeProgressEvent,
   CloudWorkspaceErrorCode,
-  CloudWorkspaceResult
+  CloudWorkspaceResult,
+  CloudWorkspaceStatus
 } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import type {
   HostedArchiveCheckout,
+  HostedSandboxView,
   HostedWorkspaceStatus
 } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import {
@@ -156,6 +158,14 @@ export function createOomTracker(announce: (event: CloudOomEvent) => void) {
       }
     }
   }
+}
+
+/** The window's status read: the panel's status plus the sandbox's failed git setup (GIT-SETUP). */
+export function withGitSetup(
+  status: HostedWorkspaceStatus,
+  sandbox: Pick<HostedSandboxView, 'gitSetup'>
+): CloudWorkspaceStatus {
+  return sandbox.gitSetup === 'failed' ? { ...status, gitSetupFailed: true } : status
 }
 
 let current: HostedWorkspaceService | null = null

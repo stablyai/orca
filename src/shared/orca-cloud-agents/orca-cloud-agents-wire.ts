@@ -109,6 +109,8 @@ export const ORCA_CLOUD_AGENTS_ERROR_CODES = [
   /** The provider's flag is off or its kill switch is on (404 from the credential routes). */
   'not_enabled',
   'invalid_token',
+  /** A pasted sign-in code that isn't one (Claude's "Paste this into Claude Code" page). */
+  'invalid_code',
   'not_found',
   'broker_in_progress',
   'rate_limited',
@@ -145,8 +147,17 @@ export type OrcaCloudAgentSetupFailure =
 /** The one setup step running on this computer for an agent (spec §5 state 6). */
 export type OrcaCloudAgentSetup =
   | { phase: 'idle' }
-  /** Claude: setup-token is running and the browser is open ("Finish in your browser"). */
-  | { phase: 'browser'; startedAt: number; canReopen: boolean }
+  /**
+   * Claude: setup-token is running and the browser is open ("Finish in your browser"). `acceptsCode`:
+   * the CLI is waiting for the code Claude's sign-in page shows; `code` is the pasted one's progress.
+   */
+  | {
+      phase: 'browser'
+      startedAt: number
+      canReopen: boolean
+      acceptsCode?: boolean
+      code?: 'checking' | 'rejected'
+    }
   /** Codex: the broker is starting. */
   | { phase: 'preparing'; startedAt: number }
   /** Codex: enter the code on the provider's page. The code is meant to be shown; it isn't a secret. */

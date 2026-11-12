@@ -283,8 +283,8 @@ export function CloudEnvironmentEmptyState({
         </p>
         <p className="text-xs leading-5 text-muted-foreground">
           {t(
-            'cloudEnvironment.empty.description',
-            'Install your repos’ dependencies once, snapshot the sandbox, and every new cloud workspace starts ready to run in seconds.'
+            'cloudEnvironment.empty.descriptionSaved',
+            'Install your repos’ dependencies once, save the sandbox as an environment, and every new cloud workspace starts ready to run in seconds.'
           )}
         </p>
       </div>

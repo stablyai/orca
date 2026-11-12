@@ -94,7 +94,9 @@ function page(
   preferences: CloudAgentConfigSyncPreferences,
   workspaces: OrcaCloudMcpWorkspace[] | null | 'failed',
   status: AgentConfigSyncStatus = STATUS,
-  expanded = true
+  expanded = true,
+  filter: 'all' | 'enabled' | 'disabled' = 'all',
+  excluded: ReadonlySet<string> = EXCLUDED
 ): React.JSX.Element {
   return (
     <div className="bg-background px-8 py-6">
@@ -113,7 +115,8 @@ function page(
             renderSync={(workspace) => (
               <CloudSkillsSyncPanel
                 status={{ ...status, environmentId: workspace.environmentId }}
-                excluded={EXCLUDED}
+                excluded={excluded}
+                initialFilter={filter}
                 autoSync={preferences.autoSync}
                 now={Date.UTC(2026, 10, 10, 16, 44)}
                 expanded={expanded}
@@ -220,7 +223,29 @@ const LONG_ROWS: AgentConfigSyncRow[] = [
     skipReason: 'secret'
   })
 ]
+const LONG = { ...STATUS, rows: LONG_ROWS }
+const LONG_OFF = new Set(['user:agents-skill:electron', 'user:agents-skill:find-skills'])
 export const longList = defineFixture({
   width: 784,
-  render: () => page(ON, ONE, { ...STATUS, rows: LONG_ROWS })
+  render: () => page(ON, ONE, LONG, true, 'all', LONG_OFF)
+})
+export const longListEnabled = defineFixture({
+  width: 784,
+  render: () => page(ON, ONE, LONG, true, 'enabled', LONG_OFF)
+})
+export const longListDisabled = defineFixture({
+  width: 784,
+  render: () => page(ON, ONE, LONG, true, 'disabled', LONG_OFF)
+})
+export const emptyEnabled = defineFixture({
+  width: 784,
+  render: () => page(ON, ONE, LONG, true, 'enabled', new Set(LONG_ROWS.map((entry) => entry.key)))
+})
+export const emptyDisabled = defineFixture({
+  width: 784,
+  render: () => page(ON, ONE, LONG, true, 'disabled', new Set())
+})
+export const emptyAll = defineFixture({
+  width: 784,
+  render: () => page(ON, ONE, { ...STATUS, rows: [], lastSyncedAt: null }, true, 'all')
 })

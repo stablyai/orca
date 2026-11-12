@@ -13,7 +13,6 @@ function base(agent: string, t: Translate): CloudStripModel {
   return {
     status: 'setup',
     title,
-    compactTitle: t('agentSignInStrip.notSetUpCompact', '{{agent}} not set up', { agent }),
     detail: t('agentSignInStrip.notSetUpDetail', 'Set up once. Every cloud workspace uses it.'),
     description: null,
     primary: {
@@ -24,6 +23,37 @@ function base(agent: string, t: Translate): CloudStripModel {
     paste: null,
     otherWays: false,
     announcement: title
+  }
+}
+
+export function setupCodePaste(
+  agent: HostAgentSignInAgent,
+  code: 'checking' | 'rejected' | undefined,
+  t: Translate,
+  /** The CLI hasn't shown the fresh link yet: the field shows, disabled. */
+  options: { waiting?: boolean } = {}
+): NonNullable<CloudStripModel['paste']> {
+  const name = HOST_AGENT_SIGN_IN_AGENT_NAME[agent]
+  return {
+    submitting: code === 'checking',
+    refusal:
+      code === 'rejected'
+        ? t(
+            'agentSignInStrip.setupCodeRejected',
+            'That code didn’t work. Paste the newest code from the sign-in page, or open it again.'
+          )
+        : null,
+    secretLabel: t('agentSignInStrip.setupCodeLabel', 'Code from {{agent}}’s sign-in page', {
+      agent: name
+    }),
+    ...(options.waiting ? { disabled: true } : {}),
+    setupCode: {
+      placeholder: t('agentSignInStrip.setupCodePlaceholder', 'Paste code'),
+      submitLabel:
+        code === 'checking'
+          ? t('agentSignInStrip.setupCodeChecking', 'Checking the code…')
+          : t('agentSignInStrip.finishSetup', 'Finish setup')
+    }
   }
 }
 
@@ -43,7 +73,6 @@ export function cloudAgentSetupStripModel(args: {
       ...need,
       status: 'done',
       title,
-      compactTitle: t('agentSignInStrip.setUpDoneCompact', '{{agent}} is set up', { agent }),
       detail: t('agentSignInStrip.setUpDoneDetail', 'Every cloud workspace uses it from now on.'),
       primary: {
         label: t('agentSignInStrip.startAgent', 'Start {{agent}}', { agent }),
@@ -66,14 +95,40 @@ export function cloudAgentSetupStripModel(args: {
     case 'browser':
       return {
         ...need,
-        status: 'busy',
-        detail: t('agentSignInStrip.finishInBrowser', 'Finish in your browser'),
-        primary: setup.canReopen
-          ? {
-              label: t('agentSignInStrip.openAgain', 'Open again'),
-              action: { kind: 'reopenSetup' }
-            }
-          : null,
+        status: setup.code === 'rejected' ? 'warning' : 'busy',
+        // A refusal leads at every width; nothing is loading then, so the warning icon (design-squad).
+        ...(setup.code === 'rejected'
+          ? { title: t('agentSignInStrip.setupCodeRejectedTitle', 'Code didn’t work') }
+          : {}),
+        // A refused code stays the detail until the next paste or "Open again".
+        detail:
+          setup.code === 'rejected'
+            ? // The title already says "Code didn’t work": the detail doesn't repeat it (design-squad).
+              t(
+                'agentSignInStrip.setupCodeRejectedDetail',
+                'Paste the newest code from the sign-in page, or open it again.'
+              )
+            : setup.acceptsCode
+              ? t(
+                  'agentSignInStrip.finishInBrowserPaste',
+                  'Finish in your browser, then paste the code here.'
+                )
+              : t('agentSignInStrip.finishInBrowser', 'Finish in your browser'),
+        // Claude's page shows a code to bring back: [Paste code] [Finish setup] [Open again].
+        // After a refusal the CLI takes a moment to show a fresh link: the field and "Open again" stay
+        // in place, disabled, so nothing actionable disappears (design-squad).
+        paste:
+          setup.acceptsCode || setup.code === 'rejected'
+            ? setupCodePaste(args.agent, setup.code, t, { waiting: !setup.acceptsCode })
+            : null,
+        primary:
+          setup.canReopen || setup.code === 'rejected'
+            ? {
+                label: t('agentSignInStrip.openAgain', 'Open again'),
+                action: { kind: 'reopenSetup' },
+                ...(setup.canReopen ? {} : { busy: true })
+              }
+            : null,
         announcement: t(
           'agentSignInStrip.waitingAnnounce',
           'Waiting for you to approve in your browser.'
@@ -135,10 +190,14 @@ export function cloudAgentSetupStripModel(args: {
         status: 'error',
         title: copy.title,
         detail: copy.detail ?? need.detail,
-        primary: {
-          label: t('agentSignInStrip.tryAgain', 'Try again'),
-          action: { kind: 'setUpOnce' }
-        },
+        // An expired sign-in: "Open again" starts a fresh one with a new link (main restarts it).
+        primary:
+          setup.error === 'timed_out'
+            ? {
+                label: t('agentSignInStrip.openAgain', 'Open again'),
+                action: { kind: 'reopenSetup' }
+              }
+            : { label: t('agentSignInStrip.tryAgain', 'Try again'), action: { kind: 'setUpOnce' } },
         announcement: copy.title
       }
     }

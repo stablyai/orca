@@ -27,6 +27,8 @@ export type HostedSandboxTiming = z.infer<typeof HostedSandboxTimingSchema>
 /** GET /v1/config: product constants clients (desktop, mobile, CLI, marketing) must not hardcode. */
 export const HostedSandboxConfigResponseSchema = z.object({
   idleSleepMinutes: z.number().int().positive(),
+  /** Days an archived workspace's snapshot is kept before it is deleted; older control planes omit it. */
+  archiveTtlDays: z.number().int().positive().optional(),
   /** Recent sandbox starts (create until orcad is ready); absent until enough were measured. */
   createTiming: HostedSandboxTimingSchema.optional()
 })
@@ -97,7 +99,12 @@ export const HostedSandboxViewSchema = z
     session: HostedSandboxSessionSchema.nullable(),
     createdAt: Millis,
     /** Org environment build this workspace booted from; null/absent for the plain image. */
-    environmentBuildId: Id.nullable().optional()
+    environmentBuildId: Id.nullable().optional(),
+    /**
+     * GIT-SETUP: the teammates' git identities couldn't be installed after create, so the VM refuses
+     * commits and pushes. Sent only to clients with feature `git-setup`; a later boot clears it.
+     */
+    gitSetup: z.literal('failed').optional()
   })
   .strict()
 export type HostedSandboxView = z.infer<typeof HostedSandboxViewSchema>

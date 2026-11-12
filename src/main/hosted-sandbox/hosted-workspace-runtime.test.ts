@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { CloudOomEvent } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedWorkspaceStatus } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
-import { createOomTracker } from './hosted-workspace-runtime'
+import { HostedSandboxViewSchema } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { createOomTracker, withGitSetup } from './hosted-workspace-runtime'
 
 function status(checkedAt: number, uptimeSeconds: number, oomKills: number): HostedWorkspaceStatus {
   return {
@@ -80,5 +81,27 @@ describe('archive checkouts trim', () => {
     const trimmed = trimCheckouts(big)
     expect(JSON.stringify(trimmed).length).toBeLessThanOrEqual(200 * 1024)
     expect(trimmed[0]!.files.length).toBeGreaterThan(0)
+  })
+})
+
+describe('GIT-SETUP on the status read', () => {
+  it('passes the sandbox view’s failed git setup to the window, and nothing otherwise', () => {
+    const read = status(1_000, 10, 0)
+    expect(withGitSetup(read, { gitSetup: 'failed' })).toEqual({ ...read, gitSetupFailed: true })
+    expect(withGitSetup(read, {})).toBe(read)
+  })
+
+  it('the strict sandbox view accepts the field the server sends with feature git-setup', () => {
+    const view = {
+      id: 'sb_1',
+      workspaceId: 'ws_1',
+      status: 'running',
+      machineSize: 'standard',
+      region: 'iad',
+      session: null,
+      createdAt: 1
+    }
+    expect(HostedSandboxViewSchema.safeParse({ ...view, gitSetup: 'failed' }).success).toBe(true)
+    expect(HostedSandboxViewSchema.safeParse({ ...view, gitSetup: 'other' }).success).toBe(false)
   })
 })

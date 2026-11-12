@@ -54,7 +54,7 @@ function RowAction({
 
 /**
  * "Sandbox · 8 vCPU · 16 GB" in the Run on menu row. The specs never split: below a 28rem
- * container they drop out whole so "N sandbox hours left" keeps its room.
+ * container they drop out whole rather than wrap.
  */
 export function OrcaCloudSpecs({ t }: { t: Translate }): React.JSX.Element {
   return (
@@ -74,6 +74,13 @@ export function OrcaCloudSpecs({ t }: { t: Translate }): React.JSX.Element {
     </>
   )
 }
+
+/**
+ * Whether the Run on menu's Orca Cloud row shows "N sandbox hours left". Off for now (Neil, JA-25
+ * follow-up): the row reads "Orca Cloud" / "Sandbox"; hours live on Account + Billing and the plan
+ * blocker. Flip to true to bring them back, along with the loading placeholder that holds their place.
+ */
+export const RUN_ON_SHOWS_HOURS_LEFT = false
 
 /** "41 sandbox hours left" (locale number, plural-aware), or null when not entitled. */
 export function useOrcaCloudHoursLeft(access: OrcaCloudRunTargetAccess): string | null {
@@ -204,24 +211,31 @@ function OrcaCloudMeta({
   const t = useTranslate()
   const hoursLeft = useOrcaCloudHoursLeft(access)
   switch (access.state) {
-    case 'loading':
-      return (
-        <span className="ml-2 flex shrink-0 self-center">
-          <Skeleton className="h-3 w-12" />
-          <span className="sr-only">
-            {t(
-              'auto.components.new.workspace.RunTargetCombobox.orcaCloudChecking',
-              'Checking your plan…'
-            )}
-          </span>
+    case 'loading': {
+      const checking = (
+        <span className="sr-only">
+          {t(
+            'auto.components.new.workspace.RunTargetCombobox.orcaCloudChecking',
+            'Checking your plan…'
+          )}
         </span>
       )
+      // The placeholder only holds the hours' place; without hours it would just flash.
+      return RUN_ON_SHOWS_HOURS_LEFT ? (
+        <span className="ml-2 flex shrink-0 self-center">
+          <Skeleton className="h-3 w-12" />
+          {checking}
+        </span>
+      ) : (
+        checking
+      )
+    }
     case 'entitled':
-      return (
+      return RUN_ON_SHOWS_HOURS_LEFT ? (
         <span className="ml-2 shrink-0 self-center text-xs tabular-nums text-muted-foreground">
           {hoursLeft}
         </span>
-      )
+      ) : null
     case 'signed-out':
       return (
         <RowAction
@@ -302,7 +316,7 @@ function showsMetaAfterStart(access: OrcaCloudRunTargetAccess, preflight: boolea
   }
 }
 
-/** Orca Cloud as a first-class Run-on target, with its hours or the fix for what blocks it. */
+/** Orca Cloud as a first-class Run-on target, with the fix for what blocks it (and hours, behind RUN_ON_SHOWS_HOURS_LEFT). */
 export function RunTargetOrcaCloudRow({
   recipe,
   access,

@@ -158,7 +158,7 @@ export const waitingNarrow = fixture({
   width: 640
 })
 export const needExpiredNarrow = fixture({ reason: 'accountExpired', width: 520 })
-/** Below 360 px: one line and Renew; the detail stays the region's description. */
+/** Below 360 px: title and detail wrap beside Renew; nothing truncates. */
 export const needExpiredCompact = fixture({ reason: 'accountExpired', width: 320 })
 
 /** RA-11 state 1: Claude was running when its Orca-account sign-in expired. */
@@ -194,10 +194,27 @@ export const runningRestartFailed = fixture({
     failure: 'hostUnresponsive'
   }
 })
+export const runningRestartingNarrow = fixture({
+  restart: { phase: 'restarting', agent: 'claude', resumable: true, ptyId: 'p', launchedAt: null },
+  width: 320
+})
+export const runningRestartFailedNarrow = fixture({
+  restart: {
+    phase: 'failed',
+    agent: 'claude',
+    resumable: true,
+    ptyId: 'p',
+    launchedAt: null,
+    failure: 'hostUnresponsive'
+  },
+  width: 320
+})
 
 /** PC-3b: the launch holds; Set up once runs the one-time Orca Cloud setup in the pane. */
 export const notSetUp = fixture({ setUp: { setup: { phase: 'idle' } } })
 export const notSetUpCompact = fixture({ setUp: { setup: { phase: 'idle' } }, width: 320 })
+/** A half-width split: the held strip wraps its detail rather than cutting it off. */
+export const notSetUpNarrow = fixture({ setUp: { setup: { phase: 'idle' } }, width: 440 })
 export const notSetUpBrowser = fixture({
   setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: true } }
 })
@@ -222,3 +239,23 @@ export const notSetUpPasteTiny = fixture({
 export const notSetUpFailed = fixture({ setUp: { setup: { phase: 'failed', error: 'denied' } } })
 /** Set up finished: Start {{agent}} releases the held launch. */
 export const notSetUpDone = fixture({ setUp: { setup: { phase: 'saved' }, ready: true } })
+/** SETUP-PASTE: Claude's sign-in page shows a code; [Paste code] [Finish setup] [Open again]. */
+export const notSetUpBrowserCode = fixture({
+  setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true } },
+  width: 800
+})
+export const notSetUpBrowserCodeNarrow = fixture({
+  setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true } },
+  width: 420
+})
+export const notSetUpBrowserCodeRejectedNarrow = fixture({
+  setUp: {
+    setup: { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true, code: 'rejected' }
+  },
+  width: 420
+})
+/** The moment after a refusal, before the fresh link: field and "Open again" stay, disabled. */
+export const notSetUpBrowserCodeGapNarrow = fixture({
+  setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: false, code: 'rejected' } },
+  width: 420
+})

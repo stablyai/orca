@@ -4,7 +4,6 @@ import {
   cloudSkillsEntryCount,
   cloudSkillsEntryKeys,
   cloudSkillsEntryKindLabel,
-  cloudSkillsGroupOpen,
   cloudSkillsGroupRows
 } from './cloud-skills-sync-copy'
 
@@ -60,20 +59,5 @@ describe('cloudSkillsGroupRows', () => {
     ])
     expect(groups.synced).toHaveLength(1)
     expect(groups.notSynced).toHaveLength(1)
-  })
-})
-
-describe('cloudSkillsGroupOpen', () => {
-  it('collapses a Synced list past 10 whenever it gets there, not only on first open', () => {
-    // Before the first sync the group is empty; after Sync now it holds 31.
-    expect(cloudSkillsGroupOpen(true, 0, null)).toBe(true)
-    expect(cloudSkillsGroupOpen(true, 31, null)).toBe(false)
-    expect(cloudSkillsGroupOpen(true, 10, null)).toBe(true)
-  })
-
-  it('keeps what the user chose, and never collapses a group that is not collapsible', () => {
-    expect(cloudSkillsGroupOpen(true, 31, true)).toBe(true)
-    expect(cloudSkillsGroupOpen(true, 3, false)).toBe(false)
-    expect(cloudSkillsGroupOpen(false, 31, null)).toBe(true)
   })
 })

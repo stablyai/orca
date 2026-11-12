@@ -295,24 +295,11 @@ export function cloudSkillsRowStateLabel(
   t: Translate = translate
 ): string {
   if (row.state === 'synced') {
-    return t('cloudSkillsSync.state.synced', 'Synced')
+    return included
+      ? t('cloudSkillsSync.state.synced', 'Synced')
+      : t('cloudSkillsSync.state.offPending', 'Off, removed at the next sync')
   }
   return row.state === 'pending' && included
     ? t('cloudSkillsSync.state.pending', 'Not synced yet')
     : t('cloudSkillsSync.state.skipped', 'Not synced')
-}
-
-/** A Synced list longer than this is collapsed; Not synced, the part to act on, never is. */
-export const CLOUD_SKILLS_COLLAPSE_OVER = 10
-
-/** Open unless the group is collapsible and past the limit; a user's own expand or collapse wins. */
-export function cloudSkillsGroupOpen(
-  collapsible: boolean,
-  count: number,
-  userChoice: boolean | null
-): boolean {
-  if (!collapsible) {
-    return true
-  }
-  return userChoice ?? count <= CLOUD_SKILLS_COLLAPSE_OVER
 }

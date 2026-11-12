@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
+import { BANNER_BODY_TEXT, BANNER_TONE } from '@/components/ui/banner-tone'
 import { useAppStore } from '@/store'
 
 export type CloudToastPriority = 'action' | 'warning' | 'info'
@@ -339,7 +340,12 @@ export function CloudToastCard({
       aria-hidden={quiet || undefined}
       aria-label={!single ? view.label : undefined}
       role={single ? undefined : 'group'}
-      className="w-[var(--width,356px)] max-w-full rounded-lg border border-border bg-card font-sans text-card-foreground shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+      // GA-P3t: the severity look, so a notice never blends into a white pane under it.
+      className={cn(
+        'w-[var(--width,356px)] max-w-full rounded-lg border font-sans text-card-foreground shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)]',
+        BANNER_TONE[warning ? 'warning' : 'info'].surface,
+        BANNER_TONE[warning ? 'warning' : 'info'].border
+      )}
     >
       <ul className="divide-y divide-border">
         {view.lines.map((line) => (
@@ -347,7 +353,7 @@ export function CloudToastCard({
             {warning ? (
               <TriangleAlert
                 aria-hidden
-                className="mt-0.5 size-3.5 shrink-0 text-status-warning-text"
+                className={cn('mt-0.5 size-3.5 shrink-0', BANNER_TONE.warning.icon)}
               />
             ) : null}
             {/* The sentence reads first; its one action sits under it so neither gets squeezed. */}
@@ -355,7 +361,7 @@ export function CloudToastCard({
               <div className="space-y-0.5">
                 <p className="text-xs leading-5 text-foreground">{line.text}</p>
                 {line.description ? (
-                  <p className="text-xs text-muted-foreground">{line.description}</p>
+                  <p className={cn('text-xs', BANNER_BODY_TEXT)}>{line.description}</p>
                 ) : null}
               </div>
               {line.action ? (

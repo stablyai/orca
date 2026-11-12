@@ -25,6 +25,8 @@ const Agent = z.enum(ORCA_CLOUD_ACCOUNT_AGENTS)
 const AgentRequest = z.object({ agent: Agent })
 // Bounded well above a real token; the service checks the exact shape.
 const PasteRequest = z.object({ token: z.string().min(1).max(1024) })
+// The code (or callback URL) from Claude's sign-in page; main normalizes it.
+const CodeRequest = z.object({ code: z.string().min(1).max(2048) })
 const SourceRequest = z.object({ agent: Agent, source: z.enum(['sign-in', 'key']).nullable() })
 // A runtime environment, never a raw sandbox id: main resolves only sandboxes this desktop made.
 const RuntimeEnvironment = z.string().min(1).max(256)
@@ -32,6 +34,7 @@ const WorkspaceRequest = z.object({ runtimeEnvironmentId: RuntimeEnvironment })
 const WorkspaceSourceRequest = SourceRequest.extend({ runtimeEnvironmentId: RuntimeEnvironment })
 
 const CHANNELS = [
+  'orcaCloudAgents:submitClaudeCode',
   'orcaCloudAgents:status',
   'orcaCloudAgents:setups',
   'orcaCloudAgents:start',
@@ -135,6 +138,10 @@ export function registerOrcaCloudAgentsHandlers(userDataPath: string): void {
     return request.success ? service.reopen(request.data.agent) : false
   })
   ipcMain.handle('orcaCloudAgents:usePaste', () => service.usePaste())
+  ipcMain.handle('orcaCloudAgents:submitClaudeCode', (_event, raw: unknown) => {
+    const request = CodeRequest.safeParse(raw)
+    return request.success ? service.submitClaudeCode(request.data.code) : invalid
+  })
   ipcMain.handle('orcaCloudAgents:pasteClaudeToken', (_event, raw: unknown) => {
     const request = PasteRequest.safeParse(raw)
     return request.success ? service.pasteClaudeToken(request.data.token) : invalid

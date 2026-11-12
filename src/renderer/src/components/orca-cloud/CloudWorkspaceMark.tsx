@@ -4,7 +4,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { HostGlyph } from '@/components/host-row-icon'
 import { FOCUS_RING } from './cloud-focus'
-import { cloudStateLabel } from './cloud-state-copy'
+import { cloudGlyphStateLabel } from './cloud-state-copy'
+import type { CloudGlyphState } from './CloudStatusGlyph'
+import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
 import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
 import { useCloudStatusPolling, useCloudWorkspaceView } from './use-cloud-workspace-view'
 import { useCloudPanelActions } from './use-cloud-panel-actions'
@@ -13,6 +15,22 @@ import { onCloudSyncFocusRequest } from '@/lib/orca-cloud/cloud-sync-store'
 const PANEL_POLL_MS = 5_000
 const HOVER_OPEN_MS = 250
 const HOVER_CLOSE_MS = 180
+const CARD_GAP_PX = 8
+
+/**
+ * The card opens beside the sidebar, not over the row it describes: from the mark to the sidebar's
+ * right edge, plus a gap. Outside the sidebar (fixtures, other hosts) it sits just right of the mark.
+ */
+export function cloudCardSideOffset(mark: HTMLElement | null): number {
+  const sidebar = mark?.closest('[data-left-sidebar]')
+  if (!mark || !sidebar) {
+    return 10
+  }
+  return Math.max(
+    10,
+    sidebar.getBoundingClientRect().right - mark.getBoundingClientRect().right + CARD_GAP_PX
+  )
+}
 
 /**
  * Sidebar mark for an Orca Cloud workspace: the Cloud host glyph with its live state as a corner badge,
@@ -36,6 +54,23 @@ export function CloudWorkspaceMark({
   )
 }
 
+const PROBLEM: ReadonlySet<CloudGlyphState> = new Set(['failed', 'wakeFailed'])
+
+/** The view's state plus the two transitions the cloud shows: going to sleep and restarting. */
+function useCloudGlyphState(
+  workspaceId: string,
+  view: ReturnType<typeof useCloudWorkspaceView>
+): CloudGlyphState {
+  const goingToSleep = useIsWorktreeGoingToSleep(workspaceId)
+  if (PROBLEM.has(view.state)) {
+    return view.state
+  }
+  if (goingToSleep) {
+    return 'goingToSleep'
+  }
+  return view.pending === 'restart' ? 'restarting' : view.state
+}
+
 function CloudWorkspaceMarkInner({
   workspaceId,
   view,
@@ -49,6 +84,7 @@ function CloudWorkspaceMarkInner({
   const [open, setOpen] = useState<'hover' | 'pinned' | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const content = useRef<HTMLDivElement | null>(null)
+  const mark = useRef<HTMLButtonElement | null>(null)
   const clearTimer = useCallback(() => {
     if (timer.current) {
       clearTimeout(timer.current)
@@ -80,8 +116,17 @@ function CloudWorkspaceMarkInner({
   useCloudStatusPolling(workspaceId, PANEL_POLL_MS, open !== null)
   const close = useCallback(() => setOpen(null), [])
   const actions = useCloudPanelActions(workspaceId, close)
+  // Esc closes the innermost layer first: the card's sub-panel, then the card.
+  const escapeInner = useRef<(() => boolean) | null>(null)
+  // Pointer or focus inside (the card, its sub-panel or its ⋯ menu) keeps a hover preview open.
+  const pin = useCallback(() => {
+    clearTimer()
+    setOpen((current) => (current === 'hover' ? 'pinned' : current))
+  }, [clearTimer])
+  const glyphState = useCloudGlyphState(workspaceId, view)
+  // The state's name: what the cloud's fill and colour show, said out loud (the card's header shows it too).
   const label = t('orcaCloudWorkspace.cloudMarkLabel', 'Cloud workspace · {{state}}', {
-    state: cloudStateLabel(view.state, t)
+    state: cloudGlyphStateLabel(glyphState, t)
   })
   return (
     <Popover
@@ -93,6 +138,7 @@ function CloudWorkspaceMarkInner({
     >
       <PopoverTrigger asChild>
         <button
+          ref={mark}
           type="button"
           aria-label={label}
           aria-haspopup="dialog"
@@ -118,24 +164,35 @@ function CloudWorkspaceMarkInner({
           className={cn(
             // 24px hit area around the 12px glyph, without changing the row's layout.
             "relative inline-flex size-3 shrink-0 items-center rounded-sm text-muted-foreground after:absolute after:-inset-1.5 after:content-['']",
-            'hover:text-foreground',
             FOCUS_RING
           )}
         >
-          <HostGlyph kind="orca-cloud" size={12} state={view.state} className="text-inherit" />
+          <HostGlyph kind="orca-cloud" size={12} state={glyphState} />
         </button>
       </PopoverTrigger>
       <PopoverContent
         ref={content}
         side="right"
         align="start"
-        sideOffset={10}
+        sideOffset={open ? cloudCardSideOffset(mark.current) : 10}
         focusRing
         className="w-72"
         aria-label={label}
         tabIndex={-1}
         onPointerEnter={() => clearTimer()}
         onPointerLeave={hoverOut}
+        onPointerDownCapture={pin}
+        onFocusCapture={(event) => {
+          // The preview's own open focus lands on the content, not inside it.
+          if (event.target !== content.current) {
+            pin()
+          }
+        }}
+        onEscapeKeyDown={(event) => {
+          if (escapeInner.current?.()) {
+            event.preventDefault()
+          }
+        }}
         onOpenAutoFocus={(event) => {
           // Hover previews keep focus in the sidebar; a pinned panel takes focus itself (not
           // its first action, so Enter can't act by accident).
@@ -154,6 +211,8 @@ function CloudWorkspaceMarkInner({
             entry={view.entry}
             pending={view.pending}
             actions={actions}
+            escapeRef={escapeInner}
+            onMenuOpenChange={(menuOpen) => (menuOpen ? pin() : undefined)}
           />
         </div>
       </PopoverContent>

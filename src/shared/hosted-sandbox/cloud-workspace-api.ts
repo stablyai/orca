@@ -53,11 +53,17 @@ export type CloudOomEvent = {
   at: number
 }
 
+/** The status panel's read plus what the desktop needs from the sandbox view alongside it. */
+export type CloudWorkspaceStatus = HostedWorkspaceStatus & {
+  /** GIT-SETUP: commits and pushes are refused in the VM until a boot installs the identities. */
+  gitSetupFailed?: true
+}
+
 export type CloudArchiveInfo = NonNullable<HostedArchiveResponse['archive']>
 
 export type OrcaCloudWorkspaceApi = {
   /** Live status: state, CPU/mem/disk, uptime, cost so far, archive. Cheap; the panel polls it while open. */
-  getStatus: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<HostedWorkspaceStatus>>
+  getStatus: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<CloudWorkspaceStatus>>
   /** "Restart" (Unresponsive / OOM): rehydrate the same disk and re-pair; agents auto-resume. */
   restart: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<null>>
   /** Sleep, then archive with a snapshot TTL; metadata captured in the VM or from the client cache. */

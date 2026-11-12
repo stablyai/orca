@@ -314,10 +314,10 @@ describe('Orca Cloud surfaces', () => {
       />
     )
     const { container, rerender } = render(panel('running', 20))
-    expect(container.textContent).toContain('Sleeps in 20 minutes if idle')
+    expect(container.textContent).toContain('Sleeps in 20 min if idle')
     // Older control planes omit the setting; their idle timer is 15 minutes.
     rerender(panel('running'))
-    expect(container.textContent).toContain('Sleeps in 15 minutes if idle')
+    expect(container.textContent).toContain('Sleeps in 15 min if idle')
     rerender(panel('unknown'))
     expect(container.querySelector('.sr-only')?.textContent).toBe('Checking…')
     expect(container.textContent?.replace('Checking…', '')).not.toContain('Checking')

@@ -165,6 +165,7 @@ import { ArchiveRequestSchema } from './sandbox-vm-inspect'
 import {
   restoreArchivedToSleeping,
   archiveSandbox,
+  DEFAULT_ARCHIVE_TTL_MS,
   readArchive,
   restartSandbox,
   unarchiveSandbox,
@@ -178,6 +179,7 @@ import {
   issueGrant,
   listGrants,
   recordOwnerDeviceAndSync,
+  recordOwnerDeviceForCreate,
   revokeForAccessChange,
   revokeGrantsForDeviceSession,
   revokeOne
@@ -261,6 +263,16 @@ export type Deps = {
   setupNotifier?: SetupNotifier
   /** Billing trial abuse-key notices after a bind (tests collect them). */
   trialNotifier?: TrialGitHubNotifier
+}
+
+/**
+ * RESUME-STUCK: a wake outlives its request. A client that quits mid-wake cancels the request, not
+ * the wake (ctx.waitUntil), so the row reaches `running` (or back to `suspended`) instead of
+ * staying `resuming`.
+ */
+function outlivingRequest<T>(life: LifecycleDeps, work: Promise<T>): Promise<T> {
+  life.background?.(work.catch(() => undefined))
+  return work
 }
 
 function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
@@ -863,6 +875,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
     secrets: await secretsDeps(env),
     memberIdentity: await memberIdentityFor(env, deps),
     now: deps.now ?? Date.now,
+    sleep: deps.sleep,
     retention: deps.retention ?? retentionFromEnv(env),
     background: deps.waitUntil,
     publicRepoCheck: deps.publicRepoCheck ?? ((repoUrl) => githubRepoIsPublic(repoUrl)),
@@ -1266,8 +1279,13 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     if (url.pathname === '/v1/config' && request.method === 'GET') {
       // Public product constants (no auth): every client reads these instead of hardcoding them.
       const createTiming = await cachedCreateTiming(env.SANDBOX_DB, (deps.now ?? Date.now)())
+      const config = workspaceConfig(env, deps)
       return Response.json(
-        { idleSleepMinutes: workspaceConfig(env, deps).idleSleepMinutes ?? ORCA_CLOUD_IDLE_SLEEP_MINUTES, ...(createTiming ? { createTiming } : {}) },
+        {
+          idleSleepMinutes: config.idleSleepMinutes ?? ORCA_CLOUD_IDLE_SLEEP_MINUTES,
+          archiveTtlDays: Math.round((config.archiveTtlMs ?? DEFAULT_ARCHIVE_TTL_MS) / 86_400_000),
+          ...(createTiming ? { createTiming } : {})
+        },
         { headers: { 'cache-control': 'public, max-age=300' } }
       )
     }
@@ -1597,7 +1615,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     const idleMinutesAware = features.includes('idle-minutes')
     // Predictive wake: the last deliberate sleep and the seat's running count, for clients that ask.
     const wakeHintsAware = features.includes('wake-hints')
-    const view = (row: SandboxRow) => sandboxView(row, archivedAware)
+    const view = (row: SandboxRow) => sandboxView(row, archivedAware, features.includes('git-setup'))
     if (!id) {
       if (request.method === 'GET') {
         // Routine runs and other machine-made workspaces stay out of the desktop's list.
@@ -1624,8 +1642,13 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
           { accountId: caller.accountId, scope: `sandbox.create:${caller.userId}`, key: readIdempotencyKey(request), body: raw, now: life.now() },
           async () => {
             // Desktops that show the clone as its own step ask for it in the background (GET .../clone).
-            const ready = await createSandbox(life, caller, { ...body.data, cloneInBackground: features.includes('clone-progress') })
-            await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
+            // Member identities install after the response; the VM's git holds commits and pushes until then.
+            const ready = await createSandbox(life, caller, {
+              ...body.data,
+              cloneInBackground: features.includes('clone-progress'),
+              deferMemberGit: true
+            })
+            await recordOwnerDeviceForCreate(life, ready)
             timings = ready.timings
             return { status: 200, body: readyView(ready.row, ready.connection, ready.cloning, features.includes('repo-update')) }
           }
@@ -1693,12 +1716,12 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         return json({ sandbox: view(suspended) })
       }
       case 'POST resume': {
-        const ready = await resumeSandbox(life, row)
+        const ready = await outlivingRequest(life, resumeSandbox(life, row))
         await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
         return readyResponse(ready)
       }
       case 'POST rollover': {
-        const ready = await rolloverSandbox(life, row)
+        const ready = await outlivingRequest(life, rolloverSandbox(life, row))
         await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
         return readyResponse(ready)
       }
@@ -1707,7 +1730,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       case 'POST restart': {
         // User-triggered and unbounded otherwise: shares the per-account start rate limit.
         await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, life.now())
-        const ready = await restartSandbox(life, row)
+        const ready = await outlivingRequest(life, restartSandbox(life, row))
         await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
         return json(readyView(ready.row, ready.connection))
       }
@@ -2096,7 +2119,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
         return json({ ...answer, endpoint: null })
       }
       // Never returns the owner's pairing offer; teammates get in through their own grant.
-      const ready = await resumeSandbox(life, row)
+      const ready = await outlivingRequest(life, resumeSandbox(life, row))
       return json({ workspace: await view(ready.row) })
     }
     case 'POST lease': {

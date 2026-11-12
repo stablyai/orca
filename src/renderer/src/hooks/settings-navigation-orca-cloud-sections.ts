@@ -13,7 +13,7 @@ import {
 } from '@/components/settings/orca-cloud/orca-cloud-settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { SettingsNavSection, SettingsNavTarget } from '@/lib/settings-navigation-types'
 import {
   BookOpenText,
   Boxes,
@@ -86,8 +86,8 @@ export function buildOrcaCloudSettingsSections(
       id: 'cloud-environments',
       title: t('settings.orcaCloud.environments.title', 'Cloud environments'),
       description: t(
-        'cloudEnvironment.descriptionTeam',
-        'Your team’s repos and install script, built once into a snapshot so every cloud workspace starts with dependencies installed.'
+        'cloudEnvironment.descriptionTeamSaved',
+        'Your team’s repos and install script, built once into a saved environment so every cloud workspace starts with dependencies installed.'
       ),
       icon: Boxes,
       searchEntries: getOrcaCloudEnvironmentsSearchEntries(),
@@ -150,10 +150,17 @@ function cloudRoutinesSection(t: Translate, group: string): SettingsNavSection[]
   ]
 }
 
+const ORCA_CLOUD_LEAD_IDS: readonly string[] = ['orca-account']
+
+/** Where Plan & billing lives inside the combined Account + Billing page (scroll anchor). */
+export const ACCOUNT_BILLING_PLAN_ANCHOR = 'orca-account-plan-billing'
+
 /**
  * JA-16: in Orca Cloud builds the Orca account leads the one Orca Cloud group instead of sitting in
  * Set up. Agent accounts stays in AI capabilities: it covers this computer and hosts as much as
  * Orca Cloud, and its Orca Cloud part is deep-linked from every cloud entry point.
+ * Neil: the account and Plan & billing are one page, "Account + Billing" (account on top). Billing's
+ * search entries move onto it and land on its Plan & billing part.
  */
 export function gatherOrcaCloudSettingsGroup(
   sections: readonly SettingsNavSection[],
@@ -162,13 +169,49 @@ export function gatherOrcaCloudSettingsGroup(
   if (isWebClient || !isOrcaCloudApiAvailable) {
     return [...sections]
   }
-  const leadIds = ['orca-account']
+  const billing = sections.find((section) => section.id === 'cloud-billing')
+  const billingEntries = (billing?.searchEntries ?? []).map((entry) => ({
+    ...entry,
+    targetSectionId: ACCOUNT_BILLING_PLAN_ANCHOR
+  }))
+  const leadIds = ORCA_CLOUD_LEAD_IDS
   const leads = leadIds
     .map((id) => sections.find((section) => section.id === id))
     .filter((section): section is SettingsNavSection => section !== undefined)
-    .map((section) => ({ ...section, group: 'orca-cloud' as const }))
-  const rest = sections.filter((section) => !leadIds.includes(section.id))
+    .map((section) => ({
+      ...section,
+      group: 'orca-cloud' as const,
+      title: translate('settings.accountBilling.title', 'Account + Billing'),
+      // Matches the page's own description (settings-setup-workflow-section-renderers).
+      description: translate(
+        'settings.accountBilling.description',
+        'Your Orca account, plan, sandbox hours and payment.'
+      ),
+      searchEntries: [...section.searchEntries, ...billingEntries]
+    }))
+  const rest = sections.filter(
+    (section) => !leadIds.includes(section.id) && section.id !== 'cloud-billing'
+  )
   const firstCloud = rest.findIndex((section) => section.group === 'orca-cloud')
   const at = firstCloud === -1 ? rest.length : firstCloud
   return [...rest.slice(0, at), ...leads, ...rest.slice(at)]
+}
+
+/**
+ * Old Plan & billing links (pane 'cloud-billing') open the combined page at its Plan & billing part.
+ * Only when the combined page exists (desktop with Orca Cloud); otherwise the target is unchanged.
+ */
+export function resolveAccountBillingTarget<T extends { pane: SettingsNavTarget; sectionId?: string }>(
+  target: T,
+  combined: boolean
+): T {
+  if (!combined || target.pane !== 'cloud-billing') {
+    return target
+  }
+  return { ...target, pane: 'orca-account', sectionId: target.sectionId ?? ACCOUNT_BILLING_PLAN_ANCHOR }
+}
+
+/** True for an Orca Cloud group page (team-level, so host-free): the cloud pages and the Orca account. */
+export function isOrcaCloudSettingsSectionId(id: string | null | undefined): boolean {
+  return typeof id === 'string' && (id.startsWith('cloud-') || ORCA_CLOUD_LEAD_IDS.includes(id))
 }

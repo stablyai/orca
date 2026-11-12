@@ -18,15 +18,17 @@ import type {
   CloudOomEvent,
   CloudWakeProgressEvent,
   CloudWorkspaceResult,
+  CloudWorkspaceStatus,
   OrcaCloudWorkspaceApi
 } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
-import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { eachLimited } from './each-limited'
+import { noteCloudGitSetupRead, noteCloudGitSetupReady } from './cloud-git-setup-store'
 import { WAKE_FAILED_STALE_MS, WAKE_STALE_MS } from './orca-cloud-workspace-state'
 import { isSilentPredictiveWake, predictiveWakeStartedAt } from './cloud-predictive-wake'
 import { wakeAfterSleepStartedAt } from '@/lib/worktree-sleep-wake-request'
 
 export type CloudStatusEntry = {
-  status: HostedWorkspaceStatus | null
+  status: CloudWorkspaceStatus | null
   loading: boolean
   error: string | null
   fetchedAt: number | null
@@ -162,8 +164,9 @@ export async function isCloudWorkspaceArchivedFresh(
 
 function applyStatus(
   workspaceId: string,
-  result: CloudWorkspaceResult<HostedWorkspaceStatus>
+  result: CloudWorkspaceResult<CloudWorkspaceStatus>
 ): void {
+  noteCloudGitSetupRead(workspaceId, !result.ok || result.value.gitSetupFailed === true)
   updateCloudWorkspaceSnapshot((s) => {
     const previous = s.status[workspaceId]
     if (!result.ok && result.code === 'not_cloud') {
@@ -190,22 +193,6 @@ function applyStatus(
 }
 
 const STARTUP_STATUS_CONCURRENCY = 4
-
-/** Runs `work` over `items` with at most `limit` in flight. */
-async function eachLimited<T>(
-  items: readonly T[],
-  limit: number,
-  work: (item: T) => Promise<void>
-) {
-  let next = 0
-  const lane = async (): Promise<void> => {
-    while (next < items.length) {
-      const item = items[next++]!
-      await work(item)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane))
-}
 
 export async function refreshCloudWorkspaceIds(): Promise<void> {
   const bridge = cloudWorkspaceApi()
@@ -299,10 +286,12 @@ export function noteCloudWakeProgress(reported: CloudWakeProgressEvent): void {
     }
   }
   if (event.phase === 'ready') {
-    // Settled: drop the entry once the status says what the VM is, so nothing keeps ticking.
-    void refreshCloudWorkspaceStatus(event.workspaceId).finally(() =>
-      dropWake(event.workspaceId, next)
+    const id = event.workspaceId
+    const afterRead = noteCloudGitSetupReady(id, next.source, () =>
+      Boolean(snapshot.status[id]?.status?.gitSetupFailed)
     )
+    // Settled: drop the entry once the status says what the VM is, so nothing keeps ticking.
+    void refreshCloudWorkspaceStatus(id).finally(() => (afterRead(), dropWake(id, next)))
   } else if (event.phase === 'failed') {
     void refreshCloudWorkspaceStatus(event.workspaceId)
     setTimeout(() => dropWake(event.workspaceId, next), WAKE_FAILED_STALE_MS)

@@ -49,7 +49,7 @@ export const LeaseRequestSchema = z
   .strict()
 
 /** `archivedAware`: the caller's schema knows `archived`; older strict desktops see `suspended`. */
-export function sandboxView(row: SandboxRow, archivedAware = false) {
+export function sandboxView(row: SandboxRow, archivedAware = false, gitSetupAware = false) {
   const session =
     row.session_id !== null &&
     row.session_started_at !== null &&
@@ -71,7 +71,10 @@ export function sandboxView(row: SandboxRow, archivedAware = false) {
     session,
     createdAt: row.created_at,
     // Only when set: desktop builds from before environments parse this view strictly.
-    ...(row.environment_build_id ? { environmentBuildId: row.environment_build_id } : {})
+    ...(row.environment_build_id ? { environmentBuildId: row.environment_build_id } : {}),
+    // Member git identities could not be installed after a create (CREATE-GIT-ASYNC). Desktops parse this
+    // view strictly, so only clients that send feature `git-setup` get it.
+    ...(gitSetupAware && row.git_setup_failed_at ? { gitSetup: 'failed' as const } : {})
   }
 }
 

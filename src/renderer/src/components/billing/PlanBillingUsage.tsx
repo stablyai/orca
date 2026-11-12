@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
@@ -118,7 +118,16 @@ export function OverageControls({
   const hintId = useId()
   const capErrorId = useId()
   const savedRef = useRef<HTMLSpanElement>(null)
+  const capInputRef = useRef<HTMLInputElement>(null)
+  // Set by Turn on: once the cap field appears, it takes focus (N-09).
+  const focusCapOnOpen = useRef(false)
   const { overage } = entitlement
+  useEffect(() => {
+    if (overage.optedIn && focusCapOnOpen.current) {
+      focusCapOnOpen.current = false
+      capInputRef.current?.focus()
+    }
+  }, [overage.optedIn])
   // One field: the cap while overage is on, $0 while it's off.
   const savedDollars = overage.optedIn ? String(Math.round(overage.spendCapCents / 100)) : '0'
   const defaultCapCents = entitlement.offers?.team.defaultSpendCapCents ?? 2500
@@ -140,14 +149,16 @@ export function OverageControls({
   const parsedCap = Number(capDollars)
   const maxCapCents = entitlement.offers?.team.maxSpendCapCents ?? null
   const capWhole = capDollars.trim() !== '' && Number.isInteger(parsedCap) && parsedCap >= 0
+  // N-09: "off" has one representation (the Turn on button); a saved $0 cap would read as "on".
+  const capZero = capWhole && parsedCap === 0
   const capTooHigh = capWhole && maxCapCents !== null && parsedCap * 100 > maxCapCents
-  const capValid = capWhole && !capTooHigh
+  const capValid = capWhole && !capTooHigh && !capZero
   const changed = capValid && capDollars.trim() !== savedDollars
   const paymentFailed = entitlement.payment.pastDueSince !== null
   const rate = formatRateCents(overage.centsPerHour, locale)
   const hint = t(
-    'auto.components.billing.overage.capHint',
-    '{{rate}} per sandbox hour after your included hours, billed by the minute. $0 keeps overage off.',
+    'components.billing.overage.capHint2',
+    '{{rate}} per sandbox hour after your included hours, billed by the minute.',
     { rate }
   )
   const capPercent =
@@ -162,7 +173,7 @@ export function OverageControls({
         aria-label={t('auto.components.billing.capUsedLabel', 'Overage spend cap used')}
       />
       <p className="text-xs text-muted-foreground tabular-nums">
-        {t('auto.components.billing.overageSpent', '{{value0}} of {{value1}} monthly cap spent', {
+        {t('components.billing.overageUsed', '{{value0}} of {{value1}} used', {
           value0: formatCents(overage.spentCents, locale),
           value1: formatCents(overage.spendCapCents, locale)
         })}
@@ -180,12 +191,14 @@ export function OverageControls({
         {title}
         <p className="text-xs text-muted-foreground tabular-nums">
           {overage.optedIn
-            ? t('auto.components.billing.overage.memberOn', 'On, up to {{cap}} a month.', {
-                cap: formatCents(overage.spendCapCents, locale)
-              })
+            ? t(
+                'components.billing.overage.memberOn5',
+                'Overage is on, up to your {{cap}} spend cap.',
+                { cap: formatCents(overage.spendCapCents, locale) }
+              )
             : t(
-                'auto.components.billing.overage.memberOff2',
-                'Off. Ask an owner or admin to turn it on.'
+                'components.billing.overage.memberOff5',
+                'Off until an owner or admin turns it on.'
               )}
         </p>
         {overage.optedIn ? spent : null}
@@ -205,6 +218,69 @@ export function OverageControls({
         'Update the payment method before changing overage.'
       )
     : undefined
+  const alertsNote = (
+    <p className="text-xs text-muted-foreground">
+      {t(
+        'auto.components.billing.usageAlertsNote',
+        'Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours.'
+      )}
+    </p>
+  )
+  const turnOn = (): void => {
+    if (busy) {
+      return
+    }
+    setCapDollars(String(Math.round(defaultCapCents / 100)))
+    focusCapOnOpen.current = true
+    save(true, defaultCapCents)
+  }
+
+  // N-09: off is one status line and one action. No cap field and no "$ 0" (which reads as "on").
+  if (!overage.optedIn) {
+    return (
+      <div
+        id={ORCA_BILLING_OVERAGE_SECTION_ID}
+        className="space-y-3 rounded-md border border-border/60 p-3"
+      >
+        {title}
+        <p className="text-xs text-muted-foreground">
+          {t(
+            'components.billing.overage.offStatus2',
+            'Overage is off. Running sandboxes go to sleep and new ones can’t start when your team runs out of sandbox hours.'
+          )}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {savedFlash ? (
+            <span
+              ref={savedRef}
+              tabIndex={-1}
+              role="status"
+              className="flex h-9 items-center gap-1 text-xs text-muted-foreground outline-none"
+            >
+              <Check className="size-3.5" />
+              {t('auto.components.billing.capSaving', 'Saving…')}
+            </span>
+          ) : (
+            <SettingsDisabledControlTooltip reason={blockedReason}>
+              <Button
+                type="button"
+                variant="outline"
+                aria-disabled={busy || paymentFailed || undefined}
+                onClick={paymentFailed ? undefined : turnOn}
+              >
+                {t('auto.components.billing.overage.turnOn', 'Turn on with a {{cap}} cap', {
+                  cap: formatCents(defaultCapCents, locale)
+                })}
+              </Button>
+            </SettingsDisabledControlTooltip>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">{hint}</p>
+        {alertsNote}
+      </div>
+    )
+  }
+
   return (
     // Deep-link target: the Run-on picker's "Turn on overage" / "Raise cap" lands here.
     <div
@@ -234,6 +310,7 @@ export function OverageControls({
                 $
               </span>
               <Input
+                ref={capInputRef}
                 id={capId}
                 inputMode="numeric"
                 adornment="leading"
@@ -251,9 +328,14 @@ export function OverageControls({
           </SettingsDisabledControlTooltip>
           {capValid ? null : (
             <p id={capErrorId} className="text-xs text-destructive">
-              {capTooHigh && maxCapCents !== null
-                ? capTooHighCopy(maxCapCents, locale, t)
-                : t('auto.components.billing.capInvalid', 'Enter a whole dollar amount.')}
+              {capZero
+                ? t(
+                    'components.billing.capZero2',
+                    'Set a spend cap above $0, or turn overage off.'
+                  )
+                : capTooHigh && maxCapCents !== null
+                  ? capTooHighCopy(maxCapCents, locale, t)
+                  : t('auto.components.billing.capInvalid', 'Enter a whole dollar amount.')}
             </p>
           )}
         </div>
@@ -273,23 +355,6 @@ export function OverageControls({
           <Button type="submit" variant="outline" aria-disabled={busy || undefined}>
             {t('auto.components.billing.saveCap', 'Save')}
           </Button>
-        ) : !overage.optedIn && !paymentFailed ? (
-          <Button
-            type="button"
-            variant="outline"
-            aria-disabled={busy || undefined}
-            onClick={() => {
-              if (busy) {
-                return
-              }
-              setCapDollars(String(Math.round(defaultCapCents / 100)))
-              save(true, defaultCapCents)
-            }}
-          >
-            {t('auto.components.billing.overage.turnOn', 'Turn on with a {{cap}} cap', {
-              cap: formatCents(defaultCapCents, locale)
-            })}
-          </Button>
         ) : null}
         <p id={hintId} className="basis-full text-xs text-muted-foreground">
           {hint}
@@ -303,13 +368,26 @@ export function OverageControls({
           </p>
         ) : null}
       </form>
-      {overage.optedIn ? spent : null}
-      <p className="text-xs text-muted-foreground">
-        {t(
-          'auto.components.billing.usageAlertsNote',
-          'Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours.'
-        )}
-      </p>
+      {spent}
+      <SettingsDisabledControlTooltip reason={blockedReason}>
+        <Button
+          type="button"
+          variant="link-muted"
+          size="inline"
+          aria-disabled={busy || paymentFailed || undefined}
+          onClick={() => {
+            if (!busy && !paymentFailed) {
+              save(false, 0)
+            }
+          }}
+        >
+          {/* Reads as a link at rest, not only on hover (design-squad, as RR-c1). */}
+          <span className="underline underline-offset-4">
+            {t('components.billing.overage.turnOff', 'Turn off overage')}
+          </span>
+        </Button>
+      </SettingsDisabledControlTooltip>
+      {alertsNote}
     </div>
   )
 }

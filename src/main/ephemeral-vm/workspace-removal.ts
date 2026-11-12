@@ -8,6 +8,10 @@ import {
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import {
+  CLOUD_DELETE_NOT_SENT,
+  CLOUD_DELETE_NOT_SENT_IN_USE,
+  CLOUD_DELETE_NOT_SENT_NO_DESTROY,
+  CLOUD_DELETE_NOT_SENT_UNCHECKED,
   RecipeWorkspaceRemovalError,
   type RecipeEnvironmentDescription,
   type RecipeHostRemovalState
@@ -167,6 +171,13 @@ export async function removeRecipeWorkspace(
     throw new Error('Recipe workspace ownership changed. Refresh and try again.')
   }
   const environmentId = runtime.runtimeEnvironmentId
+  const isOrcaCloud = runtime.recipe?.provider === 'orca-cloud'
+  if (isOrcaCloud && (runtime.recipe?.destroyDisabled || runtime.cleanupStatus === 'disabled')) {
+    // REG-12: nothing would destroy the sandbox, so refuse before touching anything.
+    throw new RecipeWorkspaceRemovalError(CLOUD_DELETE_NOT_SENT, CLOUD_DELETE_NOT_SENT_NO_DESTROY, {
+      runtimeId: runtime.id
+    })
+  }
   const { destroyHost: _destroyHost, ...forwarded } = params
   let checkoutResult: Record<string, unknown> = {}
   // A provisioned root is the VM's primary checkout, protected from ordinary Git deletion.
@@ -176,6 +187,31 @@ export async function removeRecipeWorkspace(
       throw new Error(
         "This workspace's environment is asleep. Open the workspace to wake it, then delete it again."
       )
+    }
+    // Other workspaces on the same environment keep it alive; no answer is not proof it's empty.
+    const otherWorkspaces = async (): Promise<unknown[] | undefined> => {
+      const listed = await ports.call(environmentId, 'worktree.list', {})
+      const parsedList = listed.ok ? Worktrees.safeParse(listed.result).data : undefined
+      return parsedList && parsedList.truncated !== true
+        ? parsedList.worktrees.filter(
+            (worktree) =>
+              worktree.isMainWorktree !== true &&
+              worktree.removing !== true &&
+              worktree.id !== params.worktree.slice(3)
+          )
+        : undefined
+    }
+    // REG-12: deleting an Orca Cloud workspace means deleting its sandbox, so prove the sandbox is
+    // its alone before touching anything. A refusal then really deleted nothing (Try again is safe).
+    if (isOrcaCloud) {
+      const others = await otherWorkspaces()
+      if (!others || others.length > 0) {
+        throw new RecipeWorkspaceRemovalError(
+          CLOUD_DELETE_NOT_SENT,
+          others ? CLOUD_DELETE_NOT_SENT_IN_USE : CLOUD_DELETE_NOT_SENT_UNCHECKED,
+          { runtimeId: runtime.id }
+        )
+      }
     }
     const response = await ports.call(environmentId, 'worktree.rm', {
       ...forwarded,
@@ -202,20 +238,13 @@ export async function removeRecipeWorkspace(
       }
       checkoutResult = { ...removed, removed: true }
     }
-    // Other workspaces on the same environment keep it alive; no answer is not proof it's empty.
-    const listed = await ports.call(environmentId, 'worktree.list', {})
-    const parsedList = listed.ok ? Worktrees.safeParse(listed.result).data : undefined
-    const remaining =
-      parsedList && parsedList.truncated !== true
-        ? parsedList.worktrees.filter(
-            (worktree) =>
-              worktree.isMainWorktree !== true &&
-              worktree.removing !== true &&
-              worktree.id !== params.worktree.slice(3)
-          )
-        : undefined
-    if (!remaining || remaining.length > 0) {
-      return { ...checkoutResult, removed: true, host: { runtimeId: runtime.id, state: 'kept' } }
+    // A recipe VM shared by several workspaces stays while others live on it. (Orca Cloud proved
+    // its sandbox was this workspace's alone above, so its delete always goes on to destroy.)
+    if (!isOrcaCloud) {
+      const remaining = await otherWorkspaces()
+      if (!remaining || remaining.length > 0) {
+        return { ...checkoutResult, removed: true, host: { runtimeId: runtime.id, state: 'kept' } }
+      }
     }
   }
   const cleaned = await orderDestroy(() => ports.cleanup(runtime.id))
@@ -225,6 +254,12 @@ export async function removeRecipeWorkspace(
       `${cleaned.cleanupLastError ?? 'Environment destroy failed.'} The environment (runtime ${runtime.id}) may still be running; retry the cleanup from Settings > Cloud VMs in Orca.`,
       { runtimeId: runtime.id }
     )
+  }
+  if (isOrcaCloud && cleaned.cleanupStatus === 'disabled') {
+    // Guard only (checked up front): a "cleaned" record without a destroy is never "Deleted".
+    throw new RecipeWorkspaceRemovalError(CLOUD_DELETE_NOT_SENT, CLOUD_DELETE_NOT_SENT_NO_DESTROY, {
+      runtimeId: runtime.id
+    })
   }
   return {
     ...checkoutResult,

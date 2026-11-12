@@ -29,8 +29,6 @@ export type CloudStripPrimary =
 export type CloudStripModel = {
   status: CloudStripStatus
   title: string
-  /** Below 360 px the strip shows one line: this, then the primary. */
-  compactTitle?: string
   detail: string
   /** Full sentence for the tooltip and aria-describedby when the detail is shortened. */
   description: string | null
@@ -43,6 +41,13 @@ export type CloudStripModel = {
     refusal: string | null
     /** PC-3b: a setup-token is a secret: masked, with this label (default: the claude.ai code). */
     secretLabel?: string
+    /**
+     * The code Claude's sign-in page shows, for the waiting setup-token (Set up once): masked, cleared
+     * once sent, and sent on its own when a whole code is pasted.
+     */
+    setupCode?: { placeholder: string; submitLabel: string }
+    /** Shown but not usable yet (the fresh sign-in link is on its way). */
+    disabled?: boolean
   } | null
   /** "Other ways" under ⋯: the code fallback and the key path. */
   otherWays: boolean
@@ -112,7 +117,6 @@ export function cloudAgentStripModel(args: {
     return {
       status: 'warning',
       title: t('agentSignInStrip.expired', 'Your {{agent}} sign-in expired', { agent }),
-      compactTitle: t('agentSignInStrip.expiredCompact', '{{agent}} sign-in expired', { agent }),
       detail: t('agentSignInStrip.expiredDetail', 'Sign in once to fix every workspace'),
       description: null,
       primary: { label: t('agentSignInStrip.renew', 'Renew'), action: { kind: 'renew' } },

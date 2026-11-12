@@ -30,6 +30,7 @@ function fakeChild(): FakeChild {
     kill: () => {
       child.killed = true
     },
+    write: () => {},
     emit: (chunk) => onData(chunk),
     exit: (code) => onExit(code)
   }

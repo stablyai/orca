@@ -15,6 +15,8 @@ import {
 } from '../navigation/settings-project-list'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
+import { setSettingsActiveSection } from '../host-scope/settings-active-section'
+import { resolveAccountBillingTarget } from '@/hooks/settings-navigation-orca-cloud-sections'
 import {
   getSettingsSectionId,
   SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID,
@@ -45,7 +47,8 @@ export function useSettingsPageEffects(
     setPendingNavRequestTick,
     setVoiceModelStatesLoading,
     settings,
-    settingsNavigationTarget,
+    settingsNavigationTarget: requestedNavigationTarget,
+    orcaCloudApiAvailable,
     settingsProjectList,
     showDesktopOnlySettings
   } = model
@@ -58,6 +61,11 @@ export function useSettingsPageEffects(
     searchInputRef,
     shortcutsEscapeConfirmUntilRef
   } = interactions
+
+  useEffect(() => {
+    setSettingsActiveSection(activeSectionId)
+    return () => setSettingsActiveSection(null)
+  }, [activeSectionId])
 
   useEffect(() => {
     if (activeSectionId !== 'general') {
@@ -166,9 +174,14 @@ export function useSettingsPageEffects(
   }, [keybindings, searchInputRef])
 
   useEffect(() => {
-    if (!settings || !settingsNavigationTarget) {
+    if (!settings || !requestedNavigationTarget) {
       return
     }
+    // Plan & billing is part of Account + Billing in Orca Cloud builds; old links land on that part.
+    const settingsNavigationTarget = resolveAccountBillingTarget(
+      requestedNavigationTarget,
+      orcaCloudApiAvailable && showDesktopOnlySettings
+    )
 
     const paneSectionId = getSettingsSectionId(
       settingsNavigationTarget.pane,
@@ -204,7 +217,7 @@ export function useSettingsPageEffects(
     if (settingsNavigationTarget.pane === 'general') {
       setGeneralSubPage(resolveGeneralSubPage(settingsNavigationTarget.sectionId))
     }
-    consumeSettingsNavigation(settingsNavigationTarget)
+    consumeSettingsNavigation(requestedNavigationTarget)
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
     setHighlightedSettingsTarget(
@@ -255,6 +268,8 @@ export function useSettingsPageEffects(
     setSshHostAddIntentSignal,
     settings,
     settingsProjectList,
-    settingsNavigationTarget
+    requestedNavigationTarget,
+    orcaCloudApiAvailable,
+    showDesktopOnlySettings
   ])
 }

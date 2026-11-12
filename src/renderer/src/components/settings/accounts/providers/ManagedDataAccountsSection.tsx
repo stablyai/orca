@@ -6,7 +6,10 @@ import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState
 } from '../../../../../../shared/managed-account-types'
+import { ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Button } from '../../../ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'
 import { Badge } from '../../../ui/badge'
 import {
   Dialog,
@@ -33,6 +36,7 @@ export function ManagedDataAccountsSection({
   const [busy, setBusy] = useState(false)
   const [removeId, setRemoveId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [cliOpen, setCliOpen] = useState(false)
   const environmentId = target.kind === 'environment' ? target.environmentId : null
 
   useEffect(() => {
@@ -100,22 +104,40 @@ export function ManagedDataAccountsSection({
       )}
     >
       <div className="space-y-3 py-3">
-        <code className="text-xs">{command}</code>
+        <Collapsible open={cliOpen} onOpenChange={setCliOpen}>
+          <CollapsibleTrigger asChild>
+            <Button type="button" variant="quiet" size="xs" className="-ml-2">
+              {t('accounts.managedData.useCli', 'Use from the command line')}
+              <ChevronDown
+                aria-hidden
+                className={cn(
+                  'size-3 transition-transform motion-reduce:transition-none',
+                  cliOpen && 'rotate-180'
+                )}
+              />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2">
+            <div className="space-y-2">
+              <code className="block text-xs">{command}</code>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void window.api.ui
+                    .writeClipboardText(command)
+                    .then(() => setCopied(true))
+                    .catch((cause: unknown) => setError(String(cause)))
+                }}
+              >
+                {copied
+                  ? t('accounts.managedData.copied', 'Copied')
+                  : t('accounts.managedData.add', 'Copy add account command')}
+              </Button>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void window.api.ui
-                .writeClipboardText(command)
-                .then(() => setCopied(true))
-                .catch((cause: unknown) => setError(String(cause)))
-            }}
-          >
-            {copied
-              ? t('accounts.managedData.copied', 'Copied')
-              : t('accounts.managedData.add', 'Copy add account command')}
-          </Button>
           <Button
             variant="ghost"
             size="sm"

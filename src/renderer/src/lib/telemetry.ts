@@ -9,7 +9,7 @@ import { utcDayIndex } from '../../../shared/telemetry-day'
 export { tuiAgentToAgentKind } from '../../../shared/agent-kind'
 
 // Single source-of-truth for the privacy doc URL so FirstLaunchBanner and PrivacyPane can't drift.
-export const PRIVACY_URL = 'https://www.onorca.dev/docs/telemetry'
+export const PRIVACY_URL = 'https://orca.dev/docs/telemetry'
 
 let lastTerminalUserInputAt: number | null = null
 

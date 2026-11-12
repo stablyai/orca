@@ -2,7 +2,7 @@
 // workspaces and members with their names resolved. Hours use formatHours, like the meter above.
 import type { Translate } from '@/i18n/use-translate'
 import type { OrcaBillingUsageHistory, OrcaBillingUsageTop } from '../../../../shared/orca-billing'
-import { formatHours } from './plan-billing-format'
+import { formatHours, formatHoursUsed } from './plan-billing-format'
 
 const HOUR = 3600
 
@@ -161,8 +161,8 @@ export function topWorkspaceRows(
 /** "48 sandbox hours in 30 days": the chart's total, distinct from the month's meter above. */
 export function usageWindowTotalLine(seconds: number, t: Translate): string {
   return t('auto.components.billing.usage.windowTotal', '{{value}} sandbox hours in 30 days', {
-    value: formatHours(seconds),
-    count: Number(formatHours(seconds)),
+    value: formatHoursUsed(seconds),
+    count: Number(formatHoursUsed(seconds)),
     defaultValue_one: '{{value}} sandbox hour in 30 days'
   })
 }
@@ -170,8 +170,8 @@ export function usageWindowTotalLine(seconds: number, t: Translate): string {
 /** "41.5 sandbox hours" (a day's readout). */
 export function usageTotalLine(seconds: number, t: Translate): string {
   return t('auto.components.billing.usage.total', '{{value}} sandbox hours', {
-    value: formatHours(seconds),
-    count: Number(formatHours(seconds)),
+    value: formatHoursUsed(seconds),
+    count: Number(formatHoursUsed(seconds)),
     defaultValue_one: '{{value}} sandbox hour'
   })
 }
@@ -182,8 +182,8 @@ export function yourUsageLine(history: OrcaBillingUsageHistory, t: Translate): s
     'auto.components.billing.usage.yours',
     'You used {{yours}} of your team’s {{total}} sandbox hours.',
     {
-      yours: formatHours(history.yourSeconds),
-      total: formatHours(history.totalSeconds)
+      yours: formatHoursUsed(history.yourSeconds),
+      total: formatHoursUsed(history.totalSeconds)
     }
   )
 }

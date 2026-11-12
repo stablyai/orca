@@ -4,13 +4,15 @@ import {
   armWakeScrollback,
   beginWakeScrollbackRestore,
   captureWakeScrollback,
+  displayWidth,
   finishWakeScrollbackRestore,
   forgetWakeScrollback,
   hasPendingWakeScrollback,
   noteBeforeCloudReplay,
   noteWakeViewport,
   wakeScrollbackPreview,
-  resetWakeScrollbackForTests
+  resetWakeScrollbackForTests,
+  wakeDividerLine
 } from './cloud-wake-scrollback'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -360,5 +362,42 @@ describe('WAKE-SCROLLBACK', () => {
     forgetWakeScrollback(['leaf-2'])
     armWakeScrollback(['leaf-2'])
     expect(beginWakeScrollbackRestore('leaf-2', terminal)).toBeNull()
+  })
+})
+
+// WAKE-DIVIDER-WIDTH: the divider never wraps; the longest form that fits, decided at write time.
+const SGR_CODES = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+
+describe('wakeDividerLine widths', () => {
+  const plain = (cols: number): string =>
+    wakeDividerLine(SLEPT_AT, NOW, cols).replace(SGR_CODES, '')
+  const full = plain(Infinity)
+  const short = full.replace(' · processes stopped', '')
+  const bare = '── Slept ──'
+
+  it('uses the full form when it fits exactly, and the short form one column narrower', () => {
+    expect(full).toMatch(/^── Slept .+–.+ · processes stopped ──$/)
+    expect(plain(displayWidth(full))).toBe(full)
+    expect(plain(displayWidth(full) - 1)).toBe(short)
+  })
+
+  it('uses the short form at its width (time range whole), and the bare form one narrower', () => {
+    expect(short).toMatch(/^── Slept \d.+–.+ ──$/)
+    expect(plain(displayWidth(short))).toBe(short)
+    expect(plain(displayWidth(short) - 1)).toBe(bare)
+  })
+
+  it('uses the bare form at its width, then a rule exactly the pane width', () => {
+    expect(plain(displayWidth(bare))).toBe(bare)
+    expect(plain(displayWidth(bare) - 1)).toBe('─'.repeat(displayWidth(bare) - 1))
+    expect(plain(4)).toBe('────')
+  })
+
+  it('never wraps and never uses an ellipsis at any width', () => {
+    for (let cols = 1; cols <= displayWidth(full) + 5; cols++) {
+      const line = plain(cols)
+      expect(displayWidth(line)).toBeLessThanOrEqual(cols)
+      expect(line).not.toContain('…')
+    }
   })
 })

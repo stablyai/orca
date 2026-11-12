@@ -5,7 +5,9 @@ import { buildSetupSettingsSections } from './settings-navigation-capability-sec
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 import {
   buildOrcaCloudSettingsSections,
-  gatherOrcaCloudSettingsGroup
+  gatherOrcaCloudSettingsGroup,
+  resolveAccountBillingTarget,
+  ACCOUNT_BILLING_PLAN_ANCHOR
 } from './settings-navigation-orca-cloud-sections'
 
 function options(patch: Partial<SettingsNavigationBuildOptions>): SettingsNavigationBuildOptions {
@@ -59,6 +61,10 @@ describe('Orca Cloud settings group', () => {
     expect(setup.find((section) => section.id === 'orca-account')?.description).toBe(
       'The Orca account you’re signed in with.'
     )
+    const gathered = gatherOrcaCloudSettingsGroup(setup, options({}))
+    expect(gathered.find((section) => section.id === 'orca-account')?.description).toBe(
+      'Your Orca account, plan, sandbox hours and payment.'
+    )
     const local = buildSetupSettingsSections(options({ isOrcaCloudApiAvailable: false }))
     expect(local.find((section) => section.id === 'orca-account')?.description).not.toMatch(
       /Orca Cloud/
@@ -86,17 +92,45 @@ describe('one Orca Cloud group (JA-16)', () => {
     nav('automations', 'workflows')
   ]
 
-  it('leads the Orca Cloud group with the Orca account; Agent accounts stays in AI capabilities', () => {
+  it('leads the Orca Cloud group with Account + Billing; Agent accounts stays in AI capabilities', () => {
     const out = gatherOrcaCloudSettingsGroup(all, options({}))
     expect(out.map((section) => `${section.group}:${section.id}`)).toEqual([
       'capabilities:agents',
       'capabilities:accounts',
       'setup:general',
       'orca-cloud:orca-account',
-      'orca-cloud:cloud-billing',
       'orca-cloud:cloud-team',
       'workflows:automations'
     ])
+    expect(out.find((section) => section.id === 'orca-account')?.title).toBe('Account + Billing')
+  })
+
+  it('moves Plan & billing search onto Account + Billing, landing on its billing part', () => {
+    const withEntries = all.map((section) =>
+      section.id === 'cloud-billing'
+        ? { ...section, searchEntries: [{ title: 'Plan & billing', keywords: ['invoice'] }] }
+        : section.id === 'orca-account'
+          ? { ...section, searchEntries: [{ title: 'Orca account' }] }
+          : section
+    )
+    const account = gatherOrcaCloudSettingsGroup(withEntries, options({})).find(
+      (section) => section.id === 'orca-account'
+    )
+    expect(account?.searchEntries).toEqual([
+      { title: 'Orca account' },
+      { title: 'Plan & billing', keywords: ['invoice'], targetSectionId: ACCOUNT_BILLING_PLAN_ANCHOR }
+    ])
+  })
+
+  it('sends old Plan & billing links to Account + Billing at its billing part', () => {
+    expect(resolveAccountBillingTarget({ pane: 'cloud-billing' }, true)).toEqual({
+      pane: 'orca-account',
+      sectionId: ACCOUNT_BILLING_PLAN_ANCHOR
+    })
+    expect(resolveAccountBillingTarget({ pane: 'cloud-billing' }, false)).toEqual({
+      pane: 'cloud-billing'
+    })
+    expect(resolveAccountBillingTarget({ pane: 'cloud-team' }, true)).toEqual({ pane: 'cloud-team' })
   })
 
   it('leaves the upstream grouping alone without Orca Cloud', () => {
@@ -104,5 +138,18 @@ describe('one Orca Cloud group (JA-16)', () => {
       all
     )
     expect(gatherOrcaCloudSettingsGroup(all, options({ isWebClient: true }))).toEqual(all)
+  })
+})
+
+describe('isOrcaCloudSettingsSectionId', () => {
+  it('is true only for the Orca Cloud group pages', async () => {
+    const { isOrcaCloudSettingsSectionId } =
+      await import('./settings-navigation-orca-cloud-sections')
+    expect(isOrcaCloudSettingsSectionId('cloud-billing')).toBe(true)
+    expect(isOrcaCloudSettingsSectionId('cloud-team')).toBe(true)
+    expect(isOrcaCloudSettingsSectionId('orca-account')).toBe(true)
+    expect(isOrcaCloudSettingsSectionId('general')).toBe(false)
+    expect(isOrcaCloudSettingsSectionId('terminal')).toBe(false)
+    expect(isOrcaCloudSettingsSectionId(null)).toBe(false)
   })
 })

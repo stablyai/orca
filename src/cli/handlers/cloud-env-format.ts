@@ -33,7 +33,7 @@ export function buildErrorText(error: string | null): string {
       "A repository couldn't be cloned. Check that the Orca GitHub app can access it and the branch exists.",
     record_failed: "Orca couldn't record the installed environment.",
     timeout: 'The build ran past its time limit.',
-    snapshot_failed: 'Saving the snapshot failed.',
+    snapshot_failed: 'Saving the environment failed.',
     runtime_removed: 'The build sandbox was removed before it finished.',
     boot_failed: 'The build sandbox failed to start.',
     boot_timeout: 'The build sandbox took too long to start.',

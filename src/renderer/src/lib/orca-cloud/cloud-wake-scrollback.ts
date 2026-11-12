@@ -138,14 +138,32 @@ export function captureWakeScrollback(
     .catch(() => undefined)
 }
 
-/** The divider, dim, between the restored output and the woken terminal. */
-export function wakeDividerLine(sleptAt: number, wokeAt: number): string {
-  const label = translate(
-    'orcaCloudWorkspace.terminal.sleptRangeDivider',
-    'Slept {{range}} · processes stopped',
-    { range: formatSleptRange(sleptAt, wokeAt) }
-  )
-  return `\x1b[0;2m── ${label} ──\x1b[0m`
+/**
+ * The divider, dim, between the restored output and the woken terminal (WAKE-DIVIDER-WIDTH). It
+ * never wraps: the longest form that fits the pane's columns when it is written, decided once —
+ * "── Slept 2:02–2:31 PM · processes stopped ──", then "── Slept 2:02–2:31 PM ──", then
+ * "── Slept ──", then a bare rule the pane's width. No ellipsis; the time range is never split.
+ */
+export function wakeDividerLine(sleptAt: number, wokeAt: number, cols = Infinity): string {
+  const range = formatSleptRange(sleptAt, wokeAt)
+  const labels = [
+    translate(
+      'orcaCloudWorkspace.terminal.sleptRangeDivider',
+      'Slept {{range}} · processes stopped',
+      {
+        range
+      }
+    ),
+    translate('orcaCloudWorkspace.terminal.sleptRangeShortDivider', 'Slept {{range}}', { range }),
+    translate('orcaCloudWorkspace.terminal.sleptBareDivider', 'Slept')
+  ]
+  const fitting = labels.map((label) => `── ${label} ──`).find((form) => displayWidth(form) <= cols)
+  return `\x1b[0;2m${fitting ?? '─'.repeat(Math.max(1, Math.floor(cols)))}\x1b[0m`
+}
+
+/** Columns a divider takes: one per code point (its text has no wide characters). */
+export function displayWidth(text: string): number {
+  return [...text].length
 }
 
 /** The workspace is waking or live: these panes' next clearing replay restores their output. */
@@ -234,6 +252,8 @@ export function noteWakeViewport(
 
 type WokenTerminal = {
   rows: number
+  /** The divider is fitted to these (WAKE-DIVIDER-WIDTH). */
+  cols?: number
   buffer: {
     active: RestoreBuffer & {
       type: string
@@ -282,7 +302,7 @@ export function beginWakeScrollbackRestore(
   return {
     // A remount on wake starts at the bottom: the person's scroll is the one noted before it.
     scrolledTo: viewportY < baseY ? viewportY : entry.scrolledTo,
-    block: `\x1b[0m${sanitizeRestoredText(entry.text)}\x1b[0m\r\n${wakeDividerLine(entry.sleptAt, wokeAt)}`
+    block: `\x1b[0m${sanitizeRestoredText(entry.text)}\x1b[0m\r\n${wakeDividerLine(entry.sleptAt, wokeAt, terminal.cols)}`
   }
 }
 

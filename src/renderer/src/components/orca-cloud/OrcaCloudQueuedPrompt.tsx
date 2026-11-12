@@ -4,6 +4,8 @@ import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
+import { BANNER_BODY_TEXT, BANNER_TONE } from '@/components/ui/banner-tone'
 import {
   canQueueVmCreationPrompt,
   queueVmCreationPrompt,
@@ -182,15 +184,28 @@ export function OrcaCloudQueuedPromptView({
 
   return (
     <div
-      className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2"
+      // GA-P3t: a held prompt waits on the agent's setup (warning); a queued one is info.
+      className={cn(
+        'flex items-start gap-2 rounded-md border px-3 py-2',
+        BANNER_TONE[held ? 'warning' : 'info'].surface,
+        BANNER_TONE[held ? 'warning' : 'info'].border
+      )}
       data-orca-cloud-queued-prompt="queued"
     >
-      <Clock3 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <Clock3
+        className={cn('mt-0.5 size-3.5 shrink-0', BANNER_TONE[held ? 'warning' : 'info'].icon)}
+        aria-hidden="true"
+      />
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium text-foreground">
           {queuedTitle(t, agentName, { held, editable, draft: isDraftDelivery })}
         </p>
-        <p className="mt-0.5 line-clamp-3 text-xs whitespace-pre-wrap break-words text-muted-foreground">
+        <p
+          className={cn(
+            'mt-0.5 line-clamp-3 text-xs whitespace-pre-wrap break-words',
+            BANNER_BODY_TEXT
+          )}
+        >
           {prompt}
         </p>
       </div>

@@ -28,6 +28,7 @@ import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
 import { EditorRevealFlash } from './EditorRevealFlash'
 import { SplitPaneLanding } from './SplitPaneLanding'
 import { CloudWorkspaceNumberChip } from '../cloud-workspaces/CloudWorkspaceNumberChip'
+import { CloudGitSetupStrip } from '../orca-cloud/CloudGitSetupStrip'
 import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
@@ -341,6 +342,9 @@ export default function TabGroupPanel({
         </div>
       )}
 
+      {/* GIT-SETUP: under the tab row, above the panes; once per workspace, in the top-left group
+          whatever has focus, so it never moves between splits. */}
+      {reserveCollapsedSidebarHeaderSpace ? <CloudGitSetupStrip worktreeId={worktreeId} /> : null}
       <div
         ref={setBodyRef}
         data-tab-group-body-id={groupId}

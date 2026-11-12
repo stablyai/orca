@@ -8,7 +8,12 @@ export type SetupTokenProcess = {
   onData(listener: (chunk: string) => void): void
   onExit(listener: (exitCode: number | null) => void): void
   kill(): void
+  /** Types into the CLI, like a user at its prompt (the pasted sign-in code). */
+  write(data: string): void
 }
+
+/** Hands the CLI the code from Claude's "Paste this into Claude Code" page. False when it can't take one now. */
+export type SubmitSetupCode = (code: string) => boolean
 
 /** Rejects with `{ code: 'ENOENT' }` when there is no `claude` to run. */
 export type SpawnSetupToken = () => Promise<SetupTokenProcess>
@@ -46,6 +51,12 @@ const DENIED =
   /\baccess_denied\b|authorization (?:request )?(?:was )?denied|sign-?in (?:was )?denied|login (?:was )?denied/i
 const AUTHORIZE_HOSTS = new Set(['claude.ai', 'claude.com', 'console.anthropic.com'])
 const LINK = /https:\/\/[^\s"'<>]+(?=\s)/g
+// The CLI's answer to a pasted code it could not exchange; it then waits for Enter to start over.
+const CODE_REJECTED = /code wasn.t accepted|Invalid authorization code|OAuth error/i
+// Ink reads a chunk ending in Enter as a paste; the code and the Enter go in separately.
+const ENTER_AFTER_CODE_MS = 150
+// Long enough to read the rejection; then Enter starts a fresh sign-in (new link, new code).
+const RETRY_AFTER_REJECT_MS = 500
 
 function plainText(raw: string): string {
   return raw.replace(INLINE_ESCAPE, '').replace(TERMINAL_ESCAPE, '\n')
@@ -93,8 +104,12 @@ export function runClaudeSetupToken(options: {
   signal: AbortSignal
   timeoutMs?: number
   onAuthorizeUrl?: (url: string) => void
+  /** The CLI is waiting at its sign-in prompt: from here a pasted code can finish it. */
+  onAcceptsCode?: (submit: SubmitSetupCode) => void
+  /** The CLI refused the pasted code and started over; a new link (onAuthorizeUrl) follows. */
+  onCodeRejected?: () => void
 }): Promise<ClaudeSetupTokenOutcome> {
-  const { spawn, signal, onAuthorizeUrl } = options
+  const { spawn, signal, onAuthorizeUrl, onAcceptsCode, onCodeRejected } = options
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   return new Promise((resolve) => {
     if (signal.aborted) {
@@ -106,6 +121,8 @@ export function runClaudeSetupToken(options: {
     let exited = false
     let scanned = ''
     let linkSeen = false
+    // A code was typed in and the CLI hasn't answered yet (token, or a rejection).
+    let codePending = false
     let best: string | null = null
     let timer: ReturnType<typeof setTimeout> | null = null
     let settleTimer: ReturnType<typeof setTimeout> | null = null
@@ -184,11 +201,39 @@ export function runClaudeSetupToken(options: {
             finish({ ok: false, error: 'denied' }, 'kill')
             return
           }
+          if (codePending && CODE_REJECTED.test(plainText(scanned))) {
+            // Start over in the same run: Enter gets a fresh link; the old code page is spent.
+            codePending = false
+            linkSeen = false
+            scanned = ''
+            onCodeRejected?.()
+            const retry = setTimeout(() => {
+              if (!settled && !exited) {
+                process.write('\r')
+              }
+            }, RETRY_AFTER_REJECT_MS)
+            retry.unref?.()
+            return
+          }
           if (!linkSeen) {
             const url = findAuthorizeUrl(scanned)
             if (url) {
               linkSeen = true
               onAuthorizeUrl?.(url)
+              onAcceptsCode?.((code) => {
+                if (settled || exited || !linkSeen || codePending) {
+                  return false
+                }
+                codePending = true
+                process.write(code)
+                const enter = setTimeout(() => {
+                  if (!settled && !exited) {
+                    process.write('\r')
+                  }
+                }, ENTER_AFTER_CODE_MS)
+                enter.unref?.()
+                return true
+              })
             }
           }
         })

@@ -8,7 +8,7 @@ import {
   utimesSync,
   writeFileSync
 } from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -74,7 +74,8 @@ describe('stageStartupCommand on an Orca Cloud host (CR-cmd)', () => {
       cloudHost: true
     })
     expect(staged.delivery).toBe('staged')
-    expect(staged.command).toBe(`. '${staged.scriptPath}'`)
+    // CR-cmd-quiet: a leading space, so HISTCONTROL=ignorespace shells skip it too.
+    expect(staged.command).toBe(` . '${staged.scriptPath}'`)
     expect(staged.command).not.toContain('dangerously')
     expect(readFileSync(staged.scriptPath!, 'utf8')).toContain(agentLine)
   })
@@ -119,6 +120,129 @@ describe('stageStartupCommand on an Orca Cloud host (CR-cmd)', () => {
       cloudHost: true
     })
     expect(staged).toEqual({ command: 'npm test', delivery: 'typed' })
+  })
+})
+
+describe('CR-cmd-quiet: Orca’s staged agent line leaves no trace on a cloud host', () => {
+  const ESC = '\u001b'
+
+  function quietStage(shellPath: string, command: string) {
+    return stageStartupCommand({
+      command,
+      shellPath,
+      platform: 'linux',
+      directory,
+      orcaBuiltLine: true,
+      cloudHost: true
+    })
+  }
+
+  it('erases the echoed prompt and line, then runs the agent; its errors still print', () => {
+    const staged = quietStage('/bin/bash', 'echo AGENT-OUTPUT; ls /orca-no-such-dir')
+    // A 21-column prompt plus the typed line on a 40-column terminal: the rows they took.
+    const prompt = 'user@host:~/project$ '
+    const rows = Math.ceil((prompt.length + staged.command.length) / 40)
+    const { stdout, stderr } = spawnSync('bash', ['-c', `PS1='${prompt}'; ${staged.command}`], {
+      env: { ...process.env, COLUMNS: '40' },
+      encoding: 'utf8'
+    })
+    expect(stdout.startsWith(`\r${ESC}[${rows}A${ESC}[J`)).toBe(true)
+    expect(stdout).toContain('AGENT-OUTPUT')
+    expect(stderr).toContain('orca-no-such-dir')
+  })
+
+  function eraseRows(shellPrompt: string, columns: number): number {
+    const staged = quietStage('/bin/bash', 'true')
+    const out = execFileSync(
+      'bash',
+      ['-c', `PS1=${JSON.stringify(shellPrompt)}; ${staged.command}`],
+      {
+        env: { ...process.env, COLUMNS: String(columns) },
+        encoding: 'utf8'
+      }
+    )
+    const match = new RegExp(`^\\r${ESC}\\[(\\d+)A${ESC}\\[J`).exec(out)
+    return match ? Number(match[1]) : -1
+  }
+
+  it.each([1, 2, 3])(
+    'erases exactly the %i row(s) the prompt and typed line wrapped across, nothing above the prompt',
+    (rows) => {
+      const prompt = 'ubuntu@ik-card:~/w$ '
+      // The typed line's length depends on the temp dir; size the pane so it wraps across `rows`.
+      const typed = quietStage('/bin/bash', 'true').command.length
+      const columns = Math.ceil((prompt.length + typed) / rows)
+      expect(Math.ceil((prompt.length + typed) / columns)).toBe(rows)
+      expect(eraseRows(prompt, columns)).toBe(rows)
+    }
+  )
+
+  it('counts a long coloured prompt (deep cwd, git branch) by its visible width', () => {
+    const visible =
+      'ubuntu@ik-card:~/orca/workspaces/Hello-World/fix-login-redirect (fix-login-redirect)$ '
+    // Colours and an OSC 133 mark, wrapped in \[ \] the way prompts are written: they take no room.
+    const coloured = String.raw`\[\e]133;A\a\]\[\e[32m\]ubuntu@ik-card\[\e[0m\]:\[\e[34m\]~/orca/workspaces/Hello-World/fix-login-redirect\[\e[0m\] (fix-login-redirect)$ `
+    const staged = quietStage('/bin/bash', 'true')
+    const rows = Math.ceil((visible.length + staged.command.length) / 120)
+    expect(eraseRows(coloured, 120)).toBe(rows)
+    // Only the prompt's last line shares a row with the typed line.
+    expect(eraseRows(String.raw`first line\nubuntu@ik-card:~/w$ `, 400)).toBe(1)
+  })
+
+  it('drops the line from bash history', () => {
+    const staged = quietStage('/bin/bash', 'true')
+    const history = execFileSync(
+      'bash',
+      [
+        '-c',
+        `set -o history; history -s 'echo before'; history -s ${JSON.stringify(staged.command)}; ${staged.command}; history`
+      ],
+      { encoding: 'utf8' }
+    )
+    expect(history).toContain('echo before')
+    expect(history).not.toContain('orca-launch-')
+  })
+
+  it('leaves history alone when the line was never recorded (ignorespace)', () => {
+    const staged = quietStage('/bin/bash', 'true')
+    const history = execFileSync(
+      'bash',
+      ['-c', `set -o history; history -s 'echo before'; ${staged.command}; history`],
+      { encoding: 'utf8' }
+    )
+    expect(history).toContain('echo before')
+  })
+
+  it('runs under zsh too', () => {
+    const staged = quietStage('/bin/zsh', 'echo AGENT-OUTPUT')
+    let out = ''
+    try {
+      out = execFileSync('zsh', ['-f', '-c', `PS1='%n %# '; ${staged.command}`], {
+        env: { ...process.env, COLUMNS: '80' },
+        encoding: 'utf8'
+      })
+    } catch {
+      // No zsh on this machine: nothing to check.
+      return
+    }
+    expect(out).toMatch(new RegExp(`^\\r${ESC}\\[\\d+A${ESC}\\[J`))
+    expect(out).toContain('AGENT-OUTPUT')
+  })
+
+  it('plain shells and anything the user typed are unchanged', () => {
+    expect(
+      stageStartupCommand({
+        command: 'npm test',
+        shellPath: '/bin/bash',
+        platform: 'linux',
+        directory,
+        cloudHost: true
+      })
+    ).toEqual({ command: 'npm test', delivery: 'typed' })
+    // An Orca line in a shell the prelude doesn't know stays as #431 staged it.
+    const sh = quietStage('/bin/sh', 'true')
+    expect(sh.command.startsWith('. ')).toBe(true)
+    expect(readFileSync(sh.scriptPath!, 'utf8')).not.toContain('__orca_q_')
   })
 })
 

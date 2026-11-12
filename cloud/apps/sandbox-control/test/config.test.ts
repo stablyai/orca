@@ -15,8 +15,16 @@ describe('GET /v1/config', () => {
     const body = HostedSandboxConfigResponseSchema.parse(await res.json())
     expect(body.idleSleepMinutes).toBe(ORCA_CLOUD_IDLE_SLEEP_MINUTES)
     expect(DEFAULT_PLANS.team.idleSleepMinutes).toBe(ORCA_CLOUD_IDLE_SLEEP_MINUTES)
+    // The archive TTL every "kept until" promise is computed from (30 days unless ARCHIVE_TTL_DAYS).
+    expect(body.archiveTtlDays).toBe(30)
     // No sandbox has started yet, so there is no measured start time to advertise.
     expect(body.createTiming).toBeUndefined()
+  })
+
+  it('advertises a deployed ARCHIVE_TTL_DAYS override, so "kept until" dates match what reconcile deletes', async () => {
+    const h = await createHarness({ ARCHIVE_TTL_DAYS: '14' })
+    const res = await h.send(new Request('https://sandbox.test/v1/config'))
+    expect(HostedSandboxConfigResponseSchema.parse(await res.json()).archiveTtlDays).toBe(14)
   })
 
   it('advertises the measured start time once enough sandboxes have started', async () => {

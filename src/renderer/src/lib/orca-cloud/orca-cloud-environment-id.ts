@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 
 /** True when this runtime environment is an Orca Cloud sandbox (never guessed from its name alone). */
 export function isOrcaCloudEnvironmentId(environmentId: string): boolean {
@@ -7,4 +8,10 @@ export function isOrcaCloudEnvironmentId(environmentId: string): boolean {
     .getState()
     .runtimeEnvironments?.find((entry) => entry.id === environmentId)
   return environment ? isOrcaCloudRuntimeEnvironment(environment) : false
+}
+
+/** True when this execution host is an Orca Cloud sandbox's runtime (`runtime:<environment>`). */
+export function isOrcaCloudExecutionHostId(hostId: string | null | undefined): boolean {
+  const parsed = parseExecutionHostId(hostId)
+  return parsed?.kind === 'runtime' && isOrcaCloudEnvironmentId(parsed.environmentId)
 }

@@ -75,7 +75,9 @@ it('shows the filters from 5 workspaces, or whenever a filter is on so it can be
   expect(shouldShowCloudHomeFilters(0, DEFAULTS, true)).toBe(false)
   expect(shouldShowCloudHomeFilters(4, DEFAULTS, true)).toBe(false)
   expect(shouldShowCloudHomeFilters(5, DEFAULTS, true)).toBe(true)
-  expect(shouldShowCloudHomeFilters(0, { ...DEFAULTS, archived: true }, true)).toBe(true)
+  // The Archived switch alone doesn't bring the full row (ARCHIVE-REACH): the list's size does.
+  expect(shouldShowCloudHomeFilters(2, { ...DEFAULTS, archived: true }, true)).toBe(false)
+  expect(shouldShowCloudHomeFilters(5, { ...DEFAULTS, archived: true }, true)).toBe(true)
   expect(shouldShowCloudHomeFilters(1, { ...DEFAULTS, scope: 'mine' }, true)).toBe(true)
   expect(shouldShowCloudHomeFilters(1, { ...DEFAULTS, repo: 'https://x/y' }, true)).toBe(true)
   expect(shouldShowCloudHomeFilters(1, { ...DEFAULTS, running: true }, true)).toBe(true)
