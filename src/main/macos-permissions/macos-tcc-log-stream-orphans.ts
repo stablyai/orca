@@ -4,7 +4,7 @@ import {
   splitCommandLineArgv,
   sweepProcessIdentities,
   type ProcessIdentityRow
-} from '../opencode/opencode-client-sweep'
+} from '../opencode/session-correlation/opencode-client-sweep'
 import { LOG_PREDICATE } from './macos-tcc-prompt-watch'
 
 // Match legacy builds that spawned log stream without a lifetime wrapper.

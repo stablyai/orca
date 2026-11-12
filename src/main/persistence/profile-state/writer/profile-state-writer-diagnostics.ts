@@ -2,7 +2,7 @@ import type { CrashReportBreadcrumbData } from '../../../../shared/crash-reporti
 import {
   recordCoalescedDurableCrashBreadcrumb,
   recordDurableCrashBreadcrumb
-} from '../../../crash-reporting/durable-crash-breadcrumb'
+} from '../../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { getSystemPowerState } from '../../../power/system-power-lifecycle'
 import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
 

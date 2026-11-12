@@ -23,7 +23,7 @@ import {
   withRequiredWorkspaceSessionMaps
 } from './session-host-partitions'
 import { dropClosedTerminalTabs } from '../../closed-terminal-tab-write-fence'
-import { keepWslMoveFrozenSessionsForStore } from '../../moving-wsl-projects/wsl-move-session-freeze'
+import { keepWslMoveFrozenSessionsForStore } from '../../moving-wsl-projects/terminal-state/wsl-move-session-freeze'
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
 import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-row-order'
 

@@ -38,6 +38,7 @@ function runtimeWithMixedFolder() {
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     getProjectGroups: () => [MIXED_GROUP],
     getFolderWorkspaces: () => [MIXED_FOLDER],
+    getFolderWorkspace: (id: string) => (id === MIXED_FOLDER.id ? MIXED_FOLDER : undefined),
     getWorkspaceSessionHostIds: () => [...partitions.keys()],
     getWorkspaceSession: (hostId: ExecutionHostId) => partitions.get(hostId) ?? emptySession(),
     onWorkspaceSessionWritten: () => () => {}

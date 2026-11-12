@@ -7,7 +7,7 @@ import { extractString, parseJsonObject } from '../../../ai-vault/session-scanne
 import { asRecord } from '../../../ai-vault/session-scanner-record-value'
 
 import { readOpenCodeTranscriptSignalViaWorker } from '../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
-import { samePiDirectory } from '../../../pi/rpc-launch-resolution'
+import { samePiDirectory } from '../../../pi/rpc/launch/rpc-launch-resolution'
 import { admitTranscriptPath } from '../../transcript-path-admission'
 import { adoptedDirectoryProbes } from './adopted-directory-probe'
 

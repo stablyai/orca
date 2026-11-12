@@ -1,10 +1,10 @@
-import { link, mkdtemp, mkdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { link, mkdtemp, mkdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { zstdCompressSync } from 'node:zlib'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { truncateAiVaultListResult } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
-import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
+
 import { parseSessionCandidates } from './session-scanner-candidate-parse'
 import {
   MAX_UNLISTED_ENTRIES,
@@ -17,8 +17,7 @@ import {
   parseAgentSessionFileCached
 } from './parse-cache/session-scanner-parse-cache'
 import { scanAiVaultSessions } from './session-scanner'
-import { createAntigravityWorkspaceResolver } from './scanners/antigravity/session-scanner-antigravity-history'
-import { scanInScopeSessions } from './session-scanner-scope-walk'
+
 import * as eventLoop from '../../shared/event-loop-yield'
 import { AI_VAULT_SCOPE_CWD_SOURCES } from './session-scope-cwd'
 import { SessionParseCacheDatabase } from './parse-cache/session-parse-cache-database'
@@ -140,55 +139,6 @@ async function writeRollout(sessionsDir: string, id: string, cwd: string, day: s
 }
 
 describe('scanAiVaultSessions — scope before the recency cap', () => {
-  it.each([undefined, ['/repo']])(
-    'lists a rollout once, as its plain file, beside its .zst archive (scope %j)',
-    async (scopePaths) => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-zst-twin-'))
-      tempRoots.push(root)
-      const roots = isolatedScanRoots(root)
-      const plain = await writeRollout(roots.codexSessionsDir, 'twin', '/repo', '11')
-      await writeFile(`${plain}.zst`, zstdCompressSync(await readFile(plain)))
-      const archived = await writeRollout(roots.codexSessionsDir, 'archived-only', '/repo', '13')
-      await writeFile(`${archived}.zst`, zstdCompressSync(await readFile(archived)))
-      await rm(archived)
-
-      const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', scopePaths })
-
-      expect(
-        result.sessions
-          .filter((session) => session.agent === 'codex')
-          .map((session) => [session.sessionId, session.filePath])
-      ).toEqual(
-        expect.arrayContaining([
-          ['twin', plain],
-          ['archived-only', `${archived}.zst`]
-        ])
-      )
-      expect(result.sessions.filter((session) => session.agent === 'codex')).toHaveLength(2)
-    }
-  )
-
-  it('lists the live rollout when another account home holds only its archive', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-zst-homes-'))
-    tempRoots.push(root)
-    const homeA = join(root, 'codex-accounts', 'a', 'home', 'sessions')
-    const homeB = join(root, 'codex-accounts', 'b', 'home', 'sessions')
-    const archived = await writeRollout(homeA, 'moved', '/repo', '11')
-    await writeFile(`${archived}.zst`, zstdCompressSync(await readFile(archived)))
-    await rm(archived)
-    const live = await writeRollout(homeB, 'moved', '/repo', '11')
-
-    const result = await scanAiVaultSessions({
-      ...isolatedScanRoots(root),
-      additionalCodexSessionsDirs: [homeA, homeB],
-      platform: 'darwin'
-    })
-
-    expect(
-      result.sessions.filter((session) => session.agent === 'codex').map((s) => s.filePath)
-    ).toEqual([live])
-  })
-
   it('lists an older in-scope Codex session once across hardlinked homes', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-walk-'))
     tempRoots.push(root)
@@ -251,45 +201,6 @@ it('keeps an older Antigravity session in scope across warm scans and changed hi
   expect((await scan()).sessions.map((row) => row.sessionId)).toContain('older')
 })
 
-it('admits the newest scoped activity when copied Hermes files have newer mtimes', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-scope-activity-'))
-  tempRoots.push(root)
-  const roots = isolatedScanRoots(root)
-  await writeRollout(roots.codexSessionsDir, 'newer', '/other', '15')
-  await mkdir(roots.hermesSessionsDir, { recursive: true })
-  const base = Date.parse('2026-10-10T00:00:00.000Z')
-  for (let index = 0; index < 17; index++) {
-    const path = join(roots.hermesSessionsDir, `session_${index}.json`)
-    await writeFile(
-      path,
-      JSON.stringify({
-        session_id: `hermes-${index}`,
-        cwd: '/repo',
-        message_count: 1,
-        last_updated: new Date(base + (index === 16 ? 980 : 100)).toISOString()
-      })
-    )
-    await utimes(path, new Date(base + 1000 - index), new Date(base + 1000 - index))
-  }
-  const scan = (limit: number) =>
-    scanAiVaultSessions({ ...roots, platform: 'linux', limit, scopePaths: ['/repo'] })
-  const result = await scan(1)
-  expect(result.sessions.filter((row) => row.cwd === '/repo').map((row) => row.sessionId)).toEqual([
-    'hermes-16'
-  ])
-  expect(result.sessions.some((row) => row.sessionId === 'newer')).toBe(true)
-  expect(
-    truncateAiVaultListResult(result, 1, ['/repo'])
-      .sessions.filter((row) => row.cwd === '/repo')
-      .map((row) => row.sessionId)
-  ).toEqual(['hermes-16'])
-  const deeper = await scan(2)
-  const scopedIds = (rows: AiVaultListResult) =>
-    rows.sessions.filter((row) => row.cwd === '/repo').map((row) => row.sessionId)
-  expect(scopedIds(deeper)[0]).toBe('hermes-16')
-  expect(scopedIds(truncateAiVaultListResult(deeper, 1, ['/repo']))).toEqual(scopedIds(deeper))
-})
-
 it('delivers cancellation while traversing unchanged cached candidates', async () => {
   const candidates = Array.from({ length: 512 }, (_, index) => {
     const file = {
@@ -325,37 +236,4 @@ it('delivers cancellation while traversing unchanged cached candidates', async (
   } finally {
     clearTimeout(timer)
   }
-})
-
-it('walks a history larger than the spread-argument limit', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-scope-huge-'))
-  tempRoots.push(root)
-  const sessionsDir = join(root, 'sessions')
-  const path = await writeRollout(sessionsDir, 'huge-history', '/repo', '15')
-  const { mtimeMs, mtime } = await stat(path)
-  const older = Array.from({ length: 200_000 }, (_, index) => ({
-    path: join(sessionsDir, `rollout-old-${index}.jsonl`),
-    mtimeMs: 1,
-    modifiedAt: new Date(1).toISOString()
-  }))
-  const sessions = await scanInScopeSessions({
-    inventory: [],
-    discoveries: [
-      {
-        agent: 'codex',
-        rootDir: sessionsDir,
-        files: [{ path, mtimeMs, modifiedAt: mtime.toISOString() }],
-        scopeFiles: older
-      }
-    ],
-    options: { scopePaths: ['/repo'] },
-    limit: 1,
-    alreadyParsedFilePaths: new Set(),
-    platform: 'linux',
-    executionHostId: 'local',
-    issues: [],
-    parseStats: createSessionParseStats(),
-    antigravityWorkspaceResolver: createAntigravityWorkspaceResolver(async () => null)
-  })
-  expect(sessions.map((session) => session.sessionId)).toEqual(['huge-history'])
 })

@@ -14,11 +14,11 @@ src/main/browser/network/egress/browser-route-egress-electron-launch.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
 src/main/codex-accounts/service.ts
-src/main/computer/desktop-script-provider-bridge.ts
-src/main/computer/macos-computer-use-permission-status.ts
-src/main/computer/macos-computer-use-permissions.ts
-src/main/computer/macos-native-provider-transport.ts
-src/main/computer/sidecar-client.ts
+src/main/computer/desktop-script/desktop-script-provider-bridge.ts
+src/main/computer/macos-permissions/macos-computer-use-permission-status.ts
+src/main/computer/macos-permissions/macos-computer-use-permissions.ts
+src/main/computer/macos-native/macos-native-provider-transport.ts
+src/main/computer/sidecar-transport/sidecar-client.ts
 src/main/daemon/endpoint/identity/daemon-process-identity-query.ts
 src/main/daemon/endpoint/identity/daemon-process-inspection.ts
 src/main/daemon/endpoint/identity/daemon-process-start-time.ts
@@ -39,7 +39,7 @@ src/main/git/wsl-git-read-environment.ts
 src/main/github/gh-utils.ts
 src/main/workspace-hooks/hooks.ts
 src/main/ipc/developer-permissions.ts
-src/main/ipc/filesystem/watcher-process/parcel-watcher-child-launch.ts
+src/main/ipc/filesystem/watcher-process/child-lifecycle/parcel-watcher-child-launch.ts
 src/main/ipc/local-network-connection-test.ts
 src/main/ipc/macos-keyboard-input-source.ts
 src/main/ipc/macos-keyboard-layout-snapshot.ts
@@ -54,7 +54,7 @@ src/main/memory/collector.ts
 src/main/native-chat/wsl-transcript-fs-process-spawn.ts
 src/main/network/macos-system-resolver-health.ts
 src/main/network/macos-tailscale-dns-diagnostic.ts
-src/main/plugins/workers/plugin-host-process.ts
+src/main/plugins/workers/parent-process/plugin-host-process.ts
 src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
 src/main/ports/port-scan-command-execution.ts
 src/main/providers/macos-login-session-pty-probe.ts

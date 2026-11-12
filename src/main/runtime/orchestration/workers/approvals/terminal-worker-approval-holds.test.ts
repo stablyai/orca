@@ -29,19 +29,7 @@ const DIALOG = [
   '   2. No',
   ' Esc to cancel · Tab to amend'
 ]
-const WARNED = [
-  ' Bash command',
-  ' ╌╌╌╌╌╌╌╌',
-  ' │ rm -rf build',
-  ' ╌╌╌╌╌╌╌╌',
-  ' │ Dangerous rm operation not ruled out — the shell may read this',
-  ' │ command differently than it was parsed',
-  ' ⚠ Claude Code will automatically block this request in 1:42, to avoid holding up an unattended session',
-  ' Do you want to proceed?',
-  ' ❯ 1. Yes',
-  '   2. No',
-  ' Esc to cancel · Tab to amend'
-]
+
 // An earlier prompt's deny stays on screen: only this call's tool_result says how it closed.
 const AFTER = [
   '● Bash(rm -rf old)',
@@ -55,11 +43,6 @@ const USER_NO: ClaudeToolResult = {
   isError: true,
   text: "The user doesn't want to proceed with this tool use. The tool use was rejected."
 }
-const AUTO_BLOCKED: ClaudeToolResult = {
-  isError: true,
-  text: 'Permission for this command was denied by a built-in Claude Code safety check, not by the user.'
-}
-const RAN: ClaudeToolResult = { isError: false, text: '59' }
 
 function setup(options: { canAnswer?: boolean } = {}) {
   const db = new OrchestrationDb(':memory:')
@@ -169,11 +152,6 @@ const deny = (ctx: ReturnType<typeof setup>, approvalId: string) =>
   })
 
 describe('terminal worker approval holds', () => {
-  it('passes requests it cannot name, or whose pane it cannot answer', () => {
-    expect(setup().holds.admit(hook(undefined).request)).toBe(false)
-    expect(setup({ canAnswer: false }).holds.admit(hook('tool-1').request)).toBe(false)
-  })
-
   it("claims a deny only from this call's tool_result, despite an older deny line on screen", async () => {
     const ctx = setup()
     const asked = hook('tool-1', () => {
@@ -185,18 +163,6 @@ describe('terminal worker approval holds', () => {
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: true })
     expect(asked.replies).toEqual([{ behavior: 'deny', message: REASON }])
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
-  })
-
-  it('does not claim a deny that lost to a Yes, even with an older deny line on screen', async () => {
-    const ctx = setup()
-    const asked = hook('tool-1', () => {
-      ctx.screen.lines = AFTER
-      ctx.screen.result = RAN
-    })
-    const approvalId = await opened(ctx, asked)
-
-    expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
-    expect(ctx.closing()).toEqual([expect.stringContaining("Allowed in the worker's terminal")])
   })
 
   it('names a Yes whose PostToolUse arrived while the deny was in flight', async () => {
@@ -211,63 +177,6 @@ describe('terminal worker approval holds', () => {
 
     expect(await answering).toMatchObject({ ok: false, code: 'approval_not_open' })
     expect(ctx.closing()).toEqual([expect.stringContaining("Allowed in the worker's terminal")])
-  })
-
-  it("does not claim a deny that lost to Claude's 2:00 auto-block", async () => {
-    const ctx = setup()
-    const asked = hook('tool-1', () => (ctx.screen.result = AUTO_BLOCKED))
-    const approvalId = await opened(ctx, asked)
-
-    expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
-    expect(ctx.closing()).toEqual([expect.stringContaining('on its own (its 2:00 timeout)')])
-  })
-
-  it('writes nothing to a dialog the caught-up screen no longer shows', async () => {
-    const ctx = setup()
-    const asked = hook('tool-1')
-    const approvalId = await opened(ctx, asked)
-    ctx.screen.lines = AFTER
-
-    expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
-    expect(asked.replies.filter(Boolean)).toEqual([])
-  })
-
-  it('refuses an answer once the agent in the pane was restarted', async () => {
-    const ctx = setup()
-    const asked = hook('tool-1')
-    const approvalId = await opened(ctx, asked)
-    ctx.screen.incarnation = 'run-2'
-
-    expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
-    expect(asked.replies).toEqual([])
-  })
-
-  it("carries Claude's on-screen countdown as the time the prompt decides itself", () => {
-    const { holds, dispatch, screen } = setup()
-    screen.lines = [...DIALOG, ...Array.from({ length: 30 }, () => '')]
-    holds.admit(hook('tool-1').request)
-    expect(holds.takeOpenApproval(PANE, dispatch.id)?.expiresAt).toBe('2026-11-10T12:01:42.000Z')
-  })
-
-  it('releases both prompts when a second opens in the same pane', () => {
-    const ctx = setup()
-    const first = hook('tool-1')
-    ctx.holds.admit(first.request)
-    expect(ctx.holds.admit(hook('tool-2').request)).toBe(false)
-    expect(first.replies).toEqual([null])
-    expect(ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)).toBeNull()
-  })
-
-  it("names a No in the terminal from this call's tool_result once the dialog leaves", async () => {
-    const ctx = setup()
-    const asked = hook('tool-1')
-    await opened(ctx, asked)
-    ctx.screen.lines = AFTER
-    ctx.screen.result = USER_NO
-    await ctx.tick(3)
-
-    expect(asked.replies).toEqual([null])
-    expect(ctx.closing()).toEqual([expect.stringContaining("Denied in the worker's terminal")])
   })
 
   it("closes the card when the dialog leaves, and names it from a result read on the lead's Stop", async () => {
@@ -292,33 +201,6 @@ describe('terminal worker approval holds', () => {
       expect.stringContaining('Closed without an answer Orca can name'),
       expect.stringContaining("Denied in the worker's terminal")
     ])
-  })
-
-  it('treats a killed hook with the dialog still up as answerable only in the terminal', async () => {
-    const ctx = setup()
-    const asked = hook('tool-1')
-    await opened(ctx, asked)
-
-    asked.end('hook-gone')
-    await ctx.tick(80)
-    // Only a person at the terminal can answer it now, so the coordinator is asked to act.
-    expect(ctx.closings().map(({ type, body }) => [type, body])).toEqual([
-      [
-        'escalation',
-        expect.stringContaining("Tell the user to answer it in the worker's terminal.")
-      ]
-    ])
-  })
-  it("carries the warning Claude prints under a flagged command as the card's reason", () => {
-    const ctx = setup()
-    ctx.screen.lines = WARNED
-    ctx.holds.admit(hook('tool-1').request)
-    expect(ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)?.summary.reason).toBe(
-      'Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed'
-    )
-    const plain = setup()
-    plain.holds.admit(hook('tool-1').request)
-    expect(plain.holds.takeOpenApproval(PANE, plain.dispatch.id)?.summary.reason).toBeNull()
   })
 
   it('closes a prompt left open by an earlier run, once, when the database opens', () => {

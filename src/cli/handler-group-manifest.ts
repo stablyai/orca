@@ -15,7 +15,6 @@ export type HandlerGroup = {
   load: () => Promise<Record<string, CommandHandler>>
 }
 
-// handler-group-manifest.test.ts checks keys against the real exports to prevent drift.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   JIRA_HANDLER_GROUP,
   LINEAR_HANDLER_GROUP,

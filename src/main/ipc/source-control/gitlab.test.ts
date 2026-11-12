@@ -1,16 +1,16 @@
 import { repo } from './gitlab-ipc-repository-fixture'
-import type * as PipelineJobMutationsModule from '../../gitlab/pipeline-job-mutations'
-import type * as IssuesModule from '../../gitlab/issues'
-import type * as ProjectLabelAndMemberLookupModule from '../../gitlab/project-label-and-member-lookup'
-import type * as IssueUpdateModule from '../../gitlab/issue-update'
-import type * as MergeRequestReviewMutationsModule from '../../gitlab/merge-request-review-mutations'
-import type * as MergeRequestStateMutationsModule from '../../gitlab/merge-request-state-mutations'
-import type * as MergeRequestUpdateModule from '../../gitlab/merge-request-update'
-import type * as MergeRequestLookupModule from '../../gitlab/merge-request-lookup'
-import type * as MergeRequestListModule from '../../gitlab/merge-request-list'
-import type * as WorkItemQueriesModule from '../../gitlab/work-item-queries'
-import type * as ClientModule from '../../gitlab/client'
-import type * as GitlabAuthAndRateLimitModule from '../../gitlab/gitlab-auth-and-rate-limit'
+import type * as PipelineJobMutationsModule from '../../gitlab/pipelines/pipeline-job-mutations'
+import type * as IssuesModule from '../../gitlab/issues/gitlab-issue-queries'
+import type * as ProjectLabelAndMemberLookupModule from '../../gitlab/projects/project-label-and-member-lookup'
+import type * as IssueUpdateModule from '../../gitlab/issues/issue-update'
+import type * as MergeRequestReviewMutationsModule from '../../gitlab/merge-requests/merge-request-review-mutations'
+import type * as MergeRequestStateMutationsModule from '../../gitlab/merge-requests/merge-request-state-mutations'
+import type * as MergeRequestUpdateModule from '../../gitlab/merge-requests/merge-request-update'
+import type * as MergeRequestLookupModule from '../../gitlab/merge-requests/merge-request-lookup'
+import type * as MergeRequestListModule from '../../gitlab/merge-requests/merge-request-list'
+import type * as WorkItemQueriesModule from '../../gitlab/work-items/work-item-queries'
+
+import type * as GitlabAuthAndRateLimitModule from '../../gitlab/requests/gitlab-auth-and-rate-limit'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
@@ -94,43 +94,13 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../gitlab/client', () => ({
-  addIssueComment: addIssueCommentMock,
-  addMRInlineComment: addMRInlineCommentMock,
-  addMRComment: addMRCommentMock,
-  closeMR: closeMRMock,
-  createIssue: createIssueMock,
-  diagnoseAuth: vi.fn(),
-  getAuthenticatedViewer: vi.fn(),
-  getJobTrace: getJobTraceMock,
-  getIssue: getIssueMock,
-  getMergeRequest: getMergeRequestMock,
-  getMergeRequestForBranch: getMergeRequestForBranchMock,
-  getProjectSlug: getProjectSlugMock,
-  getRateLimit: vi.fn(),
-  getWorkItemByProjectRef: getWorkItemByProjectRefMock,
-  listAssignableUsers: listAssignableUsersMock,
-  listIssues: listIssuesMock,
-  listLabels: listLabelsMock,
-  listMergeRequests: listMergeRequestsMock,
-  listTodos: listTodosMock,
-  listWorkItems: listWorkItemsMock,
-  mergeMR: mergeMRMock,
-  reopenMR: reopenMRMock,
-  resolveMRDiscussion: resolveMRDiscussionMock,
-  retryJob: retryJobMock,
-  updateIssue: updateIssueMock,
-  updateMR: updateMRMock,
-  updateMRReviewers: updateMRReviewersMock
-}))
-
-vi.mock('../../gitlab/pipeline-job-mutations', async (importOriginal) => ({
+vi.mock('../../gitlab/pipelines/pipeline-job-mutations', async (importOriginal) => ({
   ...(await importOriginal<typeof PipelineJobMutationsModule>()),
   getJobTrace: getJobTraceMock,
   retryJob: retryJobMock
 }))
 
-vi.mock('../../gitlab/issues', async (importOriginal) => ({
+vi.mock('../../gitlab/issues/gitlab-issue-queries', async (importOriginal) => ({
   ...(await importOriginal<typeof IssuesModule>()),
   addIssueComment: addIssueCommentMock,
   createIssue: createIssueMock,
@@ -138,18 +108,18 @@ vi.mock('../../gitlab/issues', async (importOriginal) => ({
   listIssues: listIssuesMock
 }))
 
-vi.mock('../../gitlab/project-label-and-member-lookup', async (importOriginal) => ({
+vi.mock('../../gitlab/projects/project-label-and-member-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof ProjectLabelAndMemberLookupModule>()),
   listAssignableUsers: listAssignableUsersMock,
   listLabels: listLabelsMock
 }))
 
-vi.mock('../../gitlab/issue-update', async (importOriginal) => ({
+vi.mock('../../gitlab/issues/issue-update', async (importOriginal) => ({
   ...(await importOriginal<typeof IssueUpdateModule>()),
   updateIssue: updateIssueMock
 }))
 
-vi.mock('../../gitlab/merge-request-review-mutations', async (importOriginal) => ({
+vi.mock('../../gitlab/merge-requests/merge-request-review-mutations', async (importOriginal) => ({
   ...(await importOriginal<typeof MergeRequestReviewMutationsModule>()),
   addMRComment: addMRCommentMock,
   addMRInlineComment: addMRInlineCommentMock,
@@ -157,52 +127,51 @@ vi.mock('../../gitlab/merge-request-review-mutations', async (importOriginal) =>
   updateMRReviewers: updateMRReviewersMock
 }))
 
-vi.mock('../../gitlab/merge-request-state-mutations', async (importOriginal) => ({
+vi.mock('../../gitlab/merge-requests/merge-request-state-mutations', async (importOriginal) => ({
   ...(await importOriginal<typeof MergeRequestStateMutationsModule>()),
   closeMR: closeMRMock,
   mergeMR: mergeMRMock,
   reopenMR: reopenMRMock
 }))
 
-vi.mock('../../gitlab/merge-request-update', async (importOriginal) => ({
+vi.mock('../../gitlab/merge-requests/merge-request-update', async (importOriginal) => ({
   ...(await importOriginal<typeof MergeRequestUpdateModule>()),
   updateMR: updateMRMock
 }))
 
-vi.mock('../../gitlab/merge-request-lookup', async (importOriginal) => ({
+vi.mock('../../gitlab/merge-requests/merge-request-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof MergeRequestLookupModule>()),
   getMergeRequest: getMergeRequestMock,
   getMergeRequestForBranch: getMergeRequestForBranchMock,
   getProjectSlug: getProjectSlugMock
 }))
 
-vi.mock('../../gitlab/merge-request-list', async (importOriginal) => ({
+vi.mock('../../gitlab/merge-requests/merge-request-list', async (importOriginal) => ({
   ...(await importOriginal<typeof MergeRequestListModule>()),
   listMergeRequests: listMergeRequestsMock
 }))
 
-vi.mock('../../gitlab/work-item-queries', async (importOriginal) => ({
+vi.mock('../../gitlab/work-items/work-item-queries', async (importOriginal) => ({
   ...(await importOriginal<typeof WorkItemQueriesModule>()),
   getWorkItemByProjectRef: getWorkItemByProjectRefMock,
   listWorkItems: listWorkItemsMock,
   listTodos: listTodosMock
 }))
 
-vi.mock('../../gitlab/gitlab-auth-and-rate-limit', async (importOriginal) => {
-  const facadeMocks = await vi.importMock<typeof ClientModule>('../../gitlab/client')
+vi.mock('../../gitlab/requests/gitlab-auth-and-rate-limit', async (importOriginal) => {
   return {
     ...(await importOriginal<typeof GitlabAuthAndRateLimitModule>()),
-    diagnoseAuth: facadeMocks.diagnoseAuth,
-    getAuthenticatedViewer: facadeMocks.getAuthenticatedViewer,
-    getRateLimit: facadeMocks.getRateLimit
+    diagnoseAuth: vi.fn(),
+    getAuthenticatedViewer: vi.fn(),
+    getRateLimit: vi.fn()
   }
 })
 
-vi.mock('../../gitlab/work-item-details', () => ({
+vi.mock('../../gitlab/work-items/work-item-details', () => ({
   getWorkItemDetails: getWorkItemDetailsMock
 }))
 
-vi.mock('../../gitlab/gitlab-project-recents', () => ({
+vi.mock('../../gitlab/projects/gitlab-project-recents', () => ({
   recordGitLabProjectRecent: vi.fn()
 }))
 
