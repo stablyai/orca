@@ -5,11 +5,16 @@ import { PluginHostCallError, PluginRuntimeCallError } from './plugin-host-call-
 import type { PluginHostRendererActions } from '../../view/plugin-host-renderer-actions'
 
 /** The runtime RPC the `orca` CLI calls, run in process; rejects with the runtime's error.
- *  `beforeEffect` runs right before the runtime acts, after its own waits; a throw refuses it. */
+ *  `beforeEffect` runs right before the runtime acts, after its own waits; a throw refuses it.
+ *  `plugin` names who the call acts for, which the runtime records where it keeps provenance. */
 export type PluginRuntimeRpc = (
   method: string,
   params: unknown,
-  options?: { signal?: AbortSignal; beforeEffect?: () => void }
+  options?: {
+    signal?: AbortSignal
+    beforeEffect?: () => void
+    plugin?: { key: string; name: string }
+  }
 ) => Promise<unknown>
 
 type Failure = [PluginErrorCode, string]
@@ -31,7 +36,8 @@ const RUNTIME_FAILURES: ReadonlyMap<string, Failure> = new Map([
   ['terminal_tab_pinned', ['conflict', "the terminal's tab is pinned; unpin it in Orca first"]],
   ['renderer_unavailable', NO_WINDOW],
   ['client_disconnected', ['unavailable', 'the host that owns this is not connected']],
-  ['runtime_unavailable', ['unavailable', 'this Orca host cannot run workspace actions now']]
+  ['runtime_unavailable', ['unavailable', 'this Orca host cannot run workspace actions now']],
+  ['Automation not found.', ['action_failed', 'no automation has this id']]
 ])
 const UNKNOWN_FAILURE: Failure = ['action_failed', 'Orca could not complete this action']
 
@@ -54,7 +60,7 @@ export function pluginRuntimeFailure(error: unknown): unknown {
       : undefined
   const [failureCode, message] =
     (code && RUNTIME_FAILURES.get(code)) || RUNTIME_FAILURES.get(detail) || UNKNOWN_FAILURE
-  return new PluginRuntimeCallError(failureCode, message, undefined, detail)
+  return new PluginRuntimeCallError(failureCode, message, undefined, detail, { cause: error })
 }
 
 export function pluginHostRenderer(services: PluginHostServices): PluginHostRendererActions {
@@ -86,7 +92,8 @@ export function pluginHostEffect(
   ctx.scope.assertActive()
   return pluginHostRpc(ctx.services)(method, params, {
     ...(ctx.scope.signal ? { signal: ctx.scope.signal } : {}),
-    beforeEffect: () => ctx.scope.assertActive()
+    beforeEffect: () => ctx.scope.assertActive(),
+    plugin: { key: ctx.pluginId, name: ctx.scope.pluginName ?? ctx.pluginId }
   })
 }
 
@@ -96,4 +103,20 @@ export function pluginHostEffect(
  */
 export function pluginWorkspaceSelector(workspaceId: string): string {
   return workspaceId.startsWith('identity:') ? workspaceId : `id:${workspaceId}`
+}
+
+/** Whether `error`, or an error it was caused by, is an instance of `type`. */
+export function pluginRuntimeErrorIs(
+  error: unknown,
+  type: abstract new (...args: never[]) => Error
+): boolean {
+  let current: unknown = error
+  for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
+    const cause: unknown = current.cause
+    if (current instanceof type) {
+      return true
+    }
+    current = cause
+  }
+  return false
 }

@@ -3,6 +3,7 @@ import { satisfiesOrcaEngineRange } from '../manifest/plugin-manifest-engine-ran
 import { PLUGIN_THEME_VIDEO_BACKGROUND_SINCE } from '../manifest/plugin-schema-field-docs'
 import { PLUGIN_EDITOR_TYPOGRAPHY_SINCE } from '../workers/plugin-host-api-editor-typography'
 import { PLUGIN_HOST_API_1_7_SINCE } from '../workers/plugin-host-api-workspace-methods'
+import { PLUGIN_HOST_API_1_8_SINCE } from '../workers/plugin-host-api-1-8'
 import { pluginHostVersion } from './plugin-host-version'
 
 describe('pluginHostVersion', () => {
@@ -11,7 +12,8 @@ describe('pluginHostVersion', () => {
     for (const since of [
       PLUGIN_THEME_VIDEO_BACKGROUND_SINCE,
       PLUGIN_EDITOR_TYPOGRAPHY_SINCE,
-      PLUGIN_HOST_API_1_7_SINCE
+      PLUGIN_HOST_API_1_7_SINCE,
+      PLUGIN_HOST_API_1_8_SINCE
     ]) {
       expect(satisfiesOrcaEngineRange(hostVersion, `>=${since}`)).toBe(true)
     }
