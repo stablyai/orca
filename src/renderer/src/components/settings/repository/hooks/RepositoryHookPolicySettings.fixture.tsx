@@ -34,3 +34,20 @@ export const invalidYaml = defineFixture({
     />
   )
 })
+
+export const missingYaml = defineFixture({
+  width: 720,
+  render: () => (
+    <RepositoryHookCommandSourceSetting
+      searchQuery=""
+      selectedPolicy="run-both"
+      yamlState="missing"
+      yamlHooks={null}
+      copiedTemplate={false}
+      isAdvancedOpen
+      onSelectPolicy={() => {}}
+      onCopyTemplate={() => {}}
+      onAdvancedOpenChange={() => {}}
+    />
+  )
+})

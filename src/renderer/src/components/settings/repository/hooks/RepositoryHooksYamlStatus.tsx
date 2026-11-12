@@ -1,7 +1,9 @@
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, ChevronRight } from 'lucide-react'
+import { Trans } from 'react-i18next'
 import type { OrcaHooks } from '../../../../../../shared/orca-yaml-hook-types'
 import { Button } from '../../../ui/button'
-import { translate } from '@/i18n/i18n'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'
+import { i18n, translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { renderYamlScriptPreview } from './repository-hook-settings-draft'
 
@@ -13,29 +15,11 @@ const EXAMPLE_TEMPLATE = `scripts:
 issueCommand: |
   Complete {{artifact_url}}`
 
-const YAML_STATE_TITLE_CLASS_NAMES: Record<string, string> = {
-  loaded: 'text-emerald-700 dark:text-emerald-300',
-  'update-available': 'text-amber-700 dark:text-amber-300',
-  invalid: 'text-amber-700 dark:text-amber-300',
-  missing: 'text-foreground'
-}
-
 function getYamlStateCopy(
   yamlState: string,
   t: Translate = translate
 ): { heading: string; description: string } {
   switch (yamlState) {
-    case 'loaded':
-      return {
-        heading: t(
-          'auto.components.settings.RepositoryHooksSection.56f9a4a1d0',
-          'Using `orca.yaml`'
-        ),
-        description: t(
-          'auto.components.settings.RepositoryHooksSection.ca424ff135',
-          'Shared hook and issue-automation defaults are defined in the repo and available to everyone who uses it.'
-        )
-      }
     case 'update-available':
       return {
         heading: t(
@@ -47,7 +31,7 @@ function getYamlStateCopy(
           'The file contains configuration keys that this version of Orca does not recognize. You may need to update Orca, or check the file for typos.'
         )
       }
-    case 'invalid':
+    default:
       return {
         heading: t(
           'auto.components.settings.RepositoryHooksSection.623e0c9f31',
@@ -56,17 +40,6 @@ function getYamlStateCopy(
         description: t(
           'auto.components.settings.RepositoryHooksSection.0cc712b823',
           'The core configuration file exists in the repo root, but Orca could not parse the supported hook definitions yet.'
-        )
-      }
-    default:
-      return {
-        heading: t(
-          'auto.components.settings.RepositoryHooksSection.5a67e4793d',
-          'No `orca.yaml` detected'
-        ),
-        description: t(
-          'auto.components.settings.RepositoryHooksSection.b20c5df6ca',
-          'Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:'
         )
       }
   }
@@ -126,6 +99,72 @@ function ExampleTemplateCard({
   )
 }
 
+const YAML_CODE_COMPONENTS = { yaml: <code className="rounded bg-muted px-1 py-0.5 font-normal" /> }
+
+// Healthy states are a plain disclosure row; only problems get a tinted card.
+function YamlScriptsDisclosure({
+  yamlState,
+  yamlHooks,
+  copiedTemplate,
+  onCopyTemplate
+}: {
+  yamlState: 'loaded' | 'missing'
+  yamlHooks: OrcaHooks | null
+  copiedTemplate: boolean
+  onCopyTemplate: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const loaded = yamlState === 'loaded'
+  return (
+    <Collapsible>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <CollapsibleTrigger className="flex items-center gap-2 rounded-md text-left text-sm font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform in-data-[state=open]:rotate-90" />
+            <span>
+              <Trans
+                i18n={i18n}
+                defaults={
+                  loaded
+                    ? t(
+                        'auto.components.settings.RepositoryHooksSection.yamlDetected',
+                        '<yaml>orca.yaml</yaml> detected'
+                      )
+                    : t(
+                        'auto.components.settings.RepositoryHooksSection.yamlNotDetected',
+                        'No <yaml>orca.yaml</yaml> detected'
+                      )
+                }
+                components={YAML_CODE_COMPONENTS}
+              />
+            </span>
+          </CollapsibleTrigger>
+          {loaded ? null : (
+            <p className="pl-5.5 text-[11px] text-muted-foreground">
+              {t(
+                'auto.components.settings.RepositoryHooksSection.yamlNotDetectedDescription',
+                'Add one to share scripts with your team.'
+              )}
+            </p>
+          )}
+        </div>
+        {loaded ? null : (
+          <Button type="button" variant="outline" size="xs" onClick={onCopyTemplate}>
+            {copiedTemplate
+              ? t('auto.components.settings.RepositoryHooksSection.3149964b66', 'Copied')
+              : t('auto.components.settings.RepositoryHooksSection.copyTemplate', 'Copy template')}
+          </Button>
+        )}
+      </div>
+      <CollapsibleContent>
+        <pre className="mt-2 ml-5.5 overflow-x-auto whitespace-pre-wrap break-words rounded-lg border border-border/50 bg-muted/30 p-3 font-mono text-[11.5px] leading-5 text-foreground">
+          {loaded ? renderYamlScriptPreview(yamlHooks) : EXAMPLE_TEMPLATE}
+        </pre>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 export function RepositoryHooksYamlStatus({
   yamlState,
   yamlHooks,
@@ -138,23 +177,27 @@ export function RepositoryHooksYamlStatus({
   onCopyTemplate: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  if (yamlState === 'loaded' || yamlState === 'missing') {
+    return (
+      <YamlScriptsDisclosure
+        yamlState={yamlState}
+        yamlHooks={yamlHooks}
+        copiedTemplate={copiedTemplate}
+        onCopyTemplate={onCopyTemplate}
+      />
+    )
+  }
   const copy = getYamlStateCopy(yamlState, t)
   const parseErrorFixes = getParseErrorFixes(t)
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
       <div className="space-y-1">
-        <p className={`text-sm font-medium ${YAML_STATE_TITLE_CLASS_NAMES[yamlState]}`}>
-          {copy.heading}
-        </p>
+        <p className="text-sm font-medium text-amber-700 dark:text-amber-300">{copy.heading}</p>
         <p className="text-xs text-muted-foreground">{copy.description}</p>
       </div>
-      {yamlState === 'loaded' ? (
-        <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg border border-border/50 bg-muted/30 p-3 font-mono text-[11.5px] leading-5 text-foreground">
-          {renderYamlScriptPreview(yamlHooks)}
-        </pre>
-      ) : yamlState === 'invalid' ? (
+      {yamlState === 'invalid' ? (
         <div className="space-y-4">
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-background/60 p-3">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300" />
             <div className="space-y-2 text-xs text-muted-foreground">
               <p>

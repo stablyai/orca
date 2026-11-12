@@ -700,6 +700,12 @@
           "dailyWarning": "Daily builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
           "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy."
         },
+        "RepositoryHooksSection": {
+          "56f9a4a1d0": "Using `orca.yaml`",
+          "5a67e4793d": "No `orca.yaml` detected",
+          "b20c5df6ca": "Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:",
+          "ca424ff135": "Shared hook and issue-automation defaults are defined in the repo and available to everyone who uses it."
+        },
         "RepositoryRemoveProjectSection": {
           "checkoutCount_one": "{{count}} checkout",
           "checkoutCount_other": "{{count}} checkouts",
