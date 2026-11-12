@@ -1,6 +1,9 @@
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { SourceControlScope } from '../panel/worktree-scope'
-import { sourceControlFileWatchRuntimeEnvironmentId } from './worktree-git-owner-target'
+import {
+  sourceControlFileWatchRuntimeEnvironmentId,
+  useWorktreeGitOwnerTarget
+} from './worktree-git-owner-target'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
@@ -23,7 +26,6 @@ import { resolveWorktreeGitCopyNow } from '@/lib/workspace/ownership/worktree-gi
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
 import { useGitStatusUpstreamRefWatch } from './use-git-status-upstream-ref-watch'
-import { useWorktreeGitOwnerTarget } from './worktree-git-owner-target'
 import { useGitStatusTurnCompletion } from './use-git-status-turn-completion'
 import {
   admissionTierForGitStatusRefreshReason,
