@@ -61,6 +61,8 @@ export async function publishMultiplexInitialSnapshot(
     }
   }
   const size = runtime.getTerminalSize(ptyId)
+  // Only an absent image asks: a host-owned one is then unavailable, never main's tail.
+  const hostHistory = !serialized && runtime.hasHostHistoryAuthority(ptyId)
   const displayMode = runtime.getMobileDisplayMode(ptyId)
   const layoutSeq = runtime.getLayout(ptyId)?.seq
   // Why: layout versions and output offsets are different sequence domains.
@@ -122,10 +124,12 @@ export async function publishMultiplexInitialSnapshot(
     lastTitle: serialized?.lastTitle,
     oscLinks: serialized?.oscLinks,
     pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
+    // A host-owned image that is unavailable is reported so; main's stream never stands in.
+    ...(hostHistory ? { unavailable: 'no-serializable-buffer' as const } : {}),
     // E2E: a forced-unavailable host retains nothing, so it has no tail to fall back on either.
     data:
       serialized?.data ??
-      (read.tail.length > 0 && !isTerminalSnapshotForcedUnavailable()
+      (read.tail.length > 0 && !hostHistory && !isTerminalSnapshotForcedUnavailable()
         ? `${read.tail.join('\r\n')}\r\n`
         : '')
   })

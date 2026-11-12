@@ -9,7 +9,8 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
-  writeFileSync
+  writeFileSync,
+  promises as fsPromises
 } from 'node:fs'
 import { HistoryManager } from '../history-manager'
 import * as hostTreeRemoval from '../../../../filesystem/host-tree-removal'
@@ -240,6 +241,71 @@ describe('HistoryManager', () => {
 
       expect(existsSync(ownerDir)).toBe(false)
       expect(existsSync(join(dir, getHistorySessionDirName(sessionId)))).toBe(false)
+    })
+  })
+
+  describe('writer handoff', () => {
+    it('leaves a successor and other live sessions intact when the predecessor closes late', async () => {
+      const id = 'handoff'
+      await mgr.openSession(id, { cwd: '/tmp', cols: 80, rows: 24 })
+      await mgr.openSession('other-live', { cwd: '/tmp', cols: 80, rows: 24 })
+      const successor = new HistoryManager(dir)
+      try {
+        const admission = successor.admit(id)
+        await admission.ready
+        await successor.openSession(id, { cwd: '/next', cols: 80, rows: 24, admission })
+        await successor.checkpoint(id, makeSnapshot({ snapshotAnsi: 'SUCCESSOR\r\n' }))
+
+        expect(await mgr.checkpoint(id, makeSnapshot({ snapshotAnsi: 'STALE\r\n' }))).toBe(
+          'unavailable'
+        )
+        await mgr.closeSession(id, 0)
+        await mgr.removeSession(id)
+        expect(await mgr.checkpoint('other-live', makeSnapshot())).toBe('committed')
+        await mgr.dispose()
+
+        const meta = JSON.parse(readFileSync(sessionPath(dir, id, 'meta.json'), 'utf-8'))
+        expect(meta.endedAt).toBeNull()
+        expect(meta.cwd).toBe('/next')
+        expect(readFileSync(sessionPath(dir, id, 'checkpoint.json'), 'utf-8')).toContain(
+          'SUCCESSOR'
+        )
+      } finally {
+        await successor.dispose()
+      }
+    })
+
+    it('admits a successor only after issued predecessor writes actually settle', async () => {
+      const id = 'stalled'
+      await mgr.openSession(id, { cwd: '/tmp', cols: 80, rows: 24 })
+      const releaseRename = Promise.withResolvers<void>()
+      const rename = fsPromises.rename
+      const stalled = vi.spyOn(fsPromises, 'rename').mockImplementationOnce(async (...args) => {
+        await releaseRename.promise
+        return rename(...args)
+      })
+      const predecessorWrite = mgr.checkpoint(id, makeSnapshot({ snapshotAnsi: 'OLD\r\n' }))
+      await vi.waitFor(() => expect(stalled).toHaveBeenCalled())
+      const successor = new HistoryManager(dir)
+      try {
+        const admission = successor.admit(id)
+        let admitted = false
+        void admission.ready.then(() => {
+          admitted = true
+        })
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(admitted).toBe(false)
+
+        releaseRename.resolve()
+        await predecessorWrite
+        await admission.ready
+        await successor.openSession(id, { cwd: '/next', cols: 80, rows: 24, admission })
+        const meta = JSON.parse(readFileSync(sessionPath(dir, id, 'meta.json'), 'utf-8'))
+        expect(meta.cwd).toBe('/next')
+        expect(existsSync(sessionPath(dir, id, 'checkpoint.json'))).toBe(false)
+      } finally {
+        await successor.dispose()
+      }
     })
   })
 

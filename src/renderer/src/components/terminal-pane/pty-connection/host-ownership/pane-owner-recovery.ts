@@ -7,6 +7,11 @@ export function isPaneOwnerRefusal(message: string): boolean {
   )
 }
 
+/** Refusals that keep the pane's saved session; Retry asks the same terminal again. */
+export function isRetryablePaneRefusal(message: string): boolean {
+  return isPaneOwnerRefusal(message) || message.includes('terminal_history_unavailable')
+}
+
 export function armPaneOwnerRetry(
   session: ConnectPanePtySession,
   generation: number,

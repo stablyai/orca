@@ -26,6 +26,7 @@ import type * as HistorySeedProtocol from '../history/seed-transfer/terminal-his
 import type * as PtyOwnerQueryProtocol from './daemon-pty-owner-query-protocol'
 import type { TerminalSnapshot } from './terminal-snapshot'
 import type { SetLaunchNoteRequest } from './daemon-launch-note-protocol'
+import type { FlushHistoryRequest, TerminalHistoryOutcome } from './daemon-history-protocol'
 
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
 
@@ -198,6 +199,8 @@ export type GetSnapshotRequest = {
   payload: {
     sessionId: string
     scrollbackRows?: number
+    /** Host-owned history answers only for this incarnation. */
+    expectedIncarnationId?: string
   }
 }
 
@@ -269,6 +272,7 @@ export type DaemonRequest =
   | GetSnapshotRequest
   | GetSizeRequest
   | TakePendingOutputRequest
+  | FlushHistoryRequest
   | PtyOwnerQueryProtocol.CloseStartupQueryAuthorityRequest
   | PtyOwnerQueryProtocol.SetColorQueryReplyColorsRequest
   | SetLaunchNoteRequest
@@ -290,6 +294,8 @@ export type RpcResponse<T = unknown> = RpcResponseOk<T> | RpcResponseError
 
 export type GetSnapshotResult = {
   snapshot: TerminalSnapshot | null
+  /** Present only when the daemon owns this session's history. */
+  history?: TerminalHistoryOutcome
 }
 
 export type ListSessionsResult = {

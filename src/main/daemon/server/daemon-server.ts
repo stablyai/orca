@@ -21,6 +21,7 @@ import { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { checkPtySpawnHealth } from '../pty-subprocess/pty-subprocess'
 import { TerminalHistorySeedTransferRegistry } from '../history/seed-transfer/terminal-history-seed-transfer-registry'
 import { TerminalHost } from '../terminal-host/terminal-host'
+import { TerminalHistoryJournals } from '../history/journal/terminal-history-journals'
 import { DaemonAutomaticWorkGuard } from '../admission/daemon-automatic-work-guard'
 import { answerAutomaticWorkRequest } from '../admission/daemon-automatic-work-protocol'
 import { HostTerminalPolicy } from '../admission/host-terminal-policy'
@@ -67,6 +68,9 @@ export class DaemonServer {
     this.host = new TerminalHost({
       spawnSubprocess: options.spawnSubprocess,
       spawnGate: this.automaticWork.gate,
+      historyJournals: options.historyRoot
+        ? new TerminalHistoryJournals(options.historyRoot, this.log)
+        : undefined,
       reportReadinessEvent: (event, details) => this.log.log(event, details),
       onSessionReaped: (sessionId) => {
         this.attachments.release(sessionId)

@@ -38,6 +38,9 @@ const PANE_OWNER_UNVERIFIED_MARKER = 'terminal_pane_owner_unverified'
 // Main lost the pane to another connection twice in one attach, or an older host never retries.
 const PANE_OWNER_CHANGED_MARKER = 'terminal_pane_owner_changed'
 
+// The host still runs this terminal but could not read its history yet; the same ID can retry.
+const TERMINAL_HISTORY_UNAVAILABLE_MARKER = 'terminal_history_unavailable'
+
 // Keep the English transport literal as a wire marker; localize it here with the surrounding banner.
 const REMOTE_TERMINAL_CLOSED_MARKER = 'Remote terminal was closed.'
 
@@ -128,6 +131,18 @@ export function isPaneOwnerRecoveryError(error: string): boolean {
   )
 }
 
+export function isTerminalHistoryUnavailableError(error: string): boolean {
+  const lines = error.split('\n').filter((line) => line.length > 0)
+  return (
+    lines.length > 0 && lines.every((line) => line.includes(TERMINAL_HISTORY_UNAVAILABLE_MARKER))
+  )
+}
+
+/** Reattach failures that kept the saved session, where Retry asks the same terminal again. */
+export function isReattachRetryError(error: string): boolean {
+  return isPaneOwnerRecoveryError(error) || isTerminalHistoryUnavailableError(error)
+}
+
 function humanizeUnreattachableSession(error: string, t: Translate = translate): string {
   const explanation = t(
     'auto.components.terminal.pane.TerminalErrorToast.sessionUnavailable',
@@ -173,6 +188,12 @@ export function humanizeTerminalError(
         )
     humanized = humanized.replaceAll(PANE_OWNER_UNVERIFIED_MARKER, () => explanation)
   }
+  humanized = humanized.replaceAll(TERMINAL_HISTORY_UNAVAILABLE_MARKER, () =>
+    t(
+      'auto.components.terminal.pane.TerminalErrorToast.historyUnavailable',
+      "Orca couldn't load this terminal's history from its host. The terminal is still running. Click Retry to reconnect it."
+    )
+  )
   humanized = humanized.replaceAll(PANE_OWNER_CHANGED_MARKER, () =>
     t(
       'auto.components.terminal.pane.TerminalErrorToast.ownerUnknown',

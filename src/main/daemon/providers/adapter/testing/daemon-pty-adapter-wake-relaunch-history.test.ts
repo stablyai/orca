@@ -10,6 +10,7 @@ import { getHistorySessionDirName } from '../../../history/storage/history-paths
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
 import type * as DaemonHealthModule from '../../../health/daemon-health'
 import type * as DaemonTccAttributionModule from '../../../permissions/daemon-tcc-attribution'
+import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({
@@ -54,10 +55,13 @@ describe('daemon history across a wake and a relaunch', () => {
   let lastSubprocess: ReturnType<typeof createMockSubprocess>
 
   beforeEach(async () => {
-    const harness = await startDaemonAdapterHarness(() => {
-      lastSubprocess = createMockSubprocess()
-      return lastSubprocess
-    })
+    const harness = await startDaemonAdapterHarness(
+      () => {
+        lastSubprocess = createMockSubprocess()
+        return lastSubprocess
+      },
+      { protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION }
+    )
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -100,7 +104,12 @@ describe('daemon history across a wake and a relaunch', () => {
       terminal.dispose()
       return rows
     }
-    let history = new SavingDaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    let history = new SavingDaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
     const save = (adapter: SavingDaemonPtyAdapter) => adapter.savePeriodically([sessionId])
 
     await history.spawn({ cols: 47, rows: 44, cwd: '/project', sessionId })
@@ -112,7 +121,12 @@ describe('daemon history across a wake and a relaunch', () => {
     await save(history)
     await history.disconnectOnly()
 
-    history = new SavingDaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    history = new SavingDaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
     await history.reconcileOnStartup(new Set([parsePtySessionId(sessionId).worktreeId ?? '']))
     await save(history)
 

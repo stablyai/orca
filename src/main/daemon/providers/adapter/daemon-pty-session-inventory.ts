@@ -15,9 +15,22 @@ import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
 import type { SessionInfo } from '../../protocol/daemon-session-info'
 import { PtyProcessListAdmission } from '../../../providers/pty-process-list-admission'
-import type { PtyProcessInfo } from '../../../providers/pty-provider-contract'
+import type {
+  PtyProcessInfo,
+  TerminalHistoryAuthority
+} from '../../../providers/pty-provider-contract'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
+  getTerminalHistoryAuthority(id: string): TerminalHistoryAuthority | undefined {
+    return this.hostHistory.authority(id)
+  }
+
+  /** A restart-dropped adapter's bindings and claims retire now, not with its routing. */
+  retireHistoryOwnership(): void {
+    this.hostHistory.clear()
+    this.historyStore?.retire()
+  }
+
   async listProcesses(opts?: {
     deadlineMs?: number
     ptyIds?: readonly string[]

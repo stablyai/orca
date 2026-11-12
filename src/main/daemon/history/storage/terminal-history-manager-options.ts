@@ -1,4 +1,5 @@
 import type { HistoryRecoveryFreeze } from './terminal-history-recovery-quarantine'
+import type { HistoryWriterAdmission } from './terminal-history-writer-handoff'
 
 export type OpenSessionOptions = {
   cwd: string
@@ -6,6 +7,8 @@ export type OpenSessionOptions = {
   rows: number
   recoveryFreeze?: HistoryRecoveryFreeze
   quarantineUnreadableRecovery?: boolean
+  /** Captured by the producer before its awaits; a closed one leaves the directory untouched. */
+  admission?: HistoryWriterAdmission
 }
 
 export type HistoryManagerOptions = {

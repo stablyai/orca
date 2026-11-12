@@ -8,7 +8,7 @@ import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT as DAEMON_RESTORE_SCROLLBACK_R
 import { historyReplayWindowsPty } from '../../protocol/daemon-history-replay-pty'
 import { HeadlessEmulator } from '../../emulation/headless-emulator'
 import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
-import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
+import { replayTerminalHistory } from './terminal-history-replay'
 import { readTerminalHistoryBufferAsync } from '../storage/terminal-history-file-reader'
 import { detectColdRestoreFromLegacyScrollback } from './terminal-history-legacy-scrollback-restore'
 import { TERMINAL_HISTORY_LOG_MAX_BYTES } from '../storage/terminal-history-file-limits'
@@ -33,7 +33,6 @@ import {
   type IncrementalLogRestore
 } from './terminal-history-cold-restore-info'
 import { readTerminalHistoryCheckpoint } from './terminal-history-checkpoint-reader'
-import { isValidTerminalHistorySize } from './terminal-history-dimensions'
 
 export type RestorableHistoryProbe =
   | { status: 'none' }
@@ -258,37 +257,10 @@ export class HistoryReader {
         wslDistro,
         windowsPty: historyReplayWindowsPty(meta.resizeModel)
       })
-      const replay = new ColdRestoreReplayWriter(emulator)
       try {
-        if (checkpoint) {
-          if (
-            !(await replay.write(checkpoint.scrollbackAnsi ?? '')) ||
-            !(await replay.write(checkpoint.rehydrateSequences)) ||
-            !(await replay.write(checkpoint.snapshotAnsi)) ||
-            !(await replay.write(checkpoint.pendingEscapeTailAnsi ?? ''))
-          ) {
-            return { restoreInfo: null, readFailed: true }
-          }
-          emulator.setRestoredOscLinks(checkpoint.oscLinks)
-          if (checkpoint.lastTitle) {
-            emulator.setLastTitle(checkpoint.lastTitle)
-          }
-        }
-        for (const batch of log.batches) {
-          for (const record of batch.records) {
-            if (record.kind === 'output') {
-              if (!(await replay.write(record.data))) {
-                return { restoreInfo: null, readFailed: true }
-              }
-            } else if (record.kind === 'resize') {
-              if (!isValidTerminalHistorySize(record.cols, record.rows)) {
-                return { restoreInfo: null, readFailed: true }
-              }
-              await replay.resize(record.cols, record.rows)
-            } else {
-              await replay.clearScrollback()
-            }
-          }
+        const records = log.batches.flatMap((batch) => batch.records)
+        if (!(await replayTerminalHistory(emulator, checkpoint, records))) {
+          return { restoreInfo: null, readFailed: true }
         }
         const snapshot = emulator.getSnapshot()
         const lastBatch = log.batches.at(-1)!

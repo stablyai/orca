@@ -13,6 +13,7 @@ import { readTerminalHistoryCheckpoint } from '../../../history/restoration/term
 import type { HistoryCheckpointResult } from '../../../history/storage/terminal-history-manager-options'
 import type { SubprocessHandle } from '../../../sessions/session-subprocess-handle'
 import type { TerminalSnapshot } from '../../../protocol/terminal-snapshot'
+import { LEGACY_HISTORY_PROTOCOL_VERSION } from '../../adapter/testing/daemon-pty-adapter-test-harness'
 
 const REATTACH_BUDGET_MS = 2_000
 // Outlast the overlay deadline so this watchdog cannot cause the behavior under test.
@@ -68,6 +69,7 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
     subprocesses = []
     const log: DaemonFileLog = { log: () => {}, close: () => {} }
     server = new DaemonServer({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
       socketPath: getDaemonSocketPath(dir),
       tokenPath: join(dir, 'test.token'),
       log,
@@ -79,6 +81,7 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
     })
     await server.start()
     adapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
       socketPath: getDaemonSocketPath(dir),
       tokenPath: join(dir, 'test.token'),
       historyPath: join(dir, 'history')

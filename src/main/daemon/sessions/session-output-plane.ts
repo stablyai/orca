@@ -12,6 +12,7 @@ import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
 import type { TerminalOwner } from '../../../shared/terminal/pty/lifecycle/terminal-owner'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
+import type { TerminalSessionJournal } from '../history/journal/terminal-session-journal'
 
 // Count UTF-16 units; even JSON escape expansion stays below the NDJSON line cap.
 const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
@@ -31,12 +32,15 @@ export type SessionOutputPlaneOptions = {
   windowsPty?: XtermConptyOptions | undefined
   /** Read ownership after the barrier scans bytes, keeping snapshot metadata aligned with the emulator. */
   getTerminalOwner?: (() => TerminalOwner | undefined) | undefined
+  /** The host history owner; replaces the main-pulled pending queue for this session. */
+  historyJournal?: TerminalSessionJournal | undefined
 }
 
 export class SessionOutputPlane {
   readonly historySeeded: boolean | undefined
   private readonly emulator: HeadlessEmulator
   private readonly readTerminalOwner: (() => TerminalOwner | undefined) | undefined
+  private readonly historyJournal: TerminalSessionJournal | undefined
   private attachedClients: AttachedClient[] = []
   private pendingOutputRecords: PendingOutputRecord[] = []
   private pendingOutputBytes = 0
@@ -60,7 +64,20 @@ export class SessionOutputPlane {
     this.historySeeded =
       opts.historySeedChunks === undefined
         ? undefined
-        : opts.historySeedChunks.every((chunk) => this.emulator.writeSync(chunk))
+        : opts.historySeedChunks.every((chunk) => {
+            if (!this.emulator.writeSync(chunk)) {
+              return false
+            }
+            // The applied seed is this incarnation's explicit history origin.
+            opts.historyJournal?.record({ kind: 'output', data: chunk }, { origin: true })
+            return true
+          })
+    this.historyJournal = opts.historyJournal
+    this.historyJournal?.bindOutput({
+      outputSequence: () => this._outputSequence,
+      terminalOwner: () => this.readTerminalOwner?.(),
+      hasAttachedClient: (token) => this.attachedClients.some((client) => client.token === token)
+    })
     this.readTerminalOwner = opts.getTerminalOwner
   }
 
@@ -219,6 +236,10 @@ export class SessionOutputPlane {
   }
 
   record(record: PendingOutputRecord): void {
+    if (this.historyJournal) {
+      this.historyJournal.record(record)
+      return
+    }
     if (this.pendingOutputOverflowed) {
       return
     }
@@ -272,7 +293,13 @@ export class SessionOutputPlane {
     this.disposed = true
   }
 
+  /** Physical exit or disposal: the journal drains what was applied, never past this cut. */
+  finishHistory(exitCode: number | null): void {
+    this.historyJournal?.finish(exitCode)
+  }
+
   disposeEmulator(): void {
+    this.historyJournal?.finish(null)
     this.emulator.dispose()
   }
 }

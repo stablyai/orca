@@ -75,6 +75,8 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
       void this.historyManager
         .dispose()
         .catch((err) => console.warn('[history] dispose failed:', err))
+    } else {
+      this.retireHistoryOwnership()
     }
     this.client.disconnect()
   }

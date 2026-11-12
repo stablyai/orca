@@ -48,6 +48,14 @@ export async function spawnAndPublishSession(
       ? await isCwdReadableByThisProcess(opts.cwd, opts)
       : null
   deps.assertCreateAllowed()
+  // A fresh process may start only after the shared root holds its ID for prior-stable readers.
+  const historyHold = await deps.historyJournals?.prepareHold(opts.sessionId, {
+    cwd: opts.cwd ?? '',
+    cols: size.cols,
+    rows: size.rows,
+    ...(opts.spawnAdmission ? { deadlineAt: opts.spawnAdmission.deadlineAt } : {})
+  })
+  deps.assertCreateAllowed()
   const lower = Promise.withResolvers<PtyCreationDisposition>()
   opts.creationWork?.join(lower.promise)
   let lowerReported = false
@@ -107,37 +115,54 @@ export async function spawnAndPublishSession(
   let recordRoot = (root: WslGuestRoot): void => {
     heldRoot = root
   }
-  const session = new Session({
-    sessionId: opts.sessionId,
-    cols: size.cols,
-    rows: size.rows,
-    terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
-    launchAgent: opts.launchAgent,
-    subprocess,
-    ownerBackend: resolvePtyOwnerBackend({
-      platform: process.platform,
-      shellPath: subprocess.shellPath,
-      wslDistro
-    }),
-    shellReadySupported,
-    scrollback: resolveDaemonSessionScrollbackRows(),
-    historySeedChunks: opts.historySeedChunks,
-    ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
-    wslDistro,
-    // A WSL guest root rides only this live session's inventory row; it dies with the session.
-    ...(wslDistro ? { onWslGuestRoot: (root) => recordRoot(root) } : {}),
-    onExit: createSessionExitHandler(
-      deps.onSessionExit,
-      opts.sessionId,
-      opts.agentSessionGeneration,
-      staging,
-      deps.spawnGate
-    ),
-    ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
-    ...(opts.shellReadyTimeoutMs !== undefined
-      ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
-      : {})
-  })
+  const historyJournal = historyHold
+    ? deps.historyJournals?.openJournal(historyHold, {
+        cwd: opts.cwd ?? '',
+        cols: size.cols,
+        rows: size.rows,
+        wslDistro
+      })
+    : undefined
+  let session: Session
+  try {
+    session = new Session({
+      sessionId: opts.sessionId,
+      cols: size.cols,
+      rows: size.rows,
+      terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
+      launchAgent: opts.launchAgent,
+      subprocess,
+      ownerBackend: resolvePtyOwnerBackend({
+        platform: process.platform,
+        shellPath: subprocess.shellPath,
+        wslDistro
+      }),
+      shellReadySupported,
+      scrollback: resolveDaemonSessionScrollbackRows(),
+      historySeedChunks: opts.historySeedChunks,
+      ...(historyJournal ? { historyJournal } : {}),
+      ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
+      wslDistro,
+      // A WSL guest root rides only this live session's inventory row; it dies with the session.
+      ...(wslDistro ? { onWslGuestRoot: (root) => recordRoot(root) } : {}),
+      onExit: createSessionExitHandler(
+        deps.onSessionExit,
+        opts.sessionId,
+        opts.agentSessionGeneration,
+        staging,
+        deps.spawnGate
+      ),
+      ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
+      ...(opts.shellReadyTimeoutMs !== undefined
+        ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
+        : {})
+    })
+  } catch (error) {
+    // No origin for a session that never existed; the hold stays conservative.
+    historyJournal?.abandon()
+    throw error
+  }
+  historyJournal?.bindSession(session)
   recordRoot = (root) => recordSessionWslGuestRoot(session, root)
   if (heldRoot) {
     recordRoot(heldRoot)

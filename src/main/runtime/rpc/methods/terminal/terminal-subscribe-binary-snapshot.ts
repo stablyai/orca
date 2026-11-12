@@ -230,6 +230,10 @@ async function publishSnapshot(
     alternateScreen: serialized?.alternateScreen,
     terminalOwner: serialized?.terminalOwner,
     lastTitle: serialized?.lastTitle,
+    // A host-owned image that is unavailable is reported so, never as an empty history.
+    ...(!serialized && runtime.hasHostHistoryAuthority(ptyId)
+      ? { unavailable: 'no-serializable-buffer' as const }
+      : {}),
     data: serialized?.data ?? ''
   })
   console.log('[mobile-terminal-stream] snapshot', {

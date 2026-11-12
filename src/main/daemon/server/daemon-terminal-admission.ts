@@ -27,6 +27,7 @@ import {
 } from '../../../shared/agent-session/agent-session-host-authority'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
+import { withAttachHistoryImage } from './daemon-history-requests'
 
 type CreateOrAttachRequest = Extract<DaemonRequest, { type: 'createOrAttach' }>
 
@@ -109,7 +110,10 @@ export class DaemonTerminalAdmission {
         payload.historySeedTransferId !== undefined
           ? this.options.historySeedTransfers.take(clientId, payload.historySeedTransferId)
           : payload.historySeed !== undefined
-            ? [payload.historySeed]
+            ? // Empty means the client chose no recovery, so the new origin supersedes it.
+              payload.historySeed === ''
+              ? []
+              : [payload.historySeed]
             : undefined
       result = await this.options.host.createOrAttach({
         sessionId: payload.sessionId,
@@ -145,6 +149,14 @@ export class DaemonTerminalAdmission {
         },
         streamClient: this.createStreamClient(clientId, () => routedSessionId)
       })
+      if (this.options.host.historyJournals) {
+        result = await withAttachHistoryImage(
+          this.options.host,
+          result.agentSessionEnsure?.owner.ptyId ?? payload.sessionId,
+          result,
+          () => spawnPreparation?.canceled === true
+        )
+      }
     } finally {
       if (spawnPreparation) {
         this.options.preparations.finish(payload.sessionId, spawnPreparation)
@@ -190,7 +202,8 @@ export class DaemonTerminalAdmission {
       ...(result.cwdReadableByDaemon !== undefined
         ? { cwdReadableByDaemon: result.cwdReadableByDaemon }
         : {}),
-      ...(result.inputClosed ? { inputClosed: true as const } : {})
+      ...(result.inputClosed ? { inputClosed: true as const } : {}),
+      ...(result.history ? { history: result.history } : {})
     }
   }
 

@@ -37,7 +37,9 @@ export class TerminalHistorySessionWriter {
   constructor(
     readonly dir: string,
     fresh: boolean,
-    private readonly checkpointMaxBytes = TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
+    private readonly checkpointMaxBytes = TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
+    // Checked synchronously before each file mutation: a successor shares these paths.
+    private readonly isAdmitted: () => boolean = () => true
   ) {
     this.checkpointPath = join(dir, 'checkpoint.json')
     this.logPath = join(dir, 'output.log')
@@ -45,6 +47,13 @@ export class TerminalHistorySessionWriter {
     this.logBytes = fresh ? 0 : null
     // Warm attach must tighten files created with older, umask-derived permissions.
     tightenTerminalHistorySessionDirMode(dir)
+  }
+
+  /** Complete frames in the current generation; a failed append or reset leaves this unchanged. */
+  get committedLog(): { generation: number; bytes: number } | null {
+    return this.logGeneration === null || this.logBytes === null
+      ? null
+      : { generation: this.logGeneration, bytes: this.logBytes }
   }
 
   async appendIncrements(
@@ -58,11 +67,13 @@ export class TerminalHistorySessionWriter {
       return 'needs-checkpoint'
     }
     if (this.logBytes === 0) {
+      this.assertAdmitted()
       await fsPromises.writeFile(this.logPath, encodeLogHeader(this.logGeneration ?? 0), {
         mode: PRIVATE_FILE_MODE
       })
       this.logBytes = LOG_HEADER_BYTES
     }
+    this.assertAdmitted()
     await fsPromises.appendFile(this.logPath, batch, { mode: PRIVATE_FILE_MODE })
     this.logBytes = (this.logBytes ?? LOG_HEADER_BYTES) + batch.length
     return 'ok'
@@ -98,17 +109,31 @@ export class TerminalHistorySessionWriter {
     }
     const tmpPath = `${this.checkpointPath}.tmp`
     // Create temporary files privately before publishing the checkpoint.
+    this.assertAdmitted()
     await fsPromises.writeFile(tmpPath, data, { mode: PRIVATE_FILE_MODE })
     // Creation mode does not tighten a temporary file left by an earlier crash.
+    this.assertAdmitted()
     tightenPathMode(tmpPath, PRIVATE_FILE_MODE)
     await fsPromises.rename(tmpPath, this.checkpointPath)
+    this.assertAdmitted()
     await fsPromises.writeFile(this.logPath, encodeLogHeader(generation), {
       mode: PRIVATE_FILE_MODE
     })
     this.logGeneration = generation
     this.logBytes = LOG_HEADER_BYTES
+    this.assertAdmitted()
     clearTerminalHistoryRecoveryProtection(this.dir)
     return { result: 'committed' }
+  }
+
+  get admitted(): boolean {
+    return this.isAdmitted()
+  }
+
+  assertAdmitted(): void {
+    if (!this.isAdmitted()) {
+      throw new Error('terminal_history_admission_closed')
+    }
   }
 
   // Warm writers must extend the existing generation without clobbering its log.

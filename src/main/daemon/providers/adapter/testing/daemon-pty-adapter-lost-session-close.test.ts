@@ -15,6 +15,7 @@ import {
   startDaemonAdapterHarness,
   waitFor
 } from './daemon-pty-adapter-test-harness'
+import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 const { newerHold } = vi.hoisted(() => ({ newerHold: { held: false } }))
 vi.mock('../../routing/daemon-newer-protocol-hold', async (importOriginal) => ({
@@ -46,7 +47,8 @@ describe('closing a kept host-loss tab after a relaunch', () => {
       },
       {
         readRunningWslDistros: async () => ({ status: 'confirmed', distros: [] }),
-        historyPath: historyDir
+        historyPath: historyDir,
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION
       }
     )
     ;({ dir, server, socketPath, tokenPath } = harness)
@@ -77,6 +79,7 @@ describe('closing a kept host-loss tab after a relaunch', () => {
   // The relaunched app's adapters remember nothing of the loss.
   function relaunchedAdapter(protocolVersion?: number): DaemonPtyAdapter {
     const adapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
       socketPath,
       tokenPath,
       historyPath: historyDir,

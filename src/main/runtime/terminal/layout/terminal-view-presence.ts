@@ -18,6 +18,7 @@ import { TerminalViewerDevices } from './terminal-viewer-devices'
 const ENDPOINT_REATTACH_INPUT_WAIT_MS = 10_000
 
 export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged extends OrcaRuntimeWithRecordAgentPromptLifecycleState {
+  abstract hasHostHistoryAuthority(ptyId: string): boolean
   protected abstract serializeTerminalBufferFromAvailableState(
     ptyId: string,
     opts?: { scrollbackRows?: number }
@@ -257,7 +258,7 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
       timeoutMs: AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
       retireOnTimeout: true
     })
-    if (providerSnapshot) {
+    if (providerSnapshot || this.hasHostHistoryAuthority(ptyId)) {
       return providerSnapshot
     }
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)

@@ -4582,6 +4582,7 @@
             "sessionUnavailable": "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue.",
             "ownerHostMismatch": "This terminal's saved session belongs to another host connection, so Orca can't reattach it here. Open a new terminal to continue.",
             "sourceRestoring": "Reconnecting this terminal — its output is being re-established. The session is still running.",
+            "historyUnavailable": "Orca couldn't load this terminal's history from its host. The terminal is still running. Click Retry to reconnect it.",
             "remoteTerminalClosed": "Remote terminal was closed.",
             "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",
             "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again.",

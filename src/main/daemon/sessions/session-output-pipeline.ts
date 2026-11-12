@@ -19,6 +19,7 @@ export function createSessionOutputPipeline(
     scrollback: opts.scrollback,
     wslDistro: opts.wslDistro,
     historySeedChunks: opts.historySeedChunks,
+    historyJournal: opts.historyJournal,
     windowsPty: windowsPtyForOwnerBackend(opts.ownerBackend, release()),
     getTerminalOwner: () => barrier?.getOwner()
   })

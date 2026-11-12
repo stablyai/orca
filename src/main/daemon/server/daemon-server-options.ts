@@ -37,5 +37,7 @@ export type DaemonServerOptions = {
   /** Shared terminal counts for the host-wide cap. */
   hostTerminalLedgerDir?: string
   terminalLimitPolicy?: HostTerminalPolicy
+  /** Host-local terminal history root; when set this daemon owns its sessions' history. */
+  historyRoot?: string
   spawnSubprocess: TerminalHostOptions['spawnSubprocess']
 }

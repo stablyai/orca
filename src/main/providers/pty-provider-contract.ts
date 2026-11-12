@@ -28,6 +28,8 @@ export type {
   PtyTransientFact
 } from './pty-provider-events'
 
+export type TerminalHistoryAuthority = { owner: 'host'; incarnationId: string | undefined }
+
 export type PtyProviderBufferSnapshot = {
   data: string
   /** Live state that can be restored without an alternate-screen frame. */
@@ -169,6 +171,11 @@ export type IPtyProvider = {
   ) => Promise<PtyProviderBufferSnapshot | null>
   /** Whether this exact PTY can return a sequence-safe provider snapshot. */
   canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
+  /**
+   * Host ownership of this binding's retained history. When set, getBufferSnapshot is the first
+   * and terminal answer: null there means unavailable, never permission to read another model.
+   */
+  getTerminalHistoryAuthority?: (id: string) => TerminalHistoryAuthority | undefined
   /** Applied size readback detects dropped/clamped remote resize requests.
    * Null means unconfirmed: callers re-forward once; providers without an authoritative source may omit this. */
   getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>

@@ -18,6 +18,7 @@ export type DaemonStartOptions = {
   /** Direct-construction seam for versioned protocol fixtures; never CLI/env configured. */
   protocolVersion?: number
   spawnSubprocess: DaemonServerOptions['spawnSubprocess']
+  historyRoot?: string
   preparePtySpawn?: DaemonServerOptions['preparePtySpawn']
   onPtySessionExit?: DaemonServerOptions['onPtySessionExit']
   onAuthenticatedClientPair?: DaemonServerOptions['onAuthenticatedClientPair']
@@ -59,6 +60,7 @@ export async function startDaemon(opts: DaemonStartOptions): Promise<DaemonHandl
     ...(opts.spawnerExecPath ? { spawnerExecPath: opts.spawnerExecPath } : {}),
     ...(opts.protocolVersion !== undefined ? { protocolVersion: opts.protocolVersion } : {}),
     spawnSubprocess: opts.spawnSubprocess,
+    ...(opts.historyRoot ? { historyRoot: opts.historyRoot } : {}),
     ...(opts.preparePtySpawn ? { preparePtySpawn: opts.preparePtySpawn } : {}),
     ...(opts.onPtySessionExit ? { onPtySessionExit: opts.onPtySessionExit } : {}),
     ...(opts.onAuthenticatedClientPair

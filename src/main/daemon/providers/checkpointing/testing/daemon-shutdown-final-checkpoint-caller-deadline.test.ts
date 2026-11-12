@@ -12,6 +12,7 @@ import { HistoryReader } from '../../../history/restoration/history-reader'
 import type { HistoryCheckpointResult } from '../../../history/storage/terminal-history-manager-options'
 import type { SubprocessHandle } from '../../../sessions/session-subprocess-handle'
 import type { TerminalSnapshot } from '../../../protocol/terminal-snapshot'
+import { LEGACY_HISTORY_PROTOCOL_VERSION } from '../../adapter/testing/daemon-pty-adapter-test-harness'
 
 // Model the absolute stop deadline used by worktree sleep.
 const CALLER_DEADLINE_MS = 300
@@ -77,6 +78,7 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     releaseStall = undefined
     const log: DaemonFileLog = { log: () => {}, close: () => {} }
     server = new DaemonServer({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
       socketPath: getDaemonSocketPath(dir),
       tokenPath: join(dir, 'test.token'),
       log,
@@ -88,6 +90,7 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     })
     await server.start()
     adapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
       socketPath: getDaemonSocketPath(dir),
       tokenPath: join(dir, 'test.token'),
       historyPath: join(dir, 'history')

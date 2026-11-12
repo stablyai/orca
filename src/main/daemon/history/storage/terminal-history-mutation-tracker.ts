@@ -12,6 +12,12 @@ export class TerminalHistoryMutationTracker {
     return operation
   }
 
+  /** Work issued so far only; later stale calls are refused by their closed admission instead. */
+  issued(sessionId: string): Promise<void> | undefined {
+    const mutations = this.pending.get(sessionId)
+    return mutations ? Promise.allSettled(mutations).then(() => {}) : undefined
+  }
+
   async wait(sessionId: string): Promise<void> {
     while (this.pending.has(sessionId)) {
       await Promise.allSettled(this.pending.get(sessionId)!)

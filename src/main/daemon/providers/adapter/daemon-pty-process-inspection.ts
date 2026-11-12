@@ -8,6 +8,7 @@ import { isShellProcess } from '../../../../shared/agent-status/process/shell-pr
 import { DaemonPtyBufferSnapshots } from '../checkpointing/daemon-pty-buffer-snapshots'
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
+import type { HistoryWriterAdmission } from '../../history/storage/terminal-history-writer-handoff'
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
 import type { SessionInfo } from '../../protocol/daemon-session-info'
 import type { PtyProcessInspectionOptions } from '../../../providers/pty-process-inspection'
@@ -169,6 +170,8 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     if (!needsAdoption && !needsPaneKey) {
       return
     }
+    // Captured before the inventory, lock and replay awaits that precede any writer install.
+    const admission = needsAdoption ? this.historyManager?.admit(sessionId) : undefined
     const result = await this.client.request<ListSessionsResult>(
       'listSessions',
       undefined,
@@ -176,7 +179,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     )
     const session = result.sessions.find((entry) => entry.sessionId === sessionId && entry.isAlive)
     if (session && needsAdoption) {
-      await this.adoptLiveSession(session, { activeOnlyIfReconciled: true })
+      await this.adoptLiveSession(session, { activeOnlyIfReconciled: true }, admission)
     } else if (session?.wslDistro && session.paneKey) {
       this.wslPaneKeysBySessionId.set(sessionId, session.paneKey)
     }
@@ -184,7 +187,8 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
 
   private async adoptLiveSession(
     session: SessionInfo,
-    opts: { activeOnlyIfReconciled?: boolean } = {}
+    opts: { activeOnlyIfReconciled?: boolean } = {},
+    admission = this.historyManager?.admit(session.sessionId)
   ): Promise<void> {
     // Include background sessions in the final disconnect checkpoint.
     if (!opts.activeOnlyIfReconciled) {
@@ -197,7 +201,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         this.wslPaneKeysBySessionId.set(session.sessionId, session.paneKey)
       }
     }
-    await this.reconcileLiveSessionHistory(session).catch((err) =>
+    await this.reconcileLiveSessionHistory(session, admission).catch((err) =>
       console.warn('[history] live-session reconciliation failed:', session.sessionId, err)
     )
     // Why after: an exit seen during the reconcile closed the writer; that session is not live.
@@ -206,10 +210,13 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     }
   }
 
-  protected async reconcileLiveSessionHistory(session: SessionInfo): Promise<void> {
+  protected async reconcileLiveSessionHistory(
+    session: SessionInfo,
+    admission: HistoryWriterAdmission | undefined
+  ): Promise<void> {
     const historyManager = this.historyManager
     const historyReader = this.historyReader
-    if (!historyManager || !historyReader) {
+    if (!historyManager || !historyReader || !admission) {
       return
     }
     await this.withHistorySpawnLock(session.sessionId, async () => {
@@ -224,7 +231,8 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         await historyManager.openSession(session.sessionId, {
           cwd: session.cwd ?? '',
           cols: session.cols,
-          rows: session.rows
+          rows: session.rows,
+          admission
         })
       } else {
         const recoveryFreeze = await historyManager.freezeForRecovery(session.sessionId)
@@ -239,7 +247,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
             historyManager.suspendSession(session.sessionId, recoveryFreeze)
             return
           }
-          historyManager.reopenSession(session.sessionId, recoveryFreeze)
+          historyManager.reopenSession(session.sessionId, recoveryFreeze, admission)
         } finally {
           historyManager.abandonRecoveryFreeze(recoveryFreeze)
         }

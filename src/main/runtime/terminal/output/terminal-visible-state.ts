@@ -19,6 +19,16 @@ import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
+    if (this.hasHostHistoryAuthority(ptyId)) {
+      // Only the daemon's current frame may replace the summary; otherwise keep the summary.
+      const frame =
+        knownAlternateScreen || this.headlessTerminals.has(ptyId)
+          ? await this.readVisibleTerminalState(ptyId)
+          : null
+      return frame?.isAlternateScreen && frame.lines.length > 0
+        ? buildPreview(frame.lines, '')
+        : preview
+    }
     const providerModeUnknown =
       this.providerSnapshotPreferredPtys.has(ptyId) && !this.providerModeTrackersByPtyId.has(ptyId)
     if (!providerModeUnknown && !knownAlternateScreen && !this.headlessTerminals.has(ptyId)) {
@@ -57,6 +67,10 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
   protected async loadVisibleTerminalState(
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null> {
+    if (this.hasHostHistoryAuthority(ptyId)) {
+      // Qualified current frame: live-owner scrollback 0, existing cache and in-flight sharing.
+      return this.readCurrentProviderVisibleState(ptyId) ?? this.captureProviderVisibleState(ptyId)
+    }
     if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
       return this.readHeadlessVisibleTerminalState(ptyId)
     }
@@ -112,7 +126,10 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return null
     }
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
-    if (this.providerSnapshotsWithLiveModeTransition.has(snapshot)) {
+    if (
+      this.providerSnapshotsWithLiveModeTransition.has(snapshot) &&
+      !this.hasHostHistoryAuthority(ptyId)
+    ) {
       // Why: the provider frame can predate a mode switch observed while its
       // RPC was pending; the ordered live emulator owns the post-switch grid.
       const liveState = await this.readHeadlessVisibleTerminalState(ptyId)

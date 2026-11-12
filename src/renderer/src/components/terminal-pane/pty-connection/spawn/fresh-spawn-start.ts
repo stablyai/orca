@@ -1,5 +1,5 @@
 import { applyTerminalLaunchResult } from '../startup/terminal-launch-result-policy'
-import { armPaneOwnerRetry, isPaneOwnerRefusal } from '../host-ownership/pane-owner-recovery'
+import { armPaneOwnerRetry, isRetryablePaneRefusal } from '../host-ownership/pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store/index'
@@ -84,7 +84,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     let ownerRefused = false
     const outputCallbacks = session.captureTransportOutputCallbacks(
       (message: string) => {
-        ownerRefused ||= isPaneOwnerRefusal(message)
+        ownerRefused ||= isRetryablePaneRefusal(message)
         session.reportError(message)
       },
       toProcessExitStartup(coldRestoreOverride ?? effectiveStartup),
@@ -266,7 +266,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       })
       .catch(async (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
-        if (!ownerRefused && isPaneOwnerRefusal(message)) {
+        if (!ownerRefused && isRetryablePaneRefusal(message)) {
           outputCallbacks.callbacks.onError(message)
         }
         releaseDeferredCwdFence(session)

@@ -57,7 +57,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         return
       }
       if (historyRecovery.freeze) {
-        this.historyManager?.abandonRecoveryFreeze(historyRecovery.freeze)
+        this.historyStore?.abandonRecoveryFreeze(historyRecovery.freeze)
         historyRecovery.freeze = null
       }
       historyRecovery.unreadableSessionId = null
@@ -84,6 +84,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     if (result.incarnationId) {
       this.sessionIncarnations.set(sessionId, result.incarnationId)
     }
+    this.hostHistory.bindResult(sessionId, result, historyRecovery)
     this.inputClosedIncarnations.sync(sessionId, result)
     this.hostLossSessionIds.delete(sessionId)
     let providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
@@ -116,7 +117,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         if (historyRecovery.unreadableSessionId === sessionId) {
           this.historyManager.suspendSession(sessionId, recoveryFreeze)
         } else {
-          this.historyManager.reopenSession(sessionId, recoveryFreeze)
+          this.historyManager.reopenSession(sessionId, recoveryFreeze, historyRecovery.admission)
           if (result.isNew) {
             // A new process seeded with the fresh-shell padding: its output must not append to a
             // checkpoint that lacks that padding, or a later replay prints its prompt on the old one.
@@ -158,6 +159,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         if (result.incarnationId) {
           this.sessionIncarnations.set(sessionId, result.incarnationId)
         }
+        this.hostHistory.bindResult(sessionId, result, historyRecovery)
         this.inputClosedIncarnations.sync(sessionId, result)
         this.hostLossSessionIds.delete(sessionId)
         providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
@@ -198,7 +200,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
             cols: effectiveCols,
             rows: effectiveRows,
             ...(recoveryFreeze ? { recoveryFreeze } : {}),
-            quarantineUnreadableRecovery: true
+            quarantineUnreadableRecovery: true,
+            admission: historyRecovery.admission
           })
           if (this.historyManager.hasWriter(sessionId)) {
             this.sessionsNeedingFullCheckpoint.add(sessionId)
@@ -206,7 +209,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
             this.lastFullCheckpointAt.delete(sessionId)
           }
         } else if (canReanchorHistory) {
-          this.historyManager.registerWriter(sessionId, recoveryFreeze)
+          this.historyManager.registerWriter(sessionId, recoveryFreeze, historyRecovery.admission)
           this.sessionsNeedingFullCheckpoint.add(sessionId)
           // The new generation has no checkpoint; discard any cooldown inherited from before the crash.
           this.lastFullCheckpointAt.delete(sessionId)
@@ -244,7 +247,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         ...(recoveryFreeze ? { recoveryFreeze } : {}),
         ...(historyRecovery.unreadableSessionId === sessionId
           ? { quarantineUnreadableRecovery: true }
-          : {})
+          : {}),
+        admission: historyRecovery.admission
       })
     } else if (
       this.historyManager &&
@@ -258,10 +262,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       )
     } else if (this.historyManager && !historyRecovery.identityChanged) {
       // Register a writer without deleting the still-authoritative checkpoint on warm reattach.
-      this.historyManager.registerWriter(
-        sessionId,
-        takeHistoryRecoveryFreeze(historyRecovery, sessionId)
-      )
+      const recoveryFreeze = takeHistoryRecoveryFreeze(historyRecovery, sessionId)
+      this.historyManager.registerWriter(sessionId, recoveryFreeze, historyRecovery.admission)
       if (!wasAlreadyManaged) {
         // Prior adapters may have drained unpersisted records; prove continuity on the first compaction.
         this.sessionsNeedingFullCheckpoint.add(sessionId)

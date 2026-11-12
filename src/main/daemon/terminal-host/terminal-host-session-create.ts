@@ -10,6 +10,7 @@ import type { TerminalHostOptions } from './terminal-host-options'
 import type { TerminalHostTombstones } from './terminal-host-tombstones'
 import type { TerminalSessionTeardown } from './terminal-session-teardown'
 import type { TerminalSpawnGate } from '../admission/terminal-spawn-gate'
+import type { TerminalHistoryJournals } from '../history/journal/terminal-history-journals'
 import { TerminalAttachCanceledError, SessionNotFoundError } from '../protocol/daemon-errors'
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 
@@ -24,6 +25,7 @@ export type TerminalHostSessionCreateDependencies = {
   killedTombstones: TerminalHostTombstones
   spawnSubprocess: TerminalHostOptions['spawnSubprocess']
   spawnGate: TerminalSpawnGate | undefined
+  historyJournals: TerminalHistoryJournals | undefined
   onDeadSessionRemoved: (sessionId: string) => void
   onSessionCreated: (sessionId: string, generation: string | undefined, isAlive: boolean) => void
   onSessionExit: (sessionId: string, generation: string | undefined) => void
@@ -66,6 +68,10 @@ export async function createOrAttachTerminalSession(
       terminalSessionExitCode(attachedSession)
     )
     const snapshot = existing.getSnapshot()
+    // Same turn as the live snapshot and stream attach, so the history image meets the stream exactly.
+    const historyCut = deps.historyJournals
+      ?.live(opts.sessionId, existing.incarnationId)
+      ?.captureCut()
     existing.detachAllClients()
     const token = existing.attachClient(opts.streamClient)
     attachSessionInputViewer(existing, opts.streamClient)
@@ -77,6 +83,7 @@ export async function createOrAttachTerminalSession(
       incarnationId: existing.incarnationId,
       ...getDaemonSessionResultMetadata(existing),
       ...(isSessionInputClosed(existing) ? { inputClosed: true as const } : {}),
+      ...(historyCut ? { historyCut } : {}),
       attachToken: token
     }
   }

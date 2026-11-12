@@ -137,6 +137,44 @@ export function registerPtyConnectionOwnerErrorRetryTests(): void {
       expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(expect.any(String), 1)
     })
 
+    it('keeps a pane through transient history-unavailable and Retry reattaches the same ID', async () => {
+      const { connectPanePty } = await import('../connect-pane-pty')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
+      const transport = createMockTransport()
+      transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
+        opts.callbacks?.onError?.('terminal_history_unavailable')
+        return undefined
+      })
+      transportFactoryQueue.push(transport)
+      const deps = seedUnverifiableRestoredPane()
+
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(2),
+          createManager(2),
+          bindPaneAgentTitleMocks(deps, agentTitleMocks)
+        )
+      )
+      await flushAsyncTicks()
+
+      expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+      transport.connect.mockImplementation(async ({ callbacks }) => {
+        callbacks?.onConnect?.()
+        return { id: 'unverifiable-pty', isReattach: true }
+      })
+      expect(transport.retryRecovery?.()).toBe(true)
+      await flushAsyncTicks()
+      expect(transport.connect).toHaveBeenCalledTimes(2)
+      expect(transport.connect.mock.calls[1]?.[0]).toMatchObject({ sessionId: 'unverifiable-pty' })
+      expect(transport.connect.mock.calls[1]?.[0].command).toBeUndefined()
+      expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+        [LEAF_2]: 'unverifiable-pty'
+      })
+    })
+
     it.each([false, true])(
       'preserves an exhausted pane until explicit Retry and clears only the current owner error (fresh: %s)',
       async (fresh) => {

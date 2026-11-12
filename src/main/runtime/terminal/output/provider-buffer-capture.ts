@@ -114,6 +114,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     if (typeof opts.cursor === 'number') {
       return read
     }
+    if (this.hasHostHistoryAuthority(ptyId)) {
+      return this.withHostHistoryFallback(ptyId, read, opts, providerSnapshot)
+    }
     const blankFallback = shouldFallbackToVisibleTerminalSnapshot(read, opts)
     const recoveredWorkerFallback =
       read.tail.length === 0 && this.legacyWorkerRecovery.hasRecoveredPty(ptyId)
@@ -129,7 +132,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         opts.limit,
         providerSnapshot
       )
-      if (providerProjection.lines.length > 0) {
+      if (providerProjection && providerProjection.lines.length > 0) {
         return buildVisibleSnapshotReadFallback(
           read,
           providerProjection.lines,
@@ -180,6 +183,45 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     )
   }
 
+  /**
+   * Optional substitutions for a host-owned binding read only the daemon's answer; when it is
+   * unavailable the caller gets the original bounded stream read, never another model's rows.
+   */
+  private async withHostHistoryFallback(
+    ptyId: string,
+    read: RuntimeTerminalRead,
+    opts: { limit?: number },
+    providerSnapshot: RuntimeProviderSnapshotReadOptions
+  ): Promise<RuntimeTerminalRead> {
+    const historical =
+      read.tail.length === 0 &&
+      (this.legacyWorkerRecovery.hasRecoveredPty(ptyId) ||
+        this.isKnownUnattachedLocalDaemonPty(ptyId))
+    const blank = shouldFallbackToVisibleTerminalSnapshot(read, opts)
+    const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
+    const conpty = isNativeWindowsConptyPty(ptyId)
+    let projection: RuntimeTerminalProjection | null = null
+    if (historical) {
+      projection = await this.readProviderTerminalTailLines(ptyId, opts.limit, providerSnapshot)
+    } else if (blank || knownAlternateScreen || conpty || this.headlessTerminals.has(ptyId)) {
+      const frame = await this.readVisibleTerminalState(ptyId)
+      if (blank || knownAlternateScreen || frame?.isAlternateScreen) {
+        projection = frame
+      } else if (conpty) {
+        projection = await this.readRenderedTerminalTailLines(ptyId, opts.limit, providerSnapshot)
+      }
+    }
+    return projection && projection.lines.length > 0
+      ? buildVisibleSnapshotReadFallback(
+          read,
+          projection.lines,
+          opts.limit,
+          projection.draft,
+          projection.tailRows
+        )
+      : read
+  }
+
   // ConPTY absolute cursor paints overwrite text that raw tails retain, including ghost PSReadLine predictions; read rendered cells.
   private async withConptyRenderedTail(
     ptyId: string,
@@ -188,7 +230,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     providerSnapshot: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalRead> {
     const projection = await this.readRenderedTerminalTailLines(ptyId, limit, providerSnapshot)
-    return projection.lines.length > 0
+    return projection && projection.lines.length > 0
       ? buildVisibleSnapshotReadFallback(
           read,
           projection.lines,
@@ -203,12 +245,12 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     ptyId: string,
     limit: number | undefined,
     providerSnapshot: RuntimeProviderSnapshotReadOptions
-  ): Promise<RuntimeTerminalProjection> {
+  ): Promise<RuntimeTerminalProjection | null> {
     // Over-fetch a screen so blank rows below the prompt cannot consume the requested nonblank line count.
     const rowLimit =
       terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT) +
       (this.getTerminalSize(ptyId)?.rows ?? 0)
-    const state = this.readWholeScreenModel(ptyId)
+    const state = this.hasHostHistoryAuthority(ptyId) ? null : this.readWholeScreenModel(ptyId)
     if (!state) {
       return this.readProviderTerminalTailLines(ptyId, rowLimit, {
         timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
@@ -232,7 +274,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     ptyId: string,
     limit: number | undefined,
     snapshotOptions: RuntimeProviderSnapshotReadOptions = {}
-  ): Promise<RuntimeTerminalProjection> {
+  ): Promise<RuntimeTerminalProjection | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
     const snapshot = await this.serializeProviderTerminalBuffer(
@@ -240,8 +282,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       { scrollbackRows: snapshotOptions.visibleScreenOnly ? 0 : lineLimit },
       snapshotOptions
     )
+    // Null stays unavailable until the caller picks structural failure or its original stream.
     if (!snapshot) {
-      return { lines: [] }
+      return null
     }
     // Cached acquisitions can include unrequested scrollback; visible-only reads must parse the grid.
     if (snapshotOptions.visibleScreenOnly) {
@@ -250,7 +293,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq
         ? projection
-        : { lines: [] }
+        : null
     }
     const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
     if (data.length === 0) {
@@ -267,7 +310,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq
         ? projection
-        : { lines: [] }
+        : null
     } finally {
       emulator.dispose()
     }

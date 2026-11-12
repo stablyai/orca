@@ -13,6 +13,7 @@ import {
 import type * as DaemonHealthModule from '../../../health/daemon-health'
 import type * as DaemonTccAttributionModule from '../../../permissions/daemon-tcc-attribution'
 import * as startupCwdProbe from '../../../../ipc/pty/host-env/startup-cwd-directory-exists'
+import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({
@@ -58,11 +59,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   } | null
 
   beforeEach(async () => {
-    const harness = await startDaemonAdapterHarness((opts) => {
-      lastSpawnOpts = opts
-      lastSubprocess = createMockSubprocess()
-      return lastSubprocess
-    })
+    const harness = await startDaemonAdapterHarness(
+      (opts) => {
+        lastSpawnOpts = opts
+        lastSubprocess = createMockSubprocess()
+        return lastSubprocess
+      },
+      { protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION }
+    )
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -99,7 +103,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       adapterClass.CHECKPOINT_INTERVAL_MS = 25
 
       try {
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        historyAdapter = new DaemonPtyAdapter({
+          protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+          socketPath,
+          tokenPath,
+          historyPath: historyDir
+        })
         const { id } = await historyAdapter.spawn({
           cols: 80,
           rows: 24,
@@ -115,9 +124,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
         lastSubprocess._simulateData('new output\r\n')
         await waitFor(() => appendSpy.mock.calls.length === 1)
-        expect(appendSpy).toHaveBeenCalledWith(id, expect.any(Number), [
-          { kind: 'output', data: 'new output\r\n' }
-        ])
+        expect(appendSpy).toHaveBeenCalledWith(
+          id,
+          expect.any(Number),
+          [{ kind: 'output', data: 'new output\r\n' }],
+          expect.objectContaining({ writer: expect.anything(), admission: expect.anything() })
+        )
         // Full emulator serialization on each dirty tick caused main-process stalls (#5096).
         expect(checkpointSpy).not.toHaveBeenCalled()
         const logPath = join(historyDir, getHistorySessionDirName(id), 'output.log')
@@ -142,7 +154,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
       const previousDeadline = adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS
       adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS = 5
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const releases: (() => void)[] = []
       const requestedSessionIds: string[] = []
       const request = vi.fn(async (_type: string, payload: { sessionId: string }) => {
@@ -161,6 +178,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         historyManager: {
           checkpoint: ReturnType<typeof vi.fn>
           appendIncrements: typeof appendIncrements
+          captureWriter: ReturnType<typeof vi.fn>
           dispose: ReturnType<typeof vi.fn>
         }
         checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
@@ -169,6 +187,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
       internals.client = { request, disconnect: vi.fn() }
       internals.historyManager = {
+        captureWriter: vi.fn(() => undefined),
         checkpoint: vi.fn(async () => 'committed' as const),
         appendIncrements,
         dispose: vi.fn(async () => {})
@@ -204,7 +223,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       adapterClass.CHECKPOINT_INTERVAL_MS = 10_000
 
       try {
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        historyAdapter = new DaemonPtyAdapter({
+          protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+          socketPath,
+          tokenPath,
+          historyPath: historyDir
+        })
         const { id } = await historyAdapter.spawn({
           cols: 80,
           rows: 24,
@@ -219,7 +243,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect(checkpointSpy).toHaveBeenCalledWith(
           id,
           expect.objectContaining({ snapshotAnsi: expect.stringContaining('latest before sleep') }),
-          { pendingOutputSeq: expect.any(Number) }
+          { pendingOutputSeq: expect.any(Number) },
+          expect.objectContaining({ writer: expect.anything(), admission: expect.anything() })
         )
         expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
 
@@ -250,7 +275,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       adapterClass.CHECKPOINT_INTERVAL_MS = 10_000
 
       try {
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        historyAdapter = new DaemonPtyAdapter({
+          protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+          socketPath,
+          tokenPath,
+          historyPath: historyDir
+        })
         const { id } = await historyAdapter.spawn({
           cols: 80,
           rows: 24,
@@ -298,7 +328,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('removes history on explicit shutdown', async () => {
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
 
       const { id } = await historyAdapter.spawn({
         cols: 80,
@@ -340,7 +375,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
       writeFileSync(join(sessionDir, 'scrollback.bin'), '$ npm run dev\r\nServer running...\r\n')
 
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
 
       const probe = c.inconclusive
         ? vi.spyOn(startupCwdProbe, 'probeRecoveredStartupCwdDirectory').mockResolvedValue(null)

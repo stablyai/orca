@@ -4,6 +4,7 @@ import type { TerminalSnapshot } from './terminal-snapshot'
 import type { DaemonLaunchNote } from './daemon-launch-note-protocol'
 import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
+import type { TerminalHistoryOutcome } from './daemon-history-protocol'
 
 export type DaemonCreateOrAttachResult = {
   isNew: boolean
@@ -22,6 +23,8 @@ export type DaemonCreateOrAttachResult = {
   cwdReadableByDaemon?: boolean
   /** The live child can no longer take input through its PTY; older daemons omit this field. */
   inputClosed?: true
+  /** The daemon owns this session's history; an attach snapshot is its image at this cut. */
+  history?: TerminalHistoryOutcome
 }
 
 export function getDaemonSessionResultMetadata(session: {

@@ -18,6 +18,7 @@ import {
 } from '../../history/seed-transfer/terminal-history-seed-chunks'
 import type { DaemonCreateOrAttachResult as CreateOrAttachResult } from '../../protocol/daemon-create-or-attach-result'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
+import type { CapturedHistoryWriter } from '../../history/storage/history-manager'
 import type { PtySpawnOptions, PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { resolveSafePtyDefaultCwd } from '../../../providers/pty-default-cwd'
 import { isMissingWorkingDirectoryError } from '../../../providers/working-directory-validation'
@@ -54,12 +55,13 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
       teardown: boolean
       forceLiveSnapshot?: boolean
       requireContinuityProof?: boolean
+      writer?: CapturedHistoryWriter | null
     }
   ): Promise<SnapshotCheckpointResult>
   protected abstract markSessionDirty(sessionId: string): void
   protected abstract writeSessionCheckpoint(
     sessionId: string,
-    opts: { final: boolean; teardown: boolean }
+    opts: { final: boolean; teardown: boolean; writer?: CapturedHistoryWriter | null }
   ): Promise<'done' | 'deferred'>
   protected abstract releasePendingRespawnAdoptionLease(): void
   protected abstract setupEventRouting(): void
@@ -136,7 +138,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         ...(!context.attachOnly && context.shellReadyTimeoutMs !== undefined
           ? { shellReadyTimeoutMs: context.shellReadyTimeoutMs }
           : {}),
-        ...(historySeed ? { historySeed } : {}),
+        ...(historySeed !== undefined ? { historySeed } : {}),
         ...(historySeedTransferId ? { historySeedTransferId } : {}),
         ...(this.supportsStartupIngress && !context.attachOnly && opts.startupIngress
           ? { startupIngress: opts.startupIngress }
@@ -161,7 +163,11 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
     let historySeedUnavailable = false
     const deliverSeedAndCreate = async (): Promise<CreateOrAttachResult> => {
       if (!historySeedSegments || historySeedSegments.length === 0) {
-        return requestCreateOrAttach(undefined, undefined)
+        // A host-owned fresh origin may supersede earlier files only on main's explicit decision;
+        // an absent seed (delivery failure or a live-session race) keeps them.
+        const supersedesRecovery =
+          this.hostHistory.enabled && !context.attachOnly && !context.restoreSkippedForLiveSession
+        return requestCreateOrAttach(supersedesRecovery ? '' : undefined, undefined)
       }
       const metrics = measureTerminalHistorySeed(historySeedSegments)
       if (metrics.codeUnits <= TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS) {

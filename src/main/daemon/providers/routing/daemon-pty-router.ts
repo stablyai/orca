@@ -217,6 +217,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).canProvideAuthoritativeBufferSnapshot(id)
   }
 
+  getTerminalHistoryAuthority = (id: string) => this.adapterFor(id).getTerminalHistoryAuthority(id)
+
   async clearBuffer(id: string): Promise<void> {
     await this.adapterFor(id).clearBuffer(id)
   }

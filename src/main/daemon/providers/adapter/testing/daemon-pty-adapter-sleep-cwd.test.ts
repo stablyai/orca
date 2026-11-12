@@ -10,6 +10,7 @@ import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-ad
 import type * as DaemonHealthModule from '../../../health/daemon-health'
 import type * as DaemonTccAttributionModule from '../../../permissions/daemon-tcc-attribution'
 import type * as ProcessCwdModule from '../../../../providers/process-cwd'
+import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 const {
   getMacDaemonSystemResolverHealthMock,
@@ -59,12 +60,15 @@ describe('a native shell slept and woken', () => {
 
   beforeEach(async () => {
     spawnedCwds = []
-    const harness = await startDaemonAdapterHarness((opts) => {
-      spawnedCwds.push(opts.cwd)
-      // A real pid, so the daemon's cwd lookup reads this process's folder, as for a live shell.
-      lastSubprocess = Object.assign(createMockSubprocess(), { pid: process.pid })
-      return lastSubprocess
-    })
+    const harness = await startDaemonAdapterHarness(
+      (opts) => {
+        spawnedCwds.push(opts.cwd)
+        // A real pid, so the daemon's cwd lookup reads this process's folder, as for a live shell.
+        lastSubprocess = Object.assign(createMockSubprocess(), { pid: process.pid })
+        return lastSubprocess
+      },
+      { protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION }
+    )
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -85,7 +89,12 @@ describe('a native shell slept and woken', () => {
     const historyDir = join(dir, 'history')
     const sessionId = 'wt-1::/project@@sleep1'
     const shellFolder = realpathSync(process.cwd())
-    const history = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    const history = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
 
     await history.spawn({ cols: 80, rows: 24, cwd: dir, sessionId })
     lastSubprocess._simulateData('user@host:~/project$ cd deep\r\nuser@host:~/project/deep$ ')
@@ -104,7 +113,12 @@ describe('a native shell slept and woken', () => {
 
   async function sleepAndWake(sessionId: string, deadlineMs?: number) {
     const historyDir = join(dir, 'history')
-    const history = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    const history = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
     await history.spawn({ cols: 80, rows: 24, cwd: dir, sessionId })
     lastSubprocess._simulateData('user@host:~/project$ ')
     await history.shutdown(sessionId, { immediate: true, keepHistory: true, deadlineMs })

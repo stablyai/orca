@@ -11,6 +11,8 @@ import type {
 } from '../../../shared/agent-session/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import type { TerminalHistoryCut } from '../history/journal/terminal-session-journal'
+import type { TerminalHistoryOutcome } from '../protocol/daemon-history-protocol'
 
 export type CreateOrAttachOptions = {
   sessionId: string
@@ -62,4 +64,7 @@ export type CreateOrAttachResult = {
   cwdReadableByDaemon?: boolean
   /** The live child can no longer take input through its PTY master. */
   inputClosed?: true
+  /** Internal: the attach cut for the host-owned history image, never sent on the wire. */
+  historyCut?: TerminalHistoryCut
+  history?: TerminalHistoryOutcome
 }

@@ -1,7 +1,6 @@
 import { parseDaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
-import { performance } from 'node:perf_hooks'
 import { setPtyOwnerHostColors } from '../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import type { ConnectedDaemonClient, DaemonClientConnections } from './daemon-client-connections'
 import type { DaemonFileLog } from '../observability/daemon-file-log'
@@ -9,7 +8,6 @@ import type { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations
 import type { DaemonServerLifecycle } from './daemon-server-lifecycle'
 import type { DaemonSessionAttachments } from './daemon-session-attachments'
 import type { DaemonSessionBackgroundRouting } from './daemon-session-background-routing'
-import { recordDaemonStreamBacklogEvent } from '../transport/stream/daemon-stream-backlog-probe'
 import type { DaemonStreamDataBatcher } from '../transport/stream/daemon-stream-data-batcher'
 import type { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { DaemonHealthRequests } from '../health/daemon-health-requests'
@@ -17,6 +15,7 @@ import type { TerminalHistorySeedTransferRegistry } from '../history/seed-transf
 import type { TerminalHost } from '../terminal-host/terminal-host'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
+import { answerDaemonHistoryRequest } from './daemon-history-requests'
 
 type DaemonRequestRouterOptions = {
   host: TerminalHost
@@ -168,7 +167,8 @@ export class DaemonRequestRouter {
       case 'shutdownIfIdle':
         return this.shutdownIfIdle(clientId, request.id)
       case 'getSnapshot':
-        return this.getSnapshot(request.payload.sessionId, request.payload.scrollbackRows)
+      case 'flushHistory':
+        return answerDaemonHistoryRequest(this.options.host, request)
       case 'getSize':
         return { size: this.options.host.getAppliedSize(request.payload.sessionId) }
       case 'takePendingOutput':
@@ -237,23 +237,6 @@ export class DaemonRequestRouter {
       this.options.lifecycle.retireAfterIdleReply(clientId, requestId, client.controlSocket)
     }
     return { retiring }
-  }
-
-  private async getSnapshot(sessionId: string, requestedRows: unknown): Promise<unknown> {
-    const startedAt = performance.now()
-    const scrollbackRows =
-      typeof requestedRows === 'number' && Number.isFinite(requestedRows)
-        ? Math.max(0, Math.min(50_000, Math.floor(requestedRows)))
-        : undefined
-    const snapshot = await this.options.host.getSettledSnapshot(sessionId, { scrollbackRows })
-    const snapshotMs = performance.now() - startedAt
-    if (snapshotMs >= 25) {
-      recordDaemonStreamBacklogEvent('slowGetSnapshot', {
-        sessionIdSuffix: sessionId.slice(-10),
-        snapshotMs: Math.round(snapshotMs)
-      })
-    }
-    return { snapshot }
   }
 
   private async shutdown(

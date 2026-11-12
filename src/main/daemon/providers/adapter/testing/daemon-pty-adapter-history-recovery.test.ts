@@ -34,6 +34,7 @@ import type { HistoryReader } from '../../../history/restoration/history-reader'
 import type { DaemonFileLog } from '../../../observability/daemon-file-log'
 import type * as DaemonHealthModule from '../../../health/daemon-health'
 import { getDaemonSocketPath } from '../../../launch/daemon-spawner'
+import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
@@ -102,6 +103,7 @@ describe('DaemonPtyAdapter history recovery', () => {
       close() {}
     }
     server = new DaemonServer({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
       socketPath,
       tokenPath,
       log: daemonLog,
@@ -112,7 +114,11 @@ describe('DaemonPtyAdapter history recovery', () => {
     })
     await server.start()
 
-    adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+    adapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath
+    })
     getMacDaemonSystemResolverHealthMock.mockReset()
     getMacDaemonSystemResolverHealthMock.mockResolvedValue('unknown')
   })
@@ -125,7 +131,12 @@ describe('DaemonPtyAdapter history recovery', () => {
   })
 
   it('suspends an empty final checkpoint with unreadable post-checkpoint recovery', async () => {
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
     const { id } = await historyAdapter.spawn({
       cols: 80,
       rows: 24,
@@ -163,7 +174,12 @@ describe('DaemonPtyAdapter history recovery', () => {
     const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
     adapterClass.CHECKPOINT_INTERVAL_MS = 5
     try {
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const { id } = await historyAdapter.spawn({
         cols: 80,
         rows: 24,
@@ -200,7 +216,12 @@ describe('DaemonPtyAdapter history recovery', () => {
   })
 
   it('serializes concurrent keepHistory and disconnectOnly checkpoints', async () => {
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
     const sessionIds = await Promise.all(
       ['queued-checkpoint-a', 'queued-checkpoint-b', 'queued-checkpoint-c'].map(
         async (sessionId) =>
@@ -292,7 +313,12 @@ describe('DaemonPtyAdapter history recovery', () => {
       })
     )
     createSparseFile(join(sessionDir, file), bytes)
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
 
     const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
 
@@ -324,7 +350,12 @@ describe('DaemonPtyAdapter history recovery', () => {
     const checkpointBytes = TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES + 1
     createSparseFile(checkpointPath, checkpointBytes)
     writeFileSync(join(sessionDir, 'scrollback.bin'), 'legacy fallback\r\n')
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
 
     const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
 
@@ -380,7 +411,12 @@ describe('DaemonPtyAdapter history recovery', () => {
       ])
     ])
     writeFileSync(join(sessionDir, 'output.log'), log)
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
 
     const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
 
@@ -430,7 +466,12 @@ describe('DaemonPtyAdapter history recovery', () => {
         checkpointedAt: '2026-07-25T10:01:00Z'
       })
     )
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
 
     const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
 
@@ -479,6 +520,7 @@ describe('DaemonPtyAdapter history recovery', () => {
       expect(failedManager.isSessionDisabled(sessionId)).toBe(true)
       expect(existsSync(join(sessionDir, '.unreadable-recovery'))).toBe(false)
       historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
         socketPath,
         tokenPath,
         historyPath: historyDir
@@ -529,7 +571,12 @@ describe('DaemonPtyAdapter history recovery', () => {
     const checkpointBytes = TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES + 1
     createSparseFile(checkpointPath, checkpointBytes)
     await leaveFailedQuarantineProtection(historyDir, canonicalId)
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
 
     const adopted = await historyAdapter.spawn({
       cols: 80,
@@ -565,7 +612,12 @@ describe('DaemonPtyAdapter history recovery', () => {
     )
     createSparseFile(join(sessionDir, 'checkpoint.json'), TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES + 1)
     await leaveFailedQuarantineProtection(historyDir, sessionId)
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
 
     const reconciled = await historyAdapter.reconcileOnStartup(new Set([worktreeId]))
 
@@ -579,7 +631,12 @@ describe('DaemonPtyAdapter history recovery', () => {
     adapterClass.CHECKPOINT_INTERVAL_MS = 100
     try {
       const worktreeId = 'repo-a::/wt/reconciled-history'
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const { id: sessionId } = await historyAdapter.spawn({
         cols: 80,
         rows: 24,
@@ -588,7 +645,12 @@ describe('DaemonPtyAdapter history recovery', () => {
       lastSubprocess._simulateData('before adapter restart\r\n')
       await historyAdapter.disconnectOnly()
 
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const manager = historyAdapter.getHistoryManager()!
       const checkpointSpy = vi.spyOn(manager, 'checkpoint')
       const reconciled = await historyAdapter.reconcileOnStartup(new Set([worktreeId]))
@@ -634,7 +696,12 @@ describe('DaemonPtyAdapter history recovery', () => {
         exitCode: null
       })
     )
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
     const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
     let releaseDetection!: () => void
     let detectCalls = 0
@@ -693,7 +760,12 @@ describe('DaemonPtyAdapter history recovery', () => {
       leafId: '11111111-1111-4111-8111-111111111111',
       terminalHandle: 'term_claim_race'
     }
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
     const client = (
       historyAdapter as unknown as {
         client: { request: (type: string, payload?: unknown) => Promise<unknown> }

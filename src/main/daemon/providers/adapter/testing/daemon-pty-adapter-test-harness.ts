@@ -9,6 +9,13 @@ import { getDaemonSocketPath } from '../../../launch/daemon-spawner'
 import type { SubprocessHandle } from '../../../sessions/session-subprocess-handle'
 import type { DaemonFileLog } from '../../../observability/daemon-file-log'
 import type { TerminalExitCause } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import {
+  HOST_HISTORY_OWNER_PROTOCOL_VERSION,
+  PROTOCOL_VERSION
+} from '../../../protocol/daemon-protocol-version'
+
+/** Fixtures for the main-pulled pipeline that daemons before v57 still use. */
+export const LEGACY_HISTORY_PROTOCOL_VERSION = HOST_HISTORY_OWNER_PROTOCOL_VERSION - 1
 
 export type SpawnSubprocess = ConstructorParameters<typeof DaemonServer>[0]['spawnSubprocess']
 
@@ -87,12 +94,18 @@ export async function startDaemonAdapterHarness(
     DaemonPtyAdapterOptions,
     'readRunningWslDistros' | 'historyPath' | 'wslBridgeBootIdentity' | 'protocolVersion'
   > = {},
-  serverOptions: { onPtySessionExit?: (sessionId: string) => void } = {}
+  serverOptions: { onPtySessionExit?: (sessionId: string) => void; hostHistory?: boolean } = {}
 ): Promise<DaemonAdapterHarness> {
   const dir = createTestDir()
   const socketPath = getDaemonSocketPath(dir)
   const tokenPath = join(dir, 'test.token')
   const daemonLogEvents: string[] = []
+  // Production v57+ daemons always own history; older protocol fixtures leave it to the adapter.
+  const {
+    hostHistory = (adapterOptions.protocolVersion ?? PROTOCOL_VERSION) >=
+      HOST_HISTORY_OWNER_PROTOCOL_VERSION,
+    ...daemonOptions
+  } = serverOptions
   const daemonLog: DaemonFileLog = {
     log: (event) => daemonLogEvents.push(event),
     close() {}
@@ -106,7 +119,8 @@ export async function startDaemonAdapterHarness(
     ...(adapterOptions.protocolVersion !== undefined
       ? { protocolVersion: adapterOptions.protocolVersion }
       : {}),
-    ...serverOptions
+    ...(hostHistory ? { historyRoot: join(dir, 'history') } : {}),
+    ...daemonOptions
   })
   await server.start()
   const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, ...adapterOptions })

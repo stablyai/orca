@@ -20,6 +20,7 @@ import { HistoryReader } from '../history-reader'
 import type { DaemonFileLog } from '../../../observability/daemon-file-log'
 import type { PendingOutputRecord } from '../../../protocol/daemon-rpc-contract'
 import type { SubprocessHandle } from '../../../sessions/session-subprocess-handle'
+import { LEGACY_HISTORY_PROTOCOL_VERSION } from '../../../providers/adapter/testing/daemon-pty-adapter-test-harness'
 
 const PREVIOUSLY_RECOVERABLE_LINE = 'LINE_01000'
 const OLDEST_WRITTEN_LINE = 'LINE_00001'
@@ -153,6 +154,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       historyDir = join(dir, 'history')
       const log: DaemonFileLog = { log: () => {}, close: () => {} }
       server = new DaemonServer({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
         socketPath: getDaemonSocketPath(dir),
         tokenPath: join(dir, 'test.token'),
         log,
@@ -163,6 +165,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       })
       await server.start()
       adapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
         socketPath: getDaemonSocketPath(dir),
         tokenPath: join(dir, 'test.token'),
         historyPath: historyDir
@@ -223,6 +226,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
 
       await adapter.disconnectOnly()
       adapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
         socketPath: getDaemonSocketPath(dir),
         tokenPath: join(dir, 'test.token'),
         historyPath: historyDir
@@ -299,6 +303,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
 
       simulateAdapterCrash(adapter)
       adapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
         socketPath: getDaemonSocketPath(dir),
         tokenPath: join(dir, 'test.token'),
         historyPath: historyDir
@@ -334,6 +339,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       simulateAdapterCrash(adapter)
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       adapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
         socketPath: getDaemonSocketPath(dir),
         tokenPath: join(dir, 'test.token'),
         historyPath: historyDir
@@ -377,6 +383,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
 
       simulateAdapterCrash(adapter)
       adapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
         socketPath: getDaemonSocketPath(dir),
         tokenPath: join(dir, 'test.token'),
         historyPath: historyDir

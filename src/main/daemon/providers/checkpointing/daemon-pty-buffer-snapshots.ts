@@ -7,6 +7,8 @@ import { focusLossReportSupport } from '../../protocol/daemon-protocol-version'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { CapturedHistoryWriter } from '../../history/storage/history-manager'
+import { readHostHistorySnapshot } from '../adapter/daemon-pty-host-history'
 
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 
@@ -17,6 +19,16 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   ): Promise<PtyProviderBufferSnapshot | null> {
     if (!this.supportsAuthoritativeBufferSnapshots) {
       return null
+    }
+    if (this.hostHistory.enabled) {
+      const incarnationId = this.hostHistory.get(id)?.incarnationId
+      const snapshot = await readHostHistorySnapshot(
+        this.client,
+        id,
+        incarnationId,
+        opts.scrollbackRows
+      )
+      return snapshot ? this.toProviderBufferSnapshot(snapshot) : null
     }
     try {
       const scrollbackRows = normalizeDesktopTerminalSnapshotRows(opts.scrollbackRows)
@@ -85,12 +97,18 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
     if (!this.tryAdmitNonFinalCheckpoint(sessionId)) {
       return liveSnapshot
     }
+    const writer = this.historyManager.captureWriter(sessionId) ?? null
     // Bound this session's reattach wait; timed-out compaction still commits durable history.
     return await this.checkpointQueue.runWithDeadline(
       sessionId,
       async () => {
         try {
-          return await this.compactDurableRestoreSnapshot(sessionId, liveSnapshot, scrollbackRows)
+          return await this.compactDurableRestoreSnapshot(
+            sessionId,
+            liveSnapshot,
+            scrollbackRows,
+            writer
+          )
         } finally {
           this.releaseNonFinalCheckpointAdmission(sessionId)
           this.overlayDeadlineWarnedSessionIds.delete(sessionId)
@@ -146,7 +164,8 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   protected async compactDurableRestoreSnapshot(
     sessionId: string,
     liveSnapshot: NonNullable<GetSnapshotResult['snapshot']>,
-    scrollbackRows?: number
+    scrollbackRows: number | undefined,
+    writer: CapturedHistoryWriter | null
   ): Promise<NonNullable<GetSnapshotResult['snapshot']>> {
     if (!this.historyReader) {
       return liveSnapshot
@@ -155,6 +174,7 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
       // Compact before reading to avoid racing the periodic checkpoint and creating a sequence gap.
       const checkpoint = await this.takeSnapshotAndCheckpoint(sessionId, {
         teardown: false,
+        writer,
         forceLiveSnapshot: this.sessionsNeedingLiveCheckpoint.has(sessionId),
         requireContinuityProof: this.sessionsNeedingContinuityCheckpoint.has(sessionId)
       })

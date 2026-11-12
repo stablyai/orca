@@ -58,6 +58,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       this.pendingClaimSpawnOperations.add(operation)
     }
     const historyRecovery: HistoryRecoveryContext = {
+      admission: this.historyStore?.admit(sessionId),
       freeze: null,
       unreadableSessionId: null,
       identityChanged: false
@@ -70,12 +71,13 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       )
     } finally {
       if (historyRecovery.freeze) {
-        this.historyManager?.abandonRecoveryFreeze(historyRecovery.freeze)
+        this.historyStore?.abandonRecoveryFreeze(historyRecovery.freeze)
       }
       this.pendingClaimSpawnOperations.delete(operation)
       operations.delete(operation)
       if (operations.size === 0) {
         this.pendingSpawnOperationsBySessionId.delete(sessionId)
+        this.hostHistory.releaseUnbound(sessionId, historyRecovery.admission)
       }
     }
   }
@@ -144,7 +146,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     })?.distro
     let activeSpawnContext: DaemonPtySpawnContext | null = null
     const freezeHistory = async (): Promise<void> => {
-      if (!this.historyManager) {
+      if (!this.historyStore) {
         return
       }
       const recoverySessionId = activeSpawnContext?.sessionId ?? sessionId
@@ -152,9 +154,9 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
         return
       }
       if (historyRecovery.freeze) {
-        this.historyManager.abandonRecoveryFreeze(historyRecovery.freeze)
+        this.historyStore.abandonRecoveryFreeze(historyRecovery.freeze)
       }
-      historyRecovery.freeze = await this.historyManager.freezeForRecovery(recoverySessionId)
+      historyRecovery.freeze = await this.historyStore.freezeForRecovery(recoverySessionId)
       historyRecovery.unreadableSessionId = null
     }
     const detectColdRestore = async (options?: {
@@ -265,6 +267,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       detectColdRestore
     }
     activeSpawnContext = context
+    await this.hostHistory.handOff(this.historyStore, historyRecovery, sessionId, attachOnly)
     const result = await this.createOrAttachSpawn(context, context.historySeedSegments)
     if (result.isNew && !attachOnly) {
       // Not awaited: the app-side read behind it can sit on an unanswered macOS folder prompt.

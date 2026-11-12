@@ -28,6 +28,8 @@ import {
 
 const PANE_OWNER_UNVERIFIED_ERROR = 'terminal_pane_owner_unverified'
 const PANE_OWNER_CHANGED_ERROR = 'terminal_pane_owner_changed'
+// The live owner is known; its history read failed for now, so keep the ID and offer Retry.
+const TERMINAL_HISTORY_UNAVAILABLE_ERROR = 'terminal_history_unavailable'
 
 /** Layout-owner build: `afterMainStart` attaches to the terminal main just started for the pane. */
 type ReattachOptions = { afterMainStart?: true; userAct?: true }
@@ -94,6 +96,7 @@ function connectDeferredSessionReattach(
   let paneNotLive = false
   let paneOwnerUnverified = false
   let paneOwnerChanged = false
+  let historyUnavailable = false
   let heldByNewerDaemon = false
   let heldForStoppedDistro: ReturnType<typeof parseWslDistroHold> = null
   // Why: main started this pane's agent; the window's attach never resumes it a second time.
@@ -125,6 +128,9 @@ function connectDeferredSessionReattach(
       }
       if (message.includes(PANE_OWNER_CHANGED_ERROR)) {
         paneOwnerChanged = true
+      }
+      if (message.includes(TERMINAL_HISTORY_UNAVAILABLE_ERROR)) {
+        historyUnavailable = true
       }
       session.reportError(message)
     },
@@ -203,7 +209,7 @@ function connectDeferredSessionReattach(
         session.settlePaneAttachAttempt('failed')
         return NOT_REOPENED
       }
-      if (!result && paneOwnerUnverified) {
+      if (!result && (paneOwnerUnverified || historyUnavailable)) {
         armPaneOwnerRetry(session, outputCallbacks.generation, () =>
           connectDeferredSessionReattach(session, deferredReattachSessionId)
         )
@@ -274,7 +280,8 @@ function connectDeferredSessionReattach(
       }
       if (
         message.includes(PANE_OWNER_UNVERIFIED_ERROR) ||
-        message.includes(PANE_OWNER_CHANGED_ERROR)
+        message.includes(PANE_OWNER_CHANGED_ERROR) ||
+        message.includes(TERMINAL_HISTORY_UNAVAILABLE_ERROR)
       ) {
         outputCallbacks.callbacks.onError(message)
         armPaneOwnerRetry(session, outputCallbacks.generation, () =>

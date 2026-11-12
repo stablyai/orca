@@ -6,6 +6,7 @@ import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import type * as DaemonHealthModule from '../../../health/daemon-health'
+import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 vi.mock('../../../health/daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
@@ -17,9 +18,12 @@ vi.mock('../../../health/daemon-health', async (importOriginal) => {
 
 it('drains keepHistory shutdowns admitted before connection preparation completes', async () => {
   const subprocess = createMockSubprocess()
-  const harness = await startDaemonAdapterHarness(() => subprocess)
+  const harness = await startDaemonAdapterHarness(() => subprocess, {
+    protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION
+  })
   const historyDir = join(harness.dir, 'history')
   const adapter = new DaemonPtyAdapter({
+    protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
     socketPath: harness.socketPath,
     tokenPath: harness.tokenPath,
     historyPath: historyDir

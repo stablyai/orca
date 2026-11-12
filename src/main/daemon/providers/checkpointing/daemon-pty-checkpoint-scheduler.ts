@@ -203,10 +203,12 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     sessionId: string,
     opts: { final: boolean; teardown: boolean }
   ): Promise<'done' | 'deferred'> {
+    // Before enqueueing: a successor's later writer is never this producer's target.
+    const writer = this.historyManager?.captureWriter(sessionId) ?? null
     // Final writes must persist the last screen; wait for queued compaction instead of deferring.
     if (opts.final) {
       return await this.checkpointQueue.run(sessionId, () =>
-        this.writeSessionCheckpoint(sessionId, opts)
+        this.writeSessionCheckpoint(sessionId, { ...opts, writer })
       )
     }
     // Deferral preserves dirty state and lets admitted writes commit before the next retry.
@@ -218,7 +220,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     }
     const run = async (): Promise<'done' | 'deferred'> => {
       try {
-        return await this.writeSessionCheckpoint(sessionId, opts)
+        return await this.writeSessionCheckpoint(sessionId, { ...opts, writer })
       } finally {
         this.releaseNonFinalCheckpointAdmission(sessionId)
         this.periodicDeadlineWarnedSessionIds.delete(sessionId)

@@ -130,7 +130,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     sessionId: string,
     operation: () => Promise<T>
   ): Promise<T> {
-    if (!this.historyManager) {
+    if (!this.historyStore) {
       return await operation()
     }
     const previous = this.historySpawnLocks.get(sessionId) ?? Promise.resolve()

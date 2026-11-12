@@ -58,6 +58,7 @@ export class TerminalHost {
   private onSessionReaped: TerminalHostOptions['onSessionReaped']
   private reportReadinessEvent: TerminalHostOptions['reportReadinessEvent']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
+  readonly historyJournals: TerminalHostOptions['historyJournals']
   private creationFenced = false
   private disposePromise: Promise<void> | null = null
   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
@@ -74,6 +75,7 @@ export class TerminalHost {
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
+    this.historyJournals = opts.historyJournals
     this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
   }
 
@@ -110,6 +112,7 @@ export class TerminalHost {
               killedTombstones: this.killedTombstones,
               spawnSubprocess: this.spawnOptions.spawnSubprocess,
               spawnGate: this.spawnOptions.spawnGate,
+              historyJournals: this.historyJournals,
               onDeadSessionRemoved: (sessionId) => this.agentSessionGenerations.forget(sessionId),
               onSessionCreated: (sessionId, generation, isAlive) =>
                 this.agentSessionGenerations.remember(sessionId, generation, isAlive),
@@ -332,7 +335,7 @@ export class TerminalHost {
       sessions: this.sessions,
       onFinalCheckpoint: this.onFinalCheckpoint,
       killedTombstones: this.killedTombstones
-    })
+    }).then(() => this.historyJournals?.settleAll())
     this.disposePromise = disposePromise
     void disposePromise.catch(() => {
       // Keep failed native owners retryable on the next shutdown request.

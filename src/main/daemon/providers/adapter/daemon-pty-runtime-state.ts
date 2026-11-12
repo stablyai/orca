@@ -16,6 +16,7 @@ import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
+  HOST_HISTORY_OWNER_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
   supportsPtyStartupIngress
@@ -33,6 +34,8 @@ import { HistoryManager } from '../../history/storage/history-manager'
 import type { HistoryCheckpointResult } from '../../history/storage/terminal-history-manager-options'
 import type { HistoryRecoveryFreeze } from '../../history/storage/terminal-history-recovery-quarantine'
 import { HistoryReader } from '../../history/restoration/history-reader'
+import type { HistoryWriterAdmission } from '../../history/storage/terminal-history-writer-handoff'
+import { DaemonPtyHostHistoryBindings } from './daemon-pty-host-history'
 import type { PtyBackgroundStreamEvent } from '../../../providers/pty-provider-contract'
 import type {
   DaemonPtyRouterDataEvent,
@@ -50,6 +53,8 @@ export type PendingDaemonSpawnOperation = {
 }
 
 export type HistoryRecoveryContext = {
+  /** Captured once at spawn entry, before any lock, retry or recovery await. */
+  admission: HistoryWriterAdmission | undefined
   freeze: HistoryRecoveryFreeze | null
   unreadableSessionId: string | null
   identityChanged: boolean
@@ -87,7 +92,11 @@ export abstract class DaemonPtyRuntimeState {
   protected readonly trackAuditEligibility = createDaemonAuditEligibilityTracker()
   protected auditObservationListeners: ((observation: DaemonAuditObservation) => void)[] = []
   protected identityChangeListeners: ((event: DaemonIdentityChangeEvent) => void)[] = []
+  /** Main-side writer; null when the daemon owns history (v57+), keeping every main write path off. */
   protected historyManager: HistoryManager | null
+  /** Same root's recovery freezes, quarantine, removal and claims, with or without main writers. */
+  protected historyStore: HistoryManager | null
+  protected readonly hostHistory: DaemonPtyHostHistoryBindings
   protected historyReader: HistoryReader | null
   protected respawnFn: DaemonPtyAdapterOptions['respawn'] | null
   protected runtimeDir: string | null
@@ -204,6 +213,7 @@ export abstract class DaemonPtyRuntimeState {
         .closeSession(sessionId, exitCode)
         .catch((error) => console.warn('[history] closeSession failed:', sessionId, error))
     }
+    this.hostHistory.release(sessionId, expectedIncarnationId)
     this.initialCwds.delete(sessionId)
     this.wslDistrosBySessionId.delete(sessionId)
     this.wslBridgeBootIdentity.forget(sessionId)
@@ -231,9 +241,14 @@ export abstract class DaemonPtyRuntimeState {
       protocolVersion: opts.protocolVersion
     })
     const client = this.client
-    this.historyManager = opts.historyPath
+    this.hostHistory = new DaemonPtyHostHistoryBindings(
+      this.protocolVersion >= HOST_HISTORY_OWNER_PROTOCOL_VERSION,
+      (id) => this.activeSessionIds.has(id)
+    )
+    this.historyStore = opts.historyPath
       ? new HistoryManager(opts.historyPath, { resizeModel: () => client.getDaemonResizeModel() })
       : null
+    this.historyManager = this.hostHistory.enabled ? null : this.historyStore
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
     this.respawnFn = opts.respawn ?? null
     this.readRunningWslDistros = opts.readRunningWslDistros

@@ -12,6 +12,7 @@ import type {
   PtyDataEvent,
   PtyProcessInfo,
   PtyProviderBufferSnapshot,
+  TerminalHistoryAuthority,
   PtySpawnOptions,
   PtySpawnResult
 } from '../../../providers/pty-provider-contract'
@@ -169,6 +170,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     opts?: { scrollbackRows?: number }
   ): Promise<PtyProviderBufferSnapshot | null> {
     return (await this.providerFor(id).getBufferSnapshot?.(id, opts)) ?? null
+  }
+
+  getTerminalHistoryAuthority(id: string): TerminalHistoryAuthority | undefined {
+    return this.providerFor(id).getTerminalHistoryAuthority?.(id)
   }
 
   clearBuffer = (id: string): Promise<void> => this.providerFor(id).clearBuffer(id)

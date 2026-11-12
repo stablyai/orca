@@ -187,6 +187,8 @@ async function runRestartDaemon(
 
   // Dispose only old subscriptions after adoption; full disposal would kill shared legacy adapters.
   disposeProviderSubscriptionsOnly(currentAdapter)
+  // The dropped adapter's history claims retire now, not with routing; legacy adapters keep theirs.
+  currentOnly?.retireHistoryOwnership()
 
   replaceDaemonProvider(newProvider)
 

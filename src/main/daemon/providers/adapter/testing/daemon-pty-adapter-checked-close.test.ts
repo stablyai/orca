@@ -11,18 +11,23 @@ import {
 } from './daemon-pty-adapter-test-harness'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import type { SubprocessHandle } from '../../../sessions/session-subprocess-handle'
+import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 let harness: DaemonAdapterHarness | undefined
 let adapter: DaemonPtyAdapter | undefined
 let subprocess: SubprocessHandle & { _simulateExit(code: number): void }
 
 async function start(withHistory = true): Promise<DaemonPtyAdapter> {
-  harness = await startDaemonAdapterHarness(() => {
-    subprocess = createMockSubprocess()
-    return subprocess
-  })
+  harness = await startDaemonAdapterHarness(
+    () => {
+      subprocess = createMockSubprocess()
+      return subprocess
+    },
+    { protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION }
+  )
   harness.adapter.dispose()
   adapter = new DaemonPtyAdapter({
+    protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
     socketPath: harness.socketPath,
     tokenPath: harness.tokenPath,
     ...(withHistory ? { historyPath: join(harness.dir, 'history') } : {})

@@ -15,6 +15,7 @@ import {
 import type * as DaemonHealthModule from '../../../health/daemon-health'
 import type * as DaemonTccAttributionModule from '../../../permissions/daemon-tcc-attribution'
 import type { TerminalSnapshot } from '../../../protocol/terminal-snapshot'
+import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({
@@ -62,11 +63,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   beforeEach(async () => {
     subprocessDataOnSubscribe = undefined
-    const harness = await startDaemonAdapterHarness((opts) => {
-      lastSpawnOpts = opts
-      lastSubprocess = createMockSubprocess(subprocessDataOnSubscribe)
-      return lastSubprocess
-    })
+    const harness = await startDaemonAdapterHarness(
+      (opts) => {
+        lastSpawnOpts = opts
+        lastSubprocess = createMockSubprocess(subprocessDataOnSubscribe)
+        return lastSubprocess
+      },
+      { protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION }
+    )
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -119,7 +123,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         )
         writeFileSync(join(sessionDir, 'scrollback.bin'), 'pre-restart history\r\n')
 
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        historyAdapter = new DaemonPtyAdapter({
+          protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+          socketPath,
+          tokenPath,
+          historyPath: historyDir
+        })
         const first = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
         expect(first.coldRestore?.scrollback).toContain('pre-restart history')
         const checkpoint = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
@@ -127,7 +136,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         await waitFor(() => checkpoint.mock.calls.length === 1)
         historyAdapter.dispose()
 
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        historyAdapter = new DaemonPtyAdapter({
+          protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+          socketPath,
+          tokenPath,
+          historyPath: historyDir
+        })
         const second = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
         const shown = second.snapshot ?? second.coldRestore?.scrollback ?? ''
         expect(shown).toContain('pre-restart history')
@@ -140,7 +154,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('re-anchors and resumes history after attach-only adoption', async () => {
       const sessionId = 'attach-only-history-adoption'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
-      const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const first = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const firstData: string[] = []
       first.onData(({ data }) => firstData.push(data))
       await first.spawn({ cols: 80, rows: 24, cwd: '/home/user', sessionId })
@@ -160,7 +179,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         JSON.parse(readFileSync(join(sessionDir, 'checkpoint.json'), 'utf8')).snapshotAnsi
       ).toContain('BASELINE-BEFORE-RESTART')
 
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const attachedData: string[] = []
       historyAdapter.onData(({ data }) => attachedData.push(data))
       await historyAdapter.attach(sessionId)
@@ -200,11 +224,21 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('does not route an exact incarnation that exits during attach history overlay', async () => {
       const sessionId = 'attach-overlay-exit-race'
-      const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const first = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const initial = await first.spawn({ cols: 80, rows: 24, sessionId })
       await first.disconnectOnly()
 
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const overlayTarget = historyAdapter as unknown as {
         overlayDurableRestoreSnapshot(
           id: string,
@@ -271,7 +305,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'raced output\r\n')
 
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const client = (
         historyAdapter as unknown as {
           client: { request: (type: string, payload?: unknown) => Promise<unknown> }
@@ -333,7 +372,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'probeless output\r\n')
 
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const client = (
         historyAdapter as unknown as {
           client: { request: (type: string, payload?: unknown) => Promise<unknown> }
@@ -377,7 +421,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'recovered marker\r\n')
       subprocessDataOnSubscribe = 'fresh shell output\r\n'
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(result.coldRestore?.scrollback).toContain('recovered marker')
 
@@ -412,7 +461,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'recovered marker\r\n')
 
-      const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const first = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const originalWriteSync = HeadlessEmulator.prototype.writeSync
       const writeSyncSpy = vi
         .spyOn(HeadlessEmulator.prototype, 'writeSync')
@@ -424,7 +478,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         lastSubprocess._simulateData('fresh-only output\r\n')
         await first.disconnectOnly()
 
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        historyAdapter = new DaemonPtyAdapter({
+          protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+          socketPath,
+          tokenPath,
+          historyPath: historyDir
+        })
         const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
         expect(result.coldRestore?.scrollback).toContain('recovered marker')
         const internals = historyAdapter as unknown as {
@@ -459,7 +518,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'recovered marker\r\n')
 
-      const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const first = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
       const originalWriteSync = HeadlessEmulator.prototype.writeSync
       const writeSyncSpy = vi
         .spyOn(HeadlessEmulator.prototype, 'writeSync')
@@ -471,7 +535,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         lastSubprocess._simulateData('fresh-only output\r\n')
         await first.disconnectOnly()
 
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        historyAdapter = new DaemonPtyAdapter({
+          protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+          socketPath,
+          tokenPath,
+          historyPath: historyDir
+        })
         await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
         await historyAdapter.shutdown(sessionId, { immediate: true, keepHistory: true })
 

@@ -5,6 +5,7 @@ import type { SubprocessHandle } from '../sessions/session-subprocess-handle'
 import type { TakePendingOutputResult } from '../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
 import type { TerminalSpawnGate } from '../admission/terminal-spawn-gate'
+import type { TerminalHistoryJournals } from '../history/journal/terminal-history-journals'
 
 export type TerminalHostOptions = {
   spawnSubprocess: (opts: {
@@ -38,6 +39,8 @@ export type TerminalHostOptions = {
   ) => void
   /** Charged only on the branch that forks; attach and adoption never reach it. */
   spawnGate?: TerminalSpawnGate
+  /** The host-local history owner; absent hosts leave history to their client. */
+  historyJournals?: TerminalHistoryJournals
   // Allow deterministic eviction tests without creating thousands of sessions.
   maxTombstones?: number
 }

@@ -30,6 +30,9 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     kittyKeyboardFlags?: number
     terminalOwner?: 'shell'
   } | null> {
+    if (this.hasHostHistoryAuthority(ptyId)) {
+      return this.serializeProviderTerminalBuffer(ptyId, opts)
+    }
     const restoredSnapshot = await this.serializePreferredRestoredTerminalBuffer(ptyId, opts)
     if (restoredSnapshot) {
       return restoredSnapshot
@@ -54,6 +57,14 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
       (providerSnapshot.data.length > 0 || Boolean(providerSnapshot.scrollbackAnsi))
       ? providerSnapshot
       : rendererSnapshot
+  }
+
+  /**
+   * A host-owned binding's daemon is the first and terminal history source: main and renderer
+   * models are projections, so an unavailable answer stays unavailable.
+   */
+  hasHostHistoryAuthority(ptyId: string): boolean {
+    return this.ptyController?.getTerminalHistoryAuthority?.(ptyId)?.owner === 'host'
   }
 
   protected async serializePreferredRestoredTerminalBuffer(

@@ -344,6 +344,8 @@ export class Session extends SessionProcessInspection {
     }
 
     this.drainStartupOutput()
+    // The final cut is every released byte; disk settlement never delays exit reporting.
+    this.output.finishHistory(code)
     cause = this.initialOutput.resolveExit(code, cause, this.incarnationId)
     this.exitCause = cause
     this._exitCode = code

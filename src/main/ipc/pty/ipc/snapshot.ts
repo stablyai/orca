@@ -51,9 +51,13 @@ export function installPtySnapshotIpcHandlers(deps: {
       const scrollbackRows = normalizeSnapshotScrollbackRows(args.opts?.scrollbackRows)
       try {
         const runtimeSeqBeforeSnapshot = runtime.getPtyOutputSequence(args.id)
-        const providerSnapshotRequired = providerSnapshotRequiredPtys.has(args.id)
+        const provider = tryGetProviderForPty(args.id)
+        // A host-owned binding answers its own history; main's model never substitutes for it.
+        const providerSnapshotRequired =
+          providerSnapshotRequiredPtys.has(args.id) ||
+          provider?.getTerminalHistoryAuthority?.(args.id)?.owner === 'host'
         const providerSnapshot = providerSnapshotRequired
-          ? await tryGetProviderForPty(args.id)?.getBufferSnapshot?.(args.id, {
+          ? await provider?.getBufferSnapshot?.(args.id, {
               scrollbackRows
             })
           : null

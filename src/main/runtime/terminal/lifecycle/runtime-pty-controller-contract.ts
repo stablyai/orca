@@ -25,7 +25,10 @@ import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle
 import type { PtyBindingSourceExpectation } from '../../../persistence/loading-store/store'
 import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type {
+  PtyProviderBufferSnapshot,
+  TerminalHistoryAuthority
+} from '../../../providers/pty-provider-contract'
 import type { PtyProcessInfo } from '../../../providers/pty-process-info'
 import type { PtySpawnResult } from '../../../providers/pty-spawn-result'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
@@ -216,6 +219,8 @@ export type RuntimePtyController = {
     ptyId: string,
     opts?: { scrollbackRows?: number }
   ): Promise<PtyProviderBufferSnapshot | null>
+  /** Set for a host-owned binding: its provider read is first and terminal, null is unavailable. */
+  getTerminalHistoryAuthority?(ptyId: string): TerminalHistoryAuthority | undefined
   // Probe renderer authority before hydration (docs/mobile-prefer-renderer-scrollback.md).
   hasRendererSerializer?(ptyId: string): boolean
   getRendererSerializerGeneration?(ptyId: string): number

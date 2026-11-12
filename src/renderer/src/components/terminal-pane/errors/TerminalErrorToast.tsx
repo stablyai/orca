@@ -3,7 +3,7 @@ import {
   shouldOfferDaemonRestart,
   isExplainedTerminalError,
   isRemoteTerminalClosedError,
-  isPaneOwnerRecoveryError,
+  isReattachRetryError,
   isFolderWorkspacePathOnlyError,
   humanizeTerminalError
 } from './terminal-error-display'
@@ -49,7 +49,7 @@ export function TerminalErrorToast({
   const ssh = isSshSignInRequiredTerminalError(error) || isSshReconnectOwnedTerminalError(error)
   // Why: the client's OS and shell describe neither the host nor its shell, and the renderer knows neither.
   const showClientEnvironment = paneOnClient && !ssh
-  const paneOwnerUnverified = isPaneOwnerRecoveryError(error)
+  const paneOwnerUnverified = isReattachRetryError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
   // Restart cannot recover a session after its owning daemon exits.
   const showIssueLink =

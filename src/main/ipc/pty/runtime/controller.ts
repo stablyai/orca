@@ -1,6 +1,11 @@
 import { adoptMaterializedRuntimePtySpawn } from './spawn-early'
 import { createRuntimePtySpawnState } from './spawn-state'
-import { getProviderForPty, hasPtyProviderForInspection, localProvider } from '../provider/registry'
+import {
+  getProviderForPty,
+  hasPtyProviderForInspection,
+  localProvider,
+  tryGetProviderForPty
+} from '../provider/registry'
 import {
   getLocalAutomaticWorkStatus,
   localTerminalLimit,
@@ -112,6 +117,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     },
     serializeProviderBuffer: (ptyId, opts) =>
       serializeProviderBufferFromRuntimeController(ptyId, opts),
+    getTerminalHistoryAuthority: (ptyId) =>
+      tryGetProviderForPty(ptyId)?.getTerminalHistoryAuthority?.(ptyId),
     hasRendererSerializer: (ptyId) => hasRendererSerializerFromRuntimeController(ptyId),
     getRendererSerializerGeneration: (ptyId) =>
       getRendererSerializerGenerationFromRuntimeController(ptyId),

@@ -21,6 +21,7 @@ import type { AgentStatus } from '../../../../shared/agent-status/title/agent-ti
 
 export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged {
   protected abstract readCaughtUpRuledScreen(ptyId: string): RuledScreen | null
+  abstract hasHostHistoryAuthority(ptyId: string): boolean
   protected abstract serializePreferredRestoredTerminalBuffer(
     ptyId: string,
     opts?: { scrollbackRows?: number }
@@ -99,6 +100,9 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     pendingEscapeTailAnsi?: string
     terminalOwner?: 'shell'
   } | null> {
+    if (this.hasHostHistoryAuthority(ptyId)) {
+      return this.serializeProviderTerminalBuffer(ptyId, opts)
+    }
     return this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
   }
 
@@ -120,6 +124,9 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     pendingEscapeTailAnsi?: string
     terminalOwner?: 'shell'
   } | null> {
+    if (this.hasHostHistoryAuthority(ptyId)) {
+      return this.serializeProviderTerminalBuffer(ptyId, opts)
+    }
     const restoredSnapshot = await this.serializePreferredRestoredTerminalBuffer(ptyId, opts)
     if (restoredSnapshot) {
       return restoredSnapshot

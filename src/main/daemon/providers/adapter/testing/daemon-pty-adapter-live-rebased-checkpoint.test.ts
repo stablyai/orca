@@ -12,6 +12,7 @@ import { getHistorySessionDirName } from '../../../history/storage/history-paths
 import { HistoryReader } from '../../../history/restoration/history-reader'
 import { readTerminalHistoryCheckpoint } from '../../../history/restoration/terminal-history-checkpoint-reader'
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
+import { LEGACY_HISTORY_PROTOCOL_VERSION } from './daemon-pty-adapter-test-harness'
 
 const DEAD_TUI_MODES = ['\x1b[?1049h', '\x1b[?1003h', '\x1b[?1006h']
 
@@ -40,10 +41,13 @@ describe('DaemonPtyAdapter checkpoints rebased on live', () => {
   let lastSubprocess: ReturnType<typeof createMockSubprocess>
 
   beforeEach(async () => {
-    const harness = await startDaemonAdapterHarness(() => {
-      lastSubprocess = createMockSubprocess()
-      return lastSubprocess
-    })
+    const harness = await startDaemonAdapterHarness(
+      () => {
+        lastSubprocess = createMockSubprocess()
+        return lastSubprocess
+      },
+      { protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION }
+    )
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -73,7 +77,12 @@ describe('DaemonPtyAdapter checkpoints rebased on live', () => {
       dead.dispose()
     }
 
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
     const spawned = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId, cwd: '/tmp' })
     expect(spawned.coldRestore).toBeDefined()
 
@@ -95,7 +104,12 @@ describe('DaemonPtyAdapter checkpoints rebased on live', () => {
     expectNoDeadTuiModes(checkpoint.checkpoint.snapshotAnsi)
 
     await historyAdapter.disconnectOnly()
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
     const reattach = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId, cwd: '/tmp' })
     expect(reattach.isReattach).toBe(true)
     expect(reattach.isAlternateScreen).toBe(false)
@@ -123,7 +137,12 @@ describe('DaemonPtyAdapter checkpoints rebased on live', () => {
       dead.dispose()
     }
 
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
     const spawned = await historyAdapter.spawn({
       cols: size.cols,
       rows: size.rows,
@@ -156,7 +175,12 @@ describe('DaemonPtyAdapter checkpoints rebased on live', () => {
   })
 
   it('bounds a rebased remount snapshot to the requested scrollback rows', async () => {
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
     const { id } = await historyAdapter.spawn({
       cols: 80,
       rows: 24,
@@ -178,7 +202,12 @@ describe('DaemonPtyAdapter checkpoints rebased on live', () => {
 
   it('persists held teardown bytes once, from the drained records', async () => {
     const sessionId = 'held-tail'
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    historyAdapter = new DaemonPtyAdapter({
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+      socketPath,
+      tokenPath,
+      historyPath: historyDir
+    })
     const manager = historyAdapter.getHistoryManager()!
     await manager.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
     const base = numberedLines(1, 3_000)

@@ -44,7 +44,8 @@ async function main(): Promise<void> {
     spawnerExecPath,
     loginSessionWatch,
     freshDaemonScope,
-    logFilePath
+    logFilePath,
+    historyRoot
   } = parseArgs(process.argv.slice(2))
   const startedAtMs = Date.now() - process.uptime() * 1000
   // Keep the extracted AppImage generation alive after its launcher exits.
@@ -176,6 +177,7 @@ async function main(): Promise<void> {
   daemon = await startDaemon({
     socketPath,
     tokenPath,
+    ...(historyRoot ? { historyRoot } : {}),
     ...(pidPath ? { pidPath } : {}),
     ...(launchNonce ? { launchNonce } : {}),
     ...(pidPath ? { startedAtMs } : {}),

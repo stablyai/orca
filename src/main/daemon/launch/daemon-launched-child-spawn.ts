@@ -1,4 +1,5 @@
 import { forkProcess, type ForkSpec } from '@orca/process-host/fork-process'
+import { join } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import type { ChildProcess } from 'node:child_process'
 import { getAppEnvironment } from '../../../shared/app-environment'
@@ -51,7 +52,8 @@ export function buildDaemonScriptArgs(
     entryPath,
     appImage,
     extractedGeneration,
-    macosLoginSessionWatch
+    macosLoginSessionWatch,
+    userDataPath
   } = options
   return [
     '--socket',
@@ -69,6 +71,9 @@ export function buildDaemonScriptArgs(
     getAppEnvironment().getVersion(),
     '--spawner-exec-path',
     spawnerExecPath,
+    // The launching host's own root, shared with its readers and prior-stable daemons.
+    '--history-root',
+    join(userDataPath, 'terminal-history'),
     ...(macosLoginSessionWatch ? ['--login-session-watch'] : []),
     ...(options.spawnAdmission === 'enforce' ? [TERMINAL_SPAWN_ADMISSION_ARG, 'enforce'] : []),
     ...daemonLogArgs()

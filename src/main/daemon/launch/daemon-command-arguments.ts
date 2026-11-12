@@ -10,6 +10,8 @@ export type ParsedDaemonArgs = {
   loginSessionWatch?: boolean
   freshDaemonScope?: boolean
   logFilePath?: string
+  /** Host-local terminal history root this daemon owns; never a client host's path. */
+  historyRoot?: string
 }
 
 export function parseArgs(argv: string[]): ParsedDaemonArgs {
@@ -23,6 +25,7 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
   let spawnerExecPath = ''
   let loginSessionWatch = false
   let freshDaemonScope = false
+  let historyRoot = ''
 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--socket' && argv[i + 1]) {
@@ -49,6 +52,9 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     } else if (argv[i] === '--spawner-exec-path' && argv[i + 1]) {
       spawnerExecPath = argv[i + 1]
       i++
+    } else if (argv[i] === '--history-root' && argv[i + 1]) {
+      historyRoot = argv[i + 1]
+      i++
     } else if (argv[i] === '--login-session-watch') {
       loginSessionWatch = true
     } else if (argv[i] === '--fresh-daemon-scope') {
@@ -73,6 +79,7 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     ...(spawnerExecPath ? { spawnerExecPath } : {}),
     ...(loginSessionWatch ? { loginSessionWatch } : {}),
     ...(freshDaemonScope ? { freshDaemonScope } : {}),
-    ...(logFilePath ? { logFilePath } : {})
+    ...(logFilePath ? { logFilePath } : {}),
+    ...(historyRoot ? { historyRoot } : {})
   }
 }
