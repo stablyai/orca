@@ -147,6 +147,78 @@ describe('sortRows', () => {
 })
 
 describe('groupRows', () => {
+  it.each<{
+    field: GitHubProjectField
+    blank: GitHubProjectRow['fieldValuesByFieldId'][string]
+    populated: GitHubProjectRow['fieldValuesByFieldId'][string]
+  }>([
+    {
+      field: singleSelectField,
+      blank: {
+        kind: 'single-select',
+        fieldId: 'F_status',
+        optionId: 'opt_a',
+        name: ' ',
+        color: 'GRAY'
+      },
+      populated: {
+        kind: 'single-select',
+        fieldId: 'F_status',
+        optionId: 'opt_a',
+        name: 'Todo',
+        color: 'GRAY'
+      }
+    },
+    {
+      field: {
+        kind: 'iteration',
+        id: 'F_iteration',
+        name: 'Iteration',
+        dataType: 'ITERATION',
+        iterations: []
+      },
+      blank: {
+        kind: 'iteration',
+        fieldId: 'F_iteration',
+        iterationId: 'iter_1',
+        title: ' ',
+        startDate: '2026-01-01',
+        duration: 14
+      },
+      populated: {
+        kind: 'iteration',
+        fieldId: 'F_iteration',
+        iterationId: 'iter_1',
+        title: 'Sprint 1',
+        startDate: '2026-01-01',
+        duration: 14
+      }
+    }
+  ])(
+    'groups blank $field.kind with missing values and sorts both last',
+    ({ field, blank, populated }) => {
+      const rows = [
+        makeRow('blank', 0, { [field.id]: blank }),
+        makeRow('populated', 1, { [field.id]: populated }),
+        makeRow('missing', 2, {})
+      ]
+      for (const direction of ['ASC', 'DESC'] as const) {
+        const view = { ...makeView(field, { field, direction }), groupByFields: [field] }
+        const table = makeTable(view, rows)
+        expect(sortRows(table, rows).map((row) => row.id)).toEqual([
+          'populated',
+          'blank',
+          'missing'
+        ])
+        expect(
+          groupRows(table, rows)
+            .at(-1)
+            ?.rows.map((row) => row.id)
+        ).toEqual(['blank', 'missing'])
+      }
+    }
+  )
+
   it('groups a present-but-empty user list with the missing-value rows', () => {
     const view = { ...makeView(assigneesField), groupByFields: [assigneesField] }
     const rows = [
