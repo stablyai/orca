@@ -21,6 +21,7 @@ import {
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
 import { readAntigravitySignInLine } from './antigravity-sign-in-url'
+import { antigravityChatRulesMeta } from './antigravity-chat-rules'
 import {
   AGY_SKIP_PERMISSIONS_FLAG,
   ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION,
@@ -74,6 +75,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   privateTempDirectory: true,
   // `session/load` replays the whole conversation, which the chat already holds.
   resumePreference: 'resume',
+  resolveSessionMeta: antigravityChatRulesMeta,
   launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
@@ -111,6 +113,7 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
   installDirectories: ({ homePath }) => [join(homePath, '.local', 'bin')],
   managedRuntime: undefined,
+  resolveSessionMeta: undefined,
   // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
   permissionModeConfig: {
     values: { ask: 'default', 'accept-edits': 'accept-edits', 'full-access': 'default' },
