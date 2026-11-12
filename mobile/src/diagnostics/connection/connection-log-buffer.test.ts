@@ -7,6 +7,65 @@ function entry(id: number): ConnectionLogEntry {
 }
 
 describe('connection log buffer', () => {
+  it('clears retained history without a pending hydration restoring it', async () => {
+    let resolveLoad: (entries: readonly ConnectionLogEntry[]) => void = () => {}
+    let persisted: readonly ConnectionLogEntry[] = [entry(1)]
+    const store = createConnectionLogStore(3, {
+      load: () =>
+        new Promise((resolve) => {
+          resolveLoad = resolve
+        }),
+      save: async (_hostId, entries) => {
+        persisted = entries
+      }
+    })
+    const hydration = store.hydrate('host-a')
+    store.append('host-a', entry(2))
+
+    await store.clear('host-a')
+    resolveLoad([entry(1)])
+    await hydration
+    await store.flush()
+
+    expect(store.get('host-a')).toEqual([])
+    expect(persisted).toEqual([])
+  })
+
+  it('clears history after an older in-flight save finishes', async () => {
+    let finishSave: () => void = () => {}
+    let markSaveStarted: () => void = () => {}
+    const saveStarted = new Promise<void>((resolve) => {
+      markSaveStarted = resolve
+    })
+    let persisted: readonly ConnectionLogEntry[] = []
+    let holdNextSave = false
+    const store = createConnectionLogStore(3, {
+      load: async () => [],
+      save: async (_hostId, entries) => {
+        if (holdNextSave) {
+          holdNextSave = false
+          markSaveStarted()
+          await new Promise<void>((resolve) => {
+            finishSave = resolve
+          })
+        }
+        persisted = entries
+      }
+    })
+    await store.hydrate('host-a')
+    await store.flush()
+    holdNextSave = true
+    store.append('host-a', entry(1))
+    await saveStarted
+
+    const cleared = store.clear('host-a')
+    finishSave()
+    await cleared
+
+    expect(store.get('host-a')).toEqual([])
+    expect(persisted).toEqual([])
+  })
+
   it('redacts credentials before retaining or persisting an event', async () => {
     const save = vi.fn(async () => {})
     const store = createConnectionLogStore(3, {

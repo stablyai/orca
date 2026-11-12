@@ -8,6 +8,7 @@ const PERSISTENCE_RETRY_DELAY_MS = 200
 
 export type ConnectionLogStore = {
   append: (hostId: string, entry: ConnectionLogEntry) => void
+  clear: (hostId: string) => Promise<void>
   flush: () => Promise<void>
   get: (hostId: string) => readonly ConnectionLogEntry[]
   hydrate: (hostId: string) => Promise<void>
@@ -133,6 +134,9 @@ export function createConnectionLogStore(
     const pending = persistence
       .load(hostId)
       .then((stored) => {
+        if (hydratedHosts.has(hostId)) {
+          return
+        }
         const live = entriesByHost.get(hostId) ?? []
         const seen = new Set<string>()
         const merged: ConnectionLogEntry[] = []
@@ -174,6 +178,14 @@ export function createConnectionLogStore(
       void hydrateHost(hostId, false)
         .then(() => persist(hostId))
         .catch(() => {})
+    },
+
+    async clear(hostId) {
+      entriesByHost.delete(hostId)
+      hydratedHosts.add(hostId)
+      hydrationFailedHosts.delete(hostId)
+      notify(hostId)
+      await flushHost(hostId)
     },
 
     flush: async () => {
