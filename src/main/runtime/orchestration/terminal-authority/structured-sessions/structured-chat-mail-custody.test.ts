@@ -12,6 +12,7 @@ import { agentSessionRefusalNotice } from '../../../../../shared/agent-session/f
 import { agentSessionWriteKindForMethod } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { nextStructuredQueuedMessage } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-gate'
 import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { structuredSessionPointerCallerKey } from '../../mailbox/structured-pointer/structured-mailbox-pointer-host'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
 import {
   COORDINATOR,
@@ -169,7 +170,17 @@ describe('a queued mail card runs only while its chat still owes it', () => {
           }
         )
       ).toMatchObject({ status: 'held' })
-      vi.spyOn(runtime, 'withdrawStaleChatMail').mockImplementation(() => {})
+      const deleteCard = host.queuedMessageDelete
+      vi.spyOn(host, 'queuedMessageDelete').mockImplementation((caller, params) => {
+        if (
+          caller.callerKey === structuredSessionPointerCallerKey(COORDINATOR) &&
+          params.envelope.sessionId === COORDINATOR &&
+          params.messageId === card!.messageId
+        ) {
+          return Promise.reject(new Error('cleanup unavailable'))
+        }
+        return deleteCard(caller, params)
+      })
       // A check takes the report while its card still waits.
       expect(await call('orchestration.check', {}, { sessionId: COORDINATOR })).toMatchObject({
         runId,
