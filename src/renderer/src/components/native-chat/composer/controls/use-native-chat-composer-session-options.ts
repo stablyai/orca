@@ -16,6 +16,7 @@ type ComposerSessionOptionsArgs = Pick<
   | 'onSubmitted'
   | 'onSwitchToTerminal'
   | 'readTerminalScreen'
+  | 'transcriptMessages'
   | 'structuredTransport'
 > &
   Pick<Parameters<typeof useNativeChatSessionOptionCommand>[0], 'disabled' | 'resolveTarget'>
@@ -30,6 +31,7 @@ export function useNativeChatComposerSessionOptions({
   targetPtyId,
   onSwitchToTerminal,
   readTerminalScreen,
+  transcriptMessages,
   paneKey,
   structuredTransport
 }: ComposerSessionOptionsArgs): {
@@ -52,6 +54,7 @@ export function useNativeChatComposerSessionOptions({
     dispatchCommand: dispatch,
     onAgentPicker: onSwitchToTerminal,
     readTerminalScreen,
+    transcriptMessages,
     paneKey
   })
   return {

@@ -7,6 +7,7 @@ import type { NativeChatStructuredComposerTransport } from './submit/native-chat
 import type { NativeChatComposerNotice } from './controls/native-chat-composer-notice'
 import type { NativeChatRecallSource } from '../drafts/native-chat-sent-prompt-history'
 import type { OrchestrationAgentReference } from '../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 
 export type NativeChatComposerProps = {
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
@@ -50,6 +51,8 @@ export type NativeChatComposerProps = {
   onSwitchToTerminal?: () => void
   /** Reads the hosted TUI's current rendered screen when chat is entered. */
   readTerminalScreen?: () => string | null
+  /** Current conversation only; model metadata is a display fallback, not a session selection. */
+  transcriptMessages?: readonly NativeChatMessage[]
   /** The tab's launch seed as this pane sees it. */
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */

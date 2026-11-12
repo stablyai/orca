@@ -53,6 +53,7 @@ function withPendingValue(
     return {
       ...descriptor,
       valueSource: 'dispatched',
+      reportedModel: undefined,
       kind: { ...kind, currentValue: pending.value }
     }
   }

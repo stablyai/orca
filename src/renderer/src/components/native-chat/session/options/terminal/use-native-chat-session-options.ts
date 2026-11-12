@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
+import { isRootAgentJournalItem } from '../../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
 import { matchNativeChatCatalogModelId } from '../../../../../../../shared/native-chat/input/native-chat-session-option-state'
 import type { SessionOptionDescriptor } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
@@ -36,6 +38,7 @@ export function useNativeChatSessionOptions(args: {
   dispatchCommand: NativeChatSessionOptionDispatchCommand
   onAgentPicker?: () => void
   readTerminalScreen?: () => string | null
+  transcriptMessages?: readonly NativeChatMessage[]
   /** OMP model evidence comes from its hook; Claude uses its terminal frame. */
   paneKey?: string
 }): {
@@ -49,6 +52,7 @@ export function useNativeChatSessionOptions(args: {
     dispatchCommand,
     onAgentPicker,
     readTerminalScreen,
+    transcriptMessages,
     paneKey
   } = args
   const reportedModel = useAppStore((state) =>
@@ -220,5 +224,32 @@ export function useNativeChatSessionOptions(args: {
     surface?.getSnapshot ?? getEmptySnapshot,
     surface?.getSnapshot ?? getEmptySnapshot
   )
-  return { surface, snapshot }
+  const shownSnapshot = useMemo(() => {
+    const transcriptModel =
+      agent === 'claude'
+        ? transcriptMessages
+            ?.findLast((message) => {
+              const model = message.model?.trim()
+              return (
+                message.role === 'assistant' &&
+                message.source === 'transcript' &&
+                !message.agentStart &&
+                isRootAgentJournalItem(message) &&
+                Boolean(model) &&
+                model !== '<synthetic>'
+              )
+            })
+            ?.model?.trim()
+        : undefined
+    if (!transcriptModel) {
+      return snapshot
+    }
+    // History names the last response, never the accepted model or its effort menu.
+    return snapshot.map((descriptor) =>
+      descriptor.id === 'model' && descriptor.valueSource === 'unknown' && !descriptor.reportedModel
+        ? { ...descriptor, reportedModel: transcriptModel }
+        : descriptor
+    )
+  }, [agent, snapshot, transcriptMessages])
+  return { surface, snapshot: shownSnapshot }
 }
