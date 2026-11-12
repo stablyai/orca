@@ -30,7 +30,7 @@ describe('empty-check hint candidates', () => {
     expect(plans).not.toContain('SEARCH d USING INDEX idx_dispatch_run_status (run_id=?)')
     expect(plans).toEqual(
       expect.arrayContaining([
-        expect.stringContaining('idx_worker_dispatches_agent_terminal_handle'),
+        expect.stringContaining('idx_dispatch_contexts_run'),
         'SEARCH d USING INDEX sqlite_autoindex_dispatch_contexts_1 (id=?)'
       ])
     )
