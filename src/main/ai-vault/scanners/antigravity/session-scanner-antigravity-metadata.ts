@@ -1,4 +1,4 @@
-import { parseJsonObject } from '../../session-scanner-values'
+import { parseJsonObject } from '../../parsing/session-json-object'
 
 export const ANTIGRAVITY_INDEX_MAX_BYTES = 4 * 1024 * 1024
 const MAX_INDEX_ENTRIES = 10_000

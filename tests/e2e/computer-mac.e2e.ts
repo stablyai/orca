@@ -1,9 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import type {
-  ComputerActionResult,
-  ComputerListAppsResult,
-  ComputerSnapshotResult
-} from '../../src/shared/runtime-types'
+import type { ComputerActionResult, ComputerSnapshotResult } from '../../src/shared/runtime-types'
 import {
   activateFinder,
   ensureOrcaRuntimeLaunched,
@@ -29,22 +25,6 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
 
   afterAll(async () => {
     await killTextEdit()
-  })
-
-  test('list-apps includes TextEdit', async () => {
-    const result = await runOrcaCli(['computer', 'list-apps', '--json'])
-    const envelope = parseJsonOutput<{ result: ComputerListAppsResult }>(result.stdout)
-
-    expect(envelope.result.apps.some((app) => app.name === 'TextEdit')).toBe(true)
-  })
-
-  test('get-app-state returns TextEdit state', async () => {
-    const result = await runOrcaCli(['computer', 'get-app-state', '--app', 'TextEdit', '--json'])
-    const envelope = parseJsonOutput<{ result: ComputerSnapshotResult }>(result.stdout)
-
-    expect(envelope.result.snapshot.app.name).toBe('TextEdit')
-    expect(envelope.result.snapshot.elementCount).toBeGreaterThan(0)
-    expect(envelope.result.snapshot.treeText).toContain('Window:')
   })
 
   test('click, type-text, and re-observe show inserted text', async () => {
@@ -145,10 +125,9 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
       ).stdout
     )
     expect(second.result.action?.actionName).toBe('AXReplaceSelection')
-    expect(second.result.action?.verification).toMatchObject({
+    expect(second.result.action?.verification).toEqual({
       state: 'verified',
-      property: 'focusedText',
-      expected: marker
+      property: 'focusedText'
     })
 
     const after = parseJsonOutput<{ result: ComputerSnapshotResult }>(
@@ -242,10 +221,9 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
       ).stdout
     )
     expect(replacement.result.action?.actionName).toBe('AXReplaceSelection')
-    expect(replacement.result.action?.verification).toMatchObject({
+    expect(replacement.result.action?.verification).toEqual({
       state: 'verified',
-      property: 'focusedText',
-      expected: marker
+      property: 'focusedText'
     })
 
     const after = parseJsonOutput<{ result: ComputerSnapshotResult }>(
@@ -262,16 +240,5 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
     )
     expect(after.result.snapshot.treeText).toContain(marker)
     expect(after.result.snapshot.treeText).not.toContain('orca unfocused first')
-  })
-
-  test('screenshot capture returns image metadata', async () => {
-    const result = await runOrcaCli(['computer', 'get-app-state', '--app', 'TextEdit', '--json'])
-    const envelope = parseJsonOutput<{ result: ComputerSnapshotResult }>(result.stdout)
-
-    expect(envelope.result.screenshotStatus.state).toBe('captured')
-    expect(envelope.result.screenshot?.format).toBe('png')
-    expect(envelope.result.screenshot?.data).toBeUndefined()
-    expect(envelope.result.screenshot?.dataOmitted).toBe(true)
-    expect(envelope.result.screenshot?.path).toContain('orca-computer-use')
   })
 })

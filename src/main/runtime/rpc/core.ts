@@ -1,4 +1,4 @@
-import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
+import type { RuntimeClientCapabilities } from './callers/runtime-client-capabilities'
 import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -21,11 +21,11 @@ import type {
 } from '../../../shared/delegated-mobile-device-contract'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
-import type { RpcCallerIdentity } from './rpc-caller-identity'
+import type { RpcCallerIdentity } from './callers/rpc-caller-identity'
 import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktops-contract'
-import type { RpcBinarySender } from './rpc-binary-sender'
-import type { RpcMethodPermission } from './rpc-method-permission'
-import type { OrcadFeatureRequirement } from './orcad-feature-readiness'
+import type { RpcBinarySender } from './transports/rpc-binary-sender'
+import type { RpcMethodPermission } from './callers/rpc-method-permission'
+import type { OrcadFeatureRequirement } from './startup/orcad-readiness'
 import {
   runsOrchestrationAccessCheck,
   type OrchestrationMethodAccessDeclaration

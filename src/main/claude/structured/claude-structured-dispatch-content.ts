@@ -13,7 +13,12 @@ import {
   type AgentJournalDispatchRejection
 } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
-import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../shared/agent-session/agent-session-attachments'
+import {
+  AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
+  AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
+} from '../../../shared/agent-session/agent-session-attachments'
+import { agentInlineImageMimeType } from '../../../shared/agent-inline-image-types'
 import { claudeRecord } from './journal/claude-structured-item-translation'
 
 export class ClaudeDispatchContentError extends Error {
@@ -52,10 +57,6 @@ export function claudeDispatchContentRejection(error: unknown): AgentJournalDisp
   return claudeDispatchRejection(agentSessionFailureFact('attachmentUnreadable'))
 }
 
-// Claude shrinks every image before the API sees it, so these bound host memory, not API limits.
-const MAX_IMAGE_BYTES = AGENT_SESSION_ATTACHMENT_MAX_BYTES
-const MAX_IMAGE_COUNT = 20
-const MAX_TOTAL_IMAGE_BYTES = 64 * 1024 * 1024
 const MAX_REPLAY_CONTENT_KEY_BYTES = 256
 
 type ImageBudget = {
@@ -63,19 +64,23 @@ type ImageBudget = {
   localBytes: number
 }
 
-export async function readClaudeImage(path: string, openImpl: typeof open = open): Promise<Buffer> {
+export async function readClaudeImage(
+  path: string,
+  maxBytes = AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  openImpl: typeof open = open
+): Promise<Buffer> {
   const file = await openImpl(path, 'r')
   try {
     const tooLarge = (): Error =>
-      attachmentError(`Claude image must be no larger than ${MAX_IMAGE_BYTES} bytes`, {
+      attachmentError(`Claude image must be no larger than ${maxBytes} bytes`, {
         reason: 'tooLarge',
-        limit: MAX_IMAGE_BYTES
+        limit: maxBytes
       })
     const info = await file.stat()
     if (!info.isFile()) {
       throw attachmentError('Claude image must be a file', { reason: 'notAFile' })
     }
-    if (info.size > MAX_IMAGE_BYTES) {
+    if (info.size > maxBytes) {
       throw tooLarge()
     }
     const buffer = Buffer.allocUnsafe(info.size + 1)
@@ -89,7 +94,7 @@ export async function readClaudeImage(path: string, openImpl: typeof open = open
     }
     // A file can grow after EOF; verify the open descriptor still matches the bytes read.
     const finalInfo = await file.stat()
-    if (bytesRead > MAX_IMAGE_BYTES) {
+    if (bytesRead > maxBytes) {
       throw tooLarge()
     }
     if (finalInfo.size !== bytesRead) {
@@ -104,24 +109,19 @@ export async function readClaudeImage(path: string, openImpl: typeof open = open
   }
 }
 
-const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
-  '.gif': 'image/gif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp'
-}
-
 async function imageContent(
   block: Extract<NativeChatBlock, { type: 'image-ref' }>,
   budget: ImageBudget
 ): Promise<unknown> {
   budget.count += 1
-  if (budget.count > MAX_IMAGE_COUNT) {
-    throw attachmentError(`Claude messages support at most ${MAX_IMAGE_COUNT} images`, {
-      reason: 'tooMany',
-      limit: MAX_IMAGE_COUNT
-    })
+  if (budget.count > AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
+    throw attachmentError(
+      `Claude messages support at most ${AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT} images`,
+      {
+        reason: 'tooMany',
+        limit: AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT
+      }
+    )
   }
   if (block.url) {
     return { type: 'image', source: { type: 'url', url: block.url } }
@@ -131,13 +131,16 @@ async function imageContent(
   }
   const data = await readClaudeImage(block.path)
   budget.localBytes += data.byteLength
-  if (budget.localBytes > MAX_TOTAL_IMAGE_BYTES) {
-    throw attachmentError(`Claude images must total no more than ${MAX_TOTAL_IMAGE_BYTES} bytes`, {
-      reason: 'totalTooLarge',
-      limit: MAX_TOTAL_IMAGE_BYTES
-    })
+  if (budget.localBytes > AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES) {
+    throw attachmentError(
+      `Claude images must total no more than ${AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES} bytes`,
+      {
+        reason: 'totalTooLarge',
+        limit: AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
+      }
+    )
   }
-  const mediaType = IMAGE_MIME_BY_EXTENSION[extname(block.path).toLowerCase()]
+  const mediaType = agentInlineImageMimeType(block.path)
   if (!mediaType) {
     throw attachmentError(`Claude does not support the image type ${extname(block.path)}`, {
       reason: 'unsupportedType'

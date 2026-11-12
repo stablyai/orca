@@ -8,12 +8,10 @@ import {
 } from '../../shared/native-chat/native-chat-types'
 import type { AgentSessionTokenUsage } from '../../shared/agent-session/agent-session-context-usage'
 import { buildImageDataUri } from '../../shared/file-preview/image-data-uri'
-import {
-  asRecord,
-  extractString,
-  parseJsonObject,
-  timestampMs
-} from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import { extractString } from '../../shared/trimmed-string'
+import { parseJsonObject } from '../ai-vault/parsing/session-json-object'
+import { timestampMs } from '../ai-vault/parsing/session-record-time'
 import { toolResultOutput } from './transcript-record-blocks'
 
 export function decodeOmpTranscriptLine(

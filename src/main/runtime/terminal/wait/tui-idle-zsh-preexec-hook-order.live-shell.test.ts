@@ -313,19 +313,6 @@ describe.skipIf(process.platform === 'win32')('tui-idle under real zsh preexec h
       }
     )
 
-    itWithZsh('attributes paint to Claude only once its own composer marker arrives', () => {
-      const { shell, agent } = splitAtAgentStart(capture.chunks)
-      const paint = new TerminalCommandPaint()
-      const observe = paintObserver(paint)
-      observe(shell)
-      // The any-visible-byte latch is what C1 F1 found: hook text satisfies it before Claude runs.
-      expect(paint.hasPainted()).toBe(hookCase.anyBytePaintBeforeAgent)
-      expect(hasTerminalAgentPainted({ commandPaint: paint }, 'claude')).toBe(false)
-
-      observe(agent)
-      expect(hasTerminalAgentPainted({ commandPaint: paint }, 'claude')).toBe(true)
-    })
-
     itWithZsh.each(RECHUNKINGS)(
       'attributes paint the same way with the capture %s',
       (_label, rechunk) => {

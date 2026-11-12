@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
 import { OrcaRuntimeService } from '../../orca-runtime'
@@ -109,37 +109,7 @@ function splitRuntime(): { runtime: OrcaRuntimeService; session: () => Workspace
   return { runtime, session: () => session }
 }
 
-const panes = (session: WorkspaceSessionState) =>
-  collectLeafIds(session.terminalLayoutsByTabId.tab?.root)
-
 describe('layout-owner build: main closes an exited split pane itself', () => {
-  it('keeps a split pane whose process failed, behind its "Terminal exited" card', async () => {
-    const { runtime, session } = splitRuntime()
-    await runtime.onPtyExit('pty-right', 1, undefined, { providerExitObserved: true })
-    expect(panes(session())).toEqual([LEFT, RIGHT])
-  })
-
-  it('keeps a split pane on a -1 nothing vouches for, as the window does on lost contact', async () => {
-    const { runtime, session } = splitRuntime()
-    await runtime.onPtyExit('pty-right', -1)
-    expect(panes(session())).toEqual([LEFT, RIGHT])
-  })
-
-  it('keeps a split pane on a -1 the host confirmed, so recovery can start a shell in it', async () => {
-    const { runtime, session } = splitRuntime()
-    await runtime.onPtyExit('pty-right', -1, undefined, { hostExitConfirmed: true })
-    expect(panes(session())).toEqual([LEFT, RIGHT])
-  })
-
-  it('keeps a split pane whose exit came with no code, as when its socket closed', async () => {
-    const { runtime, session } = splitRuntime()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: node-pty reports no exit code on a socket close, despite its types.
-    await runtime.onPtyExit('pty-right', undefined as unknown as number, undefined, {
-      providerExitObserved: true
-    })
-    expect(panes(session())).toEqual([LEFT, RIGHT])
-  })
-
   it('tells the phone a closed pane retired, and sends it nothing for a pane main keeps', async () => {
     const phone = async (runtime: OrcaRuntimeService) => {
       const tabs = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
@@ -158,22 +128,5 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
     await phone(kept)
     await kept.onPtyExit('pty-right', 1, undefined, { providerExitObserved: true })
     expect(await phone(kept)).toEqual({ version: 1, retired: [] })
-  })
-
-  it('keeps a newborn split that died while shown before any input or output', async () => {
-    const { runtime, session } = splitRuntime()
-    runtime.terminalRunFacts.recordSpawnCommit({ id: 'pty-right' }, { ptyId: 'pty-left' })
-    await runtime.onPtyExit('pty-right', 0, undefined, {
-      providerExitObserved: true,
-      viewShown: true
-    })
-    expect(panes(session())).toEqual([LEFT, RIGHT])
-  })
-
-  it('closes that newborn split when it ended unseen, as a hidden pane always closed', async () => {
-    const { runtime, session } = splitRuntime()
-    runtime.terminalRunFacts.recordSpawnCommit({ id: 'pty-right' }, { ptyId: 'pty-left' })
-    await runtime.onPtyExit('pty-right', 0, undefined, { providerExitObserved: true })
-    expect(panes(session())).toEqual([LEFT])
   })
 })

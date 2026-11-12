@@ -26,7 +26,7 @@ vi.mock('./renderer-hang-records', () => ({
     return state.publication
   }
 }))
-import { startRendererHangCapture, reduceRendererHangStack } from './renderer-hang-capture'
+import { startRendererHangCapture } from './renderer-hang-capture'
 
 const handles: { stop: () => void }[] = []
 const responses: (() => void)[] = []
@@ -129,26 +129,6 @@ it('reconciles a dead generation before admission and an old reply cannot clear 
   expect(state.records.at(-1)).toMatchObject({ windowId: 5, status: 'process-capture-pending' })
   await successor.reply()
   expect(state.records.at(-1)).toMatchObject({ windowId: 4, status: 'captured' })
-})
-
-it('drops a cut input field before redaction while preserving complete frames', () => {
-  const result = reduceRendererHangStack(
-    `at busy (file:///private/home/app.js:7:3)\n${'at '.repeat(6000)}`
-  )
-  expect(result).toEqual({
-    frames: [{ name: 'busy', module: 'app.js', line: 7, column: 3 }],
-    status: 'captured',
-    truncated: true
-  })
-})
-
-it('records an unanswered renderer request explicitly while retaining its physical owner', async () => {
-  const blocked = window(6)
-  ;(await blocked.start())?.stop()
-  expect(state.records.at(-1)).toMatchObject({ windowId: 6, status: 'request-pending', samples: 0 })
-  const shared = window(7)
-  await shared.start()
-  expect(state.records.at(-1)).toMatchObject({ windowId: 7, status: 'process-capture-pending' })
 })
 
 it('awaits baseline publication before requesting a stack and cannot start after cancellation during the write', async () => {

@@ -124,6 +124,7 @@ export type RuntimeStore = {
     codexShareHistoryAcrossAccounts?: GlobalSettings['codexShareHistoryAcrossAccounts']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     orchestrationWorkerAutoReleaseEnabled?: GlobalSettings['orchestrationWorkerAutoReleaseEnabled']
+    orchestrationCoordinatorApprovalsEnabled?: GlobalSettings['orchestrationCoordinatorApprovalsEnabled']
     workspaceDir: string
     nestWorkspaces: boolean
     workspaceDirHistory?: GlobalSettings['workspaceDirHistory']
@@ -189,6 +190,7 @@ export type RuntimeStore = {
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
     worktreeVisibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
+    workspaceCleanupPolicy?: GlobalSettings['workspaceCleanupPolicy']
     hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
     activeRuntimeEnvironmentId?: GlobalSettings['activeRuntimeEnvironmentId']
     showPinnedWorktreesInGroups?: GlobalSettings['showPinnedWorktreesInGroups']

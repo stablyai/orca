@@ -5,7 +5,7 @@ import type {
   TerminalStreamFrame,
   TerminalStreamOpcode
 } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
-import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
+import type { TerminalOutputFrameChunk } from '../../terminal/terminal-output-frame-chunks'
 import type {
   TerminalMultiplexSnapshotRequestFrame,
   TerminalMultiplexSubscribeFrame

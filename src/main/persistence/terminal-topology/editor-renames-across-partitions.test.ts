@@ -8,7 +8,7 @@ import {
   emptySession,
   GIT_KEY,
   SSH_KEY
-} from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
+} from '../../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
 import { commitLayoutCommandsAcrossPartitions } from './layout-command-commit'
 import type { TerminalTopologyCommitContext } from './terminal-topology-commit'
 

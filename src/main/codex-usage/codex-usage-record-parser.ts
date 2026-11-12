@@ -1,4 +1,4 @@
-import { extractString } from '../usage/source-input/usage-record-coercion'
+import { extractString } from '../../shared/trimmed-string'
 import {
   buildCodexUsageEventKey,
   normalizeRawUsage,
