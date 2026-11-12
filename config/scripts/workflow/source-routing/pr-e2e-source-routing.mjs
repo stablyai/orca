@@ -320,7 +320,7 @@ export const PR_E2E_SOURCE_ROUTES = [
       MANAGED_SSH_HARNESS.test(file) ||
       file === 'tests/e2e/fixtures/structured-claude-stub.cjs' ||
       (isProductSource(file) &&
-        /^src\/(?:main\/(?:claude\/claude-(?:stream-json-connection|stream-json-exit-error|structured-session-exit-lifecycle)|native-chat\/agent-session-wire\/structured-agent-session-failure-text)|renderer\/src\/components\/native-chat\/structured-agent-session-delivery-notices)\.ts$/.test(
+        /^src\/(?:main\/(?:claude\/(?:claude-(?:stream-json-connection|structured-session-exit-lifecycle)|sdk-transport\/claude-stream-json-exit-error)|native-chat\/agent-session-wire\/structured-agent-session-failure-text)|renderer\/src\/components\/native-chat\/structured-agent-session-delivery-notices)\.ts$/.test(
           file
         ))
   },
