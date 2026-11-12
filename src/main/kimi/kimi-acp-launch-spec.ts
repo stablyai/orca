@@ -6,7 +6,7 @@ import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent
 import {
   resumeInvocationFromOptions,
   type StructuredAgentSessionHistory
-} from '../native-chat/structured-agent-cli-conversations'
+} from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 // Chats and terminals share Kimi's session store and `session_<uuid>` ids.
 const KIMI_SESSION_HISTORY: StructuredAgentSessionHistory = {
