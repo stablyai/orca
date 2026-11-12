@@ -55,8 +55,14 @@ export function agentSightingOf(row: {
 }
 
 /** A row's conversation id, computed when its provider key changes and copied at publication.
- *  `id` null: a read-only file has no link for this key, which this run cannot change. */
-export type RowAgentIdentity = { key: AgentProviderKey; id: OrcaSessionId | null }
+ *  `id` null: unresolved (a read-only file without this link, or a pending failed lookup); the
+ *  row is still published as one this host can name, so a Copy click can retry. */
+export type RowAgentIdentity = {
+  key: AgentProviderKey
+  id: OrcaSessionId | null
+  /** The store was unavailable: not settled, so a later admission resolves it again. */
+  pending?: true
+}
 
 export type AgentIdentityStoreHandle = Pick<
   AgentIdentityStore,
@@ -89,7 +95,8 @@ export class PaneAgentIdentities {
   ) {}
 
   /** The identity a row carries: the carried one while its provider key is unchanged, else a
-   *  store resolution. Undefined when the row names no key here or the store is unavailable. */
+   *  store resolution. Undefined when the row names no key here; `pending` when the store was
+   *  unavailable, so the next admission (after the backoff) or a Copy click retries. */
   assign(
     sighting: ProviderSessionSighting,
     carried: RowAgentIdentity | undefined
@@ -98,7 +105,7 @@ export class PaneAgentIdentities {
     if (!key) {
       return undefined
     }
-    if (carried && sameProviderKey(carried.key, key)) {
+    if (carried && carried.pending !== true && sameProviderKey(carried.key, key)) {
       return carried
     }
     const result = this.resolve(key, false)
@@ -106,7 +113,7 @@ export class PaneAgentIdentities {
       ? { key, id: result.id }
       : result.kind === 'absent'
         ? { key, id: null }
-        : undefined
+        : { key, id: null, pending: true }
   }
 
   /** An explicit request (a Copy click): one attempt even during a failure backoff. */

@@ -69,12 +69,18 @@ export abstract class AgentHookServerListeners extends AgentHookServerAgentIdent
     this.providerRowsByTab = null
   }
 
-  private combinedStatusEntries(paneKey?: string): EnrichedAgentHookEventPayload[] {
+  /** `withAgentIds` false: an internal notification that outputs no ID does no ID work. */
+  private combinedStatusEntries(
+    paneKey?: string,
+    withAgentIds = true
+  ): EnrichedAgentHookEventPayload[] {
     return combinedAgentStatusEntries(
       {
         state: this.state,
         programStatusFacets: this.programStatusFacets,
-        canonicalIdentity: (subjectKey) => this.agentIdentities.canonicalIdentity(subjectKey),
+        ...(withAgentIds
+          ? { canonicalIdentity: (key: string) => this.agentIdentities.canonicalIdentity(key) }
+          : {}),
         canonicalStatusStore: this.canonicalStatusStore,
         canonicalSubjectsByPane: this.canonicalSubjectsByPane,
         canonicalListingOrder: this.canonicalListingOrder
@@ -248,11 +254,11 @@ export abstract class AgentHookServerListeners extends AgentHookServerAgentIdent
     const rows: AgentStatusIpcPayload[] = []
     for (const [subjectKey, subject] of this.canonicalSubjectsByPane.get(paneKey) ?? []) {
       const status = this.canonicalStatusStore.getParent(subject)?.status
-      const id = status?.structuredHost
+      const identity = status?.structuredHost
         ? undefined
-        : this.agentIdentities.canonicalIdentity(subjectKey)?.id
+        : this.agentIdentities.canonicalIdentity(subjectKey)
       if (status) {
-        rows.push(id ? { ...status, orcaSessionId: id } : status)
+        rows.push(identity ? { ...status, orcaSessionId: identity.id } : status)
       }
     }
     return rows
@@ -283,7 +289,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerAgentIdent
   } {
     const statuses: AgentHookStatusChangeEntry[] = []
     const providerSessions: AgentHookProviderSessionIdentity[] = []
-    for (const enriched of this.combinedStatusEntries()) {
+    for (const enriched of this.combinedStatusEntries(undefined, false)) {
       const paneKey = enriched.paneKey
       if (enriched.providerSession) {
         providerSessions.push({

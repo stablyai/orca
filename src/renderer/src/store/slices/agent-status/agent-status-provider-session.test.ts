@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { createTestStore } from '../../testing/app-store-test-fixture'
+import { canPaneOfferAgentId } from '../../../lib/agent-session/identity/pane-agent-session-id'
 
 it('replaces only the captured pane resume handle and keeps a newer session through manual sleep', () => {
   const store = createTestStore()
@@ -118,4 +119,30 @@ it('drops a host-assigned agent id when a failed commit leaves a new Pi transcri
   expect(store.getState().agentStatusByPaneKey[paneKey]?.orcaSessionId).toBe('pi_identity_one')
   report(2_000, '/b.jsonl')
   expect(store.getState().agentStatusByPaneKey[paneKey]?.orcaSessionId).toBeUndefined()
+})
+
+it('offers Copy Agent ID wherever the host stamped the field, even before it named the agent', () => {
+  const store = createTestStore()
+  const paneKey = 'tab-1:leaf-1'
+  const report = (updatedAt: number, orcaSessionId?: string | null) =>
+    store.getState().setAgentStatus(
+      paneKey,
+      { state: 'working', agentType: 'claude', prompt: 'p' },
+      undefined,
+      { updatedAt, stateStartedAt: updatedAt },
+      { worktreeId: 'wt-1' },
+      {
+        providerSession: { key: 'session_id', id: 'S' },
+        ...(orcaSessionId !== undefined ? { orcaSessionId } : {})
+      }
+    )
+  const offered = () => canPaneOfferAgentId(store.getState(), paneKey, () => true)
+  // An older host never stamps it: nothing there could answer the click.
+  report(1_000)
+  expect(offered()).toBe(false)
+  // A current host whose first link failed stamps null: the click retries on that host.
+  report(2_000, null)
+  expect(offered()).toBe(true)
+  report(3_000, 'claude_identity')
+  expect(offered()).toBe(true)
 })

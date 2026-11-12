@@ -222,7 +222,7 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     }
   }
 
-  /** Panes confirmed to run terminal agent `id`, read through the identity's reverse index;
+  /** Panes proven to run terminal agent `id` now, read through the identity's reverse index;
    *  null when this host never minted it. */
   terminalAgentPlaces(id: string): { paneKey: string; worktreeId?: string }[] | null {
     if (!this.agentIdentities.isTerminalIdentity(id)) {
@@ -230,12 +230,16 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     }
     const places: { paneKey: string; worktreeId?: string }[] = []
     for (const place of this.agentIdentities.placesOf(id)) {
+      // Canonical rows are never hydrated; a legacy row counts only once this runtime observed it,
+      // since a saved status (even Done) cannot prove its process survived Orca being closed.
       const subject = place.canonical
         ? this.canonicalSubjectsByPane.get(place.paneKey)?.get(place.key)
         : undefined
-      const row = subject
-        ? this.canonicalStatusStore.getParent(subject)?.status
-        : this.state.lastStatusByPaneKey.get(place.key)
+      const row = place.canonical
+        ? subject && this.canonicalStatusStore.getParent(subject)?.status
+        : this.runtimeObservedStatusPaneKeys.has(place.key)
+          ? this.state.lastStatusByPaneKey.get(place.key)
+          : undefined
       // Resume seeds, exited agents and unconfirmed restored rows prove no running agent.
       if (
         row &&

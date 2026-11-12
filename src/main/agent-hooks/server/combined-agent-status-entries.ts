@@ -19,8 +19,9 @@ export function combinedAgentStatusEntries(
   source: {
     state: HookListenerState
     programStatusFacets: Pick<ProgramStatusFacetStore, 'stitch'>
-    /** A canonical terminal status's id, assigned when it was committed. */
-    canonicalIdentity: (subjectKey: string) => RowAgentIdentity | undefined
+    /** A canonical terminal status's id, assigned when it was committed; absent for outputs
+     *  that carry no id. */
+    canonicalIdentity?: (subjectKey: string) => RowAgentIdentity | undefined
     canonicalStatusStore: Pick<AgentStatusStore, 'getParents' | 'getParent'>
     canonicalSubjectsByPane: ReadonlyMap<string, ReadonlyMap<string, AgentStatusSubject>>
     canonicalListingOrder: ReadonlyMap<string, number>
@@ -53,7 +54,10 @@ export function combinedAgentStatusEntries(
     }
     const subjectKey = serializeAgentStatusSubject(parent.subject)
     const entry = structuredStatusLegacyEvent(parent.status)
-    const agentIdentity = entry.structuredHost ? undefined : source.canonicalIdentity(subjectKey)
+    const agentIdentity =
+      entry.structuredHost || !source.canonicalIdentity
+        ? undefined
+        : source.canonicalIdentity(subjectKey)
     rows.push({
       entry: agentIdentity ? { ...entry, agentIdentity } : entry,
       order: source.canonicalListingOrder.get(subjectKey) ?? UNORDERED_STATUS_ROW

@@ -85,7 +85,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
         ...pickHostTurnEnd({ turnEndedAt, turnEndDisposition }),
         ...(providerSession ? { providerSession } : {}),
-        ...(agentIdentity?.id ? { orcaSessionId: agentIdentity.id } : {}),
+        ...(agentIdentity ? { orcaSessionId: agentIdentity.id } : {}),
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(observation ? { observation } : {}),

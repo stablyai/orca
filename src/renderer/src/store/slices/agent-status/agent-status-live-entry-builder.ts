@@ -199,15 +199,18 @@ export function buildAgentStatusLiveEntry(
     payload.programStatus === undefined ? existing?.programStatus : payload.programStatus
   // Only the host names conversations: keep its id only for the very same agent, owner and
   // provider key (locator included); any other key waits for the host's own stamp.
-  const orcaSessionId =
-    metadata?.orcaSessionId ??
-    (existing?.orcaSessionId &&
+  const keepsExistingId =
+    existing?.orcaSessionId !== undefined &&
     existing.agentType === identity.agentType &&
     (routing?.connectionId === undefined ||
       routing.connectionId === (existing.connectionId ?? null)) &&
     agentProviderSessionsEqual(identity.agentType, existing.providerSession, providerSession)
-      ? existing.orcaSessionId
-      : undefined)
+  const orcaSessionId =
+    metadata?.orcaSessionId !== undefined
+      ? metadata.orcaSessionId
+      : keepsExistingId
+        ? existing?.orcaSessionId
+        : undefined
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -254,7 +257,7 @@ export function buildAgentStatusLiveEntry(
     ...liveEntryChildFields(existing, payload),
     ...(mainAgent ? { mainAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
-    ...(orcaSessionId ? { orcaSessionId } : {}),
+    ...(orcaSessionId !== undefined ? { orcaSessionId } : {}),
     ...(launchAttested !== undefined ? { launchAttested } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }

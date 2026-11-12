@@ -58,12 +58,12 @@ export function buildRuntimeMobileAgentStatus(
   const providerSession = hookRow.providerSession
     ? {
         providerSession: hookRow.providerSession,
-        ...(hookRow.orcaSessionId ? { orcaSessionId: hookRow.orcaSessionId } : {})
+        ...(hookRow.orcaSessionId !== undefined ? { orcaSessionId: hookRow.orcaSessionId } : {})
       }
     : retained?.providerSession
       ? {
           providerSession: retained.providerSession,
-          ...(retained.orcaSessionId ? { orcaSessionId: retained.orcaSessionId } : {})
+          ...(retained.orcaSessionId !== undefined ? { orcaSessionId: retained.orcaSessionId } : {})
         }
       : {}
   const leaf = host.getLeaf(tab)

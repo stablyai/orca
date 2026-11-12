@@ -106,7 +106,7 @@ export function demoteRuntimeMobileAgentStatus(
     agentType: status.agentType,
     ...completedTurnFields(status),
     ...(status.providerSession ? { providerSession: status.providerSession } : {}),
-    ...(status.orcaSessionId ? { orcaSessionId: status.orcaSessionId } : {})
+    ...(status.orcaSessionId !== undefined ? { orcaSessionId: status.orcaSessionId } : {})
   }
 }
 
@@ -160,7 +160,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     ...(status.tabId ? { tabId: status.tabId } : {}),
     ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
     ...(status.providerSession ? { providerSession: status.providerSession } : {}),
-    ...(status.orcaSessionId ? { orcaSessionId: status.orcaSessionId } : {}),
+    ...(status.orcaSessionId !== undefined ? { orcaSessionId: status.orcaSessionId } : {}),
     ...(state === 'done' ? completedTurnFields(status) : {})
   })
   const titleConfirmsState =
@@ -221,8 +221,8 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
 
 export type RuntimeHookAgentRowLookup = {
   providerSession: AgentProviderSessionMetadata | null
-  /** The host's Orca id for that provider session's conversation. */
-  orcaSessionId: string | null
+  /** The host's Orca id for that provider session's conversation (see `AgentStatusEntry`). */
+  orcaSessionId: string | null | undefined
   providerSessionAgentType: string | null
   providerSessionReceivedAt: number | null
   agentType: string | null
@@ -286,7 +286,7 @@ export function selectRuntimeHookAgentRowForPane(
   }
   return {
     providerSession: session?.providerSession ?? null,
-    orcaSessionId: session?.orcaSessionId ?? null,
+    orcaSessionId: session?.orcaSessionId,
     providerSessionAgentType: session?.agentType ?? null,
     providerSessionReceivedAt: session?.receivedAt ?? null,
     agentType: agent?.agentType ?? null,

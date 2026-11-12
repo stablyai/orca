@@ -144,7 +144,7 @@ export function buildMirroredAgentStatusPatch(
             ...withHostProgramStatus(nextEntry, entry.programStatus),
             ...(entry.launchAttested !== undefined ? { launchAttested: entry.launchAttested } : {}),
             // Only the host names its agents; the client never mints one.
-            ...(entry.orcaSessionId &&
+            ...(entry.orcaSessionId !== undefined &&
             agentProviderSessionsEqual(
               entry.agentType,
               entry.providerSession,

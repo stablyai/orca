@@ -54,7 +54,8 @@ function serializeAgentStatusEntry(
     // A failure changes the verdict and leaves `interrupted` as it was.
     mainAgent: mainAgentKey(entry.mainAgent),
     programStatus: entry.programStatus ? programStatusFacetContent(entry.programStatus) : null,
-    orcaSessionId: entry.orcaSessionId ?? null
+    // Undefined drops out of the JSON; null (host can name it, has not yet) stays distinct.
+    orcaSessionId: entry.orcaSessionId
   })
 }
 

@@ -118,7 +118,10 @@ describe('PaneAgentIdentities', () => {
         () => ({ readOnly: false, identify: writes, has: () => false, close() {} })
       )
       for (let publication = 0; publication < 100; publication++) {
-        expect(failing.assign(sighting({ id: `S${publication}` }), undefined)).toBeUndefined()
+        expect(failing.assign(sighting({ id: `S${publication}` }), undefined)).toMatchObject({
+          id: null,
+          pending: true
+        })
       }
       expect(writes).toHaveBeenCalledTimes(1)
       // A Copy click retries once inside the window; publications stay quiet.

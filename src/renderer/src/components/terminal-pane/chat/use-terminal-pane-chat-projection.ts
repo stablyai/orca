@@ -13,7 +13,7 @@ import {
   canPaneOfferAgentId,
   resolvePaneAgentSessionId
 } from '../../../lib/agent-session/identity/pane-agent-session-id'
-import { tryRuntimeTargetForWorktreeOwner } from '@/store/slices/worktrees/listing/worktree-owner-target'
+import { canOwnerResolveSleepingAgentId } from '../../../lib/agent-session/identity/sleeping-agent-id-owner'
 import { canPaneOfferResumeInNewChat } from '../../tab-bar/tab-session-history-switch'
 
 export function useTerminalPaneChatProjection({
@@ -143,10 +143,8 @@ export function useTerminalPaneChatProjection({
       menuAgentIdAvailable:
         contextMenu.open &&
         contextMenuLeafId !== null &&
-        canPaneOfferAgentId(
-          state,
-          makePaneKey(tabId, contextMenuLeafId),
-          tryRuntimeTargetForWorktreeOwner(state, worktreeId)?.kind === 'local'
+        canPaneOfferAgentId(state, makePaneKey(tabId, contextMenuLeafId), () =>
+          canOwnerResolveSleepingAgentId(state, worktreeId)
         ),
       // Cheap stand-in for the tab menu's gate, on this pane's own conversation; the click looks it up.
       activePaneCanResumeInChat:
