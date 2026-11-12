@@ -240,17 +240,16 @@ export function registerRuntimeWindowLifecycle(
       send('runtime:clientHostedBrowserRowsChanged', event),
     claudeAccountSelected: (change) => send('claudeAccounts:selectedElsewhere', change)
   })
-  // Switch point: the window reads its sidebar from main's feed and re-reads on each notice.
-  const detachSidebarInputsNotices = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? runtime.onClientEvent(
-        (event) => {
-          if (event.type === 'sidebarInputsChanged') {
-            send('runtime:sidebarInputsChanged', event)
-          }
-        },
-        { consumesTerminalSideEffects: false }
-      )
-    : null
+  const detachClientNotices = runtime.onClientEvent(
+    (event) => {
+      if (event.type === 'linearLinkedIssueUpdated') {
+        send('linear:linkedIssueUpdated', event)
+      } else if (ORCA_SIDEBAR_INPUTS_IS_MAIN && event.type === 'sidebarInputsChanged') {
+        send('runtime:sidebarInputsChanged', event)
+      }
+    },
+    { consumesTerminalSideEffects: false }
+  )
   // Only this window's live document speaks for the Agents list; a gone one leaves no verdicts behind.
   const releaseAgentListVerdicts = addFanoutListener(
     ipcMain,
@@ -284,7 +283,7 @@ export function registerRuntimeWindowLifecycle(
     runtime.setAgentListPublication(null)
   })
   mainWindow.on('closed', () => {
-    detachSidebarInputsNotices?.()
+    detachClientNotices()
     releaseAgentListVerdicts()
     runtime.setAgentListPublication(null)
     rendererNotifications.close()
