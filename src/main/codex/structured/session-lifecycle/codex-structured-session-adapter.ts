@@ -125,8 +125,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       handleServerRequest: (sessionId, request) => this.handleServerRequest(sessionId, request),
       handleUnhandledFrame: (sessionId, kind, payload) =>
         this.handleUnhandledFrame(sessionId, kind, payload),
-      forceCloseUnexpected: (sessionId, fence, acquisitionGeneration, reason) =>
-        this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason)
+      forceCloseUnexpected: this.teardown.forceCloseUnexpected,
+      closeCompleted: this.teardown.close
     }).catch((error: unknown) => {
       throw codexAcquireFailure(error)
     })
@@ -340,6 +340,5 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.acquisitions.get(sessionId) !== undefined || this.sessions.has(sessionId)
 
-  private session = (sessionId: string): CodexSession =>
-    requireLiveCodexSession(this.sessions, sessionId)
+  private session = requireLiveCodexSession.bind(null, this.sessions)
 }

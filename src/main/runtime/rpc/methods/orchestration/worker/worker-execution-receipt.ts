@@ -26,6 +26,11 @@ export async function readWorkerExecutionReceipt(
   const receipt = parsed.data
   const fingerprint = agentSessionExecutionPolicyFingerprint(record.executionPolicy)
   const task = dispatch && db.getTask(dispatch.task_id)
+  const released =
+    record.lease.claimStatus === 'released' &&
+    !record.lease.ownerProcess &&
+    !record.lease.reservedSpawnToken &&
+    record.lease.runtimeFence === receipt.execution.runtimeFence + 1
   if (
     !runtimeId ||
     !receipt.runtime ||
@@ -39,7 +44,7 @@ export async function readWorkerExecutionReceipt(
     record.location.wslDistro !== null ||
     record.location.workspaceKind !== 'folder' ||
     receipt.execution.sessionId !== sessionId ||
-    receipt.execution.runtimeFence !== record.lease.runtimeFence ||
+    (receipt.execution.runtimeFence !== record.lease.runtimeFence && !released) ||
     receipt.execution.bounded?.policyFingerprint !== fingerprint ||
     workerStartOptionsExecutionPolicyFingerprint(
       db.getWorkerDispatch(dispatchId)?.start_options ?? ''
@@ -62,7 +67,7 @@ export async function readWorkerExecutionReceipt(
   return {
     kind: 'execution-receipt',
     sessionId: record.sessionId,
-    runtimeFence: record.lease.runtimeFence,
+    runtimeFence: receipt.execution.runtimeFence,
     agent: 'codex',
     qualification: {
       runtime: structuredClone(receipt.runtime),

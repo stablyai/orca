@@ -58,6 +58,7 @@ export async function acquireCodexStructuredSession(input: {
   ) => void
   handleUnhandledFrame: (sessionId: string, kind: string, payload: unknown) => void
   forceCloseUnexpected: CodexStructuredSessionTeardown['forceCloseUnexpected']
+  closeCompleted: CodexStructuredSessionTeardown['close']
 }): Promise<AgentSessionAcquisition> {
   const { input: acquireInput, deps, sessions, acquisitions, notificationRetries } = input
   const sessionId = acquireInput.identity.sessionId

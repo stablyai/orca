@@ -81,15 +81,29 @@ export function bindCodexExecutionDeadline(
       if (!connection) {
         return false
       }
-      const closed =
-        input.sessions.get(sessionId)?.connection === connection
-          ? await input.forceCloseUnexpected(
+      const current = input.sessions.get(sessionId)
+      const published =
+        current?.connection === connection &&
+        current.fence === input.input.fence &&
+        current.acquisitionGeneration === generation
+      if (current?.connection === connection && !published) {
+        return false
+      }
+      const completed = acquisition.execution?.turnCompleted && !acquisition.execution.invalidated
+      const closed = published
+        ? completed
+          ? await input.closeCompleted(sessionId)
+          : await input.forceCloseUnexpected(
               sessionId,
               input.input.fence,
               generation,
-              new Error('Bounded Codex deadline reached.')
+              new Error(
+                acquisition.execution?.invalidated
+                  ? 'Bounded Codex controls changed.'
+                  : 'Bounded Codex deadline reached.'
+              )
             )
-          : await connection.close()
+        : await connection.close()
       return (
         closed &&
         connection.closeResult?.root === 'exited' &&

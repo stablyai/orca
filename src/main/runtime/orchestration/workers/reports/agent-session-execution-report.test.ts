@@ -256,6 +256,16 @@ it('reads final proof from the native record and strips its private custody hash
       closure: { root: 'exited', tree: 'exited', observedAt: HOST_TEST_NOW + 1_000 }
     }
   })
+  await rig.store.transitionHandoff(HOST_TEST_SESSION, (record) => ({
+    ...record,
+    lease: {
+      ...record.lease,
+      runtimeFence: record.lease.runtimeFence + 1,
+      claimStatus: 'released' as const,
+      ownerProcess: null,
+      reservedSpawnToken: null
+    }
+  }))
   const metadata = {
     executable,
     observedAt: HOST_TEST_NOW + 2_000,
@@ -268,6 +278,7 @@ it('reads final proof from the native record and strips its private custody hash
   expect(result).toMatchObject({
     kind: 'execution-receipt',
     sessionId: HOST_TEST_SESSION,
+    runtimeFence: fence,
     qualification: {
       runtime: { runtimeId: 'qualification-runtime', buildHash: 'd'.repeat(16) },
       metadata,
@@ -289,4 +300,11 @@ it('reads final proof from the native record and strips its private custody hash
     kind: 'execution-receipt',
     qualification: { runtime: { runtimeId: 'qualification-runtime' } }
   })
+  await rig.store.transitionHandoff(HOST_TEST_SESSION, (record) => ({
+    ...record,
+    lease: { ...record.lease, runtimeFence: record.lease.runtimeFence + 1 }
+  }))
+  await expect(
+    readWorkerExecutionReceipt(rig.host, db, dispatchId, 'qualification-runtime')
+  ).resolves.toEqual({ kind: 'unknown', reason: 'identity_changed' })
 })

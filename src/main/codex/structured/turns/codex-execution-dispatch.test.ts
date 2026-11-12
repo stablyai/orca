@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 import type { AgentSessionExecutionReceiptWrite } from '../../../../shared/agent-session/agent-session-execution-receipt'
 import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import {
@@ -22,6 +23,7 @@ afterEach(() => vi.useRealTimers())
 async function bounded(account: unknown) {
   const receipts: AgentSessionExecutionReceiptWrite[] = []
   const reports: unknown[] = []
+  const events: CodexStructuredSessionEvent[] = []
   const codex = fakeCodex({
     'account/rateLimits/read': () => ({
       rateLimits: { primary: { usedPercent: 20, resetsAt: 1_800_001_000 } }
@@ -63,7 +65,7 @@ async function bounded(account: unknown) {
         }
       }
     },
-    [],
+    events,
     {
       onExecutionReceipt: async (write) => {
         receipts.push(structuredClone(write))
@@ -80,7 +82,7 @@ async function bounded(account: unknown) {
     permissionMode: 'own',
     options: { model: 'gpt-live', effort: 'low' }
   })
-  return { adapter, codex, receipts, reports }
+  return { adapter, codex, receipts, reports, events }
 }
 
 const input = {
@@ -311,3 +313,32 @@ it.each(['exhausted', 'unknown', 'wrong-model'] as const)(
     }
   }
 )
+
+it('closes a completed bounded turn as requested rather than recording a deadline fault', async () => {
+  const { adapter, codex, events } = await bounded({
+    type: 'chatgpt',
+    id: 'account-1',
+    planType: 'pro'
+  })
+  try {
+    await adapter.dispatch(input)
+    codex.connections[0]!.handlers.onNotification?.('turn/completed', {
+      threadId: THREAD_ID,
+      turn: { id: 'turn-1', status: 'completed' }
+    })
+    await vi.waitFor(() =>
+      expect(
+        events.some(
+          (event) => event.type === 'ended' && 'cause' in event && event.cause === 'requested-close'
+        )
+      ).toBe(true)
+    )
+    expect(
+      events.some(
+        (event) => 'reason' in event && event.reason === 'Bounded Codex deadline reached.'
+      )
+    ).toBe(false)
+  } finally {
+    await adapter.closeAll()
+  }
+})
