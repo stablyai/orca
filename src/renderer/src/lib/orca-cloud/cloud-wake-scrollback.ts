@@ -51,7 +51,7 @@ export type ScrollbackSource = {
   rows: number
   buffer: {
     normal: RestoreBuffer & { baseY: number }
-    active?: { viewportY: number; baseY: number }
+    active?: { viewportY: number; baseY: number } & Partial<Pick<RestoreBuffer, 'getLine'>>
   }
 }
 
