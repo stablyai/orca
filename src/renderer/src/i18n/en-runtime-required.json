@@ -648,6 +648,8 @@
           "detectedServers_other": "{{detected}} detected · {{count}} servers"
         },
         "OrchestrationPane": {
+          "coordinatorApprovalsKeywordApprove": "approve",
+          "coordinatorApprovalsKeywordPermission": "permission",
           "workerAutoReleaseKeywordClose": "close",
           "workerAutoReleaseKeywordRelease": "release"
         },
