@@ -90,9 +90,12 @@ export function useImeEnterGestureOwnership(): {
             (event.key === 'Enter' && event.keyCode === 229) ||
             isProcessedEnterKey(event))
         if (markedEnter) {
-          stateRef.current.pendingEnter = {
-            awaitsKeyUp:
-              event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter'
+          const awaitsKeyUp =
+            event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter'
+          stateRef.current.pendingEnter = { awaitsKeyUp }
+          if (!awaitsKeyUp && !stateRef.current.composing) {
+            // No composition end will come to expire it.
+            expirePendingEnter()
           }
           return true
         }

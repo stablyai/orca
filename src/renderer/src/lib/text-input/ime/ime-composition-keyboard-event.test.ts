@@ -129,6 +129,27 @@ describe('useImeEnterGestureOwnership', () => {
     expect(redispatch.prevented).toBe(true)
   })
 
+  it('expires a carry from an unknown-code commit key outside a composition', () => {
+    const frames: FrameRequestCallback[] = []
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    try {
+      const { result } = renderHook(() => useImeEnterGestureOwnership())
+      expect(result.current.ownsKeyDown(gestureEvent({ key: 'Process', keyCode: 229 }))).toBe(true)
+      for (const frame of frames.splice(0)) {
+        frame(0)
+      }
+
+      const enter = gestureEvent({ key: 'Enter', keyCode: 13, code: 'Enter' })
+      expect(result.current.ownsKeyDown(enter)).toBe(false)
+      expect(enter.prevented).toBe(false)
+    } finally {
+      raf.mockRestore()
+    }
+  })
+
   // Commit keys with no keyup expire a frame after compositionend; a held confirm Enter waits for its keyup.
   it.each([
     {
