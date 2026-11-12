@@ -445,6 +445,41 @@ describe('MobileNativeChatQueuedMessages', () => {
     }
   })
 
+  it("places a failed row below an open inline editor at the editor's height", async () => {
+    const scrollTo = vi.fn()
+    const mounted = create(createElement('View'), {
+      createNodeMock: (node) =>
+        node.type === 'ScrollView'
+          ? { scrollTo, scrollToEnd: vi.fn(), flashScrollIndicators: vi.fn() }
+          : null
+    })
+    renderer = mounted
+    const editor = { messageId: 'a' } as unknown as Props['editor']
+    const cards = [card({ messageId: 'a' }), card({ messageId: 'b' }), card({ messageId: 'c' })]
+    await act(async () => mounted.update(element({ cards, editor })))
+    await act(async () =>
+      mounted.update(
+        element({
+          cards: [cards[0]!, cards[1]!, card({ messageId: 'c', needsAttention: true })],
+          editor
+        })
+      )
+    )
+    const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+    await act(async () => {
+      // The editor row is 200pt tall; the compact rows 60pt.
+      rows(mounted).forEach((row, index) =>
+        row.props.onLayout({
+          nativeEvent: { layout: { x: 0, y: 0, width: 0, height: index === 0 ? 200 : 60 } }
+        })
+      )
+      scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } })
+      scroll.props.onContentSizeChange(0, 320)
+    })
+    // The failed row spans 260–320, past the editor.
+    expect(scrollTo).toHaveBeenLastCalledWith({ y: 220, animated: false })
+  })
+
   it("fills the head's Steer pill while the composer previews Steer queued", async () => {
     const headLight = createMobileQueuedHeadLight()
     const mounted = await mount({ cards: three(), agentWorking: true, headLight })

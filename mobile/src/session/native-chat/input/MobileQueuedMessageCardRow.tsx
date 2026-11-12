@@ -65,7 +65,11 @@ export function MobileQueuedMessageCardRow({
       <View
         testID="queued-card-row"
         style={actions.divided && styles.divided}
-        onLayout={(event) => onEditorLayout(event.nativeEvent.layout)}
+        onLayout={(event) => {
+          onEditorLayout(event.nativeEvent.layout)
+          // An open editor still stacks above later rows, so the list places them past it.
+          actions.onRowHeight?.(event.nativeEvent.layout.height)
+        }}
       >
         <MobileQueuedMessageComposer editor={editor} from={card.from} />
       </View>
