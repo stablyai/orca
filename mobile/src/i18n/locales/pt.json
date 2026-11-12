@@ -2941,6 +2941,10 @@
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Falha ao anexar (reconectando)"
     },
+    "useCloseActions": {
+      "closeFailed": "Não foi possível fechar a aba. Tente novamente.",
+      "closeFailedDesktopNotReady": "Não foi possível fechar a aba. O Orca ainda está carregando no seu computador. Tente novamente em instantes."
+    },
     "useContentCreateActions": {
       "browserCommandFailed": "Falha no comando do navegador",
       "browserCreateFailed": "Falha ao criar o navegador",

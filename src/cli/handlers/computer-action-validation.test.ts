@@ -381,12 +381,7 @@ describe('orca computer action CLI validation', () => {
         action: {
           path: 'accessibility',
           actionName: 'setValue',
-          verification: {
-            state: 'verified',
-            property: 'value',
-            expected: '',
-            actualPreview: ''
-          }
+          verification: { state: 'verified', property: 'value' }
         }
       })
     )

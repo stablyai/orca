@@ -134,6 +134,7 @@ export function sessionScreenTabMountAdapters(
             pendingSelectionRef: { current: null },
             pendingBrowserFocusPageIdRef: { current: null },
             unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
+            showToast: (message: string) => effect('toast', { message }),
             subscribeToTerminal: (handle: string) => {
               effect('subscribe-terminal', { handle })
               return true

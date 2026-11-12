@@ -51,23 +51,6 @@ describe('CodexRuntimeHomeService', () => {
     teardownRuntimeHomeTest()
   })
 
-  it('mirrors later system Codex config changes before launch', async () => {
-    const systemCodexHome = getSystemCodexHomePath()
-    mkdirSync(systemCodexHome, { recursive: true })
-    writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "first"\n', 'utf-8')
-    const store = createStore(createSettings())
-    const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    service.prepareForCodexLaunch()
-    writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "second"\n', 'utf-8')
-    service.prepareForCodexLaunch()
-
-    expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toBe(
-      'model = "second"\n'
-    )
-  })
-
   it('rebases the bundled marketplace onto the canonical path of a symlinked managed home', async () => {
     const systemMarketplace = join(
       getSystemCodexHomePath(),

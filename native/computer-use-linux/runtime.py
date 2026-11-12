@@ -1414,7 +1414,7 @@ def insert_focused_text(window, value):
             raise RuntimeError("text_caret_unconfirmed: text was inserted but caret movement did not confirm success; inspect state before retrying")
     action = {"path": "accessibility", "actionName": "insertText", "fallbackReason": None}
     if attempt(lambda: Atspi.Text.get_text(text, start, caret)) == value:
-        action["verification"] = {"state": "verified", "property": "focusedText", "expected": value}
+        action["verification"] = {"state": "verified", "property": "focusedText"}
     return action
 
 

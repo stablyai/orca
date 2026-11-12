@@ -2568,6 +2568,10 @@
     "useAttachmentInputLeaseGate": {
       "reconnecting": "No se pudo adjuntar (reconectando)"
     },
+    "useCloseActions": {
+      "closeFailed": "No se pudo cerrar la pestaña. Inténtalo de nuevo.",
+      "closeFailedDesktopNotReady": "No se pudo cerrar la pestaña. Orca todavía se está cargando en tu ordenador. Vuelve a intentarlo en un momento."
+    },
     "useContentCreateActions": {
       "browserCommandFailed": "No se pudo ejecutar el comando del navegador",
       "browserCreateFailed": "No se pudo crear el navegador",

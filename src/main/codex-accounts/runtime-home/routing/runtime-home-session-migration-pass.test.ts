@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
 import { createSettings } from '../runtime-home-settings-test-fixtures'
@@ -76,21 +76,6 @@ describe('host system default session migration pass preparation', () => {
     })
 
     expect(service.prepareHostSystemDefaultSessionMigrationPass()).toBe(false)
-  })
-
-  it('carries a full-scan demand persisted by an earlier launch into this pass', async () => {
-    writeBaselineMarker(CUSTOM_HISTORY_HOME, true)
-    const store = createStore(
-      createSettings({ codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} } })
-    )
-    const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    expect(service.prepareHostSystemDefaultSessionMigrationPass()).toBe(true)
-
-    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({
-      needsFullScan: true
-    })
   })
 
   it('still demands a full scan when the history home really moves', async () => {

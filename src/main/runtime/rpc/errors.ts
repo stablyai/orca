@@ -148,6 +148,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'cursor_dispatch_mismatch',
   'source_changed',
   'transcript_required',
+  // A released worker's original transcript or chat is gone, or it never had one.
+  'archive_unavailable',
   ...ORCHESTRATION_FEDERATION_ERROR_CODES,
   'dispatch_capability_invalid',
   'agent_unconfigured',

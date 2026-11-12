@@ -1,3 +1,5 @@
+import type { RuntimeLinearCommandPorts } from './runtime-linear-command-base'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as mutations from '../../../linear/issues/linear-issue-mutations'
 import * as comments from '../../../linear/issues/linear-issue-comments'
@@ -26,7 +28,10 @@ const issue = {
 const target = { issue, workspaceId: 'w1' }
 const team = { ...issue.team, workspaceId: 'w1' }
 
-function commands(listResolvedWorktrees: () => Promise<[]> = async () => []) {
+function commands(
+  listResolvedWorktrees: RuntimeLinearCommandPorts['listResolvedWorktrees'] = async () => [],
+  emitClientEvent: RuntimeLinearCommandPorts['emitClientEvent'] = () => {}
+) {
   const unusedSelector = async () => {
     throw new Error('unused')
   }
@@ -39,7 +44,7 @@ function commands(listResolvedWorktrees: () => Promise<[]> = async () => []) {
     resolveWorkspaceSelector: unusedSelector,
     listResolvedWorktrees,
     setWorktreeMeta: () => {},
-    emitClientEvent: () => {}
+    emitClientEvent
   }
   const result = new RuntimeLinearReadCommands(ports)
   vi.spyOn(result, 'resolveLinearAgentWriteTarget').mockResolvedValue(target)
@@ -328,3 +333,69 @@ it.each(['comment', 'attach', 'create'] as const)(
     }
   }
 )
+
+it('publishes successful command writes for each linked row with account identity intact', async () => {
+  vi.mocked(mutations.updateIssueForAgent).mockResolvedValue({
+    ...issue,
+    state: { id: 'done', name: 'Done' }
+  })
+  const base: ResolvedWorktree = {
+    id: 'wt-1',
+    repoId: 'repo',
+    path: '/repo/wt-1',
+    head: 'head',
+    branch: 'branch',
+    isBare: false,
+    isMainWorktree: false,
+    displayName: '',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: 'eng-1',
+    linkedLinearIssueWorkspaceId: 'w1',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    parentWorktreeId: null,
+    childWorktreeIds: [],
+    lineage: null,
+    git: {
+      path: '/repo/wt-1',
+      head: 'head',
+      branch: 'branch',
+      isBare: false,
+      isMainWorktree: false
+    }
+  }
+  const emit = vi.fn()
+  const c = commands(
+    async () => [
+      base,
+      { ...base, id: 'wt-2' },
+      { ...base, id: 'wrong-account', linkedLinearIssueWorkspaceId: 'w2' }
+    ],
+    emit
+  )
+  await c.linearIssueSetState({ input: 'ENG-1', to: 'Done' })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(emit.mock.calls).toEqual([
+    [
+      {
+        type: 'linearLinkedIssueUpdated',
+        worktreeId: 'wt-1',
+        identifier: 'ENG-1',
+        workspaceId: 'w1'
+      }
+    ],
+    [
+      {
+        type: 'linearLinkedIssueUpdated',
+        worktreeId: 'wt-2',
+        identifier: 'ENG-1',
+        workspaceId: 'w1'
+      }
+    ]
+  ])
+})

@@ -2568,6 +2568,10 @@
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Échec de l'ajout (reconnexion en cours)"
     },
+    "useCloseActions": {
+      "closeFailed": "Impossible de fermer l’onglet. Réessayez.",
+      "closeFailedDesktopNotReady": "Impossible de fermer l’onglet. Orca est encore en cours de chargement sur votre ordinateur. Réessayez dans un instant."
+    },
     "useContentCreateActions": {
       "browserCommandFailed": "Échec de la commande du navigateur",
       "browserCreateFailed": "Échec de la création du navigateur",

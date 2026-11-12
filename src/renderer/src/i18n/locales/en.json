@@ -4366,6 +4366,8 @@
             "86ba852118": "{{value0}}, {{value1}} failed",
             "deleteButtonCount": "Delete {{value0}}",
             "archivedStatus": "Archived",
+            "mergedStatus": "Merged",
+            "unchangedStatus": "No new commits",
             "74f6c16279": "Back"
           },
           "backgroundRemoval": {
@@ -4402,7 +4404,6 @@
             "runningTerminalBlocker": "Running terminal process",
             "terminalLivenessUnknownBlocker": "Terminal liveness unknown",
             "dirtyEditorBufferBlocker": "Unsaved editor buffer",
-            "volatileLocalContextBlocker": "Volatile local context",
             "recentVisibleContextBlocker": "Recently visited tabs",
             "liveAgentBlocker": "Active agent",
             "sshDisconnectedBlocker": "Remote unavailable",
@@ -19996,6 +19997,14 @@
         },
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
+        },
+        "PluginCatalogHighlights": {
+          "justNow": "just now",
+          "added": "Added {{value0}}",
+          "featured": "Featured",
+          "featuredDetail": "most installed, one per category",
+          "newlyAdded": "Newly added",
+          "newlyAddedDetail": "across your catalogs"
         }
       },
       "agent-workspace-trust-decision": {
@@ -21740,7 +21749,10 @@
             "dirty": "Dirty",
             "unpushed": "Unpushed",
             "unknown": "Unknown"
-          }
+          },
+          "ignoredFilesBlocker": "Ignored local files",
+          "ignoredFilesNamed": "Ignored files: {{value0}}",
+          "ignoredFilesUnchecked": "Ignored files not fully checked"
         },
         "confirm": {
           "deletingTitle_one": "Deleting {{count}} workspace",
@@ -21774,7 +21786,13 @@
           "closedToast_other": "Closed {{count}} files with unsaved edits from {{workspace}}",
           "reopen": "Reopen",
           "reopenFailed": "Some files couldn't be reopened. Open a workspace and try Reopen again."
-        }
+        },
+        "ignoredFilesLost": "Ignored files will be lost: {{names}}",
+        "ignoredFilesUnchecked": "Ignored files could not be fully checked"
+      },
+      "atRiskLocalFiles": {
+        "namesWithCount": "{{names}} +{{value0}}",
+        "namesAndMore": "{{names}} and more"
       }
     },
     "agentSessionContinuation": {
@@ -22306,14 +22324,14 @@
         "chooseAgent": "Choose agent",
         "closePane": "Close pane",
         "files": "Files",
-        "keyboardHint": "↑↓ Enter to open · → agents · / to search",
         "markdown": "Markdown",
         "mobileEmulator": "Mobile emulator",
         "new": "New",
         "newAgent": "New Agent",
         "newNamedAgent": "New {{agent}} agent",
         "noMatches": "No matches",
-        "searchPlaceholder": "Open agent, terminal, or file…",
+        "searchAgentsAndFiles": "Search agents and files",
+        "searchShort": "Search",
         "terminal": "Terminal"
       }
     },
@@ -24755,13 +24773,12 @@
     "setByArguments": "Set by your Arguments",
     "searchModels": "Search models",
     "noModels": "No models match your search.",
-    "legacyModels": "Legacy models",
     "toggleArguments": "Toggle Arguments",
     "argumentsTerminalHint": "Only applies to terminal (CLI) launches",
     "chatChoicesNote": "{{agent}} model or effort choices without a CLI flag apply to chats.",
     "composedChoicesNote": "{{agent}} effort and speed choices are included in the model argument.",
     "searchAgentModels": "Search {{agent}} models…",
-    "legacyModelCount": "{{total}} models",
+    "moreModelsWithCount": "More models ({{total}})",
     "use": "Use",
     "select": "Select agent",
     "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",

@@ -2545,6 +2545,10 @@
       "copyFailed": "Couldn't copy",
       "selectionCleared": "Selection cleared (scrolled out of buffer)"
     },
+    "useCloseActions": {
+      "closeFailed": "Couldn't close the tab. Try again.",
+      "closeFailedDesktopNotReady": "Couldn't close the tab. Orca on your computer is still loading. Try again in a moment."
+    },
     "useContentCreateActions": {
       "noteCreateFailed": "Failed to create markdown note",
       "untitledNoteCreateFailed": "Unable to create untitled markdown note",

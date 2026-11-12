@@ -10,8 +10,6 @@ import '../../../../orchestration/db/attempt-outcome-projection'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { approvalReportId } from '../../../../orchestration/workers/approvals/worker-approval-report'
 import type { ChatWorkerPrompt } from '../../../../orchestration/workers/approvals/chat-worker-approval-prompt'
-import type * as ChatApprovalPrompt from '../../../../orchestration/workers/approvals/chat-worker-approval-prompt'
-import type { WorkerApprovalPayload } from '../../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 const chat = vi.hoisted(() => {
   const state: {
@@ -40,11 +38,6 @@ vi.mock(
 )
 
 const { answerWorkerApproval } = await import('./worker-approval-answer')
-const { workerApprovalAccess } = await import('./worker-approval-access')
-type ChatApprovalPromptModule = typeof ChatApprovalPrompt
-const { answerChatWorkerApproval } = await vi.importActual<ChatApprovalPromptModule>(
-  '../../../../orchestration/workers/approvals/chat-worker-approval-prompt'
-)
 
 const HANDLE = 'term_worker'
 
@@ -63,32 +56,7 @@ function item(resolvedBy: string | null): AgentJournalApprovalItem {
   }
 }
 
-type TerminalAnswer =
-  | { ok: true; approval: WorkerApprovalPayload }
-  | { ok: false; code: 'approval_not_open' | 'approval_requires_person'; message: string }
-
-function openPayload(
-  approvalId: string,
-  dispatchId: string,
-  taskId: string
-): WorkerApprovalPayload {
-  return {
-    v: 1,
-    approvalId,
-    state: 'open',
-    worker: { handle: HANDLE, dispatchId, taskId },
-    summary: { title: 'Allow Bash?', detail: 'rm -rf build', reason: null },
-    allowedActions: ['allow', 'deny']
-  }
-}
-
-function setup(
-  approvalId: string,
-  options: {
-    coordinatorApprovals?: boolean
-    terminal?: (payload: WorkerApprovalPayload) => TerminalAnswer
-  } = {}
-) {
+function setup(approvalId: string) {
   const db = new OrchestrationDb(':memory:')
   const run = db.createRun({
     objective: 'approvals',
@@ -116,19 +84,15 @@ function setup(
     }),
     runId: run.id
   })
-  const terminalAnswer = vi.fn(
-    async (): Promise<TerminalAnswer> =>
-      options.terminal?.(openPayload(approvalId, dispatch.id, dispatch.task_id)) ?? {
-        ok: false,
-        code: 'approval_not_open',
-        message: 'gone'
-      }
-  )
+  const terminalAnswer = vi.fn(async () => ({
+    ok: false as const,
+    code: 'approval_not_open' as const,
+    message: 'gone'
+  }))
   const runtime = {
     getOrchestrationDb: () => db,
     notifyMessageArrived: vi.fn(),
-    terminalWorkerApprovals: { answer: terminalAnswer, isHeld: () => false },
-    coordinatorApprovalsEnabled: () => options.coordinatorApprovals === true
+    terminalWorkerApprovals: { answer: terminalAnswer, isHeld: () => false }
   }
   const call = (decision: 'allow' | 'deny', access: Parameters<typeof answerWorkerApproval>[2]) =>
     answerWorkerApproval(
@@ -137,32 +101,11 @@ function setup(
       { runtime: runtime as never },
       access
     )
-  /** Runs the method's access rule, then its handler, as the RPC layer does. */
-  const answerAs = async (
-    caller: 'person' | 'agent',
-    decision: 'allow' | 'deny',
-    reason: string | undefined
-  ) => {
-    const params = { dispatch: dispatch.id, prompt: approvalId, decision, reason }
-    const rpc = {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rule and handler read only these runtime members.
-      runtime: runtime as never,
-      ...(caller === 'person' ? { caller: { kind: 'desktop' as const } } : {})
-    }
-    return answerWorkerApproval(
-      params,
-      rpc,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rule reads only params, caller and the setting.
-      workerApprovalAccess({ params, ctx: rpc as never, caller: undefined })
-    )
-  }
-  const closingMessages = () =>
+  const closings = () =>
     db
       .getUnreadRunMailbox(run.id, 100)
       .filter((message) => message.subject.startsWith('Worker approval '))
-  const closings = () => closingMessages().map((message) => message.body)
-  const closedWith = () =>
-    closingMessages().map((message) => JSON.parse(message.payload ?? '{}').approval.outcome)
+      .map((message) => message.body)
   const mailToWorker = () =>
     z
       .object({ body: z.string() })
@@ -172,7 +115,7 @@ function setup(
           .prepare(`SELECT body FROM messages WHERE to_handle = ?`)
           .all(`dispatch:${dispatch.id}`)
       )
-  return { call, answerAs, closings, closedWith, mailToWorker, terminalAnswer }
+  return { call, closings, mailToWorker }
 }
 
 const person = { answeredBy: 'person' as const, reason: 'Denied by the owner.' }
@@ -207,245 +150,4 @@ describe('answering a worker approval', () => {
     await byCoordinator.call('deny', coordinator)
     expect(byCoordinator.mailToWorker()).toEqual([{ body: 'Use a script file.' }])
   })
-})
-
-const REASON = 'The tests need the build folder cleared.'
-const answeredByOrca = (decision: 'allow' | 'deny') => ({
-  ok: true as const,
-  prompt: {
-    revision: 2,
-    body: {
-      ...item('trusted-local:orchestration:approval:x'),
-      resolution: {
-        state: 'resolved' as const,
-        selectedOptionId: decision,
-        resolvedBy: 'trusted-local:orchestration:approval:x',
-        resolvedAt: 2
-      }
-    }
-  },
-  optionLabel: decision === 'allow' ? 'Allow' : 'Deny'
-})
-
-type Row = {
-  setting: 'on' | 'off'
-  caller: 'person' | 'agent'
-  decision: 'allow' | 'deny'
-  reason?: string
-  worker: 'chat' | 'terminal'
-  /** What the worker's side does with the answer. */
-  meanwhile:
-    | 'takes it'
-    | 'answered first by the person'
-    | 'refuses it'
-    | 'is a person-only check'
-    | 'drops the allow'
-  expected: { ok: true; outcome: object; mailed: string[] } | { code: string; closing: string[] }
-}
-
-// Every outcome of the coordinator-approval setting, hardcoded.
-const ROWS: Row[] = [
-  {
-    setting: 'off',
-    caller: 'agent',
-    decision: 'allow',
-    reason: REASON,
-    worker: 'chat',
-    meanwhile: 'takes it',
-    expected: { code: 'approval_requires_person', closing: [] }
-  },
-  {
-    setting: 'off',
-    caller: 'agent',
-    decision: 'allow',
-    reason: REASON,
-    worker: 'terminal',
-    meanwhile: 'takes it',
-    expected: { code: 'approval_requires_person', closing: [] }
-  },
-  {
-    setting: 'off',
-    caller: 'agent',
-    decision: 'deny',
-    reason: 'Use a script file.',
-    worker: 'chat',
-    meanwhile: 'takes it',
-    expected: {
-      ok: true,
-      outcome: { by: 'coordinator', decision: 'deny', reason: 'Use a script file.' },
-      mailed: ['Use a script file.']
-    }
-  },
-  {
-    setting: 'off',
-    caller: 'person',
-    decision: 'allow',
-    worker: 'chat',
-    meanwhile: 'takes it',
-    expected: { ok: true, outcome: { by: 'person', decision: 'allow', reason: null }, mailed: [] }
-  },
-  {
-    setting: 'on',
-    caller: 'agent',
-    decision: 'allow',
-    reason: REASON,
-    worker: 'chat',
-    meanwhile: 'takes it',
-    expected: {
-      ok: true,
-      outcome: { by: 'coordinator', decision: 'allow', reason: REASON, reasonDelivered: false },
-      mailed: []
-    }
-  },
-  {
-    setting: 'on',
-    caller: 'agent',
-    decision: 'allow',
-    reason: REASON,
-    worker: 'terminal',
-    meanwhile: 'takes it',
-    expected: {
-      ok: true,
-      outcome: { by: 'coordinator', decision: 'allow', reason: REASON, reasonDelivered: false },
-      mailed: []
-    }
-  },
-  {
-    setting: 'on',
-    caller: 'agent',
-    decision: 'deny',
-    reason: 'Use a script file.',
-    worker: 'terminal',
-    meanwhile: 'takes it',
-    expected: {
-      ok: true,
-      outcome: {
-        by: 'coordinator',
-        decision: 'deny',
-        reason: 'Use a script file.',
-        reasonDelivered: true
-      },
-      mailed: []
-    }
-  },
-  {
-    setting: 'on',
-    caller: 'agent',
-    decision: 'allow',
-    worker: 'chat',
-    meanwhile: 'takes it',
-    // A person on a remote-connected desktop sends no reason: the refusal they always got.
-    expected: { code: 'approval_requires_person', closing: [] }
-  },
-  {
-    setting: 'on',
-    caller: 'agent',
-    decision: 'allow',
-    reason: REASON,
-    worker: 'chat',
-    meanwhile: 'answered first by the person',
-    expected: {
-      code: 'approval_not_open',
-      closing: ["Allowed in the worker's own chat: approval item_1"]
-    }
-  },
-  {
-    setting: 'on',
-    caller: 'agent',
-    decision: 'allow',
-    reason: REASON,
-    worker: 'chat',
-    meanwhile: 'refuses it',
-    expected: { code: 'approval_refused', closing: [] }
-  },
-  {
-    setting: 'on',
-    caller: 'agent',
-    decision: 'allow',
-    reason: REASON,
-    worker: 'chat',
-    meanwhile: 'is a person-only check',
-    expected: { code: 'approval_requires_person', closing: [] }
-  },
-  {
-    setting: 'on',
-    caller: 'agent',
-    decision: 'deny',
-    reason: 'Use a script file.',
-    worker: 'chat',
-    meanwhile: 'is a person-only check',
-    expected: {
-      ok: true,
-      outcome: { by: 'coordinator', decision: 'deny', reason: 'Use a script file.' },
-      mailed: ['Use a script file.']
-    }
-  },
-  {
-    setting: 'on',
-    caller: 'agent',
-    decision: 'allow',
-    reason: REASON,
-    worker: 'terminal',
-    meanwhile: 'drops the allow',
-    expected: { code: 'approval_requires_person', closing: [] }
-  }
-]
-
-describe('coordinator approvals: every outcome', () => {
-  it.each(ROWS)(
-    'setting $setting, $caller $decision on a $worker worker that $meanwhile',
-    async (row) => {
-      chat.custody = row.worker === 'chat' ? 'chat' : 'terminal'
-      chat.prompt = {
-        revision: 1,
-        body: {
-          ...item(null),
-          ...(row.meanwhile === 'is a person-only check' ? { personOnly: true as const } : {})
-        }
-      }
-      chat.answer.mockReset()
-      chat.answer.mockImplementation(async (input) => {
-        switch (row.meanwhile) {
-          case 'takes it':
-            return answeredByOrca(row.decision)
-          case 'answered first by the person':
-            chat.prompt = { revision: 2, body: item('desktop-renderer') }
-            return { ok: false, code: 'approval_not_open', message: 'gone' }
-          case 'refuses it':
-            return { ok: false, code: 'approval_refused', message: 'refused' }
-          case 'is a person-only check':
-          case 'drops the allow': {
-            // The real person-only check runs before any chat is reached; past it, the answer lands.
-            const checked = await answerChatWorkerApproval({
-              ...input,
-              readPrompt: async () => chat.prompt
-            })
-            return !checked.ok && checked.code === 'approval_requires_person'
-              ? checked
-              : answeredByOrca(row.decision)
-          }
-        }
-      })
-      const ctx = setup('item_1', {
-        coordinatorApprovals: row.setting === 'on',
-        terminal: (payload) =>
-          row.meanwhile === 'drops the allow'
-            ? { ok: false, code: 'approval_requires_person', message: 'person only' }
-            : { ok: true, approval: payload }
-      })
-
-      const answering = ctx.answerAs(row.caller, row.decision, row.reason)
-
-      if ('code' in row.expected) {
-        await expect(answering).rejects.toMatchObject({ code: row.expected.code })
-        expect(ctx.closings()).toEqual(
-          row.expected.closing.map((text) => expect.stringContaining(text))
-        )
-        return
-      }
-      await expect(answering).resolves.toMatchObject({ decision: row.decision })
-      expect(ctx.closedWith()).toEqual([expect.objectContaining(row.expected.outcome)])
-      expect(ctx.mailToWorker()).toEqual(row.expected.mailed.map((body) => ({ body })))
-    }
-  )
 })

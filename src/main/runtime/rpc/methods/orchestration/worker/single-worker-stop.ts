@@ -198,7 +198,7 @@ export async function stopSingleWorker(
       'none'
     )
   }
-  await archiveWorkerOutputBeforeStop({
+  archiveWorkerOutputBeforeStop({
     runtime,
     db,
     dispatchId,
