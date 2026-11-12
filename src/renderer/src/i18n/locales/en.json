@@ -1198,7 +1198,9 @@
         "automationHelp": "Its run history is deleted too.",
         "automation": "Deleting an automation",
         "title": "Confirmations",
-        "running": "Closing a running chat or terminal"
+        "running": "Closing a running chat or terminal",
+        "applicationsFolder": "Running Orca outside Applications",
+        "applicationsFolderHelp": "Offer to move Orca to the Applications folder on launch."
       },
       "pages": {
         "folder": "Workspace folder",
@@ -1238,7 +1240,11 @@
           "custom": "custom",
           "indentation": "indentation",
           "long_lines": "long lines",
-          "about": "about"
+          "about": "about",
+          "applications": "Applications",
+          "move": "move",
+          "dmg": "DMG",
+          "disk_image": "disk image"
         }
       },
       "cli": {
@@ -24388,6 +24394,39 @@
       "message": "Orca's graphics process has crashed repeatedly.",
       "detail": "Safe graphics mode disables hardware acceleration and WebGL for this Orca version. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged."
     }
+  },
+  "applicationsFolderMove": {
+    "prompt": {
+      "title": "Move Orca to Applications?",
+      "message": "Move Orca to your Applications folder?",
+      "detail": "Orca is running from outside Applications, such as a disk image or Downloads. From there it may not be able to update, and ejecting a disk image while Orca is open can crash it. Orca will move itself into Applications, then quit and reopen. Your settings and sessions are kept.",
+      "moveButton": "Move and Relaunch",
+      "notNowButton": "Not Now",
+      "neverButton": "Don’t Ask Again"
+    },
+    "replace": {
+      "title": "Replace Orca in Applications?",
+      "message": "Another copy of Orca is already in Applications.",
+      "detail": "Replacing it moves that copy to the Trash.",
+      "replaceButton": "Replace",
+      "cancelButton": "Cancel"
+    },
+    "running": {
+      "title": "Another Orca Is Open",
+      "message": "The copy of Orca in Applications is already open.",
+      "detail": "Quit that copy, then reopen this one to move it."
+    },
+    "failed": {
+      "title": "Couldn’t Move Orca",
+      "message": "Orca couldn’t be moved to Applications.",
+      "detail": "Drag Orca into the Applications folder in Finder instead. This copy keeps running."
+    },
+    "cannotReplace": {
+      "title": "Can’t Replace Orca in Applications",
+      "message": "Another copy of Orca is already in Applications, and this account can’t replace it.",
+      "detail": "Remove or replace that copy in Finder, then reopen this one to move it. This copy keeps running."
+    },
+    "okButton": "OK"
   },
   "localBuild": {
     "chooseTitle": "Choose a Local Orca Build",

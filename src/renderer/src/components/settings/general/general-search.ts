@@ -1,4 +1,8 @@
-import { getGeneralConfirmationSearchEntries } from './general-confirmations-search'
+import {
+  getGeneralConfirmationSearchEntries,
+  getGeneralMacConfirmationSearchEntries,
+  showsMacDesktopConfirmations
+} from './general-confirmations-search'
 import { getGeneralSubPageTitle } from './general-sub-pages'
 import { GENERAL_SETTING_ANCHORS, generalSetting } from './general-setting-anchors'
 import type { SettingsSearchEntry } from '../search/settings-search'
@@ -220,6 +224,9 @@ export function getGeneralPaneSearchEntries(
     ...getGeneralWorkspaceSearchEntries(),
     ...getGeneralNavigationSearchEntries(),
     ...Object.values(getGeneralConfirmationSearchEntries()),
+    ...(showsMacDesktopConfirmations()
+      ? Object.values(getGeneralMacConfirmationSearchEntries())
+      : []),
     ...getGeneralDestinationSearchEntries(),
     ...(options.includeProjectRuntime === false ? [] : getGeneralProjectRuntimeSearchEntries()),
     ...getGeneralEditorSearchEntries(),

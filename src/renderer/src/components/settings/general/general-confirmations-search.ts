@@ -1,6 +1,8 @@
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 export const getGeneralConfirmationSearchEntries = createLocalizedCatalog(() => ({
   pinned: {
@@ -111,6 +113,32 @@ export const getGeneralConfirmationSearchEntries = createLocalizedCatalog(() => 
         'auto.components.settings.GeneralWorkspaceSettingsSection.2ffd7c4fc8',
         'Ask before deleting artifacts'
       )
+    ]
+  }
+}))
+
+/** The move offer belongs to the macOS desktop host, not to whichever browser is viewing it. */
+export function showsMacDesktopConfirmations(): boolean {
+  return getRendererAppPlatform() === 'darwin' && !isWebClientLocation()
+}
+
+export const getGeneralMacConfirmationSearchEntries = createLocalizedCatalog(() => ({
+  applicationsFolder: {
+    title: translate(
+      'settings.general.confirmations.applicationsFolder',
+      'Running Orca outside Applications'
+    ),
+    description: translate(
+      'settings.general.confirmations.applicationsFolderHelp',
+      'Offer to move Orca to the Applications folder on launch.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.confirmations', 'confirmations'),
+      ...translateSearchKeyword('settings.general.search.keywords.applications', 'Applications'),
+      ...translateSearchKeyword('settings.general.search.keywords.move', 'move'),
+      ...translateSearchKeyword('settings.general.search.keywords.dmg', 'DMG'),
+      ...translateSearchKeyword('settings.general.search.keywords.disk_image', 'disk image'),
+      ...translateSearchKeyword('auto.components.settings.general.search.0efc9d96ad', 'prompt')
     ]
   }
 }))

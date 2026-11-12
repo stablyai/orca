@@ -105,3 +105,21 @@ export async function prepareAndInvokeAppRestart<T>(
     state.pending = false
   }
 }
+
+/** Main confirmed a Move to Applications; prepare like any intentional restart so quit guards stand down and dirty buffers are backed up before the bundle moves. */
+export function registerApplicationsFolderMoveRelay(
+  ipcRenderer: Pick<IpcRenderer, 'on' | 'invoke' | 'send'>,
+  eventTarget: EventTarget,
+  awaitCheckpoint: () => Promise<void>
+): void {
+  ipcRenderer.on('applicationsFolderMove:begin', (_event, token: unknown) => {
+    void prepareAndInvokeAppRestart(
+      eventTarget,
+      (): Promise<unknown> => ipcRenderer.invoke('applicationsFolderMove:move', token),
+      awaitCheckpoint,
+      (moved) => moved === true
+    ).catch(() => {
+      ipcRenderer.send('applicationsFolderMove:prepareFailed', token)
+    })
+  })
+}
