@@ -53,6 +53,8 @@ export type TeamPageViewProps = {
   onContactSales: (url: string) => void
   /** Settings → Team renders the page inline: seats and invoices stay on Plan & billing (linked). */
   inline?: { onOpenPlanBilling: () => void }
+  /** Owners in Settings › Team: "Delete <team>", after "Leave <team>" (TEAM-DELETE). */
+  dangerZone?: React.ReactNode
 }
 
 function viewerRoleSentence(role: OrcaOrgRole, t: Translate): string {
@@ -383,6 +385,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
               </SettingsDisabledControlTooltip>
             </section>
           ) : null}
+          {props.dangerZone}
         </div>
       ) : null}
     </div>

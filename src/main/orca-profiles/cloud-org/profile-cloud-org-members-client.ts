@@ -114,11 +114,11 @@ export function normalizeRoster(value: unknown): OrcaOrgMembersRoster {
   }
 }
 
-function orgMembersUrl(config: OrcaCloudAuthConfig, orgId: string, path: string): string {
+export function orgMembersUrl(config: OrcaCloudAuthConfig, orgId: string, path: string): string {
   return `${config.apiBaseUrl}/v1/desktop/orgs/${encodeURIComponent(orgId)}${path}`
 }
 
-async function extractErrorCode(response: Response): Promise<string | undefined> {
+export async function extractErrorCode(response: Response): Promise<string | undefined> {
   try {
     const body = (await response.json()) as unknown
     if (
@@ -135,7 +135,11 @@ async function extractErrorCode(response: Response): Promise<string | undefined>
 }
 
 // Reject redirects to avoid leaking access tokens; timeouts bound renderer IPC waits.
-function requestInit(method: 'GET' | 'POST', accessToken: string, body?: unknown): RequestInit {
+export function requestInit(
+  method: 'GET' | 'POST',
+  accessToken: string,
+  body?: unknown
+): RequestInit {
   return {
     method,
     headers: {

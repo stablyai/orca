@@ -21201,7 +21201,25 @@
           "totalPerYear": "{{total}} per year",
           "openProfile": "Open {{value0}}’s profile",
           "viewProfile": "View profile",
-          "seatsOnPlanBilling": "Seats and invoices are in"
+          "seatsOnPlanBilling": "Seats and invoices are in",
+          "delete": {
+            "confirmTitle": "Delete {{value0}}?",
+            "confirmBody": "Everyone loses access to the team. Pending invites are cancelled. Its settings and team cloud secrets are deleted. Billing history is kept. This can’t be undone.",
+            "typeToConfirm": "Type {{value0}} to confirm",
+            "cta": "Delete team",
+            "title": "Delete {{value0}}",
+            "cardBody": "Removes the team for everyone. This can’t be undone.",
+            "blockedPlan": "Your team still has a plan. Cancel it in billing first, then delete the team.",
+            "blockedWorkspaces_one": "{{count}} cloud workspace still exists. Delete it first.",
+            "blockedWorkspaces_other": "{{count}} cloud workspaces still exist. Delete them first.",
+            "showWorkspaces": "Show cloud workspaces",
+            "mismatch": "The team name doesn’t match.",
+            "unavailable": "Couldn’t check the team right now, so nothing was deleted. Try again.",
+            "rateLimited": "Too many attempts. Wait a minute, then try again.",
+            "forbidden": "Only owners can delete the team.",
+            "failed": "Couldn’t delete the team. Try again.",
+            "deletedToast": "{{value0}} deleted"
+          }
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",

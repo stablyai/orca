@@ -5,6 +5,12 @@ import type {
   CloudSetupStartResult
 } from '../../shared/orca-cloud-setup'
 import type {
+  OrcaProfileOrgDeleteArgs,
+  OrcaProfileOrgDeleteCheckArgs,
+  OrcaProfileOrgDeleteCheckResult,
+  OrcaProfileOrgDeleteResult
+} from '../../shared/orca-org-delete'
+import type {
   OrcaProfileOrgCreateArgs,
   OrcaProfileOrgCreateResult,
   OrcaProfileOrgLeaveArgs
@@ -98,6 +104,10 @@ export type OrcaProfileApi = {
   orgLeave: (args: OrcaProfileOrgLeaveArgs) => Promise<OrcaProfileOrgMemberMutationResult>
   /** Creates a team owned by the signed-in user. */
   orgCreate: (args: OrcaProfileOrgCreateArgs) => Promise<OrcaProfileOrgCreateResult>
+  /** Whether an owner can delete the team now, and what blocks it (TEAM-DELETE). */
+  orgDeleteCheck: (args: OrcaProfileOrgDeleteCheckArgs) => Promise<OrcaProfileOrgDeleteCheckResult>
+  /** Deletes the team for everyone; `confirmName` is the name exactly as typed. */
+  orgDelete: (args: OrcaProfileOrgDeleteArgs) => Promise<OrcaProfileOrgDeleteResult>
   /** Fires when the browser comes back from Stripe Checkout or the Portal (orca:// link). */
   onBillingReturn: (callback: (event: OrcaBillingReturn) => void) => () => void
   /** Main asks for a billing re-read (cloud workspace created/woken, or the usage poll). */
