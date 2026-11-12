@@ -145,12 +145,10 @@ describe('independent pane agent session environments', () => {
         expect(deleted.CLAUDE_CODE_MESSAGING_SOCKET).toBeUndefined()
         expect(deleted.claude_code_messaging_socket).toBeUndefined()
         expect(explicit.claude_code_messaging_socket).toBe('')
-        if (platform !== 'win32') {
-          Object.defineProperty(process, 'platform', { value: 'linux' })
-          const posix = build({})
-          expect(posix.CLAUDE_CODE_MESSAGING_SOCKET).toBeUndefined()
-          expect(posix.claude_code_messaging_socket).toBe('parent-alias')
-        }
+        Object.defineProperty(process, 'platform', { value: 'linux' })
+        const posix = build({})
+        expect(posix.CLAUDE_CODE_MESSAGING_SOCKET).toBeUndefined()
+        expect(posix.claude_code_messaging_socket).toBe('parent-alias')
       } finally {
         Object.defineProperty(process, 'platform', { value: platform })
       }
