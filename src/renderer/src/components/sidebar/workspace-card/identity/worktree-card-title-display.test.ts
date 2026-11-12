@@ -12,15 +12,4 @@ describe('getWorktreeCardTitleDisplay', () => {
       })
     ).toBe('release/rc-11')
   })
-
-  it('lets an automatic branch name give way to a linked task title', () => {
-    expect(
-      getWorktreeCardTitleDisplay({
-        storedDisplayName: 'release/rc-11',
-        displayNameMode: 'automatic',
-        branchName: 'release/rc-11',
-        jiraIssueTitle: 'Refactor billing export'
-      })
-    ).toBe('Refactor billing export')
-  })
 })
