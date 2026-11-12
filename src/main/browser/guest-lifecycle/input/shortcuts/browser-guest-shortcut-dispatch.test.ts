@@ -4,7 +4,14 @@ import {
   type GuestShortcutForwardContext
 } from './browser-guest-shortcut-dispatch'
 
-const input = { key: 'Y', code: 'KeyY', control: true, shift: true }
+const input = {
+  key: 'Y',
+  code: 'KeyY',
+  meta: process.platform === 'darwin',
+  control: process.platform !== 'darwin',
+  shift: true
+}
+const primaryDoubleTap = process.platform === 'darwin' ? 'Cmd' : 'Ctrl'
 
 function fixture(local = true) {
   const send = vi.fn()
@@ -16,7 +23,7 @@ function fixture(local = true) {
     browserTabId: 'page',
     resolveRenderer: () => renderer,
     isLocalRenderer: () => local,
-    getKeybindings: () => ({ 'view.plugins': ['Ctrl+Shift+Y'] }),
+    getKeybindings: () => ({ 'view.plugins': ['Mod+Shift+Y'] }),
     forwardBrowserPageZoom: vi.fn()
   }
   return { context, event, send }
@@ -35,18 +42,33 @@ describe('Plugins shortcut from a browser guest', () => {
     const { context, event, send } = fixture()
     context.getKeybindings = () => ({ 'view.plugins': [] })
     expect(forwardGuestShortcutInput(context, event, input)).toBe(false)
-    context.getKeybindings = () => ({ 'view.plugins': ['Ctrl+Shift+Z'] })
+    context.getKeybindings = () => ({ 'view.plugins': ['Mod+Shift+Z'] })
     expect(forwardGuestShortcutInput(context, event, input)).toBe(false)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('leaves text-producing custom bindings to the guest', () => {
+    const { context, event, send } = fixture()
+    context.getKeybindings = () => ({ 'view.plugins': ['Alt+A'] })
+    expect(forwardGuestShortcutInput(context, event, { key: 'å', code: 'KeyA', alt: true })).toBe(
+      false
+    )
+    expect(forwardGuestShortcutInput(context, event, { key: 'a', code: 'KeyA', alt: true })).toBe(
+      false
+    )
+    expect(event.preventDefault).not.toHaveBeenCalled()
     expect(send).not.toHaveBeenCalled()
   })
 
   it('replays a configured modifier double tap', () => {
     const { context, event, send } = fixture()
-    context.getKeybindings = () => ({ 'view.plugins': ['DoubleTap+Shift'] })
-    expect(forwardGuestShortcutInput(context, event, { doubleTapModifier: 'Shift' })).toBe(true)
+    context.getKeybindings = () => ({ 'view.plugins': ['DoubleTap+Mod'] })
+    expect(forwardGuestShortcutInput(context, event, { doubleTapModifier: primaryDoubleTap })).toBe(
+      true
+    )
     expect(send).toHaveBeenCalledWith(
       'ui:browserPageTabShortcut',
-      expect.objectContaining({ doubleTapModifier: 'Shift' })
+      expect.objectContaining({ doubleTapModifier: primaryDoubleTap })
     )
   })
 

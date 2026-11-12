@@ -3,6 +3,7 @@ import {
   type WindowShortcutInput
 } from '../../../../../shared/window-shortcut-policy'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
+import { hasModifier } from '../../../../../shared/keybindings/parser'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import type { BrowserPageZoomDirection } from '../../../../../shared/browser-page-zoom'
@@ -58,7 +59,11 @@ export function forwardGuestShortcutInput(
     action?.type === 'dictationKeyDown' &&
     !textInputOwnsComposition(input) &&
     shouldForwardDictationShortcut?.() === true
+  // Why: text-producing guest chords stay on the page; primary-modifier app chords retain guest precedence.
+  const primaryModifier = process.platform === 'darwin' ? 'meta' : 'control'
+  const primaryDoubleTap = process.platform === 'darwin' ? 'Cmd' : 'Ctrl'
   const matchesPlugins =
+    (hasModifier(input, primaryModifier) || input.doubleTapModifier === primaryDoubleTap) &&
     !textInputOwnsComposition(input) &&
     keybindingMatchesAction('view.plugins', input, process.platform, keybindings, {
       context: 'app'

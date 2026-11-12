@@ -16,10 +16,13 @@ it('forwards a modifier double tap without arming it during composition', () => 
     guest: webContents,
     resolveRenderer: () => renderer,
     isLocalRenderer: () => true,
-    getKeybindings: () => ({ 'view.plugins': ['DoubleTap+Shift'] })
+    getKeybindings: () => ({ 'view.plugins': ['DoubleTap+Mod'] })
   })
   const event = { preventDefault: vi.fn() }
-  const shift = { key: 'Shift', code: 'ShiftLeft', shift: true }
+  const shift =
+    process.platform === 'darwin'
+      ? { key: 'Meta', code: 'MetaLeft', meta: true }
+      : { key: 'Control', code: 'ControlLeft', control: true }
   guest.emit('before-input-event', event, { ...shift, type: 'keyDown', isComposing: true })
   guest.emit('before-input-event', event, { ...shift, type: 'keyUp', isComposing: true })
   guest.emit('before-input-event', event, { ...shift, type: 'keyDown' })
@@ -28,6 +31,6 @@ it('forwards a modifier double tap without arming it during composition', () => 
   guest.emit('before-input-event', event, { ...shift, type: 'keyDown' })
   expect(send).toHaveBeenCalledWith(
     'ui:browserPageTabShortcut',
-    expect.objectContaining({ doubleTapModifier: 'Shift' })
+    expect.objectContaining({ doubleTapModifier: process.platform === 'darwin' ? 'Cmd' : 'Ctrl' })
   )
 })
