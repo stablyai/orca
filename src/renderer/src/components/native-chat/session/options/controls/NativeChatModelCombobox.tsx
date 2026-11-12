@@ -115,14 +115,14 @@ export function NativeChatModelCombobox({
             {/* One keyed array, so a row moving between sections keeps its highlight. */}
             {[
               ...choices.filter((choice) => !folded(choice)).map(renderChoice),
+              ...(legacyExpanded ? legacyChoices.map(renderChoice) : []),
               <AgentPickerLegacyModelsToggle
                 key="legacy-toggle"
                 total={legacyChoices.length}
                 expanded={legacyExpanded}
                 selection="palette"
                 onToggle={toggleLegacy}
-              />,
-              ...(legacyExpanded ? legacyChoices.map(renderChoice) : [])
+              />
             ]}
           </CommandGroup>
         </NativeChatSessionOptionWriteGroup>

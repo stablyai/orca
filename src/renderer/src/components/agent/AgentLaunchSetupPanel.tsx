@@ -272,14 +272,14 @@ export function AgentLaunchSetupPanel({
             {/* One keyed array, so a row moving between sections keeps its highlight. */}
             {[
               ...modelRows.rows.map(renderModelRow),
+              ...modelRows.legacyRows.map(renderModelRow),
               <AgentPickerLegacyModelsToggle
                 key="legacy-toggle"
                 total={modelRows.legacyCount}
                 expanded={legacyExpanded}
                 disabled={disabled}
                 onToggle={toggleLegacy}
-              />,
-              ...modelRows.legacyRows.map(renderModelRow)
+              />
             ]}
           </CommandGroup>
         </CommandList>

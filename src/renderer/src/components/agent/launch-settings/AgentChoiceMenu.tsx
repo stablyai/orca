@@ -106,6 +106,7 @@ export function AgentChoiceMenu({
           <DropdownMenuContent align="start" collisionPadding={8} className="w-80">
             <DropdownMenuRadioGroup value={value}>
               {mainChoices.map(radioItem)}
+              {shownLegacy.map(radioItem)}
               {legacyChoices.length > 0 ? (
                 <DropdownMenuItem
                   inset
@@ -118,7 +119,6 @@ export function AgentChoiceMenu({
                   {toggleBody}
                 </DropdownMenuItem>
               ) : null}
-              {shownLegacy.map(radioItem)}
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -160,12 +160,12 @@ export function AgentChoiceMenu({
         <SourceControlActionOptionTrigger label={current} disabled={disabled} />
         <SelectContent>
           {mainChoices.map(selectItem)}
+          {shownLegacy.map(selectItem)}
           {legacyChoices.length > 0 ? (
             <SelectItem value={LEGACY_TOGGLE} aria-expanded={legacyExpanded}>
               <span className="flex w-full min-w-0 items-center gap-2">{toggleBody}</span>
             </SelectItem>
           ) : null}
-          {shownLegacy.map(selectItem)}
         </SelectContent>
       </Select>
     </SourceControlActionOptionField>

@@ -227,6 +227,7 @@ export function descriptorRowElements(
     ...choices.filter((choice) => !choice.legacy).map(choiceRow),
     ...(more.length > 0 && moreChoices
       ? [
+          ...(moreChoices.shown ? more.map(choiceRow) : []),
           <ListRow
             key="more-choices"
             title={
@@ -235,8 +236,7 @@ export function descriptorRowElements(
                 : t('chat.sessionOptionRows.moreModels', 'More models')
             }
             onPress={moreChoices.onToggle}
-          />,
-          ...(moreChoices.shown ? more.map(choiceRow) : [])
+          />
         ]
       : [])
   ]
