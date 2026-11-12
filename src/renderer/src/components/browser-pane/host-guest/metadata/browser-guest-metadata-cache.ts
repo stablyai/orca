@@ -256,6 +256,7 @@ export function subscribeBrowserGuestMetadata(
   listener: Listener
 ): () => void {
   let guestId: number | null = null
+  let boundListener: { id: number; onState: Listener } | null = null
   let disposed = false
   let unsubscribe = (): void => {}
   const bind = (): void => {
@@ -266,7 +267,13 @@ export function subscribeBrowserGuestMetadata(
     if (id === null) {
       return
     }
-    if (id === guestId) {
+    // Why: a retired push for the same guest id clears the cache and its listener set;
+    // a re-registered guest must re-arm listeners instead of refreshing into the void.
+    if (
+      id === guestId &&
+      boundListener?.id === id &&
+      listeners.get(id)?.has(boundListener.onState)
+    ) {
       const entry = guests.get(id)
       if (!entry?.applicable || !entry.state) {
         refreshGuest(id, browserPageId)
@@ -283,6 +290,7 @@ export function subscribeBrowserGuestMetadata(
         listener(state)
       }
     }
+    boundListener = { id, onState }
     let subscribers = listeners.get(id)
     if (!subscribers) {
       subscribers = new Set()

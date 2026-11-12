@@ -151,7 +151,12 @@ export function createBrowserPageWebviewGuestSession({
     setPending: (pending) => {
       guestRecoveryPendingRef.current = pending
     },
-    validateRegistration: async () => {
+    validateRegistration: async (repair: boolean) => {
+      // Why: visibility checks must not resurrect a deliberately unregistered guest;
+      // while a recovery error is active, only explicit triggers may validate or repair.
+      if (!repair && activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
+        return null
+      }
       // Budget eviction can remove a hidden guest while its pane stays mounted.
       if (!webview.isConnected) {
         return false
@@ -175,6 +180,9 @@ export function createBrowserPageWebviewGuestSession({
       }
       if (registered) {
         return true
+      }
+      if (!repair) {
+        return null
       }
       const repaired = await window.api.browser.repairGuestRegistration({
         browserPageId: browserTabId,
