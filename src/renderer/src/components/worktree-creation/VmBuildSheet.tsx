@@ -1,6 +1,6 @@
 import React from 'react'
 import { openCloudWorkspacesHome } from '../cloud-workspaces/cloud-workspaces-home-nav'
-import { AlertTriangle, ChevronRight, CircleAlert, CircleCheck, Loader2 } from 'lucide-react'
+import { AlertTriangle, ChevronRight, CircleAlert, CircleCheck, Cloud, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useOrcaBillingStatus } from '@/components/billing/use-orca-billing-status'
@@ -223,6 +223,8 @@ export function VmBuildSheet({
                   <Loader2 aria-hidden className="size-4 text-muted-foreground animate-spin" />
                 ) : state === 'ready' ? (
                   <CircleCheck aria-hidden className="size-4 text-foreground" />
+                ) : billingBlock ? (
+                  <Cloud aria-hidden className="size-4 text-muted-foreground" />
                 ) : gated ? (
                   <CircleAlert aria-hidden className="size-4 text-muted-foreground" />
                 ) : (
