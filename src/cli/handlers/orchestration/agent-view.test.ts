@@ -92,6 +92,29 @@ describe('orchestration agent views', () => {
     expect(callMock).toHaveBeenLastCalledWith('orchestration.workerShow', { dispatch: 'ctx_1' })
   })
 
+  it('escapes provider option control characters in detailed text output', async () => {
+    const { stdout } = await run(
+      'worker-show',
+      [
+        ['dispatch', 'ctx_1'],
+        ['full', true]
+      ],
+      {
+        dispatch: { id: 'ctx_1', taskId: 'task_1', status: 'active' },
+        worker: { state: 'ready', stage: 'ready', agentTerminalHandle: null },
+        settings: {
+          kind: 'options',
+          sessionId: 'session-1',
+          runtimeFence: 7,
+          agent: 'codex',
+          current: { reportedModel: 'model\u009b2Jspoof' }
+        }
+      }
+    )
+    expect(stdout).not.toContain('\u009b')
+    expect(stdout).toContain('model\\x9b2Jspoof')
+  })
+
   it('makes a failed worker-start impossible to miss on stdout, stderr, and the exit code', async () => {
     const { stdout, stderr } = await run('worker-start', [['task', 'task_1']], {
       ...OLDER_RUNTIME_START,
