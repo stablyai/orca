@@ -59,7 +59,6 @@ export function AntigravityTerminalAccountRows({
             aria-label={t('accounts.antigravity.usage', 'Refresh usage')}
             disabled={busy}
             onClick={() => run('Usage')}
-            className="text-muted-foreground tabular-nums hover:text-foreground"
           >
             <RefreshCw />
             {reading && !reading.error
@@ -187,7 +186,6 @@ export function AntigravityTerminalAccountRows({
               size="xs"
               disabled={busy}
               onClick={() => run('Remove', account.id)}
-              className="text-muted-foreground hover:text-destructive"
             >
               <Trash2 />
               {t('accounts.antigravity.remove', 'Remove')}
@@ -232,12 +230,7 @@ function AntigravityAccountRow({
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate text-sm font-medium">{title}</span>
           {active ? (
-            <Badge
-              variant="outline"
-              className="h-4 shrink-0 rounded px-1.5 text-3xs font-medium leading-none text-foreground/80"
-            >
-              {t('accounts.antigravity.active', 'Active')}
-            </Badge>
+            <Badge variant="outline">{t('accounts.antigravity.active', 'Active')}</Badge>
           ) : null}
         </span>
       ) : null}

@@ -225,9 +225,12 @@ export function AntigravityAccountsSection({
                 aria-label={t('accounts.antigravity.refresh', 'Refresh accounts')}
                 disabled={busy}
                 onClick={() => void run('List')}
-                className="text-muted-foreground"
               >
-                {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                {busy ? (
+                  <Loader2 className="animate-spin text-muted-foreground" />
+                ) : (
+                  <RefreshCw className="text-muted-foreground" />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
@@ -293,13 +296,8 @@ function AntigravitySubsectionHeader({
         <h4 className="text-sm font-medium">{title}</h4>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={info}
-              className="text-muted-foreground"
-            >
-              <Info className="size-3.5" />
+            <Button variant="ghost" size="icon-xs" aria-label={info}>
+              <Info className="size-3.5 text-muted-foreground" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4} className="max-w-xs">
