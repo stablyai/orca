@@ -195,6 +195,11 @@ export default defineConfig({
     // A finished file's background log can lose the race with worker teardown; only that log line is lost.
     onUnhandledError: (error) =>
       !(error.name === 'EnvironmentTeardownError' && error.message.includes('"onUserConsoleLog"')),
-    ...(process.platform === 'win32' ? { maxWorkers: 4 } : {})
+    // ORCA_VITEST_MAX_WORKERS caps workers on a shared, loaded machine (the cloud premerge Mac).
+    ...(process.env.ORCA_VITEST_MAX_WORKERS
+      ? { maxWorkers: Number(process.env.ORCA_VITEST_MAX_WORKERS) }
+      : process.platform === 'win32'
+        ? { maxWorkers: 4 }
+        : {})
   }
 })
