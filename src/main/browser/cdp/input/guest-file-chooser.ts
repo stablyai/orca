@@ -34,6 +34,7 @@ export async function interceptFileChooser(
   const sessionIds = [...new Set([undefined, frameSessionId])]
   const { promise: opened, resolve: resolveOpened } = Promise.withResolvers<OpenedFileChooser>()
   let openedAny = false
+  let abandoned = false
   const onMessage = (
     _event: unknown,
     method: string,
@@ -74,23 +75,28 @@ export async function interceptFileChooser(
     )
   }
   try {
-    await Promise.all(
-      sessionIds.map(async (sessionId) => {
-        // Chromium reports choosers only with Page on; a page with no agent session may not have it.
-        await rejectAfterTimeout(
-          sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId),
-          PAGE_REPLY_TIMEOUT_MS,
-          'The page is not responding, so Orca did not send the input.'
-        )
-        await sendGuestCdpCommand(
-          wc,
-          'Page.setInterceptFileChooserDialog',
-          cancel ? { enabled: true, cancel: true } : { enabled: true },
-          sessionId
-        )
-      })
+    // Both wait on the renderer. Release follows any sent enable in order; abandon stops later ones.
+    await rejectAfterTimeout(
+      Promise.all(
+        sessionIds.map(async (sessionId) => {
+          // Chromium reports choosers only with Page on; a page with no agent session may not have it.
+          await sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId)
+          if (abandoned) {
+            return
+          }
+          await sendGuestCdpCommand(
+            wc,
+            'Page.setInterceptFileChooserDialog',
+            cancel ? { enabled: true, cancel: true } : { enabled: true },
+            sessionId
+          )
+        })
+      ),
+      PAGE_REPLY_TIMEOUT_MS,
+      'The page is not responding, so Orca did not send the input.'
     )
   } catch (error) {
+    abandoned = true
     await release()
     throw error
   }
