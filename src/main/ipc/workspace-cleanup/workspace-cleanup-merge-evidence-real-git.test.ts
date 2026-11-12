@@ -32,7 +32,14 @@ async function commitFile(cwd: string, name: string): Promise<void> {
 }
 
 async function readEvidence(baseRef?: string, branch = 'feature') {
-  const repo = { id: 'repo', path: clonePath, displayName: 'repo' } as Repo
+  const repo: Repo = {
+    id: 'repo',
+    path: clonePath,
+    displayName: 'repo',
+    badgeColor: '#000',
+    addedAt: 0
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: git evidence reads only these fields of the listed worktree.
   const worktree = {
     id: `repo::${worktreePath}`,
     repoId: 'repo',
