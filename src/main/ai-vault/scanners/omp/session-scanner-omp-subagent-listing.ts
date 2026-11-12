@@ -6,8 +6,8 @@ import type {
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { wslGatedReaddir, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
-import { recordSessionScanIssue, scanIssueTextFromError } from '../../session-scan-issues'
-import { sessionIdFromFileName, sessionSortTime } from '../../session-scanner-accumulator'
+import { recordSessionScanIssue, scanIssueTextFromError } from '../../parsing/session-scan-issues'
+import { sessionIdFromFileName, sessionSortTime } from '../../parsing/session-scanner-accumulator'
 import { parseMessageGraphSessionFile } from '../session-scanner-graph-parsers'
 import {
   isOmpSubagentTranscriptFileName,

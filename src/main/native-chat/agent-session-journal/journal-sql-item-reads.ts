@@ -31,7 +31,7 @@ import {
   readJournalDomainContinuationContext
 } from './journal-sql-continuation-context'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { ClaudeJournalSnapshot } from '../../claude/claude-subagent-journaled-identities'
+import type { ClaudeJournalSnapshot } from '../../claude/subagents/claude-subagent-journaled-identities'
 import { readJournalDomainClaudeIdentities } from './journal-sql-claude-identities'
 import type {
   JournalSqlLifecycleRead,

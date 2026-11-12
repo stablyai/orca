@@ -1,11 +1,11 @@
-import { githubBodyImageUrls, removeFailedGitHubBodyHtml } from '../../body-image-urls'
+import { githubBodyImageUrls, removeFailedGitHubBodyHtml } from '../../attachments/body-image-urls'
 import type { Nodes } from 'mdast'
 import { z } from 'zod'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
-import type { PRComment } from '../../../../shared/github/comment-types'
-import { mapGraphQLReactionGroups } from '../../comment-reactions'
-import { tailDiffHunk } from '../../../../shared/github/pr-comment-diff-hunk'
+import type { PRComment } from '../../../../shared/github/comments/comment-types'
+import { mapGraphQLReactionGroups } from '../../comments/comment-reactions'
+import { tailDiffHunk } from '../../../../shared/github/comments/pr-comment-diff-hunk'
 import { viewerAuthorship } from '../../../source-control/comment-viewer-authorship'
 
 const commentSchema = z.object({

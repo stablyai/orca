@@ -7,7 +7,7 @@ import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routin
 import {
   claudeConfigDirEnvPatch,
   withoutInheritedClaudeConfigDir
-} from '../../../claude/claude-config-dir-pin'
+} from '../../../claude/structured/launch/claude-config-dir-pin'
 import { resolveClaudeStructuredLaunchHome } from '../../../claude/structured/launch/claude-structured-launch-home'
 import type { CommitMessageGenerationTarget } from '../../../text-generation/source-control-text-generation-types'
 

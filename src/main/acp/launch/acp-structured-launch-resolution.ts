@@ -16,6 +16,7 @@ import {
 } from '../../../shared/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { assertAntigravityChatAuthPublished } from '../../antigravity/antigravity-chat-auth-publication'
+import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
@@ -23,7 +24,6 @@ import type { resolveCliCommand } from '../../../shared/node-cli-command-resolut
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../../native-chat/agent-cli-installation-error'
 import type { StructuredAgentLaunchPartResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
@@ -122,6 +122,10 @@ async function readAcpLaunchInvocation(
     overlayEnvironmentVariables(base, deps.resolveLaunchEnv?.(spec.agent), process.platform)
   )
   const envToDelete = spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env) ?? []
+  if (spec.agent === 'antigravity' && spec.managedRuntime) {
+    await prepareAntigravityAcpProxyEnvironment(env, deps.inheritedEnv ?? process.env)
+    assertStructuredAgentResolutionCurrent(deps.operation)
+  }
   Object.assign(env, spec.env)
   const commandSettings = deps.resolveCommandSettings?.()
   // Orca's account-type setting selects only the managed server's sign-in.
@@ -216,7 +220,6 @@ export function acpStructuredLaunchPart(
       },
       env: withNativeChatVisualsEnv({ ...env, ...skill?.env }, skill ? visuals : null),
       inheritedEnvToDelete: [
-        ...STRUCTURED_CHILD_ENV_TO_DELETE,
         ...envToDelete,
         // An inherited scratch directory belongs to a different chat.
         ...(skill ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),

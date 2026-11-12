@@ -1,5 +1,5 @@
 import { readTestHostJournal } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
-import '../../../unused-default-rpc-methods.test-fixture'
+import '../../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   createRestTestRig,

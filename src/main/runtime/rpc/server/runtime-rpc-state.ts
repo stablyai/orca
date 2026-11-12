@@ -8,8 +8,8 @@ import type { WebSocket } from 'ws'
 import type { DeviceRegistry } from './pairing/device-registry'
 import type { E2EEKeypair } from './pairing/e2ee-keypair'
 import type { RuntimeHostDescriptor } from '../../../../shared/remote-runtime/host-status/runtime-host-descriptor'
-import type { UnpairedDeviceAuthThrottle } from '../unpaired-device-auth-throttle'
-import type { MobileSocketWiring } from '../mobile-socket-wiring'
+import type { UnpairedDeviceAuthThrottle } from '../mobile/unpaired-device-auth-throttle'
+import type { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
 import type { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import { RelayRevokeOutbox } from '../../mobile-cloud-relay/relay-revoke-outbox'
@@ -38,7 +38,7 @@ import {
 import { DeclaredDesktopClients } from './pairing/declared-desktop-clients'
 import { AuthenticatedSourceRecorder } from './network-source-policy-store'
 import type { ServeNetworkSourceOptions } from './serve-network-source-policy'
-import type { WebSocketSourceGuard } from '../ws-network-source-guard'
+import type { WebSocketSourceGuard } from '../transports/websocket/source-admission/ws-network-source-guard'
 
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService

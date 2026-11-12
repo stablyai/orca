@@ -14,7 +14,7 @@ import { resetSessionSearchPolicyForTests } from './session-search-policy'
 import { resetSessionSearchServiceInitForTests } from './session-search-service-init'
 
 const localAiVaultScanRoots = vi.hoisted(() => vi.fn())
-vi.mock('../ai-vault/cached-session-list', async (importOriginal) => ({
+vi.mock('../ai-vault/discovery/ai-vault-scan-roots', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   localAiVaultScanRoots
 }))

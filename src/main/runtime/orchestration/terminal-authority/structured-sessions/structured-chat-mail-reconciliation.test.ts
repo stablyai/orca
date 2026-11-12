@@ -1,3 +1,4 @@
+import { queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
@@ -5,7 +6,7 @@ import { testOrcaSessionId } from '../../../../../shared/orca-session-address-te
 import { JournalSqlOwner } from '../../../../native-chat/agent-session-journal/journal-sql-owner'
 import { JournalSqlReaderPool } from '../../../../native-chat/agent-session-journal/journal-sql-reader-pool'
 import { journalSqlReads } from '../../../../native-chat/agent-session-journal/journal-sql-reads'
-import { resultOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { resultOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
 import {
   COORDINATOR,
@@ -18,7 +19,6 @@ import {
   host,
   openChat,
   observationClock,
-  queuedCardTexts,
   restartRuntime,
   dispatcher,
   request,

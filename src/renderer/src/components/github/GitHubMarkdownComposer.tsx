@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useEditor } from '@tiptap/react'
-import type { Editor } from '@tiptap/react'
+import { useEditor, type Editor } from '@tiptap/react'
+
 import Placeholder from '@tiptap/extension-placeholder'
 import { Paperclip } from 'lucide-react'
 import { cn } from '@/lib/class-names'
@@ -25,7 +25,7 @@ import {
 } from '@/components/github/github-markdown-composer-tabbar'
 import { GitHubMarkdownImageInput } from './github-markdown-image-input'
 import { useImageInput } from '@/components/github/use-image-input'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import {

@@ -28,6 +28,7 @@ import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-h
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
+import { getLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
@@ -67,6 +68,8 @@ export type RepoWorktreeRowDeps = {
     projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ) => Promise<RuntimeWorktreeScanResult>
   getCachedSuccessfulScan?: (repo: Repo) => RuntimeWorktreeScanResult | undefined
+  /** Once per new observation, with its scan-start generation; absent keeps per-read pruning. */
+  claimLineagePrune?: (scan: RuntimeWorktreeScanResult) => { scanGeneration: number } | null
   /** Folder workspaces are stamped from runtime-owned identity helpers, so the caller supplies them. */
   listFolderWorkspaces: (repo: Repo, repoOwnerCount: number) => Worktree[]
 }
@@ -111,12 +114,16 @@ export type RepoWorktreeRowsScan = { ok: boolean; worktrees: GitWorktreeInfo[] }
 
 /** The scan half of `resolveRepoWorktreeRows`: slow, and the only part that awaits. */
 export async function scanRepoWorktreeRows(
-  deps: Pick<RepoWorktreeRowDeps, 'store' | 'scanRepo' | 'getCachedSuccessfulScan'>,
+  deps: Pick<
+    RepoWorktreeRowDeps,
+    'store' | 'scanRepo' | 'getCachedSuccessfulScan' | 'claimLineagePrune'
+  >,
   repo: Repo,
   projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
   repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
 ): Promise<RepoWorktreeRowsScan> {
   const { store } = deps
+  const scanGeneration = getLocalWorktreeScanGeneration(repo.id)
   // Absorb rejection before withTimeout: rejection preserves shipped empty results, but timeout restores last-known rows.
   const scan: RuntimeWorktreeScanResult = (await withTimeout<RuntimeWorktreeScanResult | null>(
     deps
@@ -131,8 +138,14 @@ export async function scanRepoWorktreeRows(
       listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount)
   }
   const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
-  if (scan.ok) {
-    pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+  // Cached reads must not re-prune against a generation captured after their rows were observed.
+  const lineage = !scan.ok
+    ? null
+    : deps.claimLineagePrune
+      ? deps.claimLineagePrune(scan)
+      : { scanGeneration }
+  if (lineage) {
+    pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees, lineage)
   }
   return { ok: scan.ok, worktrees: gitWorktrees }
 }

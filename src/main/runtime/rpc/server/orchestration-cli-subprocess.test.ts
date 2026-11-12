@@ -36,7 +36,7 @@ import {
   openTestAgentSessionDatabase,
   withTestAgentSessionDatabase
 } from '../../agent-session/records/agent-session-record-store-test-harness'
-import { idOf, isRecord, resultOf } from '../orchestration-session-caller-test-fixture'
+import { idOf, isRecord, resultOf } from '../orchestration/callers/session.test-fixture'
 
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')
 

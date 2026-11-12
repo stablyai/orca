@@ -27,17 +27,15 @@ import { withholdUnreachableKeychainForServe } from '../host/serve-keychain-guar
 import { initSshHostKeyStoreFile } from '../ssh/host-keys/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../managed-server/activation/orcad-held-fence-tokens'
 import { neutralizeLegacyTerminalShimDir } from '../pty/shell-startup/legacy-terminal-shim-dir'
-import { createWindowsShellPathHydration } from './windows-shell-path-hydration'
-import {
-  configureWindowsHostGitEnvironmentReadiness,
-  setDefaultWslDistroOverride
-} from '../git/runner'
+import { createWindowsShellPathHydration } from './shell-environment/windows-shell-path-hydration'
+import { configureWindowsHostGitEnvironmentReadiness } from '../git/command-runner/host-routing/windows-host-git-environment'
+import { setDefaultWslDistroOverride } from '../git/command-runner/host-routing/wsl-command-resolution'
 import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
-} from './dev-education-suppression'
+} from './profile-startup/dev-education-suppression'
 import {
   awaitBrowserSessionProxies,
   setBrowserNetworkProxySettingsResolver
@@ -53,20 +51,20 @@ import {
 } from '../browser/extensions/browser-extension-startup'
 import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
 import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
-import { logStartupMilestone } from './startup-diagnostics'
-import { writeHttp1CompatibilityMarker } from './http1-compatibility-marker'
+import { logStartupMilestone } from './diagnostics/startup-diagnostics'
+import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
-import { syncMacMenuBarIcon } from './main-window-actions'
-import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
+import { syncMacMenuBarIcon } from './main-window/main-window-actions'
+import { updateGpuAccelerationAboutPanel } from './gpu-recovery/gpu-lifecycle'
 import {
   logWslCliReconciliationResults,
   reconcileManagedWslCliRegistrations
 } from '../cli/wsl/wsl-cli-registration-reconciliation'
-import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
+import { createWslCliReconciliationStartupBarrier } from './wsl-startup/wsl-cli-reconciliation-startup-barrier'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { reportProfileStateWriteFailure } from './profile-state-write-failure'
-import { reportProfileStateSaveDelay } from './profile-state-save-delay'
+import { reportProfileStateWriteFailure } from './profile-startup/profile-state-write-failure'
+import { reportProfileStateSaveDelay } from './profile-startup/profile-state-save-delay'
 import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
 
 export async function initializeReadyFoundation(): Promise<void> {

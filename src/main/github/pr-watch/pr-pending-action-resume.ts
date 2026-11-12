@@ -4,8 +4,8 @@ import * as PR from './pr-pending-action-types'
 // ones fixed at capture; a restart resumes the same row and never renews them. Each obligation is
 // saved as decided on its own, so a sibling still resolving never holds back or loses it.
 
-import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import { pushedPullRequestHead, type PushRemote } from './pr-chat-action-recorder'
 import { PRPendingActionDrain } from './pr-pending-action-drain'
 import {

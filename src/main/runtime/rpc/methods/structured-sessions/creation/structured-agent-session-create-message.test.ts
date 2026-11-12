@@ -1,5 +1,5 @@
 import { readTestHostJournal } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
-import '../../../unused-default-rpc-methods.test-fixture'
+import '../../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-create-capabilities'

@@ -2,7 +2,7 @@ import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/a
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { estimateStructuredAgentSessionItemBytes } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import { writeClaudeStopReadings } from './claude-stop-readings'
-import type { ClaudeGoalSettlement } from './claude-thread-goal'
+import type { ClaudeGoalSettlement } from './structured/journal/claude-thread-goal'
 
 /** A goal a person's Stop could keep from completing is decided at the write position. */
 export function journalClaudeGoal(

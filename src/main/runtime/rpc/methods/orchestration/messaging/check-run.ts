@@ -181,7 +181,7 @@ export async function checkRunMailbox(args: {
 
   const rearmRelays = setInterval(() => {
     try {
-      runtime.ensureOrchestrationFederationRelay(run.id)
+      runtime.ensureOrchestrationFederationRelay(run.id, { keepAwake: true })
     } catch (error) {
       console.warn('[orchestration] federation relay re-arm failed during check --wait', error)
     }

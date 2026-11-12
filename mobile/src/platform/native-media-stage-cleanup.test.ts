@@ -31,6 +31,7 @@ vi.mock('expo-clipboard', () => ({
   getImageAsync: () => Promise.resolve({ data: 'data:image/png;base64,AQID' })
 }))
 vi.mock('expo-document-picker', () => ({}))
+vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-image-picker', () => ({}))
 vi.mock('expo-file-system', () => ({
   File: class {
@@ -52,7 +53,7 @@ vi.mock('expo-file-system', () => ({
       }
     }
 
-    write(content: string | Uint8Array, options?: { encoding?: string }): void {
+    writeSync(content: string | Uint8Array, options?: { encoding?: string }): void {
       storage.events.push({ operation: 'write', uri: this.uri, content, options })
       if (storage.writeFailure !== null) {
         storage.files.set(this.uri, new Uint8Array(storage.partialBytes))

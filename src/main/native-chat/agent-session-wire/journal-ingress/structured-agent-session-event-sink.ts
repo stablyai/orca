@@ -17,7 +17,7 @@ import type { JournalStepOutcome } from '../../agent-session-journal/writing/jou
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import type { StructuredAgentSessionSnapshotSource } from './structured-agent-session-sink-snapshots'
-import type { ClaudeJournalSnapshot } from '../../../claude/claude-subagent-journaled-identities'
+import type { ClaudeJournalSnapshot } from '../../../claude/subagents/claude-subagent-journaled-identities'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import { createStructuredAgentSessionResolvedAppend } from './structured-agent-session-resolved-append'
 import {

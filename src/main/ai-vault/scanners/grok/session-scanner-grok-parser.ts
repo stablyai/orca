@@ -1,4 +1,7 @@
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import {
   openTranscriptReadStream,
   wslGatedReadFile
@@ -15,16 +18,17 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent, addSessionText } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent, addSessionText } from '../../parsing/session-scanner-messages'
 import {
   extractGrokFirstUserPromptText,
   stripGrokUserQueryEnvelope
 } from './session-scanner-grok-user-text'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
-import { numberValue } from '../../session-scanner-token-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
+import { numberValue } from '../../parsing/session-scanner-token-values'
 
 const GROK_PREVIEW_SCAN_LIMIT = 4096
 

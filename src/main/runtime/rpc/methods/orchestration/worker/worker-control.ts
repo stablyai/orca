@@ -11,6 +11,7 @@ import {
 } from './worker-observation'
 import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { readArchivedWorkerOutput } from './worker-archive-read'
+import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import { readStructuredWorkerOutput } from '../structured-workers/orchestration-structured-worker-lifecycle'
 import { releaseStructuredWorkerSession } from '../structured-workers/orchestration-structured-worker-session'
 import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
@@ -138,6 +139,10 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
               : observed.status === 'exited'
                 ? 'exited'
                 : 'unverifiable'
+        }
+        if (isStructuredWorkerHandle(resource.terminal_handle)) {
+          // A released chat's history is read from its closed session, which needs the host after a restart.
+          await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
         }
         const archived = await readArchivedWorkerOutput({
           db,

@@ -6,7 +6,7 @@ import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
-import { resultOf } from '../../../orchestration-session-caller-test-fixture'
+import { resultOf } from '../../../orchestration/callers/session.test-fixture'
 
 const LEAD = 'tab_lead:22222222-2222-4222-9222-222222222222'
 const OTHER = 'tab_other:33333333-3333-4333-8333-333333333333'

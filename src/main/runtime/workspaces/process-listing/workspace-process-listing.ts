@@ -48,7 +48,7 @@ import {
 } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 import { preModeChatGetsFullAccess } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { claudeCliFlagSupport } from '../../../claude/claude-cli-flag-support'
+import { claudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,
   runtimeHiddenRepos,
@@ -66,6 +66,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   protected readonly workerAutoReleaseActivity = new WorkerAutoReleaseActivity(
     () => this._orchestrationDb
   )
+
+  /** The task each pane was dispatched, by pane key, as `worktree.ps` rows title it. */
+  listAgentTasksByPaneKey() {
+    return this.agentOrchestrationProjection.buildByPaneKey() ?? {}
+  }
 
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
@@ -303,7 +308,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
         now: () => Date.now()
       }),
-      onTurnAttention: chatWorkerTurnStopReporter(this.workerTurnStopReportDeps),
+      createTurnAttention: () =>
+        chatWorkerTurnStopReporter({
+          ...this.workerTurnStopReportDeps,
+          openExistingDb: () => this.getExistingOrchestrationDb()
+        }),
       // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)

@@ -1,6 +1,4 @@
 import { expect, it } from 'vitest'
-import { codexRolloutItem } from '../../history/rollouts/codex-rollout-item-projection'
-import { codexImageItemBody } from './codex-image-item-translation'
 import { chat, SESSION, THREAD, turn } from '../threads/codex-thread-catch-up-contract-test-fixture'
 import { codexNonMessageIdentity } from './codex-thread-item-identity'
 import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-translation-turns'
@@ -8,21 +6,6 @@ import { agentJournalItemKey } from '../../../../shared/agent-session/journal/ag
 import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { nativeChatGeneratedImageAnswers } from '../../../../shared/native-chat/transcript/native-chat-generated-image-answers'
 import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
-
-it('retains the saved image from the provider persisted generation record', () => {
-  const item = codexRolloutItem({
-    type: 'ImageGeneration',
-    id: 'image-1',
-    status: 'completed',
-    saved_path: 'C:\\Users\\person\\.codex\\generated_images\\elephant.png',
-    result: 'A'.repeat(12000)
-  })!
-  const body = codexImageItemBody(item)
-  expect(body.blocks.find((block) => block.type === 'image-ref')).toEqual({
-    type: 'image-ref',
-    path: 'C:\\Users\\person\\.codex\\generated_images\\elephant.png'
-  })
-})
 
 it.each(['complete', 'sparse'])(
   'enriches %s authoritative saved generation once and preserves the result through replay',

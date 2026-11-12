@@ -3,20 +3,24 @@ import { sweepGonePRChats } from './pr-watch-chat-retirement'
 // The host's CI-line service: chats' verified PR actions start watches the pr-refresh queue reads;
 // each new final result on a head becomes one line in every chat that owned the PR when it landed.
 
-import type * as reads from '../../../shared/github/pull-request-refresh-types'
+import type * as reads from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
 import type { JournalWriterCommit } from '../../native-chat/agent-session-journal/journal-writer-changes'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
-import { resolveGitHubApiRepositoryCandidates } from '../github-api-repository'
+import { resolveGitHubApiRepositoryCandidates } from '../repositories/github-api-repository'
 import { observedPRCheckRollup } from '../client/lookup/pr-refresh-outcome-assembly'
-import * as refresh from '../pr-refresh-coordinator'
-import { prWatchSettled, prWatchNextDueAt, type PRWatchJob } from '../pr-refresh-watch-jobs'
+import * as refresh from '../pull-requests/refresh/pr-refresh-coordinator'
+import {
+  prWatchSettled,
+  prWatchNextDueAt,
+  type PRWatchJob
+} from '../pull-requests/refresh/pr-refresh-watch-jobs'
 import { PREarlierHeadJobs } from './pr-earlier-head-jobs'
 import { PREventDeliveryTrigger } from './pr-event-delivery'
 import { isCommitInPRHead, resolvePRCommitSha } from './pr-head-check-read'
 import { PRPendingActionResume } from './pr-pending-action-resume'
 import type { PRVerifiedAction } from './pr-pending-action-types'
-import type { PRPendingActionRow } from './pr-pending-actions'
+import { finishesPRActionCall, type PRPendingActionRow } from './pr-pending-actions'
 import { resolvePushRemote } from './pr-push-remote-resolution'
 import type { PRChatAction } from './pr-watch-tables'
 import { prKeyOf, prWatchCandidate, type PRWatchServiceDeps } from './pr-watch-types'
@@ -140,12 +144,7 @@ export class PRWatchService {
     if (this.deps.database.readOnly) {
       return
     }
-    if (
-      rows?.publication?.items.some(
-        ({ body }) =>
-          body.kind === 'tool-call' && (body.state === 'completed' || body.state === 'failed')
-      )
-    ) {
+    if (finishesPRActionCall(rows)) {
       this.resume.drain()
     }
     this.deliveries.committed(chatId, journal, rows)

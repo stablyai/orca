@@ -9,7 +9,7 @@ import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-se
 import type { StructuredAgentSessionItemAppendOptions } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import { HISTORY_CATCH_UP_MAX_OPERATIONS } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
-import { claudeRestoredItemBody } from './claude-transcript-item-reader'
+import { claudeRestoredItemBody } from './transcripts/claude-transcript-item-reader'
 
 /** Resolve translator proposals against the bounded saved rows before admitting the catch-up. */
 export function createClaudeTranscriptRowProjection(input: {

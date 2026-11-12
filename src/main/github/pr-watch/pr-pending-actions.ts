@@ -1,3 +1,4 @@
+import type { JournalWriterCommit } from '../../native-chat/agent-session-journal/journal-writer-changes'
 // A finished call's PR obligations, saved in the transaction that commits the call, so a crash
 // between the call and its verification loses nothing and nothing older is ever replayed.
 
@@ -55,10 +56,12 @@ function liveItemWrites(rows: readonly JournalRow[]): ItemWrite[] {
 }
 
 /** A committed batch that finished a call, so it may have captured work to resume. */
-export function finishesPRActionCall(rows: readonly JournalRow[]): boolean {
-  return liveItemWrites(rows).some(
-    ({ body }) =>
-      body.kind === 'tool-call' && (body.state === 'completed' || body.state === 'failed')
+export function finishesPRActionCall(commit: JournalWriterCommit | undefined): boolean {
+  return (
+    commit?.publication?.items.some(
+      ({ body }) =>
+        body.kind === 'tool-call' && (body.state === 'completed' || body.state === 'failed')
+    ) === true
   )
 }
 

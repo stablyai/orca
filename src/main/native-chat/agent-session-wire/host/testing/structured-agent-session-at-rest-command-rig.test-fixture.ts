@@ -22,7 +22,7 @@ import type {
 import {
   ClaudeAtRestCommandCatalog,
   type ClaudeAtRestCommandsDeps
-} from '../../../../claude/claude-at-rest-commands'
+} from '../../../../claude/command-catalog/claude-at-rest-commands'
 
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import {

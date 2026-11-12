@@ -2,7 +2,7 @@ import {
   structuredSessionRecoveryOptions,
   type RecoveryContextCache
 } from '../../../runtime/agent-session/lifecycle/structured-session-recovery-options'
-import { withoutInheritedClaudeConfigDir } from '../../../claude/claude-config-dir-pin'
+import { withoutInheritedClaudeConfigDir } from '../../../claude/structured/launch/claude-config-dir-pin'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 import type { AgentSessionJournalReads } from '../../agent-session-journal/journal-reads'
 

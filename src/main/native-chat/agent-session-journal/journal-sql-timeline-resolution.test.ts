@@ -8,7 +8,7 @@ import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/age
 import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/structured-agent-session-journal-open'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
-import { claudeBackgroundTaskIdentity } from '../../claude/claude-background-task-identity'
+import { claudeBackgroundTaskIdentity } from '../../claude/background-tasks/claude-background-task-identity'
 import {
   codexGoalJournalDigest,
   codexGoalJournalIdentity

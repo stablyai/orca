@@ -8,6 +8,7 @@ import type {
   PluginMarketplaceHostListing,
   PluginMarketplaceHostSourceState
 } from '../../../../../preload/api-types'
+import { OFFICIAL_MARKETPLACE_GIT_SOURCE } from '../../../../../shared/plugins/catalog/plugin-marketplace'
 import { PLUGIN_GROUP_ROW_CAP, PluginManager } from './PluginManager'
 import { usePluginPageNavigation } from '../state/use-plugin-page-navigation'
 
@@ -167,6 +168,32 @@ describe('PluginManager', () => {
     const container = await render()
     expect(container.querySelector('[data-plugin-key="stablyai.orca-nord-theme"]')).not.toBeNull()
     expect(container.textContent).toContain('Couldn’t load the plugin catalog.')
+  })
+
+  it('renders each plugin card once and no Featured row when nothing is newly added', async () => {
+    const popular = ['themes', 'editors', 'icons', 'panels'].map((category, index) =>
+      listing(`stablyai.popular-${index}`, { categories: [category] })
+    )
+    installApi({
+      // Why the real official URL: only Orca's public catalogs have install counts to feature.
+      listMarketplaces: vi
+        .fn()
+        .mockResolvedValue([{ ...source, source: OFFICIAL_MARKETPLACE_GIT_SOURCE }]),
+      listMarketplacePlugins: vi.fn().mockResolvedValue([...popular, ...catalogListings.slice(1)]),
+      getInstallCounts: vi
+        .fn()
+        .mockResolvedValue(
+          Object.fromEntries(popular.map((item, index) => [item.pluginKey, 1000 - index]))
+        )
+    })
+    const container = await render([])
+    const keys = [...container.querySelectorAll('[data-plugin-key]')].map((card) =>
+      card.getAttribute('data-plugin-key')
+    )
+
+    expect(keys).toContain('stablyai.popular-0')
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(container.textContent).not.toContain('Featured')
   })
 
   it('shows release notes as text, license and the rollback version on the plugin page', async () => {

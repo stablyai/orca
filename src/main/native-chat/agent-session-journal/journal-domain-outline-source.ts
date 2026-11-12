@@ -85,7 +85,7 @@ export function journalDomainOutlineSource(item: AgentJournalRenderItem): string
   if (projected && nativeChatToolFoldKind(projected) !== 'pass') {
     message = { ...projected, blocks: outlineBlocks(projected.blocks) }
     if (projected.role === 'user') {
-      const full = nativeChatUserMessagePreview(projected.blocks)
+      const full = nativeChatUserMessagePreview(projected)
       preview = {
         text: truncateOutlinePreview(full.text, AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS),
         imageCount: full.imageCount

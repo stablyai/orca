@@ -12,9 +12,16 @@ import { exposeDeliveryTimestamps, exposeMessageListTimestamps } from '../utc-ti
 import { requireMailboxConsumer } from './mailbox-consumer'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './mailbox-routing-page'
 import type { ReportFollowUpAction } from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
+import { DELIVERY_COLUMN_LIST } from '../row-column-lists'
+
+// Repeats the outstanding index predicate; empty handles predate mailboxes.
+const OUTSTANDING_IN_MAILBOX = "mailbox_handle = ? AND mailbox_handle != ''"
 
 export function getDeliveryRaw(this: OrchestrationDb, id: string): DeliveryRow | undefined {
-  return this.db.prepare('SELECT * FROM deliveries WHERE id = ?').get(id) as DeliveryRow | undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
+  return this.db.prepare(`SELECT ${DELIVERY_COLUMN_LIST} FROM deliveries WHERE id = ?`).get(id) as
+    | DeliveryRow
+    | undefined
 }
 
 export function getDeliveryMessages(this: OrchestrationDb, delivery: DeliveryRow): MessageRow[] {
@@ -110,7 +117,7 @@ function selectMailboxDelivery(
     ORCHESTRATION_DELIVERY_BATCH_LIMIT
   )
   const outstanding = db.db
-    .prepare('SELECT id FROM outstanding_deliveries WHERE mailbox_handle = ?')
+    .prepare(`SELECT id FROM outstanding_deliveries WHERE ${OUTSTANDING_IN_MAILBOX}`)
     .get(params.mailboxHandle)
   if (typeof outstanding?.id === 'string') {
     const existing = requireDeliveryRaw(db, outstanding.id)
@@ -226,7 +233,7 @@ export function hasOutstandingMailboxDelivery(
 ): boolean {
   return Boolean(
     this.db
-      .prepare('SELECT 1 FROM outstanding_deliveries WHERE mailbox_handle = ? LIMIT 1')
+      .prepare(`SELECT 1 FROM outstanding_deliveries WHERE ${OUTSTANDING_IN_MAILBOX} LIMIT 1`)
       .get(mailboxHandle)
   )
 }
@@ -236,7 +243,9 @@ export function getOutstandingMailboxDelivery(
   mailboxHandle: string
 ): { id: string; messageIds: string[] } | undefined {
   const row = this.db
-    .prepare('SELECT id, message_ids FROM outstanding_deliveries WHERE mailbox_handle = ? LIMIT 1')
+    .prepare(
+      `SELECT id, message_ids FROM outstanding_deliveries WHERE ${OUTSTANDING_IN_MAILBOX} LIMIT 1`
+    )
     .get(mailboxHandle)
   if (typeof row?.id !== 'string' || typeof row.message_ids !== 'string') {
     return undefined
@@ -253,7 +262,7 @@ export function fenceUnacknowledgedMailboxDeliveries(
 ): void {
   this.db
     .prepare(
-      "UPDATE deliveries SET status = 'fenced' WHERE mailbox_handle = ? AND status = 'outstanding'"
+      `UPDATE deliveries SET status = 'fenced' WHERE ${OUTSTANDING_IN_MAILBOX} AND status = 'outstanding'`
     )
     .run(mailboxHandle)
 }

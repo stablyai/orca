@@ -25,7 +25,7 @@ import {
 import {
   installMainWindowAgentStatusListeners,
   clearMainWindowAgentStatusListeners
-} from '../../../../startup/main-window-agent-status'
+} from '../../../../startup/main-window/main-window-agent-status'
 import { agentHookServer as server } from '../../agent-hook-server'
 import { buildBody, PANE, GOOD_PANE, postHookEvent } from '../server.test-fixtures'
 
@@ -38,7 +38,7 @@ vi.mock('../../../../startup/main-process-state', () => ({
 vi.mock('../../../../window/dashboard-popout-window', () => ({
   getDashboardPopoutWindow: () => null
 }))
-vi.mock('../../../../startup/synthetic-title-runtime', () => ({
+vi.mock('../../../../startup/main-window/synthetic-title-runtime', () => ({
   stopSyntheticTitleSpinnerTimer: () => {}
 }))
 

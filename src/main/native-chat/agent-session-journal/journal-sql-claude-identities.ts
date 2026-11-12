@@ -1,10 +1,10 @@
 import type Database from '../../sqlite/sync-database'
-import type { ClaudeJournalSnapshot } from '../../claude/claude-subagent-journaled-identities'
+import type { ClaudeJournalSnapshot } from '../../claude/subagents/claude-subagent-journaled-identities'
 import {
   claudeBackgroundTaskIdentity,
   indexClaudeBackgroundTask,
   type ClaudeBackgroundTaskIndex
-} from '../../claude/claude-background-task-identity'
+} from '../../claude/background-tasks/claude-background-task-identity'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalProducerLinkage } from '../../../shared/agent-session/journal/agent-session-journal-types'
 

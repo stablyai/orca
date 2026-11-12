@@ -22,24 +22,24 @@ import {
   claudeText,
   type ClaudeMessageEnvelope
 } from '../journal/claude-structured-item-translation'
-import { claudeResultOutcome } from '../../claude-result-outcome'
+import { claudeResultOutcome } from '../turns/claude-result-outcome'
 import { isUnmodeledClaudeSystemFrame } from '../../../native-chat/agent-session-wire/providers/provider-frame-disposition'
 import {
   isClaudeToolUseContent,
   isClaudeToolResultContent
 } from '../../../../shared/claude-tool-content'
-import type { ClaudeRowStamp } from '../../claude-provisional-row-corrections'
+import type { ClaudeRowStamp } from '../../subagents/claude-provisional-row-corrections'
 import { writeClaudeStopReadings, type ClaudeStopCheck } from '../../claude-stop-readings'
 import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import {
   CLAUDE_API_RETRY_FRAME_KIND,
   claudeApiRetryRowBody,
   createClaudeApiRetryRuns
-} from '../../claude-api-retry-row'
+} from '../journal/claude-api-retry-row'
 import {
   CLAUDE_INFORMATIONAL_FRAME_KIND,
   claudeInformationalRowBody
-} from '../../claude-informational-row'
+} from '../journal/claude-informational-row'
 
 export function claudeProviderFrameKind(message: Record<string, unknown>): string {
   const type = claudeText(message.type) ?? 'unknown'

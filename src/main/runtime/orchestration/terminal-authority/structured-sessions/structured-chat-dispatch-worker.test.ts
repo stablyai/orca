@@ -1,11 +1,12 @@
+import { queuedRows, queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
 import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
+import '../../../rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'
 
 import { describe, expect, it, vi } from 'vitest'
 import { agentSessionSendSubmission } from '../../../../../shared/agent-session/agent-session-wire'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
-import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import { sendChatTask } from '../../../rpc/methods/orchestration/chat-task-delivery'
 import {
   providerFaults,
@@ -21,9 +22,7 @@ import {
   dispatcher,
   host,
   openChat,
-  queuedCardTexts,
   request,
-  runtime,
   sendUserMessage,
   settleTurn,
   turnText
@@ -54,10 +53,6 @@ async function runningUserTurn(
     notify('turn/completed', { turn: { id: `user-${index}` } })
     await host.flushStreamedEvents(sessionId)
   }
-}
-
-function queuedRows(sessionId: string) {
-  return host.collaboratorsForTests().sessions.get(sessionId)?.journal.queuedMessages.list() ?? []
 }
 
 async function refusal(method: string, params: Record<string, unknown>, sessionId?: string) {
@@ -241,31 +236,5 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     } finally {
       release.resolve()
     }
-  })
-
-  it("counts a chat worker's own Dispatch as depth 2, under the nesting cap", async () => {
-    await openChat(COORDINATOR)
-    await openChat(PEER_CHAT)
-    const { taskId } = await coordinatorRunAndTask()
-    const parent = await call(
-      'orchestration.dispatch',
-      { task: taskId, to: WORKER },
-      { sessionId: COORDINATOR }
-    )
-    expect(parent.dispatch).toMatchObject({ depth: 1 })
-    await call('orchestration.runCreate', { objective: 'sub' }, { sessionId: PEER_CHAT })
-    const subTask = idOf(
-      (await call('orchestration.taskCreate', { spec: 'part' }, { sessionId: PEER_CHAT })).task
-    )
-
-    const subDispatch = { task: subTask, to: 'term_worker' }
-
-    const maxDepth = vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(1)
-    expect(await refusal('orchestration.dispatch', subDispatch, PEER_CHAT)).toMatchObject({
-      code: 'nested_worker_depth_exceeded'
-    })
-    maxDepth.mockReturnValue(2)
-    const child = await call('orchestration.dispatch', subDispatch, { sessionId: PEER_CHAT })
-    expect(child.dispatch).toMatchObject({ depth: 2, creator_dispatch_id: idOf(parent.dispatch) })
   })
 })

@@ -1,6 +1,6 @@
 import { pruneOpenCodeFingerprintCache } from './transcript-opencode-fingerprint-window'
 export { pruneOpenCodeFingerprintCache as pruneOpenCodeFingerprintCacheForTest } from './transcript-opencode-fingerprint-window'
-import { errorMessage } from '../ai-vault/session-scanner-values'
+import { errorMessage } from '../../shared/error-message'
 import {
   DESKTOP_READ_WINDOW,
   UNFLUSHED_SETTLE_MS,

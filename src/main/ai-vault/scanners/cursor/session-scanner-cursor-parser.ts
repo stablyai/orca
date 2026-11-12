@@ -17,11 +17,15 @@ import {
   createAccumulator,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent } from '../../session-scanner-messages'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractContentText, extractMessageText } from '../../session-scanner-text-normalization'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
+import { asRecord } from '../../parsing/session-record-fields'
+import {
+  extractContentText,
+  extractMessageText
+} from '../../parsing/session-scanner-text-normalization'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId

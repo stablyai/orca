@@ -1,3 +1,4 @@
+import { SqlJournalQueuedMessages } from '../../../../../native-chat/agent-session-journal/journal-sql-queued-messages'
 import { projectStructuredAgentSessionMessages } from '../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import * as historyPages from '../../../../../native-chat/agent-session-wire/publication/history/agent-session-history-page'
 import {
@@ -264,10 +265,11 @@ it('catches up a queue insertion between the old-reader initial page and its sid
       )
     ).toMatchObject({ result: { ok: true, value: { queued: { messageId: id } } } })
     expect(await j.reads.submission(id)).toBeUndefined()
-    expect(await call('agentSession.workState', { sessionId: SESSION }, OLD)).toMatchObject({
-      ok: true,
-      result: { working: true, queuedMessageIds: [id], nextQueuedMessageId: null }
-    })
+    const { work, queue } = await rig.host
+      .collaboratorsForTests()
+      .subscribers.readWorkAndQueue(SESSION, j)
+    expect(work?.working()).toBe(true)
+    expect(queue).toMatchObject({ queuedMessages: [{ messageId: id }], nextQueuedMessageId: null })
     resume.resolve()
     await eventually(() =>
       expect(streamState(frames).items).toContainEqual(
@@ -363,4 +365,18 @@ it('preserves a returned image through a SQL restart and keeps its deletion afte
   expect(
     projectStructuredAgentSessionMessages(page.items, [], page.submissions).map((item) => item.id)
   ).not.toContain(agentJournalSubmissionKey(id))
+})
+
+it('keeps current SQL work available when optional queue discovery fails', async () => {
+  rig = await createQueuedMessageTestRig({ restartable: true })
+  await rig.workingSend()
+  const { sessions, subscribers } = rig.host.collaboratorsForTests()
+  const journal = sessions.get(SESSION)!.journal
+  vi.spyOn(SqlJournalQueuedMessages.prototype, 'answerMail').mockImplementation(() => {
+    throw new Error('queue discovery unavailable')
+  })
+  const { work, queue } = await subscribers.readWorkAndQueue(SESSION, journal)
+  expect(work?.working()).toBe(true)
+  expect(work?.hasActionablePrompt()).toBe(false)
+  expect(queue).toBeUndefined()
 })

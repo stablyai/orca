@@ -37,10 +37,25 @@ export class ChatWorkerApprovalWatch {
     private readonly deps: Pick<WorkerTurnStopReportDeps, 'getDb' | 'notify'> & {
       readPrompt?: ChatWorkerPromptReader
       watchJournal?: ChatJournalWatch
+      signal: AbortSignal
     }
-  ) {}
+  ) {
+    deps.signal.addEventListener(
+      'abort',
+      () => {
+        for (const session of this.sessions.values()) {
+          session.stop()
+        }
+        this.sessions.clear()
+      },
+      { once: true }
+    )
+  }
 
   track(sessionId: string, approvalId: string, dispatchId: string): void {
+    if (this.deps.signal.aborted) {
+      return
+    }
     let session = this.sessions.get(sessionId)
     if (!session) {
       const approvals = new Map<string, Set<string>>()
@@ -55,6 +70,10 @@ export class ChatWorkerApprovalWatch {
             publication.commit.items.some((item) => approvals.has(item.itemId))
         )
       }
+      if (this.deps.signal.aborted) {
+        session.stop()
+        return
+      }
       this.sessions.set(sessionId, session)
     }
     const dispatchIds = session.approvals.get(approvalId) ?? new Set<string>()
@@ -64,7 +83,7 @@ export class ChatWorkerApprovalWatch {
 
   async check(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId)
-    if (!session) {
+    if (!session || this.deps.signal.aborted) {
       return
     }
     for (const [approvalId, dispatchIds] of session.approvals) {
@@ -73,6 +92,9 @@ export class ChatWorkerApprovalWatch {
         sessionId,
         approvalId
       ).catch(() => undefined)
+      if (this.deps.signal.aborted) {
+        return
+      }
       if (prompt === undefined || prompt?.body.resolution.state === 'pending') {
         continue
       }
@@ -84,6 +106,9 @@ export class ChatWorkerApprovalWatch {
       }
       if (outcome && db) {
         for (const dispatchId of dispatchIds) {
+          if (this.deps.signal.aborted) {
+            return
+          }
           const dispatch = db.getDispatchContextById(dispatchId)
           if (!dispatch || closeReportedApproval(db, dispatch, approvalId, outcome, this.deps)) {
             dispatchIds.delete(dispatchId)
@@ -102,9 +127,15 @@ export class ChatWorkerApprovalWatch {
 
   /** After a restart, picks up approvals reported open whose closing line never came. */
   async adopt(): Promise<void> {
+    if (this.deps.signal.aborted) {
+      return
+    }
     const db = this.deps.getDb()
     const sessions = new Set<string>()
     for (const { approval, dispatch } of db ? recentOpenApprovalReports(db) : []) {
+      if (this.deps.signal.aborted) {
+        return
+      }
       const { approvalId } = approval
       if (
         !db ||

@@ -1,26 +1,27 @@
+import { structuredAgentSessionCommandTurn } from '../../../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
-import { structuredAgentSessionCommandTurn } from '../../../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import {
   attach,
   CALLER,
   envelope,
   hostTestState,
-  serveHostTestChildWork
+  serveHostTestChildWork,
+  reportedChildWork
 } from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   hostTestMessage
 } from './structured-agent-session-host-test-data.test-fixture'
-import { reportedChildWork } from '../../observations/testing/structured-agent-session-reported-child-work.test-fixture'
 
 let state: ReturnType<typeof hostTestState>
 let compact: Mock<NonNullable<StructuredAgentSessionAdapter['compact']>>
+
 let records: AgentChildWorkView[] = []
 
 function report(next: AgentChildWorkView[]): void {
@@ -77,7 +78,6 @@ async function commandTurnState(clientMessageId: string): Promise<string | undef
 }
 
 beforeEach(() => {
-  records = []
   state = hostTestState()
   compact = vi.fn(async () => ({ state: 'accepted' as const, providerIdentity: null }))
   const trackerRoster: AgentSessionBackgroundTaskState = {

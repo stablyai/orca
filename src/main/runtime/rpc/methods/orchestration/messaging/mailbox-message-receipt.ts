@@ -3,6 +3,7 @@ import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages
 import { formatMessageBanner } from '../../../../orchestration/mailbox/formatting/message-formatting'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { completionReportFollowUp } from '../../../../orchestration/workers/reports/report-follow-up-action'
+import { getMessagesByIds } from '../../../../orchestration/db/messages/messages-by-id'
 
 // Hide read/sequence, pointer_* and sender_pane_key: they are runtime delivery plumbing, not caller mailbox truth.
 const INTERNAL_MESSAGE_COLUMNS = [
@@ -109,9 +110,14 @@ export function withReportFollowUps<T>(db: OrchestrationDb, result: T): T {
   const formatted = 'formatted' in result && typeof result.formatted === 'string'
   let changed = false
   const lineageCache = new Map()
+  const stored = getMessagesByIds(
+    db,
+    messages
+      .filter((message: MailboxMessageReceipt) => formatted || message.type === 'worker_done')
+      .map((message: MailboxMessageReceipt) => message.id)
+  )
   const rows = messages.map((message: MailboxMessageReceipt) => {
-    const row =
-      formatted || message.type === 'worker_done' ? db.getMessageById(message.id) : undefined
+    const row = stored.get(message.id)
     const followUp = row ? completionReportFollowUp(db, row, lineageCache) : undefined
     changed ||= followUp !== undefined
     return { message, row, followUp }

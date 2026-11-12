@@ -7,7 +7,7 @@ import type {
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { readClaudeStructuredSessionSettings } from './launch/claude-structured-session-acquisition-options'
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
-import { catchUpClaudeTranscript } from '../claude-transcript-catch-up'
+import { catchUpClaudeTranscript } from '../transcripts/claude-transcript-catch-up'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps,

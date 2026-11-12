@@ -36,7 +36,7 @@ import {
   refineAgentJournalQuotaTurnEnd,
   type AgentJournalFailureVoice
 } from '../../agent-session-timeline/agent-journal-turn-failure-revision'
-import { resolveClaudeBackgroundTaskIdentity } from '../../../claude/claude-background-task-identity'
+import { resolveClaudeBackgroundTaskIdentity } from '../../../claude/background-tasks/claude-background-task-identity'
 import { isBackgroundTaskBlock } from '../../../../shared/native-chat/native-chat-types'
 import { backgroundTaskJournalBody } from '../../../../shared/native-chat/input/native-chat-background-task-row'
 import {

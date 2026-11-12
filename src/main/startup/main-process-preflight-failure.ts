@@ -3,8 +3,8 @@ import { prepareEarlyMainUiLanguage, translateMain } from '../i18n/main-i18n'
 import { formatProfileStateStartupFailure } from '../persistence/profile-state/startup/profile-state-startup-failure'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { mainProcessState as state } from './main-process-state'
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from './single-instance-lock'
-import { acquireDesktopProfileInstanceLock } from './desktop-profile-instance-lock'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
+import { acquireDesktopProfileInstanceLock } from './profile-startup/desktop-profile-instance-lock'
 
 /** False when orcad holds the profile; unlike a second desktop, nothing else would say why. */
 export function acquireDesktopProfileLockOrExplain(userDataPath: string): boolean {

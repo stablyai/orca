@@ -1,5 +1,5 @@
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { ClaudeJournalSnapshot } from '../../../claude/claude-subagent-journaled-identities'
+import type { ClaudeJournalSnapshot } from '../../../claude/subagents/claude-subagent-journaled-identities'
 
 /** How a conversation's owner delivers saved facts and holds reading across a replacement. */
 export type StructuredAgentSessionSnapshotRecipient = {

@@ -10,11 +10,11 @@ import type { AgentSessionRecordStore } from '../records/agent-session-record-st
 import {
   ClaudeAtRestCommandCatalog,
   type ClaudeAtRestCommandsDeps
-} from '../../../claude/claude-at-rest-commands'
-import type { ClaudeCommandCatalogProbe } from '../../../claude/claude-command-catalog-probe'
+} from '../../../claude/command-catalog/claude-at-rest-commands'
+import type { ClaudeCommandCatalogProbe } from '../../../claude/command-catalog/claude-command-catalog-probe'
 import { openClaudeStreamJsonConnection } from '../../../claude/claude-stream-json-connection'
-import type { ClaudeCliFlagSupport } from '../../../claude/claude-cli-flag-support'
-import { prewarmClaudeCliFlags } from '../../../claude/claude-cli-flag-prewarm'
+import type { ClaudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
+import { prewarmClaudeCliFlags } from '../../../claude/cli-capabilities/claude-cli-flag-prewarm'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore

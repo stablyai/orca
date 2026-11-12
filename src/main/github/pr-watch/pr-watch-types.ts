@@ -1,6 +1,6 @@
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
 import type { RepoKind } from '../../../shared/repo-types'
 import type { PRWatchStorage } from './pr-watch-storage'

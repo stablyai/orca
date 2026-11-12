@@ -1,18 +1,18 @@
+import { journalOf, queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 // A queued mail card is the chat's to hand over only while the chat still owes it: its message unread in
 // its mailbox, and that mailbox still this chat's. The queue asks at handover; cleanup is visible only.
 
 import { describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { structuredAgentSessionMessageSendMutation } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
-import type { AgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-store'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
 import { agentSessionRefusalNotice } from '../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { agentSessionWriteKindForMethod } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { captureHostStructuredAgentSessionWork } from '../../../../native-chat/agent-session-wire/observations/structured-agent-session-read-work'
 import { nextStructuredQueuedMessage } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-gate'
-import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
 import { withTestAgentSessionDatabase } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { createStructuredMailboxPointerHost } from '../../mailbox/structured-pointer/structured-mailbox-pointer-host'
@@ -27,7 +27,6 @@ import {
   host,
   isWholeMail,
   openChat,
-  queuedCardTexts,
   root,
   runtime,
   sendUserMessage,
@@ -43,10 +42,6 @@ async function busyChat(sessionId: string) {
   chat.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
   await host.flushStreamedEvents(sessionId)
   return chat
-}
-
-function journalOf(sessionId: string): AgentSessionJournal {
-  return host.collaboratorsForTests().sessions.get(sessionId)!.journal
 }
 
 /** Queue a card behind the running turn: the person's own, or another agent's with `from`. */
