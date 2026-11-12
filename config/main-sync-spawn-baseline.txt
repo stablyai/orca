@@ -9,7 +9,6 @@
 1 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
 1 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 1 src/main/claude-accounts/runtime-auth-service.ts
-2 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
 2 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 1 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts
 1 src/main/codex-accounts/runtime-home/wsl/runtime-home-service-wsl.ts
