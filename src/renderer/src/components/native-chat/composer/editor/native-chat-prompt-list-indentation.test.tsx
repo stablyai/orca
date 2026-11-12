@@ -172,6 +172,12 @@ describe('native chat list indentation', () => {
     expect(input.value).toBe('- parent\n    • child')
   })
 
+  it('does not use an item inside a closed fence as a preceding sibling', () => {
+    const { input, tab } = setup('```\n• code\n  ```\n• first')
+    expect(tab().defaultPrevented).toBe(false)
+    expect(input.value).toBe('```\n• code\n  ```\n• first')
+  })
+
   it('leaves a fenced list literal until the fence closes, then resumes list editing', () => {
     const { input, tab } = setup('-\t```\n    - parent\n    - literal')
     expect(tab().defaultPrevented).toBe(false)

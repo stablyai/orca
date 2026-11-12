@@ -35,6 +35,9 @@ function previousListItem(lines: readonly string[], indent: number): RegExpExecA
     if (lines[index].trim() === '') {
       continue
     }
+    if (/^[ \t]*(?:`{3,}|~{3,})/.test(lines[index])) {
+      return null
+    }
     const match = LIST_ITEM.exec(lines[index])
     if (!match) {
       const leading = /^ +/.exec(lines[index])
