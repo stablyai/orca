@@ -35,9 +35,9 @@ export class AntigravityPromptTurnTracker implements AcpPromptTurnTracker {
   private queue: Promise<void> = Promise.resolve()
   private disposed = false
 
-  private readonly reader = new AntigravityTranscriptReader()
-  private readonly ledger = new AntigravityBackgroundTaskLedger()
-  private readonly streamer = new AntigravityReactiveTurnStreamer()
+  private reader = new AntigravityTranscriptReader()
+  private ledger = new AntigravityBackgroundTaskLedger()
+  private streamer = new AntigravityReactiveTurnStreamer()
 
   private watcherStepCursor = -1
   private initializedFromDisk = false
@@ -57,6 +57,15 @@ export class AntigravityPromptTurnTracker implements AcpPromptTurnTracker {
     }
     this.dispose()
     this.disposed = false
+    if (this.sessionId !== null && this.sessionId !== sessionId) {
+      this.reader = new AntigravityTranscriptReader()
+      this.ledger = new AntigravityBackgroundTaskLedger()
+      this.streamer = new AntigravityReactiveTurnStreamer()
+      this.watcherStepCursor = -1
+      this.prePromptStepIndex = -1
+      this.initializedFromDisk = false
+      this.inPrompt = false
+    }
     this.recoveredPersistedTasks = false
     this.stalledGapIndex = null
     this.sessionId = sessionId
@@ -86,7 +95,7 @@ export class AntigravityPromptTurnTracker implements AcpPromptTurnTracker {
       }
       this.initializedFromDisk = true
       this.streamer.beginPrompt(this.sessionId, this.emitTurn)
-      this.prePromptStepIndex = this.reader.maxStepIndex
+      this.prePromptStepIndex = this.watcherStepCursor
       this.inPrompt = true
       this.resetPollDelay()
     })

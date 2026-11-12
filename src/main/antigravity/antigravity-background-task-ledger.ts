@@ -92,9 +92,17 @@ export class AntigravityBackgroundTaskLedger {
       label: string
     }[] = []
     const pendingCalls: AntigravityTranscriptToolCall[] = []
+    let seenUserInput = false
     for (let idx = startStepIndex; idx <= endStepIndex; idx += 1) {
       const step = reader.stepsByIndex.get(idx)
       if (!step) {
+        continue
+      }
+      if (step.type === 'USER_INPUT') {
+        seenUserInput = true
+        continue
+      }
+      if (!seenUserInput) {
         continue
       }
       if (step.type === 'PLANNER_RESPONSE' && Array.isArray(step.tool_calls)) {

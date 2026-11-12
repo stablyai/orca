@@ -317,6 +317,16 @@ export class AcpSessionRuntime {
 
   /** Filter peer notifications through the optional prompt-turn tracker before delivery. */
   private handleNotification(method: string, params: unknown): void {
+    const sid =
+      params && typeof params === 'object' && 'sessionId' in params ? params.sessionId : undefined
+    if (
+      method === 'session/update' &&
+      this.started?.sessionId &&
+      typeof sid === 'string' &&
+      sid !== this.started.sessionId
+    ) {
+      return
+    }
     if (this.options.turnTracker?.beforeNotification(method, params) !== false) {
       this.emitFrame(method, params)
     }

@@ -101,7 +101,10 @@ export class AntigravityPromptReplayGuard {
     for (let idx = prePromptStepIndex + 1; idx <= reader.maxStepIndex; idx += 1) {
       const step = reader.stepsByIndex.get(idx)
       if (!step) {
-        continue
+        if (reader.rejectedStepIndices.has(idx)) {
+          continue
+        }
+        return idx - 1
       }
       if (step.type === 'USER_INPUT') {
         seenForegroundUserInput = true
