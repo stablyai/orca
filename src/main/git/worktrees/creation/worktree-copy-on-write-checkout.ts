@@ -192,7 +192,12 @@ function runClone(
 ): Promise<void> {
   return method === 'apfs'
     ? runTool('/bin/cp', ['-c', ...sources, targetDirectory], options)
-    : runTool('cp', ['--reflink=always', '-t', targetDirectory, ...sources], options)
+    : // GNU cp stamps copies with the current time; keep mtimes so index stats can transfer.
+      runTool(
+        'cp',
+        ['--reflink=always', '--preserve=timestamps', '-t', targetDirectory, ...sources],
+        options
+      )
 }
 
 async function runTool(
