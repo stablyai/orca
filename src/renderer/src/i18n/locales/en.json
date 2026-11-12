@@ -21056,6 +21056,8 @@
         "goToAgent": "Go to agent",
         "messageFromCoordinator": "Message from coordinator",
         "startedWorker": "Started worker",
+        "reopenedWorker": "Reopened worker",
+        "sentFollowUpToWorker": "Sent follow-up to worker",
         "handedOffToAgent": "Handed off to agent",
         "startedAgent": "Started agent",
         "taskFromCoordinator": "Task from coordinator",

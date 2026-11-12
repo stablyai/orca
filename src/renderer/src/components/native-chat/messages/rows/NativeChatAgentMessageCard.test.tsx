@@ -62,6 +62,40 @@ it('renders and copies structured mail content without the agent envelope', asyn
   expect(screen.queryByText(/Subject:|──── From:|orchestration reply/)).toBeNull()
 })
 
+it.each([
+  [true, 'Reopened worker'],
+  [false, 'Sent follow-up to worker']
+])(
+  'heads a reloaded follow-up start (reopened: %s) as %s, not a started worker',
+  (reopened, heading) => {
+    const reloaded: unknown = JSON.parse(
+      JSON.stringify({
+        itemId: 'start:follow-up',
+        revision: 1,
+        sequence: 8,
+        observedAt: 1,
+        body: {
+          kind: 'agent-start',
+          dispatchId: 'dispatch-2',
+          worker: from.senders[0],
+          task: 'and the docs',
+          followUp: { of: 'dispatch-1', reopened }
+        }
+      })
+    )
+    if (!isAdmissibleAgentJournalRenderItem(reloaded)) {
+      throw new Error('follow-up start item did not survive admission')
+    }
+    const message = projectStructuredAgentStartItem(reloaded)
+    if (!message) {
+      throw new Error('follow-up start item did not project')
+    }
+    render(card(message))
+    expect(screen.getByText(heading)).toBeInTheDocument()
+    expect(screen.queryByText('Started worker')).toBeNull()
+  }
+)
+
 it('reloads a positioned worker start into the shared card with full task, Copy and navigation', async () => {
   const task = `  Task with [a link][target].\n\n${'More task text.\n'.repeat(20)}END  \n\n[target]: https://example.com\n`
   const item: AgentJournalRenderItem = {

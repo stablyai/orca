@@ -60,7 +60,8 @@ function adoptedTaskId(key: string): string {
 const StartedOnServer = z.object({
   dispatchId: z.string().min(1),
   run: z.object({ id: z.string().min(1) }).optional(),
-  agent: z.string().nullable().optional()
+  agent: z.string().nullable().optional(),
+  state: z.string().optional()
 })
 
 /**
@@ -169,15 +170,18 @@ export async function startRemoteOwnedWorker(
         { server: server.name }
       )
     }
-    prepareWorkerStartCard(
-      runtime,
-      ctx.orchestrationCaller
-    )({
-      dispatchId: started.data.dispatchId,
-      workerAddress: `dispatch:${started.data.dispatchId}`,
-      task: task.spec,
-      agent: null
-    })
+    // As local and attached starts do: a start the server could not ready leaves no card.
+    if (started.data.state === 'ready') {
+      prepareWorkerStartCard(
+        runtime,
+        ctx.orchestrationCaller
+      )({
+        dispatchId: started.data.dispatchId,
+        workerAddress: `dispatch:${started.data.dispatchId}`,
+        task: task.spec,
+        agent: started.data.agent ?? null
+      })
+    }
   }
   const answer = inServerTerms(receipt, { server: server.name, forward })
   return withRun(
