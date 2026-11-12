@@ -1,6 +1,6 @@
 import { isViewEntry } from '@/store/slices/ui/workspace-navigation-history'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 
 export function reopenClosedWorkspaceTab(activeWorktreeId: string | null): void {
   const state = useAppStore.getState()
@@ -12,6 +12,7 @@ export function reopenClosedWorkspaceTab(activeWorktreeId: string | null): void 
     return
   }
   if (!activeWorktreeId) {
-    activateAndRevealWorktree(worktreeId)
+    // History entries may be folder workspace keys; this is the activator history replay uses.
+    activateAndRevealWorkspace(worktreeId)
   }
 }
