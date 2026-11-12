@@ -10,8 +10,11 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionAccountHomePath,
+  agentSessionAccountHomesEqual,
+  isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
 } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { usageLimitContinueIdentity as identity } from './structured-agent-session-usage-limit-chain'
 
 /** The polled usage of the account a chat continues on, as the host attributes it. */
@@ -75,6 +78,8 @@ export class UsageLimitAccountHolds {
   private readonly scopes = new Map<string, UsageLimitAccountScope | undefined>()
   /** The source witness each chat's attribution was computed under. */
   private readonly witnesses = new Map<string, string | undefined>()
+  /** When each chat was first seen continuing on another account than the one its cut hit. */
+  private readonly movedSince = new Map<string, number>()
   /** Shared by every chat of a pass and keyed by source witness: work scales with accounts and
    *  their changes, not chats. */
   private launchHomes = new Map<string, Promise<AgentSessionAccountHome | null>>()
@@ -90,15 +95,22 @@ export class UsageLimitAccountHolds {
     this.readings = new Map()
   }
 
-  /** Re-attributed each pass: the account a chat continues on follows the host's selection. */
-  async attribute(id: string, host: AttributionHost): Promise<void> {
+  /** Re-attributed each pass: the account a chat continues on follows the host's selection.
+   *  `cutHome` is the account the cut hit, when known. */
+  async attribute(
+    id: string,
+    host: AttributionHost,
+    cutHome?: AgentSessionAccountHome | null,
+    now = Date.now()
+  ): Promise<void> {
     const record = host.store.getRecord(id)
     const read = host.usageLimitAutoContinue?.accountUsage
     const witness = record ? liveWitness(host, record.provider) : undefined
     let scope: UsageLimitAccountScope | undefined
+    let moved = false
     try {
       // WSL readings never reach this host, so a WSL launch keeps the cut's own reset.
-      if (record && read && record.location.wslDistro === null) {
+      if (record && record.location.wslDistro === null) {
         // Off WSL a launch home follows only the provider's selection, never the chat.
         const target = JSON.stringify([witness, record.provider])
         let launch = this.launchHomes.get(target)
@@ -107,8 +119,9 @@ export class UsageLimitAccountHolds {
           this.launchHomes.set(target, launch)
         }
         const home = (await launch) ?? record.accountHome
+        moved = cutHome !== undefined && cutHome !== null && !sameAccountHome(home, cutHome)
         const path = agentSessionAccountHomePath(home)
-        if (home && path) {
+        if (read && home && path) {
           const key = JSON.stringify([witness, record.provider, path])
           let reading = this.readings.get(key)
           if (!reading) {
@@ -129,6 +142,11 @@ export class UsageLimitAccountHolds {
     }
     this.scopes.set(id, scope)
     this.witnesses.set(id, witness)
+    if (!moved) {
+      this.movedSince.delete(id)
+    } else if (!this.movedSince.has(id)) {
+      this.movedSince.set(id, now)
+    }
   }
 
   /** The witness the chat's attribution was computed under; a send binds to this one. */
@@ -155,20 +173,32 @@ export class UsageLimitAccountHolds {
         }
       }
     }
+    for (const id of this.movedSince.keys()) {
+      if (!shown.has(id)) {
+        this.movedSince.delete(id)
+      }
+    }
   }
 
   clear(): void {
     this.holds.clear()
     this.scopes.clear()
     this.witnesses.clear()
+    this.movedSince.clear()
     this.beginPass()
   }
 
   verdict(
     id: string,
-    cut: { turnItemId: string; resetsAt: number },
+    limited: { turnItemId: string; resetsAt: number },
     now: number
   ): UsageLimitAccountVerdict {
+    // The account the chat moved to never hit this cut: from the move on, only its reading holds.
+    const movedAt = this.movedSince.get(id)
+    const cut =
+      movedAt === undefined
+        ? limited
+        : { ...limited, resetsAt: Math.min(limited.resetsAt, movedAt) }
     const scope = this.scopes.get(id)
     let hold = this.holds.get(id)
     // Nothing attributed and nothing held: the cut decides, and nothing is kept for it.
@@ -291,6 +321,14 @@ export class UsageLimitAccountHolds {
     }
     return !hold.awaitingReading
   }
+}
+
+function sameAccountHome(left: AgentSessionAccountHome, right: AgentSessionAccountHome): boolean {
+  return isLegacyAgentSessionAccountHome(left) && isLegacyAgentSessionAccountHome(right)
+    ? left.variable === right.variable &&
+        normalizeRuntimePathForComparison(left.path) ===
+          normalizeRuntimePathForComparison(right.path)
+    : agentSessionAccountHomesEqual(left, right)
 }
 
 /** Changes whenever a source the provider's attribution reads changes. */

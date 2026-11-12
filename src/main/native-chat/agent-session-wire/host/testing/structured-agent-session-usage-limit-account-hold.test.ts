@@ -75,6 +75,10 @@ async function heldChat() {
     launchUnder: (next: UsageLimitAccountScope) => {
       attributed = next
     },
+    /** Switches the account a start of this chat would launch on. */
+    switchAccount: (path: string) => {
+      current.host.deps.launchAccountHome = async () => ({ variable: 'CODEX_HOME', path })
+    },
     setEnabled: (next: boolean) => {
       enabled = next
     },
@@ -132,6 +136,15 @@ it('holds again on spending inside the grace, and leaves an unknown reset once r
   expect(await refused.pass(room, (now) => weekly(0, null, now))).toEqual([])
   expect(refused.state()).toMatchObject({ state: 'scheduled' })
   await settleOne(await refused.pass(room + 15_000, (now) => weekly(0, null, now)))
+})
+
+it('continues before the cut resets once the chat would start on another account with room', async () => {
+  const chat = await heldChat()
+  const start = chat.cut.resetsAt - 60_000
+  chat.switchAccount('/homes/b')
+  expect(await chat.pass(start + 5_000, (now) => weekly(0, null, now))).toEqual([])
+  expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: start + 5_000 })
+  await settleOne(await chat.pass(start + 20_000, (now) => weekly(0, null, now)))
 })
 
 it('retires a hold when the launch moves to billing the reading does not describe', async () => {
