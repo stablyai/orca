@@ -2399,7 +2399,8 @@ private final class TreeRenderer {
     /// Stops at the node or depth limit with a note of how many children were left, so the agent can read that subtree.
     private func renderChildren(_ children: [AXUIElement], depth: Int, ancestors: [AXUIElement]) {
         for (position, child) in children.enumerated() {
-            guard nextIndex < Self.maxNodes, depth < Self.maxDepth else {
+            // Why: browser-tab compaction drops records, so the limit counts what is kept, as on Linux and Windows.
+            guard records.count < Self.maxNodes, depth < Self.maxDepth else {
                 truncated = true
                 maxDepthReached = maxDepthReached || depth >= Self.maxDepth
                 lines.append(String(repeating: "\t", count: depth) + "... \(children.count - position) more not shown (snapshot limit)")

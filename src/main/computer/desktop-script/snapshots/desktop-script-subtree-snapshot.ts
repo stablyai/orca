@@ -41,7 +41,9 @@ export async function readSubtreeSnapshot(
   if (!response.snapshot) {
     throw new RuntimeClientError('accessibility_error', 'desktop provider returned no snapshot')
   }
-  const { shown, cached } = indexSubtreeSnapshot(base, response.snapshot, rootElementIndex)
+  // Why: another read may have cached new indexes while this one ran; extending the latest keeps both valid.
+  const latest = store.current(app, optionalNumberParam(params, 'windowId'), params) ?? base
+  const { shown, cached } = indexSubtreeSnapshot(latest, response.snapshot, rootElementIndex)
   store.remember(app, cached, params)
   return renderSnapshot(shown, params.noScreenshot === true)
 }
