@@ -64,7 +64,7 @@ describe('spend cap field', () => {
       screen.getByText('$1.00 per sandbox hour after your included hours, billed by the minute.')
     ).toBeTruthy()
     expect(screen.getByText(/of \$40 used/)).toBeTruthy()
-    expect(screen.getByText(/alerted in Orca at 75%, 90%,? and 100%/)).toBeTruthy()
+    expect(screen.getByText(/alerted in Orca at 75%, 90% and 100%/)).toBeTruthy()
   })
 
   // Without billing's catalog (an older service, or a failed read) nothing is guessed.

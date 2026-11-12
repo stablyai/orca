@@ -410,7 +410,9 @@ export function OverageControls({
 /** "75%, 90% and 100%" in the UI locale (billing's alert levels). */
 function formatPercentList(levels: readonly number[], locale: string): string {
   const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 })
-  return new Intl.ListFormat(locale, { type: 'conjunction' }).format(
+  // House style has no serial comma in English (en-US's ListFormat adds one).
+  const listLocale = locale.toLowerCase().startsWith('en') ? 'en-GB' : locale
+  return new Intl.ListFormat(listLocale, { type: 'conjunction' }).format(
     levels.map((level) => percent.format(level / 100))
   )
 }

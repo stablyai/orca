@@ -131,10 +131,15 @@ export function vmBuildFailureCopy(
       }
     case 'concurrency':
       return {
-        title: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.teamLimitTitle',
-          'You’re at your team’s limit of running sandboxes'
-        ),
+        title: sandboxLimit?.trial
+          ? t(
+              'auto.components.worktree.creation.VmBuildFailureCard.trialLimitTitle',
+              'You’re at your trial’s limit of running sandboxes'
+            )
+          : t(
+              'auto.components.worktree.creation.VmBuildFailureCard.teamLimitTitle',
+              'You’re at your team’s limit of running sandboxes'
+            ),
         body: sandboxLimitBody(t, 'team', sandboxLimit)
       }
     case 'memberConcurrency':
