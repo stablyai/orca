@@ -3,7 +3,14 @@ import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { WorkspaceCleanupBlocker } from '../../../shared/workspace-cleanup/workspace-cleanup'
+import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
+import {
+  isWorkspaceCleanupHeadLanded,
+  type WorkspaceCleanupBlocker,
+  type WorkspaceCleanupMergeEvidence
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
+import { readWorkspaceCleanupMergeEvidence } from './workspace-cleanup-merge-evidence'
 import {
   WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
   WorkspaceCleanupScanCancelledError,
@@ -20,6 +27,7 @@ export type WorkspaceCleanupGitEvidence = {
   upstreamAhead: number | null
   upstreamBehind: number | null
   checkedAt: number | null
+  merge?: WorkspaceCleanupMergeEvidence
   blockers: WorkspaceCleanupBlocker[]
 }
 
@@ -37,6 +45,7 @@ export async function readWorkspaceCleanupGitEvidence(
   worktree: Worktree,
   repo: Repo,
   repoRoute: WorkspaceCleanupGitRoute,
+  prCache: PRCacheView<PRInfo>,
   signal?: AbortSignal
 ): Promise<WorkspaceCleanupGitEvidence> {
   const blockers: WorkspaceCleanupBlocker[] = []
@@ -95,10 +104,13 @@ export async function readWorkspaceCleanupGitEvidence(
 
   const upstreamAhead = status.upstreamStatus.hasUpstream ? status.upstreamStatus.ahead : null
   const upstreamBehind = status.upstreamStatus.hasUpstream ? status.upstreamStatus.behind : null
-  if (upstreamAhead !== null && upstreamAhead > 0) {
+  const merge = await readWorkspaceCleanupMergeEvidence(worktree, repo, prCache, signal)
+  // Commits already in the base or a merged review are not at risk, even after a squash rewrote them.
+  const headLanded = isWorkspaceCleanupHeadLanded(merge)
+  if (!headLanded && upstreamAhead !== null && upstreamAhead > 0) {
     blockers.push('unpushed-commits')
-  }
-  if (clean && upstreamAhead === null) {
+  } else if (!headLanded && clean) {
+    // A deleted remote branch still reads as an upstream 0 ahead; only `--remotes` proves the commits exist there.
     const unpushedCommitCount = await readUnpushedCommitCount(worktree, signal)
     if (unpushedCommitCount === null) {
       blockers.push('unknown-base')
@@ -112,6 +124,7 @@ export async function readWorkspaceCleanupGitEvidence(
     upstreamAhead,
     upstreamBehind,
     checkedAt,
+    ...(merge ? { merge } : {}),
     blockers: uniqueWorkspaceCleanupGitBlockers(blockers)
   }
 }

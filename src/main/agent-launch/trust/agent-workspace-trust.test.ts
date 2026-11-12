@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as NodePath from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ClaudeFolderTrustFile from '../../claude/claude-folder-trust-file'
+import type * as ClaudeFolderTrustFile from '../../claude/configuration/claude-folder-trust-file'
 
 const CODEX_CONFIG_FILES = ['/orca/codex-home/config.toml', '/home/u/.codex/config.toml']
 
@@ -47,7 +47,7 @@ vi.mock('../../codex/configuration/homes/codex-home-paths', () => ({
   getLocalCodexTrustConfigFiles: mocks.codexConfigFiles
 }))
 vi.mock('../../qoder/workspace-trust', () => ({ markQoderWorkspaceTrusted: mocks.qoder }))
-vi.mock('../../claude/claude-folder-trust-file', async (importOriginal) => {
+vi.mock('../../claude/configuration/claude-folder-trust-file', async (importOriginal) => {
   const actual = await importOriginal<typeof ClaudeFolderTrustFile>()
   mocks.claudeGrant.mockImplementation(actual.grantClaudeWorkspaceTrust)
   return { ...actual, grantClaudeWorkspaceTrust: mocks.claudeGrant }

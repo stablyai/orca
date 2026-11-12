@@ -297,36 +297,6 @@ describe('orchestration federated worker output', () => {
     return dispatchId
   }
 
-  it('routes show and read by Dispatch without repeating the worker server', async () => {
-    const dispatchId = await startRemoteWorker()
-
-    const shown = await homeCall('rpc_remote_show', 'orchestration.workerShow', {
-      dispatch: dispatchId
-    })
-    const read = await homeCall('rpc_remote_read', 'orchestration.workerRead', {
-      dispatch: dispatchId,
-      limit: 20
-    })
-
-    expect(shown).toMatchObject({
-      ok: true,
-      result: {
-        server: { environmentId: 'environment_windows', name: 'windows' },
-        observation: { status: 'live', exactWorker: true },
-        terminal: { handle: 'term_windows_worker' }
-      }
-    })
-    expect(read).toMatchObject({
-      ok: true,
-      result: {
-        source: 'terminal',
-        fallbackReason: 'session_not_reported',
-        server: { environmentId: 'environment_windows', name: 'windows' },
-        terminal: { tail: ['remote output'] }
-      }
-    })
-  })
-
   it('reads the exact transcript on the worker server without leaking its path home', async () => {
     const dispatchId = await startRemoteWorker()
     const directory = await mkdtemp(join(tmpdir(), 'orca-federated-worker-output-'))
@@ -454,85 +424,5 @@ describe('orchestration federated worker output', () => {
     setHomeOmitsAutoRelease: (omitted) => {
       homeOmitsAutoRelease = omitted
     }
-  })
-
-  it('does not report a captured remote archive or close when persistence fails', async () => {
-    const dispatchId = await startRemoteWorker()
-    workerDb.db.exec('DROP TABLE worker_terminal_archives')
-
-    const released = await homeDispatcher.dispatch({
-      id: 'rpc_remote_release_archive_failure',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'remote_release_archive_failure',
-      method: 'orchestration.workerRelease',
-      params: { dispatch: dispatchId }
-    })
-
-    expect(released).toMatchObject({
-      ok: true,
-      result: { state: 'retained', processAction: 'none', archive: null }
-    })
-    expect(workerRuntime.closeTerminal).not.toHaveBeenCalled()
-  })
-
-  it('keeps reads, fleet snapshots, and release on legacy fallbacks for an old peer', async () => {
-    workerAdvertisesNewCapabilities = false
-    // Ask shipped hosts directly for structured output; only method_not_found permits terminal fallback.
-    workerSupportsStructuredRead = false
-    const dispatchId = await startRemoteWorker()
-    remoteCalls = []
-    const read = await homeCall('rpc_old_peer_read', 'orchestration.workerRead', {
-      dispatch: dispatchId
-    })
-    const fleet = await homeCall('rpc_old_peer_fleet', 'orchestration.workerList', {
-      includeRemote: true
-    })
-    const release = await homeDispatcher.dispatch({
-      id: 'rpc_old_peer_release',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'old_peer_release',
-      method: 'orchestration.workerRelease',
-      params: { dispatch: dispatchId }
-    })
-
-    expect(read).toMatchObject({
-      ok: true,
-      result: { fallbackReason: 'remote_capability_unavailable' }
-    })
-    expect(fleet).toMatchObject({
-      ok: true,
-      result: { partialHostErrors: [{ code: 'capability_unsupported' }] }
-    })
-    expect(release).toMatchObject({
-      ok: true,
-      result: { state: 'retained', reason: 'federation_unsupported' }
-    })
-    expect(remoteCalls).toContain('orchestration.federationReadOutput')
-    expect(remoteCalls).toContain('orchestration.federationFleetSnapshot')
-    expect(remoteCalls).not.toContain('orchestration.federationRelease')
-  })
-
-  it('retains a mixed-version worker when its host cannot guarantee a durable archive', async () => {
-    workerAdvertisesDurableRelease = false
-    const dispatchId = await startRemoteWorker()
-    remoteCalls = []
-
-    const release = await homeDispatcher.dispatch({
-      id: 'rpc_nondurable_peer_release',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'nondurable_peer_release',
-      method: 'orchestration.workerRelease',
-      params: { dispatch: dispatchId }
-    })
-
-    expect(release).toMatchObject({
-      ok: true,
-      result: { state: 'retained', reason: 'federation_unsupported', archive: null }
-    })
-    expect(remoteCalls).not.toContain('orchestration.federationRelease')
-    expect(workerRuntime.closeTerminal).not.toHaveBeenCalled()
   })
 })

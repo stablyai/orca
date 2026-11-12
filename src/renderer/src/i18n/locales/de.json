@@ -3863,7 +3863,6 @@
             "runningTerminalBlocker": "Laufender Terminal-Prozess",
             "terminalLivenessUnknownBlocker": "Terminal-Aktivität unbekannt",
             "dirtyEditorBufferBlocker": "Ungespeicherter Editor-Puffer",
-            "volatileLocalContextBlocker": "Flüchtiger lokaler Kontext",
             "recentVisibleContextBlocker": "Kürzlich besuchte Tabs",
             "liveAgentBlocker": "Aktiver Agent",
             "sshDisconnectedBlocker": "Remote-Host nicht verfügbar",

@@ -70,10 +70,12 @@ export type CatalogCardHandlers = {
 
 export function CatalogCard({
   entry,
-  handlers
+  handlers,
+  metaDetail
 }: {
   entry: PluginListEntry
   handlers: CatalogCardHandlers
+  metaDetail?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const palettes = usePluginArtPalettes(entry.pluginKey, entry.listing?.release?.themePreview)
@@ -105,6 +107,7 @@ export function CatalogCard({
       entry={entry}
       statusText={controls?.statusText}
       palettes={palettes}
+      metaDetail={metaDetail}
       notice={
         phase?.kind === 'error'
           ? { text: phase.message, tone: 'destructive' }
