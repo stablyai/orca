@@ -48,6 +48,7 @@ describe('PKCE loopback for cloud setup', () => {
     expect(url.searchParams.get('setup')).toBe('1')
     expect(url.searchParams.get('device')).toBe('MacBook Pro')
     expect(url.searchParams.get('setup_steps')).toBe('github')
+    expect(url.searchParams.get('signin_page')).toBeNull()
 
     const callback = new URL(url.searchParams.get('redirect_uri')!)
     callback.searchParams.set('code', 'the-code')
@@ -83,6 +84,7 @@ describe('PKCE loopback for cloud setup', () => {
 })
 
 describe('PKCE loopback cancel and timeout', () => {
+  let lastAuthorize: URL
   async function start(signal?: AbortSignal): Promise<{
     flow: Promise<unknown>
     redirect: URL
@@ -95,8 +97,17 @@ describe('PKCE loopback cancel and timeout', () => {
     })
     flow.catch(() => undefined)
     await vi.waitFor(() => expect(authorize).not.toBe(''))
+    lastAuthorize = new URL(authorize)
     return { flow, redirect: new URL(new URL(authorize).searchParams.get('redirect_uri')!) }
   }
+
+  it('asks auth for the branded sign-in page on a plain sign-in, not on setup (V3-04)', async () => {
+    const abort = new AbortController()
+    const { flow } = await start(abort.signal)
+    expect(lastAuthorize.searchParams.get('signin_page')).toBe('1')
+    abort.abort()
+    await expect(flow).rejects.toBeDefined()
+  })
 
   it('Cancel rejects the wait and closes the loopback listener', async () => {
     const abort = new AbortController()

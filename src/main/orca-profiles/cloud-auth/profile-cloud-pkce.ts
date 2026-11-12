@@ -198,7 +198,9 @@ export function beginOrcaCloudPkceFlow(
       authorizeUrl.searchParams.set('code_challenge', createCodeChallenge(codeVerifier))
       authorizeUrl.searchParams.set('code_challenge_method', 'S256')
       authorizeUrl.searchParams.set('local_profile_id', localProfileId)
-      for (const [key, value] of Object.entries(options.authorizeParams ?? {})) {
+      // A plain sign-in asks auth for its branded "Sign in to Orca" page (V3-04); servers
+      // that don't know the flag ignore it. Cloud setup passes its own parameters.
+      for (const [key, value] of Object.entries(options.authorizeParams ?? { signin_page: '1' })) {
         authorizeUrl.searchParams.set(key, value)
       }
       options.onAuthorizeUrl?.(authorizeUrl.toString())
