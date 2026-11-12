@@ -9,9 +9,9 @@ import {
 import {
   parseGitHubIssueOrPRNumber,
   parseGitHubIssueOrPRLink
-} from '../../../../shared/github/links'
+} from '../../../../shared/github/repositories/links'
 import { normalizeGitHubLinkQuery } from '../../../../shared/new-workspace/github-links'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
 import {
   canUseIssueCommandForLinkedItemProvider,

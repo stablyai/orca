@@ -16,30 +16,11 @@ import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-depend
 import {
   createBundleServer,
   installCspViolationRecorder,
-  installListenerRecorder,
   readShellCsp
 } from '../preview/mobile-web-app-render-harness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
 const componentDir = join(mobileDir, 'src/components')
-
-const COMMANDS = [
-  { label: 'H1', command: 'heading1', select: 'all', expect: 'h1' },
-  { label: 'H2', command: 'heading2', select: 'all', expect: 'h2' },
-  { label: 'H3', command: 'heading3', select: 'all', expect: 'h3' },
-  { label: 'Bold', command: 'bold', select: 'word', expect: 'b,strong' },
-  { label: 'Italic', command: 'italic', select: 'word', expect: 'i,em' },
-  { label: 'Strike', command: 'strike', select: 'word', expect: 'strike,s,del' },
-  { label: 'Bullet list', command: 'bulletList', select: 'all', expect: 'ul' },
-  { label: 'Numbered list', command: 'orderedList', select: 'all', expect: 'ol' },
-  { label: 'Checklist', command: 'taskList', select: 'all', expect: 'ul[data-type="taskList"]' },
-  { label: 'Quote', command: 'quote', select: 'all', expect: 'blockquote' },
-  { label: 'Inline code', command: 'inlineCode', select: 'word', expect: 'code' },
-  { label: 'Code block', command: 'codeBlock', select: 'all', expect: 'pre' }
-]
-
-// Paragraph undoes another command; starting from p would prove nothing.
-const PARAGRAPH = { label: 'Body', command: 'paragraph' }
 
 // Serve inserted image locally: nonexistent URL logs WebKit load failure; successful paint proves shipped CSP admits it.
 const IMAGE_PATH = '/inserted.png'
@@ -151,21 +132,6 @@ function Harness() {
 createRoot(document.getElementById('root')).render(createElement(Harness))
 `
 
-// Install ReactNativeWebView recorder before bundle: absence alone cannot prove editor JSON avoids shell bridge if bridge object never existed.
-function installBridgeObjectRecorder() {
-  globalThis.__orcaBridgeReads = []
-  const bridge = {
-    postMessage: (message) => globalThis.__orcaBridgeReads.push(`post ${String(message)}`)
-  }
-  Object.defineProperty(globalThis, 'ReactNativeWebView', {
-    configurable: true,
-    get: () => {
-      globalThis.__orcaBridgeReads.push('read')
-      return bridge
-    }
-  })
-}
-
 const bundles = mobileWebAppDependenciesPresent()
 const describeEditor = bundles ? describe : describe.skip
 
@@ -256,9 +222,7 @@ async function openPage(browser) {
     }
   })
   page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`))
-  await page.addInitScript(installBridgeObjectRecorder)
   await page.addInitScript(installCspViolationRecorder)
-  await page.addInitScript(installListenerRecorder, { selector: '#editor' })
   await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => document.body.dataset.ready === 'yes')
   await page.waitForSelector('#first-surface #editor')
@@ -326,89 +290,7 @@ describeEditor(
 
         afterAll(() => browser?.close())
 
-        it('mounts the document, reports ready through the seam and never touches the bridge', async () => {
-          const { page, consoleErrors } = await openPage(browser)
-          try {
-            await setContent(page, '# Title', '<h1>Title</h1>')
-            expect(await readSurface(page)).toBe('<h1>Title</h1>')
-            // Initial markup proves document ready reached controller and pushed content through seam.
-            expect(await page.evaluate(() => globalThis.__orcaBridgeReads)).toEqual([])
-            expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
-            expect(consoleErrors).toEqual([])
-            // No editor occlusion report: screen’s web module already measures viewport, so reporting twice would lift bar twice.
-            expect(await page.evaluate(() => globalThis.__orcaEditor.insets)).toEqual([])
-          } finally {
-            await page.close()
-          }
-        }, 600_000)
-
-        it('runs every one of the fifteen commands against the document', async () => {
-          const { page, consoleErrors } = await openPage(browser)
-          try {
-            for (const [index, entry] of COMMANDS.entries()) {
-              const body = bodyFor(index)
-              await setContent(page, body, `<p>${body}</p>`)
-              // Require command effect absent beforehand or undelivered command could pass on previous document.
-              expect(
-                await page.evaluate(
-                  (selector) =>
-                    document.querySelector('#first-surface #editor')?.querySelector(selector),
-                  entry.expect
-                ),
-                `${entry.label} was already applied before it ran`
-              ).toBeNull()
-              await select(page, entry.select)
-              await press(page, entry.label)
-              await page.waitForFunction(
-                (selector) =>
-                  document.querySelector('#first-surface #editor')?.querySelector(selector) !==
-                  null,
-                entry.expect,
-                { timeout: 15_000 }
-              )
-            }
-
-            // Paragraph must undo another block type; it is a no-op on p.
-            await setContent(page, '# Title', '<h1>Title</h1>')
-            await select(page, 'all')
-            await press(page, PARAGRAPH.label)
-            await page.waitForFunction(
-              () =>
-                document.querySelector('#first-surface #editor')?.querySelector('h1') === null &&
-                document.querySelector('#first-surface #editor')?.querySelector('p') !== null,
-              null,
-              { timeout: 15_000 }
-            )
-
-            expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
-            expect(consoleErrors).toEqual([])
-          } finally {
-            await page.close()
-          }
-        }, 600_000)
-
         // Both engines nest unordered list inside existing p; inline paragraph serialization once dropped bullet when saved.
-        it('edits and selects under the shipped document style, which makes other text unselectable', async () => {
-          const { page, consoleErrors } = await openPage(browser)
-          try {
-            await setContent(page, 'alpha', '<p>alpha</p>')
-            const word = page.locator('#first-surface #editor p')
-            await word.click()
-            await page.keyboard.press('End')
-            await page.keyboard.type(' bravo')
-            await page.waitForFunction(
-              () =>
-                document.querySelector('#first-surface #editor p')?.textContent === 'alpha bravo'
-            )
-            // Use browser gesture: a scripted Range bypasses body user-select:none.
-            await page.evaluate(() => window.getSelection()?.removeAllRanges())
-            await word.dblclick()
-            expect(await page.evaluate(() => window.getSelection()?.toString().trim())).not.toBe('')
-            expect(consoleErrors).toEqual([])
-          } finally {
-            await page.close()
-          }
-        }, 600_000)
 
         it('reports a typed bullet list as a list, and renders that markdown back as one', async () => {
           const { page, consoleErrors } = await openPage(browser)

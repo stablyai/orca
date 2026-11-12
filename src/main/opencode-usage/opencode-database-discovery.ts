@@ -1,7 +1,10 @@
 import { stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import {
+  wslGatedReaddir,
+  wslGatedStat
+} from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import {
   resolveOpenCodeDataDirectory,
   resolveOpenCodeDatabasePath

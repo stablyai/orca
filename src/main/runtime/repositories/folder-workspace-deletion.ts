@@ -65,7 +65,8 @@ export async function deleteFolderWorkspaceRow(
         deps.emitWorktreeLifecycle({
           kind: 'removed',
           worktreeId: folderWorkspaceKey(folderWorkspaceId),
-          path: workspace.folderPath
+          path: workspace.folderPath,
+          ...(workspace.executionHostId ? { hostId: workspace.executionHostId } : {})
         })
       }
     }

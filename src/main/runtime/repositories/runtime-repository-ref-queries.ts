@@ -40,7 +40,7 @@ export class RuntimeRepositoryRefQueries {
       if (getRepoRoutingConnectionId(repo)) {
         throw new Error('This project is not served by this host.')
       }
-      const page = await searchRemoteRefPage(repo.path, query, effectiveLimit)
+      const page = await searchRemoteRefPage(repo.path, query, effectiveLimit, includeQualifiedRefs)
       return { ...page, refs: page.refDetails.map((row) => row.refName), namespace }
     }
     // Unserved SSH hosts report no refs; never search local files for them.

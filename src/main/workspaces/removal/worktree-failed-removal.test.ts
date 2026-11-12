@@ -25,7 +25,7 @@ import {
   withUnregisteredRemovalCheckouts
 } from './worktree-removal-listing'
 import { readWorktreeRemovalRecords } from './worktree-removal-records'
-import { loadWorktreeRemovalRecordsForStore } from '../../startup/worktree-removal-records-load'
+import { loadWorktreeRemovalRecordsForStore } from '../../startup/workspace-startup/worktree-removal-records-load'
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn(async () => []))
 
@@ -124,7 +124,7 @@ describe('a delete that fails after Git dropped the registration', () => {
         false,
         snapshotPendingWorktreeRemovals()
       )
-    ).toEqual(rows)
+    ).toEqual([{ id: worktreeId, removalError: GIT_ERROR }])
     // Nothing fences the leftover: a failed delete must not block terminals indefinitely.
     beginTerminalInstall(checkout)()
   })
@@ -230,14 +230,21 @@ describe('a delete that fails after Git dropped the registration', () => {
     ])
   })
 
-  it('ends at the next listing once the checkout is deleted outside Orca', async () => {
+  it('keeps an absent-folder failure across restart until explicit cleanup succeeds', async () => {
     await failRemoval()
     await rm(checkout, { recursive: true })
+    _resetPendingWorktreeRemovalsForTests()
+    await loadWorktreeRemovalRecords(join(directory, 'profile'))
 
+    expect(await listRows()).toEqual([mainWorktree, leftoverRow()])
+    const retried = retryFailedWorktreeRemoval(worktreeId, 'local', () => ({
+      run: async () => ({}),
+      publish: () => {}
+    }))
+    await expect(retried).resolves.toEqual({})
+    await _settlePendingWorktreeRemovalsForTests()
     expect(await listRows()).toEqual([mainWorktree])
-    await vi.waitFor(async () =>
-      expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toEqual([])
-    )
+    expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toEqual([])
   })
 
   it('ends at startup once its repo is removed from Orca, leaving the files', async () => {

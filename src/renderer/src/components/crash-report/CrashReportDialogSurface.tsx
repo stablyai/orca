@@ -19,7 +19,7 @@ import {
   type CrashReportDiagnosticBundle,
   type CrashReportRecord
 } from '../../../../shared/crash-reporting'
-import type { GitHubViewer } from '../../../../shared/github/pull-request-types'
+import type { GitHubViewer } from '../../../../shared/github/pull-requests/pull-request-types'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,

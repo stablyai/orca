@@ -1,6 +1,6 @@
 // Match POSIX state verdicts using staged directory snapshots; avoid extra tar processes and reject symlinks/junctions throughout.
 import { PRIMARY_RUNTIME_METADATA_FILE } from '../../../shared/runtime-bootstrap'
-import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
+import { ORCAD_LOCK_FILE_NAME } from '../../orcad/instance-lock/orcad-instance-lock'
 import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../../shared/orcad-artifacts'
 import { ORCAD_INSTALL_MODEL } from '../install/remote-install-model'
 import {

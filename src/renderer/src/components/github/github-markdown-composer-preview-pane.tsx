@@ -1,5 +1,5 @@
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function GitHubMarkdownComposerPreviewPane({

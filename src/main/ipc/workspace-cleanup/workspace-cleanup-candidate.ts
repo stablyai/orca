@@ -2,7 +2,7 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { getWorktreeExecutionHostId } from '../../../shared/execution-host'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
 import {
   createWorkspaceCleanupFingerprint,
@@ -70,7 +70,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
     repoName: repo.displayName,
     connectionId: repo.connectionId ?? null,
     executionHostId: getWorktreeExecutionHostId(worktree, repo),
-    displayName: worktree.displayName,
+    displayName: worktree.displayName ?? '',
     branch: shortWorkspaceCleanupBranchName(worktree.branch),
     path: worktree.path,
     reasons,
@@ -115,7 +115,7 @@ export function buildWorkspaceCleanupCandidateFromError(
     repoName: repo.displayName,
     connectionId: repo.connectionId ?? null,
     executionHostId: getWorktreeExecutionHostId(worktree, repo),
-    displayName: worktree.displayName,
+    displayName: worktree.displayName ?? '',
     branch: shortWorkspaceCleanupBranchName(worktree.branch),
     path: worktree.path,
     reasons: getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt),

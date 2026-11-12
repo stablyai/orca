@@ -1,27 +1,27 @@
-import '../../../github/rate-limit'
+import '../../../github/api/rate-limit'
 import type {
   GitHubCreateIssueFields,
   GitHubIssueUpdate
 } from '../../../../shared/issue-mutation-types'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
-import type { GitHubPRReviewCommentInput } from '../../../../shared/github/comment-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRReviewCommentInput } from '../../../../shared/github/comments/comment-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { LocalProjectGhExecOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { addIssueComment } from '../../../github/issue-comment'
+import { addIssueComment } from '../../../github/issues/issue-comment'
 import {
   addPRReviewComment,
   addPRReviewCommentReply
 } from '../../../github/client/create/add-pr-review-comment'
-import { createIssue } from '../../../github/issue-create'
-import { updateIssue } from '../../../github/issue-update'
+import { createIssue } from '../../../github/issues/issue-create'
+import { updateIssue } from '../../../github/issues/issue-update'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import type { GitHubAttachmentTarget } from '../../../../shared/rpc-contract/github-attachment-params'
-import { uploadGitHubImage } from '../../../github/image-attachment-upload'
+import { uploadGitHubImage } from '../../../github/attachments/image-attachment-upload'
 import {
   resolveGitHubRepoExecution,
   resolveIssueGitHubApiRepositorySource
-} from '../../../github/github-api-repository'
-import { projectGhExecOptions } from '../../../github/project-view/internals'
+} from '../../../github/repositories/github-api-repository'
+import { projectGhExecOptions } from '../../../github/project-view/project-host-execution'
 import { runAsDefaultWslCliUserAct } from '../../../git/command-runner/hosted-cli/default-wsl-cli-fallback'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
