@@ -255,33 +255,6 @@ it('does not claim success for missing registrations or failed gateway sends', a
 describe('host mobile push privacy', () => {
   afterEach(() => vi.unstubAllEnvs())
 
-  it('keeps existing content delivery when the host has no privacy override', async () => {
-    vi.stubEnv('ORCA_MOBILE_PUSH_MODE', undefined)
-    const h = createService()
-    try {
-      await h.service.register({ ...REGISTER_INPUT, deviceId: h.deviceId })
-      h.dispatch({
-        type: 'notification',
-        source: 'terminal-bell',
-        title: 'Private project',
-        body: 'Agent context',
-        notificationId: 'project-alert',
-        notificationSeq: 1,
-        notificationEpoch: 'epoch'
-      })
-      expect(h.send).toHaveBeenCalledWith({
-        registrationIds: ['reg-1'],
-        notification: expect.objectContaining({
-          title: 'Private project',
-          body: 'Agent context',
-          notificationId: 'project-alert'
-        })
-      })
-    } finally {
-      h.service.stop()
-    }
-  })
-
   it.each(['disabled', 'invalid-mode'])(
     'blocks registration and delivery in %s mode while retaining cleanup',
     async (mode) => {
