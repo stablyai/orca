@@ -17,7 +17,7 @@ import {
   sendOpenFeatureTour,
   sendOpenSetupGuide
 } from './main-window-actions'
-import { ensureAutoUpdaterConfigured } from '../../window/main-window-updater'
+import { ensureAutoUpdaterConfigured } from '../../updater/lifecycle/main-window-updater'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 
