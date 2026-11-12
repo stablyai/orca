@@ -28840,7 +28840,7 @@
     "useMySignIn": "Use my {{agent}} sign-in",
     "signIn": "Sign in",
     "expired": "Your {{agent}} sign-in expired",
-    "expiredDetail": "Sign in once to fix every workspace",
+    "expiredDetail": "Sign in once to fix every workspace.",
     "renew": "Renew",
     "expiredAnnounce": "Your {{agent}} sign-in expired. Renew it once to fix every workspace.",
     "waiting": "Approve on {{site}}",
