@@ -1049,7 +1049,8 @@
           "freebuff_label": "Freebuff",
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
-          "qoder_cn_label": "Qoder CLI 中国版"
+          "qoder_cn_label": "Qoder CLI 中国版",
+          "genie_code_label": "Genie Code"
         },
         "skill": {
           "cli": {

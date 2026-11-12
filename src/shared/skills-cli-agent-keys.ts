@@ -9,6 +9,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   // Follow native-chat skillSourceOwner (claude); Orca’s direct installer separately targets .openclaude roots.
   openclaude: 'claude-code',
   codex: 'codex',
+  // Why: the community skills CLI has no verified Genie Code target key.
+  genie: null,
   autohand: 'autohand-code',
   opencode: 'opencode',
   opencode2: 'opencode',

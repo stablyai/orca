@@ -7,6 +7,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   codebuddy: 'CodeBuddy',
   openclaude: 'OpenClaude',
   codex: 'Codex',
+  genie: 'Genie Code',
   devin: 'Devin',
   ante: 'Ante',
   trae: 'Trae',

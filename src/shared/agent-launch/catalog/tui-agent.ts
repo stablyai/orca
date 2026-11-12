@@ -4,6 +4,7 @@ export type TuiAgent =
   | 'codebuddy'
   | 'openclaude'
   | 'codex'
+  | 'genie'
   | 'autohand'
   | 'opencode'
   | 'opencode2' // OpenCode 2 beta

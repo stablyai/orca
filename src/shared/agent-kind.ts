@@ -11,6 +11,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   codebuddy: 'codebuddy',
   openclaude: 'openclaude',
   codex: 'codex',
+  genie: 'genie',
   autohand: 'autohand',
   opencode: 'opencode',
   opencode2: 'opencode2',

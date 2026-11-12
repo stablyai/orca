@@ -16,7 +16,7 @@ Orca works with **any CLI agent** — the agent combobox just launches a process
 
 ## Permissions default
 
-For new launches, Orca pre-fills each supported CLI's permission-bypass flag — `--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex, `--yolo` for Gemini / Cursor / Crush / Kimi / Muse / Rovo Dev / Hermes / GitHub Copilot / Command Code, `--mode yolo` for ZCode, plus the equivalent flag for every other agent that exposes one. These flags allow an agent to act without confirming every shell command; review the trust boundary before using them.
+For new launches, Orca pre-fills each supported CLI's permission-bypass flag: `--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex and Genie Code, `--yolo` for Gemini / Cursor / Crush / Kimi / Muse / Rovo Dev / Hermes / GitHub Copilot / Command Code, `--mode yolo` for ZCode, plus the equivalent flag for every other agent that exposes one. These flags allow an agent to act without confirming every shell command; review the trust boundary before using them.
 
 Use **Settings → Agents → Agent Permissions** when you want to switch all uncustomized agents between **Yolo** and **Manual** launches. If you already overrode a specific agent's launch arguments or environment, Orca leaves that agent alone so the global switch doesn't erase your custom command.
 
@@ -29,6 +29,7 @@ If an agent's CLI is installed outside `PATH`, expand its row in **Settings → 
 | Claude Code        | Deep integration: usage, hot-swap, hooks                                                                                   | [Anthropic](https://docs.anthropic.com/claude/docs/claude-code)                                   |
 | Claude Agent Teams | Disabled by default — enable under Settings → Agents to launch via `orca claude-teams` with native panes for each teammate | [Anthropic](https://code.claude.com/docs/agent-teams)                                             |
 | Codex              | Deep integration: usage, hot-swap                                                                                          | [OpenAI](https://github.com/openai/codex)                                                         |
+| Genie Code         | Auto-setup; Databricks profile selection stays in the Genie CLI                                                            | [Databricks](https://docs.databricks.com/aws/en/genie-code/genie-code-cli)                        |
 | Grok               | Auto-setup                                                                                                                 | [xAI](https://x.ai/cli)                                                                           |
 | GitHub Copilot CLI | Auto-setup                                                                                                                 | [GitHub](https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli)                   |
 | OpenCode           | Auto-setup, status                                                                                                         | [OpenCode](https://opencode.ai/docs/cli/)                                                         |

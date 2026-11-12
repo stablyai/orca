@@ -37,6 +37,12 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://github.com/openai/codex'
     },
     {
+      id: 'genie',
+      label: translate('auto.lib.agent.catalog.genie_code_label', 'Genie Code'),
+      cmd: 'genie',
+      homepageUrl: 'https://docs.databricks.com/aws/en/genie-code/genie-code-cli'
+    },
+    {
       id: 'grok',
       label: translate('auto.lib.agent.catalog.0baad2d5d2', 'Grok'),
       cmd: 'grok',
