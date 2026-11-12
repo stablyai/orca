@@ -41,6 +41,8 @@ function Sheet({ greyscale = false }: { greyscale?: boolean }): React.JSX.Elemen
                   <CloudStatusGlyph state={state} size={14} />
                   <CloudStatusGlyph state={state} size={16} />
                 </div>
+                {/* Enlarged, to judge the texture and colours. */}
+                <CloudStatusGlyph state={state} size={16} className="size-12" />
                 <span className="w-16 truncate text-center text-[10px] text-muted-foreground">
                   {cloudGlyphStateLabel(state)}
                 </span>
