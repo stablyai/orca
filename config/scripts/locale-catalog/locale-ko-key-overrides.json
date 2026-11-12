@@ -1895,9 +1895,6 @@
   "auto.components.settings.RepositoryHooksSection.a3fc966677": {
     "ko": "# 예: pnpm install cp \"$ORCA_ROOT_PATH/.env\" \"$ORCA_WORKTREE_PATH/.env\""
   },
-  "auto.components.settings.RepositoryHooksSection.b20c5df6ca": {
-    "ko": "이 repo의 공유 설정, 아카이브 또는 이슈 자동화 기본값을 사용하려면 `orca.yaml` 파일을 추가하세요. 예제 템플릿:"
-  },
   "auto.components.settings.RepositoryHooksSection.c5a55a2d2e": {
     "ko": "고급"
   },
