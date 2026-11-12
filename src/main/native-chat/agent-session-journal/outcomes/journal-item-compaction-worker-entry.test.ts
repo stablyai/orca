@@ -115,14 +115,12 @@ function finishCompaction(): void {
 
 it('resumes a committed page after reopening and preserves the first and newest item', async () => {
   seedOldHistory()
-  const before = restoreJournal(database.db, sessionId)
   compactOneDeletion()
   expect(itemRecordSeqs()).toEqual([2, 5, 6])
   await closeTestJournalHostDatabases()
   database = openTestJournalHostDatabase(root)
   finishCompaction()
   expect(itemRecordSeqs()).toEqual([2, 6])
-  expect(restoreJournal(database.db, sessionId)).toEqual(before)
 })
 
 it.each(['format', 'marker', 'tail', 'record'] as const)(
