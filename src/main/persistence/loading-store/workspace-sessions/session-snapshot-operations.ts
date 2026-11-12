@@ -3,18 +3,10 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../../../shared/workspace-session/workspace-session-state-types'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
 
-import {
-  workspaceSessionPatchNeedsFullNormalization,
-  prepareWorkspaceSessionTopologyPatch
-} from './terminal-session-cleanup'
-import { rebaseWorkspaceSessionTerminalGroupPatch } from '../../../runtime/terminal/surface/workspace-session-terminal-membership-authority'
+import { workspaceSessionPatchNeedsFullNormalization } from './terminal-session-cleanup'
 
 import { setLocalWorkspaceSession } from './workspace-session-snapshot-publication'
 import type { TerminalBindingRecoveryOperations } from '../terminal-bindings/terminal-binding-recovery'
@@ -84,22 +76,14 @@ export class SessionSnapshotOperations {
 
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
     const resolved = resolveHostId(hostId)
-    const prior = this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved)
     // Scalar patches skip topology work; membership patches retain stale-binding protections.
     let next: WorkspaceSessionState = {
-      ...prior,
+      ...this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved),
       ...patch
     }
     if (workspaceSessionPatchNeedsFullNormalization(patch)) {
       this.setWorkspaceSession(next, resolved)
       return
-    }
-    const topology = prepareWorkspaceSessionTopologyPatch(patch, prior)
-    const topologyWorktrees = topology.worktreeIds
-    next = { ...prior, ...topology.patch }
-    // Mirrored runtime partitions retain their existing timed full-snapshot fence.
-    if (topologyWorktrees.size > 0 && parseExecutionHostId(resolved)?.kind !== 'runtime') {
-      next = rebaseWorkspaceSessionTerminalGroupPatch(next, prior, topologyWorktrees)
     }
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
@@ -112,15 +96,11 @@ export class SessionSnapshotOperations {
       const { state } = this[sessionSnapshotOperationsContext].runtime
       next = keepWslMoveFrozenSessionsForStore(next, state.workspaceSession)
     }
-    this.publishSession(next, resolved, topologyWorktrees)
+    this.publishSession(next, resolved)
   }
 
-  private publishSession(
-    session: WorkspaceSessionState,
-    hostId: ExecutionHostId,
-    worktreeIds?: ReadonlySet<string>
-  ): void {
-    session = orderTerminalRowsByTabGroups(session, worktreeIds)
+  private publishSession(session: WorkspaceSessionState, hostId: ExecutionHostId): void {
+    session = orderTerminalRowsByTabGroups(session)
     const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
     if (hostId === LOCAL_EXECUTION_HOST_ID) {
       runtime.state.workspaceSession = session

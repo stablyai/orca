@@ -4,7 +4,18 @@ import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 
-import { resolveAiVaultSessionWorktreeInfo } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
+import {
+  aiVaultHistoryWorktrees,
+  findAiVaultHistoryWorktree
+} from '@/lib/agent-session/resume/history/ai-vault-history-worktrees'
+import type { AiVaultHistoryWorktreeState } from '@/lib/agent-session/resume/history/ai-vault-history-worktrees'
+import { getAiVaultResumeWorkspaceTargetStatus } from '@/lib/agent-session/resume/history/ai-vault-resume-target'
+import { getDefaultSettings } from '../../../../../../shared/constants'
+import { toDetectedWorktree } from '../../../../../../shared/worktree/ownership'
+import {
+  buildAiVaultSessionWorktreeMap,
+  resolveAiVaultSessionWorktreeInfo
+} from '../../../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 
 const baseSession: AiVaultSession = {
   id: 'codex:session-1',
@@ -183,4 +194,121 @@ describe('resolveAiVaultSessionWorktreeInfo', () => {
       worktreeId: worktree.id
     })
   })
+})
+
+it('matches original bare History aliases without admitting unrelated hidden policy rows or guessing a host', () => {
+  const repo = makeRepo({
+    addedAt: Date.parse('2026-11-11T12:00:00Z'),
+    externalWorktreeVisibility: 'hide'
+  })
+  const settings = getDefaultSettings('/tmp')
+  const detected = (worktree: Worktree) =>
+    toDetectedWorktree({
+      repo,
+      worktree,
+      settings,
+      knownOrcaLayouts: [{ path: '/managed', nestWorkspaces: true }]
+    })
+  const original = detected(
+    makeWorktree({
+      isBare: true,
+      hostId: 'local',
+      priorWorktreeIds: ['repo-1::/old']
+    })
+  )
+  const hidden = detected(
+    makeWorktree({
+      id: 'hidden',
+      path: '/repo/orca/deep',
+      hostId: 'local'
+    })
+  )
+  const hiddenBare = detected(
+    makeWorktree({
+      id: 'hidden-bare',
+      path: '/repo/orca/deep/.bare',
+      isBare: true,
+      hostId: 'local'
+    })
+  )
+  const state = {
+    repos: [repo],
+    settings,
+    worktreesByRepo: {},
+    detectedWorktreesByRepo: {
+      'repo-1': {
+        repoId: 'repo-1',
+        authoritative: true,
+        source: 'git',
+        worktrees: [original, hidden, hiddenBare]
+      }
+    }
+  } satisfies AiVaultHistoryWorktreeState
+  const worktrees = aiVaultHistoryWorktrees([], state)
+  const record = { ...baseSession, cwd: '/physical', cwdAliases: ['/old/src'] }
+  const map = buildAiVaultSessionWorktreeMap({ sessions: [record], repos: [repo], worktrees })
+  expect(map.get(record.id)).toMatchObject({
+    worktreeId: original.id,
+    path: '/old',
+    status: 'active'
+  })
+  expect(worktrees).toEqual([original])
+  expect(findAiVaultHistoryWorktree(state, original.id, 'local')?.path).toBe('/repo/orca')
+  expect(findAiVaultHistoryWorktree(state, original.id, 'runtime:foreign')).toBeUndefined()
+  expect(findAiVaultHistoryWorktree(state, original.id)).toBeUndefined()
+})
+
+it('keeps an original SSH record on its execution host through a paired transport and leaves rival raw owners unresolved', () => {
+  const repo = makeRepo({ connectionId: 'target-1', executionHostId: 'runtime:hub' })
+  const settings = getDefaultSettings('/tmp')
+  const original = toDetectedWorktree({
+    repo,
+    worktree: makeWorktree({
+      isBare: true,
+      hostId: 'ssh:target-1',
+      runtimeOwnerEnvironmentId: 'hub'
+    }),
+    settings,
+    knownOrcaLayouts: []
+  })
+  const state = {
+    repos: [repo],
+    settings,
+    folderWorkspaces: [],
+    projectGroups: [],
+    worktreesByRepo: {},
+    detectedWorktreesByRepo: {
+      'repo-1': {
+        repoId: 'repo-1',
+        authoritative: true,
+        source: 'git',
+        worktrees: [original]
+      }
+    }
+  } satisfies AiVaultHistoryWorktreeState
+  const record: AiVaultSession = { ...baseSession, executionHostId: 'ssh:target-1' }
+  const worktrees = aiVaultHistoryWorktrees([], state)
+  expect(
+    buildAiVaultSessionWorktreeMap({ sessions: [record], repos: [repo], worktrees }).get(record.id)
+      ?.worktreeId
+  ).toBe(original.id)
+  expect(findAiVaultHistoryWorktree(state, original.id, 'ssh:target-1')).toBe(original)
+  expect(getAiVaultResumeWorkspaceTargetStatus(state, original.id, 'ssh:target-1')).toBe('ssh')
+  expect(findAiVaultHistoryWorktree(state, original.id, 'local')).toBeUndefined()
+
+  const local: typeof original = {
+    ...original,
+    hostId: 'local',
+    runtimeOwnerEnvironmentId: undefined
+  }
+  const unproven = { ...local, hostId: undefined }
+  const collision = {
+    ...state,
+    repos: [makeRepo()],
+    detectedWorktreesByRepo: {
+      'repo-1': { ...state.detectedWorktreesByRepo['repo-1'], worktrees: [local, unproven] }
+    }
+  } satisfies AiVaultHistoryWorktreeState
+  expect(aiVaultHistoryWorktrees([], collision)).toEqual([local, unproven])
+  expect(findAiVaultHistoryWorktree(collision, original.id, 'local')).toBeUndefined()
 })

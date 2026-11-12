@@ -2,7 +2,14 @@ import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/prefligh
 import '../../../workspace/ownership/folder-workspace-connection'
 import { findFolderWorkspaceCandidateRepos } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getAiVaultResumeWorkspaceExecutionHostId } from './ai-vault-resume-target'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import {
+  findAiVaultHistoryWorktree,
+  type AiVaultHistoryWorktreeState
+} from './ai-vault-history-worktrees'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../../../shared/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../../../../shared/windows-terminal-shell'
@@ -12,9 +19,11 @@ import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../../../../shared/wsl-paths'
 import {
   selectFolderWorkspaces,
-  selectWorktreesByRepo
+  selectWorktreesByRepo,
+  selectDetectedWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
+import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 
 type AiVaultResumeShellState = Pick<
   AppState,
@@ -25,25 +34,49 @@ type AiVaultResumeShellState = Pick<
   | 'repos'
   | 'settings'
   | 'worktreesByRepo'
->
+> &
+  Partial<Pick<AppState, 'detectedWorktreesByRepo'>>
+
+export function getAiVaultResumeProjectRuntime(
+  state: AiVaultResumeShellState,
+  worktreeId?: string | null,
+  executionHostId?: ExecutionHostId | null
+): ReturnType<typeof getLocalProjectExecutionRuntimeContext> {
+  const worktree = worktreeId
+    ? findAiVaultHistoryWorktree(state, worktreeId, executionHostId)
+    : undefined
+  const repo =
+    worktree && executionHostId === LOCAL_EXECUTION_HOST_ID
+      ? findIndexedRepoOwnerForHost(state.repos, worktree.repoId, executionHostId)
+      : null
+  return getLocalProjectExecutionRuntimeContext(
+    state,
+    worktreeId,
+    CLIENT_PLATFORM,
+    {},
+    worktree && repo ? { worktree, repo } : undefined
+  )
+}
 
 export function resolveAiVaultResumeStartupShell(args: {
   state: AiVaultResumeShellState
   worktreeId?: string | null
   platform: NodeJS.Platform
+  executionHostId?: ExecutionHostId | null
 }): AgentStartupShell {
   // No login-shell probe: quoting and env clearing are deliberately valid in both sh and fish.
   if (args.platform !== 'win32') {
     return 'posix'
   }
-  const projectRuntime = getLocalProjectExecutionRuntimeContext(
+  const projectRuntime = getAiVaultResumeProjectRuntime(
     args.state,
     args.worktreeId,
-    CLIENT_PLATFORM
+    args.executionHostId
   )
   const workspacePath = getAiVaultResumeWorkspacePath(
     args.state,
-    args.worktreeId ?? args.state.activeWorktreeId
+    args.worktreeId ?? args.state.activeWorktreeId,
+    args.executionHostId
   )
   const shellOverride = resolveLocalWindowsTerminalShellOverrideForTab({
     explicitShellOverride: undefined,
@@ -56,8 +89,9 @@ export function resolveAiVaultResumeStartupShell(args: {
 }
 
 export function getAiVaultResumeWorkspacePath(
-  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>,
-  worktreeId: string | null | undefined
+  state: AiVaultHistoryWorktreeState & Pick<AppState, 'folderWorkspaces'>,
+  worktreeId: string | null | undefined,
+  executionHostId?: ExecutionHostId | null
 ): string | null {
   if (!worktreeId) {
     return null
@@ -72,11 +106,7 @@ export function getAiVaultResumeWorkspacePath(
   }
   const targetWorktreeId =
     workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId
-  return (
-    Object.values(selectWorktreesByRepo(state) ?? {})
-      .flat()
-      .find((candidate) => candidate.id === targetWorktreeId)?.path ?? null
-  )
+  return findAiVaultHistoryWorktree(state, targetWorktreeId, executionHostId)?.path ?? null
 }
 
 export function getAiVaultResumeWorkspaceWslDistro(
@@ -84,12 +114,18 @@ export function getAiVaultResumeWorkspaceWslDistro(
     Partial<
       Pick<
         AppState,
-        'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings' | 'projectGroups'
+        | 'activeRepoId'
+        | 'activeWorktreeId'
+        | 'projects'
+        | 'settings'
+        | 'projectGroups'
+        | 'detectedWorktreesByRepo'
       >
     >,
-  workspaceId: string | null | undefined
+  workspaceId: string | null | undefined,
+  executionHostId?: ExecutionHostId | null
 ): string | null | undefined {
-  const workspacePath = getAiVaultResumeWorkspacePath(state, workspaceId)
+  const workspacePath = getAiVaultResumeWorkspacePath(state, workspaceId, executionHostId)
   const workspaceKey = workspaceId ? parseWorkspaceKey(workspaceId) : null
   const runtimeState = {
     activeRepoId: state.activeRepoId ?? null,
@@ -99,12 +135,16 @@ export function getAiVaultResumeWorkspaceWslDistro(
     folderWorkspaces: selectFolderWorkspaces(state),
     projectGroups: state.projectGroups ?? [],
     repos: state.repos,
-    worktreesByRepo: selectWorktreesByRepo(state)
+    worktreesByRepo: selectWorktreesByRepo(state),
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state)
   }
   if (workspaceKey?.type === 'folder') {
     if (
-      getAiVaultResumeWorkspaceExecutionHostId(runtimeState, workspaceId ?? null) !==
-      LOCAL_EXECUTION_HOST_ID
+      getAiVaultResumeWorkspaceExecutionHostId(
+        runtimeState,
+        workspaceId ?? null,
+        executionHostId
+      ) !== LOCAL_EXECUTION_HOST_ID
     ) {
       return null
     }
@@ -114,10 +154,10 @@ export function getAiVaultResumeWorkspaceWslDistro(
       return undefined
     }
   }
-  const runtime = getLocalProjectExecutionRuntimeContext(
+  const runtime = getAiVaultResumeProjectRuntime(
     runtimeState,
     workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId,
-    CLIENT_PLATFORM
+    executionHostId
   )
   if (runtime?.status === 'repair-required') {
     return undefined

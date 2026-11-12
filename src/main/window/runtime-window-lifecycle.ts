@@ -126,9 +126,7 @@ export function registerRuntimeWindowLifecycle(
         const sent = send('ui:createTerminal', {
           requestId,
           worktreeId,
-          ...(opts.retainedTerminalStart
-            ? { retainedTerminalStart: opts.retainedTerminalStart }
-            : { ptyId: opts.ptyId }),
+          ptyId: opts.ptyId,
           title: opts.title ?? undefined,
           ...(opts.cwd ? { cwd: opts.cwd } : {}),
           ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
@@ -136,7 +134,6 @@ export function registerRuntimeWindowLifecycle(
           ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           ...(opts.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),
-          ...(opts.split ? { split: opts.split } : {}),
           ...(opts.afterTabId ? { afterTabId: opts.afterTabId } : {}),
           ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
           activate: opts.activate !== false,

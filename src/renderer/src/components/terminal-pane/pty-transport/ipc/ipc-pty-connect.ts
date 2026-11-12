@@ -52,10 +52,7 @@ export async function connectIpcPty(
   if (context.isDestroyed()) {
     return
   }
-  if (options.expectedAttachIncarnationId && (!options.attachOnlyView || !options.sessionId)) {
-    return
-  }
-  if (!options.attachOnlyView && options.sessionId && hasPreHandlerPtyExit(options.sessionId)) {
+  if (options.sessionId && hasPreHandlerPtyExit(options.sessionId)) {
     context.bind(options.sessionId)
     handlers.registerData(options.sessionId)
     if (context.isDestroyed()) {
@@ -69,8 +66,7 @@ export async function connectIpcPty(
   }
 
   const admittedSessionId =
-    options.sessionId &&
-    (options.attachOnlyView || !isPreHandlerPtyStateDiscarded(options.sessionId))
+    options.sessionId && !isPreHandlerPtyStateDiscarded(options.sessionId)
       ? options.sessionId
       : undefined
   if (admittedSessionId) {
@@ -91,18 +87,6 @@ export async function connectIpcPty(
     // Fence before spawning: redeployed relays recycle IDs, so earlier buffered state belongs to a previous PTY lifetime.
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
-    if (
-      options.expectedAttachIncarnationId &&
-      (options.shouldContinue?.() === false ||
-        spawnResult.id !== options.sessionId ||
-        !spawnResult.isReattach ||
-        spawnResult.incarnationId !== options.expectedAttachIncarnationId ||
-        spawnResult.sessionExpired ||
-        spawnResult.coldRestore)
-    ) {
-      // An observed winner is not this Restart's predecessor; do not bind, paint, enable input or kill it.
-      return
-    }
     settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)
     // Any resolved spawn or cold restore is live under this id, even if this transport was destroyed meanwhile.
     markTerminalProviderSessionBound(spawnResult.id)
@@ -140,7 +124,7 @@ export async function connectIpcPty(
     }
     context.bind(spawnResult.id)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
-      onPtySpawn?.(spawnResult.id, { fresh: true })
+      onPtySpawn?.(spawnResult.id)
       if (context.isDestroyed()) {
         return
       }

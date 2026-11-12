@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { buildImportedWorktreesCardCandidates } from '@/components/sidebar/worktree-list/listing/imported-worktrees-card-candidates'
 import {
   hasCmdJProjectSearchCandidates,
   searchCmdJProjectResults
@@ -32,8 +31,7 @@ export function useWorktreeJumpPaletteProjectTargets({
   repos,
   worktreesByRepo,
   pendingVmRepoIds,
-  detectedWorktreesByRepo,
-  worktreeVisibilityDefaultsByHost,
+  importedProjectRepoIds,
   pendingWorktreeCreations,
   projectGroups,
   projects,
@@ -70,11 +68,7 @@ export function useWorktreeJumpPaletteProjectTargets({
         ids.add(repo.id)
       }
     }
-    for (const repoId of buildImportedWorktreesCardCandidates({
-      repos,
-      detectedWorktreesByRepo,
-      visibilityDefaultsByHost: worktreeVisibilityDefaultsByHost
-    }).keys()) {
+    for (const repoId of importedProjectRepoIds) {
       ids.add(repoId)
     }
     for (const creation of Object.values(pendingWorktreeCreations)) {
@@ -83,10 +77,9 @@ export function useWorktreeJumpPaletteProjectTargets({
     return ids
   }, [
     workspaces,
-    detectedWorktreesByRepo,
+    importedProjectRepoIds,
     pendingWorktreeCreations,
     repos,
-    worktreeVisibilityDefaultsByHost,
     worktreesByRepo,
     pendingVmRepoIds
   ])

@@ -17,7 +17,6 @@ export type ReattachPayloadSession = Pick<
   | 'kittyKeyboardModes'
   | 'markHiddenOutputRestoreNeeded'
   | 'pane'
-  | 'retainedTerminalHistory'
   | 'pendingReattachFit'
   | 'recordRendererOrderedSeq'
   | 'rememberReattachPayloadAgentSignal'

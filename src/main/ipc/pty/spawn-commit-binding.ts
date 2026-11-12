@@ -23,7 +23,6 @@ export type PtySpawnPaneBinding = {
 export async function savePtySpawnPaneBinding(
   state: {
     result: PtySpawnResult
-    stablePaneBindingPersisted?: boolean
     provider: IPtyProvider
     replacedPaneOwner?: ReplacedPaneOwner | null
     deps: { runtime?: OrcaRuntimeService }
@@ -39,7 +38,6 @@ export async function savePtySpawnPaneBinding(
     if (persisted === false) {
       throw new Error(refusal)
     }
-    state.stablePaneBindingPersisted = true
     if (replaced) {
       // The swap holds the live binding now: a later failure must not retire it under the same id.
       state.replacedPaneOwner = null

@@ -1,4 +1,9 @@
-import { createFreshTerminal } from '@/store/terminals/fresh-terminal-creation'
+import { useAppStore } from '@/store'
+import { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
+import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
@@ -14,14 +19,43 @@ export function createNewTerminalTab(
     options?.onSettled?.(false)
     return
   }
-  void createFreshTerminal({
-    worktreeId: activeWorktreeId,
-    shell: shellOverride,
-    cwd: options?.startupCwd,
-    command: options?.command,
-    ...(options?.onSettled ? { notifyFailure: false } : {})
-  }).then(
-    (created) => options?.onSettled?.(created),
-    () => options?.onSettled?.(false)
-  )
+  const state = useAppStore.getState()
+  const worktreeRoute = resolveTerminalWorktreeRoute(state, activeWorktreeId)
+  if (!worktreeRoute) {
+    options?.onSettled?.(false)
+    return
+  }
+  const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
+  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    // Paired web clients receive host-owned tabs through session.tabs; creating locally races that snapshot and leaves stale handles.
+    const onSettled = options?.onSettled
+    const launch = createWebRuntimeSessionTerminal(
+      {
+        worktreeId: activeWorktreeId,
+        environmentId: runtimeEnvironmentId,
+        shell: shellOverride,
+        ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
+        ...(options?.command ? { command: options.command } : {}),
+        activate: true
+      },
+      { userAct: true, ...(onSettled ? { notifyFailure: false } : {}) }
+    )
+    if (onSettled) {
+      void launch.then(
+        (outcome) => onSettled(outcome.status === 'created'),
+        () => onSettled(false)
+      )
+    }
+    return
+  }
+  const tabId = createBrowserUuid()
+  state.createTab(activeWorktreeId, undefined, shellOverride, {
+    id: tabId,
+    ...(options?.startupCwd ? { startupCwd: options.startupCwd } : {}),
+    ...(options?.command ? { pendingStartup: { command: options.command } } : {})
+  })
+  state.setActiveTabType('terminal', activeWorktreeId)
+  // Save visual order with the new terminal last or fallback ordering puts terminals first.
+  persistAgentLaunchTabOrder(activeWorktreeId, tabId)
+  options?.onSettled?.(true)
 }

@@ -1,5 +1,4 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { retainedTerminalStartPatch } from './retained-terminal-start-patch'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { buildMirroredAgentStatusPatch } from './agent-status-patch'
 import {
@@ -103,7 +102,6 @@ export function buildFrameDrawnWorkspaceStatusPatch(
   }
 
   const patch: Partial<WebSessionTabsSyncState> = {
-    ...retainedTerminalStartPatch(state, snapshot, environmentId, retractedTabIds),
     ...adoptFrameDrawnClientHostedBrowserHandles(
       state,
       snapshot,

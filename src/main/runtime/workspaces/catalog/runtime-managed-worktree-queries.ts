@@ -261,7 +261,7 @@ export class RuntimeManagedWorktreeQueries {
         ...worktree,
         ownership: 'unknown-legacy' as const,
         selectedCheckout: false,
-        visible: true
+        visible: !worktree.isBare
       }
     }
     const visibilityDefaults = this.visibilityDefaults(defaultsSupported, settings)

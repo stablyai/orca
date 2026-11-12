@@ -5,10 +5,6 @@ import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { TerminalIdleCursorReset } from '../emulation/terminal-idle-cursor-reset'
 import type { TerminalStreamPosition } from '../pty-transport/delivery/terminal-stream-position'
 import type { PtyDataMeta } from '../pty-transport/delivery/pty-dispatcher'
-import type {
-  RetainedTerminalHistory,
-  TerminalHistoryReadOwner
-} from './reattach/retained-terminal-history'
 
 // Extracted installers share the closure’s mutable bindings through this bag without changing call order.
 export type ConnectPanePtySession = {
@@ -17,9 +13,6 @@ export type ConnectPanePtySession = {
   deps: PtyConnectionDeps
   // Why typed: every PTY write must name its input kind, and the bag's `any` would hide a missing one.
   transport: PtyTransport
-  retainedTerminalHistory?: RetainedTerminalHistory
-  terminalHistoryReadOwner?: TerminalHistoryReadOwner
-  writeReplayData: (data: string) => void
   hiddenOutputRestoreUnhideSeq: number | null
   idleCursorReset: TerminalIdleCursorReset
   streamPosition: TerminalStreamPosition

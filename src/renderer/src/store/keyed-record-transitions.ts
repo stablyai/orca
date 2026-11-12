@@ -45,7 +45,7 @@ export type TabMapChanges =
 export type KeyedSnapshot = Readonly<Record<string, unknown>>
 /** A Map-typed store field (for example runtime status by environment). */
 export type KeyedMapSnapshot = ReadonlyMap<string, unknown>
-export type Keyed = KeyedSnapshot | KeyedMapSnapshot
+export type Keyed = KeyedSnapshot | KeyedMapSnapshot | readonly unknown[]
 type KeyedRecord<V> = Readonly<Record<string, V>>
 type TabRow = { id: string }
 
@@ -142,6 +142,15 @@ export function replaceRecordEntries<V>(
     link(next, previous, keys)
   }
   return next
+}
+
+/** The writer supplies every replaced position, including duplicate-ID rows, in its original array. */
+export function recordArrayChanges<T>(
+  previous: readonly T[],
+  next: readonly T[],
+  positions: Iterable<number>
+): void {
+  link(next, previous, Array.from(positions, String))
 }
 
 /** Map form of replaceRecordEntries, read with the same readRecordChanges protocol. */

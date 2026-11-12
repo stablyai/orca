@@ -39,9 +39,6 @@
     "../src/types/**/*"
   ],
   "exclude": [
-    "../src/main/persistence/terminal-topology/persistence-runtime-admitted-terminal-membership.test.ts",
-    "../src/main/persistence/terminal-topology/runtime-admitted-terminal-membership-save.test-fixture.ts",
-    "../src/main/runtime/terminal/output/host-terminal-history-read.test.ts",
     "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts",
     "../src/main/runtime/agent-session/structured-agent-session-chat-wait-work-state.test.ts"
   ],

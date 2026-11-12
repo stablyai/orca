@@ -1,14 +1,11 @@
 {
   "extends": "./tsconfig.web.json",
   "include": [
-    "../src/main/persistence/terminal-topology/persistence-runtime-admitted-terminal-membership.test.ts",
-    "../src/main/persistence/terminal-topology/runtime-admitted-terminal-membership-save.test-fixture.ts",
-    "../src/renderer/src/app-shell/startup-retained-save.test.tsx",
-    "../src/renderer/src/app-shell/startup-retained-save.test-fixture.ts",
-    "../src/renderer/src/app-shell/startup-retained-save-history.test-fixture.ts",
-    "../src/main/runtime/terminal/output/host-terminal-history-read.test.ts",
     "../src/renderer/src/components/retained-bare-workspace.test.tsx",
     "../src/renderer/src/components/retained-bare-workspace.test-fixture.ts",
+    "../src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-history-only-resume.test.tsx",
+    "../src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-history-only-resume.test-fixture.ts",
+    "../src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-history-candidates.perf.test.tsx",
     "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts",
     "../src/main/runtime/agent-session/structured-agent-session-chat-wait-work-state.test.ts",
     "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",

@@ -221,7 +221,6 @@ export type WebSessionTabsSyncState = Pick<
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
-  | 'terminalPaneStartsByPaneKey'
   | 'unifiedTabsByWorktree'
   | 'unreadTerminalTabs'
   | 'sortEpoch'
@@ -265,7 +264,6 @@ export type WebSessionTabsBatchRecordKey =
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
-  | 'terminalPaneStartsByPaneKey'
   | 'unifiedTabsByWorktree'
   | 'unreadTerminalTabs'
 

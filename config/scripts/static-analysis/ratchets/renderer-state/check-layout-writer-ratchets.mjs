@@ -3,7 +3,6 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript-api'
-import { classifyRetainedLayoutSites } from './retained-layout-write-classification.mjs'
 
 import {
   diffCounts,
@@ -15,7 +14,7 @@ import {
 } from '../../ratchet-baseline/ratchet-baseline.mjs'
 
 // Ratchet layout writers downward: main Store/session-partition writes and renderer layout/selection keys/spreads.
-// Raw census stays intact; finite addressed projections are reported separately from down-only ordinary counts.
+// Exclude existing-entry content updates; shorthand counts only in store writes, and deleted symbols stay compiler-owned.
 
 // Partition fields of the saved workspace session (census class 1).
 const SESSION_PARTITION_FIELDS = [
@@ -136,7 +135,8 @@ export const RATCHETS = [
     keyedFields: RENDERER_LAYOUT_FIELDS,
     // Mapping existing entries preserves membership/order; treat draft/status/URL edits as content only.
     entryContentFields: new Set(['openFiles', 'browserTabsByWorktree']),
-    // Legacy owner exemptions; finite addressed projection roles are classified separately.
+    // The three writers the plan allows: applyFromRuntime, the frozen mirror's store patch and
+    // the frozen setters for remote-server workspaces.
     allowed: (rel) =>
       rel === 'src/renderer/src/store/workspace-layout/workspace-layout-cache.ts' ||
       rel === 'src/renderer/src/runtime/web-session-tabs-sync/store-patch.ts' ||
@@ -339,10 +339,10 @@ function isSeamFieldNameConstant(literal) {
 }
 
 /** Layout writes in one file under one ratchet's rules. */
-function collectLayoutWriteSites(sourceText, ratchet, fileName) {
+export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
   const names = [...ratchet.writerNames, ...ratchet.assignedFields]
   if (!names.some((name) => sourceText.includes(name))) {
-    return []
+    return 0
   }
   const sourceFile = ts.createSourceFile(
     fileName,
@@ -351,7 +351,7 @@ function collectLayoutWriteSites(sourceText, ratchet, fileName) {
     true,
     fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
   )
-  const sites = []
+  let count = 0
   const visit = (node) => {
     if (
       (ts.isPropertyAccessExpression(node) && ratchet.writerNames.has(node.name.text)) ||
@@ -359,7 +359,7 @@ function collectLayoutWriteSites(sourceText, ratchet, fileName) {
         ts.isIdentifier(node.expression) &&
         ratchet.writerNames.has(node.expression.text))
     ) {
-      sites.push(node)
+      count += 1
     } else if (
       ts.isBinaryExpression(node) &&
       ASSIGNMENT_OPERATORS.has(node.operatorToken.kind) &&
@@ -367,20 +367,20 @@ function collectLayoutWriteSites(sourceText, ratchet, fileName) {
     ) {
       const field = targetedField(node.left, ratchet.assignedFields)
       if (!(ratchet.entryContentFields.has(field) && keepsMembership(node.right))) {
-        sites.push(node)
+        count += 1
       }
     } else if (
       ts.isDeleteExpression(node) &&
       targetedField(node.expression, ratchet.assignedFields) !== null
     ) {
-      sites.push(node)
+      count += 1
     } else if (
       ts.isShorthandPropertyAssignment(node) &&
       ratchet.keyedFields.has(node.name.text) &&
       // A shorthand elsewhere passes a value on (`return { activeTabId, tabsByWorktree }`).
       isPassedToWriter(node.parent, ratchet.writerNames)
     ) {
-      sites.push(node)
+      count += 1
     } else if (ts.isPropertyAssignment(node)) {
       const name = staticName(node.name)
       if (
@@ -389,7 +389,7 @@ function collectLayoutWriteSites(sourceText, ratchet, fileName) {
         !isSameNameCopy(node, name) &&
         !(ratchet.entryContentFields.has(name) && keepsMembership(node.initializer))
       ) {
-        sites.push(node)
+        count += 1
       }
     } else if (
       (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
@@ -413,30 +413,15 @@ function collectLayoutWriteSites(sourceText, ratchet, fileName) {
       !ts.isLiteralTypeNode(node.parent) &&
       !isSeamFieldNameConstant(node)
     ) {
-      sites.push(node)
+      count += 1
     }
     ts.forEachChild(node, visit)
   }
   visit(sourceFile)
-  return sites
+  return count
 }
 
-export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
-  return collectLayoutWriteSites(sourceText, ratchet, fileName).length
-}
-
-export function analyzeLayoutWrites(sourceText, ratchet, fileName) {
-  const sites = collectLayoutWriteSites(sourceText, ratchet, fileName)
-  const classified = classifyRetainedLayoutSites(sites, ratchet, fileName)
-  const categories = {}
-  for (const role of classified.values()) {
-    const category = role.split(':')[0]
-    categories[category] = (categories[category] ?? 0) + 1
-  }
-  return { raw: sites.length, ordinary: sites.length - classified.size, categories }
-}
-
-export function collectCurrentCounts(ratchet, root = process.cwd(), classifications = new Map()) {
+export function collectCurrentCounts(ratchet, root = process.cwd()) {
   const counts = new Map()
   for (const rel of listTrackedFiles(root, [ratchet.scanRoot]).filter(isScannedPath)) {
     if (ratchet.allowed(rel)) {
@@ -449,11 +434,7 @@ export function collectCurrentCounts(ratchet, root = process.cwd(), classificati
       // Deleted in the working tree but still tracked.
       continue
     }
-    const analysis = analyzeLayoutWrites(text, ratchet, rel)
-    if (Object.keys(analysis.categories).length > 0) {
-      classifications.set(rel, analysis)
-    }
-    const found = analysis.ordinary
+    const found = countLayoutWrites(text, ratchet, rel)
     if (found > 0) {
       counts.set(rel, found)
     }
@@ -473,13 +454,7 @@ export function main(root = process.cwd()) {
       failed = true
       continue
     }
-    const classifications = new Map()
-    const current = collectCurrentCounts(ratchet, root, classifications)
-    for (const [file, { raw, ordinary, categories }] of classifications) {
-      console.log(
-        `Layout classification ${file}: ${JSON.stringify(categories)}; ${raw} raw, ${ordinary} ordinary sites.`
-      )
-    }
+    const current = collectCurrentCounts(ratchet, root)
     const { grown, shrunk } = diffCounts(
       current,
       parseCountBaseline(fs.readFileSync(baselineFile, 'utf8'))

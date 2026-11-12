@@ -70,7 +70,7 @@ it.each([true, false])(
       await import('../../orca-runtime-tests/orca-runtime-test-scenario-builders.spec')
     const reveal = vi.fn<NonNullable<RuntimeNotifier['revealTerminalSession']>>(
       (_worktree, opts) => {
-        if (!opts.tabId || !opts.leafId || !opts.ptyId) {
+        if (!opts.tabId || !opts.leafId) {
           throw new Error('Missing revealed pane')
         }
         return {

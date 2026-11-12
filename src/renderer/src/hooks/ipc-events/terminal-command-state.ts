@@ -72,7 +72,7 @@ export function addSplitLeafToLayout(
   layout: TerminalLayoutSnapshot | null | undefined,
   sourceLeafId: string,
   newLeafId: string,
-  ptyId: string | undefined,
+  ptyId: string,
   direction: TerminalSplitDirection,
   title?: string | null,
   activateNewLeaf = true
@@ -103,7 +103,7 @@ export function addSplitLeafToLayout(
     root: nextRoot,
     activeLeafId: nextActiveLeafId,
     expandedLeafId: null,
-    ptyIdsByLeafId: { ...layout?.ptyIdsByLeafId, ...(ptyId ? { [newLeafId]: ptyId } : {}) },
+    ptyIdsByLeafId: { ...layout?.ptyIdsByLeafId, [newLeafId]: ptyId },
     ...(title ? { titlesByLeafId: { ...layout?.titlesByLeafId, [newLeafId]: title } } : {})
   }
 }
@@ -112,15 +112,15 @@ export function activateExistingLeafInLayout(
   layout: TerminalLayoutSnapshot | null | undefined,
   leafId: string,
   ptyId: string,
-  title?: string | null,
-  activate = true
+  title?: string | null
 ): TerminalLayoutSnapshot | null {
   if (!layout?.root || !collectLayoutLeafIdsInOrder(layout.root).includes(leafId)) {
     return null
   }
   return {
     ...layout,
-    ...(activate ? { activeLeafId: leafId, expandedLeafId: null } : {}),
+    activeLeafId: leafId,
+    expandedLeafId: null,
     ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId },
     ...(title ? { titlesByLeafId: { ...layout.titlesByLeafId, [leafId]: title } } : {})
   }

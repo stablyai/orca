@@ -204,10 +204,9 @@
 2 src/main/daemon/executable-host/windows/daemon-host-reclaim.ts
 12 src/main/daemon/executable-host/windows/daemon-host-relocation.ts
 4 src/main/daemon/health/daemon-health.ts
-2 src/main/daemon/history/restoration/history-reader.ts
+4 src/main/daemon/history/restoration/history-reader.ts
 1 src/main/daemon/history/restoration/terminal-history-checkpoint-reader.ts
 1 src/main/daemon/history/restoration/terminal-history-legacy-scrollback-restore.ts
-2 src/main/daemon/history/restoration/terminal-history-restorable-scan.ts # existing scan extracted from history-reader; total unchanged
 1 src/main/daemon/history/storage/history-manager.ts
 3 src/main/daemon/history/storage/terminal-history-metadata.ts
 2 src/main/daemon/history/storage/terminal-history-permission-repair.ts

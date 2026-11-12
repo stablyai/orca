@@ -203,7 +203,6 @@ export const EXECUTION_HOST_METHODS = [
   // A targeted status is the server's own, so a server workspace gates on what that server supports.
   'status.get',
   'session.readTerminalScrollback',
-  'session.readTerminalHistory',
   'session.tabs.activate',
   'session.tabs.close',
   'session.tabs.closeLifecycle',

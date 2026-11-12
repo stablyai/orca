@@ -1,4 +1,3 @@
-import type { RuntimePtyController } from '../../runtime/terminal/lifecycle/runtime-pty-controller-contract'
 // Exercise the real binding store and IPC spawn pipeline over a fake session/provider; suites declare module mocks.
 import { vi, type Mock } from 'vitest'
 import { PtyBindingPersistenceOperations } from '../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
@@ -212,7 +211,7 @@ export function installRestartHarness(
       ptyBindingGenerationOf(bindingRuntime, hostId, leafId)
   })
   const runtime = {
-    setPtyController: vi.fn<(controller: RuntimePtyController) => void>(),
+    setPtyController: stub(),
     resolveTerminalPane: vi.fn(() => {
       throw new Error('terminal_not_found')
     }),

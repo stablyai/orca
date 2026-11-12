@@ -129,23 +129,6 @@ function listUnlessWslDistroStopped(
   )
 }
 
-/** Existing completed evidence only; an action must never trigger catalog work through this read. */
-export function readFreshDetectedGitWorktrees(
-  store: Store,
-  repo: Repo
-): GitWorktreeInfo[] | undefined {
-  if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID || isFolderRepo(repo)) {
-    return undefined
-  }
-  const options = getLocalProjectWorktreeGitOptions(store, repo)
-  const cached = detectedWorktreeScanCache.get(getDetectedWorktreeScanCacheKey(repo.id, options))
-  return cached &&
-    cached.expiresAt > Date.now() &&
-    isLocalWorktreeScanGenerationCurrent(repo.id, cached.generation)
-    ? cached.worktrees
-    : undefined
-}
-
 export async function listDetectedGitWorktrees(
   store: Store,
   repo: Repo

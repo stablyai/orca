@@ -1,5 +1,4 @@
 import { collectCollidingRetractionPaneKeys } from './retraction-pane-ownership'
-import { retainedTerminalStartPatch } from './retained-terminal-start-patch'
 import type { WebSessionTabsSyncState } from './state'
 import type { applyActiveStateUpdates } from './apply-active-state'
 import { buildMirroredAgentStatusPatch } from './agent-status-patch'
@@ -119,13 +118,6 @@ export function buildWebSessionTabsFinalPatch(
         )
 
   const patch: Partial<WebSessionTabsSyncState> = {
-    ...retainedTerminalStartPatch(
-      state,
-      snapshot,
-      environmentId,
-      removedTerminalResourceIds,
-      context.rawSnapshot
-    ),
     ...runtimePaneTitlePatch,
     ...agentStatusPatch,
     ...retractedTabSweepPatch,

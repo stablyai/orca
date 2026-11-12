@@ -7,19 +7,14 @@ export class ColdRestoreReplayWriter {
   private chars = 0
   private operations = 0
 
-  constructor(
-    private readonly emulator: HeadlessEmulator,
-    private readonly signal?: AbortSignal
-  ) {}
+  constructor(private readonly emulator: HeadlessEmulator) {}
 
   async write(data: string): Promise<boolean> {
-    this.signal?.throwIfAborted()
     let offset = 0
     while (offset < data.length) {
       const pendingYield = this.takeBudgetYield()
       if (pendingYield) {
         await pendingYield
-        this.signal?.throwIfAborted()
       }
       const remainingBudget = REPLAY_CHARS_PER_TURN - this.chars
       let end = Math.min(data.length, offset + remainingBudget)
@@ -50,7 +45,6 @@ export class ColdRestoreReplayWriter {
     if (pendingYield) {
       await pendingYield
     }
-    this.signal?.throwIfAborted()
     this.emulator.resize(cols, rows)
     this.operations += 1
   }
@@ -60,13 +54,11 @@ export class ColdRestoreReplayWriter {
     if (pendingYield) {
       await pendingYield
     }
-    this.signal?.throwIfAborted()
     this.emulator.clearScrollback()
     this.operations += 1
   }
 
   private takeBudgetYield(): Promise<void> | null {
-    this.signal?.throwIfAborted()
     if (this.chars < REPLAY_CHARS_PER_TURN && this.operations < REPLAY_OPERATIONS_PER_TURN) {
       return null
     }

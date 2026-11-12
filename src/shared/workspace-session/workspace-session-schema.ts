@@ -112,7 +112,7 @@ const tabSchema = z.object({
   viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional()
 })
 
-export const tabGroupSchema = z.object({
+const tabGroupSchema = z.object({
   id: z.string(),
   worktreeId: z.string(),
   activeTabId: z.string().nullable(),
@@ -122,7 +122,7 @@ export const tabGroupSchema = z.object({
 
 const tabGroupSplitDirectionSchema = z.enum(['horizontal', 'vertical'])
 
-export const tabGroupLayoutNodeSchema: z.ZodType<TabGroupLayoutNode> = z.lazy(() =>
+const tabGroupLayoutNodeSchema: z.ZodType<TabGroupLayoutNode> = z.lazy(() =>
   z.discriminatedUnion('type', [
     z.object({
       type: z.literal('leaf'),

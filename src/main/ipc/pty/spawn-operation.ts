@@ -1,14 +1,7 @@
-import { cancelRegistration } from './spawn-failure-settlement'
-import { takeRetainedTerminalAttempt } from '../../runtime/terminal/launch/retained-terminal-operation'
-import {
-  settlePreparedSpawnFailure,
-  settlePreparedSpawnOutcome
-} from './spawn-operation-settlement'
-import { retirePreparation } from './spawn-operation-preparation'
-import { acquirePtySpawnPolicyLease } from './spawn-policy-lease'
 import type { PaneSpawnOperation } from './pane/pane-spawn-operation'
+import type { AdoptStablePaneArgs } from './ipc/spawn-types'
 import { adoptedOutcome, type PtySpawnOutcome } from './spawn-outcome'
-import type { PtySpawnOperationState, SpawnAdapter } from './spawn-operation-state'
+import type { PtySpawnOperationState, PtySpawnExecutionFacts } from './spawn-operation-state'
 import { beginPtySpawn, reportPtyPaneAdoption } from './spawn-begin'
 import { executePtySpawn } from './spawn-execute'
 import { prepareSavedPtyResume } from './spawn-resume'
@@ -21,9 +14,9 @@ import {
   reserveIdlePaneSpawn
 } from './pane/spawn-reservation'
 import { restoreProvisionalPtySize } from './spawn-options-assembly'
+import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { releaseStoppedPaneBinding } from './pane/pane-owner-replacement'
-import { BareWorkspaceTerminalLaunchError } from '../../workspaces/catalog/workspace-git-storage'
 import {
   admitColdRestoreReattach,
   captureSavedResumeCleanup,
@@ -33,7 +26,49 @@ import {
   savedResumeResult
 } from './host-env/saved-resume-admission'
 
-export { normalizePtySpawnSessionId } from './spawn-operation-preparation'
+type SpawnAdapter<State extends PtySpawnOperationState> = {
+  state: State
+  prepare: () => Promise<void>
+  commit: () => Promise<PtySpawnOutcome>
+  facts: () => PtySpawnExecutionFacts
+  admission?: Promise<void>
+  drainsExitedStart?: true
+  onCommitted?: () => void
+  onOutcome?: (outcome: PtySpawnOutcome) => void
+  onError?: (error: unknown) => unknown
+  releasePreparation?: () => void
+  releaseHiddenMark?: () => void
+  adoption?: () => Pick<AdoptStablePaneArgs, 'renderer' | 'keepAbsentBinding' | 'completed'>
+  replace?: () => Promise<void>
+}
+
+export function normalizePtySpawnSessionId(sessionId: string | undefined): string | undefined {
+  return typeof sessionId === 'string' ? sessionId.trim() || undefined : undefined
+}
+
+function cancelRegistration(ctx: PtySpawnOperationState): void {
+  if (ctx.pendingRegistrationPtyId) {
+    ctx.deps.runtime?.cancelPendingPtyRegistration?.(
+      ctx.pendingRegistrationPtyId,
+      ctx.rejectedRegistrationCandidate?.incarnationId,
+      ctx.pendingRegistrationClaim
+    )
+    ctx.pendingRegistrationPtyId = null
+  }
+}
+
+function retirePreparation<State extends PtySpawnOperationState>(
+  adapter: SpawnAdapter<State>,
+  reattachId?: string
+): void {
+  const ctx = adapter.state
+  adapter.releasePreparation?.()
+  restoreProvisionalPtySize(ctx, { reattachId })
+  ctx.finishTerminalInstall()
+  ctx.finishTerminalInstall = () => {}
+  ctx.releaseWorktreeSpawn?.()
+  ctx.releaseWorktreeSpawn = undefined
+}
 
 /** One host operation owns preparation, dispatch, settlement and cleanup for every start entry. */
 export async function runPtySpawn<State extends PtySpawnOperationState>(
@@ -43,70 +78,41 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
   const args = ctx.args
   ctx.preAdoptedStablePane = args.adoptedStablePane ?? null
   ctx.paneSpawnOperation = args.paneSpawnOperation
-  const retainedAttempt = {
-    current:
-      (args.paneSpawnOperation && takeRetainedTerminalAttempt(args.paneSpawnOperation)) ??
-      (args.preparedReplacement && takeRetainedTerminalAttempt(args.preparedReplacement)) ??
-      null
-  }
   const replacementKey = adapter.replace ? resolveEarlyPaneSpawnReservationKey(args) : null
+  // Keep replacement authority across stopping the previous process.
+  if (replacementKey) {
+    ctx.paneSpawnReservation = await reserveIdlePaneSpawn(replacementKey)
+    ctx.paneSpawnReservationKey = replacementKey
+  }
   let prepared = false
-  let preparedSettled = false
   const finish = (outcome: PtySpawnOutcome) => {
-    if (preparedSettled) {
-      return outcome
+    ctx.paneSpawnOperation?.acquisition?.settle(outcome)
+    if (outcome.kind === 'registration-exited') {
+      adapter.releasePreparation?.()
+      adapter.releaseHiddenMark?.()
     }
-    preparedSettled = true
-    return settlePreparedSpawnOutcome(ctx, outcome, retainedAttempt.current, adapter)
+    adapter.onOutcome?.(outcome)
+    return outcome
   }
   const inherit = (adopted: Parameters<typeof adoptedOutcome>[0]) => {
     const outcome = adoptedOutcome(adopted)
     Object.assign(outcome.result, ctx.deps.runtime?.getTerminalLaunchResult?.(outcome.result.id))
     return finish(outcome)
   }
-  let replacementPrepared = false
-  const beginRetainedAttempt = (
-    owner:
-      | Pick<NonNullable<PaneSpawnOperation['acquisition']>, 'key' | 'reservation'>
-      | undefined = ctx.paneSpawnOperation?.acquisition
-  ): void => {
-    if (!retainedAttempt.current && args.worktreeId && args.tabId && args.leafId) {
-      retainedAttempt.current =
-        ctx.deps.runtime?.beginRetainedTerminalAttempt(
-          args.worktreeId,
-          args.tabId,
-          args.leafId,
-          owner
-        ) ?? null
-    }
-    ctx.preservesEndedPane = Boolean(ctx.args.admitPreparedSpawn || retainedAttempt.current)
-  }
-  let preparedFailure: ReturnType<typeof settlePreparedSpawnFailure> | undefined
-  const settleFailure = (failure: unknown) => {
-    if (!preparedFailure) {
-      const settled = settlePreparedSpawnFailure(
-        ctx,
-        failure,
-        retainedAttempt.current,
-        preparedSettled
-      )
-      preparedSettled = true
-      if (settled.kind === 'superseded') {
-        retainedAttempt.current?.accepted()
-      }
-      preparedFailure = settled
-    }
-    return preparedFailure
-  }
   const complete = async (operation: PaneSpawnOperation): Promise<PtySpawnOutcome> => {
     ctx.paneSpawnOperation = operation
     ctx.args.paneSpawnOperation = operation
-    beginRetainedAttempt()
     const runtime = ctx.deps.runtime
-    if (!ctx.releaseWorktreeSpawn) {
-      await acquirePtySpawnPolicyLease(ctx, args, false)
-    }
-    await ctx.args.admitPreparedSpawn?.()
+    const acquire = runtime?.acquireWorktreeTerminalSpawn
+    ctx.releaseWorktreeSpawn = acquire
+      ? await acquire.call(runtime, spawnWorktreeTarget(args.worktreeId, args.connectionId), {
+          refuseSleptWorktree: args.refuseSleptWorktree,
+          reattachSessionId: ctx.preAdoptedStablePane?.owner.ptyId ?? args.sessionId,
+          requireAttachOnly: () => {
+            ctx.spawnOptions = { ...ctx.spawnOptions, attachOnly: true }
+          }
+        })
+      : undefined
     const facts = adapter.facts()
     const chooseFresh = await prepareSavedPtyResume(ctx, facts)
     await executePtySpawn(ctx, facts, chooseFresh)
@@ -184,16 +190,8 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
       stoppedPtyId: adapter.facts().replacedPaneOwner?.ptyId,
       attachOnlyView: attachOnlyViewOf(args),
       spawnFresh: async (operation) => {
-        try {
-          outcome = await fresh(operation)
-          return outcome.result
-        } catch (caught) {
-          if (operation.acquisition?.reservation.outcome || ctx.settledSpawnOutcome) {
-            throw caught
-          }
-          // Adoption releases the reservation when this callback rejects.
-          throw settleFailure(adapter.onError?.(caught) ?? caught).error
-        }
+        outcome = await fresh(operation)
+        return outcome.result
       }
     })
     if (!adopted) {
@@ -207,19 +205,13 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     return inherit(adopted)
   }
   const fresh = async (operation: PaneSpawnOperation): Promise<PtySpawnOutcome> => {
-    ctx.paneSpawnOperation = operation
-    ctx.args.paneSpawnOperation = operation
-    beginRetainedAttempt()
-    if (!replacementPrepared) {
-      if (prepared) {
-        retirePreparation(adapter)
-      }
-      prepared = true
-      await adapter.prepare()
+    if (prepared) {
+      retirePreparation(adapter)
     }
-    replacementPrepared = false
     ctx.paneSpawnOperation = operation
     ctx.args.paneSpawnOperation = operation
+    prepared = true
+    await adapter.prepare()
     const latePane =
       !resolveEarlyPaneKey(args) && !operation.acquisition ? adapter.facts().paneKey : null
     if (latePane) {
@@ -246,20 +238,7 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     return complete(operation)
   }
   try {
-    // Keep replacement authority across stopping the previous process.
-    if (replacementKey) {
-      ctx.paneSpawnReservation = await reserveIdlePaneSpawn(replacementKey)
-      ctx.paneSpawnReservationKey = replacementKey
-    }
     if (adapter.replace) {
-      adapter.captureReplacement?.()
-      if (replacementKey && ctx.paneSpawnReservation) {
-        beginRetainedAttempt({ key: replacementKey, reservation: ctx.paneSpawnReservation })
-      }
-      prepared = true
-      await adapter.prepare()
-      await acquirePtySpawnPolicyLease(ctx, args, true)
-      replacementPrepared = true
       await adapter.replace()
     }
     await adapter.admission
@@ -275,26 +254,18 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
       ? acquire(paneKey, fresh)
       : fresh(ctx.paneSpawnOperation ?? { mustExist: false }))
   } catch (caught) {
-    const failure = preparedFailure?.error ?? adapter.onError?.(caught) ?? caught
-    const acquisition = ctx.paneSpawnOperation?.acquisition
-    const actualOutcome = acquisition?.reservation.outcome ?? ctx.settledSpawnOutcome
-    if (actualOutcome) {
-      console.warn('[pty] accepted spawn presentation failed:', failure)
-      return finish(actualOutcome)
-    }
-    const { error } = settleFailure(failure)
+    const error = adapter.onError?.(caught) ?? caught
     adapter.releasePreparation?.()
     adapter.releaseHiddenMark?.()
     cancelRegistration(ctx)
     restoreProvisionalPtySize(ctx)
-    if (ctx.replacedPaneOwner && !(caught instanceof BareWorkspaceTerminalLaunchError)) {
+    if (ctx.replacedPaneOwner) {
       await releaseStoppedPaneBinding(ctx.deps.store, ctx.replacedPaneOwner)
     }
     // Every failure settles the exact reservation so later starts can acquire it.
     rejectPaneSpawnReservation(ctx.paneSpawnReservationKey, ctx.paneSpawnReservation, error)
     throw error
   } finally {
-    retainedAttempt.current?.finalized()
     cancelRegistration(ctx)
     ctx.releaseWorktreeSpawn?.()
     ctx.finishTerminalInstall()

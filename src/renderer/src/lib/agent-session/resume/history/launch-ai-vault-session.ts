@@ -1,4 +1,17 @@
 import { useAppStore } from '@/store/index'
+import { agentTabLaunchStore } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
+import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
+import {
+  getAiVaultResumeProjectRuntime,
+  getAiVaultResumeWorkspacePath
+} from './ai-vault-resume-shell'
+import { getAiVaultResumePlatform } from './ai-vault-resume-platform'
+import { findAiVaultHistoryWorktree } from './ai-vault-history-worktrees'
+import { getConnectionIdForWorktreeCopy } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
+import { isWslUncPath } from '../../../../../../shared/wsl-paths'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { TerminalCreationExecutionFacts } from '@/store/terminals/terminal-contracts'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import '@/diagnostics/telemetry/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
@@ -20,6 +33,7 @@ export type LaunchAiVaultSessionInNewTabResult =
 export function launchAiVaultSessionInNewTab(args: {
   agent: AiVaultAgent
   worktreeId: string
+  workspaceExecutionHostId?: ExecutionHostId
   command: string
   cwd?: string
   env?: Record<string, string>
@@ -29,13 +43,21 @@ export function launchAiVaultSessionInNewTab(args: {
   targetGroupId?: string
   splitDirection?: TabSplitDirection
 }): LaunchAiVaultSessionInNewTabResult {
-  const store = useAppStore.getState()
+  const store = agentTabLaunchStore(useAppStore.getState(), args)
   // Why both paths split: the runtime path used to return first and drop the split (#22791).
   const split =
     args.splitDirection && args.targetGroupId
       ? { sourceGroupId: args.targetGroupId, splitDirection: args.splitDirection }
       : undefined
-  const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, args.worktreeId)
+  const route = args.workspaceExecutionHostId
+    ? resolveWorktreeOperationRouteForHost(store, args.worktreeId, args.workspaceExecutionHostId)
+    : null
+  if (args.workspaceExecutionHostId && !route) {
+    throw new Error('The conversation workspace is no longer on its recording host.')
+  }
+  const runtimeEnvironmentId = args.workspaceExecutionHostId
+    ? (route?.runtimeEnvironmentId ?? null)
+    : runtimeEnvironmentIdOrLocalUnlessTwin(store, args.worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     // Why an empty group first: the paired host creates the tab after a round trip.
     const splitGroupId = split
@@ -72,8 +94,46 @@ export function launchAiVaultSessionInNewTab(args: {
     return { tabId: null, runtimeLaunch: observedRuntimeLaunch }
   }
 
+  let executionFacts: TerminalCreationExecutionFacts | undefined
+  if (args.workspaceExecutionHostId) {
+    const worktree = findAiVaultHistoryWorktree(
+      store,
+      args.worktreeId,
+      args.workspaceExecutionHostId
+    )
+    const connectionId = worktree
+      ? resolveQualifiedWorktreeExecutionOwner(
+          { [args.worktreeId]: [worktree] },
+          store.repos,
+          args.worktreeId,
+          args.workspaceExecutionHostId
+        )?.connectionId
+      : getConnectionIdForWorktreeCopy(store, args.worktreeId, args.workspaceExecutionHostId)
+    const platform = getAiVaultResumePlatform(store, args.worktreeId, args.workspaceExecutionHostId)
+    if (connectionId === undefined) {
+      throw new Error('The conversation workspace is no longer on its recording host.')
+    }
+    const path = getAiVaultResumeWorkspacePath(
+      store,
+      args.worktreeId,
+      args.workspaceExecutionHostId
+    )
+    executionFacts = {
+      hostId: args.workspaceExecutionHostId,
+      connectionId,
+      platform,
+      isRemote: Boolean(connectionId),
+      isWsl: Boolean(path && isWslUncPath(path)),
+      projectRuntime: getAiVaultResumeProjectRuntime(
+        store,
+        args.worktreeId,
+        args.workspaceExecutionHostId
+      )
+    }
+  }
   const tab = store.createTab(args.worktreeId, args.targetGroupId, undefined, {
     ...(split ? { split } : {}),
+    ...(executionFacts ? { executionFacts } : {}),
     ...(args.cwd ? { startupCwd: args.cwd } : {}),
     pendingStartup: {
       command: args.command,

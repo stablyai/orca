@@ -185,8 +185,6 @@ export type PtyTransport = {
     initiallyHidden?: boolean
     /** Layout-owner build: attach to `sessionId` or start nothing; main starts the pane. */
     attachOnlyView?: true
-    /** Renderer-only result fence for a detached Restart predecessor; never serialized. */
-    expectedAttachIncarnationId?: string
     /** Sent only when this connect resumes an agent, and only to hosts that accept it. */
     resumeSpawnIntent?: RestoreSpawnIntent
     /** A restore no user act asked for: main holds a stopped WSL distro's pane instead of starting it. */
@@ -340,7 +338,7 @@ export type IpcPtyTransportOptions = {
   telemetry?: EventProps<'agent_started'>
   onPtyExit?: (ptyId: string, exitCode?: number) => void
   onTitleChange?: (title: string, rawTitle: string) => void
-  onPtySpawn?: (ptyId: string, accepted?: { fresh: true }) => void
+  onPtySpawn?: (ptyId: string) => void
   /** Current surface may retain a late disposed spawn for its successor; absent/false authorizes kill (disposed-spawn-retention.ts). */
   retainDisposedSpawn?: () => boolean
   /** Rebind an existing pane after its provider replaces the PTY identity. */

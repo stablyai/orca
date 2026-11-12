@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, opendirSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import type { TerminalCheckpointFile } from '../../protocol/daemon-checkpoint-file'
 import { getHistorySessionDirName } from '../storage/history-paths'
@@ -12,8 +12,15 @@ import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 import { readTerminalHistoryBufferAsync } from '../storage/terminal-history-file-reader'
 import { detectColdRestoreFromLegacyScrollback } from './terminal-history-legacy-scrollback-restore'
 import { TERMINAL_HISTORY_LOG_MAX_BYTES } from '../storage/terminal-history-file-limits'
-import { listRestorableTerminalHistory } from './terminal-history-restorable-scan'
-import { hasTerminalHistoryRecoveryProtection } from '../storage/terminal-history-recovery-quarantine'
+import {
+  retainNewestRestorableTerminalHistorySessions,
+  type RestorableTerminalHistorySession
+} from './terminal-history-restorable-retention'
+import {
+  hasTerminalHistoryRecoveryProtection,
+  isTerminalHistoryQuarantineEntry
+} from '../storage/terminal-history-recovery-quarantine'
+import { isTerminalHistoryPendingDeleteEntry } from '../storage/terminal-history-session-tombstone'
 import {
   readTerminalHistoryMeta,
   type SessionMeta,
@@ -27,13 +34,6 @@ import {
 } from './terminal-history-cold-restore-info'
 import { readTerminalHistoryCheckpoint } from './terminal-history-checkpoint-reader'
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
-
-type HistoryReadOptions = {
-  ignoreCleanEnd?: boolean
-  wslDistro?: string
-  priority?: number
-  signal?: AbortSignal
-}
 
 export type RestorableHistoryProbe =
   | { status: 'none' }
@@ -71,7 +71,7 @@ export class HistoryReader {
 
   async detectColdRestore(
     sessionId: string,
-    opts?: HistoryReadOptions
+    opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
   ): Promise<ColdRestoreInfo | null> {
     const detection = await this.detectColdRestoreState(sessionId, opts)
     return detection.status === 'restored' ? detection.restoreInfo : null
@@ -79,9 +79,8 @@ export class HistoryReader {
 
   async detectColdRestoreState(
     sessionId: string,
-    opts?: HistoryReadOptions
+    opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
   ): Promise<ColdRestoreDetection> {
-    opts?.signal?.throwIfAborted()
     if (hasTerminalHistoryRecoveryProtection(this.basePath, sessionId)) {
       return { status: 'unreadable', sessionId }
     }
@@ -100,14 +99,17 @@ export class HistoryReader {
 
     const sessionDir = join(this.basePath, getHistorySessionDirName(sessionId))
     const checkpointPath = join(sessionDir, 'checkpoint.json')
-    const checkpointRead = await readTerminalHistoryCheckpoint(checkpointPath, opts?.signal)
-    opts?.signal?.throwIfAborted()
+    const checkpointRead = await readTerminalHistoryCheckpoint(checkpointPath)
     const checkpoint = checkpointRead.status === 'readable' ? checkpointRead.checkpoint : null
     const checkpointReadFailed = checkpointRead.status === 'unreadable'
 
     // Incremental logs contain newer output than the last full checkpoint.
-    const logRestore = await this.restoreFromIncrementalLog(sessionDir, meta, checkpoint, opts)
-    opts?.signal?.throwIfAborted()
+    const logRestore = await this.restoreFromIncrementalLog(
+      sessionDir,
+      meta,
+      checkpoint,
+      opts?.wslDistro
+    )
     if (logRestore.restoreInfo) {
       return {
         status: 'restored',
@@ -125,8 +127,7 @@ export class HistoryReader {
       const legacyRestore = await detectColdRestoreFromLegacyScrollback(
         this.basePath,
         sessionId,
-        meta,
-        opts?.signal
+        meta
       )
       if (legacyRestore) {
         return {
@@ -152,7 +153,65 @@ export class HistoryReader {
   }
 
   listRestorable(): string[] {
-    return listRestorableTerminalHistory(this.basePath)
+    if (!existsSync(this.basePath)) {
+      return []
+    }
+
+    let directory: ReturnType<typeof opendirSync>
+    try {
+      directory = opendirSync(this.basePath)
+    } catch {
+      return []
+    }
+
+    const sessions = function* (
+      reader: HistoryReader
+    ): Generator<RestorableTerminalHistorySession> {
+      let order = 0
+      while (true) {
+        const entry = directory.readSync()
+        if (!entry) {
+          return
+        }
+        if (!entry.isDirectory()) {
+          continue
+        }
+        if (
+          isTerminalHistoryQuarantineEntry(entry.name) ||
+          isTerminalHistoryPendingDeleteEntry(entry.name)
+        ) {
+          continue
+        }
+        let sessionId: string
+        try {
+          sessionId = decodeURIComponent(entry.name)
+        } catch {
+          continue
+        }
+        const meta = reader.readMeta(sessionId)
+        if (meta && meta.endedAt === null) {
+          const parsedStartedAt = Date.parse(meta.startedAt)
+          yield {
+            sessionId,
+            startedAtMs: Number.isFinite(parsedStartedAt) ? parsedStartedAt : 0,
+            order
+          }
+          order += 1
+        }
+      }
+    }
+
+    try {
+      return retainNewestRestorableTerminalHistorySessions(sessions(this))
+    } catch {
+      return []
+    } finally {
+      try {
+        directory.closeSync()
+      } catch {
+        // Best effort after a directory read failure.
+      }
+    }
   }
 
   // Replay through the daemon emulator to preserve modes, alternate screens and snapshot normalization.
@@ -160,37 +219,25 @@ export class HistoryReader {
     sessionDir: string,
     meta: SessionMeta,
     checkpoint: TerminalCheckpointFile | null,
-    opts?: HistoryReadOptions
+    wslDistro?: string
   ): Promise<IncrementalLogRestore> {
-    const signal = opts?.signal
-    signal?.throwIfAborted()
     const logPath = join(sessionDir, 'output.log')
     try {
       // Header-only final logs need no replay slot and must not queue teardown behind startup restores.
-      const size = (await stat(logPath)).size
-      signal?.throwIfAborted()
-      if (size <= LOG_HEADER_BYTES) {
+      if ((await stat(logPath)).size <= LOG_HEADER_BYTES) {
         return { restoreInfo: null, readFailed: false }
       }
     } catch {
-      signal?.throwIfAborted()
       return { restoreInfo: null, readFailed: existsSync(logPath) }
     }
-    const release = await coldRestoreReplaySemaphore.acquire(opts?.priority ?? 0, signal)
+    const release = await coldRestoreReplaySemaphore.acquire(0)
     try {
-      signal?.throwIfAborted()
       let logBuffer: Buffer
       try {
-        logBuffer = await readTerminalHistoryBufferAsync(
-          logPath,
-          TERMINAL_HISTORY_LOG_MAX_BYTES,
-          signal
-        )
+        logBuffer = await readTerminalHistoryBufferAsync(logPath, TERMINAL_HISTORY_LOG_MAX_BYTES)
       } catch {
-        signal?.throwIfAborted()
         return { restoreInfo: null, readFailed: true }
       }
-      signal?.throwIfAborted()
       const log = decodeTerminalHistoryLog(logBuffer)
       if (!log || log.batches.length === 0) {
         return { restoreInfo: null, readFailed: true }
@@ -208,10 +255,10 @@ export class HistoryReader {
         cols: checkpoint?.cols ?? meta.cols,
         rows: checkpoint?.rows ?? meta.rows,
         scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS,
-        wslDistro: opts?.wslDistro,
+        wslDistro,
         windowsPty: historyReplayWindowsPty(meta.resizeModel)
       })
-      const replay = new ColdRestoreReplayWriter(emulator, signal)
+      const replay = new ColdRestoreReplayWriter(emulator)
       try {
         if (checkpoint) {
           if (
@@ -243,7 +290,6 @@ export class HistoryReader {
             }
           }
         }
-        signal?.throwIfAborted()
         const snapshot = emulator.getSnapshot()
         const lastBatch = log.batches.at(-1)!
         const cwd = snapshot.cwd ?? checkpoint?.cwd ?? null
@@ -257,7 +303,6 @@ export class HistoryReader {
           ...(cwd === null ? { cwdFromSpawn: true } : {})
         }
       } catch {
-        signal?.throwIfAborted()
         // Degrade to checkpoint-only restore instead of failing spawn.
         return { restoreInfo: null, readFailed: true }
       } finally {
@@ -266,6 +311,11 @@ export class HistoryReader {
     } finally {
       release()
     }
+  }
+
+  private readMeta(sessionId: string): SessionMeta | null {
+    const metaRead = this.readMetaState(sessionId)
+    return metaRead.status === 'readable' ? metaRead.meta : null
   }
 
   private readMetaState(sessionId: string): SessionMetaRead {

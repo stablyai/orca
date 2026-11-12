@@ -139,7 +139,7 @@ describe('restored pane refused for a newer daemon', () => {
     expect(toast.success).toHaveBeenCalledWith('Reopened 1 terminal', windowResumedDescription)
   })
 
-  it('keeps the saved screen until the accepted payload replaces it', async () => {
+  it('shows the saved screen while held and clears it before reconnecting', async () => {
     vi.mocked(window.api.pty.readNewerDaemonHeldScreen).mockResolvedValue({
       scrollback: 'old output',
       cols: 80,
@@ -150,7 +150,7 @@ describe('restored pane refused for a newer daemon', () => {
     await vi.waitFor(() => expect(fixture.writeReplayData).toHaveBeenCalledWith('old output'))
     nextConnect('reattach')
     await reopenHeldTerminals('tab:leaf')
-    expect(fixture.writeReplayData).toHaveBeenLastCalledWith('old output')
+    expect(fixture.writeReplayData).toHaveBeenLastCalledWith('\x1b[0m\x1b[2J\x1b[3J\x1b[H')
   })
 
   it('leaves a screen the layout restore already painted alone', async () => {

@@ -1,11 +1,11 @@
 {
   "extends": "./tsconfig.web.json",
   "exclude": [
-    "../src/renderer/src/app-shell/startup-retained-save.test.tsx",
-    "../src/renderer/src/app-shell/startup-retained-save.test-fixture.ts",
-    "../src/renderer/src/app-shell/startup-retained-save-history.test-fixture.ts",
     "../src/renderer/src/components/retained-bare-workspace.test.tsx",
     "../src/renderer/src/components/retained-bare-workspace.test-fixture.ts",
+    "../src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-history-only-resume.test.tsx",
+    "../src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-history-only-resume.test-fixture.ts",
+    "../src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-history-candidates.perf.test.tsx",
     "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",
     "../src/shared/**/*.test.ts",

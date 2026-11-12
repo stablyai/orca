@@ -20,12 +20,10 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { refuseClosedPaneSpawn } from './closed-pane-spawn-refusal'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
-import type { StablePaneOwner } from '../pane/stable-owner'
 
 export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpcArgs) {
   const args = { ...request, sessionId: normalizePtySpawnSessionId(request.sessionId) }
   const ctx = createPtyIpcSpawnState(deps, args)
-  let replacementOwner: StablePaneOwner | null = null
   const admit = () => {
     triggerPtySpawnPushTargetMaterialization(deps, args)
     return checkPtyIpcLaunchPane(ctx)
@@ -43,7 +41,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
           ctx.args.worktreeId,
           ctx.args.connectionId
         ),
-        ctx.replacedPaneOwner ?? replacementOwner
+        ctx.replacedPaneOwner
       )
       ctx.earlyWorktreeId = ctx.args.worktreeId
       if (ctx.args.agentLaunch !== undefined) {
@@ -106,25 +104,12 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
     adoption: () => ({ renderer: true, keepAbsentBinding: keepAbsentBindingForSwap(ctx) }),
     ...(args.replacesPtyId !== undefined
       ? {
-          captureReplacement: () => {
-            replacementOwner = resolveStablePaneOwner(
-              deps.runtime,
-              deps.store,
-              resolveEarlyPaneKey(args),
-              args.worktreeId,
-              args.connectionId
-            )
-            if (replacementOwner && replacementOwner.ptyId !== args.replacesPtyId) {
-              throw new Error('terminal_pane_owner_changed')
-            }
-          },
           replace: async () => {
             ctx.replacedPaneOwner = await stopReplacedPaneOwner(deps, {
               replacesPtyId: args.replacesPtyId!,
               paneKey: resolveEarlyPaneKey(args),
               worktreeId: args.worktreeId,
-              connectionId: args.connectionId,
-              expectedOwner: replacementOwner
+              connectionId: args.connectionId
             })
             await admit()
           }

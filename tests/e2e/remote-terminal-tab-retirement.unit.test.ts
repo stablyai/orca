@@ -47,7 +47,6 @@ function makeViewerState(): WebSessionTabsSyncState {
     tabBarOrderByWorktree: {},
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
-    terminalPaneStartsByPaneKey: {},
     unifiedTabsByWorktree: {},
     unreadTerminalTabs: {},
     sortEpoch: 0

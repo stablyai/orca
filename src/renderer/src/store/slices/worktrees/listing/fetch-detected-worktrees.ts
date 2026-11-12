@@ -1,3 +1,4 @@
+import { replaceDetectedWorktreeListing } from './detected-worktree-publication'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import {
   appliedWorktreeCatalogVersionPatch,
@@ -89,10 +90,11 @@ export function createFetchDetectedWorktrees(
             : { ...s, ...versionPatch }
           : {
               ...versionPatch,
-              detectedWorktreesByRepo: {
-                ...s.detectedWorktreesByRepo,
-                [repoId]: mergedDetected
-              }
+              detectedWorktreesByRepo: replaceDetectedWorktreeListing(
+                s.detectedWorktreesByRepo,
+                repoId,
+                mergedDetected
+              )
             }
       })
       return admitted ? refresh.result : null

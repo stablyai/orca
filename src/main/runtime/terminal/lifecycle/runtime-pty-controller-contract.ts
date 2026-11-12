@@ -1,17 +1,11 @@
-import type { PreparedPtySpawnSettlement, PtySpawnOutcome } from '../../../ipc/pty/spawn-outcome'
-import type { PreparedPaneReplacement } from '../recovery/prepared-pane-replacement'
-import type {
-  PaneSpawnReservation,
-  RuntimePaneCreateClaim
-} from '../../../ipc/pty/pane/spawn-reservation'
 import type { DaemonLaunchNoteChange } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type {
   TerminalLimitStatus,
   TerminalLimitUpdate
 } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
-import type { ReplacedPaneOwner } from '../../../ipc/pty/pane/replaced-pane-owner'
-import type { NewGroupSplit } from '../../../../shared/workspace-layout/workspace-layout-command-types'
+import type { PtySpawnOutcome } from '../../../ipc/pty/spawn-outcome'
+import type { RuntimePaneCreateClaim } from '../../../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
@@ -53,9 +47,6 @@ export type RuntimePtyController = {
     leafId: string
   }): RuntimePaneCreateClaim
   adoptStablePane?(opts: {
-    reservation?: PaneSpawnReservation
-    stoppedPtyId?: string
-    keepAbsentBinding?: (owner: ReplacedPaneOwner) => void
     onOutcome?: (outcome: PtySpawnOutcome, operation: PaneSpawnOperation) => void
     signal?: AbortSignal
     spawnFresh?: (operation: PaneSpawnOperation) => Promise<PtySpawnResult>
@@ -79,7 +70,6 @@ export type RuntimePtyController = {
     materialized?: true
   } | null>
   spawn?(opts: {
-    preparedReplacement?: PreparedPaneReplacement
     resolvedWorkspace?: TerminalWorkspaceLaunchScope
     cols: number
     rows: number
@@ -114,10 +104,6 @@ export type RuntimePtyController = {
     persistHostSessionBinding?: boolean
     expectedSourceBinding?: PtyBindingSourceExpectation
     placement?: TerminalPanePlacement
-    groupSplit?: NewGroupSplit
-    admitPreparedSpawn?: () => Promise<void>
-    onPreparedSpawnSettlement?: (settlement: PreparedPtySpawnSettlement) => unknown
-    absentPaneReplacement?: { owner: ReplacedPaneOwner; accept: () => void }
     terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     /** A paired launcher's theme: its PTY answers OSC 10/11 with it over the host-wide theme. */

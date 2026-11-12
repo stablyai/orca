@@ -54,7 +54,6 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       clearSessionRestoredBannerForPane(paneId)
       const leafId = manager.getLeafId(paneId)
       if (leafId) {
-        useAppStore.getState().terminalStartupAttempt?.close(tabId, leafId)
         const launchPane = useAppStore
           .getState()
           .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.agentLaunchPane

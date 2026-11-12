@@ -1,3 +1,4 @@
+import { recordDraft } from '../../../keyed-record-transitions'
 import type {
   BrowserSlice,
   BrowserSliceGet,
@@ -42,7 +43,7 @@ export function createBrowserCloseActions(
           // Main's frame already dropped a drawn tab's record.
           let owningWorktreeId: string | null = drawn?.worktreeId ?? null
           let closedWorkspace: BrowserWorkspace | null = drawn?.record ?? null
-          const nextBrowserTabsByWorktree: Record<string, BrowserWorkspace[]> = {}
+          const browserBuckets = recordDraft(s.browserTabsByWorktree)
           for (const [worktreeId, tabs] of Object.entries(s.browserTabsByWorktree)) {
             const removedTab = tabs.find((tab) => tab.id === tabId) ?? null
             const filtered = tabs.filter((tab) => tab.id !== tabId)
@@ -50,8 +51,10 @@ export function createBrowserCloseActions(
               owningWorktreeId = worktreeId
               closedWorkspace = removedTab
             }
-            if (filtered.length > 0) {
-              nextBrowserTabsByWorktree[worktreeId] = filtered
+            if (filtered.length === 0) {
+              browserBuckets.delete(worktreeId)
+            } else if (filtered.length !== tabs.length) {
+              browserBuckets.set(worktreeId, filtered)
             }
           }
           if (!owningWorktreeId || !closedWorkspace) {
@@ -87,7 +90,7 @@ export function createBrowserCloseActions(
             delete nextRemoteBrowserPageHandlesByPageId[page.id]
           }
 
-          const remainingBrowserTabs = nextBrowserTabsByWorktree[owningWorktreeId] ?? []
+          const remainingBrowserTabs = browserBuckets.get(owningWorktreeId) ?? []
           const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
           if (nextActiveBrowserTabIdByWorktree[owningWorktreeId] === tabId) {
             const neighborId = pickNeighbor(s.tabBarOrderByWorktree[owningWorktreeId] ?? [], tabId)
@@ -166,7 +169,7 @@ export function createBrowserCloseActions(
           )
 
           return {
-            browserTabsByWorktree: nextBrowserTabsByWorktree,
+            browserTabsByWorktree: browserBuckets.finish(),
             browserPagesByWorkspace: nextBrowserPagesByWorkspace,
             activeBrowserTabId:
               s.activeBrowserTabId === tabId

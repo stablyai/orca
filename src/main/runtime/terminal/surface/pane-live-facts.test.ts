@@ -72,7 +72,7 @@ describe("main's start records a resume outcome only when it wakes the pane's re
       },
       {
         ...RECONNECT,
-        startStatus: { sink, resumeOutcomes: register, resumesSleepingRecord }
+        startStatus: { sink, keepOnFailure: false, resumeOutcomes: register, resumesSleepingRecord }
       }
     )
   }

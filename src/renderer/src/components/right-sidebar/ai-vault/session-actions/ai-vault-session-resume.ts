@@ -12,6 +12,7 @@ import {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { findAiVaultHistoryWorktree } from '@/lib/agent-session/resume/history/ai-vault-history-worktrees'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
@@ -31,7 +32,12 @@ export type AiVaultSessionResumeTargetState = Pick<
   AppState,
   'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
 > &
-  Partial<Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings'>>
+  Partial<
+    Pick<
+      AppState,
+      'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings' | 'detectedWorktreesByRepo'
+    >
+  >
 
 export type AiVaultSessionResumeState = {
   blocked: boolean
@@ -76,6 +82,7 @@ export function resolveAiVaultSessionResumeState(args: {
       sessionFilePath: args.sessionFilePath,
       sessionExecutionHostId: args.sessionExecutionHostId,
       worktreeId,
+      sessionWorktreeId,
       targetState
     })
     if (!targetId) {
@@ -140,6 +147,7 @@ export function resolveAiVaultSessionResumeActions(args: {
     sessionFilePath: args.sessionFilePath,
     sessionExecutionHostId: args.sessionExecutionHostId,
     worktreeId: sessionWorktreeId,
+    sessionWorktreeId,
     targetState
   })
   const activeTargetId = resolveSupportedResumeWorktreeId({
@@ -169,7 +177,9 @@ export function resolveAiVaultSessionResumeActions(args: {
 
 export function isKnownAiVaultResumeWorkspaceTarget(
   state: AiVaultSessionResumeTargetState,
-  workspaceId: string | null
+  workspaceId: string | null,
+  sessionExecutionHostId?: AiVaultSession['executionHostId'] | null,
+  sessionWorktreeId?: string | null
 ): boolean {
   if (!workspaceId) {
     return false
@@ -183,27 +193,44 @@ export function isKnownAiVaultResumeWorkspaceTarget(
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  return getIndexedWorktreeMap(selectWorktreesByRepo(state)).has(worktreeId)
+  return (
+    getIndexedWorktreeMap(selectWorktreesByRepo(state)).has(worktreeId) ||
+    (worktreeId === sessionWorktreeId &&
+      Boolean(findAiVaultHistoryWorktree(state, worktreeId, sessionExecutionHostId)))
+  )
 }
 
 function resolveSupportedResumeWorktreeId(args: {
   sessionFilePath: string | null
   sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
   worktreeId: string | null
+  sessionWorktreeId?: string | null
   targetState: AiVaultSessionResumeTargetState
 }): string | null {
   if (!args.worktreeId) {
     return null
   }
 
-  if (!isKnownAiVaultResumeWorkspaceTarget(args.targetState, args.worktreeId)) {
+  if (
+    !isKnownAiVaultResumeWorkspaceTarget(
+      args.targetState,
+      args.worktreeId,
+      args.sessionExecutionHostId,
+      args.sessionWorktreeId
+    )
+  ) {
     return null
   }
 
-  const targetStatus = getAiVaultResumeWorkspaceTargetStatus(args.targetState, args.worktreeId)
+  const targetStatus = getAiVaultResumeWorkspaceTargetStatus(
+    args.targetState,
+    args.worktreeId,
+    args.sessionExecutionHostId
+  )
   const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(
     args.targetState,
-    args.worktreeId
+    args.worktreeId,
+    args.sessionExecutionHostId
   )
   if (
     !canResumeAiVaultSessionOnTarget({
@@ -211,7 +238,11 @@ function resolveSupportedResumeWorktreeId(args: {
       sessionExecutionHostId: args.sessionExecutionHostId,
       targetStatus,
       targetExecutionHostId,
-      targetWslDistro: getAiVaultResumeWorkspaceWslDistro(args.targetState, args.worktreeId)
+      targetWslDistro: getAiVaultResumeWorkspaceWslDistro(
+        args.targetState,
+        args.worktreeId,
+        args.sessionExecutionHostId
+      )
     })
   ) {
     return null

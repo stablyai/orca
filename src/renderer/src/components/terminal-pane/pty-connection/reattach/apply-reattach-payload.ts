@@ -19,15 +19,10 @@ import {
 import { restoredSnapshotPaintsPrintableContent } from '../../snapshots/restored-snapshot-coverage'
 import { ackPaintedColdRestore } from './painted-cold-restore-ack'
 import { mainStartsPane } from '../spawn/main-starts-pane'
-import {
-  fitReattachedPaneToGrid,
-  noteReattachAltFrameSkip,
-  readColdRestoreDestinationRows
-} from './reattach-grid-fit'
+import { fitReattachedPaneToGrid, noteReattachAltFrameSkip } from './reattach-grid-fit'
 
 import type { ReattachPayloadContext } from './reattach-payload-context'
 import type { ReattachPayloadSession } from './reattach-payload-session'
-import { acceptRetainedTerminalHistory } from './retained-terminal-history'
 
 export function createReattachPayloadHandlers(
   session: ReattachPayloadSession,
@@ -40,8 +35,6 @@ export function createReattachPayloadHandlers(
     if (!ctx.isCurrentReattachPayload()) {
       return
     }
-    const heldImage = session.retainedTerminalHistory?.painted === true
-    acceptRetainedTerminalHistory(session, false)
     if (ctx.connectResult?.snapshot) {
       const snapshotPrefixAnsi = ctx.connectResult.snapshotPrefixAnsi
       const snapshotFrameAnsi = ctx.connectResult.snapshotFrameAnsi
@@ -141,9 +134,6 @@ export function createReattachPayloadHandlers(
         return
       }
       if (modelSnapshot) {
-        if (heldImage) {
-          session.writeReplayData('\x1b[0m\x1b[2J\x1b[3J\x1b[H')
-        }
         // Scan/reset needs composed snapshot bytes; actual writes use alt-screen choreography to preserve scrollback.
         const modelData = `${modelSnapshot.scrollbackAnsi ?? ''}${modelSnapshot.data}`
         session.rememberReattachPayloadAgentSignal(modelData, {
@@ -236,10 +226,22 @@ export function createReattachPayloadHandlers(
         }
       }
     } else if (ctx.connectResult?.coldRestore) {
-      const destinationRows = readColdRestoreDestinationRows(session)
+      let destinationRows = session.pane.terminal.rows
+      try {
+        const proposedDestination = session.pane.fitAddon.proposeDimensions()
+        if (
+          proposedDestination &&
+          Number.isFinite(proposedDestination.rows) &&
+          proposedDestination.rows > 0
+        ) {
+          destinationRows = Math.max(destinationRows, proposedDestination.rows)
+        }
+      } catch {
+        // The current xterm grid remains a safe lower bound for blanking.
+      }
       // Why: shrinking first would promote clipped stale viewport rows into scrollback, beyond the reach of a later viewport-only clear.
       session.writeReplayData(
-        `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J${heldImage ? '\x1b[3J' : ''}\x1b[H`
+        `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[H`
       )
       await waitForTerminalReplayWritesParsed(session.pane.terminal)
       if (!ctx.isCurrentReattachPayload()) {

@@ -32,12 +32,6 @@ export function registerMainProcessIpcHandlers(): void {
       state.managedWslCliStartupBarrierReady
     ])
     await state.runtime?.prepareStructuredAgentSessionStartupRestoration()
-    if (!state.runtime) {
-      throw new Error('Terminal startup state is not available.')
-    }
-    return {
-      retainedTerminalStarts: state.runtime.getRetainedTerminalStartupDestinations()
-    }
   })
   // Only hosts holding a saved/new structured chat have local rows for the renderer to mirror.
   ipcMain.handle('app:holdsStructuredAgentSessions', () => structuredAgentSessionsHeld())

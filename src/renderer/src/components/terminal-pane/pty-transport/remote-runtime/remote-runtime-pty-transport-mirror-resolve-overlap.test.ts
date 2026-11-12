@@ -22,9 +22,7 @@ const { runtimeCall, resetRemoteRuntimeTransport } = createRemoteRuntimeTranspor
 })
 
 function calledMethods(): string[] {
-  return runtimeCall.mock.calls
-    .map(([request]) => request.method)
-    .filter((method) => method !== 'status.get')
+  return runtimeCall.mock.calls.map(([request]) => request.method)
 }
 
 describe('web mirror reveal: resolvePane overlaps the activation', () => {

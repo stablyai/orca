@@ -1,4 +1,3 @@
-import { terminalStartsAfterLayout } from './retained-terminal-start-lifecycle'
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -47,34 +46,21 @@ export function createTerminalLayoutActions(
     replaceTerminalLayoutPanePtyId: (tabId, leafId, ptyId) => {
       set((s) => {
         const layout = s.terminalLayoutsByTabId[tabId]
-        if (!layout) {
+        if (!layout || layout.ptyIdsByLeafId?.[leafId] === ptyId) {
           return s
         }
-        const settledUnknown = s.terminalStartupAttempt?.acceptBinding(tabId, leafId) === true
-        const nextLayout = {
-          ...layout,
-          ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
-        }
-        const starts = terminalStartsAfterLayout(
-          s.terminalPaneStartsByPaneKey,
-          tabId,
-          layout,
-          nextLayout,
-          leafId
-        )
-        if (layout.ptyIdsByLeafId?.[leafId] === ptyId) {
-          return starts !== s.terminalPaneStartsByPaneKey || settledUnknown
-            ? {
-                terminalPaneStartsByPaneKey: starts,
-                terminalStartupAttempt: s.terminalStartupAttempt
-              }
-            : s
-        }
         return {
-          terminalPaneStartsByPaneKey: starts,
           terminalLayoutsByTabId: replaceRecordEntries<
             TerminalSlice['terminalLayoutsByTabId'][string]
-          >(s.terminalLayoutsByTabId, [[tabId, nextLayout]])
+          >(s.terminalLayoutsByTabId, [
+            [
+              tabId,
+              {
+                ...layout,
+                ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
+              }
+            ]
+          ])
         }
       })
     },
@@ -93,7 +79,7 @@ export function createTerminalLayoutActions(
           : { canExpandPaneByTabId: { ...s.canExpandPaneByTabId, [tabId]: canExpand } }
       )
     },
-    setTabLayout: (tabId, layout, acceptedLeafId) => {
+    setTabLayout: (tabId, layout) => {
       let ownershipTransfers: ReturnType<typeof resolveTerminalLayoutPtyOwnershipTransfers> = []
       const before = ORCA_LAYOUT_OWNER_IS_MAIN ? get().terminalLayoutsByTabId[tabId] : undefined
       set((s) => {
@@ -101,14 +87,7 @@ export function createTerminalLayoutActions(
           if (!(tabId in s.terminalLayoutsByTabId)) {
             return s
           }
-          s.terminalStartupAttempt?.layoutChanged(tabId, s.terminalLayoutsByTabId[tabId], null)
           return {
-            terminalPaneStartsByPaneKey: terminalStartsAfterLayout(
-              s.terminalPaneStartsByPaneKey,
-              tabId,
-              s.terminalLayoutsByTabId[tabId],
-              null
-            ),
             terminalLayoutsByTabId: replaceRecordEntries<
               TerminalSlice['terminalLayoutsByTabId'][string]
             >(s.terminalLayoutsByTabId, [[tabId, null]])
@@ -124,28 +103,10 @@ export function createTerminalLayoutActions(
         }
         // Why: pane-title churn re-persists structurally identical snapshots; bailing keeps every pane selector asleep.
         const existing = s.terminalLayoutsByTabId[tabId]
-        const settledUnknown =
-          acceptedLeafId && normalized.snapshot.ptyIdsByLeafId?.[acceptedLeafId]
-            ? s.terminalStartupAttempt?.acceptBinding(tabId, acceptedLeafId) === true
-            : false
-        const starts = terminalStartsAfterLayout(
-          s.terminalPaneStartsByPaneKey,
-          tabId,
-          existing,
-          normalized.snapshot,
-          acceptedLeafId
-        )
         if (existing && terminalLayoutEqual(existing, normalized.snapshot)) {
-          return starts !== s.terminalPaneStartsByPaneKey || settledUnknown
-            ? {
-                terminalPaneStartsByPaneKey: starts,
-                terminalStartupAttempt: s.terminalStartupAttempt
-              }
-            : s
+          return s
         }
-        s.terminalStartupAttempt?.layoutChanged(tabId, existing, normalized.snapshot)
         return {
-          terminalPaneStartsByPaneKey: starts,
           terminalLayoutsByTabId: replaceRecordEntries<
             TerminalSlice['terminalLayoutsByTabId'][string]
           >(s.terminalLayoutsByTabId, [[tabId, normalized.snapshot]])

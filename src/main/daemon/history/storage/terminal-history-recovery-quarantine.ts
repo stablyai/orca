@@ -1,8 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, lstatSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { lstat, readdir } from 'node:fs/promises'
-import { errnoCodeOrUnknown } from '../../../../shared/errno-code'
 import {
   ensurePrivateDir,
   PRIVATE_FILE_MODE
@@ -95,33 +93,6 @@ export function fingerprintTerminalHistorySession(
     fingerprint.update('\0')
   }
   return fingerprint.digest('hex')
-}
-
-/** Address one session without blocking main or mutating its recovery state. */
-export async function fingerprintTerminalHistorySessionAsync(
-  basePath: string,
-  sessionId: string
-): Promise<TerminalHistoryDirectoryFingerprint> {
-  const sessionDir = join(basePath, getHistorySessionDirName(sessionId))
-  try {
-    const fingerprint = createHash('sha256')
-    const entries = (await readdir(sessionDir)).sort()
-    for (const name of ['.', ...entries]) {
-      const stats = await lstat(name === '.' ? sessionDir : join(sessionDir, name))
-      fingerprint.update(name)
-      fingerprint.update('\0')
-      fingerprint.update(
-        [stats.dev, stats.ino, stats.mode, stats.size, stats.mtimeMs, stats.ctimeMs].join(':')
-      )
-      fingerprint.update('\0')
-    }
-    return fingerprint.digest('hex')
-  } catch (error) {
-    if (errnoCodeOrUnknown(error) === 'ENOENT') {
-      return null
-    }
-    throw error
-  }
 }
 
 export function quarantineTerminalHistorySession(

@@ -14,7 +14,6 @@ import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 export type PtySpawnOutcome = {
   kind: 'committed' | 'adopted' | 'registration-exited'
   terminalStartFailure?: TerminalStartFailure
-  settlementError?: unknown
   owner?: StablePaneOwner
   result: PtySpawnResult & {
     savedStartupCwd?: string
@@ -25,11 +24,6 @@ export type PtySpawnOutcome = {
   }
 }
 
-/** Internal prepared-operation evidence; adapters never infer it from a later exception. */
-export type PreparedPtySpawnSettlement =
-  | { kind: 'outcome'; outcome: PtySpawnOutcome }
-  | { kind: 'rejected' | 'unknown' | 'superseded'; error: unknown }
-
 import '../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
 
 export function requireAcceptedSpawn(
@@ -37,13 +31,10 @@ export function requireAcceptedSpawn(
   refusalCode = 'agent_session_exited_during_start'
 ): PtySpawnOutcome['result'] {
   if (outcome.kind === 'registration-exited') {
-    if (outcome.settlementError !== undefined) {
-      throw outcome.settlementError
-    }
     const failure = outcome.terminalStartFailure
     throw failure
       ? terminalStartError(refusalCode, failure.cause, failure.incarnationId)
-      : terminalExitError(refusalCode, undefined, outcome.result.incarnationId)
+      : terminalExitError(refusalCode)
   }
   return outcome.result
 }

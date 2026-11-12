@@ -23,8 +23,6 @@ export type TerminalSplitOptions = {
   command?: string
   env?: Record<string, string>
   envToDelete?: string[]
-  cwd?: string
-  initialSize?: { cols: number; rows: number }
   activate?: boolean
   // Why: same split as createTerminal — adopt the pane without revealing its
   // workspace, for splits the user never asked to see.
@@ -74,8 +72,8 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     const paneKey = makePaneKey(parentTabId, leafId)
     const splitArgs: Parameters<typeof spawnInAdmittedPane>[2] = {
       // Why unmeasured: a new split pane has no size of its own until the window lays it out.
-      ...(opts.initialSize ?? UNMEASURED_PTY_SIZE),
-      cwd: this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd) ?? workspace.path,
+      ...UNMEASURED_PTY_SIZE,
+      cwd: workspace.path,
       command: opts.command,
       commandDelivery: 'provider',
       env: this.buildTerminalWorkspaceEnv(

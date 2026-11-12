@@ -69,9 +69,21 @@ export function assertAntigravityReferenceTarget(
     !canResumeAiVaultSessionOnTarget({
       sessionFilePath: args.session.filePath,
       sessionExecutionHostId: args.session.executionHostId,
-      targetStatus: getAiVaultResumeWorkspaceTargetStatus(args.state, workspaceId),
-      targetExecutionHostId: getAiVaultResumeWorkspaceExecutionHostId(args.state, workspaceId),
-      targetWslDistro: getAiVaultResumeWorkspaceWslDistro(args.state, workspaceId)
+      targetStatus: getAiVaultResumeWorkspaceTargetStatus(
+        args.state,
+        workspaceId,
+        args.session.executionHostId
+      ),
+      targetExecutionHostId: getAiVaultResumeWorkspaceExecutionHostId(
+        args.state,
+        workspaceId,
+        args.session.executionHostId
+      ),
+      targetWslDistro: getAiVaultResumeWorkspaceWslDistro(
+        args.state,
+        workspaceId,
+        args.session.executionHostId
+      )
     })
   ) {
     throw new Error(

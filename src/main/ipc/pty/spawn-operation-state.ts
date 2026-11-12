@@ -1,5 +1,3 @@
-import type { AdoptStablePaneArgs } from './ipc/spawn-types'
-import type { PtySpawnOutcome } from './spawn-outcome'
 import type { PtyRuntimeControllerDeps } from './runtime/controller-deps'
 import type { RuntimePtySpawnState, RuntimePtySpawnArgs } from './runtime/spawn-state'
 import type { PtySpawnTiming } from './pty-spawn-timing'
@@ -19,8 +17,6 @@ export type PtySpawnOperationState = Pick<
   | 'preAdoptedStablePane'
   | 'stablePaneOwner'
   | 'stablePaneBindingPersisted'
-  | 'settledSpawnOutcome'
-  | 'preservesEndedPane'
   | 'pendingRegistrationPtyId'
   | 'pendingRegistrationClaim'
   | 'rejectedRegistrationCandidate'
@@ -73,21 +69,4 @@ export type PtySpawnExecutionFacts = {
   validateDispatch?: () => void
   beforeProviderSpawn?: () => void
   reportPtySpawnCommitted?: () => void
-}
-
-export type SpawnAdapter<State extends PtySpawnOperationState> = {
-  state: State
-  prepare: () => Promise<void>
-  commit: () => Promise<PtySpawnOutcome>
-  facts: () => PtySpawnExecutionFacts
-  admission?: Promise<void>
-  drainsExitedStart?: true
-  onCommitted?: () => void
-  onOutcome?: (outcome: PtySpawnOutcome) => void
-  onError?: (error: unknown) => unknown
-  releasePreparation?: () => void
-  releaseHiddenMark?: () => void
-  adoption?: () => Pick<AdoptStablePaneArgs, 'renderer' | 'keepAbsentBinding' | 'completed'>
-  captureReplacement?: () => void
-  replace?: () => Promise<void>
 }

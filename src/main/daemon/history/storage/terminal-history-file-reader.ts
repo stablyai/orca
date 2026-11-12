@@ -19,26 +19,21 @@ export function readTerminalHistoryJson<T>(filePath: string, maxBytes: number): 
 // Cold-restore payload reads must yield the main thread while retaining the byte bound.
 export async function readTerminalHistoryBufferAsync(
   filePath: string,
-  maxBytes: number,
-  signal?: AbortSignal
+  maxBytes: number
 ): Promise<Buffer> {
-  return (await readNodeFileWithinLimit(filePath, maxBytes, { signal })).buffer
+  return (await readNodeFileWithinLimit(filePath, maxBytes)).buffer
 }
 
 export async function readTerminalHistoryTextAsync(
   filePath: string,
-  maxBytes: number,
-  signal?: AbortSignal
+  maxBytes: number
 ): Promise<string> {
-  return (await readTerminalHistoryBufferAsync(filePath, maxBytes, signal)).toString('utf8')
+  return (await readTerminalHistoryBufferAsync(filePath, maxBytes)).toString('utf8')
 }
 
-export async function readTerminalHistoryJsonAsync(
+export async function readTerminalHistoryJsonAsync<T>(
   filePath: string,
-  maxBytes: number,
-  signal?: AbortSignal
-): Promise<unknown> {
-  const text = await readTerminalHistoryTextAsync(filePath, maxBytes, signal)
-  signal?.throwIfAborted()
-  return JSON.parse(text)
+  maxBytes: number
+): Promise<T> {
+  return JSON.parse(await readTerminalHistoryTextAsync(filePath, maxBytes)) as T
 }

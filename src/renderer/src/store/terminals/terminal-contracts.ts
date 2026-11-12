@@ -8,7 +8,8 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execu
 export type TerminalCreationExecutionFacts = {
   hostId: ExecutionHostId
   connectionId: string | null
-  platform: NodeJS.Platform
+  /** Null until a legacy/SSH host reports its OS. */
+  platform: NodeJS.Platform | null
   isRemote: boolean
   isWsl: boolean
   projectRuntime?: ProjectExecutionRuntimeResolution

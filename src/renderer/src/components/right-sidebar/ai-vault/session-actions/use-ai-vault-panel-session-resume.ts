@@ -18,17 +18,19 @@ import {
   useAiVaultSessionWorktreeMap
 } from '../session-list/ai-vault-session-worktree'
 import { withAiVaultCurrentWorktreeStatus } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
+import { useAiVaultHistoryRecordWorktrees } from '@/lib/agent-session/resume/history/ai-vault-history-candidates'
 
 export function useAiVaultPanelSessionResume(args: {
   sessions: readonly AiVaultSession[]
   repos: readonly Repo[]
-  allWorktrees: readonly Worktree[]
+  visibleWorktrees: readonly Worktree[]
   workspaceId: string | null
   resumeTargetState: AiVaultSessionResumeTargetState
 }) {
-  const { sessions, repos, allWorktrees, workspaceId, resumeTargetState } = args
+  const { sessions, repos, visibleWorktrees, workspaceId, resumeTargetState } = args
+  const historyWorktrees = useAiVaultHistoryRecordWorktrees(visibleWorktrees, sessions)
   // Folder workspaces also own sessions by cwd for resume and jump.
-  const ownerWorkspaces = useAiVaultSessionOwnerWorkspaces(allWorktrees, resumeTargetState)
+  const ownerWorkspaces = useAiVaultSessionOwnerWorkspaces(historyWorktrees, resumeTargetState)
   const sessionWorktreeById = useAiVaultSessionWorktreeMap({
     sessions,
     repos,

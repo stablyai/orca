@@ -5,17 +5,15 @@ import type { Tab } from '../../../shared/tab-types'
 import { buildUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
-import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { getDefaultSettings, getDefaultWorkspaceSession } from '../../../shared/constants'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { useTerminalWorkspaceFoundation } from './use-terminal-workspace-foundation'
 import { WorktreeSplitSurface } from './TerminalWorktreeSplitSurface'
 import type { WorkspaceTabDragState } from './tab-group/WorkspaceTabDragLayer'
 import { getEffectiveLayoutForWorktree } from './terminal/split-group-mount'
-import { selectWorkspacePresentationWorktrees } from '@/store/workspaces/catalog/retained-workspace-presentation'
+import { getExistingContentWorktrees } from '@/lib/workspace/tabs/existing-workspace-content'
 import { buildSearchableWorkspaceTabEntries } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
 import { searchWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
 import { activateWorkspaceTabPaletteResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-activation'
@@ -25,10 +23,18 @@ import {
   findAmbiguousWorktreeIds
 } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
-import { stoppedWorkspaceListing } from './retained-bare-workspace.test-fixture'
+import {
+  savedBareWorkspaceSession,
+  stoppedWorkspaceListing
+} from './retained-bare-workspace.test-fixture'
+import { buildSearchableBrowserPages } from '@/lib/browser/palette/browser-palette-page-entries'
+import { searchBrowserPages } from '@/lib/browser/palette/browser-palette-search'
+import { activateBrowserPagePaletteResult } from '@/lib/browser/palette/browser-page-palette-activation'
 import { mergeFetchedWorktrees } from '@/store/slices/worktrees/listing/fetched-worktree-merge'
-import { replaceRecordEntries } from '@/store/keyed-record-transitions'
-import { ensureSimulatorTab } from '@/lib/simulator/tabs/ensure-simulator-tab'
+import {
+  ensureSimulatorTab,
+  getSimulatorTabForWorktree
+} from '@/lib/simulator/tabs/ensure-simulator-tab'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn(async () => undefined)
@@ -129,7 +135,7 @@ function RetainedSurfaces() {
 
 function searchTabs(query: string) {
   const state = useAppStore.getState()
-  const worktrees = Object.values(selectWorkspacePresentationWorktrees(state)).flat()
+  const worktrees = getExistingContentWorktrees(state)
   return searchWorkspaceTabs(
     buildSearchableWorkspaceTabEntries({
       ...state,
@@ -156,7 +162,7 @@ afterEach(() => {
 })
 
 it.each(['scanned', 'stopped WSL', 'failed refresh'] as const)(
-  'hydrates, renders and rediscovers original shell/chat panes after %s listing',
+  'hydrates, renders and rediscovers original shell/chat/browser/editor content after %s listing',
   (listing) => {
     Object.defineProperty(window, 'api', { configurable: true, value: apiProxy() })
     useAppStore.setState(
@@ -183,60 +189,11 @@ it.each(['scanned', 'stopped WSL', 'failed refresh'] as const)(
       },
       true
     )
-    const session = {
-      ...getDefaultWorkspaceSession(),
-      activeRepoId: 'repo1',
-      activeWorktreeId: bare.id,
-      activeWorkspaceExecutionHostId: 'local' as const,
-      activeTabId: 'old-shell',
-      activeTabIdByWorktree: { [bare.id]: 'old-shell' },
-      tabsByWorktree: {
-        [bare.id]: [makeTab({ id: 'old-shell', worktreeId: bare.id, title: 'Saved shell' })]
-      },
-      unifiedTabs: {
-        [bare.id]: [
-          {
-            id: 'shell-tab',
-            entityId: 'old-shell',
-            groupId: 'original-group',
-            worktreeId: bare.id,
-            executionHostId: 'local' as const,
-            contentType: 'terminal' as const,
-            label: 'Saved shell',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          },
-          {
-            id: 'chat-tab',
-            entityId: 'old-chat',
-            groupId: 'original-group',
-            worktreeId: bare.id,
-            executionHostId: 'local' as const,
-            contentType: 'agent-session' as const,
-            agentSessionAgent: 'claude' as const,
-            label: 'Saved conversation',
-            customLabel: null,
-            color: null,
-            sortOrder: 1,
-            createdAt: 1
-          }
-        ]
-      },
-      tabGroups: {
-        [bare.id]: [
-          {
-            id: 'original-group',
-            worktreeId: bare.id,
-            activeTabId: 'shell-tab',
-            tabOrder: ['shell-tab', 'chat-tab']
-          }
-        ]
-      }
-    }
+    const session = savedBareWorkspaceSession(bare.id)
     useAppStore.getState().hydrateWorkspaceSession(session)
     useAppStore.getState().hydrateTabsSession(session)
+    useAppStore.getState().hydrateEditorSession(session)
+    useAppStore.getState().hydrateBrowserSession(session)
     if (listing === 'stopped WSL') {
       const repo = { ...TEST_REPO, path: '/repo' }
       const fallback = stoppedWorkspaceListing(repo, [bare, checkout])
@@ -276,7 +233,7 @@ it.each(['scanned', 'stopped WSL', 'failed refresh'] as const)(
     }
     render(<RetainedSurfaces />)
     expect(screen.getByRole('region', { name: 'original-group' }).textContent).toBe(
-      'old-shellold-chat'
+      'old-shellold-chatold-browser/repo/.bare/readme.md'
     )
     expect(useAppStore.getState().worktreesByRepo.repo1.map((row) => row.id)).toEqual([checkout.id])
     if (listing === 'stopped WSL') {
@@ -306,14 +263,14 @@ it.each(['scanned', 'stopped WSL', 'failed refresh'] as const)(
         ).toBe('applied')
       })
       expect(screen.getByRole('region', { name: 'original-group' }).textContent).toBe(
-        'old-shellold-chat'
+        'old-shellold-chatold-browser/repo/.bare/readme.md'
       )
     }
     act(() => {
       activateAndRevealWorkspace(checkout.id, { providesInitialSurface: true })
     })
     expect(screen.queryByRole('region', { name: 'original-group' })).toBeNull()
-    for (const title of ['Saved shell', 'Saved conversation']) {
+    for (const title of ['Saved shell', 'Saved conversation', 'readme.md']) {
       const match = searchTabs(title).find((row) => row.worktreeId === bare.id)
       expect(match).toBeDefined()
       if (!match) {
@@ -323,11 +280,35 @@ it.each(['scanned', 'stopped WSL', 'failed refresh'] as const)(
         expect(activateWorkspaceTabPaletteResult(match)).toEqual({ status: 'activated' })
       })
       expect(screen.getByRole('region', { name: 'original-group' }).textContent).toBe(
-        'old-shellold-chat'
+        'old-shellold-chatold-browser/repo/.bare/readme.md'
       )
       expect(useAppStore.getState().groupsByWorktree[bare.id][0].activeTabId).toBe(match.tabId)
       expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('local')
     }
+    const state = useAppStore.getState()
+    const browserResults = searchBrowserPages(
+      buildSearchableBrowserPages({
+        ...state,
+        worktrees: getExistingContentWorktrees(state),
+        ownershipWorktrees: getPaletteOwnershipWorktreeIds(state),
+        repoMap: new Map([[TEST_REPO.id, TEST_REPO]]),
+        worktreeOrder: new Map()
+      }),
+      'Saved browser'
+    )
+    expect(
+      browserResults.map((row) => [
+        row.worktreeId,
+        row.workspaceId,
+        row.pageId,
+        row.executionHostId
+      ])
+    ).toEqual([[bare.id, 'old-browser', 'old-page', 'local']])
+    act(() => {
+      expect(activateBrowserPagePaletteResult(browserResults[0]).status).toBe('activated')
+    })
+    expect(useAppStore.getState().activeWorktreeId).toBe(bare.id)
+    expect(useAppStore.getState().groupsByWorktree[bare.id][0].activeTabId).toBe('browser-tab')
     if (listing === 'failed refresh') {
       act(() => {
         expect(
@@ -355,75 +336,77 @@ it.each(['scanned', 'stopped WSL', 'failed refresh'] as const)(
       expect(searchTabs('Saved')).toEqual([])
     }
     act(() => {
-      useAppStore.setState((state) => ({
-        tabsByWorktree: replaceRecordEntries<AppState['tabsByWorktree'][string]>(
-          state.tabsByWorktree,
-          [[bare.id, null]]
-        ),
-        unifiedTabsByWorktree: replaceRecordEntries<AppState['unifiedTabsByWorktree'][string]>(
-          state.unifiedTabsByWorktree,
-          [[bare.id, null]]
-        )
-      }))
+      useAppStore.getState().closeBrowserTab('old-browser')
+      useAppStore.getState().closeFile('/repo/.bare/readme.md')
+      useAppStore.getState().closeUnifiedTab('chat-tab')
+      useAppStore.getState().closeTab('old-shell')
     })
     expect(screen.queryByRole('region', { name: 'original-group', hidden: true })).toBeNull()
     expect(searchTabs('Saved')).toEqual([])
   }
 )
 
-it('keeps host twins ambiguous and drops truly removed identities despite retained bytes', () => {
-  const remote = { ...bare, hostId: 'runtime:other' as const, runtimeOwnerEnvironmentId: 'other' }
-  useAppStore.setState(
-    {
-      ...initialState,
-      repos: [TEST_REPO],
-      worktreesByRepo: { repo1: [checkout] },
-      detectedWorktreesByRepo: {
-        repo1: {
-          repoId: 'repo1',
-          authoritative: true,
-          source: 'git',
-          worktrees: [bare, remote].map(
-            (row) =>
-              ({
-                ...row,
-                ownership: 'external',
-                selectedCheckout: false,
-                visible: false
-              }) satisfies DetectedWorktree
-          )
+it.each(['runtime', 'unstamped'] as const)(
+  'keeps %s host twins ambiguous and drops truly removed identities despite retained bytes',
+  (owner) => {
+    const remote =
+      owner === 'runtime'
+        ? { ...bare, hostId: 'runtime:other' as const, runtimeOwnerEnvironmentId: 'other' }
+        : { ...bare, hostId: undefined }
+    useAppStore.setState(
+      {
+        ...initialState,
+        repos: [TEST_REPO],
+        worktreesByRepo: { repo1: [checkout] },
+        detectedWorktreesByRepo: {
+          repo1: {
+            repoId: 'repo1',
+            authoritative: true,
+            source: 'git',
+            worktrees: [bare, remote].map(
+              (row) =>
+                ({
+                  ...row,
+                  ownership: 'external',
+                  selectedCheckout: false,
+                  visible: false
+                }) satisfies DetectedWorktree
+            )
+          }
+        },
+        unifiedTabsByWorktree: {
+          [bare.id]: [
+            {
+              id: 'chat',
+              entityId: 'chat',
+              groupId: 'group',
+              worktreeId: bare.id,
+              contentType: 'agent-session',
+              label: 'Saved',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
         }
       },
-      unifiedTabsByWorktree: {
-        [bare.id]: [
-          {
-            id: 'chat',
-            entityId: 'chat',
-            groupId: 'group',
-            worktreeId: bare.id,
-            contentType: 'agent-session',
-            label: 'Saved',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      }
-    },
-    true
-  )
-  const state = useAppStore.getState()
-  expect(findAmbiguousWorktreeIds(getPaletteOwnershipWorktreeIds(state)).has(bare.id)).toBe(true)
-  expect(getResolvedExecutionHostIdForWorktree(state, bare.id)).toBeNull()
-  expect(searchTabs('Saved')).toEqual([])
-  useAppStore.setState({ detectedWorktreesByRepo: {} })
-  expect(
-    Object.values(selectWorkspacePresentationWorktrees(useAppStore.getState()))
-      .flat()
-      .map((row) => row.id)
-  ).toEqual([checkout.id])
-})
+      true
+    )
+    const state = useAppStore.getState()
+    const contentOwners = getExistingContentWorktrees(state)
+    expect(contentOwners[0]).toBe(state.detectedWorktreesByRepo.repo1.worktrees[0])
+    expect(contentOwners[1]).toBe(state.detectedWorktreesByRepo.repo1.worktrees[1])
+    expect(contentOwners.map((row) => row.hostId)).toEqual(
+      owner === 'runtime' ? ['local', 'runtime:other'] : ['local', undefined]
+    )
+    expect(findAmbiguousWorktreeIds(getPaletteOwnershipWorktreeIds(state)).has(bare.id)).toBe(true)
+    expect(getResolvedExecutionHostIdForWorktree(state, bare.id)).toBeNull()
+    expect(searchTabs('Saved')).toEqual([])
+    useAppStore.setState({ detectedWorktreesByRepo: {} })
+    expect(getExistingContentWorktrees(useAppStore.getState()).map((row) => row.id)).toEqual([])
+  }
+)
 
 it('preserves unresolved browser ownership after restoring hostless content beside a hidden twin', async () => {
   Object.defineProperty(window, 'api', { configurable: true, value: apiProxy() })
@@ -596,6 +579,20 @@ it('reuses an unresolved simulator without claiming a host or adopting a scoped 
   const unresolved = useAppStore.getState().unifiedTabsByWorktree[checkout.id]
   expect(unresolved).toHaveLength(1)
   expect(unresolved[0].executionHostId).toBeUndefined()
+  expect(getSimulatorTabForWorktree(checkout.id)).toMatchObject({
+    id: first,
+    groupId: 'sim-group'
+  })
+  expect(ensureSimulatorTab(checkout.id, { surfacePane: true })).toBe(first)
+  expect(useAppStore.getState().activeGroupIdByWorktree[checkout.id]).toBe('sim-group')
+  expect(
+    useAppStore.getState().groupsByWorktree[checkout.id].find((group) => group.id === 'sim-group')
+      ?.activeTabId
+  ).toBe(first)
+  expect(useAppStore.getState().activeTabTypeByWorktree[checkout.id]).toBe('simulator')
+  expect(
+    useAppStore.getState().unifiedTabsByWorktree[checkout.id][0].executionHostId
+  ).toBeUndefined()
   const scoped = ensureSimulatorTab(checkout.id, {
     targetGroupId: 'sim-group',
     surfacePane: false,
@@ -615,4 +612,44 @@ it('reuses an unresolved simulator without claiming a host or adopting a scoped 
   expect(
     useAppStore.getState().unifiedTabsByWorktree[checkout.id].map((tab) => tab.executionHostId)
   ).toEqual([undefined, 'ssh:other'])
+  expect(getSimulatorTabForWorktree(checkout.id, 'ssh:missing')).toBeNull()
+  useAppStore.setState({ activeWorkspaceExecutionHostId: 'ssh:missing' })
+  expect(getSimulatorTabForWorktree(checkout.id)).toBeNull()
+})
+
+it('does not mount selected bare metadata or unplaced editor backing content', () => {
+  useAppStore.setState(
+    {
+      ...initialState,
+      repos: [TEST_REPO],
+      worktreesByRepo: { repo1: [checkout] },
+      detectedWorktreesByRepo: {
+        repo1: {
+          repoId: 'repo1',
+          authoritative: true,
+          source: 'git',
+          worktrees: [{ ...bare, ownership: 'external', selectedCheckout: false, visible: false }]
+        }
+      },
+      activeWorktreeId: bare.id,
+      activeWorkspaceExecutionHostId: 'local',
+      openFiles: [
+        {
+          id: '/repo/.bare/orphan.md',
+          filePath: '/repo/.bare/orphan.md',
+          relativePath: 'orphan.md',
+          worktreeId: bare.id,
+          language: 'markdown',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    },
+    true
+  )
+  const foundation = renderHook(() => useTerminalWorkspaceFoundation())
+  expect(foundation.result.current.workspaceSurfaces).toEqual([
+    { id: 'repo1::/repo/main', path: '/repo/main' }
+  ])
+  expect(getExistingContentWorktrees(useAppStore.getState())).toEqual([])
 })

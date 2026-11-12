@@ -17,7 +17,6 @@ import { syncRemoteOutputCadence } from './output/remote-output-cadence'
 
 export type PanePtyBinding = IDisposable & {
   getOwnerContext: () => ReturnType<typeof resolveTerminalPaneOwnerContext>
-  getPtyIncarnationId?: () => string | null
   syncProcessTracking: () => void
   noteVisibilityResume: () => void
   reassertPtySizeAfterWindowWake: () => void
@@ -87,7 +86,6 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
 
   return {
     getOwnerContext: () => session.ownerContext,
-    getPtyIncarnationId: () => session.remotePtyIncarnationId ?? null,
     syncProcessTracking() {
       session.agentCompletionCoordinator.startProcessTracking()
       // Why: the hidden-delivery gate must follow every pane visibility flip.
@@ -183,7 +181,7 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
       session.disposeSpawnDeferral()
       session.startupTiming?.finish('disposed')
       const unsentReplacedPtyId: string | null = session.claimPendingReplacedPtyId()
-      if (unsentReplacedPtyId && !session.deps.restartRecovery) {
+      if (unsentReplacedPtyId) {
         // Why: no spawn will carry this stop now, and the pane no longer references the PTY.
         void Promise.resolve()
           .then(() => window.api.pty.kill(unsentReplacedPtyId))

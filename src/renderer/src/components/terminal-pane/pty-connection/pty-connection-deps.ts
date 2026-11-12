@@ -36,9 +36,6 @@ export type PtyConnectionDeps = {
   startup?: PtyPaneStartup
   /** The pane's previous PTY; main stops it before this connection's first fresh spawn. */
   replacesPtyId?: string
-  /** Local Restart retains its original association/image until a successor or exact live reattach accepts. */
-  restartRecovery?: { ptyId: string | null; incarnationId: string | null }
-  explicitPaneRestart?: true
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
   /** Render-time park intent survives watcher disposal and is consumed once after layout replay. */

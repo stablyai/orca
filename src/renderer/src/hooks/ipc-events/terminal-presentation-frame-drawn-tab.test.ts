@@ -6,7 +6,7 @@ import { createStoreSessionMockApi } from '../../store/testing/app-store-session
 
 const mocks = vi.hoisted(() => {
   const store: { current: ReturnType<typeof createTestStore> | null } = { current: null }
-  return { store, main: true, callRuntimeRpc: vi.fn(async () => ({ ok: true, result: {} })) }
+  return { store, callRuntimeRpc: vi.fn(async () => ({ ok: true, result: {} })) }
 })
 
 function testStore(): ReturnType<typeof createTestStore> {
@@ -17,11 +17,7 @@ function testStore(): ReturnType<typeof createTestStore> {
 }
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('../../../../shared/layout-owner-switch', () => ({
-  get ORCA_LAYOUT_OWNER_IS_MAIN() {
-    return mocks.main
-  }
-}))
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
@@ -45,8 +41,7 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 
 type Listener = (payload: Record<string, unknown>) => void
 
-function setup(frameDrewTab = true, main = true) {
-  mocks.main = main
+function setup(frameDrewTab = true) {
   const listeners = new Map<string, Listener>()
   const replyTerminalCreate = vi.fn()
   const ui = new Proxy(
@@ -86,7 +81,7 @@ function setup(frameDrewTab = true, main = true) {
       : {})
   })
   registerTerminalPresentationIpcBridge([])
-  const reveal = (extra: Record<string, unknown> = {}) =>
+  const reveal = () =>
     listeners.get('onCreateTerminal')?.({
       requestId: 'request-1',
       worktreeId: WORKTREE,
@@ -94,8 +89,7 @@ function setup(frameDrewTab = true, main = true) {
       tabId: TAB,
       leafId: LEAF,
       title: 'Build',
-      presentation: 'background',
-      ...extra
+      presentation: 'background'
     })
   return { store, reveal, replyTerminalCreate }
 }
@@ -106,9 +100,9 @@ beforeEach(() => {
 })
 
 // Main’s frame may precede reveal; reuse its ID rather than adding a second terminal tab.
-describe.each([false, true])('revealing an accepted host terminal (main layout = %s)', (main) => {
+describe('revealing a terminal main created, in a layout-owner build', () => {
   it('shows the tab its frame drew, bound to main’s terminal, instead of a second one', () => {
-    const { store, reveal, replyTerminalCreate } = setup(true, main)
+    const { store, reveal, replyTerminalCreate } = setup()
 
     reveal()
 
@@ -123,7 +117,7 @@ describe.each([false, true])('revealing an accepted host terminal (main layout =
   })
 
   it('before its frame, draws the tab under main’s ids so main finds the create already done', () => {
-    const { store, reveal } = setup(false, main)
+    const { store, reveal } = setup(false)
 
     reveal()
 
@@ -131,35 +125,8 @@ describe.each([false, true])('revealing an accepted host terminal (main layout =
     expect(store.getState().terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({
       [LEAF]: 'pty-1'
     })
-  })
-  it('deduplicates reveal/reply projection without replaying startup or changing a later pane selection', () => {
-    const { store, reveal } = setup(true, main)
-    const otherLeaf = '22222222-2222-4222-8222-222222222222'
-    seedStore(store, {
-      terminalLayoutsByTabId: {
-        [TAB]: {
-          root: {
-            type: 'split',
-            direction: 'vertical',
-            first: { type: 'leaf', leafId: LEAF },
-            second: { type: 'leaf', leafId: otherLeaf }
-          },
-          activeLeafId: otherLeaf,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [otherLeaf]: 'pty-existing' }
-        }
-      }
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'layout.apply', {
+      command: expect.objectContaining({ type: 'createTerminalTab', tabId: TAB, leafId: LEAF })
     })
-
-    reveal({ command: 'echo already-delivered' })
-    reveal({ command: 'echo already-delivered' })
-
-    expect(store.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([TAB])
-    expect(store.getState().terminalLayoutsByTabId[TAB]?.activeLeafId).toBe(otherLeaf)
-    expect(store.getState().terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({
-      [LEAF]: 'pty-1',
-      [otherLeaf]: 'pty-existing'
-    })
-    expect(store.getState().pendingStartupByTabId[TAB]).toBeUndefined()
   })
 })

@@ -6,7 +6,6 @@ import { applyAgentLaunchPluginHook } from '../spawn-agent-launch-plugin-hook'
 import { buildRuntimePtySpawnOptions } from './spawn-options'
 import { commitRuntimePtySpawn } from './spawn-commit'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
-import { keepAbsentBindingForSwap } from '../ipc/spawn-absent-binding-swap'
 import {
   commitRuntimeSpawnHiddenDelivery,
   markRuntimeSpawnHiddenBeforeSpawn,
@@ -20,15 +19,6 @@ export async function spawnPtyFromRuntimeController(
 ) {
   const args = { ...request, sessionId: normalizePtySpawnSessionId(request.sessionId) }
   const ctx = createRuntimePtySpawnState(deps, args)
-  if (args.preparedReplacement) {
-    ctx.releaseWorktreeSpawn = args.preparedReplacement.accept(args)
-    ctx.paneSpawnReservation = args.preparedReplacement.reservation
-    ctx.paneSpawnReservationKey = args.preparedReplacement.reservationKey
-  }
-  if (args.absentPaneReplacement) {
-    ctx.replacedPaneOwner = args.absentPaneReplacement.owner
-    args.absentPaneReplacement.accept()
-  }
   const outcome = await runPtySpawn({
     state: ctx,
     prepare: async () => {
@@ -46,7 +36,6 @@ export async function spawnPtyFromRuntimeController(
       },
       paneKey: ctx.spawnIdentityPaneKey,
       preAllocatedHandle: args.preAllocatedHandle,
-      replacedPaneOwner: ctx.replacedPaneOwner,
       beforeProviderSpawn: () => markRuntimeSpawnHiddenBeforeSpawn(ctx),
       reportPtySpawnCommitted: () => ctx.reportPtySpawnCommitted()
     }),
@@ -66,10 +55,7 @@ export async function spawnPtyFromRuntimeController(
     },
     onCommitted: () => commitRuntimeSpawnHiddenDelivery(ctx),
     releaseHiddenMark: () => releaseRuntimeSpawnPreSpawnHiddenMark(ctx),
-    adoption: () => ({
-      completed: args.adoptedStablePane,
-      keepAbsentBinding: keepAbsentBindingForSwap(ctx)
-    })
+    adoption: () => ({ completed: args.adoptedStablePane })
   })
   const result = requireAcceptedSpawn(outcome)
   let stablePaneOwner = result.stablePaneOwner

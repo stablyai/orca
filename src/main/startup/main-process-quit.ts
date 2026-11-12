@@ -246,7 +246,6 @@ function installWillQuitHandler(): void {
     disposeDesktopBrowserBridge()
     const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()
     const skillUploadShutdown = state.runtime?.disposeSkillUploadSessions() ?? Promise.resolve()
-    state.runtime?.disposeRetainedTerminalStarts()
     // Capture ownership before awaits let other teardown paths clear runtime state.
     const ownedPid = process.pid
     const ownedRuntimeId = state.runtime?.getRuntimeId()

@@ -13,7 +13,6 @@ export type SplitPaneAroundLeafIdsOptions = {
   cwdPromise?: Promise<string>
   leafId?: string
   ptyId?: string
-  activate?: boolean
   placement?: 'before' | 'after'
 }
 

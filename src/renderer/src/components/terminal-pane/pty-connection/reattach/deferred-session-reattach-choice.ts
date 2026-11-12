@@ -14,7 +14,7 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function runDeferredSessionReattachChoice(session: ConnectPanePtySession): void {
   // An explicit replacement owns its startup; saved recovery state must not substitute another agent.
-  if (session.pendingReplacedPtyId || session.userRestart) {
+  if (session.pendingReplacedPtyId) {
     session.startFreshSpawn()
     return
   }

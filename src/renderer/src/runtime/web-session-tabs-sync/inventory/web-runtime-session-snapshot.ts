@@ -4,8 +4,7 @@ import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtim
 import { useAppStore } from '../../../store/index'
 import {
   listRemoteRuntimeSessionTabsAfterCurrentInFlight,
-  listRemoteRuntimeSessionTabsDeduped,
-  type RemoteRuntimeSessionTabsAnswer
+  listRemoteRuntimeSessionTabsDeduped
 } from './remote-runtime-session-tabs-inflight'
 import { getRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
@@ -64,7 +63,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     afterCurrentInFlight?: boolean
     errorMode?: 'warn' | 'throw'
   } = {}
-): Promise<RemoteRuntimeSessionTabsAnswer | undefined> {
+): Promise<void> {
   // Await up front; list application and its receipt must not yield between them.
   const [
     { applyWebSessionTabsSnapshot },
@@ -153,14 +152,13 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       return
     }
     // Only the frame decision proves this host answer was accepted; discarded workspaces supply no evidence.
-    const receiptAccepted = shouldApplyRecoveredWebSessionTabsSnapshot(
+    const decision = shouldApplyRecoveredWebSessionTabsSnapshot(
       environmentId,
       recovered,
       receivedFrame,
       runtimeId
     )
-    const decision = receiptAccepted
-      ? decideWebSessionTabsSnapshot(recovered, environmentId, runtimeId, receivedFrame, snapshot)
+      ? decideWebSessionTabsSnapshot(recovered, environmentId)
       : WEB_SESSION_TABS_FRAME_OUTRANKED
     const settleMirror = applyWebSessionTabsStorePatch(
       (state, changedAgentPaneKeys) => {
@@ -193,7 +191,6 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       recovered
     )
     settleMirror()
-    return receiptAccepted ? { snapshot: recovered, receivedFrame, runtimeId } : undefined
   } catch (error) {
     if (options.errorMode === 'throw') {
       throw error
@@ -203,7 +200,6 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       '[web-runtime-session] failed to refresh session-tabs snapshot:',
       error instanceof Error ? error.message : String(error)
     )
-    return undefined
   }
 }
 

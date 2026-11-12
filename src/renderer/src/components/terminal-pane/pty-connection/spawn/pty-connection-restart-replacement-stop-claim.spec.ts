@@ -75,25 +75,5 @@ export function registerPtyConnectionRestartReplacementDisposeTests(): void {
 
       expect(window.api.pty.kill).toHaveBeenCalledWith('pty-replaced')
     })
-
-    it('retains a local Restart predecessor and its painted image if disposed before dispatch', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      transportFactoryQueue.push(createMockTransport('pty-restarted'))
-      const deps = createDeps({
-        tabId: 'tab-restart-retained',
-        replacesPtyId: 'pty-original',
-        restartRecovery: { ptyId: 'pty-original', incarnationId: 'original-incarnation' }
-      })
-      const args = mockPanePtyArgs(createPane(2), createManager(1), deps)
-      bindPaneAgentTitleMocks(args[2], agentTitleMocks)
-      const binding = connectPanePty(...args)
-      expect(args[0].terminal.options.disableStdin).toBe(true)
-      binding.dispose()
-      await flushAsyncTicks()
-      expect(window.api.pty.kill).not.toHaveBeenCalled()
-    })
   })
 }

@@ -2,12 +2,10 @@ import type { WorkspaceSessionState } from '../workspace-session/workspace-sessi
 
 /** Group tab orders are authoritative; unlisted rows retain order afterwards. Return the same session when already ordered. */
 export function orderTerminalRowsByTabGroups(
-  session: WorkspaceSessionState,
-  worktreeIds?: ReadonlySet<string>
+  session: WorkspaceSessionState
 ): WorkspaceSessionState {
   let tabsByWorktree: WorkspaceSessionState['tabsByWorktree'] | null = null
-  for (const worktreeId of worktreeIds ?? Object.keys(session.tabsByWorktree ?? {})) {
-    const rows = session.tabsByWorktree?.[worktreeId] ?? []
+  for (const [worktreeId, rows] of Object.entries(session.tabsByWorktree ?? {})) {
     const groups = session.tabGroups?.[worktreeId]
     if (!groups?.length || rows.length < 2) {
       continue

@@ -4,7 +4,6 @@ import type { Store } from '../../../persistence/loading-store/store'
 import { ptyBindingIsRefused } from '../../../persistence/loading-store/terminal-bindings/pty-binding-refusals'
 import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PaneSpawnReservation } from './spawn-reservation'
-import type { RetainedTerminalAttempt } from '../../../runtime/terminal/launch/retained-terminal-attempt'
 
 export class PaneOwnerContentionError extends Error {
   constructor() {
@@ -18,8 +17,6 @@ export type AbsentPaneBinding = { ptyId: string; incarnationIds: readonly string
 /** In-process authority of the enclosing operation; never sent over IPC/RPC or saved. */
 export type PaneSpawnOperation = {
   mustExist: boolean
-  /** Consumed by the shared spawn owner before its first await. */
-  retainedAttempt?: RetainedTerminalAttempt
   absentOwner?: AbsentPaneBinding
   acquisition?: {
     key: string

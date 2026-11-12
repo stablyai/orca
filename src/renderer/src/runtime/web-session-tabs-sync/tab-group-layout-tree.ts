@@ -5,12 +5,6 @@ import type {
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { WEB_SESSION_GROUP_PREFIX, type WebSessionTabsSyncState } from './state'
 import { sanitizeRecentTabIds } from './state-equality-core'
-import { collectLayoutGroupIds } from '../../../../shared/workspace-layout/tab-group-layout-composition'
-export {
-  collectLayoutGroupIds,
-  dropTabGroupLayoutGroups,
-  appendTabGroupLayout
-} from '../../../../shared/workspace-layout/tab-group-layout-composition'
 
 export function chooseTargetGroupId(
   state: WebSessionTabsSyncState,
@@ -35,6 +29,23 @@ export function chooseTargetGroupId(
     snapshot.activeGroupId ??
     `${WEB_SESSION_GROUP_PREFIX}${snapshot.worktree}`
   )
+}
+
+export function collectLayoutGroupIds(layout: TabGroupLayoutNode | undefined): Set<string> {
+  const result = new Set<string>()
+  const visit = (node: TabGroupLayoutNode | undefined): void => {
+    if (!node) {
+      return
+    }
+    if (node.type === 'leaf') {
+      result.add(node.groupId)
+      return
+    }
+    visit(node.first)
+    visit(node.second)
+  }
+  visit(layout)
+  return result
 }
 
 export function buildHostGroupIdByTabId(
@@ -68,6 +79,47 @@ export function pruneTabGroupLayout(
     return { ...layout, first, second }
   }
   return first ?? second
+}
+
+export function dropTabGroupLayoutGroups(
+  layout: TabGroupLayoutNode | null,
+  excludedGroupIds: ReadonlySet<string>
+): TabGroupLayoutNode | null {
+  if (!layout) {
+    return null
+  }
+  if (layout.type === 'leaf') {
+    return excludedGroupIds.has(layout.groupId) ? null : layout
+  }
+  const first = dropTabGroupLayoutGroups(layout.first, excludedGroupIds)
+  const second = dropTabGroupLayoutGroups(layout.second, excludedGroupIds)
+  if (first && second) {
+    return { ...layout, first, second }
+  }
+  return first ?? second
+}
+
+export function appendTabGroupLayout(
+  first: TabGroupLayoutNode | null,
+  second: TabGroupLayoutNode | null
+): TabGroupLayoutNode | null {
+  if (!first) {
+    return second
+  }
+  if (!second) {
+    return first
+  }
+  // Never append another leaf for an already placed group; each duplicate renders another tab-strip column.
+  const appended = dropTabGroupLayoutGroups(second, collectLayoutGroupIds(first))
+  if (!appended) {
+    return first
+  }
+  return {
+    type: 'split',
+    direction: 'horizontal',
+    first,
+    second: appended
+  }
 }
 
 export function tabGroupLayoutEqual(

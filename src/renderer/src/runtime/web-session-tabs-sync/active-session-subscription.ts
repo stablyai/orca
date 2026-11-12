@@ -134,13 +134,7 @@ export function installActiveSessionTabsSubscription({
       acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
     }
     const recoveredEvent: SessionTabsStreamEvent = { ...recovered, type: event.type }
-    const decision = decideWebSessionTabsSnapshot(
-      recovered,
-      environmentId,
-      runtimeId,
-      receivedFrame,
-      event
-    )
+    const decision = decideWebSessionTabsSnapshot(recovered, environmentId, runtimeId)
     const syncState = useAppStore.getState()
     const localTabs = syncState.tabsByWorktree[activeWorktreeId] ?? []
     const hasLiveLocalPty = localTabs.some(

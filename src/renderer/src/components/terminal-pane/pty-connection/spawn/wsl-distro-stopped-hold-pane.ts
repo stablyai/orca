@@ -3,7 +3,9 @@ import { holdPaneForStoppedWslDistro } from '../../session-restore/wsl-distro/ws
 import { recordPtyConnectDiagnostic } from '../instrumentation/pty-connect-diagnostics'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { WslDistroHoldState } from '../../../../../../shared/wsl-distro-stopped-hold'
-import { holdRetainedTerminalHistory } from '../reattach/retained-terminal-history'
+
+// Clears the saved screen the hold painted so the restore below paints it once.
+const CLEAR_HELD_SCREEN = '\x1b[0m\x1b[2J\x1b[3J\x1b[H'
 
 /**
  * Whether a local restore may start a stopped WSL distro: only Start, or this pane's first mount
@@ -39,7 +41,7 @@ export function holdForStoppedWslDistro(
     generation === session.transportStreamGeneration &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
   let held = true
-  const image = holdRetainedTerminalHistory(session, sessionId)
+  let paintedScreen = false
   // Why: nothing backs this pane, so keystrokes have nowhere to go.
   terminal.options.disableStdin = true
   const forget = holdPaneForStoppedWslDistro(session.cacheKey, {
@@ -49,21 +51,21 @@ export function holdForStoppedWslDistro(
       if (!isCurrent()) {
         return
       }
+      terminal.options.disableStdin = false
+      if (paintedScreen) {
+        session.writeReplayData(CLEAR_HELD_SCREEN)
+      }
       await reconnect()
     }
   })
   session.waitTeardowns.push(forget)
-  if (session.deps.restoredViewportBlankingPanesRef?.current.has(session.pane.id)) {
-    image.painted = true
-    return
-  }
   // The same read-only history read a newer-daemon hold paints, from this machine's daemon history.
   void window.api.pty
     .readNewerDaemonHeldScreen(sessionId)
     .catch(() => null)
     .then((screen) => {
-      if (screen && held && isCurrent() && !image.painted) {
-        image.painted = true
+      if (screen && held && isCurrent()) {
+        paintedScreen = true
         session.writeReplayData(screen.scrollback)
       }
     })

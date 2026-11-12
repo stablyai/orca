@@ -51,14 +51,10 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
       }
 
       if (ptyId) {
-        setTabLayout(
-          tabId,
-          {
-            ...layoutWithoutPtyBindings,
-            ptyIdsByLeafId: { ...existingBindings, [leafId]: ptyId }
-          },
-          leafId
-        )
+        setTabLayout(tabId, {
+          ...layoutWithoutPtyBindings,
+          ptyIdsByLeafId: { ...existingBindings, [leafId]: ptyId }
+        })
         return
       }
       const nextBindings = { ...existingBindings }

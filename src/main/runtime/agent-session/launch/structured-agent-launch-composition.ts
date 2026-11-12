@@ -24,7 +24,6 @@ export type StructuredAgentLaunchSources = {
     'selectWritableRecord' | 'requireWritableRecord' | 'pinLaunchDirectory'
   >
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
-  assertWorkspaceAcceptsLaunch?: (workspaceId: string) => Promise<void>
   resolveBaseEnvironment: () => Promise<Record<string, string>>
   /** The base environment with the user's overlay for `agent` laid over it. */
   resolveAgentEnvironment: (agent: string) => Promise<Record<string, string>>
@@ -177,9 +176,6 @@ export function composeStructuredLaunch<L>(
   part: StructuredAgentLaunchPartResolver<L>
 ): StructuredAgentLaunchResolver<L> {
   return async ({ identity, spawnToken, permissionMode }) => {
-    await sources.assertWorkspaceAcceptsLaunch?.(
-      admittedRecord(definition, sources.store, identity.sessionId).location.workspaceId
-    )
     const { launch, cwd, env, inheritedEnvToDelete, cliRuntimeCommand } = await composedPart(
       definition,
       sources,
@@ -230,9 +226,6 @@ export function structuredAgentLaunchSources(
   return {
     store: context.store,
     resolveWorkspacePath: deps.resolveWorkspacePath,
-    ...(deps.assertWorkspaceAcceptsLaunch
-      ? { assertWorkspaceAcceptsLaunch: deps.assertWorkspaceAcceptsLaunch }
-      : {}),
     resolveBaseEnvironment: context.environment.resolveBaseEnvironment,
     resolveAgentEnvironment: context.environment.resolveAgentEnvironment,
     refreshAfterMissingProgram: context.environment.refreshAfterMissingProgram,

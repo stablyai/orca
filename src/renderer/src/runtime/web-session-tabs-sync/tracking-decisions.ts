@@ -1,4 +1,3 @@
-import { acceptRetainedTerminalSnapshotAuthority } from './retained-terminal-start-authority'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
@@ -59,11 +58,9 @@ export function shouldApplyWebSessionTabsSnapshot(
 export function decideWebSessionTabsSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
-  runtimeId?: string,
-  receivedFrame?: number,
-  receivedSnapshot: RuntimeMobileSessionTabsResult = snapshot
+  runtimeId?: string
 ): WebSessionTabsSnapshotDecision {
-  if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId, receivedFrame)) {
+  if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId)) {
     return WEB_SESSION_TABS_FRAME_OUTRANKED
   }
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
@@ -114,13 +111,6 @@ export function decideWebSessionTabsSnapshot(
   ) {
     return WEB_SESSION_TABS_FRAME_OUTRANKED
   }
-  acceptRetainedTerminalSnapshotAuthority(
-    snapshot,
-    environmentId,
-    runtimeId,
-    receivedFrame,
-    receivedSnapshot
-  )
   rememberHostTerminalTabCount(environmentId, snapshot)
   replayableSessionTabsSnapshotByWorktree.delete(key)
   // Unpublished frames affirm no takeover: apply terminal reconciliation but do not note a new publisher (host-session-snapshot-authority.ts).

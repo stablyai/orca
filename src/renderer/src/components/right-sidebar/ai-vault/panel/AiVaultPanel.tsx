@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useAiVaultHistoryWorktrees } from '@/lib/agent-session/resume/history/ai-vault-history-candidates'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { useRepos } from '@/store/repos/use-repository-catalog'
 import { useAiVaultPanelSessions } from '../session-list/ai-vault-session-filters'
@@ -52,6 +53,7 @@ import {
 import { useAiVaultPanelHandle, type AiVaultPanelProps } from '../scope/ai-vault-panel-handle'
 import { aiVaultSearchHitHostLabels } from '../search/ai-vault-search-hit-hosts'
 import {
+  selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
@@ -72,7 +74,7 @@ export default function AiVaultPanel({
     repo: activeRepo
   } = useAiVaultPanelWorkspace(workspace)
   const repos = useRepos()
-  const allWorktrees = useAllWorktrees()
+  const visibleWorktrees = useAllWorktrees()
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const resumeTargetState = useAppStore(
     useShallow((state) => ({
@@ -81,9 +83,11 @@ export default function AiVaultPanel({
       folderWorkspaces: selectFolderWorkspaces(state),
       projectGroups: state.projectGroups,
       repos: state.repos,
-      worktreesByRepo: selectWorktreesByRepo(state)
+      worktreesByRepo: selectWorktreesByRepo(state),
+      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state)
     }))
   )
+  const allWorktrees = useAiVaultHistoryWorktrees(visibleWorktrees)
   const settings = useAppStore((s) => s.settings)
   const agentCmdOverrides = settings?.agentCmdOverrides
   const paneActions = useAiVaultOriginalPaneActions()
@@ -205,7 +209,7 @@ export default function AiVaultPanel({
   } = useAiVaultPanelSessionResume({
     sessions: resolverSessions,
     repos,
-    allWorktrees,
+    visibleWorktrees,
     workspaceId: effectiveActiveWorktreeId,
     resumeTargetState
   })
@@ -213,6 +217,7 @@ export default function AiVaultPanel({
     activeWorktree: activeWorktree ?? null,
     activeWorktreeId: effectiveActiveWorktreeId,
     targetState: resumeTargetState,
+    getSessionResumeState,
     agentCmdOverrides
   })
   const viewAdjustmentCount = countAiVaultViewAdjustments({

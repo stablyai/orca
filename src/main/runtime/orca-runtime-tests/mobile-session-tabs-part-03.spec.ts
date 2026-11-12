@@ -188,66 +188,31 @@ describe('OrcaRuntimeService', () => {
     ).toBe(hostTerminal.tab.id)
   })
 
-  it.each([false, true])(
-    'scopes terminal-create idempotency to the paired caller (window available: %s)',
-    async (windowAvailable) => {
-      let spawnIndex = 0
-      const send = vi.fn()
-      const runtime = new OrcaRuntimeService(store)
-      runtime.setPtyController({
-        spawn: vi.fn(
-          committingSpawn(runtime, async () => ({ id: `pty-headless-${++spawnIndex}` }))
-        ),
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => null,
-        listProcesses: async () => []
-      })
-      if (windowAvailable) {
-        runtime.attachWindow(1)
-        electronMocks.BrowserWindow.fromId.mockReturnValue({
-          isDestroyed: () => false,
-          webContents: { send }
-        })
-        runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-      } else {
-        runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-      }
+  it('scopes terminal-create idempotency to the paired caller', async () => {
+    let spawnIndex = 0
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: `pty-headless-${++spawnIndex}` }))),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
-      const [createdA, createdB, duplicateA] = await Promise.all([
-        runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-          clientNavigationId: 'device-a',
-          navigation: 'caller',
-          clientMutationId: 'same-mutation'
-        }),
-        runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-          clientNavigationId: 'device-b',
-          navigation: 'caller',
-          clientMutationId: 'same-mutation'
-        }),
-        runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-          clientNavigationId: 'device-a',
-          navigation: 'caller',
-          clientMutationId: 'same-mutation'
-        })
-      ])
-      const retriedA = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+    const [createdA, createdB] = await Promise.all([
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
         clientNavigationId: 'device-a',
         navigation: 'caller',
         clientMutationId: 'same-mutation'
+      }),
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        clientNavigationId: 'device-b',
+        navigation: 'caller',
+        clientMutationId: 'same-mutation'
       })
+    ])
 
-      expect(createdA.tab.id).not.toBe(createdB.tab.id)
-      expect(spawnIndex).toBe(2)
-      expect(duplicateA).toBe(createdA)
-      expect(retriedA).toBe(createdA)
-      expect(send).not.toHaveBeenCalledWith('terminal:requestTabCreate', expect.anything())
-      expect(
-        (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`, 'device-a')).activeTabId
-      ).toBe(createdA.tab.id)
-      expect(
-        (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`, 'device-b')).activeTabId
-      ).toBe(createdB.tab.id)
-    }
-  )
+    expect(createdA.tab.id).not.toBe(createdB.tab.id)
+    expect(spawnIndex).toBe(2)
+  })
 })

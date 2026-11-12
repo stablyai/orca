@@ -1,5 +1,3 @@
-import { createTerminalPresentationTab } from './terminal-presentation-tab-creation'
-import { projectRetainedTerminalStart } from '@/store/terminals/retained-terminal-start'
 import { presentAgentLaunchTab } from '@/lib/agent-session/launch/pane/agent-launch-tab-presentation'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
@@ -29,17 +27,21 @@ import {
 export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onLaunchRecipe(registerLaunchRecipe),
-    window.api.ui.onCreateTerminal((request) => {
-      const {
+    window.api.ui.onCreateTerminal(
+      ({
         requestId,
         worktreeId,
         command,
+        cwd,
         env,
         launchConfig,
         resumeProviderSession,
         launchToken,
         launchAgent,
+        viewMode,
+        targetGroupId,
         afterTabId,
+        shellOverride,
         title,
         ptyId,
         activate,
@@ -52,236 +54,239 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         splitFromLeafId,
         splitDirection,
         splitTelemetrySource
-      } = request
-      try {
-        if (request.retainedTerminalStart) {
-          const start = request.retainedTerminalStart
-          if (
-            start.worktreeId !== worktreeId ||
-            start.tabId !== tabId ||
-            start.leafId !== leafId ||
-            !projectRetainedTerminalStart(start, {
-              groupId: request.targetGroupId,
-              shell: request.shellOverride,
-              cwd: request.cwd,
-              viewMode: request.viewMode,
-              ...(request.split
-                ? {
-                    split: {
-                      sourceGroupId: request.split.besideGroupId,
-                      splitDirection: request.split.direction
-                    }
-                  }
-                : {}),
-              splitFromLeafId,
-              splitDirection
-            })
-          ) {
-            throw new Error('The retained terminal destination changed.')
-          }
-          if (resolveTerminalPresentation(request) === 'focused') {
-            focusTerminalInitiatedTab(start.tabId, start.leafId, worktreeId)
-          }
-          if (requestId) {
-            window.api.ui.replyTerminalCreate({ requestId, tabId: start.tabId })
-          }
-          return
-        }
-        const store = useAppStore.getState()
-        const terminalPresentation = resolveTerminalPresentation({
-          presentation,
-          activate,
-          focus
-        })
-        const shouldActivate = agentLaunchViewer === undefined && terminalPresentation === 'focused'
-        const shouldSurfaceOwner =
-          agentLaunchViewer === undefined &&
-          terminalPresentation !== 'background' &&
-          surfaceOwner !== false
-        const worktreeTabs = store.tabsByWorktree[worktreeId] ?? []
-        const isSplitReveal = Boolean(ptyId && tabId && leafId && splitFromLeafId)
-        const splitTargetTab = isSplitReveal
-          ? worktreeTabs.find((candidate) => candidate.id === tabId)
-          : undefined
-        // Why: before activating, so a split into a tab this window lacks does not navigate.
-        if (isSplitReveal && !splitTargetTab) {
-          throw new Error(`Terminal tab ${tabId} not found`)
-        }
-        if (shouldActivate) {
-          revealWorkspaceSurface(store, worktreeId)
-        }
-        if (ptyId && tabId && leafId && wasAgentLaunchPaneClosedByUser(tabId, leafId)) {
-          // User close wins while launch waits; stop its agent, tolerating a second kill after host retirement.
-          window.api.pty.kill(ptyId).catch(() => {})
-          throw new Error('agent_launch_tab_closed')
-        }
-        // Mobile-revealed splits may exist only in persisted layout before mount; recognize them to avoid duplicate tabs (#10486).
-        const ownership = ptyId
-          ? resolveTerminalTabPtyOwnership(
-              store,
-              worktreeId,
-              ptyId,
-              tabId !== undefined ? { preferTabId: tabId } : {}
-            )
-          : { kind: 'none' as const }
-        const existingTab =
-          ownership.kind === 'owned'
-            ? worktreeTabs.find((candidate) => candidate.id === ownership.tabId)
-            : undefined
-        let reusedTab = existingTab ?? splitTargetTab
-        // A frame or an earlier reply may already have projected this exact accepted tab.
-        const frameDrawnTab =
-          ptyId && !reusedTab && tabId !== undefined
+      }) => {
+        try {
+          const store = useAppStore.getState()
+          const terminalPresentation = resolveTerminalPresentation({
+            presentation,
+            activate,
+            focus
+          })
+          const shouldActivate =
+            agentLaunchViewer === undefined && terminalPresentation === 'focused'
+          const shouldSurfaceOwner =
+            agentLaunchViewer === undefined &&
+            terminalPresentation !== 'background' &&
+            surfaceOwner !== false
+          const worktreeTabs = store.tabsByWorktree[worktreeId] ?? []
+          const isSplitReveal = Boolean(ptyId && tabId && leafId && splitFromLeafId)
+          const splitTargetTab = isSplitReveal
             ? worktreeTabs.find((candidate) => candidate.id === tabId)
             : undefined
-        if (frameDrawnTab) {
-          reusedTab = frameDrawnTab
-        }
-        const tab =
-          reusedTab ??
-          createTerminalPresentationTab(store, request, shouldActivate, terminalPresentation)
-        if (afterTabId) {
-          const unifiedTabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
-          const createdUnified = unifiedTabs.find((item) => item.entityId === tab.id)?.id
-          const anchorUnified = unifiedTabs.find(
-            (item) => item.id === afterTabId || item.entityId === afterTabId
-          )?.id
-          if (createdUnified && anchorUnified) {
-            insertUnifiedTabAfterAnchor(worktreeId, createdUnified, anchorUnified)
+          // Why: before activating, so a split into a tab this window lacks does not navigate.
+          if (isSplitReveal && !splitTargetTab) {
+            throw new Error(`Terminal tab ${tabId} not found`)
           }
-        }
-        // Different reused IDs break the PTY’s baked-in paneKey attribution; warn in dev.
-        if (tabId !== undefined && tab.id !== tabId) {
-          console.warn(
-            `[onCreateTerminal] tabId hint ${tabId} ignored for ptyId ${ptyId}; existing tab ${tab.id} adopted instead (hook attribution will degrade for this terminal)`
-          )
-        }
-        if (shouldActivate) {
-          store.setActiveTabType('terminal', worktreeId)
-          store.setActiveTab(tab.id)
-        } else if (shouldSurfaceOwner) {
-          store.revealWorktreeInSidebar(worktreeId)
-        }
-        if (shouldSurfaceOwner) {
-          focusTerminalInitiatedTab(tab.id, leafId, worktreeId)
-        }
-        if (agentLaunchViewer) {
-          presentAgentLaunchTab(agentLaunchViewer, worktreeId, tab.id, leafId)
-        }
-        // Apply runtime titles only to fresh tabs or focus would overwrite reused tabs’ custom titles.
-        if (title && !reusedTab) {
-          store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
-        }
-        if (leafId && ptyId) {
-          const launchPaneKey = tryMakePaneKey(tab.id, leafId)
-          if (launchConfig) {
-            registerLaunchRecipe({
-              tabId: tab.id,
-              leafId,
-              launchConfig,
+          if (shouldActivate) {
+            revealWorkspaceSurface(store, worktreeId)
+          }
+          if (ptyId && tabId && leafId && wasAgentLaunchPaneClosedByUser(tabId, leafId)) {
+            // User close wins while launch waits; stop its agent, tolerating a second kill after host retirement.
+            window.api.pty.kill(ptyId).catch(() => {})
+            throw new Error('agent_launch_tab_closed')
+          }
+          // Mobile-revealed splits may exist only in persisted layout before mount; recognize them to avoid duplicate tabs (#10486).
+          const ownership = ptyId
+            ? resolveTerminalTabPtyOwnership(
+                store,
+                worktreeId,
+                ptyId,
+                tabId !== undefined ? { preferTabId: tabId } : {}
+              )
+            : { kind: 'none' as const }
+          const existingTab =
+            ownership.kind === 'owned'
+              ? worktreeTabs.find((candidate) => candidate.id === ownership.tabId)
+              : undefined
+          let reusedTab = existingTab ?? splitTargetTab
+          // Reuse main’s frame-drawn tab even if stale records make legacy ownership ambiguous.
+          const frameDrawnTab =
+            ORCA_LAYOUT_OWNER_IS_MAIN && !reusedTab && tabId !== undefined
+              ? worktreeTabs.find((candidate) => candidate.id === tabId)
+              : undefined
+          if (frameDrawnTab) {
+            reusedTab = frameDrawnTab
+          }
+          const tab =
+            reusedTab ??
+            (ptyId
+              ? store.createTab(worktreeId, targetGroupId, shellOverride, {
+                  initialPtyId: ptyId,
+                  activate:
+                    shouldActivate ||
+                    agentLaunchViewer === 'focus-window' ||
+                    agentLaunchViewer === 'focus-in-workspace',
+                  ...(surfaceOwner === false && terminalPresentation === 'background'
+                    ? { recordInteraction: false }
+                    : {}),
+                  ...(launchAgent
+                    ? {
+                        launchAgent,
+                        // Why: a paired client resolved explicit mode before PTY materialization; only omitted mode uses host defaults.
+                        ...(viewMode ? { viewMode } : {})
+                      }
+                    : {}),
+                  ...(cwd ? { startupCwd: cwd } : {}),
+                  // Why: CLI-spawned PTYs bake the pane key into env; adopt the same tab id so hook-event attribution keeps working.
+                  ...(tabId !== undefined ? { id: tabId } : {}),
+                  ...(ORCA_LAYOUT_OWNER_IS_MAIN && leafId ? { initialLeafId: leafId } : {})
+                })
+              : store.createTab(
+                  worktreeId,
+                  targetGroupId,
+                  shellOverride,
+                  shouldActivate
+                    ? cwd
+                      ? { startupCwd: cwd }
+                      : undefined
+                    : {
+                        activate: false,
+                        recordInteraction: false,
+                        ...(cwd ? { startupCwd: cwd } : {})
+                      }
+                ))
+          if (afterTabId) {
+            const unifiedTabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
+            const createdUnified = unifiedTabs.find((item) => item.entityId === tab.id)?.id
+            const anchorUnified = unifiedTabs.find(
+              (item) => item.id === afterTabId || item.entityId === afterTabId
+            )?.id
+            if (createdUnified && anchorUnified) {
+              insertUnifiedTabAfterAnchor(worktreeId, createdUnified, anchorUnified)
+            }
+          }
+          // Different reused IDs break the PTY’s baked-in paneKey attribution; warn in dev.
+          if (tabId !== undefined && tab.id !== tabId) {
+            console.warn(
+              `[onCreateTerminal] tabId hint ${tabId} ignored for ptyId ${ptyId}; existing tab ${tab.id} adopted instead (hook attribution will degrade for this terminal)`
+            )
+          }
+          if (shouldActivate) {
+            store.setActiveTabType('terminal', worktreeId)
+            store.setActiveTab(tab.id)
+          } else if (shouldSurfaceOwner) {
+            store.revealWorktreeInSidebar(worktreeId)
+          }
+          if (shouldSurfaceOwner) {
+            focusTerminalInitiatedTab(tab.id, leafId, worktreeId)
+          }
+          if (agentLaunchViewer) {
+            presentAgentLaunchTab(agentLaunchViewer, worktreeId, tab.id, leafId)
+          }
+          // Apply runtime titles only to fresh tabs or focus would overwrite reused tabs’ custom titles.
+          if (title && !reusedTab) {
+            store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
+          }
+          if (leafId && ptyId) {
+            const launchPaneKey = tryMakePaneKey(tab.id, leafId)
+            if (launchConfig) {
+              registerLaunchRecipe({
+                tabId: tab.id,
+                leafId,
+                launchConfig,
+                ...(launchToken ? { launchToken } : {}),
+                ...(launchAgent ? { launchAgent } : {})
+              })
+            } else if (!splitFromLeafId && launchPaneKey) {
+              store.clearAgentLaunchConfig(launchPaneKey)
+            }
+            if (splitFromLeafId) {
+              // Runtime splits already use their parent paneKey; reuse the tab rather than minting a colliding ID.
+              const existingLayout = store.terminalLayoutsByTabId?.[tab.id]
+              const detail: SplitTerminalPaneDetail = {
+                tabId: tab.id,
+                worktreeId,
+                paneRuntimeId: -1,
+                direction: splitDirection ?? 'horizontal',
+                sourceLeafId: splitFromLeafId,
+                sourcePtyId: existingLayout?.ptyIdsByLeafId?.[splitFromLeafId],
+                telemetrySource: splitTelemetrySource,
+                newLeafId: leafId,
+                ptyId
+              }
+              const targetMounted = hasRegisteredRuntimeTerminalTab(tab.id, worktreeId)
+              if (!targetMounted) {
+                // Hold the cold tab through PTY adoption before topology changes can mount it.
+                queueTerminalPaneSplitRequest(detail)
+                requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
+              }
+              store.updateTabPtyId(tab.id, ptyId)
+              store.setTabLayout(
+                tab.id,
+                addSplitLeafToLayout(
+                  existingLayout,
+                  splitFromLeafId,
+                  leafId,
+                  ptyId,
+                  splitDirection ?? 'horizontal',
+                  title,
+                  shouldActivate
+                )
+              )
+              if (targetMounted) {
+                dispatchTerminalPaneSplitRequest(detail)
+              }
+            } else {
+              const paneTitle = ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : title
+              // Why: CLI/runtime PTYs emit hook events before the tab mounts, so the leaf must exist in layout for paneKey validation.
+              const existingLayout = reusedTab
+                ? activateExistingLeafInLayout(
+                    store.terminalLayoutsByTabId?.[tab.id],
+                    leafId,
+                    ptyId,
+                    paneTitle
+                  )
+                : null
+              if (existingLayout) {
+                store.updateTabPtyId(tab.id, ptyId)
+                store.setTabLayout(tab.id, existingLayout)
+              } else {
+                store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, paneTitle))
+              }
+            }
+          }
+          if (command) {
+            store.queueTabStartupCommand(tab.id, {
+              command,
+              ...(env ? { env } : {}),
+              ...(launchConfig ? { launchConfig } : {}),
+              ...(resumeProviderSession ? { resumeProviderSession } : {}),
               ...(launchToken ? { launchToken } : {}),
               ...(launchAgent ? { launchAgent } : {})
             })
-          } else if (!splitFromLeafId && launchPaneKey) {
-            store.clearAgentLaunchConfig(launchPaneKey)
           }
-          if (splitFromLeafId) {
-            // Runtime splits already use their parent paneKey; reuse the tab rather than minting a colliding ID.
-            const existingLayout = store.terminalLayoutsByTabId?.[tab.id]
-            const detail: SplitTerminalPaneDetail = {
+          if (ptyId && terminalPresentation === 'background') {
+            requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
+          }
+          if (requestId) {
+            // Why: attest the actual binding; recovery callers compare it with their expected identity.
+            const identity =
+              ptyId && tabId && leafId
+                ? verifyTerminalRevealIdentity(useAppStore.getState(), {
+                    worktreeId,
+                    tabId: tab.id,
+                    leafId,
+                    ptyId
+                  })
+                : undefined
+            window.api.ui.replyTerminalCreate({
+              requestId,
               tabId: tab.id,
-              worktreeId,
-              paneRuntimeId: -1,
-              direction: splitDirection ?? 'horizontal',
-              sourceLeafId: splitFromLeafId,
-              sourcePtyId: existingLayout?.ptyIdsByLeafId?.[splitFromLeafId],
-              telemetrySource: splitTelemetrySource,
-              newLeafId: leafId,
-              ptyId
-            }
-            const targetMounted = hasRegisteredRuntimeTerminalTab(tab.id, worktreeId)
-            if (!targetMounted) {
-              // Hold the cold tab through PTY adoption before topology changes can mount it.
-              queueTerminalPaneSplitRequest(detail)
-              requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
-            }
-            store.updateTabPtyId(tab.id, ptyId)
-            store.setTabLayout(
-              tab.id,
-              addSplitLeafToLayout(
-                existingLayout,
-                splitFromLeafId,
-                leafId,
-                ptyId,
-                splitDirection ?? 'horizontal',
-                title,
-                shouldActivate
-              )
-            )
-            if (targetMounted) {
-              dispatchTerminalPaneSplitRequest(detail)
-            }
-          } else {
-            const paneTitle = ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : title
-            // Why: CLI/runtime PTYs emit hook events before the tab mounts, so the leaf must exist in layout for paneKey validation.
-            const existingLayout = reusedTab
-              ? activateExistingLeafInLayout(
-                  store.terminalLayoutsByTabId?.[tab.id],
-                  leafId,
-                  ptyId,
-                  paneTitle,
-                  shouldActivate || agentLaunchViewer !== undefined
-                )
-              : null
-            if (existingLayout) {
-              store.updateTabPtyId(tab.id, ptyId)
-              store.setTabLayout(tab.id, existingLayout)
-            } else {
-              store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, paneTitle))
-            }
+              title: title ?? tab.title,
+              ...(identity ? { identity } : {})
+            })
           }
-        }
-        if (command && !ptyId) {
-          store.queueTabStartupCommand(tab.id, {
-            command,
-            ...(env ? { env } : {}),
-            ...(launchConfig ? { launchConfig } : {}),
-            ...(resumeProviderSession ? { resumeProviderSession } : {}),
-            ...(launchToken ? { launchToken } : {}),
-            ...(launchAgent ? { launchAgent } : {})
-          })
-        }
-        if (ptyId && terminalPresentation === 'background') {
-          requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
-        }
-        if (requestId) {
-          // Why: attest the actual binding; recovery callers compare it with their expected identity.
-          const identity =
-            ptyId && tabId && leafId
-              ? verifyTerminalRevealIdentity(useAppStore.getState(), {
-                  worktreeId,
-                  tabId: tab.id,
-                  leafId,
-                  ptyId
-                })
-              : undefined
+        } catch (err) {
+          if (!requestId) {
+            throw err
+          }
           window.api.ui.replyTerminalCreate({
             requestId,
-            tabId: tab.id,
-            title: title ?? tab.title,
-            ...(identity ? { identity } : {})
+            error: err instanceof Error ? err.message : 'Terminal reveal failed'
           })
         }
-      } catch (err) {
-        if (!requestId) {
-          throw err
-        }
-        window.api.ui.replyTerminalCreate({
-          requestId,
-          error: err instanceof Error ? err.message : 'Terminal reveal failed'
-        })
       }
-    })
+    )
   )
 
   // Why: background-mount a mobile-subscribed tab's PTY without navigating the desktop (STA-1840).

@@ -1,15 +1,13 @@
 import { toast } from 'sonner'
-import { captureTerminalCreationNavigation } from '@/store/terminals/terminal-creation-navigation'
-import { runtimeEnvironmentCapabilityProof } from '../../rpc/compatibility/runtime-capability-proof'
-import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
-import { TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
 import type { TerminalPaneSplitSource } from '../../../../../shared/feature-education-telemetry'
+import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
 import type { RuntimeTerminalSplit } from '../../../../../shared/runtime-terminal-contracts'
+import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
+  captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
-  isWebRuntimeSessionActive,
-  matchesWebSessionIntentOwner
+  isWebRuntimeSessionActive
 } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import {
   beginWebRuntimeSplitFocusRequest,
@@ -29,8 +27,7 @@ export function splitWebRuntimeTerminal(
   ptyId: string | null | undefined,
   direction: 'horizontal' | 'vertical',
   telemetrySource: TerminalPaneSplitSource,
-  source?: WebRuntimeSplitSource,
-  launch?: { cwd?: string | Promise<string>; initialSize?: { cols: number; rows: number } }
+  source?: WebRuntimeSplitSource
 ): boolean {
   if (!ptyId) {
     return false
@@ -54,54 +51,23 @@ export function splitWebRuntimeTerminal(
   const focusRequest = source
     ? beginWebRuntimeSplitFocusRequest(intentOwner, source.worktreeId)
     : null
-  const navigation = captureTerminalCreationNavigation()
-  void (async () => {
-    if (!launch) {
-      return await callRuntimeRpc<{ split: RuntimeTerminalSplit }>(
-        { kind: 'environment', environmentId },
-        'terminal.split',
-        { terminal: remote.handle, direction, telemetrySource },
-        {
-          timeoutMs: 15_000,
-          expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
-          skipCompatibilityCheck: true
-        }
+  void captureRuntimeEnvironmentCall(
+    environmentId,
+    intentOwner.pairingRevision
+  )({
+    method: 'terminal.split',
+    params: {
+      terminal: remote.handle,
+      direction,
+      telemetrySource
+    },
+    timeoutMs: 15_000
+  })
+    .then(async (response) => {
+      const result = unwrapRuntimeRpcResult(
+        response as RuntimeRpcResponse<{ split: RuntimeTerminalSplit }>
       )
-    }
-    const proof = await runtimeEnvironmentCapabilityProof(
-      environmentId,
-      TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY
-    )
-    if (!matchesWebSessionIntentOwner(intentOwner)) {
-      throw new Error('The workspace host changed before the split request.')
-    }
-    const cwd = proof.supported ? await launch.cwd : undefined
-    return await callRuntimeRpc<{ split: RuntimeTerminalSplit }>(
-      { kind: 'environment', environmentId },
-      'terminal.split',
-      {
-        terminal: remote.handle,
-        direction,
-        telemetrySource,
-        ...(proof.supported ? { activate: false, cwd, initialSize: launch.initialSize } : {})
-      },
-      {
-        timeoutMs: 15_000,
-        expectedEnvironmentPairingRevision: proof.pairingRevision,
-        expectedEnvironmentRuntimeId: proof.runtimeId
-      }
-    )
-  })()
-    .then(async (result) => {
-      if (navigation.current()) {
-        await focusSplitWebRuntimeTerminalPane(
-          intentOwner,
-          focusTarget,
-          focusRequest,
-          result?.split,
-          navigation.current
-        )
-      }
+      await focusSplitWebRuntimeTerminalPane(intentOwner, focusTarget, focusRequest, result?.split)
     })
     .catch((error) => {
       releasePendingMirrorSuppression()
@@ -110,10 +76,7 @@ export function splitWebRuntimeTerminal(
       toast.error(message)
       console.warn('[web-runtime-session] failed to split terminal:', message)
     })
-    .finally(() => {
-      navigation.dispose()
-      finishWebRuntimeSplitFocusRequest(focusRequest)
-    })
+    .finally(() => finishWebRuntimeSplitFocusRequest(focusRequest))
   return true
 }
 

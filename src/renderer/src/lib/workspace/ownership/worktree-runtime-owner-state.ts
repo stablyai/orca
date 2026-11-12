@@ -8,8 +8,7 @@ import type { Worktree } from '../../../../../shared/worktree/types'
 export type WorktreeRuntimeOwnerRow = Pick<
   Worktree,
   'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'
-> &
-  Partial<Pick<Worktree, 'isBare' | 'isArchived'>>
+>
 
 export type WorktreeRuntimeOwnerState = {
   worktreesByRepo?: Record<string, readonly WorktreeRuntimeOwnerRow[]>

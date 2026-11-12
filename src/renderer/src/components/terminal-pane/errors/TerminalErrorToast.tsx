@@ -2,7 +2,6 @@ import {
   isSshReconnectOwnedTerminalError,
   shouldOfferDaemonRestart,
   isExplainedTerminalError,
-  isGitStorageTerminalRefusal,
   isRemoteTerminalClosedError,
   isPaneOwnerRecoveryError,
   isFolderWorkspacePathOnlyError,
@@ -49,7 +48,7 @@ export function TerminalErrorToast({
   // An SSH host state (reconnecting, or waiting for the user to sign in), not a bug to report.
   const ssh = isSshSignInRequiredTerminalError(error) || isSshReconnectOwnedTerminalError(error)
   // Why: the client's OS and shell describe neither the host nor its shell, and the renderer knows neither.
-  const showClientEnvironment = paneOnClient && !ssh && !isGitStorageTerminalRefusal(error)
+  const showClientEnvironment = paneOnClient && !ssh
   const paneOwnerUnverified = isPaneOwnerRecoveryError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
   // Restart cannot recover a session after its owning daemon exits.

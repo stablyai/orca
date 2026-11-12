@@ -20,8 +20,6 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner
 import { holdInPlaceResumeUntilSettled } from '../startup/in-place-resume-hold'
 import { mainStartsPane, startMainPaneOnFirstView } from '../spawn/main-starts-pane'
 import { attachResumeCheck } from '../spawn/main-pane-resume-banner'
-import { acceptRetainedTerminalHistory } from './retained-terminal-history'
-import { hasUnknownRestoredPaneStart } from '../spawn/main-pane-start-wait'
 
 import {
   awaitAgentStatusStartupSnapshot,
@@ -99,7 +97,7 @@ function connectDeferredSessionReattach(
   let heldByNewerDaemon = false
   let heldForStoppedDistro: ReturnType<typeof parseWslDistroHold> = null
   // Why: main started this pane's agent; the window's attach never resumes it a second time.
-  const attachOnlyView = mainStartsPane(session) || hasUnknownRestoredPaneStart(session)
+  const attachOnlyView = mainStartsPane(session)
   const resumeStartup = session.buildColdRestoreAgentResumeStartup()
   const coldRestoreStartup = attachOnlyView ? null : resumeStartup
   const resumedAgent = attachResumeCheck(session, coldRestoreStartup)
@@ -230,6 +228,8 @@ function connectDeferredSessionReattach(
         if (!isCurrentReattach()) {
           return NOT_REOPENED
         }
+        session.clearExitedPanePtyLayoutBinding(deferredReattachSessionId)
+        session.deps.clearTabPtyId(session.deps.tabId, deferredReattachSessionId)
         return startFreshInstead()
       }
       const accepted = await session.handleReattachResult(
@@ -240,7 +240,6 @@ function connectDeferredSessionReattach(
         outputCallbacks.launchContext
       )
       if (accepted && isCurrentReattach()) {
-        acceptRetainedTerminalHistory(session, false)
         writeStartupCwdFallbackNotice(session, result)
       }
       session.finishReattachLiveDataDeferral(accepted, outputCallbacks.generation)
@@ -293,6 +292,8 @@ function connectDeferredSessionReattach(
         reason: message
       })
       session.reportError(message)
+      session.clearExitedPanePtyLayoutBinding(deferredReattachSessionId)
+      session.deps.clearTabPtyId(session.deps.tabId, deferredReattachSessionId)
       return startFreshInstead()
     })
   void outcome.finally(() => {

@@ -261,7 +261,6 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       claimKeyId: this.agentSessionClaimSigner.keyId,
       logger,
       ...catalogDeps,
-      assertWorkspaceAcceptsLaunch: (workspaceId) => this.assertWorkspaceAcceptsLaunch(workspaceId),
       claudeCliFlags: claudeCliFlagSupport,
       usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
       idleSweep: { idleMs: () => nativeChatIdleStopMs(this.requireStore().getSettings()) },

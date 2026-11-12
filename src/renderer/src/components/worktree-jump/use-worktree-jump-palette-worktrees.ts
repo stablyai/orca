@@ -32,7 +32,7 @@ export function useWorktreeJumpPaletteWorktrees({
   agentStatusByPaneKey,
   tabsByWorktree,
   workspaces,
-  presentationWorkspaces,
+  contentWorkspaces,
   filterPredicate,
   hideDefaultBranchWorkspace,
   hideAutomationGeneratedWorkspaces,
@@ -190,9 +190,9 @@ export function useWorktreeJumpPaletteWorktrees({
       return EMPTY_SORTED_WORKTREES
     }
     return filterPredicate
-      ? presentationWorkspaces.filter(filterPredicate.matchesWorktree)
-      : presentationWorkspaces
-  }, [paletteStatusInputsActive, presentationWorkspaces, filterPredicate])
+      ? contentWorkspaces.filter(filterPredicate.matchesWorktree)
+      : contentWorkspaces
+  }, [paletteStatusInputsActive, contentWorkspaces, filterPredicate])
   const sortedWorktrees = useMemo(
     () =>
       hasQuery

@@ -131,13 +131,7 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
       if (replayed) {
         acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
       }
-      const decision = decideWebSessionTabsSnapshot(
-        recovered,
-        environmentId,
-        runtimeId,
-        receivedFrame,
-        event
-      )
+      const decision = decideWebSessionTabsSnapshot(recovered, environmentId, runtimeId)
       if (decision.apply) {
         settleHydration = applyWebSessionTabsStorePatch(
           createWebSessionTabsSnapshotPatch(recovered, environmentId),

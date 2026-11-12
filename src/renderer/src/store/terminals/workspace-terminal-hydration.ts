@@ -219,13 +219,6 @@ export function createWorkspaceTerminalHydrationActions(
             )
           )
         }
-        if (!options?.replaceWorkspaceKeys) {
-          s.terminalStartupAttempt?.capture({
-            ...s,
-            ...hydrated,
-            groupsByWorktree: session.tabGroups ?? s.groupsByWorktree
-          })
-        }
         return options?.replaceWorkspaceKeys
           ? targetScopedWorkspaceHydrationPatch(s, hydrated, session, options)
           : markFullWorkspaceHydration(hydrated)

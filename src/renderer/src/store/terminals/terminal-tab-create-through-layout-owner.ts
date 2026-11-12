@@ -15,6 +15,7 @@ import type {
   LayoutApplyReply
 } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { AppState } from '../types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   clearWindowTabMark,
@@ -88,13 +89,25 @@ export function terminalTabCreateCommand(
 export function recordCreatedTerminalTabInLayoutOwner(
   state: AppState,
   command: CommandOf<'createTerminalTab'> & { tabId: string; leafId: string },
-  start?: { tab: TerminalTab; store: Parameters<typeof startWindowTabInMain>[0] }
+  start?: {
+    tab: TerminalTab
+    executionHostId?: ExecutionHostId
+    store: Parameters<typeof startWindowTabInMain>[0]
+  }
 ): void {
   // Why: a tab main already holds is its own.
   if (layoutFrameTerminalTab(command.workspace, command.tabId)) {
     return
   }
   const { workspace, ...rest } = command
+  // Scope the request's captured owner without changing the user's live selection.
+  if (start?.executionHostId) {
+    state = {
+      ...state,
+      activeWorktreeId: workspace,
+      activeWorkspaceExecutionHostId: start.executionHostId
+    }
+  }
   // Main starts the first terminal once it holds the tab; until then the pane waits for it.
   const startsInMain =
     start !== undefined &&

@@ -99,17 +99,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     snapshot = titleStructuredConversationTabs(snapshot, (sessionId) =>
       this.structuredConversationTabName(snapshot.worktree, sessionId)
     )
-    const result = projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
-    return {
-      ...result,
-      tabs: result.tabs.map((tab) => {
-        if (tab.type !== 'terminal') {
-          return tab
-        }
-        const start = this.getRetainedTerminalStart(snapshot.worktree, tab.parentTabId, tab.leafId)
-        return start ? { ...tab, retainedTerminalStart: start } : tab
-      })
-    }
+    return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
   }
 
   refreshStructuredConversationTabTitle(workspaceId: string, sessionId: string): void {

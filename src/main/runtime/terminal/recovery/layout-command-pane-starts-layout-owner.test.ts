@@ -4,7 +4,6 @@ import type { SleepingAgentSessionRecord as SleepingRecord } from '../../../../s
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
 import type { RestoredPaneTrigger } from './restored-pane-start'
-import { BareWorkspaceTerminalLaunchError } from '../../../workspaces/catalog/workspace-git-storage'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -27,10 +26,6 @@ const PANE = { worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab', leafId: HEADLESS
 
 class StatusRuntime extends OrcaRuntimeService {
   startsNoTerminal = false
-  bareStorage = false
-  protected override async workspaceUsesBareGitStorage(): Promise<boolean> {
-    return this.bareStorage
-  }
   protected override materializePendingMobileSessionTerminal(
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab,
@@ -164,47 +159,6 @@ describe('a client’s startPane in the layout-owner build', () => {
     expect(spawn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
-})
-
-it('refuses a bare replacement before stopping or clearing the saved live owner', async () => {
-  const { runtime, spawn, kill, started, getSession } = await desktopRuntime()
-  await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-  started.resolve({ id: 'persisted-pty' })
-  await vi.waitFor(() => expect(runtime.startStatusOf(PANE_KEY)).toBeNull())
-  runtime.bareStorage = true
-  spawn.mockClear()
-  await expect(
-    runtime.applyLayoutCommand({
-      type: 'restartPane',
-      workspace: TEST_WORKTREE_ID,
-      tabId: 'host-tab',
-      paneKey: PANE_KEY
-    })
-  ).rejects.toBeInstanceOf(BareWorkspaceTerminalLaunchError)
-  expect(kill).not.toHaveBeenCalled()
-  expect(spawn).not.toHaveBeenCalled()
-  expect(getSession().terminalLayoutsByTabId['host-tab']?.ptyIdsByLeafId?.[HEADLESS_LEAF_ID]).toBe(
-    'persisted-pty'
-  )
-})
-
-it('applies the same fresh admission before a completed-record Start retires its live binding', async () => {
-  const { runtime, spawn, kill, started, getSession, setSession } = await desktopRuntime()
-  await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-  started.resolve({ id: 'persisted-pty' })
-  await vi.waitFor(() => expect(runtime.startStatusOf(PANE_KEY)).toBeNull())
-  setSession({
-    ...getSession(),
-    sleepingAgentSessionsByPaneKey: { [PANE_KEY]: { ...RECORD, state: 'done' } }
-  })
-  runtime.bareStorage = true
-  spawn.mockClear()
-  await expect(
-    runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-  ).rejects.toBeInstanceOf(BareWorkspaceTerminalLaunchError)
-  expect(kill).not.toHaveBeenCalled()
-  expect(spawn).not.toHaveBeenCalled()
-  expect(runtime.isRestoredPaneBoundTo(PANE, 'persisted-pty')).toBe(true)
 })
 
 describe('a client’s wake of a slept pane in the layout-owner build', () => {

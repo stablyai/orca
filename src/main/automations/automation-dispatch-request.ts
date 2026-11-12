@@ -1,12 +1,3 @@
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
-import {
-  workspaceRootIsBare,
-  BARE_WORKSPACE_LAUNCH_ERROR
-} from '../workspaces/catalog/workspace-git-storage'
-import { isFolderRepo } from '../../shared/repo-kind'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
-import { readFreshDetectedGitWorktrees } from '../ipc/worktrees/listing/detected-worktree-scan-cache'
 import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
 import { isDeepStrictEqual } from 'node:util'
 import type { Automation } from '../../shared/automations/automation-definition'
@@ -14,6 +5,7 @@ import type {
   AutomationRun,
   AutomationPrecheckResult
 } from '../../shared/automations/history/automation-run'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRunWriter } from './automation-run-writer'
 import type { AutomationLauncher } from './automation-launch'
@@ -206,28 +198,11 @@ export async function runAutomationRequestPrecheck(
   if (!target.ok) {
     return failedPrecheckResult(automation.precheck, Date.now(), target.error)
   }
-  const workspace =
-    automation.workspaceMode === 'existing' && automation.workspaceId
-      ? splitWorktreeIdForFilesystem(automation.workspaceId)
-      : null
-  const cwd = workspace?.repoId === target.repo.id ? workspace.worktreePath : target.cwd
-  if (automation.workspaceMode === 'existing' && !isFolderRepo(target.repo)) {
-    const local = getRepoExecutionHostId(target.repo) === LOCAL_EXECUTION_HOST_ID
-    const worktrees = local ? readFreshDetectedGitWorktrees(store, target.repo) : undefined
-    if (
-      await workspaceRootIsBare(target.repo, cwd, {
-        worktrees,
-        ...(local ? getLocalProjectWorktreeGitOptions(store, target.repo) : {})
-      })
-    ) {
-      return failedPrecheckResult(automation.precheck, Date.now(), BARE_WORKSPACE_LAUNCH_ERROR)
-    }
-  }
   return await runAutomationPrecheck({
     precheck: automation.precheck,
     target:
       automation.executionTargetType === 'ssh'
-        ? { type: 'ssh', cwd, connectionId: automation.executionTargetId }
-        : { type: 'local', cwd }
+        ? { type: 'ssh', cwd: target.cwd, connectionId: automation.executionTargetId }
+        : { type: 'local', cwd: target.cwd }
   })
 }

@@ -1,7 +1,3 @@
-import { workspaceRootIsBare } from '../../../workspaces/catalog/workspace-git-storage'
-import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { OrcaRuntimeWithReadKittyFile } from '../../files/paths/orca-runtime-read-kitty-file'
 import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -140,11 +136,20 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
   }
 
   protected pruneUnregisteredWorktreeScans(): void {
-    ScanCache.pruneUnregisteredWorktreeScans(this.store, () => [
+    const registered = new Set(
+      (this.store?.getRepos() ?? []).map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}`)
+    )
+    for (const cache of [
       this.worktreeScanCache,
       this.worktreeScanGenerations,
       this.worktreeScanInFlight
-    ])
+    ]) {
+      for (const key of cache.keys()) {
+        if (!registered.has(key)) {
+          cache.delete(key)
+        }
+      }
+    }
   }
 
   /** The fleet listing from cached scans and the store as it is now, synchronously. */
@@ -286,32 +291,6 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
       })
     this.worktreeScanInFlight.set(scanScopeKey, { generation, runtimeKey, promise })
     return (await promise).result
-  }
-
-  protected async workspaceUsesBareGitStorage(target: HostWorktreeTarget): Promise<boolean> {
-    const parsed = splitWorktreeIdForFilesystem(target.id)
-    if (!parsed || !this.store) {
-      return false
-    }
-    const owners = this.store
-      .getRepos()
-      .filter((repo) => repo.id === parsed.repoId && getRepoExecutionHostId(repo) === target.hostId)
-    const repo = owners.length === 1 ? owners[0] : undefined
-    if (!repo || isFolderRepo(repo)) {
-      return false
-    }
-    const key = `${repo.id}\0${target.hostId}`
-    return workspaceRootIsBare(repo, parsed.worktreePath, {
-      worktrees: ScanCache.readFreshWorktreeScan(
-        this.requireStore(),
-        repo,
-        this.worktreeScanCache.get(key),
-        this.worktreeScanGenerations.get(key) ?? 0
-      ),
-      ...(target.hostId === LOCAL_EXECUTION_HOST_ID
-        ? getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
-        : {})
-    })
   }
 
   listRepos(): Repo[] {

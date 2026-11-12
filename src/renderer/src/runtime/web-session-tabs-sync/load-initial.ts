@@ -121,17 +121,8 @@ export function loadInitialWebSessionTabs({
             runtimeId
           )
       )
-      const receivedSnapshotByRecovered = new Map(
-        recovered.map((snapshot, index) => [snapshot, result.snapshots[index]!])
-      )
       const decisions = applicable.map((snapshot) =>
-        decideWebSessionTabsSnapshot(
-          snapshot,
-          environmentId,
-          runtimeId,
-          requestReceivedFrame,
-          receivedSnapshotByRecovered.get(snapshot)!
-        )
+        decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId)
       )
       const freshSnapshots = applicable.filter((_snapshot, index) => decisions[index]!.apply)
       const initialInventoryStillCurrent =

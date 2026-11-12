@@ -270,6 +270,7 @@ export default function AiVaultSessionDropLayer({
           const launchResult = launchAiVaultSessionInNewTab({
             agent: payload.agent,
             worktreeId,
+            workspaceExecutionHostId: targetExecutionHostId ?? undefined,
             command: startup.command,
             ...(payload.sessionCwd ? { cwd: payload.sessionCwd } : {}),
             ...(startup.env ? { env: startup.env } : {}),

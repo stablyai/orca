@@ -42,7 +42,7 @@ const EMPTY_WORKSPACE_TAB_ENTRIES: SearchableWorkspaceTab[] = []
 export function useWorktreeJumpPaletteOpenTabs({
   paletteStatusInputsActive,
   openTabWorkspaces,
-  presentationWorkspaces,
+  contentWorkspaces,
   repoMap,
   repoByHostIdentity,
   worktreeOrder,
@@ -84,7 +84,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     }
     return buildSearchableBrowserPages({
       worktrees: openTabWorkspaces,
-      ownershipWorktrees: presentationWorkspaces,
+      ownershipWorktrees: contentWorkspaces,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -102,7 +102,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     activeTabType,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
-    presentationWorkspaces,
+    contentWorkspaces,
     browserPagesByWorkspace,
     browserTabsByWorktree,
     openTabWorkspaces,
@@ -124,7 +124,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     }
     return buildSearchableSimulatorTabs({
       worktrees: openTabWorkspaces,
-      ownershipWorktrees: presentationWorkspaces,
+      ownershipWorktrees: contentWorkspaces,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -141,7 +141,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     activeTabType,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
-    presentationWorkspaces,
+    contentWorkspaces,
     openTabWorkspaces,
     groupsByWorktree,
     repoByHostIdentity,
@@ -168,7 +168,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     }
     return buildSearchableWorkspaceTabEntries({
       worktrees: openTabWorkspaces,
-      ownershipWorktrees: presentationWorkspaces,
+      ownershipWorktrees: contentWorkspaces,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -204,7 +204,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     activeTabTypeByWorktree,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
-    presentationWorkspaces,
+    contentWorkspaces,
     agentStatusByPaneKey,
     openTabWorkspaces,
     chatNames,

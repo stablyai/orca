@@ -80,8 +80,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     launchContext: TerminalLaunchContext = captureTerminalLaunchContext(
       sessionBag,
       coldRestoreStartup ?? sessionBag.paneStartup
-    ),
-    isCurrentOwner: () => boolean = () => true
+    )
   ): Promise<boolean> => {
     if (session.disposed) {
       return false
@@ -91,7 +90,6 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     }
     const isCurrentReattachTransport = (): boolean =>
       !session.disposed &&
-      isCurrentOwner() &&
       // Require current transport ownership before old async results can mutate or retire a successor.
       session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
       attemptGeneration === session.transportStreamGeneration
@@ -137,8 +135,13 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
         ptyId: staleSessionId ?? null
       })
       // Why: a stale restored session can fail reattach after mount; don't leave xterm alive without a backing PTY.
-      if (!staleSessionId) {
+      if (staleSessionId) {
+        session.clearExitedPanePtyLayoutBinding(staleSessionId)
+      } else {
         session.syncPanePtyLayoutBinding(null)
+      }
+      if (staleSessionId) {
+        session.deps.clearTabPtyId(session.deps.tabId, staleSessionId)
       }
       session.startFreshColdRestoreAgentResume(coldRestoreStartup, {
         forceBlankRestoredViewport: true
@@ -146,8 +149,13 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       return false
     }
     if (connectResult?.sessionExpired) {
-      if (!staleSessionId) {
+      if (staleSessionId) {
+        session.clearExitedPanePtyLayoutBinding(staleSessionId)
+      } else {
         session.syncPanePtyLayoutBinding(null)
+      }
+      if (staleSessionId) {
+        session.deps.clearTabPtyId(session.deps.tabId, staleSessionId)
       }
       // Why: a host can invalidate the PTY while the tab stays mounted; replace it in place, not with a stale overlay.
       session.startFreshColdRestoreAgentResume(startup, {

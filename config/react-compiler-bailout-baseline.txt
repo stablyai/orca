@@ -668,7 +668,6 @@
 1 src/renderer/src/components/use-terminal-keyboard-shortcuts.ts
 1 src/renderer/src/components/use-terminal-parking-pass.ts
 1 src/renderer/src/components/use-terminal-window-lifecycle.ts
-1 src/renderer/src/components/use-terminal-workspace-foundation.ts
 1 src/renderer/src/components/virtualized-list.tsx
 1 src/renderer/src/components/workspace-cleanup/use-workspace-cleanup-facet-rows.ts
 2 src/renderer/src/components/workspace-cleanup/use-workspace-cleanup-git-evidence.ts

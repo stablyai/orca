@@ -130,15 +130,13 @@ export async function focusSplitWebRuntimeTerminalPane(
   owner: WebSessionIntentOwner,
   target: WebRuntimeSplitFocusTarget | null,
   request: WebRuntimeSplitFocusRequest | null,
-  split: RuntimeTerminalSplit | undefined,
-  canFocus: () => boolean = () => true
+  split: RuntimeTerminalSplit | undefined
 ): Promise<void> {
   const hostTabId = split?.tabId?.trim()
   const leafId = split?.leafId?.trim()
   if (
     !hostTabId ||
     !leafId ||
-    !canFocus() ||
     !target ||
     !isLatestWebRuntimeSplitFocusRequest(request) ||
     !matchesWebSessionIntentOwner(owner) ||
@@ -158,7 +156,6 @@ export async function focusSplitWebRuntimeTerminalPane(
     acceptCurrentSnapshot: true
   })
   if (
-    !canFocus() ||
     !isLatestWebRuntimeSplitFocusRequest(request) ||
     !matchesWebSessionIntentOwner(owner) ||
     !matchesWebRuntimeSplitFocusTarget(target, hostTabId, leafId)
@@ -168,5 +165,5 @@ export async function focusSplitWebRuntimeTerminalPane(
     }
     return
   }
-  activateTabAndFocusPane(toWebTerminalSurfaceTabId(hostTabId), leafId, { canFocus })
+  activateTabAndFocusPane(toWebTerminalSurfaceTabId(hostTabId), leafId)
 }

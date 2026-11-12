@@ -1,4 +1,8 @@
 import {
+  selectWorktreesByRepo,
+  selectDetectedWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toSshExecutionHostId,
@@ -8,17 +12,14 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
-  findIndexedProjectGroupOwner
+  findIndexedProjectGroupOwner,
+  findIndexedWorktrees,
+  findIndexedDetectedWorktrees
 } from './worktree-runtime-owner-index'
-import { selectWorkspacePresentationWorktrees } from '@/store/workspaces/catalog/retained-workspace-presentation'
 import { resolveQualifiedWorktreeExecutionOwner } from './qualified-worktree-execution-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
-import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-
-type PresentationOwnerState = WorktreeRuntimeOwnerState &
-  Partial<Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree' | 'browserTabsByWorktree'>>
 
 function getResolvedFolderHost(
   state: WorktreeRuntimeOwnerState,
@@ -55,7 +56,7 @@ function getResolvedFolderHost(
 
 /** Require hydrated ownership: restored SSH worktrees can collide with local repo rows while catalogs load. */
 export function getResolvedExecutionHostIdForWorktree(
-  state: PresentationOwnerState,
+  state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
 ): ExecutionHostId | null {
   if (!worktreeId) {
@@ -74,7 +75,12 @@ export function getResolvedExecutionHostIdForWorktree(
       : undefined
   return (
     resolveQualifiedWorktreeExecutionOwner(
-      selectWorkspacePresentationWorktrees(state),
+      {
+        [worktreeId]: [
+          ...findIndexedWorktrees(selectWorktreesByRepo(state), worktreeId),
+          ...findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), worktreeId)
+        ]
+      },
       state.repos,
       worktreeId,
       preferredHostId
@@ -87,7 +93,7 @@ export function getResolvedExecutionHostIdForWorktree(
  * unproven, or the owner has no RPC route (direct SSH). Callers pick their own fallback.
  */
 export function getActiveWorkspaceOwnerTarget(
-  state: PresentationOwnerState
+  state: WorktreeRuntimeOwnerState
 ): RuntimeClientTarget | null {
   // Without paired servers all RPC owners are this app; skip building the owner index.
   if (state.runtimeEnvironmentCatalogHydrated && state.runtimeEnvironments?.length === 0) {

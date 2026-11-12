@@ -9,7 +9,7 @@ export type ReplacedPaneOwner = {
 /** The stopped id is dead whatever its incarnation, so a binding naming it must not be reattached. */
 export function excludeReplacedPaneOwner<Owner extends { ptyId: string }>(
   owner: Owner | null,
-  replaced: Pick<ReplacedPaneOwner, 'ptyId'> | null
+  replaced: ReplacedPaneOwner | null
 ): Owner | null {
   return owner && owner.ptyId === replaced?.ptyId ? null : owner
 }

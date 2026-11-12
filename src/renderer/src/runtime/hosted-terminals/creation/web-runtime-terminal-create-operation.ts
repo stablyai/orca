@@ -1,26 +1,24 @@
-import { projectRetainedWebRuntimeCreate } from './web-runtime-retained-terminal-create'
-import { startWebRuntimeAgentTerminalCreate } from './web-runtime-agent-terminal-create'
-import { useAppStore } from '@/store/index'
-import { captureTerminalCreationNavigation } from '@/store/terminals/terminal-creation-navigation'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
-import { TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
-import {
-  runtimeEnvironmentCapabilityProof,
-  type RuntimeCapabilityProof
-} from '../../rpc/compatibility/runtime-capability-proof'
-import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { buildLegacyAgentCreateTerminalParams } from './web-runtime-legacy-agent-create-params'
+import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
+import { createAgentSessionKeyboardOptions } from './agent-launch/agent-session-keyboard-capability'
+import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../../shared/runtime-session-contracts'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import { agentProviderSessionForHostEnsure } from './agent-launch/agent-session-ensure-provider-session'
 import { translate } from '../../../i18n/i18n'
+import { agentResumeHostAuthorityCapability } from './agent-launch/agent-resume-host-authority-capability'
+import {
+  createAgentSessionCreateOperation,
+  withAgentSessionCreateOperationId
+} from './agent-launch/agent-session-create-operation'
+import { runRemoteAgentSessionLaunch } from './agent-launch/remote-agent-session-launch'
+import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { resolveWebRuntimeSessionEnvironmentId } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-routing'
-import {
-  clearWebSessionFocusIntentIfMatches,
-  recordWebSessionFocusIntent,
-  resolveWebSessionVisibleTabId
-} from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
+import { recordWebSessionFocusIntent } from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   forgetWebSessionTerminalPlacement,
+  recordWebSessionTerminalPlacement,
   webTerminalPlacementParentTabId
 } from '../placement/web-session-terminal-placement'
 import {
@@ -31,6 +29,7 @@ import {
 } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import type {
+  CreatedAgentTerminalIdentity,
   CreatedWebRuntimeSessionTerminal,
   CreateWebRuntimeSessionTerminalOnHostArgs
 } from './terminal-create-contracts'
@@ -40,13 +39,16 @@ import {
   selectWebRuntimeSessionWorktree,
   type WebRuntimeSessionWorkspaceSelectionRollback
 } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-selection'
-import { createdTerminalLeafId } from './web-runtime-terminal-identity'
 import {
-  settleWebRuntimeTerminalPlacement,
-  projectAcceptedWebRuntimeSplitGroup,
-  recordAcceptedWebRuntimeTerminalPlacement
-} from '../placement/web-runtime-terminal-placement-settlement'
+  createdTerminalLeafId,
+  readCreatedAgentTerminalIdentity
+} from './web-runtime-terminal-identity'
+import { settleWebRuntimeTerminalPlacement } from '../placement/web-runtime-terminal-placement-settlement'
 import { buildPlainCreateTerminalParams } from './web-runtime-plain-terminal-create-params'
+import {
+  createAgentSessionTrustWorktreeOptions,
+  agentSessionCreateRequest
+} from './agent-launch/agent-session-create-request'
 
 export async function createWebRuntimeSessionTerminalResult(
   args: CreateWebRuntimeSessionTerminalOnHostArgs
@@ -65,14 +67,9 @@ export async function createWebRuntimeSessionTerminalResult(
   }
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
-  const plain = !(args.launchAgent ?? args.agent)
-  let navigation = plain ? captureTerminalCreationNavigation() : null
-  let activate = args.activate !== false
-  let targetGroupId = args.targetGroupId
-  let legacySplitGroupId: string | undefined
 
   let workspaceSelectionRollback: WebRuntimeSessionWorkspaceSelectionRollback | null = null
-  if (!plain && args.selectWorktree !== false) {
+  if (args.selectWorktree !== false) {
     const previous = readActiveWorkspaceSelection()
     selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
     workspaceSelectionRollback = {
@@ -86,7 +83,6 @@ export async function createWebRuntimeSessionTerminalResult(
   let hostCreated = false
   let createdTabId: string | undefined
   let createdLeafId: string | undefined
-  let plainProof: RuntimeCapabilityProof | undefined
   try {
     const agent = args.launchAgent ?? args.agent
     const agentArgsOverride =
@@ -96,16 +92,111 @@ export async function createWebRuntimeSessionTerminalResult(
           ? args.launchConfig?.agentArgs
           : undefined
     if (agent) {
-      const creation = startWebRuntimeAgentTerminalCreate(
-        args,
+      // Paired panes retain the default keyboard advertisement, including on Windows clients.
+      const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
+      const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
+      const trustOptions = createAgentSessionTrustWorktreeOptions(args.trustWorktreeId)
+      let legacyAlreadyPlacedInGroup = false
+      // Keep legacy placement until structured creation supports afterTabId.
+      // Focus belongs to this client; headless hosts have no renderer.
+      // Rebuilding prepared commands under host authority can discard prompts/delivery flags.
+      const mustUseLegacyAgentCreate = args.preparedAgentCommand || args.afterTabId
+      const hostAuthority = mustUseLegacyAgentCreate
+        ? undefined
+        : args.agentSessionKind === 'resume'
+          ? args.providerSession
+            ? async () =>
+                readCreatedAgentTerminalIdentity(
+                  unwrapRuntimeRpcResult(
+                    await callEnvironment({
+                      method: 'terminal.ensureAgentSession',
+                      params: {
+                        ...(await keyboardOptions(environmentId)),
+                        kind: 'explicit',
+                        worktree: toRuntimeWorktreeSelector(args.worktreeId),
+                        agent,
+                        providerSession: await agentProviderSessionForHostEnsure(
+                          environmentId,
+                          args.providerSession!
+                        ),
+                        ...(args.launchConfig?.ompResumeFilePath
+                          ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
+                          : {}),
+                        ...(agentArgsOverride !== undefined
+                          ? { agentArgs: agentArgsOverride }
+                          : {}),
+                        ...(args.launchPreferences
+                          ? { launchPreferences: args.launchPreferences }
+                          : {}),
+                        presentation: 'background'
+                      },
+                      timeoutMs: 15_000
+                    })
+                  )
+                )
+            : undefined
+          : async () =>
+              await createAgentSessionCreateOperation().run(async (clientOperationId) =>
+                readCreatedAgentTerminalIdentity(
+                  unwrapRuntimeRpcResult(
+                    await callEnvironment({
+                      method: 'terminal.createAgentSession',
+                      params: withAgentSessionCreateOperationId(
+                        {
+                          ...(await keyboardOptions(environmentId)),
+                          ...(args.trustWorktreeId ? await trustOptions(environmentId) : {}),
+                          ...agentSessionCreateRequest({
+                            ...args,
+                            agent,
+                            agentArgs: args.agentArgs
+                          }),
+                          ...(args.cwd ? { startupCwd: args.cwd } : {}),
+                          ...(args.viewMode ? { viewMode: args.viewMode } : {})
+                        },
+                        clientOperationId
+                      ),
+                      timeoutMs: 15_000
+                    })
+                  )
+                )
+              )
+      const resumeHostAuthorityCapability =
+        args.agentSessionKind === 'resume' ? agentResumeHostAuthorityCapability(agent) : undefined
+      const created = await runRemoteAgentSessionLaunch<{
+        terminal: CreatedAgentTerminalIdentity
+      }>({
         environmentId,
-        callEnvironment,
-        agent,
-        agentArgsOverride
-      )
-      const created = await creation.result
+        ...(hostAuthority ? { hostAuthority } : {}),
+        ...((resumeHostAuthorityCapability ?? args.agentSessionCreateCapability)
+          ? {
+              hostAuthorityCapability:
+                resumeHostAuthorityCapability ?? args.agentSessionCreateCapability
+            }
+          : {}),
+        legacy: async () => {
+          const legacyAgentLaunch = await args.legacyAgentLaunch?.()
+          const response = await callEnvironment({
+            method: 'session.tabs.createTerminal',
+            params: buildLegacyAgentCreateTerminalParams(
+              args,
+              legacyAgentLaunch,
+              args.trustWorktreeId ? await trustOptions(environmentId) : {}
+            ),
+            timeoutMs: 15_000
+          })
+          const legacyCreated = unwrapRuntimeRpcResult(
+            response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>
+          )
+          legacyAlreadyPlacedInGroup = true
+          return {
+            terminal: {
+              tabId: legacyCreated.tab.id,
+              leafId: legacyCreated.tab.leafId
+            }
+          }
+        }
+      })
       hostCreated = true
-      const legacyAlreadyPlacedInGroup = creation.wasLegacyPlacedInGroup()
       createdTabId = created.terminal.tabId
       createdLeafId = legacyAlreadyPlacedInGroup
         ? created.terminal.leafId
@@ -123,110 +214,50 @@ export async function createWebRuntimeSessionTerminalResult(
         })
       }
     } else {
-      const proof = await runtimeEnvironmentCapabilityProof(
-        environmentId,
-        TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY
-      )
-      plainProof = proof
-      if (
-        !matchesWebSessionIntentOwner(intentOwner) ||
-        proof.pairingRevision !== intentOwner.pairingRevision
-      ) {
-        throw new Error('The workspace host changed before the terminal request.')
-      }
-      if (args.split) {
-        if (proof.supported) {
-          targetGroupId = createBrowserUuid()
-        } else {
-          // Select the old placement route before dispatch; a refused/uncertain create never switches routes.
-          activate = activate && (navigation?.current() ?? true)
-          navigation?.dispose()
-          legacySplitGroupId =
-            useAppStore
-              .getState()
-              .createEmptySplitGroup(
-                args.worktreeId,
-                args.split.besideGroupId,
-                args.split.direction
-              ) ?? undefined
-          if (!legacySplitGroupId) {
-            throw new Error('The terminal group is no longer available.')
-          }
-          targetGroupId = legacySplitGroupId
-          navigation = captureTerminalCreationNavigation()
-        }
-      }
-      const params = await buildPlainCreateTerminalParams(environmentId, {
-        ...args,
-        targetGroupId,
-        split: proof.supported ? args.split : undefined,
-        initialSize: proof.supported ? args.initialSize : undefined,
-        clientMutationId: args.clientMutationId ?? createBrowserUuid()
+      const response = await callEnvironment({
+        method: 'session.tabs.createTerminal',
+        params: await buildPlainCreateTerminalParams(environmentId, args),
+        timeoutMs: 15_000
       })
-      const created = await callRuntimeRpc<RuntimeMobileSessionCreateTerminalResult>(
-        { kind: 'environment', environmentId },
-        'session.tabs.createTerminal',
-        params,
-        {
-          timeoutMs: 15_000,
-          expectedEnvironmentPairingRevision: proof.pairingRevision,
-          expectedEnvironmentRuntimeId: proof.runtimeId
-        }
+      const created = unwrapRuntimeRpcResult(
+        response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>
       )
       hostCreated = true
       createdTabId = created.tab.id
       createdLeafId = created.tab.leafId
-      activate = activate && (navigation?.current() ?? true)
-      navigation?.dispose()
-      projectAcceptedWebRuntimeSplitGroup(args, proof.supported, targetGroupId)
-      if (activate && args.selectWorktree !== false && matchesWebSessionIntentOwner(intentOwner)) {
-        selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
-      }
     }
-    recordAcceptedWebRuntimeTerminalPlacement(args, environmentId, createdTabId, targetGroupId)
-    if (activate && createdTabId && matchesWebSessionIntentOwner(intentOwner)) {
+    if (args.targetGroupId && createdTabId) {
+      // Host drops client-minted group IDs; client placement must land the mirrored tab in the requested pane.
+      recordWebSessionTerminalPlacement({
+        environmentId,
+        worktreeId: args.worktreeId,
+        hostTabId: webTerminalPlacementParentTabId(createdTabId),
+        groupId: args.targetGroupId
+      })
+    }
+    if (args.activate !== false && createdTabId && matchesWebSessionIntentOwner(intentOwner)) {
       // Intent lets reconciliation focus this new terminal instead of sticky-keeping the previous tab.
-      recordWebSessionFocusIntent(
-        intentOwner,
-        args.worktreeId,
-        createdTabId,
-        createdLeafId,
-        plain ? resolveWebSessionVisibleTabId(useAppStore.getState(), args.worktreeId) : undefined
-      )
-    }
-    if (plain) {
-      navigation = captureTerminalCreationNavigation()
+      recordWebSessionFocusIntent(intentOwner, args.worktreeId, createdTabId, createdLeafId)
     }
     const placementTabId =
-      createdTabId && (targetGroupId || args.afterTabId) ? createdTabId : undefined
+      createdTabId && (args.targetGroupId || args.afterTabId) ? createdTabId : undefined
     await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
       expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
       // Publication can beat RPC response; replay once caller intent exists.
-      acceptCurrentSnapshot: Boolean(createdTabId) && (activate || Boolean(placementTabId)),
+      acceptCurrentSnapshot:
+        Boolean(createdTabId) && (args.activate !== false || Boolean(placementTabId)),
       // Require a post-create list; deduped in-flight lists may predate placement.
       ...(placementTabId ? { afterCurrentInFlight: true } : {})
     })
-    if (plain && navigation?.current() === false) {
-      activate = false
-      if (createdTabId) {
-        clearWebSessionFocusIntentIfMatches(
-          intentOwner,
-          args.worktreeId,
-          createdTabId,
-          createdLeafId
-        )
-      }
-    }
     if (placementTabId) {
       await settleWebRuntimeTerminalPlacement(
         environmentId,
         args.worktreeId,
         webTerminalPlacementParentTabId(placementTabId),
         {
-          groupId: targetGroupId,
+          groupId: args.targetGroupId,
           afterTabId: args.afterTabId,
-          activate,
-          ...(plain ? { canActivate: () => navigation?.current() === true } : {})
+          activate: args.activate !== false
         }
       )
     }
@@ -235,19 +266,6 @@ export async function createWebRuntimeSessionTerminalResult(
       ...(createdTabId ? { hostTabId: createdTabId } : {})
     }
   } catch (error) {
-    const retainedTabId = plain
-      ? projectRetainedWebRuntimeCreate(error, args, {
-          environmentId,
-          intentOwner,
-          proof: plainProof,
-          targetGroupId,
-          activate,
-          navigation
-        })
-      : null
-    if (retainedTabId) {
-      return { outcome: { status: 'retained' }, hostTabId: retainedTabId }
-    }
     const message = error instanceof Error ? error.message : String(error)
     console.warn(
       hostCreated
@@ -271,11 +289,6 @@ export async function createWebRuntimeSessionTerminalResult(
       outcome: hostCreated ? { status: 'created' } : { status: 'failed', message },
       ...(createdTabId ? { hostTabId: createdTabId } : {}),
       ...(hostCreated ? {} : { hostFailed: true as const })
-    }
-  } finally {
-    navigation?.dispose()
-    if (legacySplitGroupId) {
-      useAppStore.getState().closeEmptyGroup(args.worktreeId, legacySplitGroupId)
     }
   }
 }

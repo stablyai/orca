@@ -116,7 +116,6 @@ export function registerPersistedPtySpawn(
   store: Store | undefined,
   claim: PtyRegistrationClaim | undefined,
   result: PtySpawnResult | undefined,
-  retention: { preserveEndedBinding?: boolean },
   ...args: Parameters<OrcaRuntimeService['registerPty']>
 ): Promise<never> | undefined {
   try {
@@ -134,9 +133,6 @@ export function registerPersistedPtySpawn(
       runtime?.getPtyLivenessVerdict?.(ptyId)?.status === 'exited' &&
       binding
     ) {
-      if (retention.preserveEndedBinding) {
-        return Promise.reject(failure)
-      }
       return retirePersistedStablePaneOwner(
         store,
         { ...binding, ptyId, persistedIncarnationId: binding.incarnationId },

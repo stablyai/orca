@@ -21,16 +21,17 @@ export function mergeDetectedWorktreesForHost(
     refreshed.worktrees.map((worktree) => withRepoHostOwnership(worktree, hostId, setup)),
     current?.worktrees
   )
-  const refreshedIds = new Set(refreshedForHost.map((row) => row.id))
   // Incomplete scans can update positive identities but cannot delete known content owners.
-  const incoming = refreshed.authoritative
-    ? refreshedForHost
-    : [
-        ...refreshedForHost,
-        ...(current?.worktrees ?? []).filter(
-          (row) => worktreeMatchesHost(row, hostId, options) && !refreshedIds.has(row.id)
-        )
-      ]
+  let incoming = refreshedForHost
+  if (!refreshed.authoritative) {
+    const refreshedIds = new Set(refreshedForHost.map((row) => row.id))
+    incoming = [
+      ...refreshedForHost,
+      ...(current?.worktrees ?? []).filter(
+        (row) => worktreeMatchesHost(row, hostId, options) && !refreshedIds.has(row.id)
+      )
+    ]
+  }
   const worktrees = mergeWorktreesForHost(current?.worktrees, incoming, hostId, options)
   if (
     current &&

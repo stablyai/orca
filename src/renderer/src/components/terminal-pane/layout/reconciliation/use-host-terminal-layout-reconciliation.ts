@@ -1,5 +1,4 @@
-import { useEffect, useMemo } from 'react'
-import type { AppState } from '@/store/types'
+import { useEffect } from 'react'
 import {
   isHostAuthoritativeLayout,
   planTerminalLiveLayoutInsertions,
@@ -9,7 +8,6 @@ import {
 } from './terminal-live-layout-reconciliation'
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-pane-layout-tree'
 import type { TerminalPaneCloseController } from '../close/use-terminal-pane-close-actions'
-import { useAppStore } from '@/store/index'
 
 export function useHostTerminalLayoutReconciliation({
   executeClosePane,
@@ -21,8 +19,7 @@ export function useHostTerminalLayoutReconciliation({
   persistLayoutSnapshot,
   ptyRecoveryStatesByPaneId,
   restoredLayout,
-  hostLayoutLeafIdsRef,
-  tabId
+  hostLayoutLeafIdsRef
 }: Pick<
   TerminalPaneCloseController,
   | 'executeClosePane'
@@ -34,23 +31,7 @@ export function useHostTerminalLayoutReconciliation({
   | 'persistLayoutSnapshot'
   | 'ptyRecoveryStatesByPaneId'
   | 'restoredLayout'
-  | 'tabId'
 > & { hostLayoutLeafIdsRef: React.RefObject<ReadonlySet<string>> }): void {
-  const selectHasRetainedStart = useMemo(() => {
-    const paneKeys = collectLeafIds(restoredLayout.root).map((leafId) => `${tabId}:${leafId}`)
-    let previous: AppState['terminalPaneStartsByPaneKey'] | undefined
-    let result = false
-    return (state: AppState): boolean => {
-      if (previous !== state.terminalPaneStartsByPaneKey) {
-        previous = state.terminalPaneStartsByPaneKey
-        result = paneKeys.some((key) =>
-          Boolean(state.terminalPaneStartsByPaneKey[key]?.retainedTerminalStart)
-        )
-      }
-      return result
-    }
-  }, [restoredLayout.root, tabId])
-  const hasRetainedStart = useAppStore(selectHasRetainedStart)
   useEffect(() => {
     const manager = managerRef.current
     if (!manager || !restoredLayout.root) {
@@ -59,7 +40,6 @@ export function useHostTerminalLayoutReconciliation({
     // Why the retired check: dropping a retired leaf can drop the layout's only remote PTY id.
     if (
       hostRetiredLeafIdsRef.current.size === 0 &&
-      !hasRetainedStart &&
       !isHostAuthoritativeLayout({
         isWebClient: !!(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__,
         ptyIdsByLeafId: restoredLayout.ptyIdsByLeafId
@@ -89,15 +69,8 @@ export function useHostTerminalLayoutReconciliation({
     let appliedInsertion = false
     for (const insertion of insertions) {
       const ptyId = restoredLayout.ptyIdsByLeafId?.[insertion.newLeafId]
-      const retained =
-        useAppStore.getState().terminalPaneStartsByPaneKey[`${tabId}:${insertion.newLeafId}`]
-          ?.retainedTerminalStart
       const sourcePaneId = manager.getNumericIdForLeaf(insertion.sourceLeafId)
-      if (
-        (!ptyId && !retained) ||
-        sourcePaneId === null ||
-        manager.getNumericIdForLeaf(insertion.newLeafId) !== null
-      ) {
+      if (!ptyId || sourcePaneId === null || manager.getNumericIdForLeaf(insertion.newLeafId)) {
         continue
       }
       const splitRatio =
@@ -113,8 +86,7 @@ export function useHostTerminalLayoutReconciliation({
         {
           ...(splitRatio !== undefined && { ratio: splitRatio }),
           leafId: insertion.newLeafId,
-          ...(ptyId ? { ptyId } : {}),
-          activate: false,
+          ptyId,
           placement: insertion.placement
         }
       )
@@ -156,8 +128,6 @@ export function useHostTerminalLayoutReconciliation({
     restoredLayout,
     hostRetiredLeafIdsRef,
     managerRef,
-    paneTransportsRef,
-    tabId,
-    hasRetainedStart
+    paneTransportsRef
   ])
 }

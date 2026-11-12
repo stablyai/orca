@@ -1,7 +1,3 @@
-import type {
-  RetainedTerminalStartError,
-  RetainedTerminalStart
-} from '../../../../shared/workspace-layout/retained-terminal-start'
 import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import { createTerminalRevealWarning, ownerSurfacing } from './terminal-presentation'
@@ -74,10 +70,6 @@ export function revealCreatedTerminal(args: {
           ...(launchToken ? { launchToken } : {}),
           ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
           ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
-          ...(launchOpts.targetGroupId ? { targetGroupId: launchOpts.targetGroupId } : {}),
-          ...(launchOpts.afterTabId ? { afterTabId: launchOpts.afterTabId } : {}),
-          ...(launchOpts.shellOverride ? { shellOverride: launchOpts.shellOverride } : {}),
-          ...(launchOpts.split ? { split: launchOpts.split } : {}),
           activate: presentation === 'focused',
           ...(presentation ? { presentation } : {}),
           ...terminalRevealViewerOptions(opts),
@@ -100,44 +92,4 @@ export function revealCreatedTerminal(args: {
     surface: 'background',
     warning: presentation !== 'background' ? createTerminalRevealWarning(handle) : undefined
   }
-}
-
-export async function revealRetainedTerminalStart(args: {
-  notifier: Pick<RuntimeNotifier, 'revealTerminalSession'> | null
-  start: RetainedTerminalStart
-  opts: TerminalCreateOptions
-  splitFromLeafId?: string
-  splitDirection?: 'horizontal' | 'vertical'
-}): Promise<void> {
-  const { notifier, start, opts } = args
-  await notifier?.revealTerminalSession?.(start.worktreeId, {
-    retainedTerminalStart: start,
-    tabId: start.tabId,
-    leafId: start.leafId,
-    cwd: opts.cwd,
-    shellOverride: opts.shellOverride,
-    targetGroupId: opts.targetGroupId,
-    afterTabId: opts.afterTabId,
-    split: opts.split,
-    viewMode: opts.viewMode,
-    activate: opts.presentation === 'focused',
-    presentation: opts.presentation ?? 'background',
-    ...(args.splitFromLeafId ? { splitFromLeafId: args.splitFromLeafId } : {}),
-    ...(args.splitDirection ? { splitDirection: args.splitDirection } : {})
-  })
-}
-
-export function revealRetainedFailure(
-  notifier: Pick<RuntimeNotifier, 'revealTerminalSession'> | null,
-  error: RetainedTerminalStartError,
-  launchOpts: TerminalCreateOptions,
-  { cwd, presentation }: Pick<TerminalCreateOptions, 'cwd' | 'presentation'>
-): Promise<void> {
-  return revealRetainedTerminalStart({
-    notifier,
-    start: error.data.retainedTerminalStart,
-    opts: { ...launchOpts, cwd, presentation }
-  }).catch((publicationError: unknown) => {
-    console.warn('[terminal] failed to show retained start:', publicationError)
-  })
 }

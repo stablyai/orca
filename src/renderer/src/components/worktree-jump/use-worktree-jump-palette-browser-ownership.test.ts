@@ -47,7 +47,7 @@ it('keeps same-id browser results on their owner with recency, and follows owner
     workspacePortScan: null,
     paletteStatusInputsActive: true,
     openTabWorkspaces: worktrees,
-    presentationWorkspaces: worktrees,
+    contentWorkspaces: worktrees,
     repoMap: new Map(),
     repoByHostIdentity: new Map(),
     worktreeOrder: new Map(),

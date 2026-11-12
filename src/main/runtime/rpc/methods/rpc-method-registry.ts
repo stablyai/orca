@@ -2,10 +2,7 @@ import { STATUS_METHODS } from './host-management/status'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
 import { ORCAD_MIGRATION_METHODS } from './orcad/orcad-migration'
-import {
-  SESSION_TERMINAL_SCROLLBACK_METHODS,
-  SESSION_TERMINAL_HISTORY_METHODS
-} from './terminal/session-terminal-scrollback'
+import { SESSION_TERMINAL_SCROLLBACK_METHODS } from './terminal/session-terminal-scrollback'
 import { AI_VAULT_METHODS } from './history/ai-vault'
 import { AUTOMATION_METHODS } from './automations/automations'
 import { REPO_METHODS } from './projects/repo'
@@ -91,7 +88,6 @@ export const ALL_RPC_METHODS = [
   ...ORCAD_TERMINAL_CENSUS_METHODS,
   ...ORCAD_MIGRATION_METHODS,
   ...SESSION_TERMINAL_SCROLLBACK_METHODS,
-  ...SESSION_TERMINAL_HISTORY_METHODS,
   ...AGENT_HOOK_METHODS,
   ...AI_VAULT_METHODS,
   ...ARTIFACT_METHODS,

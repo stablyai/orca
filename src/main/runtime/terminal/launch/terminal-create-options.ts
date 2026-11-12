@@ -1,4 +1,3 @@
-import type { PreparedPaneReplacement } from '../recovery/prepared-pane-replacement'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
 import type {
   AgentProviderSessionMetadata,
@@ -15,10 +14,8 @@ import type { TerminalOscColorQueryReplyColors } from '../../../../shared/termin
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
 import type { AgentLaunchTabViewerRule } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
-import type { NewGroupSplit } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 
 export type TerminalCreateOptions = {
-  preparedReplacement?: PreparedPaneReplacement
   command?: string
   /** Spawn Windows shell as the PTY process; selecting it through command creates only a child and later returns to the unwanted default shell. */
   shellOverride?: string
@@ -65,7 +62,6 @@ export type TerminalCreateOptions = {
   viewMode?: 'terminal' | 'chat'
   /** The tab group a background create joins; defaults to the first group. */
   targetGroupId?: string
-  split?: NewGroupSplit
   /** Main-internal placement anchor; removed before PTY dispatch. */
   afterTabId?: string
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']

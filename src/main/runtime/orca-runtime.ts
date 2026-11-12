@@ -307,23 +307,17 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   ): Promise<LayoutApplyReply> {
     // Wait for live terminal placement before creating the first workspace surface.
     const placing = this.livePlacementSettledFor(command)
-    const apply = async (): Promise<LayoutApplyReply> => {
-      const prepared = await this.prepareLayoutCommandRun(command, run)
-      try {
-        return await Layout.applyWindowLayoutCommand(
-          this.requireStore(),
-          (worktreeId, tabId) =>
-            tabId !== null
-              ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
-              : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
-          command,
-          (move) => rekeyMovedPaneOwners(this, move),
-          prepared.run
-        )
-      } finally {
-        prepared.release()
-      }
-    }
+    const apply = (): Promise<LayoutApplyReply> =>
+      Layout.applyWindowLayoutCommand(
+        this.requireStore(),
+        (worktreeId, tabId) =>
+          tabId !== null
+            ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
+            : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
+        command,
+        (move) => rekeyMovedPaneOwners(this, move),
+        { ...this.layoutCommandRun(command), ...run }
+      )
     // Order sleep/wake after previously accepted hook statuses.
     const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)
       ? this.inResumeRecordOrder(apply)

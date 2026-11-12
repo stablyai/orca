@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
@@ -19,12 +19,15 @@ import {
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
 import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 import {
-  selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { selectWorkspacePresentationWorktrees } from '@/store/workspaces/catalog/retained-workspace-presentation'
+import { createExistingContentWorktreeSelector } from '@/lib/workspace/tabs/existing-content-worktree-selector'
+import {
+  createPaletteImportedProjectSelector,
+  EMPTY_IMPORTED_PROJECT_REPO_IDS
+} from './worktree-jump-imported-projects'
 import { EMPTY_SORTED_WORKTREES } from './worktree-jump-palette-model'
 
 export function useWorktreeJumpPaletteStoreState({
@@ -46,7 +49,6 @@ export function useWorktreeJumpPaletteStoreState({
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const revealSidebarRow = useAppStore((state) => state.revealSidebarRow)
   const storedWorktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
-  const presentationWorktreesByRepo = useAppStore(selectWorkspacePresentationWorktrees)
   const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
   // Why: a VM create's checkout is not a workspace until the create adopts it.
   const worktreesByRepo = useMemo(
@@ -76,29 +78,19 @@ export function useWorktreeJumpPaletteStoreState({
     [folderWorkspaces, projectGroups, repos, worktreesByRepo]
   )
   const projects = useAppStore((state) => state.projects)
-  const presentationWorkspaces = useMemo(() => {
-    if (!paletteStatusInputsActive) {
-      return EMPTY_SORTED_WORKTREES
-    }
-    if (presentationWorktreesByRepo === storedWorktreesByRepo) {
-      return workspaces
-    }
-    return dedupePaletteWorktrees([
-      ...withoutHiddenVmWorktrees(
-        Object.values(presentationWorktreesByRepo).flat(),
-        hiddenVmCheckouts
-      ),
-      ...workspaces.filter((workspace) => workspace.id.startsWith('folder:'))
-    ])
-  }, [
-    paletteStatusInputsActive,
-    presentationWorktreesByRepo,
-    storedWorktreesByRepo,
-    hiddenVmCheckouts,
-    workspaces
-  ])
   const projectHostSetups = useAppStore((state) => state.projectHostSetups)
-  const detectedWorktreesByRepo = useAppStore((state) => selectDetectedWorktreesByRepo(state))
+  const [selectContentWorktrees] = useState(createExistingContentWorktreeSelector)
+  const contentRows = useAppStore((state) =>
+    paletteStatusInputsActive ? selectContentWorktrees(state) : EMPTY_SORTED_WORKTREES
+  )
+  const contentWorkspaces = useMemo(
+    () => withoutHiddenVmWorktrees(contentRows, hiddenVmCheckouts),
+    [contentRows, hiddenVmCheckouts]
+  )
+  const [selectImportedProjects] = useState(createPaletteImportedProjectSelector)
+  const importedProjectRepoIds = useAppStore((state) =>
+    paletteStatusInputsActive ? selectImportedProjects(state) : EMPTY_IMPORTED_PROJECT_REPO_IDS
+  )
   const pendingWorktreeCreations = useAppStore((state) => state.pendingWorktreeCreations)
   const pluginCommands = usePluginCommands()
   const pluginNewFiles = usePluginNewFiles()
@@ -192,12 +184,12 @@ export function useWorktreeJumpPaletteStoreState({
     worktreesByRepo,
     pendingVmRepoIds: hiddenVmCheckouts.repoIds,
     workspaces,
-    presentationWorkspaces,
+    contentWorkspaces,
     repos,
     projectGroups,
     projects,
     projectHostSetups,
-    detectedWorktreesByRepo,
+    importedProjectRepoIds,
     pendingWorktreeCreations,
     pluginCommands,
     pluginNewFiles,

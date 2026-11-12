@@ -48,7 +48,6 @@ describe('OrcaRuntimeService', () => {
         tabId: 'tab-renderer',
         leafId: HEADLESS_LEAF_ID
       })
-      runtime.noteTerminalSpawnCommand('pty-renderer', 'codex')
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [
@@ -103,7 +102,6 @@ describe('OrcaRuntimeService', () => {
     })
 
     const result = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-      agent: 'codex',
       activate: false,
       viewMode: 'chat'
     })
@@ -114,8 +112,6 @@ describe('OrcaRuntimeService', () => {
         worktreeId: TEST_WORKTREE_ID,
         activate: false,
         source: 'runtime-session',
-        launchAgent: 'codex',
-        command: expect.stringMatching(/codex/),
         viewMode: 'chat'
       })
     )
@@ -275,12 +271,10 @@ describe('OrcaRuntimeService', () => {
 
     const [first, second] = await Promise.all([
       runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        agent: 'codex',
         activate: false,
         clientMutationId: 'mutation-1'
       }),
       runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        agent: 'codex',
         activate: false,
         clientMutationId: 'mutation-1'
       })
@@ -360,13 +354,11 @@ describe('OrcaRuntimeService', () => {
     })
 
     const first = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-      agent: 'codex',
       activate: false,
       clientMutationId: 'mutation-lost-response'
     })
     // A retry within the retention window must reuse the terminal when its create reply was lost.
     const retried = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-      agent: 'codex',
       activate: false,
       clientMutationId: 'mutation-lost-response'
     })

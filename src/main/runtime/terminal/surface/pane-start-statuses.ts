@@ -6,102 +6,14 @@ import type {
   PaneStartStatus,
   PublishedWorkspaceLayout
 } from '../../../../shared/workspace-layout/workspace-layout-published'
-import { bindingOf, PaneLiveFacts, type AwaitedBind } from './pane-live-facts'
-import type { RetainedTerminalStart } from '../../../../shared/workspace-layout/retained-terminal-start'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { bindingOf, PaneLiveFacts } from './pane-live-facts'
 
-export type RetainedStartBinding = { ptyId: string | null; incarnationId?: string }
-
-export type PaneStartFact = {
-  status: PaneStartStatus
-  reason?: string
-  retainedTerminalStart?: RetainedTerminalStart
-  /** The predecessor is a history hint, not evidence this attempt accepted a replacement. */
-  retainedStartBinding?: RetainedStartBinding
-  inFlightOperation?: object
-}
+export type PaneStartFact = { status: PaneStartStatus; reason?: string }
 
 /** A pane's start status (layout-owner build), given the pane's current binding (`bindingOf`). */
 export type PaneStartFactOf = (paneKey: string, binding: string) => PaneStartFact | null
 
-export class PaneStartStatuses extends PaneLiveFacts<PaneStartFact> {
-  private sequence = 0
-  private readonly retainedKeysByHost = new Map<ExecutionHostId, Set<string>>()
-
-  constructor(
-    changed: (paneKey: string, fact: PaneStartFact) => void,
-    private readonly policy?: {
-      acceptsUnqualified: boolean
-      bindingOf: (start: RetainedTerminalStart) => RetainedStartBinding
-    }
-  ) {
-    super(changed)
-  }
-
-  override set(paneKey: string, fact: PaneStartFact, awaits?: AwaitedBind): void {
-    const previous = this.peek(paneKey)
-    if (previous === fact) {
-      return
-    }
-    const start = fact.retainedTerminalStart
-    if (
-      !start &&
-      this.policy?.acceptsUnqualified === false &&
-      !(fact.status === 'starting' && fact.inFlightOperation)
-    ) {
-      return
-    }
-    if (previous?.retainedTerminalStart) {
-      this.removeRetainedKey(paneKey, previous.retainedTerminalStart.executionHostId)
-    }
-    if (start) {
-      const before = previous?.retainedTerminalStart
-      fact.retainedStartBinding ??=
-        before?.runtimeId === start.runtimeId && before.startSequence === start.startSequence
-          ? previous?.retainedStartBinding
-          : this.policy?.bindingOf(start)
-      const keys = this.retainedKeysByHost.get(start.executionHostId) ?? new Set<string>()
-      keys.add(paneKey)
-      this.retainedKeysByHost.set(start.executionHostId, keys)
-    }
-    super.set(paneKey, fact, awaits)
-  }
-
-  override clear(paneKey: string, expected?: PaneStartFact): void {
-    const previous = this.peek(paneKey)
-    if (expected !== undefined && previous !== expected) {
-      return
-    }
-    if (previous?.retainedTerminalStart) {
-      this.removeRetainedKey(paneKey, previous.retainedTerminalStart.executionHostId)
-    }
-    super.clear(paneKey, expected)
-  }
-
-  hasRetainedHost(hostId: ExecutionHostId): boolean {
-    return this.retainedKeysByHost.has(hostId)
-  }
-
-  retainedHosts(): IterableIterator<ExecutionHostId> {
-    return this.retainedKeysByHost.keys()
-  }
-
-  retainedKeys(hostId: ExecutionHostId): IterableIterator<string> {
-    return this.retainedKeysByHost.get(hostId)?.values() ?? [][Symbol.iterator]()
-  }
-
-  private removeRetainedKey(paneKey: string, hostId: ExecutionHostId): void {
-    const keys = this.retainedKeysByHost.get(hostId)
-    keys?.delete(paneKey)
-    if (keys?.size === 0) {
-      this.retainedKeysByHost.delete(hostId)
-    }
-  }
-
-  nextStartSequence(): number {
-    return ++this.sequence
-  }
-}
+export class PaneStartStatuses extends PaneLiveFacts<PaneStartFact> {}
 
 /** Whether main's resume of a pane's agent came back, set with the terminal that start made. */
 export class PaneResumeOutcomes extends PaneLiveFacts<PaneResumeOutcome> {}
