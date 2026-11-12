@@ -128,7 +128,10 @@ export function subscriptionProjection(catalog: Catalog, subscription: Subscript
     planVersion: version,
     entitlements: planVersion(plan, version).entitlements,
     seatQuantity: Math.max(1, subscription.seats),
-    startsAt: subscription.current_period_start,
+    // Access starts when Stripe says the subscription is live, not at the period start: a test
+    // clock (or any period anchored ahead of our clock) must not read as "not started yet". Kept
+    // stable across syncs (the first value seen), so a renewal doesn't rewrite every grant.
+    startsAt: Math.min(subscription.current_period_start, existing[0]?.starts_at ?? subscription.updated_at),
     // Cancel at period end: access lasts until the period ends, then Stripe deletes it.
     endsAt: subscription.cancel_at_period_end === 1 ? subscription.current_period_end : null
   }

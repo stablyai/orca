@@ -101,6 +101,22 @@ describe('a price change never orphans existing subscribers (planForPrice)', () 
 })
 
 describe('Stripe states (ENTITLEMENTS_MODE=on)', () => {
+  it('a live subscription whose period starts after our clock (a Stripe test clock) is granted now', async () => {
+    const h = await createHarness({ ENTITLEMENTS_MODE: 'on' })
+    const token = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner', email: 'a@example.com' })
+    const auth = { authorization: `Bearer ${token}` }
+    await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', seats: 1 }, headers: auth })
+    const customer = [...h.stripe.customers.keys()][0]!
+    const future = Math.floor(Date.now() / 1000) + 31 * 24 * HOUR
+    const subscription = h.stripe.putSubscription({ customer, accountId: 'org:o1', basePrice: 'price_team_month', quantity: 1, periodStart: future, periodEnd: future + 30 * 24 * HOUR })
+    await h.webhook(checkoutCompleted({ customer, subscription: subscription.id, accountId: 'org:o1' }))
+    expect(await entitlement(h, auth)).toMatchObject({ status: 'active', canStartSandbox: true })
+    // ...and agrees with the legacy computation (the shadow diff the dev test-clock run found).
+    h.env.ENTITLEMENTS_MODE = 'shadow'
+    await entitlement(h, auth)
+    expect(h.raw.prepare('SELECT COUNT(*) AS n FROM entitlement_shadow_diffs').get()).toEqual({ n: 0 })
+  })
+
   it('holds on pause and releases on resume', async () => {
     const { h, auth, subscription } = await subscribed('on')
     subscription.status = 'paused'
