@@ -5191,7 +5191,6 @@
       "src/renderer/src/components/sidebar/wsl-host-offer-move.test.ts": 227,
       "src/renderer/src/components/skills/sharing/SkillSharedLinkRow.test.tsx": 817,
       "src/renderer/src/components/skills/SkillsPage.test.tsx": 3822,
-      "src/renderer/src/components/skills/catalog/skill-agent-filter.test.ts": 274,
       "src/renderer/src/components/sparse/sparse-directory-entry-input.test.ts": 207,
       "src/renderer/src/components/stats/usage-daily-chart.test.tsx": 333,
       "src/renderer/src/components/stats/usage-overview-model.test.ts": 364,
