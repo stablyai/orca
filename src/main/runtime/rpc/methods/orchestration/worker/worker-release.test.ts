@@ -20,7 +20,8 @@ describe('orchestration worker release', () => {
     expect(receipt).toMatchObject({
       state: 'released',
       processAction: 'closed_agent_terminal',
-      archive: { source: 'terminal', status: 'captured' }
+      // This worker reported no transcript, so release records that its output is unavailable.
+      archive: { source: 'terminal', status: 'unavailable' }
     })
     expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
     expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
@@ -124,7 +125,7 @@ describe('orchestration worker release', () => {
   )
 
   it.each([false, true])(
-    'keeps the output of a stopped worker (retained first: %s)',
+    'keeps the output reference of a stopped worker (retained first: %s)',
     async (retain) => {
       h.setup()
       const { dispatchId } = await h.startWorker()
@@ -138,7 +139,7 @@ describe('orchestration worker release', () => {
 
       await expect(
         h.call('orchestration.workerRelease', { dispatch: dispatchId })
-      ).resolves.toMatchObject({ state: 'released', archive: { status: 'captured' } })
+      ).resolves.toMatchObject({ state: 'released', archive: { status: 'unavailable' } })
       expect(h.db.getWorkerTerminalArchive(dispatchId)?.kind).toBe('terminal_tail')
     }
   )
@@ -166,30 +167,6 @@ describe('orchestration worker release', () => {
       expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).not.toBe('released')
     }
   )
-
-  it('lets an explicit retain cancel a release while output capture is pending', async () => {
-    h.setup()
-    const { dispatchId } = await h.startSettledWorker()
-    const pendingRead = h.deferred<Awaited<ReturnType<OrcaRuntimeService['readTerminal']>>>()
-    vi.mocked(h.runtime.readTerminal).mockReturnValue(pendingRead.promise)
-
-    const release = h.call('orchestration.workerRelease', { dispatch: dispatchId })
-    await vi.waitFor(() => expect(h.runtime.readTerminal).toHaveBeenCalledTimes(1))
-    await expect(
-      h.call('orchestration.workerRetain', { dispatch: dispatchId })
-    ).resolves.toMatchObject({ state: 'retained', reason: 'user_requested' })
-    pendingRead.resolve({
-      handle: 'term_worker',
-      status: 'running',
-      tail: ['captured before retention'],
-      truncated: false,
-      nextCursor: '1'
-    })
-
-    await expect(release).resolves.toMatchObject({ state: 'retained', reason: 'user_requested' })
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(h.db.getWorkerTerminalArchive(dispatchId)).toBeUndefined()
-  })
 
   it('does not claim retention succeeded after terminal close was committed', async () => {
     h.setup()
@@ -241,32 +218,6 @@ describe('orchestration worker release', () => {
     expect(h.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
-  it('re-proves process identity after archive capture before closing', async () => {
-    h.setup()
-    const { dispatchId } = await h.startSettledWorker()
-    const pendingRead = h.deferred<Awaited<ReturnType<OrcaRuntimeService['readTerminal']>>>()
-    vi.mocked(h.runtime.readTerminal).mockReturnValue(pendingRead.promise)
-
-    const release = h.call('orchestration.workerRelease', { dispatch: dispatchId })
-    await vi.waitFor(() => expect(h.runtime.readTerminal).toHaveBeenCalledTimes(1))
-    vi.mocked(h.runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
-      handle === 'term_worker' ? 'runtime_test:term_worker:2' : null
-    )
-    pendingRead.resolve({
-      handle: 'term_worker',
-      status: 'running',
-      tail: ['output from the old process'],
-      truncated: false,
-      nextCursor: '1'
-    })
-
-    await expect(release).resolves.toMatchObject({
-      state: 'retained',
-      reason: 'identity_unproven'
-    })
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-  })
-
   it('returns release_unknown when the terminal no longer resolves, then completes a retry', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
@@ -289,17 +240,6 @@ describe('orchestration worker release', () => {
     }
     expect(retry.state).toBe('released')
     expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
-  })
-
-  it('retains the live terminal when output capture fails', async () => {
-    h.setup()
-    const { dispatchId } = await h.startSettledWorker()
-    vi.mocked(h.runtime.readTerminal).mockRejectedValue(new Error('read exploded'))
-    await expect(h.call('orchestration.workerRelease', { dispatch: dispatchId })).rejects.toThrow(
-      /Output could not be preserved/
-    )
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('requested')
   })
 
   it('marks release_unknown when the close itself fails', async () => {

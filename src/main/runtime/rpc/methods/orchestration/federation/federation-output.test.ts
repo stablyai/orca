@@ -377,20 +377,10 @@ describe('orchestration federated worker output', () => {
     }
   })
 
-  it('serves a durable redacted archive after remote terminal removal and host restart', async () => {
+  it('releases a remote worker with no transcript and says its output is unavailable, across a host restart', async () => {
     const dispatchId = await startSettledRemoteWorker()
-    const capability = `dcap_${'A'.repeat(43)}`
-    vi.mocked(workerRuntime.readTerminal).mockResolvedValue({
-      handle: 'term_windows_worker',
-      status: 'running',
-      tail: ['x'.repeat(300_000), `secret ${capability}`, 'remote output'],
-      truncated: false,
-      nextCursor: '3'
-    })
     vi.mocked(workerRuntime.closeTerminal).mockImplementation(async () => {
-      const archive = workerDb.getWorkerTerminalArchive(dispatchId)
-      expect(archive).toBeDefined()
-      expect(archive!.content.length).toBeLessThan(270_000)
+      expect(workerDb.getWorkerTerminalArchive(dispatchId)?.kind).toBe('terminal_tail')
       workerTerminalAvailable = false
       return { ptyKilled: true } as never
     })
@@ -405,42 +395,25 @@ describe('orchestration federated worker output', () => {
     })
     expect(released).toMatchObject({
       ok: true,
-      result: { state: 'released', archive: { source: 'terminal', status: 'captured' } }
+      result: { state: 'released', archive: { source: 'terminal', status: 'unavailable' } }
     })
 
-    const afterRemoval = await homeCall(
-      'rpc_remote_read_archive_after_removal',
-      'orchestration.workerRead',
-      { dispatch: dispatchId }
-    )
-    expect(afterRemoval).toMatchObject({
-      ok: true,
-      result: {
-        archived: true,
-        terminal: {
-          tail: ['secret [dispatch capability redacted]', 'remote output'],
-          truncated: true
-        }
-      }
-    })
-    expect(JSON.stringify(afterRemoval)).not.toContain(capability)
+    const unavailable = {
+      ok: false,
+      error: { code: 'archive_unavailable', message: expect.stringContaining('worker_done') }
+    }
+    await expect(
+      homeCall('rpc_remote_read_archive_after_removal', 'orchestration.workerRead', {
+        dispatch: dispatchId
+      })
+    ).resolves.toMatchObject(unavailable)
 
     restartWorkerRuntime(true)
-    const afterRestart = await homeCall(
-      'rpc_remote_read_archive_after_restart',
-      'orchestration.workerRead',
-      { dispatch: dispatchId }
-    )
-    expect(afterRestart).toMatchObject({
-      ok: true,
-      result: {
-        archived: true,
-        terminal: {
-          tail: ['secret [dispatch capability redacted]', 'remote output'],
-          truncated: true
-        }
-      }
-    })
+    await expect(
+      homeCall('rpc_remote_read_archive_after_restart', 'orchestration.workerRead', {
+        dispatch: dispatchId
+      })
+    ).resolves.toMatchObject(unavailable)
 
     const replayed = await homeDispatcher.dispatch({
       id: 'rpc_remote_release_archive_replay',
@@ -455,7 +428,7 @@ describe('orchestration federated worker output', () => {
       result: {
         state: 'already_released',
         processAction: 'none',
-        archive: { source: 'terminal', status: 'captured' }
+        archive: { source: 'terminal', status: 'unavailable' }
       }
     })
     expect(workerRuntime.closeTerminal).not.toHaveBeenCalled()

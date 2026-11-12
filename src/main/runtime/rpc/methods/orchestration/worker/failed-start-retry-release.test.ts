@@ -96,7 +96,7 @@ describe('retrying a failed worker-start', () => {
     await vi.waitFor(() =>
       expect(h.db.getWorkerTerminalResourceByOwner(failed.dispatchId)).toMatchObject({
         release_state: 'released',
-        archive_status: 'captured'
+        archive_status: 'unavailable'
       })
     )
     expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
