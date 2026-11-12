@@ -114,7 +114,7 @@ export async function splitUsageCacheFile(
         typeof report.worktreeFingerprint === 'string' ? report.worktreeFingerprint : null,
       reuse: true
     },
-    sources
+    sources as unknown[]
   )
   return { reportText: JSON.stringify(report), migrated: true }
 }
