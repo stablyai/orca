@@ -2,12 +2,11 @@ import {
   deriveAzureDevOpsStatus,
   summarizeAzureDevOpsStatuses,
   mapAzureDevOpsPullRequest,
-  mapAzureDevOpsPullRequestState,
   type AzureDevOpsPullRequestInfo,
   type RawAzureDevOpsPullRequest,
   type RawAzureDevOpsStatus
 } from './pull-request-mappers'
-import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
+import { selectBranchPullRequestCandidate } from './branch-pull-request-selection'
 import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref'
 import {
   getHostedReviewLocalGitOptions,
@@ -122,25 +121,6 @@ async function normalizePullRequest(
   )
 }
 
-function sortPullRequestsForBranch(
-  left: RawAzureDevOpsPullRequest,
-  right: RawAzureDevOpsPullRequest
-): number {
-  const leftStatus = left.status?.trim().toLowerCase()
-  const rightStatus = right.status?.trim().toLowerCase()
-  const abandonedOrder = Number(leftStatus === 'abandoned') - Number(rightStatus === 'abandoned')
-  // Newer abandoned PRs must not hide usable branch reviews.
-  if (abandonedOrder !== 0) {
-    return abandonedOrder
-  }
-  const leftTime = Date.parse(left.closedDate ?? left.creationDate ?? '') || 0
-  const rightTime = Date.parse(right.closedDate ?? right.creationDate ?? '') || 0
-  if (leftTime !== rightTime) {
-    return rightTime - leftTime
-  }
-  return Number(rightStatus === 'active') - Number(leftStatus === 'active')
-}
-
 export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {
   const config = getAzureDevOpsAuthConfig()
   const baseUrl = config.apiBaseUrl ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl) : null
@@ -241,20 +221,15 @@ export async function getAzureDevOpsPullRequestForBranch(
       },
       throwOnFailure
     )
-    const raw = (list?.value ?? []).sort(sortPullRequestsForBranch)[0]
+    const raw = await selectBranchPullRequestCandidate(list?.value ?? [], {
+      branchName,
+      linkedPRNumber,
+      repoPath,
+      connectionId,
+      localGitOptions: getHostedReviewLocalGitOptions(options)
+    })
     if (raw) {
-      const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
-        state: mapAzureDevOpsPullRequestState(raw),
-        reviewNumber: raw.pullRequestId ?? null,
-        linkedReviewNumber: linkedPRNumber,
-        branchName,
-        repoPath,
-        connectionId,
-        localGitOptions: getHostedReviewLocalGitOptions(options)
-      })
-      if (!hideOnDefaultBranch) {
-        return normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
-      }
+      return normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
     }
   }
 

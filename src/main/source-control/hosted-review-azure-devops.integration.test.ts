@@ -149,4 +149,191 @@ describe('Azure DevOps hosted review integration', () => {
       }
     }
   )
+
+  async function createReusedBranchRepo(): Promise<string> {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-azure-review-'))
+    await execFileAsync('git', ['init', '-b', 'feature/azure'], { cwd: repoPath })
+    await execFileAsync('git', ['config', 'user.email', 'dev@example.com'], { cwd: repoPath })
+    await execFileAsync('git', ['config', 'user.name', 'Dev'], { cwd: repoPath })
+    await execFileAsync('git', ['commit', '--allow-empty', '-m', 'reuse branch'], {
+      cwd: repoPath
+    })
+    await execFileAsync(
+      'git',
+      ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Project/_git/repo'],
+      { cwd: repoPath }
+    )
+    return repoPath
+  }
+
+  function serveBranchPullRequests(
+    value: unknown[],
+    seen?: string[]
+  ): ReturnType<typeof createServer> {
+    return createServer((req: IncomingMessage, res: ServerResponse) => {
+      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
+      seen?.push(url.pathname)
+
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
+        sendJson(res, {
+          id: 'repo-guid',
+          webUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+        })
+        return
+      }
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
+        sendJson(res, { value })
+        return
+      }
+      const statuses = url.pathname.match(
+        /\/acme\/Project\/_apis\/git\/repositories\/repo-guid\/pullRequests\/(\d+)\/statuses$/
+      )
+      if (statuses) {
+        sendJson(res, { value: [{ state: 'succeeded' }] })
+        return
+      }
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ message: 'not found' }))
+    })
+  }
+
+  function completedPullRequest(number: number, commitId: string) {
+    return {
+      pullRequestId: number,
+      title: 'Completed branch review',
+      status: 'completed',
+      creationDate: '2026-10-29T00:00:00Z',
+      closedDate: '2026-11-02T00:00:00Z',
+      mergeStatus: 'succeeded',
+      lastMergeSourceCommit: { commitId }
+    }
+  }
+
+  async function withAzureServerAndRepo(
+    value: unknown[],
+    run: (repoPath: string) => Promise<void>
+  ): Promise<void> {
+    const server = serveBranchPullRequests(value)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const repoPath = await createReusedBranchRepo()
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('expected TCP server address')
+      }
+      process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = `http://127.0.0.1:${address.port}/acme/Project`
+      await run(repoPath)
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()))
+      })
+    }
+  }
+
+  it('hides a completed PR whose last source commit no longer matches the reused branch head', async () => {
+    const seen: string[] = []
+    const server = serveBranchPullRequests(
+      [completedPullRequest(77, '1111111111111111111111111111111111111111')],
+      seen
+    )
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const repoPath = await createReusedBranchRepo()
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('expected TCP server address')
+      }
+      process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = `http://127.0.0.1:${address.port}/acme/Project`
+
+      await expect(
+        getHostedReviewForBranch({
+          executionHostId: 'local',
+          repoPath,
+          branch: 'refs/heads/feature/azure'
+        })
+      ).resolves.toBeNull()
+      // Hiding happens before status lookups, so a stale merged match never fetches them.
+      expect(seen.some((pathname) => pathname.endsWith('/statuses'))).toBe(false)
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()))
+      })
+    }
+  })
+
+  it('keeps a completed PR whose last source commit still matches the branch head', async () => {
+    const repoPath = await createReusedBranchRepo()
+    const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: repoPath })
+    const headSha = stdout.trim()
+    const server = serveBranchPullRequests([completedPullRequest(77, headSha)])
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('expected TCP server address')
+      }
+      process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = `http://127.0.0.1:${address.port}/acme/Project`
+
+      await expect(
+        getHostedReviewForBranch({
+          executionHostId: 'local',
+          repoPath,
+          branch: 'refs/heads/feature/azure'
+        })
+      ).resolves.toMatchObject({
+        provider: 'azure-devops',
+        number: 77,
+        state: 'merged',
+        headSha
+      })
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()))
+      })
+    }
+  })
+
+  it('keeps an explicitly linked completed PR visible when the branch head moved on', async () => {
+    await withAzureServerAndRepo(
+      [completedPullRequest(77, '1111111111111111111111111111111111111111')],
+      async (repoPath) => {
+        await expect(
+          getHostedReviewForBranch({
+            executionHostId: 'local',
+            repoPath,
+            branch: 'refs/heads/feature/azure',
+            linkedAzureDevOpsPR: 77
+          })
+        ).resolves.toMatchObject({ provider: 'azure-devops', number: 77, state: 'merged' })
+      }
+    )
+  })
+
+  it('surfaces the active PR hidden behind a newer completed one on a reused branch', async () => {
+    await withAzureServerAndRepo(
+      [
+        completedPullRequest(78, '1111111111111111111111111111111111111111'),
+        {
+          pullRequestId: 79,
+          title: 'Active branch review',
+          status: 'active',
+          creationDate: '2026-10-30T00:00:00Z',
+          mergeStatus: 'succeeded',
+          lastMergeSourceCommit: { commitId: '2222222222222222222222222222222222222222' }
+        }
+      ],
+      async (repoPath) => {
+        await expect(
+          getHostedReviewForBranch({
+            executionHostId: 'local',
+            repoPath,
+            branch: 'refs/heads/feature/azure'
+          })
+        ).resolves.toMatchObject({ provider: 'azure-devops', number: 79, state: 'open' })
+      }
+    )
+  })
 })
