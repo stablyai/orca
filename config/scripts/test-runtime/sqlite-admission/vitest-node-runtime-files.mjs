@@ -155,6 +155,7 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
   'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
+  'src/main/agent-hooks/server/testing/persistence/server-last-status-claude-model.test.ts',
   'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts',
