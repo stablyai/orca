@@ -93,10 +93,10 @@ export function SourceControlMergedReviewNotice({
             className="cursor-pointer"
             disabled={isDeleting}
             onClick={() =>
-              runWorktreeDelete(
-                worktree.id,
-                worktree.hostId ? { expectedHostId: worktree.hostId } : {}
-              )
+              runWorktreeDelete(worktree.id, {
+                expectedHostId: worktree.hostId,
+                expectedInstanceId: worktree.instanceId
+              })
             }
           >
             {isDeleting ? (

@@ -140,7 +140,11 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         <SourceControlMergedReviewNotice
           review={model.hostedReview}
           worktree={activeWorktree}
-          statusHeadOid={statusReadError === undefined ? model.activeGitStatusHead : null}
+          statusHeadOid={
+            statusReadError === undefined && repositoryHuge === undefined
+              ? model.activeGitStatusHead
+              : null
+          }
           uncommittedCount={model.entries.length}
         />
       )}

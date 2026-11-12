@@ -114,6 +114,9 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay, t: Translate = tran
   if (outcome === 'success') {
     return t('workspace.reviewStatus.checksPassing', '{{review}} checks: Passing', values)
   }
+  if (!review.state && !outcome) {
+    return getReviewLabel(review)
+  }
   return t('workspace.reviewStatus.open', '{{review}}: Open', values)
 }
 
