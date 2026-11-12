@@ -1,3 +1,4 @@
+import { rendererStatusGraphAccepted } from '../agent-status/renderer-status-publication'
 import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/layout/reconciliation/terminal-lifecycle-diagnostics'
 import {
@@ -229,6 +230,7 @@ export async function syncRuntimeGraph(): Promise<void> {
 
   try {
     const result = await window.api.runtime.syncWindowGraph(graph)
+    rendererStatusGraphAccepted()
     graphState.publishedTerminalGroupGridSizesKey = JSON.stringify(gridSizes ?? null)
     graphState.publishedProjectSectionCatalog =
       projectSectionCatalog ?? graphState.publishedProjectSectionCatalog

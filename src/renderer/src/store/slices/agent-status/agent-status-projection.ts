@@ -118,6 +118,11 @@ export class AgentStatusProjection {
       this.data.notifying = false
     }
   }
+  mobileSource(key: string, tabId: string) {
+    const worktreeId = this.data.mobileOwners.get(key)
+    const tab = this.data.tabs.get(tabId)
+    return worktreeId && tab ? { worktreeId, tab } : undefined
+  }
   tabKeys(tabId: string): Iterable<string> {
     return this.data.acceptedByTab.get(tabId) ?? []
   }

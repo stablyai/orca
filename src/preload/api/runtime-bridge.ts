@@ -1,3 +1,7 @@
+import type {
+  RendererStatusPublication,
+  RendererStatusAck
+} from '../../shared/agent-status/renderer-status-publication'
 import { ipcRenderer } from 'electron'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
@@ -12,6 +16,8 @@ import type { RuntimeEnvironmentSubscriptionHandle } from '../runtime-environmen
 import type { PreloadApi } from '../api-types'
 
 export const runtimeApi = {
+  syncAgentStatus: (batch: RendererStatusPublication): Promise<RendererStatusAck> =>
+    ipcRenderer.invoke('runtime:syncAgentStatus', batch),
   syncWindowGraph: (graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
     ipcRenderer.invoke('runtime:syncWindowGraph', graph),
   getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),

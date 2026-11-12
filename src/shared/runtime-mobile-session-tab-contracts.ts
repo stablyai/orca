@@ -24,6 +24,8 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string | null
   terminalTheme?: RuntimeMobileTerminalTheme
+  /** Same-build renderer graph input; main never returns this in client frames. */
+  statusSuppressionTitle?: string
   agentStatus?: AgentStatusEntry | null
   /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
   turnCompletedAt?: number

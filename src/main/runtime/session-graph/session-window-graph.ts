@@ -55,6 +55,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
     const rendererGeneration = this.admitWindowPublisher(windowId, graph)
     const previousTitleAuthority = this.captureSessionTitleAuthority()
     const publishedMobileSessionTabs = graph.mobileSessionTabs
+    const rendererGraph = graph
     if (windowId === HEADLESS_RUNTIME_WINDOW_ID) {
       this.headlessGraphFallbackAvailable = true
       this.servesHeadlessGraph = true
@@ -266,6 +267,13 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
     }
     if (rendererGeneration !== undefined) {
       this.rendererGeneration = rendererGeneration
+    }
+    if (typeof rendererGeneration === 'string') {
+      this.reconcileRendererStatusMembership(
+        rendererGeneration,
+        rendererGraph,
+        changedMobileWorktrees
+      )
     }
     this.republishSessionTitleAuthorityChanges(previousTitleAuthority, changedMobileWorktrees)
     for (const worktreeId of changedMobileWorktrees) {

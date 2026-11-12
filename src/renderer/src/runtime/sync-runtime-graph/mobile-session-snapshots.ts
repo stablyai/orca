@@ -7,7 +7,6 @@ import {
   mobilePublicationEpoch
 } from './graph-state'
 import {
-  buildMobileSessionAgentStatusByWorktree,
   buildMobileSessionWorktreeInputs,
   getOpenFileIndexes,
   excludeCrossPlacedEditorFiles
@@ -51,10 +50,6 @@ export function buildMobileSessionTabSnapshots(
     browserTabsByWorktree,
     openFileIndexes,
     editorDraftVersionByFileId: getEditorDraftVersionByFileId(state.editorDrafts, state.openFiles),
-    agentStatusByWorktreeId: buildMobileSessionAgentStatusByWorktree(
-      state.agentStatusByPaneKey ?? {},
-      state.tabsByWorktree
-    ),
     generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     terminalTheme: getMobileTerminalTheme(state, systemPrefersDark)
   }

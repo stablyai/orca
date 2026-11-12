@@ -8,7 +8,6 @@ import {
   nativeChatLaunchAgentForLeaf
 } from '../../components/native-chat/pane/routing/native-chat-leaf-routing'
 import type { MobileSessionWorktreeInputs } from './types'
-import { isClaudeManagementTitle } from '../../../../shared/agent-status/title/agent-title-core'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   mobileTerminalSurfaceId,
@@ -85,10 +84,6 @@ export function buildMobileTerminalSurfaceTabs(
         )
       : (leafTitle ?? 'Terminal')
     const agentStatusTitle = leafTitle ?? (tabWideFallbackSafe ? terminal.title : '') ?? ''
-    const agentStatus =
-      paneKey && !isClaudeManagementTitle(agentStatusTitle)
-        ? inputs.agentStatusByPaneKey.get(paneKey)
-        : undefined
     const launchAgent = nativeChatLaunchAgentForLeaf({
       launchAgent: terminal.launchAgent,
       launchAgentLeafId,
@@ -123,7 +118,7 @@ export function buildMobileTerminalSurfaceTabs(
       leafId,
       ptyId,
       ...(inputs.terminalTheme ? { terminalTheme: inputs.terminalTheme } : {}),
-      ...(agentStatus ? { agentStatus } : {}),
+      statusSuppressionTitle: agentStatusTitle,
       ...(launchAgent ? { launchAgent } : {}),
       ...(publishedLaunchDraft
         ? {

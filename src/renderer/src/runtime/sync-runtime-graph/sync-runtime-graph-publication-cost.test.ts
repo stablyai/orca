@@ -150,3 +150,56 @@ describe('mounted terminal surface memoization', () => {
     expect(after.get(MOUNTED_WT)?.tabs).toEqual([expect.objectContaining({ ptyId: 'pty-saved-1' })])
   })
 })
+
+it('keeps the exact status suppression title through pane, saved, tab and split fallback changes', async () => {
+  const { shapeMobileTerminalStatus } =
+    await import('../../../../shared/agent-status/mobile-terminal-status-shaping')
+  const { state, mountedTabId } = makeMountedState('suppression')
+  const entry = {
+    paneKey: `${mountedTabId}:${MOUNTED_LEAF_ID}`,
+    state: 'working' as const,
+    prompt: 'keep this turn',
+    updatedAt: 20,
+    stateStartedAt: 10,
+    stateHistory: []
+  }
+  const surface = makeLiveSurface(mountedTabId)
+  const unregister = registerRuntimeTerminalTab(surface.registration)
+  const shown = () => {
+    const tab = snapshotsByWorktree(state).get(MOUNTED_WT)!.tabs[0]
+    if (tab.type !== 'terminal') {
+      throw new Error('expected terminal surface')
+    }
+    expect(tab.agentStatus).toBeUndefined()
+    return shapeMobileTerminalStatus(entry, tab.statusSuppressionTitle!)?.prompt
+  }
+  try {
+    state.tabsByWorktree = {
+      ...state.tabsByWorktree,
+      [MOUNTED_WT]: [{ ...state.tabsByWorktree[MOUNTED_WT][0], title: 'claude agents' }]
+    }
+    expect(shown()).toBeUndefined()
+    state.terminalLayoutsByTabId = {
+      ...state.terminalLayoutsByTabId,
+      [mountedTabId]: {
+        ...state.terminalLayoutsByTabId[mountedTabId],
+        titlesByLeafId: { [MOUNTED_LEAF_ID]: 'Claude' }
+      }
+    }
+    expect(shown()).toBe('keep this turn')
+    state.runtimePaneTitlesByTabId = { [mountedTabId]: { 1: 'claude agents' } }
+    expect(shown()).toBeUndefined()
+    state.runtimePaneTitlesByTabId = { [mountedTabId]: { 1: 'Claude' } }
+    expect(shown()).toBe('keep this turn')
+    state.runtimePaneTitlesByTabId = {}
+    state.terminalLayoutsByTabId = {
+      ...state.terminalLayoutsByTabId,
+      [mountedTabId]: { ...state.terminalLayoutsByTabId[mountedTabId], titlesByLeafId: {} }
+    }
+    expect(shown()).toBeUndefined()
+    surface.addPane(2, SPLIT_LEAF_ID)
+    expect(shown()).toBe('keep this turn')
+  } finally {
+    unregister()
+  }
+})
