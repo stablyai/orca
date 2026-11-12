@@ -12,6 +12,8 @@ import {
   publishTestJournalEpoch
 } from '../store-lifecycle/journal-host-database-test-support'
 import { compactJournalItemRevisionPage } from './journal-item-compaction-worker-entry'
+import { journalCompactionIsIdle } from './journal-compaction-activity'
+import { ensureJournalOutcomeTables } from './journal-outcome-format'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 
 const sessionId = 'compacted'
@@ -71,38 +73,127 @@ it('stores only the first and newest record of a streamed item, and reopens to t
   })
 })
 
-it('compacts old item revisions page by page, resuming where the last page committed', () => {
+function seedOldHistory(): void {
   database.transaction((db) => {
-    // History written by a build that kept every revision.
-    db.exec('DROP TRIGGER journal_outcome_item_supersede')
-    const generation = Number(
-      db
-        .prepare('INSERT INTO journal_outcome_generations (session_id, epoch) VALUES (?, ?)')
-        .run('old', 'old-epoch').lastInsertRowid
+    publishTestJournalEpoch(db, sessionId, epoch)
+    publishJournalOutcomeEpoch(db, sessionId, epoch, [
+      {
+        ...row,
+        seq: 1,
+        kind: 'epoch',
+        reason: 'session_created',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      },
+      revision(2, 'H')
+    ]).adopt()
+    const first = db
+      .prepare("SELECT generation, ordinal, value_json FROM journal_outcomes WHERE field = 'items'")
+      .get()!
+    const insert = db.prepare(
+      `INSERT INTO journal_outcomes VALUES (?, ?, 'items', '"reply"', 3, ?, ?, 0)`
     )
-    const insert = db.prepare(`INSERT INTO journal_outcomes
-      (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
-      VALUES (?, ?, ?, ?, 3, 'o', '{}', 0)`)
-    for (const seq of [1, 2, 3, 4, 5, 6]) {
-      insert.run(generation, seq, 'items', '"a"')
-      insert.run(generation, seq, 'itemFences', '"a"')
+    for (const seq of [3, 4, 5, 6]) {
+      insert.run(first.generation, seq, first.ordinal, first.value_json)
     }
-    for (const seq of [2, 3]) {
-      insert.run(generation, seq, 'items', '"b"')
-    }
+    db.exec('UPDATE journal_outcome_epochs SET through_seq = 6')
   })
+}
 
-  let pages = 0
-  while (!compactJournalItemRevisionPage(database.db, { keys: 1, rows: 2 }).done) {
-    pages += 1
+function compactOneDeletion(): void {
+  let page
+  do {
+    page = compactJournalItemRevisionPage(database.db, { keys: 1, rows: 2 })
+  } while (!page.done && page.deleted === 0)
+}
+
+function finishCompaction(): void {
+  let done = false
+  while (!done) {
+    done = compactJournalItemRevisionPage(database.db, { keys: 1, rows: 2 }).done
   }
+}
 
-  expect(pages).toBe(3)
-  expect(itemRecordSeqs()).toEqual([1, 6, 2, 3])
-  expect(itemRecordSeqs('itemFences')).toEqual([1, 2, 3, 4, 5, 6])
-  expect(compactJournalItemRevisionPage(database.db, { keys: 1, rows: 2 })).toEqual({
-    done: true,
-    keys: 0,
-    deleted: 0
-  })
+it('resumes a committed page after reopening and preserves the first and newest item', async () => {
+  seedOldHistory()
+  const before = restoreJournal(database.db, sessionId)
+  compactOneDeletion()
+  expect(itemRecordSeqs()).toEqual([2, 5, 6])
+  await closeTestJournalHostDatabases()
+  database = openTestJournalHostDatabase(root)
+  finishCompaction()
+  expect(itemRecordSeqs()).toEqual([2, 6])
+  expect(restoreJournal(database.db, sessionId)).toEqual(before)
+})
+
+it.each(['format', 'marker', 'tail', 'record'] as const)(
+  'preserves history with a newer %s contract across reopen',
+  async (newer) => {
+    seedOldHistory()
+    if (newer === 'format') {
+      database.db.exec('UPDATE journal_outcome_epochs SET format = 4')
+    }
+    if (newer === 'marker') {
+      database.db.exec(`UPDATE journal_rows SET row_json = json_set(row_json, '$.v', 7)`)
+    }
+    if (newer === 'tail') {
+      database.db.exec(`INSERT INTO journal_rows
+      SELECT session_id, epoch, seq + 1, ts, row_json FROM journal_rows`)
+    }
+    if (newer === 'record') {
+      database.db.exec(`UPDATE journal_outcomes SET format = 4 WHERE field = 'items' AND seq = 4`)
+    }
+    finishCompaction()
+    expect(itemRecordSeqs()).toEqual([2, 3, 4, 5, 6])
+    await closeTestJournalHostDatabases()
+    database = openTestJournalHostDatabase(root)
+    finishCompaction()
+    expect(itemRecordSeqs()).toEqual([2, 3, 4, 5, 6])
+  }
+)
+
+it('rolls back deletion when progress cannot commit, then recovers on reopen', async () => {
+  seedOldHistory()
+  compactOneDeletion()
+  database.db.exec(`CREATE TRIGGER fail_progress BEFORE INSERT ON journal_maintenance
+    BEGIN SELECT RAISE(ABORT, 'injected progress failure'); END`)
+  expect(() => finishCompaction()).toThrow()
+  expect(itemRecordSeqs()).toEqual([2, 5, 6])
+  database.db.exec('DROP TRIGGER fail_progress')
+  await closeTestJournalHostDatabases()
+  database = openTestJournalHostDatabase(root)
+  finishCompaction()
+  expect(itemRecordSeqs()).toEqual([2, 6])
+})
+
+it('removes the persistent trigger before a newer writer can insert unknown records', () => {
+  seedOldHistory()
+  database.db.exec(`CREATE TRIGGER journal_outcome_item_supersede AFTER INSERT ON journal_outcomes
+    BEGIN DELETE FROM journal_outcomes WHERE field = 'items' AND seq = 3; END`)
+  ensureJournalOutcomeTables(database.db)
+  database.db.exec(`INSERT INTO journal_outcomes
+    SELECT generation, 7, field, entry_key, 4, ordinal, value_json, deleted
+    FROM journal_outcomes WHERE field = 'items' AND seq = 6`)
+  expect(itemRecordSeqs()).toEqual([2, 3, 4, 5, 6, 7])
+})
+
+it('defers history deletion while the serving database is active, then resumes', () => {
+  seedOldHistory()
+  const idle = () => journalCompactionIsIdle(database.compactionActivity)
+  compactJournalItemRevisionPage(database.db, { keys: 1, rows: 2 }, idle)
+  compactJournalItemRevisionPage(database.db, { keys: 1, rows: 2 }, idle)
+  expect(itemRecordSeqs()).toEqual([2, 3, 4, 5, 6])
+  Atomics.store(database.compactionActivity, 0, 0n)
+  let page
+  do {
+    page = compactJournalItemRevisionPage(database.db, { keys: 1, rows: 2 }, idle)
+  } while (!page.done && page.deleted === 0)
+  expect(itemRecordSeqs()).toEqual([2, 5, 6])
+})
+
+it('preserves the entire epoch when a distant item contains an unknown field', () => {
+  seedOldHistory()
+  database.db.exec(`UPDATE journal_outcomes SET value_json = json_set(value_json, '$.future', 1)
+    WHERE field = 'items' AND seq = 6`)
+  finishCompaction()
+  expect(itemRecordSeqs()).toEqual([2, 3, 4, 5, 6])
 })

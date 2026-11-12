@@ -17,7 +17,10 @@ type CompactionResult =
   | { ok: false; error: string }
 
 export function startJournalItemCompaction(deps: {
-  database: Pick<JournalHostDatabase, 'readOnly' | 'isClosed' | 'stateDirectory'>
+  database: Pick<
+    JournalHostDatabase,
+    'readOnly' | 'isClosed' | 'stateDirectory' | 'compactionActivity'
+  >
   logger: StructuredAgentSessionLogger
 }): { stop: () => void } {
   let worker: Worker | null = null
@@ -29,7 +32,7 @@ export function startJournalItemCompaction(deps: {
         return
       }
       const databasePath = journalDatabasePath(deps.database.stateDirectory)
-      worker = spawnCompactionWorker(databasePath)
+      worker = spawnCompactionWorker(databasePath, deps.database.compactionActivity.buffer)
       worker.on('message', (result: CompactionResult) => {
         if (!result.ok) {
           deps.logger.warn('old chat history could not be compacted', {
@@ -75,8 +78,8 @@ export function startJournalItemCompaction(deps: {
   }
 }
 
-function spawnCompactionWorker(databasePath: string): Worker {
+function spawnCompactionWorker(databasePath: string, activityBuffer: ArrayBufferLike): Worker {
   // A missing entry surfaces as the worker's error event.
   const path = resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), WORKER_FILENAME)
-  return spawnWorkerThread(path, { workerData: { databasePath } })
+  return spawnWorkerThread(path, { workerData: { databasePath, activityBuffer } })
 }

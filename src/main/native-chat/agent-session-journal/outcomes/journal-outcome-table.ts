@@ -88,6 +88,13 @@ export function persistJournalOutcomeRows(
   journalInputOrder(transition.state).introduceOverlays(transition.state)
   const previous = db.prepare(`SELECT ordinal, deleted FROM journal_outcomes
     WHERE generation = ? AND field = ? AND entry_key = ? ORDER BY seq DESC LIMIT 1`)
+  const supersede = db.prepare(`DELETE FROM journal_outcomes
+    WHERE generation = ? AND field = 'items' AND entry_key = ?
+    AND seq = (SELECT seq FROM journal_outcomes WHERE generation = ? AND field = 'items'
+      AND entry_key = ? AND seq < ? ORDER BY seq DESC LIMIT 1)
+    AND seq > (SELECT seq FROM journal_outcomes WHERE generation = ? AND field = 'items'
+      AND entry_key = ? ORDER BY seq LIMIT 1)
+    AND format IN (1, 2, 3)`)
   const insert = db.prepare(`INSERT INTO journal_outcomes
     (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -152,6 +159,17 @@ export function persistJournalOutcomeRows(
         value.json,
         Number(value.deleted)
       )
+      if (value.field === 'items') {
+        supersede.run(
+          source.generation,
+          value.key,
+          source.generation,
+          value.key,
+          value.seq,
+          source.generation,
+          value.key
+        )
+      }
     }
   }
   return { state: transition.state, adopt: transition.adopt }

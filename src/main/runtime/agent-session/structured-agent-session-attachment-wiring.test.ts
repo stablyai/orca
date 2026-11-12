@@ -49,6 +49,7 @@ function install(directory = stateDirectory): void {
     readOnly: true,
     isClosed: false,
     stateDirectory: directory,
+    compactionActivity: new BigInt64Array(new SharedArrayBuffer(8)),
     get db(): Database.Database {
       throw new Error('not opened in this test')
     }

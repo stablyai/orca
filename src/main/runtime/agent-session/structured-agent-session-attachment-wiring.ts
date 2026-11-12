@@ -29,7 +29,13 @@ export function installAgentSessionAttachments(deps: {
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'isSessionUnreadable'>
   journalDatabase: Pick<
     JournalHostDatabase,
-    'readOnly' | 'isClosed' | 'db' | 'writeAutocommit' | 'transaction' | 'stateDirectory'
+    | 'readOnly'
+    | 'isClosed'
+    | 'db'
+    | 'writeAutocommit'
+    | 'transaction'
+    | 'stateDirectory'
+    | 'compactionActivity'
   >
   logger: StructuredAgentSessionLogger
 }): void {
