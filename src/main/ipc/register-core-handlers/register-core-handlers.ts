@@ -294,5 +294,5 @@ export function registerCoreHandlers(
     }
   })
   registerUpdaterHandlers(store)
-  registerSpeechHandlers(store)
+  registerSpeechHandlers(store, commitMessageAgentEnv)
 }

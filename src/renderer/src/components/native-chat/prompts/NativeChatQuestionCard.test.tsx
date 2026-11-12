@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
+import { getByRole, queryByRole } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 
@@ -139,31 +140,87 @@ describe('NativeChatQuestionCard', () => {
         />
       )
     })
-    act(() => vi.runAllTimers())
     const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
-    const confirmButton = (): HTMLButtonElement =>
-      [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-        /^(Skip|Submit)/.test(button.textContent ?? '')
-      )!
     expect(document.activeElement).toBe(rows[0])
-    // Focus is a ring only; the picked look (primary border, fill) is reserved for aria-pressed rows.
-    expect(rows[0]!.getAttribute('aria-pressed')).toBe('false')
-    expect(rows[0]!.className).not.toMatch(/(^|\s)(focus:)?bg-accent(\s|$)/)
-    expect(rows[0]!.parentElement!.className).not.toContain('border-primary')
-    expect(confirmButton().textContent).toBe('Skip')
+    expect([...rows].map((row) => row.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
+    expect(getByRole(container, 'button', { name: 'Skip' })).toBeTruthy()
 
     act(() => rows[1]!.click())
+    expect([...rows].map((row) => row.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
+    // The Enter hint is aria-hidden, so the button is still named "Submit".
+    expect(getByRole(container, 'button', { name: 'Submit' })).toBeTruthy()
+    expect(queryByRole(container, 'button', { name: 'Skip' })).toBeNull()
+  })
+
+  it('confirms with Enter on the chosen single-select row instead of deselecting it', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    const onAnswer = vi.fn()
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={{
+            questions: [
+              tabsOrSpaces.questions[0]!,
+              {
+                question: 'Two or four?',
+                header: 'Width',
+                multiSelect: false,
+                options: [{ label: 'Two' }, { label: 'Four' }]
+              }
+            ]
+          }}
+          onAnswer={onAnswer}
+          onCancel={() => {}}
+          shouldFocus
+        />
+      )
+    })
+    const rows = (): HTMLButtonElement[] => [
+      ...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    ]
+    act(() => rows()[0]!.click())
+    act(() => vi.runAllTimers())
+    expect(rows()[0]!.textContent).toContain('Two')
+
+    pressKey({ key: 'ArrowLeft' }, rows()[0]!)
+    expect(rows()[0]!.textContent).toContain('Tabs')
+    expect(rows()[0]!.getAttribute('aria-pressed')).toBe('true')
+    expect(getByRole(container, 'button', { name: 'Next' })).toBeTruthy()
+    act(() => rows()[0]!.focus())
+    pressKey({ key: 'Enter' }, rows()[0]!)
+    act(() => vi.runAllTimers())
+    expect(rows()[0]!.textContent).toContain('Two')
+
+    pressKey({ key: 'ArrowLeft' }, rows()[0]!)
+    expect(rows()[0]!.getAttribute('aria-pressed')).toBe('true')
+    // Click still toggles the chosen row off.
+    act(() => rows()[0]!.click())
+    expect(rows()[0]!.getAttribute('aria-pressed')).toBe('false')
+    expect(onAnswer).not.toHaveBeenCalled()
+  })
+  it('submits with a second Enter on the last step instead of deselecting the pick', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    const onAnswer = vi.fn()
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={tabsOrSpaces}
+          onAnswer={onAnswer}
+          onCancel={() => {}}
+          shouldFocus
+        />
+      )
+    })
+    const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    act(() => rows[1]!.focus())
+    pressKey({ key: 'Enter' }, rows[1]!)
     expect(rows[1]!.getAttribute('aria-pressed')).toBe('true')
-    expect(rows[1]!.parentElement!.className).toContain('border-primary')
-    expect(rows[0]!.parentElement!.className).not.toContain('border-primary')
-    // The Enter hint is decoration; the button's name stays "Submit".
-    const submit = confirmButton()
-    expect(submit.querySelector('[aria-hidden]')?.textContent).toBe('↵')
-    expect(
-      [...submit.childNodes]
-        .filter((node) => !(node instanceof Element && node.hasAttribute('aria-hidden')))
-        .map((node) => node.textContent)
-        .join('')
-    ).toBe('Submit')
+    // Before the auto-advance fires, Enter on the chosen row submits it.
+    pressKey({ key: 'Enter' }, rows[1]!)
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
+    act(() => vi.runAllTimers())
+    expect(onAnswer).toHaveBeenCalledTimes(1)
   })
 })

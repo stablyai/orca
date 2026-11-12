@@ -2182,21 +2182,19 @@
       "providers": ["local-daemon", "ssh-daemon", "paired-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local-daemon"],
-      "coverageNotes": "Audit 3959 retires the whole session.test.ts driver (27 authored / 33 finite cases): startup/echo filtering, readiness input gates, ownership confirmation, detach authority, and termination retry/exit ordering alarms are intentionally lost. No equivalent replacement or fresh runtime validation is claimed. Audit1627 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Real TerminalHost, Session, and subprocess wrapper with injected native I/O failures and mocked OS signals. Local non-daemon and SSH-relay implementations are unaffected; daemon consumers on SSH, WSL, paired runtimes, and mobile retain host-owned semantics. Live Linux/Windows/WSL and remote runs remain gaps. No git or folder-workspace assumptions. The fault-injection suite also runs with simulated darwin/linux/win32 platform branches; these do not constitute native OS coverage. Native macOS coverage now proves shell exit and PTY master-fd closure, input/output round trips, and teardown of a paused producer for both graceful and immediate cleanup. Windows single-close/job escalation and pre-listener output/status are fault-injected contracts. Audit1302: src/main/daemon/terminal-host-teardown-recreate.test.ts: Fake subprocess handles synthesize exits via real40ms/30s timers or manual exit callback, with descendant retirement mocked away; assertions inspect isNew/refusal/spawn counts. No real subprocess/PTY teardown/recreation or owned-tree retention boundary. Lose artificial teardown/attach/shutdown/cancellation scheduling alarms; no equivalent replacement. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim.",
+      "coverageNotes": "Audit 3959 retires the whole session.test.ts driver (27 authored / 33 finite cases): startup/echo filtering, readiness input gates, ownership confirmation, detach authority, and termination retry/exit ordering alarms are intentionally lost. No equivalent replacement or fresh runtime validation is claimed. Audit1627 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Real TerminalHost, Session, and subprocess wrapper with injected native I/O failures and mocked OS signals. Local non-daemon and SSH-relay implementations are unaffected; daemon consumers on SSH, WSL, paired runtimes, and mobile retain host-owned semantics. Live Linux/Windows/WSL and remote runs remain gaps. No git or folder-workspace assumptions. The fault-injection suite also runs with simulated darwin/linux/win32 platform branches; these do not constitute native OS coverage. Archived native macOS results previously exercised shell exit and PTY master-fd closure, input/output round trips, and teardown of a paused producer; that suite is now retired without replacement. Windows single-close/job escalation and pre-listener output/status are fault-injected contracts. Audit1302: src/main/daemon/terminal-host-teardown-recreate.test.ts: Fake subprocess handles synthesize exits via real40ms/30s timers or manual exit callback, with descendant retirement mocked away; assertions inspect isNew/refusal/spawn counts. No real subprocess/PTY teardown/recreation or owned-tree retention boundary. Lose artificial teardown/attach/shutdown/cancellation scheduling alarms; no equivalent replacement. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim.\nOrcad folder cleanup intentionally retires the Cartesian native failed-I/O test under repository test policy, without equivalent replacement. Remaining selectors retain their narrower scope. Dated evidenceRuns remain historical and do not validate this changed selector.",
       "motivatingLinks": ["docs/terminal-daemon-session-leak-investigation.md"],
       "invariant": "I/O errors must not establish physical exit or disable termination of an owned PTY. Session and native handle disposal require the exit event.",
-      "oracle": "Inject write and resize failures, require graceful and forced signals to reach the native owner, keep producer resume available, suppress repeated failed I/O, deliver output and exit, and suppress signals after exit. Across 32 create/close cycles per failure, retain each session before exit and release its native handle and emulator exactly once afterwards. Mark physical exit before notifying listeners; reentrant kill/forceKill/signal from those listeners must never signal the retired PID. A native POSIX test performs input/output and resize, pauses the producer, injects each I/O failure, then gracefully or immediately closes 16 real shells; require ESRCH for each child PID and EBADF for each PTY master fd.",
+      "oracle": "Inject write and resize failures, require graceful and forced signals to reach the native owner, keep producer resume available, suppress repeated failed I/O, deliver output and exit, and suppress signals after exit. Across 32 create/close cycles per failure, retain each session before exit and release its native handle and emulator exactly once afterwards. Mark physical exit before notifying listeners; reentrant kill/forceKill/signal from those listeners must never signal the retired PID. The former native POSIX shell/PID/fd oracle is retired without replacement.",
       "commands": [
         "pnpm test src/main/daemon/pty-subprocess/testing/pty-subprocess-io-failure-cleanup.test.ts",
-        "pnpm test src/main/daemon/pty-subprocess/testing/pty-subprocess-io-failure-cleanup.test.ts src/main/daemon/pty-subprocess/testing/pty-subprocess-handle-lifecycle.test.ts src/main/daemon/terminal-host/testing/terminal-host-session-reaping-leak.test.ts src/main/daemon/terminal-host/testing/terminal-session-teardown.test.ts",
-        "pnpm test src/main/daemon/pty-subprocess/testing/pty-subprocess-io-failure-native.test.ts"
+        "pnpm test src/main/daemon/pty-subprocess/testing/pty-subprocess-io-failure-cleanup.test.ts src/main/daemon/pty-subprocess/testing/pty-subprocess-handle-lifecycle.test.ts src/main/daemon/terminal-host/testing/terminal-host-session-reaping-leak.test.ts src/main/daemon/terminal-host/testing/terminal-session-teardown.test.ts"
       ],
       "testFiles": [
         "src/main/daemon/pty-subprocess/testing/pty-subprocess-io-failure-cleanup.test.ts",
         "src/main/daemon/pty-subprocess/testing/pty-subprocess-handle-lifecycle.test.ts",
         "src/main/daemon/terminal-host/testing/terminal-host-session-reaping-leak.test.ts",
-        "src/main/daemon/terminal-host/testing/terminal-session-teardown.test.ts",
-        "src/main/daemon/pty-subprocess/testing/pty-subprocess-io-failure-native.test.ts"
+        "src/main/daemon/terminal-host/testing/terminal-session-teardown.test.ts"
       ],
       "assertionRefs": [
         {
@@ -2207,10 +2205,6 @@
             "suppresses repeated native I/O failures while still delivering output and exit",
             "blocks reentrant termination from an exit listener after I/O failure"
           ]
-        },
-        {
-          "file": "src/main/daemon/pty-subprocess/testing/pty-subprocess-io-failure-native.test.ts",
-          "assertions": ["reaps real shells and master fds after %s failure (immediate=%s)"]
         }
       ],
       "evidenceRuns": [
@@ -2223,16 +2217,6 @@
           "durationSeconds": 3.71,
           "summary": "32 tests passed with 4 Windows-only cases skipped; simulated macOS/Linux/Windows branches include 192 failed-I/O create/close cycles and exit-listener reentrancy.",
           "currentCommand": "pnpm test src/main/daemon/pty-subprocess/testing/pty-subprocess-io-failure-cleanup.test.ts"
-        },
-        {
-          "date": "2026-09-07",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm test src/main/daemon/pty-subprocess-io-failure-native.test.ts",
-          "result": "passed",
-          "durationSeconds": 2.52,
-          "summary": "Four native cases pass across 16 real shells, including input/output, pause before teardown, confirmed PID absence, and closed PTY master fds.",
-          "currentCommand": "pnpm test src/main/daemon/pty-subprocess/testing/pty-subprocess-io-failure-native.test.ts"
         }
       ],
       "runtimeBudget": {
@@ -2257,10 +2241,11 @@
       "knownGaps": [
         "Audit1627 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "Fault injection proves a leak mechanism, not causality for the historical 427-session incident.",
-        "Real Linux/Windows/WSL, remote, startup-close, login-wrapper descendants, and multi-day load evidence remain outstanding. Native tests inject synchronous I/O errors; they do not model every asynchronous node-pty pipe failure.",
+        "Real Linux/Windows/WSL, remote, startup-close, login-wrapper descendants, and multi-day load evidence remain outstanding. The archived native tests injected synchronous I/O errors; they did not model every asynchronous node-pty pipe failure. No active native-shell coverage remains after their retirement.",
         "No output throughput change or interactive latency benchmark is included.",
         "Audit1302: src/main/daemon/terminal-host-teardown-recreate.test.ts: Fake subprocess handles synthesize exits via real40ms/30s timers or manual exit callback, with descendant retirement mocked away; assertions inspect isNew/refusal/spawn counts. No real subprocess/PTY teardown/recreation or owned-tree retention boundary. Lose artificial teardown/attach/shutdown/cancellation scheduling alarms; no equivalent replacement. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim.",
-        "Audit1302 retired the complete dated receipt after source coverage changed. Its result does not validate the reduced selector. Original receipt verbatim:\n{\n          \"date\": \"2026-09-07\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"pnpm test src/main/daemon/pty-subprocess-io-failure-cleanup.test.ts src/main/daemon/pty-subprocess-handle-lifecycle.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/daemon/terminal-host-teardown-recreate.test.ts src/main/daemon/terminal-session-teardown.test.ts src/main/daemon/session.test.ts\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 0.617,\n          \"summary\": \"136 tests passed across six files; failed-I/O cycle tests cover 64 closures.\"\n        }"
+        "Audit1302 retired the complete dated receipt after source coverage changed. Its result does not validate the reduced selector. Original receipt verbatim:\n{\n          \"date\": \"2026-09-07\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"pnpm test src/main/daemon/pty-subprocess-io-failure-cleanup.test.ts src/main/daemon/pty-subprocess-handle-lifecycle.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/daemon/terminal-host-teardown-recreate.test.ts src/main/daemon/terminal-session-teardown.test.ts src/main/daemon/session.test.ts\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 0.617,\n          \"summary\": \"136 tests passed across six files; failed-I/O cycle tests cover 64 closures.\"\n        }",
+        "Orcad owner layout retires this native test receipt without replacement. Original receipt verbatim:\n{\n          \"date\": \"2026-09-07\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"pnpm test src/main/daemon/pty-subprocess-io-failure-native.test.ts\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 2.52,\n          \"summary\": \"Four native cases pass across 16 real shells, including input/output, pause before teardown, confirmed PID absence, and closed PTY master fds.\",\n          \"currentCommand\": \"pnpm test src/main/daemon/pty-subprocess/testing/pty-subprocess-io-failure-native.test.ts\"\n        }"
       ],
       "demotionRule": "Keep experimental; investigate any lost cleanup signal, premature exit, or unexplained flake."
     },
@@ -6193,7 +6178,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal/surface/orca-runtime-terminal-close-continuity.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/construction/orca-runtime.test.ts",
-        "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server/testing/authority/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/persistence/terminal-topology/persistence-pane-identity-migration.test.ts src/main/persistence/terminal-topology/persistence-pty-binding-reconciliation.test.ts src/renderer/src/store/slices/agent-status/agent-pane-authority.test.ts src/renderer/src/store/terminals/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/terminals/terminal-tab-retirement-store.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+        "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server/testing/authority/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/persistence/restoring-sessions/persistence-pane-identity-migration.test.ts src/main/persistence/loading-store/terminal-bindings/persistence-pty-binding-reconciliation.test.ts src/renderer/src/store/slices/agent-status/agent-pane-authority.test.ts src/renderer/src/store/terminals/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/terminals/terminal-tab-retirement-store.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/process-retirement/pty-descendant-termination.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/providers/local-pty/local-pty-provider-shutdown.test.ts src/main/runtime/workspaces/removal/worktree-teardown.test.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-tab-close-restart-persistence.spec.ts --workers=1",
         "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
@@ -6207,8 +6192,8 @@
         "src/main/agent-hooks/server/testing/authority/server-pane-authority.test.ts",
         "src/main/ipc/agent-hooks.test.ts",
         "src/main/ipc/agent-pane-authority-ownership.test.ts",
-        "src/main/persistence/terminal-topology/persistence-pane-identity-migration.test.ts",
-        "src/main/persistence/terminal-topology/persistence-pty-binding-reconciliation.test.ts",
+        "src/main/persistence/restoring-sessions/persistence-pane-identity-migration.test.ts",
+        "src/main/persistence/loading-store/terminal-bindings/persistence-pty-binding-reconciliation.test.ts",
         "src/main/pty/process-retirement/pty-descendant-termination.test.ts",
         "src/main/daemon/terminal-host/testing/terminal-host.test.ts",
         "src/main/providers/local-pty/local-pty-provider-shutdown.test.ts",

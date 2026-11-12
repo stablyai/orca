@@ -180,8 +180,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     ...getSpeechModelErrorRates('nemotron-3.5-asr-streaming-0.6b'),
     licence: 'OpenMDW-1.1',
     sampleRate: 16000,
-    // Decoded per chunk for now; live text arrives with the streaming engine path.
-    streaming: false
+    streaming: true
   },
   {
     id: 'openai-gpt-transcribe',

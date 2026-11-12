@@ -220,7 +220,7 @@ export function mapBridgeError(message: string): RuntimeClientError {
     return new RuntimeClientError('screenshot_failed', text)
   }
   if (
-    /window_not_found|No top-level(?: AT-SPI| UI Automation)? window|has no (?:on-screen |accessibility )?window|could not match accessibility window|unknown window(?:_index| id)?/i.test(
+    /window_not_found|windowNotFound|No top-level(?: AT-SPI| UI Automation)? window|has no (?:on-screen |accessibility )?window|could not match accessibility window|unknown window(?:_index| id)?/i.test(
       text
     )
   ) {

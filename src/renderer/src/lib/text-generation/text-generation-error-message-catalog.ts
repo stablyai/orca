@@ -4,6 +4,7 @@ import {
   type TextGenerationFailureCode
 } from '../../../../shared/text-generation-failure-copy'
 import { AGENT_OUTPUT_ERROR_COPY } from './agent-output-error-copy'
+import { DICTATION_CLEANUP_ERROR_COPY } from './dictation-cleanup-error-copy'
 
 export type TextGenerationCopyValues = Record<string, string | number>
 
@@ -287,5 +288,6 @@ export const TEXT_GENERATION_ERROR_COPY: Record<
       TEXT_GENERATION_FAILURE_COPY.planThinkingLevelInvalid,
       values
     ),
-  ...AGENT_OUTPUT_ERROR_COPY
+  ...AGENT_OUTPUT_ERROR_COPY,
+  ...DICTATION_CLEANUP_ERROR_COPY
 }

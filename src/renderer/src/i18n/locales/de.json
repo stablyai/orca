@@ -4025,6 +4025,8 @@
             "15dd899676": "Zu {{value0}} hinzufügen…"
           },
           "TerminalErrorToast": {
+            "title": "Terminalproblem",
+            "errorTitle": "Terminalfehler",
             "e4aa243f8c": "Daemon neu starten",
             "retry": "Erneut versuchen",
             "retrying": "Wird erneut versucht…",

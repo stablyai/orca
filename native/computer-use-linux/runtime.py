@@ -135,8 +135,11 @@ def pid_of(node):
 
 
 def has_state(node, state):
-    state_set = attempt(node.get_state_set)
-    return bool(state_set is not None and attempt(lambda: state_set.contains(state), False))
+    return state_set_contains(attempt(node.get_state_set), state)
+
+
+def state_set_contains(state_set, state, default=False):
+    return bool(state_set is not None and attempt(lambda: state_set.contains(state), default))
 
 
 class GeometryReader:
@@ -401,8 +404,17 @@ def accessible_id(node):
     return str(attempt(node.get_accessible_id, "") or "")
 
 
+def is_disabled(state_set):
+    # Why: toolkits set ENABLED and SENSITIVE on usable nodes; a node whose states can't be read is not called disabled.
+    usable = [getattr(Atspi.StateType, name, None) for name in ("ENABLED", "SENSITIVE")]
+    if state_set is None or None in usable:
+        return False
+    return not any(state_set_contains(state_set, state, True) for state in usable)
+
+
 def record(node, index, path):
     role = role_of(node)
+    state_set = attempt(node.get_state_set)
     return {
         "index": index,
         "runtimeId": path,
@@ -412,7 +424,8 @@ def record(node, index, path):
         "localizedControlType": role,
         "className": str(attempt(node.get_toolkit_name, "") or ""),
         "value": string_value(node),
-        "isSelected": has_state(node, Atspi.StateType.SELECTED),
+        "isSelected": state_set_contains(state_set, Atspi.StateType.SELECTED),
+        "isDisabled": is_disabled(state_set),
         "nativeWindowHandle": 0,
         "frame": None,
         "actions": action_labels(node),
@@ -474,13 +487,19 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
         has_text = bool(item["name"] or item["automationId"] or item["value"])
         return role in {"panel", "filler", "unknown", "section"} and not has_text and not meaningful_actions(item["actions"]) and summary is None and child_count <= 1
 
+    def walk_children(child_items, depth, path):
+        for position, (child_index, child) in enumerate(child_items):
+            if len(records) >= MAX_NODES or depth > MAX_DEPTH:
+                truncation["truncated"] = True
+                if depth > MAX_DEPTH:
+                    truncation["maxDepthReached"] = True
+                # Marks where the walk stopped, so the agent can read that parent's subtree by index.
+                lines.append(("\t" * depth) + f"... {len(child_items) - position} more not shown (snapshot limit)")
+                return
+            walk(child, depth, path + [child_index])
+
     def walk(node, depth, path):
         nonlocal next_index
-        if len(records) >= MAX_NODES or depth > MAX_DEPTH:
-            truncation["truncated"] = True
-            if depth > MAX_DEPTH:
-                truncation["maxDepthReached"] = True
-            return
         item = record(node, next_index, path)
         role_key = (item["controlType"] or "").lower()
         title = item["name"] or item["automationId"] or ""
@@ -492,15 +511,15 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
             if len(summary_values) >= 2 and is_plain_text_subtree(node):
                 generic_summary = " ".join(summary_values)
         if should_elide(item, len(child_items), generic_summary):
-            for child_index, child in child_items:
-                walk(child, depth, path + [child_index])
+            walk_children(child_items, depth, path)
             return
         records.append(item)
         next_index += 1
         if geometry_nodes is not None:
             geometry_nodes[id(item)] = node
         role_label = item["localizedControlType"] or item["controlType"]
-        line = f'{item["index"]} {role_label} {sanitize_text(title)}'.rstrip()
+        traits = " (disabled)" if item["isDisabled"] else ""
+        line = f'{item["index"]} {role_label}{traits} {sanitize_text(title)}'.rstrip()
         line += formatted_value(role_key, title, item["value"])
         if generic_summary and generic_summary != title:
             line += ", Text: " + sanitize_text(generic_summary)
@@ -515,8 +534,7 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
         if generic_summary or suppressed:
             return
         child_line_start = len(lines)
-        for child_index, child in child_items:
-            walk(child, depth + 1, path + [child_index])
+        walk_children(child_items, depth + 1, path)
         if compact_browser_tabs:
             compact_rendered_browser_tabs(records, lines, child_line_start, depth + 1)
 
@@ -1189,17 +1207,23 @@ def window_json(app, index, window):
     }
 
 
-def make_snapshot(query, include_screenshot, window_id=None, window_index=None, restore=False):
+def make_snapshot(query, include_screenshot, window_id=None, window_index=None, restore=False, root=None):
     app = find_app(query)
     window_index, window = choose_window(app, window_id, window_index)
     if restore:
         restore_window(app, window)
         window_index, window = choose_window(app, window_id, window_index)
     bounds = screen_rect(window)
+    tree_root, root_path = window, [window_index]
+    if root is not None:
+        tree_root = find_element(app, root)
+        if tree_root is None:
+            raise RuntimeError(f"stale element: element {root.get('index')} is gone; run get-app-state again and use a fresh element index")
+        root_path = list(root.get("runtimeId") or [])
     geometry_nodes = {}
     records, lines, truncation = render_accessibility_tree(
-        window,
-        [window_index],
+        tree_root,
+        root_path,
         compact_browser_tabs=is_browser_app(query, app),
         geometry_nodes=geometry_nodes,
     )
@@ -1264,7 +1288,7 @@ def handshake_response():
         "supports": {
             "apps": {"list": True, "bundleIds": False, "pids": True},
             "windows": {"list": True, "targetById": False, "targetByIndex": True, "focus": False, "moveResize": False},
-            "observation": {"screenshot": has_screenshot, "annotatedScreenshot": False, "elementFrames": True, "ocr": False},
+            "observation": {"screenshot": has_screenshot, "annotatedScreenshot": False, "elementFrames": True, "ocr": False, "disabledState": True},
             "actions": {
                 "click": True,
                 "typeText": True,
@@ -1861,6 +1885,7 @@ def run_operation(operation):
                 operation.get("windowId"),
                 operation.get("windowIndex"),
                 bool(operation.get("restoreWindow")),
+                operation.get("root"),
             ),
         }
 

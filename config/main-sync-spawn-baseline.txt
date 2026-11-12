@@ -27,8 +27,8 @@
 1 src/main/ipc/worktree-logic.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
 1 src/main/opencode/status-hooks/legacy-plugin-acl-retry.ts
-2 src/main/orcad/node-pty-precondition.ts
-1 src/main/orcad/orcad-data-root-privacy.ts
+2 src/main/orcad/native-runtime/node-pty-precondition.ts
+1 src/main/orcad/instance-lock/orcad-data-root-privacy.ts
 2 src/main/persistence/profile-state/access/profile-state-access-identity.ts
 1 src/main/persistence/profile-state/recovery/profile-state-recovery-copy.ts
 1 src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs

@@ -40,6 +40,7 @@ import {
   isRuntimeHostUnavailable
 } from './runtime-host/desktop-script-runtime-host'
 import { DesktopScriptSnapshotStore } from './snapshots/desktop-script-snapshot-store'
+import { readSubtreeSnapshot } from './snapshots/desktop-script-subtree-snapshot'
 import { normalizeBridgeApp, renderSnapshot } from './snapshots/desktop-script-snapshot-rendering'
 import { normalizeComputerActionResult } from '../action-contracts/computer-action-verification-normalization'
 import { RuntimeClientError } from '../runtime-client-error'
@@ -119,6 +120,14 @@ export class DesktopScriptProviderClient {
 
   async snapshot(params: Record<string, unknown>): Promise<ComputerSnapshotResult> {
     const app = stringParam(params, 'app')
+    const rootElementIndex = optionalNumberParam(params, 'rootElementIndex')
+    if (rootElementIndex !== undefined) {
+      return await readSubtreeSnapshot(this.snapshotStore, (request) => this.callBridge(request), {
+        app,
+        rootElementIndex,
+        params
+      })
+    }
     const response = await this.callBridge({
       tool: 'get_app_state',
       app,
