@@ -82,6 +82,33 @@ export function useCloudArchivedCount({
   return state.count
 }
 
+/**
+ * Home's two numbers: `archivedRead` (the count while the active list shows, for the empty state)
+ * and `archivedCount` (the switch's label: with the switch on, the archived rows shown).
+ */
+export function useHomeArchivedCount({
+  account,
+  scope,
+  shown,
+  archivedOn,
+  enabled
+}: {
+  account: string
+  scope: 'team' | 'mine'
+  /** The rows Home shows now; null while they load. */
+  shown: readonly { id: string }[] | null
+  archivedOn: boolean
+  enabled: boolean
+}): { archivedRead: number | null; archivedCount: number | null } {
+  const archivedRead = useCloudArchivedCount({
+    account,
+    scope,
+    activeIds: shown ? shown.map((w) => w.id) : null,
+    enabled: enabled && !archivedOn
+  })
+  return { archivedRead, archivedCount: archivedOn ? (shown?.length ?? null) : archivedRead }
+}
+
 /** Tests: forget every cached count. */
 export function resetCloudArchivedCountCache(): void {
   cache.clear()

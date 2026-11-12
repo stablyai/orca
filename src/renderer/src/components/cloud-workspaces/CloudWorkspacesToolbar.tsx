@@ -63,7 +63,8 @@ export function shouldShowCloudHomeFilters(
     (hasOrg && filters.scope !== INITIAL_CLOUD_WORKSPACE_FILTERS.scope) ||
     filters.by !== ANY ||
     filters.repo !== ANY ||
-    filters.archived ||
+    // The Archived switch is not a reason for the full row: the row follows the list it shows
+    // (5+ archived rows: full row; fewer: the switch on its own), so turning it on never floods.
     filters.running === true ||
     filters.routines === true
   return active || count >= CLOUD_HOME_FILTERS_MIN
@@ -74,11 +75,23 @@ export function shouldShowCloudHomeFilters(
  * their Archived switch on its own, so archiving your only workspace never leaves Home without a way
  * back to it.
  */
-export function shouldShowCloudHomeArchivedOnly(
-  showFilters: boolean,
+export function shouldShowCloudHomeArchivedOnly({
+  showFilters,
+  archivedCount,
+  archivedOn,
+  activeCount
+}: {
+  showFilters: boolean
   archivedCount: number | null
-): boolean {
-  return !showFilters && (archivedCount ?? 0) > 0
+  /** The switch is on: it stays, so the active list is one click back. */
+  archivedOn: boolean
+  /** With nothing active, the empty state's "Show archived (N)" is the one way in (no second control). */
+  activeCount: number
+}): boolean {
+  if (showFilters) {
+    return false
+  }
+  return archivedOn || ((archivedCount ?? 0) > 0 && activeCount > 0)
 }
 
 /** Row 1: title, count and cost, refresh. Row 2: whose, by whom, which repo, running, routine runs, archived. */

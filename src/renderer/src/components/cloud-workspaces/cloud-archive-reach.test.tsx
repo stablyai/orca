@@ -19,26 +19,48 @@ vi.mock('@/hooks/useOrcaCloudApiAvailability', () => ({ useOrcaCloudApiAvailable
 
 afterEach(cleanup)
 
-/** What Home decides for `active` active workspaces and `archived` archived ones, no filter on. */
-function homeRow(active: number, archived: number) {
-  const showFilters = shouldShowCloudHomeFilters(active, DEFAULTS, true)
-  return { showFilters, archivedOnly: shouldShowCloudHomeArchivedOnly(showFilters, archived) }
+/** What Home decides for `active` workspaces, `archived` archived ones, and the switch on or off. */
+function homeRow(active: number, archived: number, archivedOn = false) {
+  // With the switch on, Home lists the archived ones: the row follows that list's size.
+  const shown = archivedOn ? archived : active
+  const showFilters = shouldShowCloudHomeFilters(shown, { ...DEFAULTS, archived: archivedOn }, true)
+  return {
+    showFilters,
+    archivedOnly: shouldShowCloudHomeArchivedOnly({
+      showFilters,
+      archivedCount: archived,
+      archivedOn,
+      activeCount: active
+    })
+  }
 }
 
 describe('which filter row Home shows', () => {
   it.each([
-    [0, 0, { showFilters: false, archivedOnly: false }],
-    [0, 1, { showFilters: false, archivedOnly: true }],
-    [3, 0, { showFilters: false, archivedOnly: false }],
-    [3, 2, { showFilters: false, archivedOnly: true }],
-    [5, 0, { showFilters: true, archivedOnly: false }],
-    [5, 4, { showFilters: true, archivedOnly: false }]
-  ])('%i active, %i archived', (active, archived, expected) => {
-    expect(homeRow(active, archived)).toEqual(expected)
+    // Nothing active: the empty state's "Show archived (N)" is the way in, not a second control.
+    [0, 0, false, { showFilters: false, archivedOnly: false }],
+    [0, 2, false, { showFilters: false, archivedOnly: false }],
+    [3, 0, false, { showFilters: false, archivedOnly: false }],
+    [3, 2, false, { showFilters: false, archivedOnly: true }],
+    [5, 0, false, { showFilters: true, archivedOnly: false }],
+    [5, 4, false, { showFilters: true, archivedOnly: false }],
+    // Switch on: a few archived rows keep the minimal row with the switch; 5+ get the full row.
+    [0, 2, true, { showFilters: false, archivedOnly: true }],
+    [3, 2, true, { showFilters: false, archivedOnly: true }],
+    [3, 6, true, { showFilters: true, archivedOnly: false }]
+  ])('%i active, %i archived, switch on: %s', (active, archived, on, expected) => {
+    expect(homeRow(active, archived, on)).toEqual(expected)
   })
 
   it('an unknown count (read failed or loading) keeps today’s row', () => {
-    expect(shouldShowCloudHomeArchivedOnly(false, null)).toBe(false)
+    expect(
+      shouldShowCloudHomeArchivedOnly({
+        showFilters: false,
+        archivedCount: null,
+        archivedOn: false,
+        activeCount: 3
+      })
+    ).toBe(false)
   })
 })
 
@@ -118,6 +140,9 @@ describe('the empty state', () => {
     )
     expect(screen.getByText('All your cloud workspaces are archived')).toBeTruthy()
     expect(screen.queryByText('You don’t have any cloud workspaces yet.')).toBeNull()
+    expect(screen.getByText('Unarchive one to keep working, or start a new one.')).toBeTruthy()
+    // The first-run pitch isn't for someone who already has workspaces.
+    expect(screen.queryByText(/It runs in a sandbox/)).toBeNull()
     expect(screen.getByRole('button', { name: 'New cloud workspace' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Show archived (2)' }))
     expect(onShowArchived).toHaveBeenCalledOnce()

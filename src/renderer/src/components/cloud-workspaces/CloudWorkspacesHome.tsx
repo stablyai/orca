@@ -23,7 +23,7 @@ import {
   shouldShowCloudHomeArchivedOnly,
   shouldShowCloudHomeFilters
 } from './CloudWorkspacesToolbar'
-import { useCloudArchivedCount } from './use-cloud-archived-count'
+import { useHomeArchivedCount } from './use-cloud-archived-count'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
 import { useCloudHomeFilters } from './use-cloud-home-filters'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
@@ -114,17 +114,13 @@ export function CloudWorkspacesHome({
   // A workspace being deleted (or gone) is not something to open or manage; Home leaves it out.
   const all = useHomeWorkspaces(state.status === 'ready' ? state.workspaces : null)
   // ARCHIVE-REACH: archived ones are always reachable, however few workspaces are active.
-  const archivedRead = useCloudArchivedCount({
+  const { archivedRead, archivedCount } = useHomeArchivedCount({
     account,
     scope,
-    activeIds: state.status === 'ready' && !stale ? all.map((w) => w.id) : null,
-    enabled: Boolean(cloud) && !filters.archived
+    shown: state.status === 'ready' && !stale ? all : null,
+    archivedOn: filters.archived,
+    enabled: Boolean(cloud)
   })
-  const archivedCount = filters.archived
-    ? state.status === 'ready' && !stale
-      ? all.length
-      : null
-    : archivedRead
   const showFilters = shouldShowCloudHomeFilters(all.length, filters, Boolean(orgId))
   const { directory, canAdmin } = useMemberDirectory(orgId, all)
   const repos = useMemo(
@@ -297,7 +293,12 @@ export function CloudWorkspacesHome({
         onRefresh={refresh}
         routineRuns={routineRuns}
         showFilters={showFilters}
-        archivedOnly={shouldShowCloudHomeArchivedOnly(showFilters, archivedCount)}
+        archivedOnly={shouldShowCloudHomeArchivedOnly({
+          showFilters,
+          archivedCount,
+          archivedOn: filters.archived,
+          activeCount: all.length
+        })}
         archivedCount={archivedCount}
       />
 

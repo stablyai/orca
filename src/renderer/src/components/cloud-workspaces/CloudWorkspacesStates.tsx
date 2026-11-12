@@ -182,7 +182,10 @@ export function EmptyState({
               'components.cloudWorkspaces.emptyAllArchivedTitle',
               'All your cloud workspaces are archived'
             ),
-            startBody
+            t(
+              'components.cloudWorkspaces.emptyAllArchivedBody',
+              'Unarchive one to keep working, or start a new one.'
+            )
           ]
         : scope === 'mine' && hasOrg
           ? [

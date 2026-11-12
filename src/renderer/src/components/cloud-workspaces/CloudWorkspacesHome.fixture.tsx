@@ -354,7 +354,14 @@ export const emptyMine = defineFixture({
 function archivedRows(n: number) {
   return Array.from({ length: n }, (_, i) =>
     workspace({
-      title: ['fix-auth-redirect', 'billing-retries', 'docs-refresh', 'perf-trace'][i % 4],
+      title: [
+        'fix-auth-redirect',
+        'billing-retries',
+        'docs-refresh',
+        'perf-trace',
+        'flaky-ci',
+        'old-spike'
+      ][i % 6],
       status: 'suspended',
       archivedAt: Date.now() - (i + 1) * 86_400_000,
       section: null
@@ -399,5 +406,7 @@ export const fewNoArchived = homeWith(3, 0)
 export const manyWithArchived = homeWith(7, 2)
 /** 5+ active, none archived: the full filter row, plain Archived. */
 export const manyNoArchived = homeWith(7, 0)
-/** The switch on: the archived rows. */
+/** The switch on with 2 archived: the rows, and the minimal row keeps only the switch. */
 export const archivedShown = homeWith(3, 2, true)
+/** The switch on with 6 archived: 5+ rows shown, so the full filter row (JA-30's rule, same as active). */
+export const manyArchivedShown = homeWith(3, 6, true)
