@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
-import { focusRuntimeTerminalSurface } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
@@ -14,6 +13,10 @@ import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-h
 import type { RenderedWorkspaceRow } from './worktree-sidebar-row-preference'
 import { resolveCycledWorkspaceRow, type LastActiveCycleWorkspace } from './worktree-keyboard-cycle'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import { focusActiveWorkspaceSurfaceFromSidebar } from './focus-workspace-surface'
+import type { WorktreeContextMenuDeleteIntent } from '../../workspace-actions/context-menu/worktree-context-menu-delete-intent'
+import { useSidebarWorkspaceDeleteKeyboard } from './use-sidebar-workspace-delete-keyboard'
 import { useWorkspaceNeighborPrewarm } from './use-neighbor-prewarm'
 
 const PREVIEW_COMMIT_FIRST_REPEAT_MS = 120
@@ -44,6 +47,8 @@ export function useWorktreeListKeyboardNavigation(args: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   activeModal: string
   markDirectScrollInput: () => void
+  onKeyboardSelect?: (worktree: Worktree) => void
+  resolveDeleteIntent?: () => WorktreeContextMenuDeleteIntent | null
 }) {
   const {
     rows,
@@ -52,7 +57,9 @@ export function useWorktreeListKeyboardNavigation(args: {
     pinnedDisplayPolicy,
     scrollRef,
     activeModal,
-    markDirectScrollInput
+    markDirectScrollInput,
+    onKeyboardSelect,
+    resolveDeleteIntent
   } = args
   const keybindings = useAppStore((s) => s.keybindings)
   useWorkspaceNeighborPrewarm({
@@ -96,6 +103,8 @@ export function useWorktreeListKeyboardNavigation(args: {
       setKeyboardPreview(null)
     }
   }, [clearPreviewCommitTimer])
+  const { handleDeleteKeyDown, handleContainerKeyUp, resetDeleteGesture } =
+    useSidebarWorkspaceDeleteKeyboard({ keybindings, resolveDeleteIntent, dropPreview })
   const commitPreview = useCallback(() => {
     const preview = previewRef.current
     dropPreview()
@@ -110,7 +119,7 @@ export function useWorktreeListKeyboardNavigation(args: {
   useEffect(() => clearPreviewCommitTimer, [clearPreviewCommitTimer])
 
   const navigateWorktree = useCallback(
-    (direction: 'up' | 'down', isRepeat: boolean) => {
+    (direction: 'up' | 'down', isRepeat: boolean, selectInList = false) => {
       const { worktreeNavHistory, worktreeNavHistoryIndex } = useAppStore.getState()
       const previewState = previewRef.current
       const preview =
@@ -133,6 +142,9 @@ export function useWorktreeListKeyboardNavigation(args: {
       }
 
       const nextWorktree = nextRow.worktree
+      if (selectInList) {
+        onKeyboardSelect?.(nextWorktree)
+      }
       const executionHostId = getWorktreeExecutionHostId(nextWorktree, nextRow.repo)
       if (isRepeat) {
         previewRef.current = { row: nextRow, fromWorktreeId: activeWorktreeId }
@@ -174,6 +186,7 @@ export function useWorktreeListKeyboardNavigation(args: {
       activeWorktreeId,
       activeWorkspaceExecutionHostId,
       pinnedDisplayPolicy,
+      onKeyboardSelect,
       clearPreviewCommitTimer,
       commitPreview,
       dropPreview
@@ -221,20 +234,36 @@ export function useWorktreeListKeyboardNavigation(args: {
         commitPreview()
       }
     }
-    const handlePointerDown = () => {
-      endListNavigation()
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node && scrollRef.current?.contains(event.target))) {
+        endListNavigation()
+      }
+      resetDeleteGesture()
       dropPreview()
+    }
+    const handleFocusOut = (event: FocusEvent) => {
+      if (event.target === scrollRef.current) {
+        endListNavigation()
+        resetDeleteGesture()
+      }
+    }
+    const handleBlur = () => {
+      endListNavigation()
+      resetDeleteGesture()
     }
 
     addAppKeyListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp, { capture: true })
     window.addEventListener('pointerdown', handlePointerDown, { capture: true })
-    window.addEventListener('focusout', endListNavigation, { capture: true })
+    window.addEventListener('focusout', handleFocusOut, { capture: true })
+    window.addEventListener('blur', handleBlur)
     return () => {
       removeAppKeyListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp, { capture: true })
       window.removeEventListener('pointerdown', handlePointerDown, { capture: true })
-      window.removeEventListener('focusout', endListNavigation, { capture: true })
+      window.removeEventListener('focusout', handleFocusOut, { capture: true })
+      window.removeEventListener('blur', handleBlur)
+      resetDeleteGesture()
     }
   }, [
     activeModal,
@@ -243,51 +272,47 @@ export function useWorktreeListKeyboardNavigation(args: {
     keybindings,
     markDirectScrollInput,
     navigateWorktree,
-    scrollRef
+    scrollRef,
+    resetDeleteGesture
   ])
 
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (
         e.defaultPrevented ||
+        e.isComposing ||
         e.target !== e.currentTarget ||
         activeModal !== 'none' ||
         hasVisibleOverlay()
       ) {
         return
       }
+      if (handleDeleteKeyDown(e)) {
+        return
+      }
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         // The focused DOM node owns navigation, including while a new terminal mounts.
         e.currentTarget.setAttribute('data-keyboard-navigation', '')
         markDirectScrollInput()
-        navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down', e.repeat)
+        navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down', e.repeat, true)
         e.preventDefault()
       } else if (e.key === 'Enter') {
         if (previewRef.current !== null) {
           commitPreview()
         }
-        const { activeView, activeWorktreeId, activeTabType, activeTabId, tabsByWorktree } =
-          useAppStore.getState()
-        if (
-          activeView === 'terminal' &&
-          activeTabType === 'terminal' &&
-          activeWorktreeId &&
-          activeTabId &&
-          tabsByWorktree[activeWorktreeId]?.some((tab) => tab.id === activeTabId)
-        ) {
-          // The registered manager owns the active split; unavailable surfaces keep list focus.
-          focusRuntimeTerminalSurface(activeTabId, null, activeWorktreeId)
-        }
+        focusActiveWorkspaceSurfaceFromSidebar(e.currentTarget)
         e.preventDefault()
       } else if (['PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) {
         markDirectScrollInput()
       }
     },
-    [activeModal, commitPreview, markDirectScrollInput, navigateWorktree]
+    [activeModal, commitPreview, handleDeleteKeyDown, markDirectScrollInput, navigateWorktree]
   )
 
   return {
     handleContainerKeyDown,
+    handleContainerKeyUp,
+    handleContainerBlur: resetDeleteGesture,
     keyboardPreview: keyboardPreview?.fromWorktreeId === activeWorktreeId ? keyboardPreview : null
   }
 }

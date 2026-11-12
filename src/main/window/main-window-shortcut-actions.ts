@@ -42,9 +42,6 @@ export function sendResolvedWindowShortcutAction(
     case 'openNewWorkspace':
       mainWindow.webContents.send('ui:openNewWorkspace')
       return
-    case 'deleteCurrentWorkspace':
-      mainWindow.webContents.send('ui:deleteCurrentWorkspace')
-      return
     case 'openWorkspaceBoard':
       mainWindow.webContents.send('ui:openWorkspaceBoard')
       return

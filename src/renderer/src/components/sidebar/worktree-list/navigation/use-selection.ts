@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import type React from 'react'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -36,11 +36,40 @@ export function useSidebarWorktreeSelection(args: {
     getKey: getWorktreeHostIdentity,
     getScope: getSidebarContainer
   })
+  const { updateSelectionForGesture: updateSelection } = selection
+  const [focusedKey, setFocusedKey] = useState<string | null>(null)
+  const focusedWorktree = useMemo(
+    () =>
+      selection.selectedItems.find((item) => getWorktreeHostIdentity(item) === focusedKey) ?? null,
+    [focusedKey, selection.selectedItems]
+  )
+  if (focusedKey !== null && focusedWorktree === null) {
+    setFocusedKey(null)
+  }
+  const selectWorktree = useCallback(
+    (worktree: Worktree) => {
+      setFocusedKey(getWorktreeHostIdentity(worktree))
+      updateSelection({ metaKey: false, ctrlKey: false, shiftKey: false }, worktree)
+    },
+    [updateSelection]
+  )
+  const updateSelectionForGesture = useCallback(
+    (event: React.MouseEvent<HTMLElement>, worktree: Worktree): boolean => {
+      const list = event.currentTarget?.closest<HTMLElement>('[data-worktree-sidebar]')
+      list?.focus({ preventScroll: true })
+      list?.setAttribute('data-keyboard-navigation', '')
+      setFocusedKey(getWorktreeHostIdentity(worktree))
+      return updateSelection(event, worktree)
+    },
+    [updateSelection]
+  )
   const { selectForContextMenu: selectItemForContextMenu } = selection
   // Why keep the event arg: kanban and list cards share the onContextMenuSelect prop shape.
   const selectForContextMenu = useCallback(
-    (_event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] =>
-      selectItemForContextMenu(worktree),
+    (_event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
+      setFocusedKey(getWorktreeHostIdentity(worktree))
+      return selectItemForContextMenu(worktree)
+    },
     [selectItemForContextMenu]
   )
 
@@ -75,7 +104,9 @@ export function useSidebarWorktreeSelection(args: {
     renderedWorktreeIdentities: selection.visibleKeys,
     selectedWorktreeIds: selection.selectedKeys,
     selectedWorktrees: selection.selectedItems,
-    updateSelectionForGesture: selection.updateSelectionForGesture,
+    focusedWorktree,
+    selectWorktree,
+    updateSelectionForGesture,
     selectForContextMenu
   }
 }
