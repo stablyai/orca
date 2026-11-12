@@ -243,7 +243,7 @@ export async function routePageTextInsertion(
     }
   }
   if (route.kind === 'widget' && route.hasFocusedLocalFrame) {
-    const insertText = await prepareGuestTextInsertion(send)
+    const insertText = await prepareGuestTextInsertion(send, route.contextId)
     return {
       deliver: (insertParams) =>
         withAgentInputInjection(webContents, async () => {

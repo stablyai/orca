@@ -13,7 +13,7 @@ import {
 
 export type FocusedFrameRoute =
   // The renderer still validates the editable target when committing text.
-  | { kind: 'widget'; hasFocusedLocalFrame: boolean }
+  | { kind: 'widget'; hasFocusedLocalFrame: boolean; contextId?: number }
   | { kind: 'session'; sessionId: string }
   | { kind: 'unknown' }
 
@@ -100,7 +100,11 @@ function routeFor(at: ProbeSite, focusedElement: boolean): FocusedFrameRoute {
     return { kind: 'session', sessionId: at.sessionId }
   }
   // Entering a same-site frame through its focused owner proves that frame holds focus.
-  return { kind: 'widget', hasFocusedLocalFrame: focusedElement || at.contextId !== undefined }
+  return {
+    kind: 'widget',
+    hasFocusedLocalFrame: focusedElement || at.contextId !== undefined,
+    ...(at.contextId === undefined ? {} : { contextId: at.contextId })
+  }
 }
 
 /** Follow focus through same-site contexts and cross-site sessions. */

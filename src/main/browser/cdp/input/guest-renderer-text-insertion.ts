@@ -3,6 +3,7 @@ import { BrowserError } from '../../browser-error'
 import {
   readRecord,
   readString,
+  settle,
   settleWithin,
   type GuestSessionCdpSender
 } from './guest-frame-input-sessions'
@@ -10,10 +11,15 @@ import {
 const INSERT_TIMEOUT_MS = 10_000
 const INSERT_WORLD_NAME = 'orca-guest-text-insertion'
 
-const insertionScript = (text: string, expiresAt: number): string => `(() => {
+const insertionScript = (
+  text: string,
+  expiresAt: number,
+  requireFrameFocus: boolean
+): string => `(() => {
   const expiresAt = ${expiresAt}
   const text = ${JSON.stringify(text)}
   const focusedField = () => {
+    if (${requireFrameFocus} && !document.hasFocus()) return null
     let doc = document
     for (let depth = 0; depth < 64; depth++) {
       let field = doc.activeElement
@@ -47,8 +53,17 @@ const insertionScript = (text: string, expiresAt: number): string => `(() => {
 
 /** Bind edits to this document's isolated world, so navigation invalidates queued work. */
 export async function prepareGuestTextInsertion(
-  send: GuestSessionCdpSender
+  send: GuestSessionCdpSender,
+  focusedContextId?: number
 ): Promise<(webContents: WebContents, text: string) => Promise<void>> {
+  if (focusedContextId !== undefined) {
+    // Virtual page focus preserves background input while hasFocus fences a stale child route.
+    const emulated = await settle(send('Emulation.setFocusEmulationEnabled', { enabled: true }))
+    if (emulated.outcome !== 'ok') {
+      throw unavailableError()
+    }
+    return (webContents, text) => insertGuestText(webContents, send, focusedContextId, text, true)
+  }
   const tree = await settleWithin(send('Page.getFrameTree', {}), null)
   const frameId = readString(readRecord(readRecord(tree, 'frameTree'), 'frame'), 'id')
   const world = frameId
@@ -64,7 +79,7 @@ export async function prepareGuestTextInsertion(
   if (typeof contextId !== 'number') {
     throw unavailableError()
   }
-  return (webContents, text) => insertGuestText(webContents, send, contextId, text)
+  return (webContents, text) => insertGuestText(webContents, send, contextId, text, false)
 }
 
 function unavailableError(): BrowserError {
@@ -82,7 +97,8 @@ async function insertGuestText(
   webContents: WebContents,
   send: GuestSessionCdpSender,
   contextId: number,
-  text: string
+  text: string,
+  requireFrameFocus: boolean
 ): Promise<void> {
   const expiresAt = Date.now() + INSERT_TIMEOUT_MS
   let stop = (): void => {}
@@ -106,7 +122,7 @@ async function insertGuestText(
   try {
     const response = await Promise.race([
       send('Runtime.evaluate', {
-        expression: insertionScript(text, expiresAt),
+        expression: insertionScript(text, expiresAt, requireFrameFocus),
         contextId,
         returnByValue: true
       }).catch(() => {

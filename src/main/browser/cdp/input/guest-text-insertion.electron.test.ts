@@ -34,6 +34,50 @@ app.whenReady().then(async () => {
   const send = (method, params, sessionId) => guest.debugger.sendCommand(method, params, sessionId)
   const insert = async text => (await routePageTextInsertion(guest, send)).deliver({ text })
   await guest.executeJavaScript('field.focus()')
+  if (scenario.startsWith('child-')) {
+    const childServer = createServer((_req,res) => {
+      res.setHeader('Content-Type','text/html')
+      res.end('<textarea id="field"></textarea>')
+    })
+    await new Promise(resolve => childServer.listen(0,'127.0.0.1',resolve))
+    const loaded = new Promise(resolve => guest.once('did-frame-finish-load',resolve))
+    await guest.executeJavaScript('document.querySelector("iframe").src="http://127.0.0.1:' + childServer.address().port + '/";void 0')
+    await loaded
+    const { frameTree } = await send('Page.getFrameTree',{})
+    const frameId = frameTree.childFrames[0].frame.id
+    const { executionContextId } = await send('Page.createIsolatedWorld',{frameId,worldName:'fixture-child'})
+    const child = expression => send('Runtime.evaluate',{expression,contextId:executionContextId,returnByValue:true})
+    const { targetInfos } = await send('Target.getTargets',{})
+    if (targetInfos.some(target => target.type === 'iframe' && target.targetId === frameId)) throw Error('Fixture child must share the root renderer')
+    await child('field.focus()')
+    if (scenario === 'child-focus-race') await child("document.designMode='on';document.body.innerHTML='';document.body.focus()")
+    await win.webContents.executeJavaScript('draft.focus()')
+    const route = await routePageTextInsertion(guest,send)
+    if (scenario === 'child-focus-race') await guest.executeJavaScript('field.focus()')
+    if (scenario === 'child-detached') await guest.executeJavaScript('document.querySelector("iframe").remove()')
+    if (scenario === 'child-navigation') {
+      const reloaded = new Promise(resolve => guest.once('did-frame-finish-load',resolve))
+      await guest.executeJavaScript('document.querySelector("iframe").src+="?new";void 0')
+      await reloaded
+    }
+    if (scenario === 'child-expired') {
+      const busy = new Promise(resolve => guest.once('console-message',resolve))
+      void child("console.log('busy');{const end=performance.now()+11000;while(performance.now()<end){}}")
+      await busy
+    }
+    let outcome = 'ok'
+    try { await route.deliver({text:'Child 🙏'}) } catch(error) {outcome=error.code}
+    const after = scenario === 'child-detached' ? null : scenario === 'child-navigation'
+      ? await guest.mainFrame.frames[0].executeJavaScript('field.value')
+      : (await child(scenario === 'child-focus-race' ? 'document.body.textContent' : 'field.value')).result.value
+    await guest.executeJavaScript('field.focus()')
+    await insert('Next 🙏')
+    const result = {outcome,after,root:await guest.executeJavaScript('field.value'),host:await win.webContents.executeJavaScript('draft.value'),hostFocus:await win.webContents.executeJavaScript('document.activeElement.id')}
+    guest.debugger.detach()
+    win.destroy()
+    answer(result)
+    return
+  }
   if (scenario === 'editing') {
     await guest.executeJavaScript("field.value='Replace me';field.setSelectionRange(0,10);window.inputText='';field.addEventListener('input',()=>{inputText=field.value})")
     await insert('First\nSecond 🙏')
@@ -115,7 +159,12 @@ it.each([
   'detached',
   'editing',
   'handler-expired',
-  'renderer-dies'
+  'renderer-dies',
+  'child-insert',
+  'child-focus-race',
+  'child-expired',
+  'child-navigation',
+  'child-detached'
 ])(
   'handles %s input without leaking or replaying abandoned text',
   async (scenario) => {
@@ -135,6 +184,22 @@ it.each([
         JSON.stringify({ resultPath: join(root, 'result.json'), scenario })
       )
       const result = await runBrowserRouteEgressElectron(root, mainPath)
+      if (scenario.startsWith('child-')) {
+        expect(result).toEqual({
+          outcome:
+            scenario === 'child-insert'
+              ? 'ok'
+              : scenario === 'child-expired'
+                ? 'browser_timeout'
+                : 'browser_input_target_unavailable',
+          after:
+            scenario === 'child-insert' ? 'Child 🙏' : scenario === 'child-detached' ? null : '',
+          root: 'Next 🙏',
+          host: 'Unsent draft',
+          hostFocus: 'draft'
+        })
+        return
+      }
       if (scenario === 'editing') {
         expect(result).toEqual({
           selection: 'First\nSecond 🙏',
