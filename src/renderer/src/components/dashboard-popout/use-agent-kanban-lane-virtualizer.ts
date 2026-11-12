@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import { useVirtualizer, type Range } from '@tanstack/react-virtual'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { extractPinnedVirtualRange } from '@/lib/list-interaction/pinned-virtual-range'
@@ -16,6 +16,8 @@ const AGENT_CARD_OVERSCAN = 6
  */
 export function useAgentKanbanLaneVirtualizer({
   cards,
+  paneKeys,
+  indexByPaneKey,
   scrollElement,
   expandedPaneKeys,
   focusedIndex,
@@ -23,12 +25,33 @@ export function useAgentKanbanLaneVirtualizer({
   pendingIndex
 }: {
   cards: DashboardCard[]
+  paneKeys: readonly string[]
+  indexByPaneKey: ReadonlyMap<string, number>
   scrollElement: HTMLDivElement | null
   expandedPaneKeys: ReadonlySet<string>
   focusedIndex: number | undefined
   dialogIndex: number | undefined
   pendingIndex: number | undefined
 }) {
+  const [previousSubagentCounts, setPreviousSubagentCounts] = useState(() =>
+    cards.map((card) => card.subagents?.length ?? 0)
+  )
+  const subagentCounts = useMemo(
+    () =>
+      cards.length === previousSubagentCounts.length &&
+      cards.every((card, index) => (card.subagents?.length ?? 0) === previousSubagentCounts[index])
+        ? previousSubagentCounts
+        : cards.map((card) => card.subagents?.length ?? 0),
+    [cards, previousSubagentCounts]
+  )
+  if (subagentCounts !== previousSubagentCounts) {
+    setPreviousSubagentCounts(subagentCounts)
+  }
+  // This core version keys layout invalidation to getItemKey, including changes to height estimates.
+  const layout = useMemo(
+    () => ({ paneKeys, subagentCounts, expandedPaneKeys }),
+    [paneKeys, subagentCounts, expandedPaneKeys]
+  )
   // Lane endpoints stay mounted so native Tab enters and leaves the lane at its logical first and last cards.
   const rangeExtractor = useCallback(
     (range: Range) =>
@@ -43,30 +66,38 @@ export function useAgentKanbanLaneVirtualizer({
   )
   const estimateSize = useCallback(
     (index: number) => {
-      const subagentCount = cards[index]?.subagents?.length ?? 0
+      const subagentCount = layout.subagentCounts[index] ?? 0
       if (subagentCount === 0) {
         return AGENT_CARD_ESTIMATED_HEIGHT
       }
-      const expanded = expandedPaneKeys.has(cards[index].paneKey)
+      const expanded = layout.expandedPaneKeys.has(layout.paneKeys[index])
       return (
         AGENT_CARD_ESTIMATED_HEIGHT +
         AGENT_CARD_SUBAGENT_TOGGLE_HEIGHT +
         (expanded ? subagentCount * AGENT_CARD_SUBAGENT_ROW_HEIGHT : 0)
       )
     },
-    [cards, expandedPaneKeys]
+    [layout]
   )
   const virtualizer = useVirtualizer({
-    count: cards.length,
+    count: paneKeys.length,
     getScrollElement: () => scrollElement,
     estimateSize,
-    getItemKey: useCallback((index: number) => cards[index]?.paneKey ?? index, [cards]),
+    getItemKey: useCallback((index: number) => layout.paneKeys[index] ?? index, [layout]),
     overscan: AGENT_CARD_OVERSCAN,
     gap: AGENT_CARD_GAP,
     rangeExtractor,
     // Async renders plus overscan avoid blocking wheel events with rich-card flushes.
     useFlushSync: false
   })
+  useLayoutEffect(() => {
+    // Detached row observers retire DOM; logical departure must also retire its measured size.
+    for (const key of virtualizer.itemSizeCache.keys()) {
+      if (typeof key !== 'string' || !indexByPaneKey.has(key)) {
+        virtualizer.itemSizeCache.delete(key)
+      }
+    }
+  }, [indexByPaneKey, virtualizer])
   return {
     virtualItems: virtualizer.getVirtualItems(),
     totalSize: virtualizer.getTotalSize(),

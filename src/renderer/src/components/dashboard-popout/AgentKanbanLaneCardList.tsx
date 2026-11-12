@@ -37,9 +37,21 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
   onOpenTerminal
 }: AgentKanbanLaneCardListProps): React.JSX.Element {
   const listRef = useRef<HTMLDivElement | null>(null)
+  const [previousPaneKeys, setPreviousPaneKeys] = useState(() => cards.map((card) => card.paneKey))
+  const paneKeys = useMemo(
+    () =>
+      cards.length === previousPaneKeys.length &&
+      cards.every((card, index) => card.paneKey === previousPaneKeys[index])
+        ? previousPaneKeys
+        : cards.map((card) => card.paneKey),
+    [cards, previousPaneKeys]
+  )
+  if (paneKeys !== previousPaneKeys) {
+    setPreviousPaneKeys(paneKeys)
+  }
   const indexByPaneKey = useMemo(
-    () => new Map(cards.map((card, index) => [card.paneKey, index])),
-    [cards]
+    () => new Map(paneKeys.map((paneKey, index) => [paneKey, index])),
+    [paneKeys]
   )
   const [expandedPaneKeys, setExpandedPaneKeys] = useState<ReadonlySet<string>>(EMPTY_PANE_KEYS)
   // Last focused card stays pinned after focus leaves the lane so dialog close and window refocus can return to it.
@@ -74,6 +86,8 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
   const pendingIndex = pendingTab ? indexByPaneKey.get(pendingTab.paneKey) : undefined
   const { virtualItems, totalSize, measureElement, scrollToIndex } = useAgentKanbanLaneVirtualizer({
     cards,
+    paneKeys,
+    indexByPaneKey,
     scrollElement,
     expandedPaneKeys,
     focusedIndex,
