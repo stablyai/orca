@@ -4,22 +4,14 @@ import {
   parseAgentStatusPaneIdentity,
   resolveAgentStatusWorktreeId
 } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
-import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '../../../../../../shared/workspace-layout/terminal-surface-id'
-
-export type LiveEntriesByWorktreeCache = {
-  tabsByWorktree: AppState['tabsByWorktree']
-  unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] | undefined
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
-  entriesByWorktree: Map<string, AgentStatusEntry[]>
-}
 
 // Local completed orphans stay hidden; remote rows await host retraction, not tab hydration.
 export function liveEntryWorktreeId(
   paneKey: string,
   entry: AgentStatusEntry,
-  tabIdToWorktreeId: Map<string, string>,
+  tabIdToWorktreeId: Pick<ReadonlyMap<string, string>, 'get'>,
   representedTabs?: ReadonlyMap<string, Tab>
 ): string | undefined {
   const parsed = parseAgentStatusPaneIdentity(paneKey, representedTabs?.get(paneKey))
@@ -32,67 +24,6 @@ export function liveEntryWorktreeId(
     return resolveAgentStatusWorktreeId(entry, tabIdToWorktreeId) ?? undefined
   }
   return tabWorktreeId ?? (entry.state === 'done' && !remote ? undefined : entry.worktreeId)
-}
-
-/** Patch unchanged buckets on status pings; producers must not reorder keys without entry/key changes, or must invalidate this cache. */
-export function patchLiveEntriesByWorktree(
-  cache: LiveEntriesByWorktreeCache,
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
-  tabIdToWorktreeId: Map<string, string>,
-  representedTabs?: ReadonlyMap<string, Tab>
-): Map<string, AgentStatusEntry[]> | null {
-  const previousMap = cache.agentStatusByPaneKey
-  const changed: { paneKey: string; entry: AgentStatusEntry }[] = []
-  let keyCount = 0
-  for (const paneKey in agentStatusByPaneKey) {
-    keyCount += 1
-    const entry = agentStatusByPaneKey[paneKey]
-    const previous = previousMap[paneKey]
-    if (previous === entry) {
-      continue
-    }
-    // Added keys or changes to worktree, remote presence or done-ness require rebucketing.
-    if (
-      previous === undefined ||
-      previous.worktreeId !== entry.worktreeId ||
-      Boolean(previous.connectionId) !== Boolean(entry.connectionId) ||
-      (previous.state === 'done') !== (entry.state === 'done')
-    ) {
-      return null
-    }
-    if (!agentRowEntriesEqual(previous, entry)) {
-      changed.push({ paneKey, entry })
-    }
-  }
-  if (keyCount !== Object.keys(previousMap).length) {
-    // Removed keys require bucket cleanup through a full rebuild.
-    return null
-  }
-  if (changed.length === 0) {
-    return cache.entriesByWorktree
-  }
-
-  const entriesByWorktree = new Map(cache.entriesByWorktree)
-  const clonedBuckets = new Set<string>()
-  for (const { paneKey, entry } of changed) {
-    const worktreeId = liveEntryWorktreeId(paneKey, entry, tabIdToWorktreeId, representedTabs)
-    if (!worktreeId) {
-      continue
-    }
-    const bucket = entriesByWorktree.get(worktreeId)
-    const index = bucket?.findIndex((row) => row.paneKey === paneKey) ?? -1
-    if (!bucket || index < 0) {
-      return null
-    }
-    const nextBucket = clonedBuckets.has(worktreeId) ? bucket : bucket.slice()
-    // Replace in place to retain the iteration order a full rebuild would produce.
-    nextBucket[index] = entry
-    if (!clonedBuckets.has(worktreeId)) {
-      clonedBuckets.add(worktreeId)
-      entriesByWorktree.set(worktreeId, nextBucket)
-    }
-  }
-  return entriesByWorktree
 }
 
 /** Delivery sequence is consumed from the store by attention, never displayed in agent rows. */

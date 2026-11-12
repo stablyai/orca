@@ -73,7 +73,7 @@ afterEach(() => {
           { updatedAt: 1_000, stateStartedAt: 1_000 }
         )
 
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = store.getState().agentStatusByPaneKey.get('tab-1:1')!
       expect(entry.state).toBe('working')
       expect(entry.prompt).toBe('fresh')
       expect(entry.updatedAt).toBe(2_000)
@@ -147,11 +147,11 @@ afterEach(() => {
 
       const s = store.getState()
       expect(s.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-closed')).toBe(false)
-      expect(s.agentStatusByPaneKey['tab-closed:0']).toBeUndefined()
-      expect(s.agentStatusByPaneKey['tab-orphan:0']).toBeUndefined()
-      expect(s.agentStatusByPaneKey['tab-active-child:0']).toBeDefined()
-      expect(s.agentStatusByPaneKey['tab-live:0']).toBeDefined()
-      expect(s.agentStatusByPaneKey['tab-other-orphan:0']).toBeDefined()
+      expect(s.agentStatusByPaneKey.get('tab-closed:0')!).toBeUndefined()
+      expect(s.agentStatusByPaneKey.get('tab-orphan:0')!).toBeUndefined()
+      expect(s.agentStatusByPaneKey.get('tab-active-child:0')!).toBeDefined()
+      expect(s.agentStatusByPaneKey.get('tab-live:0')!).toBeDefined()
+      expect(s.agentStatusByPaneKey.get('tab-other-orphan:0')!).toBeDefined()
     })
 
     it.each(['wt-1', 'folder-workspace-1'])(
@@ -216,13 +216,15 @@ afterEach(() => {
         store.getState().closeTab('tab-closed')
 
         const after = store.getState()
-        expect(after.agentStatusByPaneKey[paneKey]).toBe(before.agentStatusByPaneKey[paneKey])
+        expect(after.agentStatusByPaneKey.get(paneKey)!).toBe(
+          before.agentStatusByPaneKey.get(paneKey)!
+        )
         expect(after.acknowledgedAgentsByPaneKey[paneKey]).toBe(
           before.acknowledgedAgentsByPaneKey[paneKey]
         )
         expect(after.activityClearedAtByPaneKey[paneKey]).toBe(100)
         expect(after.manuallyUnreadTurnsByPaneKey[paneKey]).toBe(200)
-        expect(after.agentStatusByPaneKey[missingOwnerPaneKey]).toBeUndefined()
+        expect(after.agentStatusByPaneKey.get(missingOwnerPaneKey)!).toBeUndefined()
         expect(after.acknowledgedAgentsByPaneKey[missingOwnerPaneKey]).toBeUndefined()
         expect(after.activityClearedAtByPaneKey[missingOwnerPaneKey]).toBeUndefined()
         expect(after.manuallyUnreadTurnsByPaneKey[missingOwnerPaneKey]).toBeUndefined()
@@ -234,7 +236,7 @@ afterEach(() => {
 
         const closed = store.getState()
         expect(closed.unifiedTabsByWorktree[worktreeId]).toEqual([])
-        expect(closed.agentStatusByPaneKey[paneKey]).toBeUndefined()
+        expect(closed.agentStatusByPaneKey.get(paneKey)!).toBeUndefined()
         expect(closed.acknowledgedAgentsByPaneKey[paneKey]).toBeUndefined()
         expect(closed.activityClearedAtByPaneKey[paneKey]).toBeUndefined()
         expect(closed.manuallyUnreadTurnsByPaneKey[paneKey]).toBeUndefined()
@@ -264,12 +266,12 @@ afterEach(() => {
         paneKeys: new Set([retiringPaneKey])
       })
 
-      expect(patch.agentStatusByPaneKey?.[retiringPaneKey]).toBeUndefined()
-      expect(patch.agentStatusByPaneKey?.[siblingPaneKey]).toBe(
-        before.agentStatusByPaneKey[siblingPaneKey]
+      expect(patch.agentStatusByPaneKey!.get(retiringPaneKey)!).toBeUndefined()
+      expect(patch.agentStatusByPaneKey!.get(siblingPaneKey)!).toBe(
+        before.agentStatusByPaneKey.get(siblingPaneKey)!
       )
-      expect(patch.agentStatusByPaneKey?.['missing-owner:0']).toBe(
-        before.agentStatusByPaneKey['missing-owner:0']
+      expect(patch.agentStatusByPaneKey!.get('missing-owner:0')!).toBe(
+        before.agentStatusByPaneKey.get('missing-owner:0')!
       )
     })
   })

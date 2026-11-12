@@ -40,7 +40,7 @@ type DeferredSpawn = {
 
 function providerSessionLiveInAnotherPane(resume: SleepingAgentSessionRecord): boolean {
   const state = useAppStore.getState()
-  return Object.values(state.agentStatusByPaneKey).some((entry) => {
+  return Array.from(state.agentStatusByPaneKey.values()).some((entry) => {
     const pane = entry.paneKey === resume.paneKey ? null : parsePaneKey(entry.paneKey)
     return (
       pane !== null &&

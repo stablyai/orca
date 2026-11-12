@@ -1,3 +1,4 @@
+import type { AcceptedAgentStatuses } from './accepted-agent-statuses'
 import type { AgentSenderPublication } from '../../../../../shared/agent-sender-associations'
 import type { AgentSenderPublications } from '@/runtime/native-chat/agent-senders/agent-sender-publication-patch'
 import type {
@@ -37,7 +38,7 @@ export type AgentStatusSlice = {
   agentSenderPublicationsByHost: AgentSenderPublications
   setAgentSenderPublication: (host: string, publication: AgentSenderPublication | undefined) => void
   /** Explicit agent status entries keyed by `${tabId}:${leafId}`; real-time only, not persisted. */
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   /** Pane conversation identity and first session clock; transient and independent of agent occupancy. */
   agentConversationsByPaneKey: Record<string, AgentPaneConversationIdentity>
   /** Store-local committed row changes, using writer-known keys rather than map discovery. */

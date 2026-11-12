@@ -11,8 +11,8 @@ export function resolveLeafCloseCopyKind(
   if (!leafId || !isTerminalLeafId(leafId) || !tabId || tabId.includes(':')) {
     return 'command'
   }
-  const agentStatusByPaneKey = useAppStore.getState().agentStatusByPaneKey ?? {}
-  const agentType = agentStatusByPaneKey[makePaneKey(tabId, leafId)]?.agentType
+  const agentStatusByPaneKey = useAppStore.getState().agentStatusByPaneKey
+  const agentType = agentStatusByPaneKey.get(makePaneKey(tabId, leafId))?.agentType
   return agentType && agentType !== 'unknown' ? 'agent' : 'command'
 }
 

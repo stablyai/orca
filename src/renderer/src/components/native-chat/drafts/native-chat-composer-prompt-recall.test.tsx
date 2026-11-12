@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { promptValue } from '../composer/editor/native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 
@@ -26,7 +27,7 @@ vi.mock('../../../store/index', () => {
   const state = {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     updateSettings: vi.fn(),
     clearNativeChatLaunchDraft: vi.fn(),
     markNativeChatLaunchDraftAdopted: vi.fn()

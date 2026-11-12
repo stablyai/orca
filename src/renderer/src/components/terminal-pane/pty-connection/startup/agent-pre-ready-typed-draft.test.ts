@@ -351,16 +351,21 @@ describe('agent pane keys typed before its PTY binds', () => {
   it('leaves a paired-server agent pane resuming a live entry on its own transport', async () => {
     pairedRoute.runtimeEnvironmentId = 'env-1'
     const paneKey = makePaneKey('tab-1', leafIdForPane(1))
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
-      state: 'working',
-      prompt: '',
-      agentType: 'claude',
-      paneKey,
-      updatedAt: 1_000,
-      stateStartedAt: 1_000,
-      stateHistory: [],
-      providerSession: { key: 'session_id', id: 'session-1' }
-    }
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        paneKey,
+        {
+          state: 'working',
+          prompt: '',
+          agentType: 'claude',
+          paneKey,
+          updatedAt: 1_000,
+          stateStartedAt: 1_000,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'session-1' }
+        }
+      ]
+    ])
     const pane = connectAgentPane({ startup: undefined })
     await flushAsyncTicks(20)
 

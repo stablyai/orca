@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 /** Bulk worktree purge must clear pane status/unread/input maps like single removal. External scans/project removal/hydration run no terminal teardown; missed entries otherwise leak for renderer lifetime and leave unread dock badges. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -76,7 +77,7 @@ function seedPaneState(store: ReturnType<typeof createTestStore>): void {
       repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })]
     },
     tabsByWorktree: { [WT]: [makeTab({ id: TAB, worktreeId: WT })] },
-    agentStatusByPaneKey: { [PANE]: liveEntry(PANE) },
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE]: liveEntry(PANE) })),
     agentLaunchConfigByPaneKey: {
       [PANE]: { launchConfig: {}, registeredAt: 0, identity: {} }
     } as unknown as AppState['agentLaunchConfigByPaneKey'],
@@ -101,7 +102,7 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     const store = createTestStore()
     seedPaneState(store)
     const epochBefore = store.getState().agentStatusEpoch
-    const previous = store.getState().agentStatusByPaneKey[PANE]
+    const previous = store.getState().agentStatusByPaneKey.get(PANE)
     const accepted = vi.fn()
     const dispose = store.getState().subscribeAgentStatusChanges(accepted)
 
@@ -112,7 +113,7 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
       { paneKey: PANE, previous, current: undefined }
     ])
     dispose()
-    expect(s.agentStatusByPaneKey[PANE]).toBeUndefined()
+    expect(s.agentStatusByPaneKey.get(PANE)).toBeUndefined()
     expect(s.agentStatusEpoch).toBe(epochBefore + 1)
     expect(s.agentLaunchConfigByPaneKey[PANE]).toBeUndefined()
     expect(s.acknowledgedAgentsByPaneKey[PANE]).toBeUndefined()

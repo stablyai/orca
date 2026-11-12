@@ -1,3 +1,4 @@
+import type { PresentationRecordDrafts } from './presentation-record-drafts'
 import type { AppState } from '../../store/types'
 import type { RetiredTerminalTabSweepState } from '../../store/terminals/retired-terminal-tab-state-sweep'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -274,7 +275,7 @@ export type WebSessionOpenFilesIndex = {
 export type WebSessionTabsBatchContext = {
   changedAgentPaneKeys?: Set<string>
   retractionPaneKeysByRecord?: WeakMap<object, Map<string, Set<string>>>
-  agentPaneKeysByTabId: Map<string, Set<string>> | null
   changedRecords: Set<WebSessionTabsBatchRecordKey>
+  presentationDrafts?: PresentationRecordDrafts
   openFilesIndex: WebSessionOpenFilesIndex | null
 }

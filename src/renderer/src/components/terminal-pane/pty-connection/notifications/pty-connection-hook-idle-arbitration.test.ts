@@ -163,21 +163,26 @@ describe('connectPanePty', () => {
     const realDispatchNotification = useNotificationDispatch('wt-1')
     const dispatchNotification = vi.fn((event) => realDispatchNotification(event))
     const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
-      state: 'done',
-      prompt: 'Fix notification payloads',
-      updatedAt: Date.now(),
-      stateStartedAt: Date.now(),
-      // Snapshot identity must match the live completion title or notification dispatch treats it as stale.
-      agentType: 'claude',
-      paneKey,
-      terminalTitle: '* Claude done',
-      stateHistory: [],
-      toolName: 'Edit',
-      toolInput: 'src/main/ipc/notifications.ts',
-      lastAssistantMessage: 'Implemented the formatter.',
-      interrupted: false
-    }
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        paneKey,
+        {
+          state: 'done',
+          prompt: 'Fix notification payloads',
+          updatedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          // Snapshot identity must match the live completion title or notification dispatch treats it as stale.
+          agentType: 'claude',
+          paneKey,
+          terminalTitle: '* Claude done',
+          stateHistory: [],
+          toolName: 'Edit',
+          toolInput: 'src/main/ipc/notifications.ts',
+          lastAssistantMessage: 'Implemented the formatter.',
+          interrupted: false
+        }
+      ]
+    ])
     mockStoreState.worktreesByRepo.repo2 = [
       { id: 'wt-2', repoId: 'repo2', path: '/tmp/wt-2', displayName: 'feat/other' }
     ]
@@ -248,15 +253,20 @@ describe('connectPanePty', () => {
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
-      state: 'working',
-      prompt: 'still thinking',
-      updatedAt: Date.now() - 60_000,
-      stateStartedAt: Date.now() - 60_000,
-      agentType: 'pi',
-      paneKey,
-      stateHistory: []
-    }
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        paneKey,
+        {
+          state: 'working',
+          prompt: 'still thinking',
+          updatedAt: Date.now() - 60_000,
+          stateStartedAt: Date.now() - 60_000,
+          agentType: 'pi',
+          paneKey,
+          stateHistory: []
+        }
+      ]
+    ])
 
     const pane = createPane(1)
     const manager = createManager(1)
@@ -297,15 +307,20 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(transport)
     vi.useFakeTimers()
     const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
-      state: 'working',
-      prompt: 'previous agent state',
-      updatedAt: Date.now() - 60_000,
-      stateStartedAt: Date.now() - 60_000,
-      agentType: 'pi',
-      paneKey,
-      stateHistory: []
-    }
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        paneKey,
+        {
+          state: 'working',
+          prompt: 'previous agent state',
+          updatedAt: Date.now() - 60_000,
+          stateStartedAt: Date.now() - 60_000,
+          agentType: 'pi',
+          paneKey,
+          stateHistory: []
+        }
+      ]
+    ])
 
     const pane = createPane(1)
     const manager = createManager(1)
@@ -357,15 +372,20 @@ describe('connectPanePty', () => {
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
-      state: 'working',
-      prompt: 'still working without a known agent identity',
-      updatedAt: Date.now() - 60_000,
-      stateStartedAt: Date.now() - 60_000,
-      agentType: 'unknown',
-      paneKey,
-      stateHistory: []
-    }
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        paneKey,
+        {
+          state: 'working',
+          prompt: 'still working without a known agent identity',
+          updatedAt: Date.now() - 60_000,
+          stateStartedAt: Date.now() - 60_000,
+          agentType: 'unknown',
+          paneKey,
+          stateHistory: []
+        }
+      ]
+    ])
 
     const pane = createPane(1)
     const manager = createManager(1)
@@ -402,15 +422,20 @@ describe('connectPanePty', () => {
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
-      state: 'working',
-      prompt: 'OMP is still working',
-      updatedAt: Date.now() - 60_000,
-      stateStartedAt: Date.now() - 60_000,
-      agentType: 'omp',
-      paneKey,
-      stateHistory: []
-    }
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        paneKey,
+        {
+          state: 'working',
+          prompt: 'OMP is still working',
+          updatedAt: Date.now() - 60_000,
+          stateStartedAt: Date.now() - 60_000,
+          agentType: 'omp',
+          paneKey,
+          stateHistory: []
+        }
+      ]
+    ])
 
     const pane = createPane(1)
     const manager = createManager(1)

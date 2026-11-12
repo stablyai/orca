@@ -48,7 +48,7 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
           )
         )
       }
-      expect(store.getState().agentStatusByPaneKey[PANE].state).toBe('done')
+      expect(store.getState().agentStatusByPaneKey.get(PANE)!.state).toBe('done')
       for (const hook_event_name of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
         await postHookEvent(
           server,
@@ -57,7 +57,7 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
         )
         const record = sleepingRecordFromEntry({
           state: store.getState(),
-          entry: store.getState().agentStatusByPaneKey[PANE],
+          entry: store.getState().agentStatusByPaneKey.get(PANE),
           worktreeId: 'wt-1',
           capturedAt: Date.now()
         })

@@ -221,7 +221,7 @@ async function seedAgentRecoveryMetadata(
       page.evaluate(
         ({ paneKey, providerSessionId, worktreeId }) => {
           const state = window.__store?.getState()
-          const live = state?.agentStatusByPaneKey[paneKey]
+          const live = state?.agentStatusByPaneKey.get(paneKey)
           const sleeping = state?.sleepingAgentSessionsByPaneKey[paneKey]
           return {
             liveProviderSessionId: live?.providerSession?.id ?? null,

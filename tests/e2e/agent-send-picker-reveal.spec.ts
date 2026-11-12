@@ -136,19 +136,21 @@ for (const host of ['local', 'ssh'] as const) {
                 }
               },
               ptyIdsByTabId: { ...current.ptyIdsByTabId, [tabId]: [ptyId] },
-              agentStatusByPaneKey: {
-                ...current.agentStatusByPaneKey,
-                [paneKey]: {
-                  state: 'working',
-                  prompt: 'Check sidebar disclosure',
-                  updatedAt: now,
-                  stateStartedAt: now,
-                  agentType: 'claude',
+              agentStatusByPaneKey: current.agentStatusByPaneKey.replace([
+                [
                   paneKey,
-                  worktreeId: target,
-                  stateHistory: []
-                }
-              }
+                  {
+                    state: 'working',
+                    prompt: 'Check sidebar disclosure',
+                    updatedAt: now,
+                    stateStartedAt: now,
+                    agentType: 'claude',
+                    paneKey,
+                    worktreeId: target,
+                    stateHistory: []
+                  }
+                ]
+              ])
             })
             return {
               target,

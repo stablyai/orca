@@ -47,7 +47,7 @@ export function buildAgentStatusTabPrefixDropPatch(
       : findCompletedOrphanPaneKeysForTabClose(s, opts?.worktreeId, prefix)
     const completedOrphanKeySet = new Set(completedOrphanKeys)
     const liveKeys = [
-      ...Object.keys(s.agentStatusByPaneKey).filter((k) => matchesPane(k)),
+      ...Array.from(s.agentStatusByPaneKey.keysForTab(tabIdPrefix)).filter((k) => matchesPane(k)),
       ...completedOrphanKeys
     ]
     const launchConfigKeys = Object.keys(s.agentLaunchConfigByPaneKey).filter(
@@ -136,10 +136,9 @@ export function buildAgentStatusTabPrefixDropPatch(
     }
     hadLive = liveKeys.length > 0
 
-    const nextLive = liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+    const nextLive = removePaneKeys(s.agentStatusByPaneKey, new Set(liveKeys))
     for (const key of liveKeys) {
       removedPaneKeys.push(key)
-      delete nextLive[key]
     }
     const nextLaunchConfigs =
       launchConfigKeys.length > 0

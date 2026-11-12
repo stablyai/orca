@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { MigrationUnsupportedPtyEntry } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
@@ -44,7 +44,7 @@ export type WorkspaceDecisionInputs = {
   repos?: readonly Repo[]
   tabsByWorktree: Record<string, readonly TerminalTab[]>
   ptyIdsByTabId: Record<string, string[]>
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   openFiles: readonly { id: string; worktreeId: string; isDirty: boolean }[]

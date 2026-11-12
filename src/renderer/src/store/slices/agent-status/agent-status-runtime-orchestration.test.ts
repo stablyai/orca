@@ -35,7 +35,7 @@ import '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary
         }
       })
 
-      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      expect(store.getState().agentStatusByPaneKey.get(childPaneKey)!.orchestration).toEqual({
         taskId: 'task-2',
         dispatchId: 'ctx-2',
         parentTerminalHandle: 'term-current'
@@ -64,7 +64,7 @@ import '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary
         agentType: 'codex'
       })
 
-      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toBeUndefined()
+      expect(store.getState().agentStatusByPaneKey.get(childPaneKey)!.orchestration).toBeUndefined()
     })
   })
 }
@@ -100,7 +100,7 @@ import '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary
       store.getState().setAgentStatus(PANE_KEY, { state: 'done', prompt: 'p', agentType: 'claude' })
 
       // Why: inheriting it would let a stale authority claim ordering over a row it never observed.
-      expect(store.getState().agentStatusByPaneKey[PANE_KEY]?.observation).toBeUndefined()
+      expect(store.getState().agentStatusByPaneKey.get(PANE_KEY)?.observation).toBeUndefined()
     })
   })
 }

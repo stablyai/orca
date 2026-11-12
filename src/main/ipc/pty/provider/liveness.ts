@@ -122,7 +122,7 @@ export function finishPtyShutdown(
     return null
   }
   const incarnationId = ptyIncarnationById.get(id)
-  clearProviderPtyState(id)
+  clearProviderPtyState(id, evidence instanceof PtyExitProof ? { exitProven: true } : {})
   if (connectionId) {
     // Keeps any relay-era undelivered stop on the lease: only host evidence may retire it.
     store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), evidence)

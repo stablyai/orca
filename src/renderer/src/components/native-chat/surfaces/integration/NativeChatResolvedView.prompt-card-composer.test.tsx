@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type * as RuntimeTerminalInputSendModule from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../../../shared/agent-launch/startup/agent-tui-input-clear'
 // @vitest-environment happy-dom
@@ -148,7 +149,10 @@ beforeEach(() => {
   composer.typed.mockReset().mockReturnValue(true)
   pty.verified.mockReset().mockResolvedValue(true)
   pty.raw.mockReset().mockReturnValue(true)
-  useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
+  useAppStore.setState({
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
+    nativeChatLaunchPromptByTabId: {}
+  })
   retained.session = {
     messages: [userTurn],
     status: 'working',
@@ -168,7 +172,10 @@ afterEach(() => {
     cleanup()
     resetNativeChatPtySendQueuesForTests()
     restoreViewport()
-    useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
+    useAppStore.setState({
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
+      nativeChatLaunchPromptByTabId: {}
+    })
   } finally {
     vi.useRealTimers()
   }

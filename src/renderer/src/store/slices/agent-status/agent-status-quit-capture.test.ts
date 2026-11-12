@@ -44,7 +44,9 @@ describe('captureAllSleepingAgentSessions', () => {
       }
     )
 
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).not.toHaveProperty('launchConfig')
+    expect(store.getState().agentStatusByPaneKey.get('tab-1:leaf-1')).not.toHaveProperty(
+      'launchConfig'
+    )
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig).toEqual({
       agentArgs: '--model gpt-5',
       agentEnv: { CODEX_PROFILE: 'captured' }
@@ -218,7 +220,9 @@ describe('captureAllSleepingAgentSessions', () => {
       { tabId: 'tab-1', worktreeId: 'wt-1' },
       { providerSession: { key: 'session_id', id: 'codex-session-1' }, launchToken }
     )
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).not.toHaveProperty('launchConfig')
+    expect(store.getState().agentStatusByPaneKey.get('tab-1:leaf-1')).not.toHaveProperty(
+      'launchConfig'
+    )
 
     store.getState().setAgentStatus(
       'tab-1:leaf-1',
@@ -233,11 +237,13 @@ describe('captureAllSleepingAgentSessions', () => {
       { providerSession: { key: 'session_id', id: 'codex-session-2' } }
     )
 
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toEqual({
+    expect(store.getState().agentStatusByPaneKey.get('tab-1:leaf-1')?.providerSession).toEqual({
       key: 'session_id',
       id: 'codex-session-2'
     })
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).not.toHaveProperty('launchConfig')
+    expect(store.getState().agentStatusByPaneKey.get('tab-1:leaf-1')).not.toHaveProperty(
+      'launchConfig'
+    )
     expect(
       store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig
     ).toBeUndefined()
@@ -339,7 +345,7 @@ describe('captureAllSleepingAgentSessions', () => {
         { launchToken }
       )
 
-    const entry = store.getState().agentStatusByPaneKey['tab-1:leaf-1']
+    const entry = store.getState().agentStatusByPaneKey.get('tab-1:leaf-1')
     expect(entry?.providerSession).toBeUndefined()
     expect(entry).not.toHaveProperty('launchConfig')
     expect(

@@ -51,8 +51,8 @@ type StatusTrafficWindow = Window & {
 
 async function syntheticStatusPanes(page: Page): Promise<SyntheticStatusPane[]> {
   return page.evaluate((syntheticTabPrefix) => {
-    const statuses = window.__store?.getState().agentStatusByPaneKey ?? {}
-    return Object.values(statuses)
+    const statuses = window.__store?.getState().agentStatusByPaneKey
+    return Array.from(statuses?.values() ?? [])
       .filter(({ paneKey }) => paneKey.startsWith(syntheticTabPrefix))
       .map((entry) => ({
         paneKey: entry.paneKey,
@@ -71,9 +71,9 @@ async function waitForStatusReceipts(
 ): Promise<void> {
   await page.waitForFunction(
     (expected) => {
-      const statuses = window.__store?.getState().agentStatusByPaneKey ?? {}
+      const statuses = window.__store?.getState().agentStatusByPaneKey
       return expected.every(
-        ({ paneKey, receivedAt }) => statuses[paneKey]?.updatedAt === receivedAt
+        ({ paneKey, receivedAt }) => statuses?.get(paneKey)?.updatedAt === receivedAt
       )
     },
     receipts,
@@ -155,7 +155,7 @@ export async function startAccumulatedStatusTraffic(
       const baselineSequenceByPaneKey = Object.fromEntries(
         paneKeys.map((paneKey) => [
           paneKey,
-          store.getState().agentStatusByPaneKey[paneKey]?.acceptedStatusSeq ?? 0
+          store.getState().agentStatusByPaneKey.get(paneKey)?.acceptedStatusSeq ?? 0
         ])
       )
       const target: StatusTrafficWindow = window
@@ -260,7 +260,7 @@ export async function stopAccumulatedStatusTraffic(
     let acceptedUpdates = 0
     let latestReceipts = 0
     for (const [paneKey, baselineSequence] of Object.entries(probe.baselineSequenceByPaneKey)) {
-      const entry = state.agentStatusByPaneKey[paneKey]
+      const entry = state.agentStatusByPaneKey.get(paneKey)
       acceptedUpdates += (entry?.acceptedStatusSeq ?? baselineSequence) - baselineSequence
       if (entry?.updatedAt === lastReceivedAtByPaneKey[paneKey]) {
         latestReceipts += 1

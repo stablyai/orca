@@ -121,7 +121,7 @@ export async function admitCliChatResumeClose(
   }
   const state = useAppStore.getState()
   // Main's answer to a chat that already holds the conversation; the host's create judges terminals.
-  const ownerRow = Object.values(state.agentStatusByPaneKey).find(
+  const ownerRow = Array.from(state.agentStatusByPaneKey.values()).find(
     (row) =>
       row.terminalResumeEligible === false &&
       !!row.worktreeId &&

@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { AppState } from '@/store/types'
 
 export type PaletteStatusInputsState = Pick<
@@ -26,7 +27,7 @@ export type PaletteIndexStatusSnapshot = Pick<
 >
 
 const EMPTY_PALETTE_INDEX_STATUS: PaletteIndexStatusSnapshot = Object.freeze({
-  agentStatusByPaneKey: {},
+  agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
   runtimePaneTitlesByTabId: {},
   unreadTerminalTabs: {},
   unreadAgentCompletionPanes: {}

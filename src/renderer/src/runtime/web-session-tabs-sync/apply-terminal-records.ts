@@ -1,3 +1,4 @@
+import { presentationRecordDraft, finishPresentationRecord } from './presentation-record-drafts'
 import { terminalLayoutEqual } from '../../../../shared/workspace-layout/terminal-layout-equality'
 import type { prepareWebSessionTabsSnapshotGroups } from './apply-preparation-groups'
 import { sameStringArray, writableWebSessionTabsRecord } from './state-equality-core'
@@ -14,60 +15,34 @@ export function applyTerminalRecordUpdates(context: TerminalRecordContext) {
     exactProvisionalHandoffs
   } = context
 
-  let nextPtyIdsByTabId = state.ptyIdsByTabId
+  const ptyDraft = presentationRecordDraft(state, 'ptyIdsByTabId', batchContext)
   for (const removedId of removedTerminalResourceIds) {
-    if (!nextPtyIdsByTabId[removedId]) {
-      continue
-    }
-    nextPtyIdsByTabId =
-      nextPtyIdsByTabId === state.ptyIdsByTabId
-        ? writableWebSessionTabsRecord(state, 'ptyIdsByTabId', batchContext)
-        : nextPtyIdsByTabId
-    delete nextPtyIdsByTabId[removedId]
+    ptyDraft.delete(removedId)
   }
   for (const { tab, ptyIds } of mirroredTerminalTabs) {
     if (ptyIds.length === 0) {
-      if (nextPtyIdsByTabId[tab.id]) {
-        nextPtyIdsByTabId =
-          nextPtyIdsByTabId === state.ptyIdsByTabId
-            ? writableWebSessionTabsRecord(state, 'ptyIdsByTabId', batchContext)
-            : nextPtyIdsByTabId
-        delete nextPtyIdsByTabId[tab.id]
-      }
-      continue
+      ptyDraft.delete(tab.id)
+    } else if (!sameStringArray(ptyDraft.get(tab.id) ?? [], ptyIds)) {
+      ptyDraft.set(tab.id, ptyIds)
     }
-    const current = nextPtyIdsByTabId[tab.id] ?? []
-    if (sameStringArray(current, ptyIds)) {
-      continue
-    }
-    nextPtyIdsByTabId =
-      nextPtyIdsByTabId === state.ptyIdsByTabId
-        ? writableWebSessionTabsRecord(state, 'ptyIdsByTabId', batchContext)
-        : nextPtyIdsByTabId
-    nextPtyIdsByTabId[tab.id] = ptyIds
   }
+  const nextPtyIdsByTabId = finishPresentationRecord(state, 'ptyIdsByTabId', ptyDraft, batchContext)
 
-  let nextTerminalLayoutsByTabId = state.terminalLayoutsByTabId
+  const layoutDraft = presentationRecordDraft(state, 'terminalLayoutsByTabId', batchContext)
   for (const removedId of removedTerminalResourceIds) {
-    if (!nextTerminalLayoutsByTabId[removedId]) {
-      continue
-    }
-    nextTerminalLayoutsByTabId =
-      nextTerminalLayoutsByTabId === state.terminalLayoutsByTabId
-        ? writableWebSessionTabsRecord(state, 'terminalLayoutsByTabId', batchContext)
-        : nextTerminalLayoutsByTabId
-    delete nextTerminalLayoutsByTabId[removedId]
+    layoutDraft.delete(removedId)
   }
   for (const { tab, layout } of mirroredTerminalTabs) {
-    if (terminalLayoutEqual(nextTerminalLayoutsByTabId[tab.id], layout)) {
-      continue
+    if (!terminalLayoutEqual(layoutDraft.get(tab.id), layout)) {
+      layoutDraft.set(tab.id, layout)
     }
-    nextTerminalLayoutsByTabId =
-      nextTerminalLayoutsByTabId === state.terminalLayoutsByTabId
-        ? writableWebSessionTabsRecord(state, 'terminalLayoutsByTabId', batchContext)
-        : nextTerminalLayoutsByTabId
-    nextTerminalLayoutsByTabId[tab.id] = layout
   }
+  const nextTerminalLayoutsByTabId = finishPresentationRecord(
+    state,
+    'terminalLayoutsByTabId',
+    layoutDraft,
+    batchContext
+  )
 
   // Local-only home retires with tabs but host frames never rewrite live entries; keeping it outside layout preserves this ownership.
   let nextLocalOnlyScrollbackByTabId = state.localOnlyScrollbackByTabId

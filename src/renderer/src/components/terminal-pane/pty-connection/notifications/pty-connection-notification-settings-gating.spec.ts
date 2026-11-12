@@ -80,17 +80,22 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       vi.useFakeTimers()
       const dispatchNotification = useNotificationDispatch('wt-1')
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        state: 'done',
-        prompt: 'Fix notification payloads',
-        updatedAt: Date.now(),
-        stateStartedAt: Date.now(),
-        agentType: 'codex',
-        paneKey,
-        terminalTitle: '* Codex done',
-        stateHistory: [],
-        lastAssistantMessage: 'Implemented the formatter.'
-      }
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [
+          paneKey,
+          {
+            state: 'done',
+            prompt: 'Fix notification payloads',
+            updatedAt: Date.now(),
+            stateStartedAt: Date.now(),
+            agentType: 'codex',
+            paneKey,
+            terminalTitle: '* Codex done',
+            stateHistory: [],
+            lastAssistantMessage: 'Implemented the formatter.'
+          }
+        ]
+      ])
 
       const pane = createPane(1)
       const manager = createManager(1)

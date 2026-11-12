@@ -47,6 +47,7 @@ const RATCHET_INPUTS = {
   'check-render-path-translate-ratchet.mjs': ['src/renderer/src/'],
   'check-repo-host-read-ratchet.mjs': ['src/cli/', 'src/main/', 'src/shared/'],
   'check-runtime-electron-ratchet.mjs': ['src/main/', 'src/cli/', 'src/shared/'],
+  'check-agent-status-map-ratchet.mjs': ['src/renderer/src/', 'tests/'],
   'check-tab-map-seam-ratchet.mjs': ['src/renderer/src/'],
   'check-terminal-parking-ownership-ratchet.mjs': ['src/renderer/src/'],
   'check-unproven-pty-retirement-ratchet.mjs': ['src/main/'],

@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -87,14 +88,16 @@ it('keeps filtered live badge counts across sidebar modes', () => {
     agentsHideWorkspacesFromOtherDevices: false,
     agentsHideAutomationGeneratedWorkspaces: false,
     agentsHideCliCreatedWorkspaces: false,
-    agentStatusByPaneKey: {
-      [PANE_KEY]: {
-        ...makeWorkingEntryWithoutHistory(),
-        state: 'waiting',
-        updatedAt: 10_000,
-        stateStartedAt: 10_000
-      }
-    }
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [PANE_KEY]: {
+          ...makeWorkingEntryWithoutHistory(),
+          state: 'waiting',
+          updatedAt: 10_000,
+          stateStartedAt: 10_000
+        }
+      })
+    )
   })
   const badgeTarget = document.createElement('span')
   document.body.append(badgeTarget)
@@ -129,15 +132,17 @@ it('preserves historical search, live badges and migration blocks in badge-only 
     agentsHideWorkspacesFromOtherDevices: false,
     agentsHideAutomationGeneratedWorkspaces: false,
     agentsHideCliCreatedWorkspaces: false,
-    agentStatusByPaneKey: {
-      [PANE_KEY]: {
-        ...makeWorkingEntryWithoutHistory(),
-        workingMode: 'monitoring',
-        updatedAt: 10_000,
-        stateStartedAt: 10_000,
-        stateHistory: [{ state: 'done', prompt: 'previous-task', startedAt: 1_000 }]
-      }
-    }
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [PANE_KEY]: {
+          ...makeWorkingEntryWithoutHistory(),
+          workingMode: 'monitoring',
+          updatedAt: 10_000,
+          stateStartedAt: 10_000,
+          stateHistory: [{ state: 'done', prompt: 'previous-task', startedAt: 1_000 }]
+        }
+      })
+    )
   })
   const badgeTarget = document.createElement('span')
   document.body.append(badgeTarget)
@@ -158,7 +163,9 @@ it('preserves historical search, live badges and migration blocks in badge-only 
   expect(badgeTarget.textContent).toBe('1')
   view.rerender(<SidebarAgentsList {...props} active={false} />)
   expect(badgeTarget.textContent).toBe('1')
-  act(() => useAppStore.setState({ agentStatusByPaneKey: {} }))
+  act(() =>
+    useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})) })
+  )
   view.rerender(<SidebarAgentsList {...props} query="" readFilter="all" active={false} />)
   expect(badgeTarget.textContent).toBe('0')
   act(() =>

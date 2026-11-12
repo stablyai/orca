@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -110,7 +111,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
   }
 
   beforeEach(() => {
-    useAppStore.setState({ agentStatusByPaneKey: {} })
+    useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})) })
   })
 
   afterEach(() => {
@@ -316,9 +317,11 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
   it('does not let an older pagination read rewind a live completion', async () => {
     useAppStore.setState({
-      agentStatusByPaneKey: {
-        [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() } as never
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() } as never
+        })
+      )
     })
     const transport = getMockTransport('env-1')
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, index) =>
@@ -391,7 +394,7 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
   }
 
   beforeEach(() => {
-    useAppStore.setState({ agentStatusByPaneKey: {} })
+    useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})) })
   })
 
   afterEach(() => {

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusUpdate } from '../store/slices/agent-status/agent-status-contract'
 import {
   buildStoreState,
+  applyMockAgentStatusUpdate,
   FUTURE_LEAF_ID,
   FUTURE_PANE_KEY,
   type AgentStatusSetData,
@@ -29,18 +30,15 @@ describe('useIpcEvents agent status snapshot integration', () => {
     let storeState: StoreLike
     const applyStatusUpdate = (
       paneKey: string,
-      payload: { state: string },
+      payload: AgentStatusUpdate['payload'],
       timing: { updatedAt?: number } | undefined
     ): void => {
-      storeState.agentStatusByPaneKey = {
-        ...(storeState.agentStatusByPaneKey as Record<string, unknown>),
-        [paneKey]: { ...payload, updatedAt: timing?.updatedAt }
-      }
+      applyMockAgentStatusUpdate(storeState, { paneKey, payload, timing })
     }
     const setAgentStatus = vi.fn(
       (
         paneKey: string,
-        payload: { state: string },
+        payload: AgentStatusUpdate['payload'],
         _title: unknown,
         timing: { updatedAt?: number } | undefined
       ) => {
@@ -54,9 +52,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       return updates.map(() => true)
     })
     const removeAgentStatus = vi.fn((paneKey: string) => {
-      const next = { ...(storeState.agentStatusByPaneKey as Record<string, unknown>) }
-      delete next[paneKey]
-      storeState.agentStatusByPaneKey = next
+      const statuses = storeState.agentStatusByPaneKey
+      storeState.agentStatusByPaneKey = statuses.replace([[paneKey, null]])
     })
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
@@ -133,12 +130,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
       onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
       expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY)
-      expect(storeState.agentStatusByPaneKey).toEqual({})
+      expect(storeState.agentStatusByPaneKey.size).toBe(0)
 
       vi.advanceTimersByTime(40)
       expect(setAgentStatus).toHaveBeenCalledTimes(1)
       expect(setAgentStatuses).toHaveBeenCalledTimes(1)
-      expect(storeState.agentStatusByPaneKey).toEqual({})
+      expect(storeState.agentStatusByPaneKey.size).toBe(0)
 
       emit(1_700_000_000_002, 'task')
       emit(1_700_000_000_003, 'task', 'done')
@@ -152,9 +149,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         expect.objectContaining({ payload: expect.objectContaining({ state: 'done' }) })
       )
       expect(removeAgentStatus).toHaveBeenCalledTimes(1)
-      expect(storeState.agentStatusByPaneKey).toEqual({
-        [FUTURE_PANE_KEY]: expect.objectContaining({ state: 'done' })
-      })
+      expect(storeState.agentStatusByPaneKey.get(FUTURE_PANE_KEY)).toMatchObject({ state: 'done' })
       vi.advanceTimersByTime(40)
       expect(setAgentStatus).toHaveBeenCalledTimes(2)
       expect(setAgentStatuses).toHaveBeenCalledTimes(2)
@@ -177,12 +172,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }
     }
     const storeState: StoreLike = buildStoreState({
-      setAgentStatus: (paneKey: string, entry: unknown) => {
+      setAgentStatus: (paneKey: string, entry: AgentStatusUpdate['payload']) => {
         setAgentStatusCalls += 1
-        storeState.agentStatusByPaneKey = {
-          ...(storeState.agentStatusByPaneKey as Record<string, unknown>),
-          [paneKey]: entry
-        }
+        applyMockAgentStatusUpdate(storeState, {
+          paneKey,
+          payload: entry
+        })
         notify()
       },
       workspaceSessionReady: true,

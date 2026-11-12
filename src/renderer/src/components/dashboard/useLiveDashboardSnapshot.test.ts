@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { resetHostStructuredAgentsForTests } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 
@@ -104,7 +105,7 @@ function seed(settings: Partial<GlobalSettings> | null): void {
     repos: [repo()],
     worktreesByRepo: { 'repo-1': [worktree()] },
     tabsByWorktree: { 'wt-1': [tab()] },
-    agentStatusByPaneKey: { [PANE_KEY]: entry() },
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY]: entry() })),
     terminalLayoutsByTabId: {
       [TAB_ID]: {
         root: { type: 'leaf', leafId: LEAF_ID },

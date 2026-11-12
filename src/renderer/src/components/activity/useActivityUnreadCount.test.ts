@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -21,7 +22,7 @@ function makeEntry(overrides: Partial<AgentStatusEntry>): AgentStatusEntry {
 function makeSource(entry: AgentStatusEntry, ackAt = 0) {
   return {
     acknowledgedAgentsByPaneKey: { [PANE]: ackAt },
-    agentStatusByPaneKey: { [PANE]: entry },
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE]: entry })),
     migrationUnsupportedByPtyId: {}
   }
 }

@@ -188,7 +188,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
     adapt(key, context, producerByContext.get(context) ?? LOCAL_EXECUTION_HOST_ID)
   }
   const embedded = (
-    entry: AppState['agentStatusByPaneKey'][string],
+    entry: NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>,
     worktreeId = entry.worktreeId
   ) => {
     visits++
@@ -230,7 +230,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       adapt(entry.paneKey, entry.orchestration, host)
     }
   }
-  for (const entry of Object.values(state.agentStatusByPaneKey ?? EMPTY)) {
+  for (const entry of Array.from(state.agentStatusByPaneKey?.values() ?? [])) {
     embedded(entry)
   }
   const previous = cache?.contexts

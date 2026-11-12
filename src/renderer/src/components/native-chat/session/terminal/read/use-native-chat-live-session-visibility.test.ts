@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -105,7 +106,7 @@ describe('useNativeChatLiveSession visibility', () => {
     latest = null
     renders.mockClear()
     resetTransport()
-    useAppStore.setState({ agentStatusByPaneKey: {} })
+    useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})) })
   })
 
   afterEach(() => {

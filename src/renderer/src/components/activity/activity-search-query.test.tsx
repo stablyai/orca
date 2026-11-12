@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -45,7 +46,7 @@ function installThreads(count: number, prompt = 'Task PROJECT ☃ progress'): st
     }
   }
   useAppStore.setState({
-    agentStatusByPaneKey: entries,
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(entries)),
 
     migrationUnsupportedByPtyId: {},
     runtimeAgentOrchestrationByPaneKey: {},
@@ -72,10 +73,10 @@ describe('Activity search query in the real hook', () => {
     const panes = installThreads(12)
     const entries = useAppStore.getState().agentStatusByPaneKey
     useAppStore.setState({
-      agentStatusByPaneKey: Object.fromEntries(
+      agentStatusByPaneKey: acceptedAgentStatuses(
         panes.map((paneKey, index) => [
           paneKey,
-          index === 0 ? entries[paneKey] : { ...entries[paneKey], state: 'done' as const }
+          index === 0 ? entries.get(paneKey)! : { ...entries.get(paneKey)!, state: 'done' as const }
         ])
       ),
       acknowledgedAgentsByPaneKey: Object.fromEntries(panes.map((paneKey) => [paneKey, 100_000]))
@@ -93,7 +94,9 @@ describe('Activity search query in the real hook', () => {
     const [livePane, unavailablePane] = installThreads(2)
     const entries = useAppStore.getState().agentStatusByPaneKey
     useAppStore.setState({
-      agentStatusByPaneKey: { [livePane]: entries[livePane] },
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({ [livePane]: entries.get(livePane)! })
+      ),
       migrationUnsupportedByPtyId: {
         'pty-tab-1': {
           ptyId: 'pty-tab-1',
@@ -181,10 +184,13 @@ describe('Activity search query in the real hook', () => {
     act(() => {
       const entries = useAppStore.getState().agentStatusByPaneKey
       useAppStore.setState({
-        agentStatusByPaneKey: {
+        agentStatusByPaneKey: acceptedAgentStatuses([
           ...entries,
-          [panes[2]]: { ...entries[panes[2]], prompt: 'second prompt' }
-        }
+          [panes[2], { ...entries.get(panes[2])!, prompt: 'second prompt' }] satisfies [
+            string,
+            AgentStatusEntry
+          ]
+        ])
       })
     })
     expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([

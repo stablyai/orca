@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { vi, type Mock } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type {
@@ -111,7 +112,7 @@ export function installEligibleState(
     tabsByWorktree: { 'wt-bg': [tab()] },
     terminalLayoutsByTabId: { 'tab-1': layout() },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-    agentStatusByPaneKey: { [e.paneKey]: e },
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [e.paneKey]: e })),
     sleepingAgentSessionsByPaneKey: {},
     lastTerminalInputAtByPaneKey: {},
     shutdownCompletedAgentPaneForHibernation: shutdownCompletedAgentPaneForHibernation as never,

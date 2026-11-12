@@ -76,7 +76,7 @@ function getAgentEntriesByTabId(
   agentStatusByPaneKey: AgentHibernationPlannerSnapshot['agentStatusByPaneKey']
 ): Map<string, AgentStatusEntry[]> {
   const entriesByTabId = new Map<string, AgentStatusEntry[]>()
-  for (const entry of Object.values(agentStatusByPaneKey)) {
+  for (const entry of Array.from(agentStatusByPaneKey.values())) {
     if (!entry) {
       continue
     }

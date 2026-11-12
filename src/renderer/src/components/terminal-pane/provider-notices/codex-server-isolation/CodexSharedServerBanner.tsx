@@ -104,7 +104,7 @@ export function CodexSharedServerBanner({
   const codexInPane = useAppStore(
     (state) =>
       state.paneForegroundAgentByPaneKey[paneKey]?.agent === 'codex' ||
-      state.agentStatusByPaneKey[paneKey]?.agentType === 'codex'
+      state.agentStatusByPaneKey.get(paneKey)?.agentType === 'codex'
   )
   // Why a recheck: after the fix stops the server, the banner hides unless a new one is joined.
   const [recheck, setRecheck] = useState(0)

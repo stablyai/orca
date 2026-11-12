@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
@@ -76,7 +77,7 @@ function setup() {
       'tab-2': singlePaneLayoutSnapshot(leaf, 'pty-tab-2')
     },
     ptyIdsByTabId: { 'tab-1': ['pty-tab-1'], 'tab-2': ['pty-tab-2'] },
-    agentStatusByPaneKey: {}
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({}))
   })
   const pending = new Map<number, { resolve: (value: GitHubWorkItem | null) => void }>()
   exactLookup.mockImplementation(({ number }: { number: number }) => {

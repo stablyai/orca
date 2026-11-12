@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -67,24 +68,24 @@ function setStatus(payload: Omit<AgentStatusPayload, 'prompt' | 'agentType'>, ag
   useAppStore
     .getState()
     .setAgentStatus(paneKey, { prompt: 'Rename the module', agentType: 'claude', ...payload })
-  const live = useAppStore.getState().agentStatusByPaneKey[paneKey]
+  const live = useAppStore.getState().agentStatusByPaneKey.get(paneKey)
   if (!live) {
     throw new Error('the store dropped the status row this test depends on')
   }
   useAppStore.setState((store) => ({
-    agentStatusByPaneKey: {
+    agentStatusByPaneKey: acceptedAgentStatuses([
       ...store.agentStatusByPaneKey,
-      [paneKey]: { ...live, stateStartedAt: Date.now() - age }
-    }
+      [paneKey, { ...live, stateStartedAt: Date.now() - age }] as const
+    ])
   }))
 }
 
 function patchStatus(fields: Partial<AgentStatusEntry>): void {
   useAppStore.setState((store) => ({
-    agentStatusByPaneKey: {
+    agentStatusByPaneKey: acceptedAgentStatuses([
       ...store.agentStatusByPaneKey,
-      [paneKey]: { ...store.agentStatusByPaneKey[paneKey]!, ...fields }
-    }
+      [paneKey, { ...store.agentStatusByPaneKey.get(paneKey)!, ...fields }] as const
+    ])
   }))
 }
 
@@ -108,13 +109,19 @@ function renderPane(): void {
 
 beforeEach(() => {
   restoreViewport = installNativeChatMessageListTestViewport()
-  useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
+  useAppStore.setState({
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
+    nativeChatLaunchPromptByTabId: {}
+  })
 })
 
 afterEach(() => {
   cleanup()
   restoreViewport()
-  useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
+  useAppStore.setState({
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
+    nativeChatLaunchPromptByTabId: {}
+  })
 })
 
 describe('NativeChatResolvedView turn status', () => {

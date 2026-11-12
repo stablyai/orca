@@ -40,8 +40,8 @@ describe('setTabLayout PTY ownership', () => {
       }
     })
 
-    expect(store.getState().agentStatusByPaneKey[removedPaneKey]).toBeUndefined()
-    expect(store.getState().agentStatusByPaneKey[retainedPaneKey]?.prompt).toBe('before repair')
+    expect(store.getState().agentStatusByPaneKey.get(removedPaneKey)).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey.get(retainedPaneKey)?.prompt).toBe('before repair')
     expect(resolveAgentPaneAuthorityKey(removedPaneKey)).toBe(retainedPaneKey)
 
     store.getState().setAgentStatus(removedPaneKey, {
@@ -49,7 +49,7 @@ describe('setTabLayout PTY ownership', () => {
       prompt: 'after repair',
       agentType: 'codex'
     })
-    expect(store.getState().agentStatusByPaneKey[retainedPaneKey]?.prompt).toBe('after repair')
+    expect(store.getState().agentStatusByPaneKey.get(retainedPaneKey)?.prompt).toBe('after repair')
   })
 
   it('does not steal authority from a pane that was already detached to another tab', () => {

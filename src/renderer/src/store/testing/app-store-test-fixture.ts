@@ -1,3 +1,4 @@
+import { withAgentStatusOwnership } from '../slices/agent-status/agent-status-ownership-boundary'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from '../types'
 
@@ -62,7 +63,7 @@ import { TEST_REPO } from '../repos/repo.test-fixture'
 import { resetProviderRuntimeSessionGenerationForTests } from '@/runtime/hosts/observations/provider-runtime-context'
 
 const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
-  withEditorBufferRecords(withAgentConversationRetention(creator), check)
+  withAgentStatusOwnership(withEditorBufferRecords(withAgentConversationRetention(creator), check))
 
 export function createTestStore(
   isClaudeAgent: Parameters<typeof createTerminalSlice>[3] = undefined

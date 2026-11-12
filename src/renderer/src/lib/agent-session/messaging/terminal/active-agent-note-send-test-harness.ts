@@ -1,4 +1,7 @@
-import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import {
+  acceptedAgentStatuses,
+  type AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
 export const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -22,7 +25,7 @@ export type NoteSendAppState = {
       ptyIdsByLeafId?: Record<string, string | undefined>
     }
   >
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   settings: Record<string, unknown>
 }
 
@@ -42,7 +45,7 @@ export function createNoteSendAppState(): NoteSendAppState {
     terminalLayoutsByTabId: {
       'tab-1': { activeLeafId: LEAF_ID, ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' } }
     },
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     settings: {}
   }
 }

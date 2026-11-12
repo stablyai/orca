@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -85,9 +86,11 @@ describe('selectWorktreeAgentActivitySummary', () => {
       tabsByWorktree: {},
       unifiedTabsByWorktree: {},
       agentStatusEpoch: 0,
-      agentStatusByPaneKey: {
-        [paneKey]: makeAgentStatusEntry({ paneKey, worktreeId, state: 'working' })
-      },
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [paneKey]: makeAgentStatusEntry({ paneKey, worktreeId, state: 'working' })
+        })
+      ),
       migrationUnsupportedByPtyId: {},
       runtimeAgentOrchestrationByPaneKey: {}
     }
@@ -117,34 +120,40 @@ describe('selectWorktreeAgentActivitySummary', () => {
         [worktreeId]: [makeTab('tab-1', worktreeId), makeTab('tab-2', worktreeId)]
       },
       agentStatusEpoch: 0,
-      agentStatusByPaneKey: {
-        [firstPaneKey]: makeAgentStatusEntry({ paneKey: firstPaneKey, state: 'working' }),
-        [secondPaneKey]: makeAgentStatusEntry({ paneKey: secondPaneKey, state: 'working' })
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [firstPaneKey]: makeAgentStatusEntry({ paneKey: firstPaneKey, state: 'working' }),
+          [secondPaneKey]: makeAgentStatusEntry({ paneKey: secondPaneKey, state: 'working' })
+        })
+      )
     }
     const reordered: AgentActivityInput = {
       ...initial,
       agentStatusEpoch: 1,
-      agentStatusByPaneKey: {
-        [secondPaneKey]: initial.agentStatusByPaneKey[secondPaneKey],
-        [firstPaneKey]: initial.agentStatusByPaneKey[firstPaneKey]
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [secondPaneKey]: initial.agentStatusByPaneKey.get(secondPaneKey)!,
+          [firstPaneKey]: initial.agentStatusByPaneKey.get(firstPaneKey)!
+        })
+      )
     }
     const replacement: AgentActivityInput = {
       ...sharedInputs,
       tabsByWorktree: { [worktreeId]: [makeTab('tab-3', worktreeId)] },
       agentStatusEpoch: 2,
-      agentStatusByPaneKey: {
-        [replacementPaneKey]: makeAgentStatusEntry({
-          paneKey: replacementPaneKey,
-          state: 'working'
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [replacementPaneKey]: makeAgentStatusEntry({
+            paneKey: replacementPaneKey,
+            state: 'working'
+          })
         })
-      }
+      )
     }
     const removed: AgentActivityInput = {
       ...replacement,
       agentStatusEpoch: 3,
-      agentStatusByPaneKey: {}
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({}))
     }
 
     const first = selectWorktreeAgentActivitySummary(initial, worktreeId)
@@ -170,7 +179,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     const state: AgentActivityInput = {
       tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
       agentStatusEpoch: 0,
-      agentStatusByPaneKey: { [paneKey]: entry },
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [paneKey]: entry })),
       migrationUnsupportedByPtyId: {},
       runtimeAgentOrchestrationByPaneKey: {}
     }

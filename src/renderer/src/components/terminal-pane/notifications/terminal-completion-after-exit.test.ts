@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
@@ -75,7 +76,7 @@ beforeEach(() => {
       }
     },
     ptyIdsByTabId: {},
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     agentConversationsByPaneKey: {},
     activeWorktreeId: null,
     refreshGitHubForWorktreeIfStale: vi.fn(),
@@ -191,7 +192,7 @@ describe('completion after the process exits with its pane still open', () => {
           })
         )
         expect(store.getState().worktreesByRepo.repo1[0].isUnread).toBe(true)
-        expect(store.getState().agentStatusByPaneKey[PANE]).toBeUndefined()
+        expect(store.getState().agentStatusByPaneKey.get(PANE)).toBeUndefined()
       } finally {
         resetAgentHookCompletionNotificationCoordinators()
       }

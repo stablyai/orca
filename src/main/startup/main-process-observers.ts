@@ -66,9 +66,30 @@ export function initializeMainProcessObservers(): void {
     isQuitting: () => state.isQuitting,
     getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
   })
-  const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
-    state.agentAwakeService?.setStatuses(statuses)
-  })
+  const unsubscribeStatusChanges = agentHookServer.subscribeStatusRowMutations(
+    ({ before, after }) => {
+      for (const paneKey of new Set([before?.paneKey, after?.paneKey])) {
+        if (!paneKey) {
+          continue
+        }
+        const row = agentHookServer
+          .getStatusSnapshotForPane(paneKey)
+          .find((row) => !row.providerSessionOnly)
+        state.agentAwakeService?.updateStatus(
+          paneKey,
+          row
+            ? {
+                paneKey,
+                state: row.state,
+                receivedAt: row.receivedAt,
+                observedInCurrentRuntime:
+                  row.isReplay !== true && row.restoredUnconfirmed !== true && !row.paneSleep
+              }
+            : undefined
+        )
+      }
+    }
+  )
   const unsubscribeStatusFreshness = agentHookServer.subscribeStatusFreshness((status) => {
     state.agentAwakeService?.observeStatusFreshness(status)
   })

@@ -130,10 +130,10 @@ describe('hook-driven tab title IPC integration', () => {
           onSet(events[0])
         }
         await vi.waitFor(() => {
-          expect(store.getState().agentStatusByPaneKey[PANE_KEY]?.state).toBe(states.at(-1))
+          expect(store.getState().agentStatusByPaneKey.get(PANE_KEY)?.state).toBe(states.at(-1))
         })
         expect(store.getState().tabsByWorktree[WORKTREE_ID][0].title).toBe(expected)
-        expect(store.getState().agentStatusByPaneKey[PANE_KEY].terminalTitle).toBe(
+        expect(store.getState().agentStatusByPaneKey.get(PANE_KEY)!.terminalTitle).toBe(
           states.at(-1) === 'done' ? 'Codex ready' : 'Codex - action required'
         )
         expect(updateTitle).toHaveBeenCalledTimes(mode === 'live' ? 1 : 0)

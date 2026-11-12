@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 /** Verify which closeTerminalTab callers reach running-process confirmation (#10142). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -74,7 +75,7 @@ function busyTabState(overrides: Record<string, unknown> = {}): Record<string, u
     },
     ptyIdsByTabId: { 'tab-busy': ['pty-busy'] },
     terminalLayoutsByTabId: { 'tab-busy': { ptyIdsByLeafId: { [LEAF]: 'pty-busy' } } },
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     openFiles: [],
     browserTabsByWorktree: {},
     activeWorktreeId: 'wt-1',

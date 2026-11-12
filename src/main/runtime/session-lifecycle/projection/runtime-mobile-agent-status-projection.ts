@@ -1,4 +1,10 @@
 import {
+  workingHookOwnsIdleTitleInterval,
+  codexHookReportsRunningTurn,
+  completedTurnFields,
+  ptyStatusEvidenceAt
+} from './runtime-mobile-agent-status-evidence'
+import {
   AGENT_STATUS_HYDRATE_MAX_AGE_MS,
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusAuthorityObservedAt
@@ -14,101 +20,6 @@ import { terminalTitleBlocksExplicitAgentStatus } from '../../workspaces/process
 import type { HookLiveAgentRow } from '../../workspaces/process-listing/hook-live-agent-row'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { codexAsyncQuestionOutlivesWorkingTitle } from './codex-async-question-title-hold'
-
-type HookTurnFacts = Pick<
-  AgentStatusEntry,
-  'state' | 'agentType' | 'mainAgent' | 'restoredUnconfirmed'
->
-
-function workingHookOwnsIdleTitleInterval(
-  status: HookTurnFacts,
-  observedAt: number,
-  pty: RuntimePtyWorktreeRecord | null
-): boolean {
-  return (
-    status.state === 'working' &&
-    pty?.lastAgentStatus === 'idle' &&
-    !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle) &&
-    (codexHookReportsRunningTurn(status, observedAt, pty) ||
-      observedAt >
-        Math.max(
-          pty.lastAgentStatusRichInvalidatedAtEpochMs ?? 0,
-          pty.lastAgentStatusStartedAtEpochMs ?? 0
-        )) &&
-    Date.now() - observedAt <= AGENT_STATUS_STALE_AFTER_MS
-  )
-}
-
-// Why: Codex's title follows the thread it displays, so a /side chat goes idle while the main
-// turn runs; its end arrives by hook or host rollout, and the stale bound covers older hosts.
-// A hook from before the PTY's current process describes that process's predecessor.
-function codexHookReportsRunningTurn(
-  status: HookTurnFacts,
-  observedAt: number,
-  pty: RuntimePtyWorktreeRecord | null
-): boolean {
-  const mainState = status.mainAgent?.state
-  return (
-    status.agentType === 'codex' &&
-    status.restoredUnconfirmed !== true &&
-    mainState !== undefined &&
-    mainState !== 'done' &&
-    observedAt > (pty?.providerGenerationResetAtEpochMs ?? 0)
-  )
-}
-
-// Why: only a completed turn's reply is final; mid-turn hook snapshots carry tool stdout.
-function completedTurnFields(
-  status: AgentStatusEntry
-): Pick<
-  AgentStatusEntry,
-  'lastAssistantMessage' | 'lastAssistantMessageIsToolOutput' | 'interrupted'
-> {
-  if (status.state !== 'done') {
-    return {}
-  }
-  return {
-    ...(status.lastAssistantMessage
-      ? {
-          lastAssistantMessage: status.lastAssistantMessage,
-          ...(status.lastAssistantMessageIsToolOutput != null
-            ? { lastAssistantMessageIsToolOutput: status.lastAssistantMessageIsToolOutput }
-            : {})
-        }
-      : {}),
-    ...(status.interrupted != null ? { interrupted: status.interrupted } : {})
-  }
-}
-
-// Why: program activity moves the PTY's status without a new title, so a title-only frame dated by
-// the title alone sorts behind rows the client accepted since (#25136).
-export function ptyStatusEvidenceAt(
-  pty: RuntimePtyWorktreeRecord,
-  titleEvidenceAt: number
-): number {
-  return Math.max(titleEvidenceAt, pty.lastAgentStatusStartedAtEpochMs ?? 0)
-}
-
-export function demoteRuntimeMobileAgentStatus(
-  status: AgentStatusEntry,
-  pty: RuntimePtyWorktreeRecord | null
-): AgentStatusEntry {
-  return {
-    state: 'done',
-    prompt: '',
-    // A demotion supersedes the status it replaces, so it must never sort behind it.
-    updatedAt:
-      pty?.lastOscTitleEpochMs != null
-        ? Math.max(status.updatedAt, ptyStatusEvidenceAt(pty, pty.lastOscTitleEpochMs))
-        : status.updatedAt,
-    stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? status.stateStartedAt,
-    paneKey: status.paneKey,
-    stateHistory: [],
-    agentType: status.agentType,
-    ...completedTurnFields(status),
-    ...(status.providerSession ? { providerSession: status.providerSession } : {})
-  }
-}
 
 export function renewRuntimeMobileAgentStatusFromPtyTitle(
   status: AgentStatusEntry | null,
@@ -250,7 +161,7 @@ export function selectRuntimeHookAgentRowForPane(
       entry.agentType &&
       (entry.providerSessionOnly !== true ||
         (entry.agentType === 'pi' && entry.providerSession != null)) &&
-      (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter &&
+      (entry.paneSleep || (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter) &&
       (!agent || entry.receivedAt > agent.receivedAt)
     ) {
       agent = entry
@@ -262,7 +173,7 @@ export function selectRuntimeHookAgentRowForPane(
       entry.providerSessionOnly !== true &&
       // Restored rows cannot prove liveness because the turn may have ended while offline (#12346).
       entry.restoredUnconfirmed !== true &&
-      (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter &&
+      (entry.paneSleep || (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter) &&
       (!live || entry.receivedAt > live.receivedAt)
     ) {
       live = entry
@@ -300,7 +211,8 @@ function toHookLiveAgentRow(row: AgentStatusIpcPayload): HookLiveAgentRow {
     stateStartedAt: row.stateStartedAt ?? row.receivedAt,
     ...pickHostTurnEnd(row),
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
-    ...(row.programStatus ? { programStatus: row.programStatus } : {})
+    ...(row.programStatus ? { programStatus: row.programStatus } : {}),
+    ...(row.paneSleep ? { paneSleep: row.paneSleep } : {})
   }
 }
 
@@ -311,6 +223,9 @@ export function resolveRuntimeHookLiveAgentRow(
 ): HookLiveAgentRow | null {
   if (!live) {
     return null
+  }
+  if (live.paneSleep) {
+    return live
   }
   if (live.payload.interactivePrompt != null) {
     return live
@@ -327,3 +242,8 @@ export function resolveRuntimeHookLiveAgentRow(
     ? live
     : null
 }
+
+export {
+  demoteRuntimeMobileAgentStatus,
+  ptyStatusEvidenceAt
+} from './runtime-mobile-agent-status-evidence'

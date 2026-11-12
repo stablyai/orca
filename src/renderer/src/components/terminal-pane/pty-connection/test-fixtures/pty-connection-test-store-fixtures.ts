@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { vi } from 'vitest'
 import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 import { LEAF_1 } from './pty-connection-test-pane-fixtures'
@@ -48,7 +49,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     consumePendingColdRestore: vi.fn(() => null),
     consumePendingSnapshot: vi.fn(() => null),
     runtimePaneTitlesByTabId: {},
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
 
     paneForegroundAgentByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
@@ -78,7 +79,9 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
         _timing?: unknown,
         routing?: { connectionId?: string | null }
       ) => {
-        getState().agentStatusByPaneKey[paneKey] = {
+        const entry = {
+          state: 'working' as const,
+          prompt: '',
           ...payload,
           paneKey,
           ...(terminalTitle ? { terminalTitle } : {}),
@@ -87,6 +90,10 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
           stateStartedAt: Date.now(),
           stateHistory: []
         }
+        getState().agentStatusByPaneKey = acceptedAgentStatuses([
+          ...getState().agentStatusByPaneKey,
+          [paneKey, entry]
+        ])
       }
     ),
     removeAgentStatus: vi.fn(),

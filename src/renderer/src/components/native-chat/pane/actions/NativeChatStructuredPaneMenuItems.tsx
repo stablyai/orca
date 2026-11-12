@@ -1,3 +1,4 @@
+import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useMemo } from 'react'
 import { PanelBottomClose, PanelRightClose, X } from 'lucide-react'
 import {
@@ -7,7 +8,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { useAppStore } from '@/store'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { NativeChatProviderSessionIdMenuItem } from './NativeChatProviderSessionIdMenuItem'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
@@ -32,9 +32,7 @@ export function NativeChatStructuredPaneMenuItems({
     () => structuredAgentSessionPaneKey(pane.tabId, pane.sessionId),
     [pane.tabId, pane.sessionId]
   )
-  const providerSessionId = useAppStore(
-    (state) => state.agentStatusByPaneKey[paneKey]?.providerSession?.id
-  )
+  const providerSessionId = useAgentStatus(paneKey)?.providerSession?.id
   return (
     <>
       {leadingSeparator ? <DropdownMenuSeparator /> : null}

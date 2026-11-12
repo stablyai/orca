@@ -1,71 +1,19 @@
-import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'
-
-/** Index iconable panes once per status-map identity instead of scanning globally per mounted tab. Preserve insertion order: first-match resolution decides split-tab icons. */
 export type TabAgentPane = { readonly leafId: string; readonly agent: TerminalAgent }
 
-type TabAgentPanesByTabId = ReadonlyMap<string, readonly TabAgentPane[]>
-
-const NO_PANES: readonly TabAgentPane[] = Object.freeze([])
-const EMPTY_INDEX: TabAgentPanesByTabId = new Map()
-
-function appendPane(index: Map<string, TabAgentPane[]>, tabId: string, pane: TabAgentPane): void {
-  const panes = index.get(tabId)
-  if (panes) {
-    panes.push(pane)
-  } else {
-    index.set(tabId, [pane])
-  }
-}
-
-// Immutable store maps make identity exact invalidation: scan once per write, not per tab/render.
-let cachedStatusSource: Record<string, AgentStatusEntry> | null = null
-let cachedLiveIndex: TabAgentPanesByTabId = EMPTY_INDEX
-let cachedCompletedIndex: TabAgentPanesByTabId = EMPTY_INDEX
-
-function indexAgentStatus(source: Record<string, AgentStatusEntry>): void {
-  if (source === cachedStatusSource) {
-    return
-  }
-  const live = new Map<string, TabAgentPane[]>()
-  const completed = new Map<string, TabAgentPane[]>()
-  for (const [paneKey, entry] of Object.entries(source)) {
-    const agent = agentTypeToIconAgent(entry?.agentType)
-    if (!agent) {
-      continue
-    }
-    const parsed = parsePaneKey(paneKey)
-    if (!parsed) {
-      continue
-    }
-    appendPane(entry.state === 'done' ? completed : live, parsed.tabId, {
-      leafId: parsed.leafId,
-      agent
-    })
-  }
-  cachedLiveIndex = live
-  cachedCompletedIndex = completed
-  cachedStatusSource = source
-}
-
 export function selectLiveTabAgentPanes(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  statuses: AcceptedAgentStatuses,
   tabId: string
 ): readonly TabAgentPane[] {
-  indexAgentStatus(agentStatusByPaneKey)
-  return cachedLiveIndex.get(tabId) ?? NO_PANES
+  return statuses.projection.tabPanes(tabId, false)
 }
-
 export function selectCompletedTabAgentPanes(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  statuses: AcceptedAgentStatuses,
   tabId: string
 ): readonly TabAgentPane[] {
-  indexAgentStatus(agentStatusByPaneKey)
-  return cachedCompletedIndex.get(tabId) ?? NO_PANES
+  return statuses.projection.tabPanes(tabId, true)
 }
-
 export function firstTabAgentExcludingLeaf(
   panes: readonly TabAgentPane[],
   excludedLeafId?: string

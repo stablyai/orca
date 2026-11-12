@@ -1,3 +1,4 @@
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveWindowsShiftEnterEncodingForPane } from '../../input/keyboard/terminal-windows-shift-enter'
@@ -104,7 +105,7 @@ export type StoreState = {
   consumePendingSnapshot: ReturnType<typeof vi.fn>
   consumeTabStartupCommand?: ReturnType<typeof vi.fn>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  agentStatusByPaneKey: Record<string, unknown>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   sleepingAgentSessionsByPaneKey: Record<string, unknown>
   suppressedPtyExitIds: Record<string, true>

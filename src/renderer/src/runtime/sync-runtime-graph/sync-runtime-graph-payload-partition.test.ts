@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   scheduleRuntimeGraphSync,
@@ -26,6 +27,7 @@ function makeState(prefix: string, worktreeCount: number, titles: string[] = [])
       expandedLeafId: null
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this graph fixture supplies the serializer's read surface, without unused store actions.
   return {
     tabsByWorktree,
     terminalLayoutsByTabId,
@@ -40,7 +42,7 @@ function makeState(prefix: string, worktreeCount: number, titles: string[] = [])
     openFiles: [],
     editorDrafts: {},
     activeTabId: null,
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     browserTabsByWorktree: {}
   } as unknown as AppState
 }

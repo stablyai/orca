@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
 
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
@@ -59,7 +60,7 @@ describe('workspace lineage menu actions', () => {
         ptyIdsByTabId: { 'child-tab': ['child-pty'] },
         browserTabsByWorktree: {},
         unifiedTabsByWorktree: {},
-        agentStatusByPaneKey: {},
+        agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
         structuredChatSleptAtByPaneKey: {}
       }
     })

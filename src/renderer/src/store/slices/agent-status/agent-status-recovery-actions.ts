@@ -57,7 +57,7 @@ export function createAgentStatusRecoveryActions(
         const capturedAt = Date.now()
         const updates = new Map<string, SleepingAgentSessionRecord>()
         let changed = false
-        for (const entry of Object.values(s.agentStatusByPaneKey)) {
+        for (const entry of Array.from(s.agentStatusByPaneKey.values())) {
           const record = capturedResumeRecord({
             entry,
             existing: updates.get(entry.paneKey) ?? s.sleepingAgentSessionsByPaneKey[entry.paneKey],

@@ -1,4 +1,5 @@
-import { RelaySessionGenerations } from './server-relay-sessions'
+import { AgentHookServerStatusRowMutation } from './server-status-row-mutation'
+
 import { retainHookRootContext } from '../../../shared/agent-hook-listener/pane-provider-session'
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import { previewHookPresence } from '../../../shared/agent-hook-listener/presence/agent-hook-presence-transition'
@@ -14,7 +15,7 @@ import {
 } from '../../../shared/agent-status/identity/agent-status-identity'
 import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status/contracts/agent-status-observation'
-import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
+
 import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import {
   attachClaudePermissionToolUseId,
@@ -24,31 +25,10 @@ import {
 } from './server-claude-status-rules'
 import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from '../../../shared/agent-hook-listener/state/agent-hook-cancel-verdict-latch'
-import { AgentHookServerStatusApplication } from './server-status-application'
+
 import { claimsPaneAfterExit } from './agent-exit-evidence'
 
-export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
-  protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
-    this.state
-  )
-  protected readonly relaySessions = new RelaySessionGenerations()
-
-  // Every row mutation passes here, including cancellation and pane moves.
-  protected override commitStatusRowMutation(
-    before: EnrichedAgentHookEventPayload | null | undefined,
-    after: EnrichedAgentHookEventPayload | null | undefined,
-    emit = true
-  ): boolean {
-    if (after) {
-      this.claudeOwedNotificationExpiry.arm(after.paneKey, (row) => {
-        if (this.server) {
-          this.applyRestatedStatus(row)
-        }
-      })
-    }
-    return super.commitStatusRowMutation(before, after, emit)
-  }
-
+export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusRowMutation {
   protected applyNormalizedStatus(
     incoming: IncomingAgentHookEvent,
     onAccepted?: () => void,
@@ -110,6 +90,24 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       | EnrichedAgentHookEventPayload
       | undefined
     const rowBefore = mutationBefore ?? previous
+    if (
+      previous?.paneSleep &&
+      !rootContext.acquired &&
+      !newRun &&
+      this.sameTerminalOwner(previous, payload) &&
+      previous.payload.agentType === payload.payload.agentType
+    ) {
+      return previous
+    }
+    if (
+      previous &&
+      payload.payload.sessionBoundary === true &&
+      !rootContext.acquired &&
+      this.sameTerminalOwner(previous, payload) &&
+      this.preservesStoppingDone(previous.paneKey)
+    ) {
+      return previous
+    }
     const terminalHandle =
       payload.terminalHandle ??
       (previous?.terminalHandle && this.sameTerminalOwner(previous, payload)

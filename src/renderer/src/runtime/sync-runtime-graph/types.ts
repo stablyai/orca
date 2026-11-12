@@ -21,7 +21,7 @@ export type RuntimeMobileSessionSyncKey = {
   activeTabId: AppState['activeTabId']
   activeBrowserTabIdByWorktree: AppState['activeBrowserTabIdByWorktree']
   agentStatusEpoch: number
-  agentStatusProjection: string
+  agentStatusProjection: object
   generatedTabTitlesEnabled: boolean
   systemPrefersDark: boolean | null
   terminalThemeProjection: string
@@ -92,7 +92,7 @@ export type EditorDraftHashCache = {
 }
 export type MobileSessionAgentStatusByWorktree = ReadonlyMap<
   string,
-  ReadonlyMap<string, AppState['agentStatusByPaneKey'][string]>
+  ReadonlyMap<string, NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>>
 >
 /** Slices shared by every worktree in one publication; derived from `AppState` exactly once. */
 export type MobileSessionPublicationInputs = {
@@ -133,7 +133,10 @@ export type MobileSessionWorktreeInputs = {
     string,
     NonNullable<AppState['nativeChatLaunchDraftByTabId']>[string]
   >
-  agentStatusByPaneKey: ReadonlyMap<string, AppState['agentStatusByPaneKey'][string]>
+  agentStatusByPaneKey: ReadonlyMap<
+    string,
+    NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>
+  >
   editorDraftVersionByFileId: ReadonlyMap<string, string>
   pagesByBrowserWorkspaceId: ReadonlyMap<
     string,

@@ -1,3 +1,4 @@
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
@@ -33,11 +34,21 @@ export type RuntimeConstructionDependencies = {
   onClaudeTerminalEvidence?: (paneKey: string, evidence: ClaudeTerminalEvidence) => void
   getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
   getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
-  getPublicAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
+  getPublicAgentStatusSnapshotForPane?: (
+    paneKey: string,
+    terminalHandle?: string | null
+  ) => AgentStatusIpcPayload[]
   structuredAgentStatusSink?: StructuredAgentSessionStatusSink
   readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
   getAgentProviderSessionSnapshot?: (tabId?: string) => AgentStatusIpcPayload[]
-  getAgentProviderSessionRowsForPane?: (paneKey: string) => AgentStatusIpcPayload[]
+  getAgentProviderSessionRowsForSession?: (
+    agent: string,
+    session: AgentProviderSessionMetadata
+  ) => AgentStatusIpcPayload[]
+  getAgentProviderSessionRowsForPane?: (
+    paneKey: string,
+    terminalHandle?: string | null
+  ) => AgentStatusIpcPayload[]
   getAcceptedAgentReply?: (paneKey: string, leadTurnKey: number) => string | undefined
   subscribeAgentStatusRowChanges?: (listener: (paneKey: string) => void) => () => void
   subscribeAgentProviderSessionChanges?: (
@@ -56,7 +67,10 @@ export type RuntimeConstructionDependencies = {
     paneKey: string,
     exitedSince?: number
   ) => Promise<'live' | 'unverifiable' | 'exited' | null>
-  reconcileAgentStatusForEndedProcess?: (paneKeys: Iterable<string>) => void
+  reconcileAgentStatusForEndedProcess?: (
+    paneKeys: Iterable<string>,
+    sleep?: { ptyId: string; incarnationId?: string }
+  ) => void
   /** A worker attached to these panes; an exit the hook store proved before then is not its own. */
   forgetHookAgentExit?: (paneKeys: Iterable<string>) => void
   dropAgentStatusForRemovedWorktree?: (worktreeId: string, host?: ExecutionHostScope) => void

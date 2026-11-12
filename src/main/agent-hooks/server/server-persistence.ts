@@ -19,6 +19,8 @@ import { authorityCommitmentsMatch } from './server-persistence-validation'
 import { AgentHookServerHydration } from './server-hydration'
 import { pruneAgentExits, serializeAgentExits } from './agent-exit-evidence'
 import { LastStatusStore } from './last-status-store'
+import { StatusCacheExpiry } from './status-cache-expiry'
+import { rowsOf } from './last-status-saved-rows'
 import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 
 export abstract class AgentHookServerPersistence extends AgentHookServerHydration {
@@ -28,25 +30,47 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
   private statusPersistRetryDelayMs = 0
   private statusPersistRetryAt = 0
 
-  protected buildStatusFile(): LastStatusFile {
+  private readonly statusCacheExpiry = new StatusCacheExpiry()
+  private persistedExitRevision = -1
+
+  protected buildStatusFile(keys?: readonly string[], includeExits = true): LastStatusFile {
+    if (!keys) {
+      this.statusCacheExpiry.clear()
+    }
     const entries: Record<string, PersistedAgentHookEventPayload> = {}
     const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
     const conflictedCommitments = new Set<string>()
     // Restart drops anything older than the TTL, so saving it would only carry dead rows forward.
     const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
-    for (const [paneKey, commitment] of this.persistedAuthorityCommitmentsByPaneKey) {
+    for (const [paneKey, commitment] of selectedEntries(
+      this.persistedAuthorityCommitmentsByPaneKey,
+      keys
+    )) {
+      this.statusCacheExpiry.set(
+        `commitment\0${paneKey}`,
+        commitment.observedAt >= ttlCutoff ? commitment.observedAt + HYDRATE_MAX_AGE_MS : undefined
+      )
       if (commitment.observedAt >= ttlCutoff) {
         authorityCommitments[paneKey] = { ...commitment }
       }
     }
-    for (const [paneKey, payload] of this.state.lastStatusByPaneKey) {
+    for (const [paneKey, payload] of selectedEntries(this.state.lastStatusByPaneKey, keys)) {
       // Why: never persist invalid keys (matches the hydrate-path invariant).
       if (!isValidPaneKey(paneKey)) {
         continue
       }
       const enrichedPayload = payload as EnrichedAgentHookEventPayload
+      this.statusCacheExpiry.set(
+        `entry\0${paneKey}`,
+        !enrichedPayload.paneSleep && enrichedPayload.receivedAt >= ttlCutoff
+          ? enrichedPayload.receivedAt + HYDRATE_MAX_AGE_MS
+          : undefined
+      )
       // Journal projections must not compete with unconfirmed copies hydrated from this cache.
-      if (enrichedPayload.structuredHost || enrichedPayload.receivedAt < ttlCutoff) {
+      if (
+        enrichedPayload.structuredHost ||
+        (!enrichedPayload.paneSleep && enrichedPayload.receivedAt < ttlCutoff)
+      ) {
         continue
       }
       const {
@@ -90,14 +114,27 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       }
     }
     // Panes without successor agents would otherwise retain exit evidence forever.
-    pruneAgentExits(this.agentExitedAtByPaneKey, ttlCutoff, (paneKey) =>
-      this.state.lastStatusByPaneKey.has(paneKey)
-    )
+    if (includeExits) {
+      pruneAgentExits(this.agentExitedAtByPaneKey, ttlCutoff, (paneKey) =>
+        this.state.lastStatusByPaneKey.has(paneKey)
+      )
+    }
     // Runtime keeps an old exit for a live row; the saved copy keeps it only beside a saved row.
-    const agentExits = serializeAgentExits(this.agentExitedAtByPaneKey).filter(
-      (exit) =>
-        exit.at >= ttlCutoff || exit.paneKeys.some((paneKey) => Object.hasOwn(entries, paneKey))
-    )
+    const agentExits = includeExits
+      ? serializeAgentExits(this.agentExitedAtByPaneKey).filter(
+          (exit) =>
+            exit.at >= ttlCutoff ||
+            exit.paneKeys.some((paneKey) => this.state.lastStatusByPaneKey.has(paneKey))
+        )
+      : []
+    if (includeExits) {
+      for (const [key, exit] of this.agentExitedAtByPaneKey) {
+        this.statusCacheExpiry.set(
+          `exit\0${key}`,
+          exit.at >= ttlCutoff ? exit.at + HYDRATE_MAX_AGE_MS : undefined
+        )
+      }
+    }
     return {
       version: LAST_STATUS_FILE_VERSION,
       entries,
@@ -156,13 +193,51 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       return true
     }
     if (store.isDisabled) {
+      this.clearStatusPersistDebt()
       // Nothing reaches disk this session; flush callers must not read that as saved.
       return false
     }
     this.lastStatusPersistStartedAt = Date.now()
     const fingerprint = this.currentAuthorityFingerprint()
     try {
-      store.write(this.buildStatusFile(), busyTimeoutMs)
+      const keys = new Set([
+        ...this.statusPersistDirtyKeys,
+        ...this.hydratedLaunchTokenHashByPaneKey.dirtyKeys,
+        ...this.persistedAuthorityCommitmentsByPaneKey.dirtyKeys
+      ])
+      let exitsDirty = this.persistedExitRevision !== this.agentExitedAtByPaneKey.revision
+      for (const expired of this.statusCacheExpiry.takeDue(Date.now())) {
+        const separator = expired.indexOf('\0')
+        if (expired.startsWith('exit\0')) {
+          exitsDirty = true
+          this.persistedExitRevision = -1
+        } else {
+          keys.add(expired.slice(separator + 1))
+        }
+      }
+      for (const key of keys) {
+        this.statusPersistDirtyKeys.add(key)
+      }
+      const file = this.buildStatusFile([...keys], exitsDirty)
+      const changes = new Map<string, string | null>()
+      for (const key of keys) {
+        changes.set(`entry\0${key}`, null)
+        changes.set(`commitment\0${key}`, null)
+      }
+      if (exitsDirty) {
+        changes.set('exits\0', null)
+      }
+      for (const row of rowsOf(file)) {
+        changes.set(row.key, row.json)
+      }
+      const reinsertKeys = new Set([...this.statusPersistRemovedKeys].map((key) => `entry\0${key}`))
+      store.patch(changes, () => this.buildStatusFile(), busyTimeoutMs, reinsertKeys)
+      this.statusPersistDirtyKeys.clear()
+      this.statusPersistRemovedKeys.clear()
+      this.hydratedLaunchTokenHashByPaneKey.dirtyKeys.clear()
+      this.persistedAuthorityCommitmentsByPaneKey.dirtyKeys.clear()
+      this.agentExitedAtByPaneKey.dirtyKeys.clear()
+      this.persistedExitRevision = this.agentExitedAtByPaneKey.revision
     } catch (err) {
       this.reportStatusPersistFailure(err)
       this.statusPersistRetryDelayMs = nextRetryDelayMs(this.statusPersistRetryDelayMs, {
@@ -182,11 +257,23 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     return true
   }
 
+  private clearStatusPersistDebt(): void {
+    this.statusPersistDirtyKeys.clear()
+    this.statusPersistRemovedKeys.clear()
+    this.hydratedLaunchTokenHashByPaneKey.dirtyKeys.clear()
+    this.persistedAuthorityCommitmentsByPaneKey.dirtyKeys.clear()
+    this.agentExitedAtByPaneKey.dirtyKeys.clear()
+  }
+
   protected closeStatusSnapshotWriter(): void {
+    this.tracksStatusPersistence = () => false
+    this.clearStatusPersistDebt()
     this.cancelStatusPersistTimer()
     this.statusStore?.close()
     this.statusStore = null
     this.statusStorePath = null
+    this.statusCacheExpiry.clear()
+    this.persistedExitRevision = -1
     this.lastStatusPersistStartedAt = Number.NEGATIVE_INFINITY
     this.lastPersistedAuthorityFingerprint = null
     this.statusPersistFailing = false
@@ -203,21 +290,15 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       this.statusStore?.close()
       this.statusStore = new LastStatusStore(filePath)
       this.statusStorePath = filePath
+      const store = this.statusStore
+      this.tracksStatusPersistence = () => !store.isDisabled
     }
     return this.statusStore
   }
 
   /** Revision counters and live tokens avoid per-event hashing or serialization. */
   protected currentAuthorityFingerprint(): string {
-    let fingerprint = `${this.hydratedLaunchTokenHashByPaneKey.revision}:${this.persistedAuthorityCommitmentsByPaneKey.revision}`
-    for (const [paneKey, payload] of this.state.lastStatusByPaneKey) {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
-      const launchToken = (payload as EnrichedAgentHookEventPayload).launchToken?.trim()
-      if (launchToken) {
-        fingerprint += `\n${paneKey}\t${launchToken}`
-      }
-    }
-    return fingerprint
+    return `${this.hydratedLaunchTokenHashByPaneKey.revision}:${this.persistedAuthorityCommitmentsByPaneKey.revision}:${this.statusAuthorityRevision}`
   }
 
   private cancelStatusPersistTimer(): void {
@@ -240,5 +321,18 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
 
   _resetConnectionTimestampWatermarksForTests(): void {
     this.connectionTimestampWatermarkById.clear()
+  }
+}
+
+function* selectedEntries<K, V>(map: ReadonlyMap<K, V>, keys?: readonly K[]): Iterable<[K, V]> {
+  if (!keys) {
+    yield* map
+    return
+  }
+  for (const key of keys) {
+    const value = map.get(key)
+    if (value !== undefined) {
+      yield [key, value]
+    }
   }
 }

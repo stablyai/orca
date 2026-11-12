@@ -1,6 +1,7 @@
+import { RuntimeAgentStatusReadContract } from './runtime-agent-status-read-contract'
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
-import type { selectFreshExplicitAgentStatus } from '../workspaces/process-listing/runtime-hook-agent-row-selection'
+
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import type {
   RuntimePtyWorktreeRecord,
@@ -41,13 +42,13 @@ import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/m
 import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { StructuredPointerTarget } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+
 import type * as PtyControllerContract from '../terminal/lifecycle/runtime-pty-controller-contract'
 import type { RuntimeClientEventBus } from '../client/events/runtime-client-event-bus'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
 
-export abstract class RuntimeConstructionServices {
+export abstract class RuntimeConstructionServices extends RuntimeAgentStatusReadContract {
   abstract getOrchestrationDb(): OrchestrationDb
   abstract getExistingOrchestrationDb(): OrchestrationDb | null
   abstract listRepos(): Repo[]
@@ -274,11 +275,6 @@ export abstract class RuntimeConstructionServices {
   protected abstract getWorkspaceSessionForWorktree(
     worktreeId: string
   ): WorkspaceSessionState | null
-  protected abstract readonly getAgentStatusSnapshotForPaneFn:
-    | ((paneKey: string) => AgentStatusIpcPayload[])
-    | null
-  protected abstract readonly publicPaneStatusFn?: (paneKey: string) => AgentStatusIpcPayload[]
-  abstract readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   protected abstract getTrackedDisplayTitleForPty(ptyId: string): string | null
   protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]
   abstract notifyMessageArrived(handle: string, messageType?: string): void
@@ -296,8 +292,4 @@ export abstract class RuntimeConstructionServices {
     retryStale?: boolean,
     inventoryOptions?: PtyControllerContract.PtyInventoryRefreshOptions
   ): Promise<PtyControllerContract.PtyControllerInventory | null>
-  protected abstract getFreshExplicitAgentStatusForHandle(
-    handle: string,
-    ptyId: string
-  ): ReturnType<typeof selectFreshExplicitAgentStatus>
 }

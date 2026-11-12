@@ -111,7 +111,7 @@ export async function seedAccumulatedWorkspaceFixture(
         }
       }
       const syntheticStatuses = Object.fromEntries(
-        Object.entries(store.getState().agentStatusByPaneKey).filter(([paneKey]) =>
+        Array.from(store.getState().agentStatusByPaneKey.entries()).filter(([paneKey]) =>
           paneKey.startsWith('synthetic-tab-')
         )
       )

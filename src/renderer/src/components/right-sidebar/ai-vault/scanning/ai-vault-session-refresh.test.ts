@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -154,7 +155,7 @@ function makeVaultSession(index: number): AiVaultSession {
 
 async function setAgentStatuses(entries: Record<string, AgentStatusEntry>): Promise<void> {
   await act(async () => {
-    useAppStore.setState({ agentStatusByPaneKey: entries })
+    useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(entries)) })
   })
   await flushMicrotasks()
 }

@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -65,7 +66,7 @@ function mountChatConsumers(consumer: ChatStatusConsumer): void {
   useAppStore.setState({
     tabsByWorktree: {},
     browserTabsByWorktree: {},
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
 
     unifiedTabsByWorktree: { [TARGET_WORKTREE_ID]: [tab] },
     structuredChatSleptAtByPaneKey: { [structuredAgentSessionPaneKey(tab.id, tab.entityId)]: 1 }
@@ -134,13 +135,18 @@ describe.each<ChatStatusConsumer>(['sidebar', 'parent picker', 'palette'])(
         stateHistory: []
       }
       act(() =>
-        useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: working }, agentStatusEpoch: 1 })
+        useAppStore.setState({
+          agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [paneKey]: working })),
+          agentStatusEpoch: 1
+        })
       )
       expect(chatStatusLabels()).toEqual(['working'])
       if (consumer !== 'palette') {
         act(() =>
           useAppStore.setState({
-            agentStatusByPaneKey: { [paneKey]: { ...working, state: 'done' } },
+            agentStatusByPaneKey: acceptedAgentStatuses(
+              Object.entries({ [paneKey]: { ...working, state: 'done' } })
+            ),
             agentStatusEpoch: 2
           })
         )
@@ -149,7 +155,7 @@ describe.each<ChatStatusConsumer>(['sidebar', 'parent picker', 'palette'])(
       act(() =>
         useAppStore.setState({
           unifiedTabsByWorktree: {},
-          agentStatusByPaneKey: {},
+          agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
           agentStatusEpoch: 3
         })
       )

@@ -170,6 +170,10 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   })
 
   protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
+    isStopping: (ptyId) =>
+      this.intentionalPtyStops
+        .claimExit(ptyId, this.ptysById.get(ptyId)?.incarnationId)
+        .includes('reversible'),
     isObservablePty: (ptyId) => {
       const pty = this.ptysById.get(ptyId)
       // SSH/WSL foregrounds belong to the host/guest, not this process.

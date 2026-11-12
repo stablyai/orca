@@ -23,7 +23,7 @@ export function localAgentConversationAcceptance(
   agentType: AgentStatusEntry['agentType']
 ) {
   const { state, paneKey, payload, routing, timing, metadata } = args
-  const existing = state.agentStatusByPaneKey[paneKey]
+  const existing = state.agentStatusByPaneKey.get(paneKey)
   const source: AgentConversationSource = {
     ...payload,
     stateStartedAt: timing?.stateStartedAt,

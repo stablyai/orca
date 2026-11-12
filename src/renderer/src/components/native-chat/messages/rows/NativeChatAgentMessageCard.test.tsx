@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
@@ -393,7 +394,9 @@ it.each(['task', 'mail', 'generic'] as const)(
     }
     act(() =>
       useAppStore.setState({
-        agentStatusByPaneKey: { [paneKey]: { ...entry, state: 'done' } },
+        agentStatusByPaneKey: acceptedAgentStatuses(
+          Object.entries({ [paneKey]: { ...entry, state: 'done' } })
+        ),
         agentStatusEpoch: 2
       })
     )

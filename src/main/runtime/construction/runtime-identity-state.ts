@@ -231,7 +231,11 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   // The candidate receipt owns its exit evidence until publication or cancellation.
   protected pendingPtyRegistrationIncarnations = new Map<string, PtyRegistrationClaim>()
 
-  readonly intentionalPtyStops = new TerminalIntentionalStops()
+  protected onIntentionalPtyStopSettled(_ptyId: string, _stopped: boolean): void {}
+
+  readonly intentionalPtyStops = new TerminalIntentionalStops((ptyId, stopped) =>
+    this.onIntentionalPtyStopSettled(ptyId, stopped)
+  )
 
   readonly terminalRunFacts = new TerminalRunFactsRegister()
 

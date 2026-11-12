@@ -5,7 +5,7 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
 
 type TitleFact =
-  | AppState['agentStatusByPaneKey'][string]
+  | NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>
   | AppState['sleepingAgentSessionsByPaneKey'][string]
   | AppState['agentConversationsByPaneKey'][string]
 
@@ -19,7 +19,7 @@ export function titleRelevant(entry: TitleFact | undefined): boolean {
 
 function paneHasTitleFact(state: AppState, key: string): boolean {
   return [
-    state.agentStatusByPaneKey[key],
+    state.agentStatusByPaneKey.get(key),
     state.sleepingAgentSessionsByPaneKey[key],
     state.agentConversationsByPaneKey?.[key]
   ].some(titleRelevant)
@@ -67,7 +67,9 @@ export function placedPanesEqual(current: AppState, previous: AppState): boolean
         state.sleepingAgentSessionsByPaneKey,
         state.agentConversationsByPaneKey ?? {}
       ]) {
-        for (const entry of Object.values(record)) {
+        for (const entry of record === state.agentStatusByPaneKey
+          ? state.agentStatusByPaneKey.values()
+          : Object.values(record)) {
           if (!titleRelevant(entry)) {
             continue
           }

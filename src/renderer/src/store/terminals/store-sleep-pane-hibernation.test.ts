@@ -137,11 +137,11 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       providerSession: { key: 'session_id', id: 'target-session' }
     })
     expect(state.sleepingAgentSessionsByPaneKey[siblingPaneKey]).toBe(siblingSleepingRecordBefore)
-    expect(state.agentStatusByPaneKey[targetPaneKey]).toBeUndefined()
+    expect(state.agentStatusByPaneKey.get(targetPaneKey)).toBeUndefined()
     expect(state.acknowledgedAgentsByPaneKey[targetPaneKey]).toBe(2000)
     expect(state.activityClearedAtByPaneKey[targetPaneKey]).toBe(2000)
     expect(state.manuallyUnreadTurnsByPaneKey[targetPaneKey]).toBe(1000)
-    expect(state.agentStatusByPaneKey[siblingPaneKey]).toBeDefined()
+    expect(state.agentStatusByPaneKey.get(siblingPaneKey)).toBeDefined()
     expect(state.unreadTerminalTabs['tab-1']).toBe(true)
     expect(state.unreadTerminalPanes[targetPaneKey]).toBe(true)
     expect(state.unreadTerminalPanes[siblingPaneKey]).toBe(true)

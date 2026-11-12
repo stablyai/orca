@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -72,7 +73,7 @@ describe('useNativeChatLiveSession — file watcher pagination composition', () 
   beforeEach(() => {
     // Without it React warns on every act() and may not flush updates inside it.
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-    useAppStore.setState({ agentStatusByPaneKey: {} })
+    useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})) })
   })
 
   afterEach(() => {

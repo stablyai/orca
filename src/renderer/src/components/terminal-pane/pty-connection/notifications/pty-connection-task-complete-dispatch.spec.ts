@@ -157,17 +157,22 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       vi.setSystemTime(1_000_000)
       const dispatchNotification = useNotificationDispatch('wt-1')
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        state: 'done',
-        prompt: 'Previous task that must not leak',
-        updatedAt: Date.now() - 15_000,
-        stateStartedAt: Date.now() - 20_000,
-        agentType: 'codex',
-        paneKey,
-        terminalTitle: '* Codex done',
-        stateHistory: [],
-        lastAssistantMessage: 'Old response'
-      }
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [
+          paneKey,
+          {
+            state: 'done',
+            prompt: 'Previous task that must not leak',
+            updatedAt: Date.now() - 15_000,
+            stateStartedAt: Date.now() - 20_000,
+            agentType: 'codex',
+            paneKey,
+            terminalTitle: '* Codex done',
+            stateHistory: [],
+            lastAssistantMessage: 'Old response'
+          }
+        ]
+      ])
 
       const pane = createPane(1)
       const manager = createManager(1)

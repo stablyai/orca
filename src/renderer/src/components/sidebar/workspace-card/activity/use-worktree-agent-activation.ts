@@ -46,7 +46,7 @@ export function activateWorktreeAgentPane(
     })
     activateTerminalTabOnOwner(worktreeId, tabId, parsed.leafId)
   } else if (!activateStructuredAgentSessionTab({ worktreeId, tabId })) {
-    const liveEntry = useAppStore.getState().agentStatusByPaneKey[paneKey]
+    const liveEntry = useAppStore.getState().agentStatusByPaneKey.get(paneKey)
     if (liveEntry?.worktreeId === worktreeId) {
       // Live worker status can precede tab hydration; retain the row and activate its owning terminal.
       activateTerminalTabOnOwner(worktreeId, tabId, parsed.leafId)

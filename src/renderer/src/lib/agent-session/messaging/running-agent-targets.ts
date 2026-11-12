@@ -96,7 +96,7 @@ function deriveTerminalAgentSendTargets(
   const tabsById = new Map(tabs.map((tab) => [tab.id, tab]))
   const targets: TerminalAgentSendTarget[] = []
 
-  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(state.agentStatusByPaneKey.entries())) {
     const parsed = parsePaneKey(paneKey)
     if (!parsed) {
       continue
@@ -170,7 +170,7 @@ function deriveStructuredAgentSendTargets(
       continue
     }
     const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-    const entry = state.agentStatusByPaneKey[paneKey] ?? null
+    const entry = state.agentStatusByPaneKey.get(paneKey) ?? null
     if ((entry !== null) !== (status === 'with-status')) {
       continue
     }

@@ -31,7 +31,7 @@ export abstract class OrcaRuntimeWithRestoredAgentDialogScreen extends OrcaRunti
     const row = selectFreshExplicitAgentStatusRow({
       handles: [handle],
       paneKeys: paneKey ? [paneKey] : [],
-      hookRows: this.getAgentStatusSnapshotFn?.() ?? [],
+      hookRows: paneKey ? (this.publicPaneStatusFn?.(paneKey) ?? []) : [],
       screenMayHoldDialog: () => this.screenMayHoldAgentDialog(ptyId)
     })
     return row?.restoredUnconfirmed === true

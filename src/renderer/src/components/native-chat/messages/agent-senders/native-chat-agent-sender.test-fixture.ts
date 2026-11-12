@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
 import { useAppStore } from '@/store'
@@ -38,7 +39,9 @@ export function resetSenderStore(): void {
       activeWorkspaceExecutionHostId: 'local',
       tabsByWorktree: { workspace: [makeTab({ id: 'tab-0', worktreeId: 'workspace' })] },
       unifiedTabsByWorktree: {},
-      agentStatusByPaneKey: { [status(0).paneKey]: status(0) },
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({ [status(0).paneKey]: status(0) })
+      ),
 
       migrationUnsupportedByPtyId: {},
       runtimeAgentOrchestrationByPaneKey: {},
@@ -70,7 +73,7 @@ export function setSenderSessionStatus(sessionId: OrcaSessionId): AgentStatusEnt
   }
   useAppStore.setState({
     unifiedTabsByWorktree: { workspace: [tab] },
-    agentStatusByPaneKey: { [paneKey]: entry }
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [paneKey]: entry }))
   })
   return entry
 }

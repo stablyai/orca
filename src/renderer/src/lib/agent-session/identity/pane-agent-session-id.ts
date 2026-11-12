@@ -3,7 +3,7 @@ import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-ses
 import type { PaneForegroundAgentEntry } from '../../../store/slices/agent-status/pane-foreground-agent'
 
 export type PaneAgentSessionIdState = {
-  agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
+  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry | undefined>
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord | undefined>
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry | undefined>
 }
@@ -17,7 +17,7 @@ export function resolvePaneAgentSessionId(
   if (state.paneForegroundAgentByPaneKey[paneKey]?.shellForeground === true) {
     return null
   }
-  const live = state.agentStatusByPaneKey[paneKey]
+  const live = state.agentStatusByPaneKey.get(paneKey)
   if (live && live.restoredUnconfirmed !== true) {
     return live.providerSession?.id ?? null
   }

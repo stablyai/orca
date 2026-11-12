@@ -27,7 +27,7 @@ function reclaim(session?: string) {
         }
       : undefined
   )
-  return store.getState().agentStatusByPaneKey[PANE_KEY]
+  return store.getState().agentStatusByPaneKey.get(PANE_KEY)
 }
 
 describe('pane owner reclaim', () => {

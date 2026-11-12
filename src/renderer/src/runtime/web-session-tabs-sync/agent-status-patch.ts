@@ -27,9 +27,8 @@ import {
   clientAgentStatusFencesHost,
   hostAgentStatusPiercesClientAuthority,
   isMirroredAgentPaneKeyForTabs,
-  batchAgentPaneKeysForTabs,
-  remapHostAgentStatus,
-  updateBatchAgentPaneKey
+  agentPaneKeysForTabs,
+  remapHostAgentStatus
 } from './agent-status-primitives'
 import {
   retirePaneLaunchNote,
@@ -38,8 +37,7 @@ import {
 import {
   agentStatusEntryEqual,
   isAgentStatusFresh,
-  isMirroredCommandCodeTurnBump,
-  writableWebSessionTabsRecord
+  isMirroredCommandCodeTurnBump
 } from './state-equality-core'
 
 type MirroredAgentStatusPatch = Pick<
@@ -80,6 +78,11 @@ export function buildMirroredAgentStatusPatch(
     return null
   }
 
+  const survivingSleepingPaneKeys = new Set(
+    terminalSurfaceTabs.map(
+      (surface) => `${toWebTerminalSurfaceTabId(surface.parentTabId)}:${surface.leafId}`
+    )
+  )
   let retainedSurfaceByHostTabAndPrunedLeafId:
     | Map<string, ReadonlyMap<string, RuntimeMobileSessionTerminalClientTab>>
     | undefined
@@ -102,7 +105,7 @@ export function buildMirroredAgentStatusPatch(
       continue
     }
     const existing =
-      nextByPaneKey.get(hostEntry.paneKey) ?? state.agentStatusByPaneKey[hostEntry.paneKey]
+      nextByPaneKey.get(hostEntry.paneKey) ?? state.agentStatusByPaneKey.get(hostEntry.paneKey)
     const entry = withMirroredEvidenceReceipt(
       hostEntry.connectionId === undefined
         ? { ...hostEntry, connectionId: environmentId }
@@ -172,13 +175,12 @@ export function buildMirroredAgentStatusPatch(
   let aggregateRelevantChange = false
   let sortRelevantChange = false
 
-  for (const paneKey of batchAgentPaneKeysForTabs(state, mirroredTabIds, batchContext)) {
+  for (const paneKey of agentPaneKeysForTabs(state, mirroredTabIds)) {
     if (!isMirroredAgentPaneKeyForTabs(paneKey, mirroredTabIds)) {
       continue
     }
-    if (
-      !isMirroredAgentStatusOwnedBy(state.agentStatusByPaneKey[paneKey], environmentId, worktreeId)
-    ) {
+    const existing = state.agentStatusByPaneKey.get(paneKey)
+    if (!existing || !isMirroredAgentStatusOwnedBy(existing, environmentId, worktreeId)) {
       continue
     }
     // Explicit retraction retires pane authority after the live-row patch.
@@ -188,19 +190,18 @@ export function buildMirroredAgentStatusPatch(
     if (nextByPaneKey.has(paneKey)) {
       continue
     }
-    // Host omission cannot prove OSC-driven exit. Retain owned rows through staleness so wake decays them like local panes instead of erasing them (STA-3107).
-    if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])) {
+    if (
+      state.agentStatusByPaneKey.get(paneKey)?.paneSleep &&
+      survivingSleepingPaneKeys.has(paneKey)
+    ) {
       continue
     }
-    if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
-      nextAgentStatusByPaneKey = writableWebSessionTabsRecord(
-        state,
-        'agentStatusByPaneKey',
-        batchContext
-      )
+    // Host omission cannot prove OSC-driven exit. Retain owned rows through staleness so wake decays them like local panes instead of erasing them (STA-3107).
+    if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey.get(paneKey))) {
+      continue
     }
-    delete nextAgentStatusByPaneKey[paneKey]
-    updateBatchAgentPaneKey(paneKey, false, batchContext)
+    nextAgentStatusByPaneKey = nextAgentStatusByPaneKey.replace([[paneKey, null]])
+    batchContext?.changedAgentPaneKeys?.add(paneKey)
     changed = true
     aggregateRelevantChange = true
     sortRelevantChange = true
@@ -221,7 +222,7 @@ export function buildMirroredAgentStatusPatch(
       toRuntimeExecutionHostId(environmentId),
       { ...entry, isReplay: true }
     )
-    const existing = nextAgentStatusByPaneKey[paneKey]
+    const existing = nextAgentStatusByPaneKey.get(paneKey)
     // The host's retirement of this pane's launch ends the client's copies of its note.
     if (retiresLaunch(existing, entry)) {
       retirement = { ...retirement, ...retirePaneLaunchNote({ ...state, ...retirement }, paneKey) }
@@ -232,15 +233,8 @@ export function buildMirroredAgentStatusPatch(
     ) {
       continue
     }
-    if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
-      nextAgentStatusByPaneKey = writableWebSessionTabsRecord(
-        state,
-        'agentStatusByPaneKey',
-        batchContext
-      )
-    }
-    nextAgentStatusByPaneKey[paneKey] = entry
-    updateBatchAgentPaneKey(paneKey, true, batchContext)
+    nextAgentStatusByPaneKey = nextAgentStatusByPaneKey.replace([[paneKey, entry]])
+    batchContext?.changedAgentPaneKeys?.add(paneKey)
     changed = true
     const entryAttributionChanged =
       existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId

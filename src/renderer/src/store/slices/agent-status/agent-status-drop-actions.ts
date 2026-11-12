@@ -32,7 +32,7 @@ export function createAgentStatusDropActions(
     dropAgentStatus: (paneKey, opts?: DropAgentStatusOptions) => {
       let liveExisted = false
       set((s, changedPaneKeys) => {
-        const hasLive = paneKey in s.agentStatusByPaneKey
+        const hasLive = s.agentStatusByPaneKey.has(paneKey)
         liveExisted = hasLive
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,
@@ -74,10 +74,11 @@ export function createAgentStatusDropActions(
           }
           return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
         }
-        const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        const nextLive = hasLive
+          ? s.agentStatusByPaneKey.replace([[paneKey, null]])
+          : s.agentStatusByPaneKey
         if (hasLive) {
           changedPaneKeys.add(paneKey)
-          delete nextLive[paneKey]
         }
         return {
           agentStatusByPaneKey: nextLive,
@@ -129,9 +130,12 @@ export function createAgentStatusDropActions(
     dropHibernatedAgentStatusPane: (_worktreeId, paneKey) => {
       let hadLive = false
       set((s, changedPaneKeys) => {
-        hadLive = paneKey in s.agentStatusByPaneKey
+        const row = s.agentStatusByPaneKey.get(paneKey)
+        hadLive = row !== undefined && !(row.state === 'done' && row.paneSleep)
         const keys = new Set([paneKey])
-        const agentStatusByPaneKey = removePaneKeys(s.agentStatusByPaneKey, keys)
+        const agentStatusByPaneKey = hadLive
+          ? removePaneKeys(s.agentStatusByPaneKey, keys)
+          : s.agentStatusByPaneKey
         const agentLaunchConfigByPaneKey = removePaneKeys(s.agentLaunchConfigByPaneKey, keys)
         const migration = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,

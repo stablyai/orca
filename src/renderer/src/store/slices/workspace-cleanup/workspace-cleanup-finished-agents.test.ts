@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import {
   makeFacets,
   makeFacetCandidate
@@ -33,20 +34,22 @@ it('counts current Done agents only for their workspace host', () => {
         makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', hostId: 'ssh:b' })
       ]
     },
-    agentStatusByPaneKey: {
-      'done-tab:0': {
-        paneKey: 'done-tab:0',
-        tabId: tab.id,
-        worktreeId: WORKTREE_ID,
-        state: 'done',
-        prompt: 'finished task',
-        agentType: 'claude',
-        updatedAt: 1000,
-        stateStartedAt: 1000,
-        stateHistory: [],
-        connectionId: 'a'
-      }
-    }
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        'done-tab:0': {
+          paneKey: 'done-tab:0',
+          tabId: tab.id,
+          worktreeId: WORKTREE_ID,
+          state: 'done',
+          prompt: 'finished task',
+          agentType: 'claude',
+          updatedAt: 1000,
+          stateStartedAt: 1000,
+          stateHistory: [],
+          connectionId: 'a'
+        }
+      })
+    )
   })
   const a = makeCandidate({ executionHostId: 'ssh:a', connectionId: 'a' })
   const b = makeCandidate({ executionHostId: 'ssh:b', connectionId: 'b' })
@@ -54,7 +57,7 @@ it('counts current Done agents only for their workspace host', () => {
   expect(evidence.get(getWorkspaceCleanupCandidateIdentity(a))).toEqual({ finishedAgentCount: 1 })
   expect(evidence.get(getWorkspaceCleanupCandidateIdentity(b))).toEqual({ finishedAgentCount: 0 })
   store.setState({
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     sleepingAgentSessionsByPaneKey: {
       'done-tab:0': {
         paneKey: 'done-tab:0',

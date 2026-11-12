@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 
@@ -59,7 +60,7 @@ describe('selectWorktreeAgentOrchestration', () => {
     const base: IndexState = {
       tabsByWorktree: { 'wt-1': [makeTab('tab-1')] },
       runtimeAgentOrchestrationByPaneKey: { [paneKey]: context },
-      agentStatusByPaneKey: {}
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({}))
     }
     selectWorktreeAgentOrchestration(base, 'wt-1')
 
@@ -88,7 +89,7 @@ describe('selectWorktreeAgentOrchestration', () => {
     const state: IndexState = {
       tabsByWorktree: {},
       runtimeAgentOrchestrationByPaneKey: Object.fromEntries([['__proto__', context]]),
-      agentStatusByPaneKey: Object.fromEntries([['__proto__', makeEntry('__proto__', 'wt-1')]])
+      agentStatusByPaneKey: acceptedAgentStatuses([['__proto__', makeEntry('__proto__', 'wt-1')]])
     }
 
     const record = selectWorktreeAgentOrchestration(state, 'wt-1')

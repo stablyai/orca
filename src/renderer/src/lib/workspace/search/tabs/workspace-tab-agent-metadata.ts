@@ -1,3 +1,4 @@
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentStatusEvidenceObservedAt } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -31,7 +32,7 @@ export function maxAgentActivityAt(metadata: readonly AgentMetadata[]): number |
 }
 
 export type WorkspaceTabAgentMetadataState = {
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
 }
 
@@ -136,7 +137,7 @@ export function collectAgentMetadataForTerminal({
 }): AgentMetadata[] {
   const metadataByPaneKey = new Map<string, AgentMetadata>()
 
-  for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(agentStatusByPaneKey.entries())) {
     if (
       agentRecordMatchesTab({
         paneKey,
@@ -198,7 +199,7 @@ export function buildAgentMetadataTabIndex(
   const index = new Map<string, IndexedAgentEntry[]>()
   const seenPaneKeys = new Set<string>()
 
-  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(state.agentStatusByPaneKey.entries())) {
     const tabId = entry.tabId || getPaneKeyTabId(paneKey)
     if (!tabId) {
       continue

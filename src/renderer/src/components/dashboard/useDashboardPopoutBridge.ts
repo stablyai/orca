@@ -8,7 +8,6 @@ import {
 import { revealDashboardAgent } from './reveal-dashboard-agent'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
-import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Throttle cross-worktree snapshot rebuilds to 4Hz during agent-status bursts.
@@ -119,17 +118,12 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     let lastPublishedRepoIcons: Record<string, RepoIcon | null> | null = null
 
     // Force icons for new/requesting windows; throttle-time omissions retain their map. Cache worktree rows per bridge lifecycle.
-    const rowsCache = createWorktreeAgentRowsCache()
     const publishNow = (withIcons: boolean): void => {
       lastPublishAt = Date.now()
       const state = useAppStore.getState()
       const snapshot = buildDashboardSnapshot(
         { ...state, chatNames: getStructuredChatTabNames() },
-        lastPublishAt,
-        {
-          rowsCache,
-          rowsGeneration: state.agentStatusEpoch
-        }
+        lastPublishAt
       )
       const icons = snapshot.repoIconsByRepoId ?? {}
       if (!withIcons && repoIconsUnchanged(icons, lastPublishedRepoIcons)) {

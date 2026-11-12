@@ -93,7 +93,7 @@ test('idle Claude keeps chat, mobile transcript, and return identity through nes
   await expect
     .poll(() =>
       orcaPage.evaluate(
-        (key) => window.__store?.getState().agentStatusByPaneKey[key]?.state,
+        (key) => window.__store?.getState().agentStatusByPaneKey.get(key)?.state,
         descriptor.paneKey
       )
     )
@@ -121,7 +121,7 @@ test('idle Claude keeps chat, mobile transcript, and return identity through nes
     await expect
       .poll(() =>
         orcaPage.evaluate(
-          (key) => window.__store?.getState().agentStatusByPaneKey[key]?.providerSession?.id,
+          (key) => window.__store?.getState().agentStatusByPaneKey.get(key)?.providerSession?.id,
           descriptor.paneKey
         )
       )
@@ -158,7 +158,7 @@ test('idle Claude keeps chat, mobile transcript, and return identity through nes
   ).toHaveCount(0)
   expect(
     await orcaPage.evaluate(
-      (key) => window.__store?.getState().agentStatusByPaneKey[key]?.providerSession?.id,
+      (key) => window.__store?.getState().agentStatusByPaneKey.get(key)?.providerSession?.id,
       descriptor.paneKey
     )
   ).toBe(SESSION)

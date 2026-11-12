@@ -1,3 +1,8 @@
+import {
+  buildDashboardSnapshotFixture as buildDashboardSnapshot,
+  buildDashboardBucketCountsFixture as buildDashboardBucketCounts
+} from './dashboard-snapshot.test-fixture'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -6,11 +11,7 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import {
-  buildDashboardSnapshot,
-  type DashboardSnapshotInput as DashboardSnapshotState
-} from './build-dashboard-snapshot'
-import { buildDashboardBucketCounts } from './build-dashboard-bucket-counts'
+import type { DashboardSnapshotInput as DashboardSnapshotState } from './build-dashboard-snapshot'
 
 const NOW = 2_000_000_000
 const WORKSPACE_ID = folderWorkspaceKey('folder-1')
@@ -88,7 +89,7 @@ function state(): DashboardSnapshotState {
     folderWorkspaces: [folderWorkspace()],
     projectGroups: [projectGroup()],
     tabsByWorktree: { [WORKSPACE_ID]: [tab()] },
-    agentStatusByPaneKey: { [PANE_KEY]: entry() },
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY]: entry() })),
 
     migrationUnsupportedByPtyId: {},
     runtimeAgentOrchestrationByPaneKey: {},
@@ -108,6 +109,22 @@ function state(): DashboardSnapshotState {
 }
 
 describe('buildDashboardSnapshot folder workspaces', () => {
+  it('counts a remote row in its host workspace when a local tab ID collides', () => {
+    const remoteState = state()
+    remoteState.tabsByWorktree = { local: [{ ...tab(), worktreeId: 'local' }] }
+    remoteState.agentStatusByPaneKey = acceptedAgentStatuses([
+      [PANE_KEY, { ...entry(), connectionId: 'ssh-1' }]
+    ])
+    const snapshot = buildDashboardSnapshot(remoteState, NOW)
+    expect(snapshot.cards.map((card) => card.worktreeId)).toEqual([WORKSPACE_ID])
+    expect(buildDashboardBucketCounts(remoteState, NOW)).toEqual({
+      attention: 0,
+      working: 1,
+      done: 0,
+      idle: 0
+    })
+  })
+
   it('keeps done structured sessions visible when their tab exists only in unified tabs', () => {
     const structuredState = state()
     structuredState.tabsByWorktree = { [WORKSPACE_ID]: [] }
@@ -129,13 +146,15 @@ describe('buildDashboardSnapshot folder workspaces', () => {
         } satisfies Tab
       ]
     }
-    structuredState.agentStatusByPaneKey = {
-      [PANE_KEY]: {
-        ...entry(),
-        state: 'done',
-        sessionBoundary: true
-      }
-    }
+    structuredState.agentStatusByPaneKey = acceptedAgentStatuses(
+      Object.entries({
+        [PANE_KEY]: {
+          ...entry(),
+          state: 'done',
+          sessionBoundary: true
+        }
+      })
+    )
 
     const snapshot = buildDashboardSnapshot(structuredState, NOW)
     const expected = { attention: 0, working: 0, done: 0, idle: 0 }

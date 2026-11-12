@@ -44,14 +44,14 @@ describe('agent pane authority', () => {
 
     // Reattach mid-turn emits no new turn; revival cannot wait for one.
     store.getState().setAgentStatus(TARGET, { state: 'done', prompt: 'turn in flight' })
-    expect(store.getState().agentStatusByPaneKey[TARGET]).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey.get(TARGET)).toBeUndefined()
 
     store.getState().restoreAgentPaneAuthority(TARGET)
     expect(store.getState().recentlyRetiredAgentStatusPaneKeys[TARGET]).toBeUndefined()
     expect(restorePaneAuthority).toHaveBeenCalledWith(TARGET)
 
     store.getState().setAgentStatus(TARGET, { state: 'done', prompt: 'turn in flight' })
-    expect(store.getState().agentStatusByPaneKey[TARGET]?.state).toBe('done')
+    expect(store.getState().agentStatusByPaneKey.get(TARGET)?.state).toBe('done')
   })
 
   it('does not lift a closed-tab tombstone on re-attach', () => {
@@ -63,7 +63,7 @@ describe('agent pane authority', () => {
     expect(restorePaneAuthority).not.toHaveBeenCalled()
 
     store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'after close' })
-    expect(store.getState().agentStatusByPaneKey[TARGET]).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey.get(TARGET)).toBeUndefined()
   })
 
   it('clears the alias when a pane moves back to a key it previously left', () => {
@@ -80,6 +80,6 @@ describe('agent pane authority', () => {
     expect(resolveAgentPaneAuthorityKey(SOURCE)).toBe(SOURCE)
     expect(resolveAgentPaneAuthorityKey(TARGET)).toBe(SOURCE)
     store.getState().setAgentStatus(SOURCE, { state: 'done', prompt: 'back home' })
-    expect(store.getState().agentStatusByPaneKey[SOURCE]?.prompt).toBe('back home')
+    expect(store.getState().agentStatusByPaneKey.get(SOURCE)?.prompt).toBe('back home')
   })
 })

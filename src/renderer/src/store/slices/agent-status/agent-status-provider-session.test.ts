@@ -65,7 +65,7 @@ it.each([
           ? undefined
           : { providerSession: { key: 'session_id', id: incomingId } }
       )
-    const row = store.getState().agentStatusByPaneKey[paneKey]
+    const row = store.getState().agentStatusByPaneKey.get(paneKey)
     if (keepsTurn) {
       expect(row).toMatchObject({
         turnStartedAt: 1_000,
@@ -91,7 +91,7 @@ it.each([
       undefined,
       { providerSession: { key: 'session_id', id: 'root-c' } }
     )
-    expect(store.getState().agentStatusByPaneKey[paneKey]).toMatchObject({
+    expect(store.getState().agentStatusByPaneKey.get(paneKey)).toMatchObject({
       turnStartedAt: 4_000,
       turnEndedAt: 5_000,
       turnEndDisposition: 'identified'

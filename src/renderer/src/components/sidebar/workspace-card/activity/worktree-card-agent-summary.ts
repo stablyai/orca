@@ -119,7 +119,7 @@ export function formatStateCount(
 }
 
 // The _one form drops "All" because a lone agent reads "1 agent done".
-function formatAllAgentsInState(
+export function formatAllAgentsInState(
   state: AgentDotState,
   count: number,
   t: Translate = translate

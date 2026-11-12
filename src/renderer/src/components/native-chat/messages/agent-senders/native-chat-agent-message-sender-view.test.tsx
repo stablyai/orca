@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -65,10 +66,13 @@ function write(i: number, update: Partial<AgentStatusEntry>) {
   const key = status(i).paneKey
   act(() =>
     useAppStore.setState({
-      agentStatusByPaneKey: {
+      agentStatusByPaneKey: acceptedAgentStatuses([
         ...state.agentStatusByPaneKey,
-        [key]: { ...state.agentStatusByPaneKey[key], ...update }
-      },
+        [key, { ...state.agentStatusByPaneKey.get(key)!, ...update }] satisfies [
+          string,
+          AgentStatusEntry
+        ]
+      ]),
       agentStatusEpoch: state.agentStatusEpoch + 1
     })
   )
@@ -162,7 +166,10 @@ it('shows only a proved Dispatch invocation and withdraws proof without changing
       ...useAppStore.getState().tabsByWorktree,
       remote: [makeTab({ id: 'tab-9', worktreeId: 'remote' })]
     },
-    agentStatusByPaneKey: { ...useAppStore.getState().agentStatusByPaneKey, [other.paneKey]: other }
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      ...useAppStore.getState().agentStatusByPaneKey,
+      [other.paneKey, other] as const
+    ])
   })
   render(
     <>

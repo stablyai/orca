@@ -1,7 +1,6 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import WorktreeCardAgents from './WorktreeCardAgents'
-import { applyAgentRowLineage } from '../../../dashboard/agent-row-lineage'
-import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -38,24 +37,16 @@ const entries: AgentStatusEntry[] = [parent, child].map((paneKey, index) => ({
     ? { orchestration: { taskId: 'task', dispatchId: 'dispatch', parentPaneKey: parent } }
     : {})
 }))
-const rows = applyAgentRowLineage(
-  buildWorktreeAgentRows({
-    tabs: [],
-    representedTabs: new Map(
-      tabs.map((tab) => [structuredAgentSessionPaneKey(tab.id, tab.entityId), tab])
-    ),
-    entries,
-
-    now
-  })
-)
-
 export const nestedChatWorker = defineFixture({
   width: 380,
-  store: { agentActivityDisplayMode: 'compact' },
+  store: {
+    agentActivityDisplayMode: 'compact',
+    unifiedTabsByWorktree: { 'fixture-workspace': tabs },
+    agentStatusByPaneKey: acceptedAgentStatuses(entries.map((entry) => [entry.paneKey, entry]))
+  },
   render: () => (
     <div className="flex flex-col gap-0.5 bg-sidebar p-2 text-sidebar-foreground">
-      <WorktreeCardAgents worktreeId="fixture-workspace" agents={rows} />
+      <WorktreeCardAgents worktreeId="fixture-workspace" />
     </div>
   )
 })

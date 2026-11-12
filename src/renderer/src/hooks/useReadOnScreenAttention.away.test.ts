@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -51,7 +52,7 @@ beforeEach(() => {
     terminalLayoutsByTabId: {
       'away-tab': { root: { type: 'leaf', leafId: leaf }, activeLeafId: leaf, expandedLeafId: null }
     },
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
 
     acknowledgedAgentsByPaneKey: {},
     unreadAgentCompletionPanes: {},
@@ -212,7 +213,7 @@ it.each([false, true])('preserves manual unread across return signals (web=%s)',
   renderHook(() => useReadOnScreenAttention())
   await act(async () => {})
   act(() => useAppStore.getState().unacknowledgeAgents([pane]))
-  const turn = useAppStore.getState().agentStatusByPaneKey[pane]!.stateStartedAt
+  const turn = useAppStore.getState().agentStatusByPaneKey.get(pane)!.stateStartedAt
   dismiss.mockClear()
   await act(async () => window.dispatchEvent(new Event('focus')))
   const input = new Event('pointerdown')

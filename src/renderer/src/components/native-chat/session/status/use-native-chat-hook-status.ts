@@ -1,4 +1,4 @@
-import { useAppStore } from '../../../../store/index'
+import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import type { AgentStatusState } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   nativeChatHookHasWorkingSubagents,
@@ -9,14 +9,8 @@ export function useNativeChatHookStatus(
   paneKey: string
 ): readonly [AgentStatusState | null, number | null, boolean] {
   // Primitive selectors avoid rerenders for unrelated status changes.
-  const state = useAppStore((store) =>
-    resolveNativeChatHookState(store.agentStatusByPaneKey[paneKey])
-  )
-  const stateStartedAt = useAppStore(
-    (store) => store.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
-  )
-  const hasWorkingSubagents = useAppStore((store) =>
-    nativeChatHookHasWorkingSubagents(store.agentStatusByPaneKey[paneKey])
-  )
+  const state = resolveNativeChatHookState(useAgentStatus(paneKey))
+  const stateStartedAt = useAgentStatus(paneKey)?.stateStartedAt ?? null
+  const hasWorkingSubagents = nativeChatHookHasWorkingSubagents(useAgentStatus(paneKey))
   return [state, stateStartedAt, hasWorkingSubagents]
 }

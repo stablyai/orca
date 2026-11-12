@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -134,19 +135,21 @@ function seedTwin(tab: Tab) {
       { ...folder, executionHostId: 'local' },
       { ...folder, executionHostId: 'runtime:paired' }
     ],
-    agentStatusByPaneKey: {
-      [paneKey]: {
-        paneKey,
-        tabId: tab.id,
-        worktreeId: tab.worktreeId,
-        agentType: 'codex',
-        state: 'working',
-        prompt: '',
-        updatedAt: Date.now(),
-        stateStartedAt: Date.now(),
-        stateHistory: []
-      }
-    }
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [paneKey]: {
+          paneKey,
+          tabId: tab.id,
+          worktreeId: tab.worktreeId,
+          agentType: 'codex',
+          state: 'working',
+          prompt: '',
+          updatedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          stateHistory: []
+        }
+      })
+    )
   })
 }
 function name(tab: Tab, conversationName: string): AgentSessionStatusSummary {

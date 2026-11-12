@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import { transport } from './__mocks__/structured-attention-read-surfaces'
 import { cleanup } from '@testing-library/react'
@@ -341,7 +342,7 @@ beforeEach(() => {
     activeView: 'terminal',
     activeWorkspaceExecutionHostId: null,
     runtimeEnvironments: [],
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
 
     acknowledgedAgentsByPaneKey: {},
     manuallyUnreadTurnsByPaneKey: {},

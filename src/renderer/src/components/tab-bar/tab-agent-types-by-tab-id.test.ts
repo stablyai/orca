@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
 
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -88,7 +89,7 @@ describe('selectTabAgentTypesByTabId', () => {
         layouts = rest
       }
       const result = select({
-        agentStatusByPaneKey: statuses,
+        agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(statuses)),
         terminalLayoutsByTabId: layouts
       })
       expect(result.tabAgentTypesByTabId).toEqual(selectTabAgentTypesByTabId(statuses, layouts))

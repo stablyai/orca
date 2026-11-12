@@ -87,7 +87,7 @@ export function workerAutoCloseKey(
 function workerActivity(state: AppState, paneKey: string): string | null {
   const context = selectVisibleAgentOrchestration(state)[paneKey]
   return context
-    ? `${context.dispatchId}:${context.dispatchStatus ?? ''}:${state.agentStatusByPaneKey[paneKey]?.state ?? ''}`
+    ? `${context.dispatchId}:${context.dispatchStatus ?? ''}:${state.agentStatusByPaneKey.get(paneKey)?.state ?? ''}`
     : null
 }
 

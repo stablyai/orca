@@ -95,7 +95,7 @@ function projectPaneWorktreeIds(
     : new Map<string, string>()
   for (const [paneKey, context] of runtimeEntries) {
     paneWorktreeIds.push(
-      agentStatusByPaneKey[paneKey]?.worktreeId,
+      agentStatusByPaneKey.get(paneKey)?.worktreeId,
       represented.get(paneKey),
       represented.size > 0 && context.parentPaneKey
         ? represented.get(context.parentPaneKey)

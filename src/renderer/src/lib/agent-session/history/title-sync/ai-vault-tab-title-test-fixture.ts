@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { AiVaultSessionTitlesResult } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from '@/store/types'
@@ -54,9 +55,9 @@ export function makeState(args: {
     ...useAppStore.getInitialState(),
     activeWorktreeId: args.worktreeId,
     activeWorkspaceExecutionHostId: args.executionHostId,
-    agentStatusByPaneKey: args.sleeping
-      ? {}
-      : { 'tab-1:00000000-0000-4000-8000-000000000001': statusEntry },
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      args.sleeping ? [] : [['tab-1:00000000-0000-4000-8000-000000000001', statusEntry]]
+    ),
 
     sleepingAgentSessionsByPaneKey: args.sleeping
       ? {
@@ -115,8 +116,8 @@ export function makeState(args: {
       const previous = state
       state = {
         ...state,
-        agentStatusByPaneKey: Object.fromEntries(
-          Object.entries(state.agentStatusByPaneKey).map(([paneKey, entry]) => [
+        agentStatusByPaneKey: acceptedAgentStatuses(
+          Array.from(state.agentStatusByPaneKey.entries()).map(([paneKey, entry]) => [
             paneKey,
             { ...entry, updatedAt: entry.updatedAt + 1 }
           ])
@@ -130,8 +131,8 @@ export function makeState(args: {
       const previous = state
       state = {
         ...state,
-        agentStatusByPaneKey: Object.fromEntries(
-          Object.entries(state.agentStatusByPaneKey).map(([paneKey, entry]) => {
+        agentStatusByPaneKey: acceptedAgentStatuses(
+          Array.from(state.agentStatusByPaneKey.entries()).map(([paneKey, entry]) => {
             if (!entry.providerSession) {
               return [paneKey, entry]
             }

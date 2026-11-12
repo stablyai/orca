@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -5,7 +6,7 @@ import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/run
 import { recomputeOn } from '@/lib/recompute-on'
 
 // Why: selectors that opt out of a slice must return one stable reference, or every store tick looks like a change.
-const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
+const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = acceptedAgentStatuses()
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 const EMPTY_UNIFIED_TABS_BY_WORKTREE: AppState['unifiedTabsByWorktree'] = {}
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}

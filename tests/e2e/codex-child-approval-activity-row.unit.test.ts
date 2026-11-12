@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 // Round-trip subagent approval through the real translator/journal/status/activity pipeline; answering must preserve done time and read state.
@@ -115,7 +116,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-codex-child-approval-'))
   const worktree = makeWorktree()
   store().setState({
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     acknowledgedAgentsByPaneKey: {},
     activityClearedAtByPaneKey: {},
 
@@ -240,7 +241,8 @@ describe("a Codex subagent's answered approval on the settled parent's Activity 
       }
       return latest.session
     }
-    const paneKey = (): string => Object.keys(store().getState().agentStatusByPaneKey)[0] ?? ''
+    const paneKey = (): string =>
+      Array.from(store().getState().agentStatusByPaneKey.keys())[0] ?? ''
 
     await host.journal.appendItem(
       { provider: 'orca', clientMessageId: 'prompt-1' },

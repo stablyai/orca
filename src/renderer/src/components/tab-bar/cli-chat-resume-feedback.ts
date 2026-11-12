@@ -111,7 +111,7 @@ export async function reportCliChatResumeFailure(
     )
     return
   }
-  const row = useAppStore.getState().agentStatusByPaneKey[source.paneKey]
+  const row = useAppStore.getState().agentStatusByPaneKey.get(source.paneKey)
   const inThisTerminal = !!row && row.providerSession?.id === source.providerSessionId
   if (
     refusal?.code === 'agent_session_conflict' ||

@@ -84,7 +84,7 @@ function activeOrQueuedResumeClaimsProviderSession(
   const worktreeTabIds = new Set(
     (state.tabsByWorktree[record.worktreeId] ?? []).map((tab) => tab.id)
   )
-  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+  for (const entry of Array.from(state.agentStatusByPaneKey.values())) {
     // Why: only an owned pane needs its record; hidden/live panes still dedupe by status.
     if (samePaneOwnsRecovery && entry.paneKey === record.paneKey) {
       continue

@@ -1,3 +1,5 @@
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { useAppStore } from '@/store/index'
@@ -36,8 +38,15 @@ function makeRecord(
   }
 }
 
-function makeTerminalTab(id: string): Record<string, unknown> {
-  return { id, ptyId: null, worktreeId: 'wt-1', title: 'shell', sortOrder: 0, createdAt: 1 }
+function makeTerminalTab(id: string) {
+  return makeTab({
+    id,
+    ptyId: null,
+    worktreeId: 'wt-1',
+    title: 'shell',
+    sortOrder: 0,
+    createdAt: 1
+  })
 }
 
 describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
@@ -46,7 +55,7 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
     useAppStore.setState((state) => ({
@@ -66,7 +75,7 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
     const resumedTab = useAppStore.getState().tabsByWorktree['wt-1']![0]!
@@ -75,7 +84,7 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
 
     useAppStore.setState({
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    } as never)
+    })
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
     expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
@@ -85,21 +94,24 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     const record = makeRecord()
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [makeTerminalTab('old-tab'), makeTerminalTab('live-tab')] },
-      agentStatusByPaneKey: {
-        'live-tab:leaf-1': {
-          state: 'working',
-          prompt: record.prompt,
-          updatedAt: 10,
-          stateStartedAt: 10,
-          agentType: record.agent,
-          paneKey: 'live-tab:leaf-1',
-          worktreeId: 'wt-1',
-          tabId: 'live-tab',
-          providerSession: record.providerSession
-        }
-      },
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          'live-tab:leaf-1': {
+            state: 'working',
+            stateHistory: [],
+            prompt: record.prompt,
+            updatedAt: 10,
+            stateStartedAt: 10,
+            agentType: record.agent,
+            paneKey: 'live-tab:leaf-1',
+            worktreeId: 'wt-1',
+            tabId: 'live-tab',
+            providerSession: record.providerSession
+          }
+        })
+      ),
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    } as never)
+    })
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
     expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(2)
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
@@ -120,7 +132,7 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
         }
       },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
     expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)

@@ -69,7 +69,7 @@ async function rootWithActiveChild(): Promise<ReturnType<typeof createTestStore>
     { message: { role: 'assistant', content: 'ROOT assistant preview' } },
     root
   )
-  expect(store.getState().agentStatusByPaneKey[PANE]?.providerSession?.id).toBe(ROOT_SESSION)
+  expect(store.getState().agentStatusByPaneKey.get(PANE)?.providerSession?.id).toBe(ROOT_SESSION)
 
   // OMP binds each task's extension factory to a different SessionManager in the same process.
   harness.reload()
@@ -90,7 +90,7 @@ async function rootWithActiveChild(): Promise<ReturnType<typeof createTestStore>
 describe('OMP child lifecycle recovery boundaries', () => {
   it('retains the normalized root prompt and assistant preview while its child works (#9348)', async () => {
     const store = await rootWithActiveChild()
-    expect(store.getState().agentStatusByPaneKey[PANE]).toMatchObject({
+    expect(store.getState().agentStatusByPaneKey.get(PANE)).toMatchObject({
       prompt: 'ROOT distinctive user request',
       lastAssistantMessage: 'ROOT assistant preview',
       state: 'working',

@@ -53,7 +53,6 @@ export const CARD_ACTIVITY_PARTS = {
   Agents: part(['tight'], (props, _children, card) => (
     <WorktreeCardAgents
       worktreeId={card.worktree.id}
-      agents={card.agentActivityDisplayMode === 'compact' ? card.compactInlineAgentRows : undefined}
       // Why: counterbalance the card stack gap so agents right after the title read as one group.
       className={props.tight === true ? '-mt-1' : 'mt-0'}
     />

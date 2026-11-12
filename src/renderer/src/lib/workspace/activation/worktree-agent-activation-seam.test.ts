@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import path from 'node:path'
@@ -62,7 +63,7 @@ function baseState(): Partial<AppState> {
     tabBarOrderByWorktree: {},
     pendingStartupByTabId: {},
     automaticAgentResumeClaimsByTabId: {},
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     sleepingAgentSessionsByPaneKey: {},
     settings: {
       ...getDefaultSettings(''),

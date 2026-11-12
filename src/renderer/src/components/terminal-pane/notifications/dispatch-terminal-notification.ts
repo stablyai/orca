@@ -95,7 +95,7 @@ export function dispatchTerminalNotification(
       : null
   const storedAgentStatus =
     event.source === 'agent-task-complete' && event.paneKey
-      ? state.agentStatusByPaneKey[event.paneKey]
+      ? state.agentStatusByPaneKey.get(event.paneKey)
       : undefined
   const eventAgentStatusSnapshot =
     event.source === 'agent-task-complete' &&

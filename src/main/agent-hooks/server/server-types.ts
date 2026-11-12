@@ -36,6 +36,7 @@ export type IncomingAgentHookEvent = AgentHookEventPayload & {
 }
 
 export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
+  paneSleep?: { ptyId: string; incarnationId?: string }
   /** Live acknowledgement of the matching renderer retirement; never cached. */
   authorityRestartId?: string
   receivedAt: number
@@ -127,6 +128,8 @@ export type ProviderSessionChangeListener = (
   providerSessions: AgentHookProviderSessionIdentity[]
 ) => void
 export type AgentHookStatusRowIdentity = {
+  providerSession?: EnrichedAgentHookEventPayload['providerSession']
+  agentType?: EnrichedAgentHookEventPayload['payload']['agentType']
   paneKey: string
   worktreeId?: string
   terminalHandle?: string

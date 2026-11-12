@@ -1,3 +1,10 @@
+import type { AgentGroupSummary } from '@/store/slices/agent-status/agent-row-display-index'
+import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
+import {
+  formatAllAgentsInState,
+  formatStateCount,
+  formatSummaryStateLabel
+} from './worktree-card-agent-summary'
 import React, { useCallback, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
@@ -22,7 +29,8 @@ function stopActivationKeyPropagation(e: React.KeyboardEvent): void {
 }
 
 type CompactAgentSummaryButtonProps = {
-  agents: DashboardAgentRowData[]
+  agents?: DashboardAgentRowData[]
+  groups?: readonly AgentGroupSummary[]
   subjectLabel: string
   expanded: boolean
   onToggle: () => void
@@ -72,20 +80,50 @@ export function CompactAgentExpansion({
   )
 }
 
+const EMPTY_AGENTS: NonNullable<CompactAgentSummaryButtonProps['agents']> = []
+
 export function CompactAgentSummaryButton({
-  agents,
+  agents = EMPTY_AGENTS,
+  groups: precomputedGroups,
   subjectLabel,
   expanded,
   onToggle
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
   const t = useTranslate()
-  const summary = summarizeAgents(agents, subjectLabel, t)
-  const groups = buildSummaryAgentGroups(agents)
+  const groups: readonly AgentGroupSummary[] =
+    precomputedGroups ??
+    buildSummaryAgentGroups(agents).map((group) => ({
+      state: group.state,
+      count: group.agents.length,
+      icons: selectSummaryGroupIconAgents(group.agents, 3),
+      identities: []
+    }))
+  const summary = !precomputedGroups
+    ? summarizeAgents(agents, subjectLabel, t)
+    : groups.length === 1
+      ? formatAllAgentsInState(groups[0].state, groups[0].count, t)
+      : t('sidebar.agentSummary.mixedStates', '{{subject}}: {{states}}', {
+          subject: subjectLabel,
+          states: groups.map((group) => formatStateCount(group.state, group.count, t)).join(', ')
+        })
   const visibleGroups = groups.slice(0, 3)
   const hiddenGroupAgentCount = groups
     .slice(visibleGroups.length)
-    .reduce((count, group) => count + group.agents.length, 0)
-  const agentIdentitySummary = summarizeAgentIdentities(agents, t)
+    .reduce((count, group) => count + group.count, 0)
+  const agentIdentitySummary = !precomputedGroups
+    ? summarizeAgentIdentities(agents, t)
+    : groups
+        .flatMap((group) =>
+          group.identities.flatMap((identity) =>
+            Array.from({ length: identity.count }, () =>
+              t('sidebar.agentSummary.agentIdentityState', '{{agent}} {{status}}', {
+                agent: formatAgentTypeLabel(identity.agentType),
+                status: formatSummaryStateLabel(group.state, t)
+              })
+            )
+          )
+        )
+        .join('; ')
   const stopPointerPropagation = useCallback((e: React.SyntheticEvent) => {
     e.stopPropagation()
   }, [])
@@ -140,8 +178,8 @@ export function CompactAgentSummaryButton({
         <>
           <span className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden" aria-hidden>
             {visibleGroups.map((group) => {
-              const iconAgents = selectSummaryGroupIconAgents(group.agents, 3)
-              const hiddenIconCount = Math.max(0, group.agents.length - iconAgents.length)
+              const iconAgents = group.icons
+              const hiddenIconCount = Math.max(0, group.count - iconAgents.length)
               return (
                 <span
                   key={group.state}

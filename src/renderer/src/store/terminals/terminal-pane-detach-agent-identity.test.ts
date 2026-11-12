@@ -93,8 +93,8 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
       tabId: targetTabId,
       leafId: detachedLeafId
     })
-    expect(state.agentStatusByPaneKey[sourcePaneKey]).toBeUndefined()
-    expect(state.agentStatusByPaneKey[targetPaneKey]).toMatchObject({
+    expect(state.agentStatusByPaneKey.get(sourcePaneKey)).toBeUndefined()
+    expect(state.agentStatusByPaneKey.get(targetPaneKey)).toMatchObject({
       paneKey: targetPaneKey,
       tabId: targetTabId,
       state: 'working'

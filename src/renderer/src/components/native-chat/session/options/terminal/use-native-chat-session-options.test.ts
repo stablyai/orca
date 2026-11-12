@@ -21,11 +21,13 @@ vi.mock('../catalog/native-chat-session-option-discovery', () => ({
 const storeState: {
   settings: Record<string, unknown>
   updateSettings: () => Promise<undefined>
-  agentStatusByPaneKey: Record<string, { model?: string; modelSwitchCommand?: 'orca-model' }>
+  agentStatusByPaneKey: Map<string, { model?: string; modelSwitchCommand?: 'orca-model' }> & {
+    subscribe: () => () => void
+  }
 } = {
   settings: {},
   updateSettings: async () => undefined,
-  agentStatusByPaneKey: {}
+  agentStatusByPaneKey: Object.assign(new Map(), { subscribe: () => () => {} })
 }
 
 vi.mock('../../../../../store/index', () => ({
@@ -60,7 +62,7 @@ describe('useNativeChatSessionOptions model reporting', () => {
     discoverModels.mockReset()
     settingsRpc.mockReset()
     settingsRpc.mockResolvedValue(undefined)
-    storeState.agentStatusByPaneKey = {}
+    storeState.agentStatusByPaneKey = Object.assign(new Map(), { subscribe: () => () => {} })
     Object.defineProperty(window, 'api', { configurable: true, value: undefined })
   })
 

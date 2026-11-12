@@ -53,7 +53,7 @@ export function createAgentStatusCleanupActions(
       const current = get()
       // Transient PTY loss removes occupancy; conversation identity survives until explicit pane retirement.
       if (
-        !(paneKey in current.agentStatusByPaneKey) &&
+        !current.agentStatusByPaneKey.has(paneKey) &&
         !(paneKey in current.agentLaunchConfigByPaneKey) &&
         !Object.values(current.migrationUnsupportedByPtyId).some(
           (entry) => entry.paneKey === paneKey
@@ -62,11 +62,12 @@ export function createAgentStatusCleanupActions(
         return
       }
       set((s, changedPaneKeys) => {
-        const hasLive = paneKey in s.agentStatusByPaneKey
-        const next = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        const hasLive = s.agentStatusByPaneKey.has(paneKey)
+        const next = hasLive
+          ? s.agentStatusByPaneKey.replace([[paneKey, null]])
+          : s.agentStatusByPaneKey
         if (hasLive) {
           changedPaneKeys.add(paneKey)
-          delete next[paneKey]
         }
         const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
         const nextLaunchConfigs = hasLaunchConfig
@@ -106,7 +107,7 @@ export function createAgentStatusCleanupActions(
     removeAgentStatusByTabPrefix: (tabIdPrefix) => {
       const prefix = `${tabIdPrefix}:`
       const current = get()
-      const toRemove = Object.keys(current.agentStatusByPaneKey).filter((key) =>
+      const toRemove = Array.from(current.agentStatusByPaneKey.keys()).filter((key) =>
         key.startsWith(prefix)
       )
       const launchConfigKeys = Object.keys(current.agentLaunchConfigByPaneKey).filter((key) =>
@@ -129,10 +130,9 @@ export function createAgentStatusCleanupActions(
         return
       }
       set((s, changedPaneKeys) => {
-        const next = { ...s.agentStatusByPaneKey }
+        const next = removePaneKeys(s.agentStatusByPaneKey, new Set(toRemove))
         for (const key of toRemove) {
           changedPaneKeys.add(key)
-          delete next[key]
         }
         const nextLaunchConfigs = { ...s.agentLaunchConfigByPaneKey }
         for (const key of launchConfigKeys) {
@@ -175,9 +175,9 @@ export function createAgentStatusCleanupActions(
       let removed = false
       set((s, changedPaneKeys) => {
         const worktreeIdsOnConnection = collectWorktreeIdsForConnection(s, connectionId)
-        let next: Record<string, (typeof s.agentStatusByPaneKey)[string]> | null = null
-        for (const [paneKey, existing] of Object.entries(s.agentStatusByPaneKey)) {
-          if (existing.updatedAt > clearedAt) {
+        let next: typeof s.agentStatusByPaneKey | null = null
+        for (const [paneKey, existing] of Array.from(s.agentStatusByPaneKey.entries())) {
+          if (existing.paneSleep || existing.updatedAt > clearedAt) {
             continue
           }
           const belongsToConnection =
@@ -188,9 +188,8 @@ export function createAgentStatusCleanupActions(
           if (!belongsToConnection) {
             continue
           }
-          next ??= { ...s.agentStatusByPaneKey }
+          next = (next ?? s.agentStatusByPaneKey).replace([[paneKey, null]])
           changedPaneKeys.add(paneKey)
-          delete next[paneKey]
         }
         const alreadyBlocked = connectionId in s.transientClearedAgentStatusConnectionIds
         if (!next && alreadyBlocked) {

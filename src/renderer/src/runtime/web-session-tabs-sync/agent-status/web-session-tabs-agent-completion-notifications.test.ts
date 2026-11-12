@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
@@ -115,19 +116,21 @@ describe('paired session-tab agent completion notifications', () => {
     markRendererOwnedAgentStatusWrite(paneKey)
     const setClientTurn = (stateStartedAt: number, prompt: string): void => {
       useAppStore.setState({
-        agentStatusByPaneKey: {
-          [paneKey]: {
-            state: 'working',
-            prompt,
-            updatedAt: NOW,
-            stateStartedAt,
-            agentType: 'claude',
-            paneKey,
-            tabId: toWebTerminalSurfaceTabId(HOST_TAB_ID),
-            worktreeId: WORKTREE_ID,
-            stateHistory: []
-          }
-        }
+        agentStatusByPaneKey: acceptedAgentStatuses(
+          Object.entries({
+            [paneKey]: {
+              state: 'working',
+              prompt,
+              updatedAt: NOW,
+              stateStartedAt,
+              agentType: 'claude',
+              paneKey,
+              tabId: toWebTerminalSurfaceTabId(HOST_TAB_ID),
+              worktreeId: WORKTREE_ID,
+              stateHistory: []
+            }
+          })
+        )
       })
     }
 

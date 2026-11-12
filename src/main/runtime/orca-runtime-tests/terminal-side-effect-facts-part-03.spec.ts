@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
-import '../orca-runtime'
-import { TEST_WORKTREE_ID, syncSinglePty } from './orca-runtime-test-fixtures.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { TEST_WORKTREE_ID, syncSinglePty, store } from './orca-runtime-test-fixtures.spec'
 import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
 
 describe('terminal side-effect fact channel', () => {
@@ -40,3 +41,43 @@ describe('terminal side-effect fact channel', () => {
     expect(batches.at(-1)?.facts).toEqual([{ kind: 'command-code-done', prompt: 'say hi' }])
   })
 })
+
+it.each([false, true])(
+  'does not infer completion during stop; stopped=%s settles the pending producer',
+  async (stopped) => {
+    vi.useFakeTimers()
+    let row: AgentStatusIpcPayload | undefined
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshotForPane: () => (row ? [row] : []),
+      onTerminalAgentStatus: (event) => {
+        row = {
+          ...event.payload,
+          paneKey: event.paneKey,
+          connectionId: null,
+          stateStartedAt: Date.now(),
+          receivedAt: Date.now()
+        }
+      }
+    })
+    try {
+      syncSinglePty(runtime)
+      runtime.onPtyData('pty-1', '# Command Code v0.27.3\r\n', 100)
+      runtime.onPtyData('pty-1', '❯ say hi\r\n✻ Thinking...', 101)
+      expect(row).toMatchObject({ state: 'working', agentType: 'command-code', prompt: 'say hi' })
+      const settle = runtime.intentionalPtyStops.mark('pty-1', 'reversible', null)
+      runtime.onPtyData(
+        'pty-1',
+        '\r\n✻ Thought for 1 second\r\n:: Hi!\r\n❯ Ask your question...',
+        102
+      )
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(row?.state).toBe('working')
+      settle(stopped)
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(row?.state).toBe(stopped ? 'working' : 'done')
+    } finally {
+      await runtime.onPtyExit('pty-1', 0)
+      vi.useRealTimers()
+    }
+  }
+)

@@ -1,3 +1,7 @@
+import {
+  acceptedAgentStatuses,
+  type AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 vi.mock('@/components/confirmation-dialog-context', () => ({
@@ -248,16 +252,20 @@ function setAgentLineageState(options: {
     branch: 'child-branch',
     sortOrder: 10
   })
-  const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {
-    [PANE_ROOT]: makeAgentEntry(PANE_ROOT, 'PARENT_AGENT_PROMPT'),
-    [PANE_CHILD]: makeAgentEntry(PANE_CHILD, 'CHILD_AGENT_PROMPT', {
-      taskId: 't1',
-      dispatchId: 'd1',
-      parentPaneKey: PANE_ROOT
+  let agentStatusByPaneKey: AcceptedAgentStatuses = acceptedAgentStatuses(
+    Object.entries({
+      [PANE_ROOT]: makeAgentEntry(PANE_ROOT, 'PARENT_AGENT_PROMPT'),
+      [PANE_CHILD]: makeAgentEntry(PANE_CHILD, 'CHILD_AGENT_PROMPT', {
+        taskId: 't1',
+        dispatchId: 'd1',
+        parentPaneKey: PANE_ROOT
+      })
     })
-  }
+  )
   if (options.secondRootAgent) {
-    agentStatusByPaneKey[PANE_ROOT_2] = makeAgentEntry(PANE_ROOT_2, 'SECOND_ROOT_PROMPT')
+    agentStatusByPaneKey = agentStatusByPaneKey.replace([
+      [PANE_ROOT_2, makeAgentEntry(PANE_ROOT_2, 'SECOND_ROOT_PROMPT')]
+    ])
   }
 
   mockStore.state = {

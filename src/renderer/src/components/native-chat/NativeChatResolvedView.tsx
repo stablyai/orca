@@ -1,3 +1,4 @@
+import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useNativeChatDeliveryProjection } from './session/terminal/delivery/use-native-chat-delivery-projection'
 import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { TerminalChatCrewPanel } from '../orchestration-crew/TerminalChatCrewPanel'
@@ -100,14 +101,12 @@ export function NativeChatResolvedView({
   // Use the live session’s reconciled lifecycle for every working-state consumer.
   const liveWorking = session.status === 'working'
   // Preview the in-progress hook reply before its completed transcript turn arrives.
-  const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  const hookPreview = useAgentStatus(paneKey)?.lastAssistantMessage
   // Tool stdout/errors ride the same field for status-card previews; they are not the reply.
-  const hookPreviewIsToolOutput = useAppStore(
-    (s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessageIsToolOutput === true
-  )
+  const hookPreviewIsToolOutput = useAgentStatus(paneKey)?.lastAssistantMessageIsToolOutput === true
   // A coalesced interrupt/restart can stay working; the newer epoch must still clear Stop suppression.
-  const workingEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null)
-  const turnEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.turnStartedAt ?? null)
+  const workingEpoch = useAgentStatus(paneKey)?.stateStartedAt ?? null
+  const turnEpoch = useAgentStatus(paneKey)?.turnStartedAt ?? null
   const sendWorkingEpoch =
     (session.hookWorking ?? liveWorking) || session.hookAwaitingInput ? turnEpoch : undefined
   const canSend = useNativeChatCanSend(targetPtyId)

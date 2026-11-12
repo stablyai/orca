@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStateHistoryEntry } from '../../../../shared/agent-status/lifecycle/agent-state-history'
@@ -24,7 +25,7 @@ import { makeRepo, makeTab, makeWorktree, PANE_KEY } from './ActivityPrototypePa
     const tab = makeTab()
     return buildActivityEvents({
       chatNames: new Map(),
-      agentStatusByPaneKey: args.entries ?? {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(args.entries ?? {})),
       tabsByWorktree: { [worktree.id]: [tab] },
       worktreeMap: new Map([[worktree.id, worktree]]),
       repoMap: new Map([[repo.id, repo]]),

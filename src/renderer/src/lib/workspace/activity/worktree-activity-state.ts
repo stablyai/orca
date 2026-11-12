@@ -22,7 +22,7 @@ const EMPTY_WORKTREE_IDS: ReadonlySet<string> = new Set()
 
 /** Keep only fresh in-progress agents; disconnected SSH/completed headless rows can outlive actual open sessions. */
 export function getWorktreeIdsWithLiveAgent(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | null | undefined,
+  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry> | null | undefined,
   tabsByWorktree: TabsByWorktree | null | undefined,
   now: number
 ): Set<string> {
@@ -40,11 +40,11 @@ export const createLiveAgentWorktreeIdsSelector = () =>
   )
 
 export function getLiveAgentStatusByWorktreeId(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | null | undefined,
+  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry> | null | undefined,
   tabsByWorktree: TabsByWorktree | null | undefined,
   now: number
 ): Map<string, LiveAgentWorktreeStatus> {
-  const entries = Object.values(agentStatusByPaneKey ?? {}).filter((entry) =>
+  const entries = Array.from(agentStatusByPaneKey?.values() ?? []).filter((entry) =>
     isFreshNonDoneAgentStatus(entry, now)
   )
   if (entries.length === 0) {

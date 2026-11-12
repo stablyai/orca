@@ -1,3 +1,4 @@
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   isTuiAgent,
@@ -18,7 +19,7 @@ export function resolveProtectedMultilinePasteOptionsForPane({
 }: {
   isWindowsClient: boolean
   hostPlatform: NodeJS.Platform
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   tabId: string
   leafId: string
@@ -34,7 +35,7 @@ export function resolveProtectedMultilinePasteOptionsForPane({
     isWindowsClient,
     hostPlatform,
     foregroundAgent: paneForegroundAgentByPaneKey[paneKey]?.agent,
-    entry: agentStatusByPaneKey[paneKey]
+    entry: agentStatusByPaneKey.get(paneKey)
   })
 }
 

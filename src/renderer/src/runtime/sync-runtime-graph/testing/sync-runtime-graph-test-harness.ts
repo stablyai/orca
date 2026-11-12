@@ -1,11 +1,13 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AppState } from '../../../store/types'
 
 export function makeState(overrides: Partial<AppState> = {}): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: graph tests exercise only the snapshot fields defined here; no omitted actions are invoked.
   return {
     tabsByWorktree: {},
-    terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
-    runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
+    terminalLayoutsByTabId: {},
+    runtimePaneTitlesByTabId: {},
     groupsByWorktree: {},
     activeGroupIdByWorktree: {},
     unifiedTabsByWorktree: {},
@@ -21,7 +23,7 @@ export function makeState(overrides: Partial<AppState> = {}): AppState {
     openFiles: [],
     editorDrafts: {},
     activeTabId: null,
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     agentStatusEpoch: 0,
     ...overrides
   } as AppState

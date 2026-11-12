@@ -85,7 +85,7 @@ export function ClaudeOldTerminalBanner({
   const claudeInPane = useAppStore(
     (state) =>
       state.paneForegroundAgentByPaneKey[paneKey]?.agent === 'claude' ||
-      state.agentStatusByPaneKey[paneKey]?.agentType === 'claude'
+      state.agentStatusByPaneKey.get(paneKey)?.agentType === 'claude'
   )
   const openedBefore = useOpenedBeforeClaudeAccounts(
     ptyId,

@@ -40,7 +40,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           }
           const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
           let stamp = now
-          const liveEntry = s.agentStatusByPaneKey?.[key]
+          const liveEntry = s.agentStatusByPaneKey.get(key)
           if (liveEntry) {
             collectAcknowledgedAgentNotificationId({
               state: s,
@@ -95,7 +95,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             next ??= { ...s.acknowledgedAgentsByPaneKey }
             delete next[key]
           }
-          const turnTimestamp = s.agentStatusByPaneKey?.[key]?.stateStartedAt
+          const turnTimestamp = s.agentStatusByPaneKey.get(key)?.stateStartedAt
           if (
             turnTimestamp !== undefined &&
             s.manuallyUnreadTurnsByPaneKey[key] !== turnTimestamp

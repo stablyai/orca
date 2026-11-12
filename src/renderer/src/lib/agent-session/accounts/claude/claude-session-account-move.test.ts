@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -131,7 +132,7 @@ function seedPanes(panes: SeededPane[]): void {
         }
       ])
     ),
-    agentStatusByPaneKey: statuses,
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(statuses)),
     paneForegroundAgentByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},

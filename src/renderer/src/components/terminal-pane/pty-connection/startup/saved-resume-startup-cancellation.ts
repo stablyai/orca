@@ -71,12 +71,11 @@ export function installSavedResumeStartupCancellation(session: ConnectPanePtySes
       const seeded = session.savedStartupStatus
       if (seeded?.source === source) {
         useAppStore.getState().updateAgentStatusState((current, changedPaneKeys) => {
-          if (current.agentStatusByPaneKey[session.cacheKey] !== seeded.entry) {
+          if (current.agentStatusByPaneKey.get(session.cacheKey) !== seeded.entry) {
             return current
           }
-          const next = { ...current.agentStatusByPaneKey }
+          const next = current.agentStatusByPaneKey.replace([[session.cacheKey, null]])
           changedPaneKeys.add(session.cacheKey)
-          delete next[session.cacheKey]
           return { agentStatusByPaneKey: next }
         })
       }

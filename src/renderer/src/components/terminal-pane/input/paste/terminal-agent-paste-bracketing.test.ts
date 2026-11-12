@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -35,7 +36,7 @@ function decide(
   return resolveProtectedMultilinePasteOptionsForPane({
     isWindowsClient: false,
     hostPlatform: 'linux',
-    agentStatusByPaneKey: CODEX_ON_AGENT_LEAF,
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(CODEX_ON_AGENT_LEAF)),
     paneForegroundAgentByPaneKey: {},
     tabId: TAB_ID,
     leafId: AGENT_LEAF,

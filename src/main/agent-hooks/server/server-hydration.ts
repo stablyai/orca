@@ -60,6 +60,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
     } else {
       this.admitSavedStatus(saved.document)
     }
+    this.pruneUnplacedSleepingPanes()
     // Repairs and a migrated legacy file are saved now; an unchanged store writes nothing.
     this.runStatusPersist()
   }
@@ -96,7 +97,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
           ? rawEntry
           : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
-      if (entry && entry.receivedAt >= ttlCutoff) {
+      if (entry && (entry.paneSleep || entry.receivedAt >= ttlCutoff)) {
         const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
         if (launchTokenHash) {
           this.hydratedLaunchTokenHashByPaneKey.set(resolvedPaneKey, launchTokenHash)

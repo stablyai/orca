@@ -10,7 +10,7 @@ import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import { findRegisteredTerminalTab } from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { clientAgentStatusFencesHost } from './agent-status-primitives'
-import { writableWebSessionTabsRecord } from './state-equality-core'
+import { presentationRecordDraft, finishPresentationRecord } from './presentation-record-drafts'
 import type {
   MirroredTerminalTab,
   WebSessionTabsBatchContext,
@@ -45,7 +45,7 @@ export function buildMirroredRuntimePaneTitlePatch(
     byLeaf.set(surface.leafId, surface)
     surfacesByTab.set(surface.parentTabId, byLeaf)
   }
-  let nextTitles = titles
+  const draft = presentationRecordDraft(state, 'runtimePaneTitlesByTabId', batchContext)
   for (const { tab, hostTabId, layout, retainedSurfaceByPrunedLeafId, paneTitles } of titledTabs) {
     const leaves = new Set(collectRuntimePaneLeafIds(layout.root))
     const liveSlotIds = Object.keys(paneTitles)
@@ -94,7 +94,7 @@ export function buildMirroredRuntimePaneTitlePatch(
         if (
           clientAgentStatusFencesHost(
             paneKey,
-            state.agentStatusByPaneKey[paneKey],
+            state.agentStatusByPaneKey.get(paneKey),
             hostSurface.agentStatus,
             now
           )
@@ -131,10 +131,13 @@ export function buildMirroredRuntimePaneTitlePatch(
     if (nextPaneTitles === paneTitles) {
       continue
     }
-    if (nextTitles === titles) {
-      nextTitles = writableWebSessionTabsRecord(state, 'runtimePaneTitlesByTabId', batchContext)
-    }
-    nextTitles[tab.id] = nextPaneTitles
+    draft.set(tab.id, nextPaneTitles)
   }
+  const nextTitles = finishPresentationRecord(
+    state,
+    'runtimePaneTitlesByTabId',
+    draft,
+    batchContext
+  )
   return nextTitles === titles ? null : { runtimePaneTitlesByTabId: nextTitles }
 }

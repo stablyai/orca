@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
@@ -55,7 +56,10 @@ function startAgent(name: string): void {
       ...state.tabsByWorktree,
       [worktreeId(name)]: [makeTab({ id: `tab-${name}`, worktreeId: worktreeId(name) })]
     },
-    agentStatusByPaneKey: { ...state.agentStatusByPaneKey, [paneKey]: entry }
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      ...state.agentStatusByPaneKey,
+      [paneKey, entry] as const
+    ])
   }))
 }
 
@@ -131,18 +135,20 @@ describe('workspace cleanup removal of workspaces with a running agent', () => {
     const updatedAt = Date.now()
     const chatPaneKey = makePaneKey('chat-a', LEAF_ID)
     useAppStore.setState({
-      agentStatusByPaneKey: {
-        [chatPaneKey]: {
-          paneKey: chatPaneKey,
-          worktreeId: worktreeId('a'),
-          state: 'working',
-          connectionId: null,
-          prompt: '',
-          updatedAt,
-          stateStartedAt: updatedAt,
-          stateHistory: []
-        }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [chatPaneKey]: {
+            paneKey: chatPaneKey,
+            worktreeId: worktreeId('a'),
+            state: 'working',
+            connectionId: null,
+            prompt: '',
+            updatedAt,
+            stateStartedAt: updatedAt,
+            stateHistory: []
+          }
+        })
+      )
     })
     const { result } = renderAtConfirm([candidateFor('a')])
 

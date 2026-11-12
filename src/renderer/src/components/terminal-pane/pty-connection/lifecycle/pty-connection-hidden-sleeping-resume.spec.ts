@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -66,7 +67,7 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
         }
       },
       settings: { ...mockStoreState.settings, agentCmdOverrides: {} },
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
       sleepingAgentSessionsByPaneKey: {
         [PANE_KEY]: {
           paneKey: PANE_KEY,

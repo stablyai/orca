@@ -100,7 +100,7 @@ export function useNativeChatInteractiveSend(
       const buildsCodexAnswer = resolveNativeChatTranscriptAgent(agent) === 'codex'
       // Capture the question baseline before paced/remote delivery so late settlement cannot clear a replacement question’s wait.
       const questionStatusBaseline = stepsAnswer
-        ? useAppStore.getState().agentStatusByPaneKey[paneKey]
+        ? useAppStore.getState().agentStatusByPaneKey.get(paneKey)
         : undefined
       let settledHandle: NativeChatSendHandle | null = null
       const onSettled = (delivered: boolean): void => {

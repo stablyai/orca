@@ -3,12 +3,7 @@ import { replaceRecordEntries } from '../../keyed-record-transitions'
 import { projectAgentPaneConversation } from './agent-pane-conversation'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import {
-  capLiveAgentStatusesInPlace,
-  classifyPaneKeyLiveness,
-  countLiveAgentStatuses,
-  noteLiveAgentStatusCount
-} from './agent-status-capacity-eviction'
+import { MAX_LIVE_AGENT_STATUSES } from './agent-status-capacity-eviction'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
 import type { AgentStatusLiveEntryBuild } from './agent-status-live-entry-builder'
 import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -61,7 +56,7 @@ export function reduceAgentStatusLiveUpdate(
   if (
     (providerSessionChanged ||
       (entry.state === 'done' && entry.sessionBoundary !== true) ||
-      retiresLaunch(state.agentStatusByPaneKey[paneKey], entry)) &&
+      retiresLaunch(state.agentStatusByPaneKey.get(paneKey), entry)) &&
     paneKey in state.agentLaunchConfigByPaneKey
   ) {
     nextLaunchConfigs = { ...state.agentLaunchConfigByPaneKey }
@@ -80,30 +75,25 @@ export function reduceAgentStatusLiveUpdate(
     )
   }
   const previousLive = state.agentStatusByPaneKey
-  const nextLive = { ...previousLive, [paneKey]: entry }
-  const nextLiveCount = countLiveAgentStatuses(previousLive) + (paneKey in previousLive ? 0 : 1)
-  const evictedPaneKeys = capLiveAgentStatusesInPlace(
+  const nextLive = previousLive.replace([[paneKey, entry]])
+  const evictedPaneKeys = nextLive.projection.evictionKeys(
     nextLive,
+    state.terminalLayoutsByTabId,
     paneKey,
-    () => classifyPaneKeyLiveness(state.terminalLayoutsByTabId),
     updatedAt,
-    undefined,
-    nextLiveCount
+    MAX_LIVE_AGENT_STATUSES
   )
-  noteLiveAgentStatusCount(nextLive, nextLiveCount - evictedPaneKeys.length)
   const evictedOrphans = evictedPaneKeys.length > 0
-  const evictedEntries: AgentStatusEntry[] = []
+  const evictedEntries = evictedPaneKeys.flatMap((key) => {
+    const row = nextLive.get(key)
+    return row ? [row] : []
+  })
   if (evictedOrphans) {
     const evicted = new Set(evictedPaneKeys)
-    for (const evictedPaneKey of evictedPaneKeys) {
-      const evictedEntry = previousLive[evictedPaneKey]
-      if (evictedEntry) {
-        evictedEntries.push(evictedEntry)
-      }
-    }
     nextSleepingAgentSessions = removePaneKeys(nextSleepingAgentSessions, evicted)
     nextLaunchConfigs = removePaneKeys(nextLaunchConfigs, evicted)
   }
+  nextLive.replace(evictedPaneKeys.map((key) => [key, null] as const))
   const nextConversations = projectConversation(
     state,
     entry,

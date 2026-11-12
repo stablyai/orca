@@ -10,7 +10,7 @@ const CHECK_DELAY_MS = 1200
 const ACTIVE_AGENT_STATES = new Set(['working', 'waiting', 'blocked'])
 const NON_TYPING_MODIFIER_KEYS = new Set(['Alt', 'Control', 'Meta', 'Shift'])
 
-type AgentStatusSnapshot = Record<string, AgentStatusEntry>
+type AgentStatusSnapshot = ReadonlyMap<string, AgentStatusEntry>
 type AgentValueMomentPreparation = Awaited<ReturnType<typeof window.api.starNag.agentValueMoment>>
 
 function hasMeaningfulPrompt(entry: AgentStatusEntry): boolean {

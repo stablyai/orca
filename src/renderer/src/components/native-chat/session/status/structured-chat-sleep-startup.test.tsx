@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 import { act, cleanup, render, waitFor } from '@testing-library/react'
@@ -49,7 +50,7 @@ it('keeps an unidentified twin visible, then follows only its named host through
     },
     unifiedTabsByWorktree: { [workspaceId]: [tab] },
     structuredChatSleptAtByPaneKey: {},
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     tabsByWorktree: {},
     browserTabsByWorktree: {}
   })

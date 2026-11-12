@@ -70,12 +70,12 @@ describe('agent status cleanup for a lost SSH connection', () => {
     unsubscribe()
     expect(subscriber).toHaveBeenCalledOnce()
     expect(queueMicrotaskSpy).toHaveBeenCalledOnce()
-    expect(store.getState().agentStatusByPaneKey[oldA]).toBeUndefined()
-    expect(store.getState().agentStatusByPaneKey[secondA]).toBeUndefined()
-    expect(store.getState().agentStatusByPaneKey[newerA]).toBeDefined()
-    expect(store.getState().agentStatusByPaneKey[siblingB]).toBeDefined()
-    expect(store.getState().agentStatusByPaneKey[unstamped]).toBeDefined()
-    expect(store.getState().agentStatusByPaneKey[local]?.connectionId).toBeNull()
+    expect(store.getState().agentStatusByPaneKey.get(oldA)).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey.get(secondA)).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey.get(newerA)).toBeDefined()
+    expect(store.getState().agentStatusByPaneKey.get(siblingB)).toBeDefined()
+    expect(store.getState().agentStatusByPaneKey.get(unstamped)).toBeDefined()
+    expect(store.getState().agentStatusByPaneKey.get(local)?.connectionId).toBeNull()
     expect(store.getState().agentLaunchConfigByPaneKey[oldA]).toBeDefined()
     expect(store.getState().acknowledgedAgentsByPaneKey[oldA]).toBe(2)
   })
@@ -134,8 +134,8 @@ describe('agent status cleanup for a lost SSH connection', () => {
 
     store.getState().clearTransientAgentStatuses('ssh-a', 30)
 
-    expect(store.getState().agentStatusByPaneKey[orphanA]).toBeUndefined()
-    expect(store.getState().agentStatusByPaneKey[liveB]).toBeDefined()
+    expect(store.getState().agentStatusByPaneKey.get(orphanA)).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey.get(liveB)).toBeDefined()
   })
 
   it('does not clear a live row whose worktree id collides across hosts', () => {
@@ -194,7 +194,7 @@ describe('agent status cleanup for a lost SSH connection', () => {
 
     store.getState().clearTransientAgentStatuses('ssh-a', 30)
 
-    expect(store.getState().agentStatusByPaneKey[liveOnB]).toBeDefined()
-    expect(store.getState().agentStatusByPaneKey[collidedOrphan]).toBeDefined()
+    expect(store.getState().agentStatusByPaneKey.get(liveOnB)).toBeDefined()
+    expect(store.getState().agentStatusByPaneKey.get(collidedOrphan)).toBeDefined()
   })
 })

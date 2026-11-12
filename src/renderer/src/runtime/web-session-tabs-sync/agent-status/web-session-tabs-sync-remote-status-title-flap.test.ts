@@ -119,7 +119,9 @@ function replayClientOscWorking(store: TestStore, clientNow: number): () => void
       MIRROR_PANE_KEY,
       { state: 'working', prompt: CLIENT_PROMPT, agentType: 'claude' },
       'claude',
-      resolveRendererOwnedAgentStatusTiming(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]),
+      resolveRendererOwnedAgentStatusTiming(
+        store.getState().agentStatusByPaneKey.get(MIRROR_PANE_KEY)
+      ),
       { tabId: MIRROR_TAB_ID, worktreeId: WT }
     )
   return release
@@ -181,7 +183,7 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
         }),
         T0 + 1_000
       )
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('waiting')
+      expect(store.getState().agentStatusByPaneKey.get(MIRROR_PANE_KEY)?.state).toBe('waiting')
 
       applyHostSnapshot(
         store,
@@ -193,10 +195,10 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
         }),
         T0 + 1_250
       )
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('working')
+      expect(store.getState().agentStatusByPaneKey.get(MIRROR_PANE_KEY)?.state).toBe('working')
 
       replayClientOscWorking(store, T0 + 1_500)
-      const byteEntry = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
+      const byteEntry = store.getState().agentStatusByPaneKey.get(MIRROR_PANE_KEY)
       expect(byteEntry?.state).toBe('working')
       expect(byteEntry?.mirroredEvidenceReceivedAt).toBeUndefined()
       expect(byteEntry?.interactivePrompt).toBeUndefined()
@@ -210,7 +212,7 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
         }),
         T0 + 2_000
       )
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toMatchObject({
+      expect(store.getState().agentStatusByPaneKey.get(MIRROR_PANE_KEY)).toMatchObject({
         state: 'working',
         updatedAt: T0 + 1_500,
         prompt: CLIENT_PROMPT

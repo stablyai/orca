@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -90,13 +91,15 @@ describe('NativeChatSessionGate', () => {
     fireEvent.change(input, { target: { value: 'keep this search' } })
     act(() => {
       useAppStore.setState({
-        agentStatusByPaneKey: {
-          [paneKey]: entry({
-            paneKey,
-            agentType: 'codex',
-            providerSession: { key: 'session_id', id: 'codex-session' }
+        agentStatusByPaneKey: acceptedAgentStatuses(
+          Object.entries({
+            [paneKey]: entry({
+              paneKey,
+              agentType: 'codex',
+              providerSession: { key: 'session_id', id: 'codex-session' }
+            })
           })
-        }
+        )
       })
     })
     expect(screen.getByText('Session codex-session')).toBeInTheDocument()

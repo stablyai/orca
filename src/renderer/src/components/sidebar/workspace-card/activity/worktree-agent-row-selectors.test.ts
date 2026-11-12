@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 
@@ -53,7 +54,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
     const state = {
       tabsByWorktree: { 'wt-1': [] },
       unifiedTabsByWorktree: { 'wt-1': [structuredTab] },
-      agentStatusByPaneKey: { [PANE_KEY_1]: entry },
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY_1]: entry })),
       migrationUnsupportedByPtyId: {}
     }
 
@@ -73,7 +74,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
     })
     const state = {
       tabsByWorktree: { 'wt-1': [], 'wt-2': [] },
-      agentStatusByPaneKey: { [PANE_KEY_1]: entry },
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY_1]: entry })),
       migrationUnsupportedByPtyId: {}
     }
     expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
@@ -81,7 +82,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
     const moved = { ...entry, worktreeId: 'wt-2' }
     const nextState = {
       ...state,
-      agentStatusByPaneKey: { [PANE_KEY_1]: moved }
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY_1]: moved }))
     }
     expect(selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-1')).toEqual([])
     expect(selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-2')).toEqual([moved])
@@ -94,7 +95,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
     })
     const state = {
       tabsByWorktree: { 'wt-1': [] },
-      agentStatusByPaneKey: { [PANE_KEY_1]: entry },
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY_1]: entry })),
       migrationUnsupportedByPtyId: {}
     }
     expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
@@ -103,7 +104,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
     const done = { ...entry, state: 'done' as const }
     const nextState = {
       ...state,
-      agentStatusByPaneKey: { [PANE_KEY_1]: done }
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY_1]: done }))
     }
     expect(selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-1')).toEqual([])
   })

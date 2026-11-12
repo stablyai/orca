@@ -18,6 +18,8 @@ function toMutationIdentity(
   }
   return {
     paneKey: row.paneKey,
+    ...(row.providerSession ? { providerSession: row.providerSession } : {}),
+    ...(row.payload.agentType ? { agentType: row.payload.agentType } : {}),
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
     ...(row.terminalHandle ? { terminalHandle: row.terminalHandle } : {})
   }
@@ -58,6 +60,13 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
   protected applyRestatedStatus(
     incoming: AgentHookEventPayload
   ): EnrichedAgentHookEventPayload | undefined {
+    if (
+      incoming.payload.state === 'done' &&
+      this.terminalPaneLifecycle?.isStopping(incoming.paneKey) &&
+      this.state.lastStatusByPaneKey.get(incoming.paneKey)?.payload.state !== 'done'
+    ) {
+      return undefined
+    }
     this.restatingStatus = true
     try {
       return this.applyNormalizedStatus(incoming)
@@ -68,6 +77,7 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
 
   _resetRowOwnershipForTests(): void {
     this.paneKeyByTerminalHandle.clear()
+    this.statusQueryIndex = null
   }
 
   subscribeStatusRowMutations(listener: StatusRowMutationListener): () => void {
@@ -115,6 +125,11 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     }
     if (after?.terminalHandle) {
       this.paneKeyByTerminalHandle.set(after.terminalHandle, after.paneKey)
+    }
+    for (const key of new Set([before?.paneKey, after?.paneKey])) {
+      if (key) {
+        this.updateStatusQueryIndex(key)
+      }
     }
     if (!emit || semanticRowsEqual(before, after)) {
       return false

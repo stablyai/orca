@@ -34,7 +34,7 @@ function viewFailure(parent: boolean): string {
 export async function viewClaudeAgentFromRow(agent: DashboardAgentRow): Promise<void> {
   const state = useAppStore.getState()
   const paneKey = agent.activationPaneKey ?? agent.paneKey
-  const parent = state.agentStatusByPaneKey[paneKey] ?? agent.entry
+  const parent = state.agentStatusByPaneKey.get(paneKey) ?? agent.entry
   if (parent.agentType !== 'claude' || parent.structuredHostOwned) {
     return
   }
@@ -65,7 +65,7 @@ export async function viewClaudeAgentFromRow(agent: DashboardAgentRow): Promise<
     const ptyId = state.terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId]
     current = () => {
       const now = useAppStore.getState()
-      const liveParent = now.agentStatusByPaneKey[paneKey]
+      const liveParent = now.agentStatusByPaneKey.get(paneKey)
       const liveOwner = resolveOwnerOrLocal(now, { workspaceId: agent.tab.worktreeId })
       return (
         latest() &&

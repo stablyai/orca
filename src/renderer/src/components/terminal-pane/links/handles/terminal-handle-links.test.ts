@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { ILink } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
     tabsByWorktree: {},
     ptyIdsByTabId: {},
     terminalLayoutsByTabId: {},
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
 
     runtimeAgentOrchestrationByPaneKey: {},
     setActiveWorktree: vi.fn(),
@@ -202,7 +203,7 @@ describe('createTerminalHandleLinkProvider', () => {
     mocks.storeState.tabsByWorktree = {}
     mocks.storeState.ptyIdsByTabId = {}
     mocks.storeState.terminalLayoutsByTabId = {}
-    mocks.storeState.agentStatusByPaneKey = {}
+    mocks.storeState.agentStatusByPaneKey = acceptedAgentStatuses(Object.entries({}))
     mocks.storeState.runtimeAgentOrchestrationByPaneKey = {}
     vi.stubGlobal('window', {
       api: {

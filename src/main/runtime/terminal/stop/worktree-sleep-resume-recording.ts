@@ -92,17 +92,22 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
   }
 
   protected readonly sleepResumeRecords: WorktreeSleepResumeRecorder = {
-    capture: (worktreeId, ptyIds) =>
-      captureWorktreeSleepResumeRecords({
+    capture: (worktreeId, ptyIds) => {
+      const paneKeysByPtyId = new Map(
+        [...ptyIds].map((ptyId) => [ptyId, this.collectAgentStatusPaneKeysForPty(ptyId)])
+      )
+      return captureWorktreeSleepResumeRecords({
         worktreeId,
-        paneKeysByPtyId: new Map(
-          [...ptyIds].map((ptyId) => [ptyId, this.collectAgentStatusPaneKeysForPty(ptyId)])
-        ),
+        paneKeysByPtyId,
         launchByPtyId: new Map([...ptyIds].map((ptyId) => [ptyId, this.ptysById.get(ptyId)])),
-        readRows: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
+        readRows: () =>
+          Array.from(new Set([...paneKeysByPtyId.values()].flatMap((keys) => [...keys]))).flatMap(
+            (key) => this.getAgentProviderSessionRowsForPaneFn?.(key) ?? []
+          ),
         checkAgentPresence: this.checkHookAgentPresenceFn,
         capturedAt: Date.now()
-      }),
+      })
+    },
     persist: async (worktreeId, capture, stoppedPtyIds) => {
       const commit = (): Promise<void> =>
         this.commitWorkspaceSessionEdit(

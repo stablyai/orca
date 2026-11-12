@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
@@ -70,7 +71,9 @@ function snapshot(
     terminalLayoutsByTabId: { 'tab-1': layout() },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
     inUsePtyIds: [],
-    agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({ [agentEntry.paneKey]: agentEntry })
+    ),
     sleepingAgentSessionsByPaneKey: {},
     lastTerminalInputAtByPaneKey: {},
     foregroundTerminalLastSeenAtByTabId: {},
@@ -111,7 +114,9 @@ describe('agent sleep planner', () => {
           tabsByWorktree: {
             [FLOATING_TERMINAL_WORKTREE_ID]: [tab('tab-1', FLOATING_TERMINAL_WORKTREE_ID)]
           },
-          agentStatusByPaneKey: { [floating.paneKey]: floating }
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [floating.paneKey]: floating })
+          )
         })
       )
     ).toEqual([])
@@ -120,16 +125,32 @@ describe('agent sleep planner', () => {
   it('requires done resumable provider-session entries', () => {
     for (const state of ['working', 'waiting', 'blocked'] as const) {
       const e = entry({ state })
-      expect(plannedWorktrees(snapshot({ agentStatusByPaneKey: { [e.paneKey]: e } }))).toEqual([])
+      expect(
+        plannedWorktrees(
+          snapshot({
+            agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [e.paneKey]: e }))
+          })
+        )
+      ).toEqual([])
     }
     const interrupted = entry({ interrupted: true })
     expect(
-      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [interrupted.paneKey]: interrupted } }))
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [interrupted.paneKey]: interrupted })
+          )
+        })
+      )
     ).toEqual([])
     // A failure ranks like a completion for attention, but a failed pane is never passive.
     const failed = entry({ mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: OLD } })
     expect(
-      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [failed.paneKey]: failed } }))
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [failed.paneKey]: failed }))
+        })
+      )
     ).toEqual([])
     // A main agent that finished while its subagents still run is live work, whatever its verdict.
     for (const outcome of ['success', 'failure'] as const) {
@@ -138,16 +159,32 @@ describe('agent sleep planner', () => {
         mainAgent: { state: 'done', outcome, stateStartedAt: OLD }
       })
       expect(
-        plannedWorktrees(snapshot({ agentStatusByPaneKey: { [held.paneKey]: held } }))
+        plannedWorktrees(
+          snapshot({
+            agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [held.paneKey]: held }))
+          })
+        )
       ).toEqual([])
     }
     const noSession = entry({ providerSession: undefined })
     expect(
-      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [noSession.paneKey]: noSession } }))
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [noSession.paneKey]: noSession })
+          )
+        })
+      )
     ).toEqual([])
     const ephemeralPi = entry({ agentType: 'pi', providerSession: undefined })
     expect(
-      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [ephemeralPi.paneKey]: ephemeralPi } }))
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [ephemeralPi.paneKey]: ephemeralPi })
+          )
+        })
+      )
     ).toEqual([])
     const piWithoutTranscript = entry({
       agentType: 'pi',
@@ -155,12 +192,22 @@ describe('agent sleep planner', () => {
     })
     expect(
       plannedWorktrees(
-        snapshot({ agentStatusByPaneKey: { [piWithoutTranscript.paneKey]: piWithoutTranscript } })
+        snapshot({
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [piWithoutTranscript.paneKey]: piWithoutTranscript })
+          )
+        })
       )
     ).toEqual([])
     const unsupported = entry({ agentType: 'amp' })
     expect(
-      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [unsupported.paneKey]: unsupported } }))
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [unsupported.paneKey]: unsupported })
+          )
+        })
+      )
     ).toEqual([])
   })
 
@@ -177,13 +224,23 @@ describe('agent sleep planner', () => {
     })
     expect(
       plannedPaneKeys(
-        snapshot({ agentStatusByPaneKey: { [withIdleTeammate.paneKey]: withIdleTeammate } })
+        snapshot({
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [withIdleTeammate.paneKey]: withIdleTeammate })
+          )
+        })
       )
     ).toEqual([])
 
     const cleared = { ...withIdleTeammate, subagents: undefined }
     expect(
-      plannedPaneKeys(snapshot({ agentStatusByPaneKey: { [cleared.paneKey]: cleared } }))
+      plannedPaneKeys(
+        snapshot({
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [cleared.paneKey]: cleared })
+          )
+        })
+      )
     ).toEqual([cleared.paneKey])
   })
 
@@ -200,7 +257,11 @@ describe('agent sleep planner', () => {
 
       expect(
         plannedPaneKeys(
-          snapshot({ agentStatusByPaneKey: { [orchestrated.paneKey]: orchestrated } })
+          snapshot({
+            agentStatusByPaneKey: acceptedAgentStatuses(
+              Object.entries({ [orchestrated.paneKey]: orchestrated })
+            )
+          })
         )
       ).toEqual([])
     }
@@ -209,7 +270,11 @@ describe('agent sleep planner', () => {
   it('requires the idle threshold and blocks input after done', () => {
     const fresh = entry({ stateStartedAt: NOW - 1_000, updatedAt: NOW - 1_000 })
     expect(
-      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [fresh.paneKey]: fresh } }))
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [fresh.paneKey]: fresh }))
+        })
+      )
     ).toEqual([])
     expect(
       plannedWorktrees(snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD + 1 } }))
@@ -232,7 +297,9 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(
         snapshot({
-          agentStatusByPaneKey: { [withTurn.paneKey]: withTurn },
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [withTurn.paneKey]: withTurn })
+          ),
           lastTerminalInputAtByPaneKey: { [withTurn.paneKey]: turnStartedAt + 30_000 }
         })
       )
@@ -242,7 +309,9 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(
         snapshot({
-          agentStatusByPaneKey: { [withTurn.paneKey]: withTurn },
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [withTurn.paneKey]: withTurn })
+          ),
           lastTerminalInputAtByPaneKey: { [withTurn.paneKey]: turnStartedAt - 1_000 }
         })
       )
@@ -251,7 +320,9 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(
         snapshot({
-          agentStatusByPaneKey: { [withTurn.paneKey]: withTurn },
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [withTurn.paneKey]: withTurn })
+          ),
           lastTerminalInputAtByPaneKey: { [withTurn.paneKey]: OLD + 1 }
         })
       )
@@ -270,7 +341,9 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(
         snapshot({
-          agentStatusByPaneKey: { [multiSegment.paneKey]: multiSegment },
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [multiSegment.paneKey]: multiSegment })
+          ),
           lastTerminalInputAtByPaneKey: { [multiSegment.paneKey]: OLD - 75_000 }
         })
       )
@@ -278,7 +351,9 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(
         snapshot({
-          agentStatusByPaneKey: { [multiSegment.paneKey]: multiSegment },
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [multiSegment.paneKey]: multiSegment })
+          ),
           lastTerminalInputAtByPaneKey: { [multiSegment.paneKey]: OLD - 45_000 }
         })
       )
@@ -293,7 +368,9 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(
         snapshot({
-          agentStatusByPaneKey: { [resubmitted.paneKey]: resubmitted },
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [resubmitted.paneKey]: resubmitted })
+          ),
           lastTerminalInputAtByPaneKey: { [resubmitted.paneKey]: OLD - 45_000 }
         })
       )
@@ -302,7 +379,9 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(
         snapshot({
-          agentStatusByPaneKey: { [multiSegment.paneKey]: multiSegment },
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [multiSegment.paneKey]: multiSegment })
+          ),
           lastTerminalInputAtByPaneKey: { [multiSegment.paneKey]: OLD - 30_000 }
         })
       )
@@ -310,7 +389,9 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(
         snapshot({
-          agentStatusByPaneKey: { [multiSegment.paneKey]: multiSegment },
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [multiSegment.paneKey]: multiSegment })
+          ),
           lastTerminalInputAtByPaneKey: { [multiSegment.paneKey]: OLD - 60_000 }
         })
       )
@@ -342,10 +423,12 @@ describe('agent sleep planner', () => {
             'tab-1': ['pty-1'],
             'tab-2': ['pty-2']
           },
-          agentStatusByPaneKey: {
-            [`tab-1:${LEAF}`]: entry(),
-            [siblingEntry.paneKey]: siblingEntry
-          }
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({
+              [`tab-1:${LEAF}`]: entry(),
+              [siblingEntry.paneKey]: siblingEntry
+            })
+          )
         })
       )
     ).toEqual([`tab-2:${OTHER_LEAF}`])
@@ -396,7 +479,9 @@ describe('agent sleep planner', () => {
       expect(
         plannedPaneKeys(
           snapshot({
-            agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
+            agentStatusByPaneKey: acceptedAgentStatuses(
+              Object.entries({ [agentEntry.paneKey]: agentEntry })
+            ),
             sleepingAgentSessionsByPaneKey: {
               [agentEntry.paneKey]: {
                 paneKey: agentEntry.paneKey,
@@ -475,7 +560,9 @@ describe('agent sleep planner', () => {
         },
         runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['terminal-1'], 'wt-b': ['terminal-1'] },
         runtimeLivenessRequiredWorktreeIds: ['wt-bg', 'wt-b'],
-        agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry(), [onB.paneKey]: onB },
+        agentStatusByPaneKey: acceptedAgentStatuses(
+          Object.entries({ [`tab-1:${LEAF}`]: entry(), [onB.paneKey]: onB })
+        ),
         attentionByWorktreeId: { 'wt-b': { 'terminal-1': attention } }
       })
 
@@ -495,7 +582,7 @@ describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
     const sigFor = (e: AgentStatusEntry): string =>
       planAgentHibernationCandidates(
         snapshot({
-          agentStatusByPaneKey: { [e.paneKey]: e },
+          agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [e.paneKey]: e })),
           ptyBindingFirstSeenAtByPaneKey: { [e.paneKey]: OLD }
         })
       )[0]!.signature
@@ -507,7 +594,7 @@ describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
     const sigFor = (e: AgentStatusEntry): string =>
       planAgentHibernationCandidates(
         snapshot({
-          agentStatusByPaneKey: { [e.paneKey]: e },
+          agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [e.paneKey]: e })),
           ptyBindingFirstSeenAtByPaneKey: { [e.paneKey]: OLD }
         })
       )[0]!.signature

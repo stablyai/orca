@@ -56,7 +56,7 @@ function projectFailedStart(
   failedAt: number
 ): void {
   const store = transaction.getState()
-  const current = store.agentStatusByPaneKey?.[paneKey]
+  const current = store.agentStatusByPaneKey.get(paneKey)
   if (
     current?.state === 'done' &&
     agentMainAgentVerdict(current) === 'failure' &&
@@ -103,7 +103,7 @@ export function projectStatus(
   if (!summary?.status) {
     if (launchFailedAt !== null) {
       projectFailedStart(transaction, tab, paneKey, launchFailedAt)
-    } else if (store.agentStatusByPaneKey?.[paneKey]) {
+    } else if (store.agentStatusByPaneKey.get(paneKey)) {
       store.removeAgentStatus(paneKey)
     }
     return
@@ -116,7 +116,7 @@ export function projectStatus(
     turnOutcome: summary.turnOutcome,
     ...(summary.stopping ? { stopping: summary.stopping } : {})
   })
-  const current = store.agentStatusByPaneKey?.[paneKey]
+  const current = store.agentStatusByPaneKey.get(paneKey)
   // Same continuity rule as the host ingest, on the main agent's own clock.
   const mainAgent = continueMainAgentStatus(
     current?.mainAgent,

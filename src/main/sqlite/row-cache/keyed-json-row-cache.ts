@@ -1,5 +1,15 @@
-import { existsSync } from 'node:fs'
-import SyncDatabase from '../sync-database'
+import {
+  readRows,
+  rollback,
+  parseOrNull,
+  receiptNames,
+  RECEIPT_KEY,
+  readKeyedJsonRowsSnapshot,
+  type StoredRow
+} from './keyed-json-row-snapshot'
+export { parseKeyedJsonRows } from './keyed-json-row-snapshot'
+
+import type SyncDatabase from '../sync-database'
 import {
   openVersionedCacheDatabase,
   removeVersionedCacheDatabase
@@ -32,10 +42,7 @@ export type KeyedJsonRowLoad<T> =
   | { kind: 'import'; value: T; receipt: string; rows: KeyedJsonRow[] }
   | { kind: 'unavailable'; error: unknown; legacy?: T }
 
-type StoredRow = { seq: number; json: string }
-
 const DEFAULT_BUSY_TIMEOUT_MS = 25
-const RECEIPT_KEY = 'legacy_import_receipt'
 const SCHEMA_SQL = `CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS rows(key TEXT PRIMARY KEY, seq INTEGER NOT NULL, value TEXT NOT NULL);`
 
@@ -122,56 +129,84 @@ export class KeyedJsonRowCache {
     this.closeDatabase()
   }
 
-  /** One read-only snapshot: another connection's write lock cannot block it. */
-  private readSnapshot(
-    busyTimeoutMs: number
-  ):
-    | { kind: 'rows'; rows: KeyedJsonRow[]; receipt: unknown }
-    | { kind: 'unavailable'; error: unknown } {
-    // One-shot startup probe, so an unused store creates no file.
-    if (!existsSync(this.path)) {
-      return { kind: 'rows', rows: [], receipt: undefined }
-    }
-    let db: SyncDatabase | null = null
+  /** Addressed updates opt in; an uncertain baseline lazily reconciles the full owner. */
+  patch(
+    changes: ReadonlyMap<string, string | null>,
+    fullRows: () => readonly KeyedJsonRow[],
+    options: {
+      importReceipt?: string
+      busyTimeoutMs?: number
+      reinsertKeys?: ReadonlySet<string>
+    } = {}
+  ): void {
+    const busyTimeoutMs = options.busyTimeoutMs ?? this.busyTimeoutMs
     try {
-      db = new SyncDatabase(this.path, { readonly: true, fileMustExist: true })
-      db.pragma(`busy_timeout = ${busyTimeoutMs}`)
-      db.exec('BEGIN')
-      try {
-        const tables = db
-          .prepare(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('meta', 'rows')"
-          )
-          .all()
-        const version =
-          tables.length === 2
-            ? db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get()
-            : undefined
-        if (version?.value !== String(this.options.schemaVersion)) {
-          // Another layout holds nothing this build reads; the first write rebuilds it.
-          return { kind: 'rows', rows: [], receipt: undefined }
+      this.withRebuild(() => {
+        const db = this.database(busyTimeoutMs)
+        db.pragma(`busy_timeout = ${busyTimeoutMs}`)
+        db.exec('BEGIN IMMEDIATE')
+        try {
+          if (
+            options.importReceipt !== undefined ||
+            db.pragma('data_version', { simple: true }) !== this.dataVersion
+          ) {
+            rollback(db)
+            this.commit(fullRows(), options.importReceipt, busyTimeoutMs)
+            return
+          }
+          const upsert = db.prepare(`INSERT INTO rows(key, seq, value) VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET seq = excluded.seq, value = excluded.value`)
+          const remove = db.prepare('DELETE FROM rows WHERE key = ?')
+          const landed = new Map<string, StoredRow | null>()
+          let maxSeq = this.maxSeq
+          for (const [key, json] of changes) {
+            const previous = this.stored.get(key)
+            if (json === null) {
+              if (previous) {
+                remove.run(key)
+              }
+              landed.set(key, null)
+            } else {
+              const row = {
+                seq: options.reinsertKeys?.has(key) ? ++maxSeq : (previous?.seq ?? ++maxSeq),
+                json
+              }
+              if (!previous || previous.json !== json || previous.seq !== row.seq) {
+                upsert.run(key, row.seq, json)
+              }
+              landed.set(key, row)
+            }
+          }
+          const version = db.pragma('data_version', { simple: true })
+          db.exec('COMMIT')
+          for (const [key, row] of landed) {
+            if (row) {
+              this.stored.set(key, row)
+            } else {
+              this.stored.delete(key)
+            }
+          }
+          this.maxSeq = maxSeq
+          this.dataVersion = version
+        } catch (error) {
+          rollback(db)
+          this.dataVersion = undefined
+          throw error
         }
-        const rows = [...readRows(db).stored].map(([key, { json }]) => ({ key, json }))
-        return { kind: 'rows', rows, receipt: readReceipt(db) }
-      } finally {
-        rollback(db)
-      }
-    } catch (error) {
-      if (classifyRowCacheFailure(error) !== 'corrupt') {
-        return { kind: 'unavailable', error }
-      }
-      db?.close()
-      db = null
-      try {
-        // Damaged rows hold nothing recoverable; the next write rebuilds the cache.
-        removeVersionedCacheDatabase(this.path, 'fail-fast')
-      } catch (removeError) {
-        return { kind: 'unavailable', error: removeError }
-      }
-      return { kind: 'rows', rows: [], receipt: undefined }
+      })
     } finally {
-      db?.close()
+      if (this.options.holdConnection === false || this.closed) {
+        this.closeDatabase()
+      }
     }
+    if (options.importReceipt !== undefined && this.options.legacyPath) {
+      removeLegacyJsonSource(this.options.legacyPath, options.importReceipt)
+    }
+  }
+
+  /** One read-only snapshot: another connection's write lock cannot block it. */
+  private readSnapshot(busyTimeoutMs: number) {
+    return readKeyedJsonRowsSnapshot(this.path, this.options.schemaVersion, busyTimeoutMs)
   }
 
   private commit(
@@ -293,60 +328,4 @@ export class KeyedJsonRowCache {
     }
     this.db = null
   }
-}
-
-function readRows(db: SyncDatabase): { stored: Map<string, StoredRow>; maxSeq: number } {
-  const stored = new Map<string, StoredRow>()
-  let maxSeq = 0
-  for (const row of db.prepare('SELECT key, seq, value FROM rows ORDER BY seq').all()) {
-    const { key, seq, value } = row
-    if (typeof key === 'string' && typeof seq === 'number' && typeof value === 'string') {
-      stored.set(key, { seq, json: value })
-      maxSeq = Math.max(maxSeq, seq)
-    }
-  }
-  return { stored, maxSeq }
-}
-
-function readReceipt(db: SyncDatabase): unknown {
-  return db.prepare('SELECT value FROM meta WHERE key = ?').get(RECEIPT_KEY)?.value
-}
-
-function rollback(db: SyncDatabase): void {
-  if (db.isTransaction) {
-    db.exec('ROLLBACK')
-  }
-}
-
-/** Parsed values of rows, skipping any that no longer parse (the next save rewrites them). */
-export function parseKeyedJsonRows(
-  rows: readonly KeyedJsonRow[]
-): { key: string; value: unknown }[] {
-  return rows.flatMap(({ key, json }) => {
-    try {
-      const value: unknown = JSON.parse(json)
-      return [{ key, value }]
-    } catch {
-      return []
-    }
-  })
-}
-
-function parseOrNull<T>(parse: (text: string) => T | null, text: string): T | null {
-  try {
-    return parse(text)
-  } catch {
-    return null
-  }
-}
-
-/**
- * Whether a stored import receipt names these bytes. Builds before the shared row cache wrote
- * `<length>:<mtime>:<sha256>`; its hash still identifies the same bytes.
- */
-function receiptNames(stored: unknown, receipt: string): boolean {
-  if (typeof stored !== 'string') {
-    return false
-  }
-  return stored === receipt || /^\d+:\d+:([0-9a-f]{64})$/.exec(stored)?.[1] === receipt
 }

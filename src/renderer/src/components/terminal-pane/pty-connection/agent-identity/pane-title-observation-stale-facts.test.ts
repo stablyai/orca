@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createTerminalTitleTracker,
@@ -12,7 +13,7 @@ vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: () => ({
       settings: { terminalGpuAcceleration: 'auto' },
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
       runtimePaneTitlesByTabId: { tab: { 1: 'fix the gemini launcher' } },
       tabsByWorktree: {}
     })

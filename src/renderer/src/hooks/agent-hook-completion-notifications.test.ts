@@ -1,3 +1,7 @@
+import {
+  acceptedAgentStatuses,
+  type AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
@@ -33,18 +37,7 @@ type MockStoreState = {
       launchToken?: string
     }
   >
-  agentStatusByPaneKey: Record<
-    string,
-    {
-      state: ParsedAgentStatusPayload['state']
-      prompt: string
-      paneKey: string
-      updatedAt: number
-      stateStartedAt: number
-      agentType?: ParsedAgentStatusPayload['agentType']
-      stateHistory: []
-    }
-  >
+  agentStatusByPaneKey: AcceptedAgentStatuses
   getAgentLaunchConfigForStatusEntry: (entry: {
     paneKey: string
   }) => { agentArgs: string; agentEnv: Record<string, string> } | undefined
@@ -84,15 +77,20 @@ function seedCodexPane(paneKey: string, launchToken = 'launch-token-1'): void {
     },
     launchToken
   }
-  mockStoreState.agentStatusByPaneKey[paneKey] = {
-    state: 'working',
-    prompt: 'implement notifications',
-    paneKey,
-    updatedAt: Date.now(),
-    stateStartedAt: Date.now(),
-    agentType: 'codex',
-    stateHistory: []
-  }
+  mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+    [
+      paneKey,
+      {
+        state: 'working',
+        prompt: 'implement notifications',
+        paneKey,
+        updatedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        agentType: 'codex',
+        stateHistory: []
+      }
+    ]
+  ])
 }
 
 describe('agent hook completion notifications', () => {
@@ -142,7 +140,7 @@ describe('agent hook completion notifications', () => {
       },
       terminalLayoutsByTabId: {},
       agentLaunchConfigByPaneKey: {},
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
       getAgentLaunchConfigForStatusEntry: (entry) =>
         mockStoreState.agentLaunchConfigByPaneKey[entry.paneKey]?.launchConfig
     }

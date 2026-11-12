@@ -1,7 +1,8 @@
+import { useAppStore } from '@/store'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { clearWorktreeAgentExpansionStateForTests } from './worktree-card-agents-expansion-state'
-import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentChildWorkView } from '../../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
@@ -41,7 +42,7 @@ function child(
   }
 }
 
-function rowsFor(worktreeId: string) {
+function setupRows(worktreeId: string) {
   const tab: TerminalTab = {
     id: `${worktreeId}-tab`,
     ptyId: null,
@@ -69,19 +70,25 @@ function rowsFor(worktreeId: string) {
       child('d', 'manifest-schema', 'working', 0.2 * HOUR)
     ]
   }
-  return buildWorktreeAgentRows({ tabs: [tab], entries: [parent], now })
+  useAppStore.setState({
+    tabsByWorktree: { [worktreeId]: [tab] },
+    agentStatusByPaneKey: acceptedAgentStatuses([[parent.paneKey, parent]])
+  })
 }
 
 function render(worktreeId: string) {
   return (
     <div className="flex flex-col gap-0.5 bg-sidebar p-2 text-sidebar-foreground">
-      <WorktreeCardAgents worktreeId={worktreeId} agents={rowsFor(worktreeId)} />
+      <WorktreeCardAgents worktreeId={worktreeId} />
     </div>
   )
 }
 
 // Expansion state is module-global; reset so each theme pass starts collapsed.
-const setup = clearWorktreeAgentExpansionStateForTests
+const setup = (worktreeId: string) => () => {
+  clearWorktreeAgentExpansionStateForTests()
+  setupRows(worktreeId)
+}
 
 function expand(frame: HTMLElement, selector: string): void {
   const toggle = frame.querySelector<HTMLElement>(selector)
@@ -95,14 +102,14 @@ const wait = () => new Promise((resolve) => setTimeout(resolve, 300))
 export const atRest = defineFixture({
   width: 300,
   store: { agentActivityDisplayMode: 'compact' },
-  setup,
+  setup: setup('fixture-subagents-rest'),
   render: () => render('fixture-subagents-rest')
 })
 
 export const userExpanded = defineFixture({
   width: 300,
   store: { agentActivityDisplayMode: 'compact' },
-  setup,
+  setup: setup('fixture-subagents-expanded'),
   render: () => render('fixture-subagents-expanded'),
   interact: async (frame) => {
     expand(frame, '[data-agent-child-disclosure-button]')
@@ -113,7 +120,7 @@ export const userExpanded = defineFixture({
 export const idleGroupExpanded = defineFixture({
   width: 300,
   store: { agentActivityDisplayMode: 'compact' },
-  setup,
+  setup: setup('fixture-subagents-idle-open'),
   render: () => render('fixture-subagents-idle-open'),
   interact: async (frame) => {
     expand(frame, '[data-agent-child-disclosure-button]')
@@ -126,7 +133,7 @@ export const idleGroupExpanded = defineFixture({
 export const fullMode = defineFixture({
   width: 300,
   store: { agentActivityDisplayMode: 'full' },
-  setup,
+  setup: setup('fixture-subagents-full'),
   render: () => render('fixture-subagents-full'),
   interact: async (frame) => {
     expand(frame, '[data-agent-child-disclosure-button]')
@@ -137,6 +144,6 @@ export const fullMode = defineFixture({
 export const fullModeCollapsed = defineFixture({
   width: 300,
   store: { agentActivityDisplayMode: 'full' },
-  setup,
+  setup: setup('fixture-subagents-full-rest'),
   render: () => render('fixture-subagents-full-rest')
 })

@@ -6,7 +6,10 @@ import { isShellProcess } from '../../../../../../shared/agent-status/process/sh
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status/ownership/agent-status-connection-ownership'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { rendererAgentStatusObservations } from '@/lib/agent-status/evidence/renderer-agent-status-observations'
+import {
+  rendererAgentStatusObservations,
+  hostOwnsCommandCodeStatus
+} from '@/lib/agent-status/evidence/renderer-agent-status-observations'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store/index'
 import {
@@ -26,7 +29,7 @@ export type ParkedTerminalCommandStatusPolicy = {
 
 // Only working rows prove a live Command Code turn; stale done rows could arm a recreated detector against its replacement.
 export function readInFlightCommandCodeTurn(paneKey: string): { prompt: string } | null {
-  const entry = useAppStore.getState().agentStatusByPaneKey?.[paneKey]
+  const entry = useAppStore.getState().agentStatusByPaneKey.get(paneKey)
   if (entry?.agentType !== 'command-code' || entry.state !== 'working') {
     return null
   }
@@ -60,12 +63,15 @@ export function createParkedTerminalCommandStatusPolicy(options: {
 
   const canApplyCommandCodeOutputStatus = (): boolean => {
     const state = useAppStore.getState()
+    if (hostOwnsCommandCodeStatus(state.agentStatusByPaneKey.get(paneKey))) {
+      return false
+    }
     const tab = (state.tabsByWorktree[worktreeId] ?? []).find((entry) => entry.id === tabId)
     const foreground = state.paneForegroundAgentByPaneKey[paneKey]
     const paneOwnerAgent = resolvePaneAgentOwner({
       launchAgent: tab?.launchAgent,
       startupLaunchAgent: state.agentLaunchConfigByPaneKey[paneKey]?.identity.agentType,
-      hookAgent: state.agentStatusByPaneKey[paneKey]?.agentType
+      hookAgent: state.agentStatusByPaneKey.get(paneKey)?.agentType
     })
     return canCommandCodeOutputOwnPane({
       foregroundAgent: foreground?.agent,
@@ -82,7 +88,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       state.clearAgentLaunchConfig(paneKey)
       return
     }
-    const current = state.agentStatusByPaneKey[paneKey]
+    const current = state.agentStatusByPaneKey.get(paneKey)
     if (!current) {
       state.clearAgentLaunchConfig(paneKey)
       return
@@ -108,7 +114,10 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       return
     }
     const currentState = useAppStore.getState()
-    const currentEntry = currentState.agentStatusByPaneKey[paneKey]
+    const currentEntry = currentState.agentStatusByPaneKey.get(paneKey)
+    if (hostOwnsCommandCodeStatus(currentEntry)) {
+      return
+    }
     if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
       return
     }
@@ -178,7 +187,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       if (parseAppSshPtyId(ptyId) === null) {
         return
       }
-      dropCommandFinishedStatusIfSameTurn(useAppStore.getState().agentStatusByPaneKey[paneKey])
+      dropCommandFinishedStatusIfSameTurn(useAppStore.getState().agentStatusByPaneKey.get(paneKey))
     },
 
     // Port of pty-connection's seedCommandCodeOutputWorkingStatus (store-level only).
@@ -192,7 +201,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
         return
       }
       const currentState = useAppStore.getState()
-      const currentEntry = currentState.agentStatusByPaneKey[paneKey]
+      const currentEntry = currentState.agentStatusByPaneKey.get(paneKey)
       const currentTitle = currentState.runtimePaneTitlesByTabId?.[tabId]?.[paneId]
       const normalizedPrompt = prompt.trim()
       if (

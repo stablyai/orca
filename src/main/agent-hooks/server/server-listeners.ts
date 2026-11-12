@@ -1,3 +1,5 @@
+import { AgentHookServerStatusQueries } from './server-status-queries'
+
 import { cliWriterExecutionMatcher, type CliWriterExecutionMatches } from './cli-writer-observation'
 import type {
   AgentStatusClearIpcPayload,
@@ -15,13 +17,12 @@ import type {
   StatusDropListener
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
-import { AgentHookServerState } from './server-state'
+
 import { combinedAgentStatusEntries } from './combined-agent-status-entries'
 import { PaneTimers } from './program-status/pane-timers'
 import { ProgramStatusFacetStore } from './program-status/facet-store'
-import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
-export abstract class AgentHookServerListeners extends AgentHookServerState {
+export abstract class AgentHookServerListeners extends AgentHookServerStatusQueries {
   protected providerRowsByTab: Map<string, AgentStatusIpcPayload[]> | null = null
   protected statusChangeNotificationVersion = 0
   protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
@@ -65,6 +66,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
 
   protected override resetCanonicalStatus(): void {
     super.resetCanonicalStatus()
+    this.statusQueryIndex = null
     this.providerRowsByTab = null
   }
 
@@ -206,34 +208,30 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     return this.combinedStatusEntries().map(toAgentStatusIpcPayload)
   }
 
-  /** Provider-source projection; status timestamps still use the uncached status getter. */
-  getProviderSessionSourceRowsForTab(tabId: string): AgentStatusIpcPayload[] {
-    // Media reads share the owner's snapshot until the next status mutation.
-    if (!this.providerRowsByTab) {
-      const byTab = new Map<string, AgentStatusIpcPayload[]>()
-      for (const entry of this.combinedStatusEntries()) {
-        const row = toAgentStatusIpcPayload(entry)
-        const owner = row.tabId ?? parsePaneKey(row.paneKey)?.tabId
-        if (owner) {
-          const rows = byTab.get(owner) ?? []
-          rows.push(row)
-          byTab.set(owner, rows)
-        }
-      }
-      this.providerRowsByTab = byTab
-    }
-    return [...(this.providerRowsByTab.get(tabId) ?? [])]
-  }
-
   /** Include metadata-only provider identities. */
   getProviderSessionIdentities(): AgentHookProviderSessionIdentity[] {
     return this.buildStatusChangeNotification().providerSessions
   }
 
-  getPublicStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
-    return this.combinedStatusEntries(paneKey)
-      .filter((entry) => entry.providerSessionOnly !== true)
+  getStatusRowsForPaneOrHandle(
+    paneKey: string,
+    terminalHandle?: string | null
+  ): AgentStatusIpcPayload[] {
+    const handlePaneKey = terminalHandle
+      ? this.paneKeyByTerminalHandle.get(terminalHandle)
+      : undefined
+    return Array.from(new Set([paneKey, ...(handlePaneKey ? [handlePaneKey] : [])]))
+      .flatMap((key) => this.combinedStatusEntries(key))
       .map(toAgentStatusIpcPayload)
+  }
+
+  getPublicStatusSnapshotForPane(
+    paneKey: string,
+    terminalHandle?: string | null
+  ): AgentStatusIpcPayload[] {
+    return this.getStatusRowsForPaneOrHandle(paneKey, terminalHandle).filter(
+      (row) => row.providerSessionOnly !== true
+    )
   }
 
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {

@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -57,10 +58,12 @@ beforeEach(() => {
       'ssh-b': [makeTab({ id: 'tab-b', worktreeId: 'ssh-b' })]
     },
     unifiedTabsByWorktree: {},
-    agentStatusByPaneKey: {
-      [KEY_A]: entry(KEY_A, 'folder-a'),
-      [KEY_B]: { ...entry(KEY_B, 'ssh-b'), connectionId: 'ssh:host' }
-    },
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [KEY_A]: entry(KEY_A, 'folder-a'),
+        [KEY_B]: { ...entry(KEY_B, 'ssh-b'), connectionId: 'ssh:host' }
+      })
+    ),
     migrationUnsupportedByPtyId: {},
     runtimePaneTitlesByTabId: {},
     ptyIdsByTabId: {},
@@ -138,7 +141,7 @@ it.each([100, 1000])(
           }
         ])
       ),
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
       agentConversationsByPaneKey: {}
     })
     useAppStore.getState().setAgentStatuses(updates)

@@ -60,6 +60,7 @@ import {
 } from '../runtime/terminal/identity/agent-status-observed-pane-identity'
 import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
+import { bindTerminalPaneStatusLifecycle } from '../ipc/pty/pane/terminal-pane-status-lifecycle'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
 import { openOffscreenBrowserPageLink } from '../runtime/browser/commands/offscreen-browser-page-link'
@@ -163,6 +164,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // Each host titles its own workspaces' untitled GitHub issue links once, when they are linked.
   const disposeIssueLinkTitleFill = wireGitHubIssueLinkTitleFill(store, runtime)
   app.once('will-quit', disposeIssueLinkTitleFill)
+  bindTerminalPaneStatusLifecycle(runtime, store)
   state.runtime = runtime
   // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
   registerRecipeVmWaker({

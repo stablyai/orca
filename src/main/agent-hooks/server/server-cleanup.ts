@@ -1,3 +1,4 @@
+import { AgentHookServerPaneSleep } from './server-pane-sleep'
 import type { AgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
 import {
   admitLegacyAgentStatus,
@@ -15,10 +16,10 @@ import {
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { isLocalHookConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
-import { AgentHookServerAuthorityFences } from './server-authority-fences'
+
 import { recordAgentExit } from './agent-exit-evidence'
 
-export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFences {
+export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
   /** Resume identity survives teardown without claiming live work. */
   protected toRetainedProviderSessionRow(
     entry: EnrichedAgentHookEventPayload | null | undefined
@@ -30,7 +31,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     ) {
       return null
     }
-    const { launchToken: _launchToken, ...resumeIdentity } = entry
+    const { launchToken: _launchToken, paneSleep: _paneSleep, ...resumeIdentity } = entry
     return { ...resumeIdentity, providerSessionOnly: true, retainedForLiveness: true }
   }
 
@@ -120,6 +121,9 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     let cleared = 0
     for (const paneKey of paneKeys) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+      if (this.preservesStoppingDone(resolvedPaneKey)) {
+        continue
+      }
       if (options?.endedPresence) {
         // Cleanup drops aliases, but readers may still hold either key.
         const paneKeys = new Set([resolvedPaneKey, paneKey])
@@ -254,7 +258,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     for (const [paneKey, rawEntry] of this.state.lastStatusByPaneKey) {
       const entry = rawEntry as EnrichedAgentHookEventPayload
       // Why: unstamped rows can't be attributed to one host; leave them for normal pane teardown.
-      if (entry.connectionId !== normalizedConnectionId) {
+      if (entry.paneSleep || entry.connectionId !== normalizedConnectionId) {
         continue
       }
       const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })

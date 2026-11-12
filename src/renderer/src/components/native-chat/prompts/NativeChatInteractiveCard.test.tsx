@@ -29,10 +29,17 @@ const paneStatus: PaneStatus = {
   toolName: 'AskUserQuestion',
   stateStartedAt: 1
 }
-const storeState = { agentStatusByPaneKey: { 'tab-1:leaf-1': paneStatus } }
+const storeState = {
+  agentStatusByPaneKey: Object.assign(new Map<string, PaneStatus>([['tab-1:leaf-1', paneStatus]]), {
+    subscribe: () => () => {}
+  })
+}
 
 vi.mock('../../../store/index', () => ({
-  useAppStore: (selector: (state: typeof storeState) => unknown) => selector(storeState)
+  useAppStore: Object.assign(
+    (selector: (state: typeof storeState) => unknown) => selector(storeState),
+    { getState: () => storeState }
+  )
 }))
 
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
@@ -151,7 +158,7 @@ function chooseSpacesAndSubmit(): void {
 const APPROVAL = JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } })
 
 describe('NativeChatInteractiveCard approvals', () => {
-  const status = storeState.agentStatusByPaneKey['tab-1:leaf-1']
+  const status = storeState.agentStatusByPaneKey.get('tab-1:leaf-1')!
   beforeEach(() => {
     vi.clearAllMocks()
     status.interactivePrompt = APPROVAL
@@ -184,8 +191,8 @@ describe('NativeChatInteractiveCard approvals', () => {
 describe('NativeChatInteractiveCard answer lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = INITIAL_PROMPT
-    storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = undefined
+    storeState.agentStatusByPaneKey.get('tab-1:leaf-1')!.interactivePrompt = INITIAL_PROMPT
+    storeState.agentStatusByPaneKey.get('tab-1:leaf-1')!.state = undefined
   })
 
   afterEach(() => {

@@ -87,6 +87,25 @@ export class LastStatusStore {
     return true
   }
 
+  patch(
+    changes: ReadonlyMap<string, string | null>,
+    fullFile: () => LastStatusFile,
+    busyTimeoutMs: number,
+    reinsertKeys?: ReadonlySet<string>
+  ): boolean {
+    if (this.disabled) {
+      return false
+    }
+    this.cache.patch(changes, () => rowsOf(fullFile()), {
+      importReceipt: this.pendingImport,
+      busyTimeoutMs,
+      reinsertKeys
+    })
+    this.pendingImport = undefined
+    this.legacyReceipt = undefined
+    return true
+  }
+
   close(): void {
     this.cache.close()
     this.savedRows = []

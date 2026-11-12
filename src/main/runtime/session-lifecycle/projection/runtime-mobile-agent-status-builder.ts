@@ -199,7 +199,8 @@ export function buildRuntimeMobileAgentStatus(
         tabId: tab.parentTabId,
         terminalTitle,
         ...providerSession,
-        ...(liveRow.programStatus ? { programStatus: liveRow.programStatus } : {})
+        ...(liveRow.programStatus ? { programStatus: liveRow.programStatus } : {}),
+        ...(liveRow.paneSleep ? { paneSleep: liveRow.paneSleep } : {})
       },
       ownerAgent,
       ownerOptions

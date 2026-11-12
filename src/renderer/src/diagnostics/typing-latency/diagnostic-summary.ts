@@ -115,13 +115,11 @@ export type FocusedPaneCensus = {
   statusAgentType: string | null
 }
 
-type CountableRecord = Record<string, unknown> | null | undefined
-
 export type TypingCensusStoreView = {
   worktreesByRepo?: Record<string, WorktreeLike[]> | null
   tabsByWorktree?: Record<string, unknown[]> | null
   unifiedTabsByWorktree?: Record<string, unknown[]> | null
-  agentStatusByPaneKey?: CountableRecord
+  agentStatusByPaneKey?: ReadonlyMap<string, unknown> | null
   activeTabId?: string | null
   activeTabType?: string | null
   settings?: Record<string, unknown> | null
@@ -153,10 +151,6 @@ export type TypingScaleCensus = {
   settings: TypingSettingsCensus
   activeTab: { id: string | null; type: string | null }
   focusedPane: FocusedPaneCensus | null
-}
-
-function countRecord(record: CountableRecord): number {
-  return record ? Object.keys(record).length : 0
 }
 
 function sumArrayLengths(byKey: Record<string, unknown[]> | null | undefined): number {
@@ -227,7 +221,7 @@ export function summarizeTypingScaleCensus(input: {
   const state = input.state
   const settings = state?.settings ?? null
   const worktrees = collectWorktrees(state?.worktreesByRepo)
-  const storeLive = countRecord(state?.agentStatusByPaneKey)
+  const storeLive = state?.agentStatusByPaneKey?.size ?? 0
   return {
     appVersion: input.appVersion,
     repos: state?.worktreesByRepo ? Object.keys(state.worktreesByRepo).length : 0,

@@ -83,6 +83,13 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
   }
   // Publish reverse pane lookup for hook titles and provider cleanup.
   const rememberedPaneKey = rememberPaneKeyForPty(result.id, input.paneKey)
+  if (
+    rememberedPaneKey &&
+    !result.isReattach &&
+    result.agentSessionEnsure?.disposition !== 'adopted'
+  ) {
+    agentHookServer.retireSleepingPaneOnSpawn(rememberedPaneKey)
+  }
   if (input.paneKeyAliases) {
     registerSpawnPaneKeyAliases(result, input.paneKey, input.paneKeyAliases)
   }

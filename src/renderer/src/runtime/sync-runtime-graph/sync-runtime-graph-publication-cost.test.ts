@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
 import { registerRuntimeTerminalTab } from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
@@ -47,7 +48,7 @@ function makeMountedState(tabIdPrefix: string): {
     openFiles: [],
     editorDrafts: {},
     activeTabId: null,
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     browserTabsByWorktree: {}
   } as unknown as AppState
   return {

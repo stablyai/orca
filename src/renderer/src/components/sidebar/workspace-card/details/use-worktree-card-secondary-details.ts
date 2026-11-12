@@ -12,7 +12,7 @@ import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-brows
 import './WorktreeCardMeta'
 import { hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
 import { usePromptCacheCountdownStartedAt } from '../activity/CacheTimer'
-import { useWorktreeAgentRows } from '../activity/useWorktreeAgentRows'
+import { useWorktreeAgentKeys } from '../activity/useWorktreeAgentRows'
 import type { WorktreeCardSecondaryDetailsInputs } from './worktree-card-secondary-details-inputs'
 
 export function useWorktreeCardSecondaryDetails({
@@ -62,14 +62,14 @@ export function useWorktreeCardSecondaryDetails({
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
   const metaComment = showComment ? hoverComment : null
   const showInlineAgentList = cardDetails.inlineAgents
-  const compactInlineAgentRows = useWorktreeAgentRows(
+  const compactInlineAgentKeys = useWorktreeAgentKeys(
     worktree.id,
     showInlineAgentList && agentActivityDisplayMode === 'compact'
   )
   const compactInlineAgentRowsVisible =
     showInlineAgentList &&
     agentActivityDisplayMode === 'compact' &&
-    compactInlineAgentRows.length > 0
+    compactInlineAgentKeys.length > 0
   const showAggregateCacheTimer = !compactCards && !compactInlineAgentRowsVisible
   const handleOpenGitHubIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
@@ -257,7 +257,7 @@ export function useWorktreeCardSecondaryDetails({
     metaCliProvenance,
     metaComment,
     showInlineAgentList,
-    compactInlineAgentRows,
+    compactInlineAgentKeys,
     handleOpenGitHubIssueInOrca,
     handleOpenIssueInBrowser,
     handleOpenReviewInOrca,

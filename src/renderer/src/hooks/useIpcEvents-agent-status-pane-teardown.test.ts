@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -36,15 +37,19 @@ describe('useIpcEvents agent status snapshot integration', () => {
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Claude' }]
       },
-      agentStatusByPaneKey: {
-        [FUTURE_PANE_KEY]: {
-          state: 'working',
-          prompt: 'newer turn',
-          agentType: 'claude',
-          updatedAt: 1_700_000_000_500,
-          stateStartedAt: 1_700_000_000_400
-        }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [FUTURE_PANE_KEY]: {
+            state: 'working',
+            prompt: 'newer turn',
+            agentType: 'claude',
+            paneKey: FUTURE_PANE_KEY,
+            stateHistory: [],
+            updatedAt: 1_700_000_000_500,
+            stateStartedAt: 1_700_000_000_400
+          }
+        })
+      )
     })
 
     stubReactSyncEffect()
@@ -182,18 +187,20 @@ describe('useIpcEvents agent status snapshot integration', () => {
       worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
       tabsByWorktree: { 'wt-1': [] },
       terminalLayoutsByTabId: {},
-      agentStatusByPaneKey: {
-        [FUTURE_PANE_KEY]: {
-          state: 'working',
-          prompt: 'hidden worker',
-          agentType: 'codex',
-          updatedAt: 1_700_000_000_200,
-          stateStartedAt: 1_700_000_000_000,
-          paneKey: FUTURE_PANE_KEY,
-          worktreeId: 'wt-1',
-          stateHistory: []
-        }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [FUTURE_PANE_KEY]: {
+            state: 'working',
+            prompt: 'hidden worker',
+            agentType: 'codex',
+            updatedAt: 1_700_000_000_200,
+            stateStartedAt: 1_700_000_000_000,
+            paneKey: FUTURE_PANE_KEY,
+            worktreeId: 'wt-1',
+            stateHistory: []
+          }
+        })
+      )
     })
 
     stubReactSyncEffect()
@@ -395,18 +402,20 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const storeState: StoreLike = buildStoreState({
       removeAgentStatus,
       workspaceSessionReady: true,
-      agentStatusByPaneKey: {
-        [FUTURE_PANE_KEY]: {
-          state: 'done',
-          prompt: 'hidden worker',
-          agentType: 'codex',
-          updatedAt: 1_700_000_000_200,
-          stateStartedAt: 1_700_000_000_000,
-          paneKey: FUTURE_PANE_KEY,
-          worktreeId: 'wt-1',
-          stateHistory: []
-        }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [FUTURE_PANE_KEY]: {
+            state: 'done',
+            prompt: 'hidden worker',
+            agentType: 'codex',
+            updatedAt: 1_700_000_000_200,
+            stateStartedAt: 1_700_000_000_000,
+            paneKey: FUTURE_PANE_KEY,
+            worktreeId: 'wt-1',
+            stateHistory: []
+          }
+        })
+      )
     })
 
     stubReactSyncEffect()

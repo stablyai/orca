@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { expect, vi, type Mock } from 'vitest'
 import { useAppStore } from '@/store'
 import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
@@ -74,7 +75,9 @@ export const row = (paneKey: string, extra: Record<string, unknown> = {}) => ({
 })
 export const showAgentInSource = () =>
   useAppStore.setState({
-    agentStatusByPaneKey: { [SOURCE.paneKey]: row(SOURCE.paneKey, { tabId: 'tab-1' }) }
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({ [SOURCE.paneKey]: row(SOURCE.paneKey, { tabId: 'tab-1' }) })
+    )
   })
 
 /** Every test starts with one terminal pane whose shell still runs its agent, on a host that can't close it. */

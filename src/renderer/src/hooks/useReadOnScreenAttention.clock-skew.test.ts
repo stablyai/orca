@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { cleanup, renderHook } from '@testing-library/react'
@@ -60,7 +61,7 @@ function seedFutureStampedTurn(stateStartedAt: number): void {
         expandedLeafId: null
       }
     },
-    agentStatusByPaneKey: { [PANE_KEY]: entry },
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY]: entry })),
 
     acknowledgedAgentsByPaneKey: {},
     unreadAgentCompletionPanes: {},

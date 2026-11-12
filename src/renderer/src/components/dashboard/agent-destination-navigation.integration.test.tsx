@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 
@@ -148,19 +149,21 @@ describe('Dashboard and sidebar destination contract', () => {
                 expandedLeafId: null
               }
             },
-        agentStatusByPaneKey: {
-          [paneKey]: {
-            paneKey,
-            tabId,
-            worktreeId: worktree.id,
-            state: 'done',
-            agentType: 'codex',
-            prompt: 'Open this conversation',
-            updatedAt: NOW,
-            stateStartedAt: NOW,
-            stateHistory: []
-          }
-        }
+        agentStatusByPaneKey: acceptedAgentStatuses(
+          Object.entries({
+            [paneKey]: {
+              paneKey,
+              tabId,
+              worktreeId: worktree.id,
+              state: 'done',
+              agentType: 'codex',
+              prompt: 'Open this conversation',
+              updatedAt: NOW,
+              stateStartedAt: NOW,
+              stateHistory: []
+            }
+          })
+        )
       })
 
       const snapshot = buildDashboardSnapshot(

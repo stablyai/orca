@@ -1,3 +1,4 @@
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import {
   isAgentStatusFresh,
@@ -43,7 +44,7 @@ export type WorkspaceSpaceDeleteReadiness = {
 export type WorkspaceSpaceAgentActivityInputs = {
   worktreeId: string
   tabs: readonly Pick<TerminalTab, 'id' | 'title'>[]
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   ptyIdsByTabId: Record<string, string[]>
@@ -106,7 +107,7 @@ export function countWorkspaceSpaceActiveAgents({
   const tabsWithActiveHook = new Set<string>()
   let count = 0
 
-  for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(agentStatusByPaneKey.entries())) {
     if (!isActiveAgentState(entry)) {
       continue
     }

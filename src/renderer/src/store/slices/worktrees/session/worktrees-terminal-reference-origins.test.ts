@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => ({}) } }))
 import type {
   HostedReviewInfo,
@@ -69,7 +70,7 @@ function setup() {
       'tab-2': singlePaneLayoutSnapshot(leaf, 'pty-tab-2')
     },
     ptyIdsByTabId: { 'tab-1': ['pty-tab-1'], 'tab-2': ['pty-tab-2'] },
-    agentStatusByPaneKey: {}
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({}))
   })
   return { store, readHostedReview }
 }

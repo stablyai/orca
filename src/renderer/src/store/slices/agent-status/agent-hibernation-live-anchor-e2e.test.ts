@@ -93,8 +93,8 @@ describe('a finished Claude turn reaches the hibernation planner', () => {
         ROUTING
       )
     const state = store.getState()
-    expect(state.agentStatusByPaneKey[PANE]?.updatedAt).toBe(NOW - 1_000)
-    expect(state.agentStatusByPaneKey[PANE]?.stateStartedAt).toBe(DONE_AT)
+    expect(state.agentStatusByPaneKey.get(PANE)?.updatedAt).toBe(NOW - 1_000)
+    expect(state.agentStatusByPaneKey.get(PANE)?.stateStartedAt).toBe(DONE_AT)
     expect(planFrom(state, DONE_AT)).toEqual([PANE])
   })
 

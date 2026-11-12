@@ -78,7 +78,7 @@ export function applyWebSessionTabsStorePatch(
             continue
           }
           const remapped = remapHostAgentStatus(surface, snapshot.worktree)
-          const accepted = remapped ? nextAgentStatuses[remapped.paneKey] : undefined
+          const accepted = remapped ? nextAgentStatuses.get(remapped.paneKey) : undefined
           const turnCompletedAt = remapped
             ? normalizeTurnCompletedAtField(surface.turnCompletedAt, remapped.state)
             : undefined
@@ -95,7 +95,7 @@ export function applyWebSessionTabsStorePatch(
             !remapped ||
             (!clientOwnedNotification &&
               (!accepted ||
-                accepted === state.agentStatusByPaneKey[remapped.paneKey] ||
+                accepted === state.agentStatusByPaneKey.get(remapped.paneKey) ||
                 !agentStatusEntryEqual(accepted, remapped)))
           ) {
             continue
@@ -113,7 +113,7 @@ export function applyWebSessionTabsStorePatch(
             continue
           }
           const currentClientStateStartedAt = clientOwnedNotification
-            ? state.agentStatusByPaneKey[notificationStatus.paneKey]?.stateStartedAt
+            ? state.agentStatusByPaneKey.get(notificationStatus.paneKey)?.stateStartedAt
             : undefined
           let localStateStartedAt = currentClientStateStartedAt
           if (
@@ -170,7 +170,7 @@ export function applyWebSessionTabsStorePatch(
                   turnEndedAt: notificationStatus.turnEndedAt
                 },
                 notificationStatus.state,
-                state.agentStatusByPaneKey[notificationStatus.paneKey]
+                state.agentStatusByPaneKey.get(notificationStatus.paneKey)
               ))
           if (!notifyCompletion && notificationStatus.state !== 'working') {
             if (notificationStatus.state === 'done') {
