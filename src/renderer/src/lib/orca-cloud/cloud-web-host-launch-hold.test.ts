@@ -291,6 +291,8 @@ describe('NOACCT-MISLABEL: no Claude account is a setup hold, never "didn’t st
     const { toast } = await import('sonner')
     vi.mocked(toast).mockClear()
     useAppStore.setState({
+      activeView: 'terminal',
+      activeWorktreeId: 'w1',
       tabsByWorktree: {
         w1: [makeTerminalTab({ id: toWebTerminalSurfaceTabId('h1'), worktreeId: 'w1' })]
       }
@@ -301,5 +303,31 @@ describe('NOACCT-MISLABEL: no Claude account is a setup hold, never "didn’t st
     releaseCloudAgentHold(cloudTabHoldKey(toWebTerminalSurfaceTabId('h1')), 'cancel')
     await result
     expect(toast).toHaveBeenCalledWith('The agent didn’t start. The shell is still open.')
+  })
+
+  it('never confirms a cancel over another workspace or Settings (N-03)', async () => {
+    const { useAppStore } = await import('@/store')
+    const { makeTerminalTab } = await import('@/store/terminals/terminal-row.test-fixture')
+    const { toast } = await import('sonner')
+    const tabs = {
+      w1: [makeTerminalTab({ id: toWebTerminalSurfaceTabId('h1'), worktreeId: 'w1' })]
+    }
+    const cancelHold = async (): Promise<void> => {
+      setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
+      const result = createWithCloudAgentHold(CREATE_AGENT, hostCreate())
+      await flush()
+      releaseCloudAgentHold(cloudTabHoldKey(toWebTerminalSurfaceTabId('h1')), 'cancel')
+      await result
+    }
+    vi.mocked(toast).mockClear()
+    useAppStore.setState({
+      activeView: 'terminal',
+      activeWorktreeId: 'other',
+      tabsByWorktree: tabs
+    })
+    await cancelHold()
+    useAppStore.setState({ activeView: 'settings', activeWorktreeId: 'w1', tabsByWorktree: tabs })
+    await cancelHold()
+    expect(toast).not.toHaveBeenCalled()
   })
 })
