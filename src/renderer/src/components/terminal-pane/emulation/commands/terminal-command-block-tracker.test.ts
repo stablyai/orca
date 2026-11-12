@@ -326,6 +326,32 @@ describe('terminal-command-block-tracker', () => {
     expect(readTerminalCommandBlockText(reader, lines, 'output')).toBe('out-part1part2')
   })
 
+  it('keeps the real C when an OMP zone closes on its row', async () => {
+    const { terminal, tracker, dispose } = trackedTerminal()
+    try {
+      await write(
+        terminal,
+        `${OSC}A${BEL}$ ${OSC}B${BEL}echo hi\r\n${OSC}C${BEL}` +
+          `${OSC}B${BEL}${OSC}C${BEL}${OSC}D;0${BEL}hi\r\n${OSC}D;0${BEL}`
+      )
+      // The zone's B and C are ignored, and its close must not roll back the
+      // real command's output start; the real D still completes the block.
+      const block = tracker.resolveBlockAtRow(1)
+      expect(block).not.toBeNull()
+      if (!block) {
+        return
+      }
+      expect(
+        readTerminalBlockTextFromTerminal(terminal, block, 'command', { trimGutter: false })
+      ).toBe('echo hi')
+      expect(
+        readTerminalBlockTextFromTerminal(terminal, block, 'output', { trimGutter: false })
+      ).toBe('hi')
+    } finally {
+      dispose()
+    }
+  })
+
   it('completes the block when output moves the cursor before a stale D', async () => {
     const { terminal, tracker, dispose } = trackedTerminal()
     try {

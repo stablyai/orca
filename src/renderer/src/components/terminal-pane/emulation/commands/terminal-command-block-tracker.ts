@@ -74,7 +74,8 @@ export function createTerminalCommandBlockTracker(
   const blocks: TrackedCommandBlock[] = []
   let pendingPrompt: IMarker | null = null
   let pendingOutputStart: IMarker | null = null
-  let pendingInputStart: { marker: IMarker; col: number } | null = null
+  let pendingOutputStartFromZone = false
+  let pendingInputStart: { marker: IMarker; col: number; fromZone: boolean } | null = null
   let pendingCommandSnapshot: string | null = null
   let adjacentMarkers = ''
   let lastPayloadCursor: { x: number; row: number } | null = null
@@ -93,6 +94,7 @@ export function createTerminalCommandBlockTracker(
     pendingInputStart?.marker.dispose()
     pendingPrompt = null
     pendingOutputStart = null
+    pendingOutputStartFromZone = false
     pendingInputStart = null
     pendingCommandSnapshot = null
   }
@@ -154,15 +156,20 @@ export function createTerminalCommandBlockTracker(
       adjacentMarkers = adjacent ? (adjacentMarkers + letter).slice(-2) : letter
       lastPayloadCursor = cursor
       if (closesAppZone) {
-        // The zone's C already set pending output start on this row; roll it
-        // back along with any same-row input start so the real command keeps
-        // clean boundaries (full-row fallback beats a wrong slice).
-        if (pendingOutputStart && pendingOutputStart.line === cursor.row) {
+        // Roll back only markers the zone itself created. A zone closing on
+        // the real command's row must not dispose the real C state, or the
+        // real D finds nothing to complete.
+        if (
+          pendingOutputStartFromZone &&
+          pendingOutputStart &&
+          pendingOutputStart.line === cursor.row
+        ) {
           pendingOutputStart.dispose()
           pendingOutputStart = null
+          pendingOutputStartFromZone = false
           pendingCommandSnapshot = null
         }
-        if (pendingInputStart && pendingInputStart.marker.line === cursor.row) {
+        if (pendingInputStart?.fromZone && pendingInputStart.marker.line === cursor.row) {
           pendingInputStart.marker.dispose()
           pendingInputStart = null
         }
@@ -186,12 +193,17 @@ export function createTerminalCommandBlockTracker(
         if (pendingPrompt && !pendingInputStart) {
           const marker = registerCurrentLine()
           if (marker) {
-            pendingInputStart = { marker, col: buffer.cursorX }
+            // A real B follows prompt text (cursor moved); a zone B arrives
+            // adjacent to the previous payload.
+            pendingInputStart = { marker, col: buffer.cursorX, fromZone: adjacent }
           }
         }
       } else if (letter === 'C') {
         if (pendingPrompt && !pendingOutputStart) {
           pendingOutputStart = registerCurrentLine()
+          // Adjacent C right after B is the zone's own; anything else (typed
+          // command moved the cursor, or no B preceded it) is the real one.
+          pendingOutputStartFromZone = adjacent && adjacentMarkers === 'BC'
           // Prompt rows never change after C until they scroll out, so this
           // snapshot equals any later buffer read and outlives the rows.
           pendingCommandSnapshot = snapshotBlockCommandText(
