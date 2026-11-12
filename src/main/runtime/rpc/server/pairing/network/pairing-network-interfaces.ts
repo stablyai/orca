@@ -1,4 +1,4 @@
-import { isIP } from 'node:net'
+import { BlockList, isIP } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import {
   isVirtualBridgeInterface,
@@ -20,9 +20,15 @@ function isUsableIPv6Address(address: string): boolean {
   return !/^fe[89ab][0-9a-f]:/i.test(address)
 }
 
+const IPV4_MAPPED_ADDRESSES = new BlockList()
+IPV4_MAPPED_ADDRESSES.addSubnet('::ffff:0:0', 96, 'ipv6')
+
 // 0.0.0.0 cannot accept IPv6; only an IPv6 bind can offer both families (#31161).
 function listenerServesFamily(listenerHost: string, family: 'IPv4' | 'IPv6'): boolean {
   const listenerFamily = isIP(listenerHost)
+  if (listenerFamily === 6 && IPV4_MAPPED_ADDRESSES.check(listenerHost, 'ipv6')) {
+    return family === 'IPv4'
+  }
   if (listenerFamily === 6 && /^[0:]+$/.test(listenerHost)) {
     return true
   }

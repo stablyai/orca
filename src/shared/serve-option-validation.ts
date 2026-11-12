@@ -1,4 +1,5 @@
 import { levenshtein } from './edit-distance'
+import { isLoopbackBindHost } from './orcad-bind-address'
 
 export type ServeOptionValidationInput = {
   /** Explicit --bind value; undefined/null means the host's default listener. */
@@ -16,9 +17,9 @@ export function getServeOptionValidationError(options: ServeOptionValidationInpu
   if (options.noPairing && options.mobilePairing) {
     return 'Use either --mobile-pairing or --no-pairing, not both.'
   }
-  if (options.mobilePairing && options.bind && options.bind !== '0.0.0.0') {
-    // Mobile offers widen the listener to all interfaces, which a pinned --bind refuses, so the QR could never be served.
-    return '--mobile-pairing needs --bind 0.0.0.0 (or no --bind); a narrower --bind cannot serve the mobile pairing offer.'
+  if (options.mobilePairing && options.bind && isLoopbackBindHost(options.bind)) {
+    // A phone cannot reach a loopback listener; a network interface such as a Tailscale IP can serve the offer.
+    return '--mobile-pairing needs a network --bind (0.0.0.0 or an interface address such as a Tailscale IP); a loopback --bind cannot serve the mobile pairing offer.'
   }
   if (options.grantDesktopControl && (options.noPairing || options.mobilePairing)) {
     return '--grant-desktop-control applies only to the default runtime pairing offer.'

@@ -307,6 +307,18 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     }
   })
 
+  it('treats a bind pinned to a network interface as already exposed', async () => {
+    const server = new OrcaRuntimeRpcServer({
+      methods: [],
+      runtime: new OrcaRuntimeService(),
+      userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
+      enableWebSocket: false,
+      pinnedBindHost: '100.64.1.20'
+    })
+
+    await expect(server.ensureNetworkExposure()).resolves.toBeUndefined()
+  })
+
   it('refuses a runtime-widening pairing offer while the bind is pinned to loopback', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

@@ -1,3 +1,4 @@
+import { isLoopbackBindHost } from '../../../../shared/orcad-bind-address'
 import { WebSocketTransport } from '../ws-transport'
 import { writeWsFallbackPort } from '../ws-fallback-port-store'
 import { RuntimeRpcLifecycle } from './runtime-rpc-lifecycle'
@@ -12,6 +13,10 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
   // LAN opt-in rebinds loopback and disconnects local clients; reuse their already-issued port so all endpoints can reconnect (STA-2370).
   async ensureNetworkExposure(): Promise<void> {
     if (this.pinnedBindHost && this.pinnedBindHost !== WS_BIND_HOST_ALL_INTERFACES) {
+      // A pinned network interface (e.g. a Tailscale IP) is the operator's chosen exposure; never widen past it.
+      if (!isLoopbackBindHost(this.pinnedBindHost)) {
+        return
+      }
       // Throw on failed widening so callers return network_exposure_failed rather than advertise unreachable LAN.
       throw new Error(
         `Runtime bind address is pinned to ${this.pinnedBindHost}; refusing to widen to all interfaces`

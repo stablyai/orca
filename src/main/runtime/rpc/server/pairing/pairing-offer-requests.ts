@@ -1,4 +1,8 @@
 /** Pairing offers requested by this host's owner: the desktop's Settings and `orca pair` mint the same offers. */
+import {
+  isAllInterfacesBindHost,
+  isLoopbackBindHost
+} from '../../../../../shared/orcad-bind-address'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type {
   PairingCreateOfferParams,
@@ -53,8 +57,16 @@ async function pairingAddress(
   address: string | undefined,
   lookup: DefaultRouteInterfaceLookup
 ): Promise<string | null> {
-  // Explicit interfaces support overlay networks unreachable through the default LAN candidate.
-  return address ?? (await getDefaultPairingAddress(server.getNetworkExposureBindHost(), lookup))
+  if (address) {
+    // Explicit interfaces support overlay networks unreachable through the default LAN candidate.
+    return address
+  }
+  const bindHost = server.getNetworkExposureBindHost()
+  // A listener pinned to one interface answers only there, so another interface's address would be unreachable.
+  if (!isAllInterfacesBindHost(bindHost) && !isLoopbackBindHost(bindHost)) {
+    return bindHost
+  }
+  return await getDefaultPairingAddress(bindHost, lookup)
 }
 
 export async function requestMobilePairingOffer(

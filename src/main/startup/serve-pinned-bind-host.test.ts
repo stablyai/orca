@@ -5,7 +5,7 @@ import { getServeOptions } from './serve-options'
 import './serve-pinned-bind-host'
 
 describe('Electron serve listener pin', () => {
-  it('rejects hostnames, empty values and --mobile-pairing with a narrower bind', () => {
+  it('rejects hostnames, empty values and --mobile-pairing with a loopback bind', () => {
     expect(() => getServeOptions(['/AppRun', '--serve', '--serve-bind'])).toThrow(
       'Missing value for --serve-bind.'
     )
@@ -14,7 +14,21 @@ describe('Electron serve listener pin', () => {
     )
     expect(() =>
       getServeOptions(['/AppRun', '--serve', '--serve-bind', '127.0.0.1', '--serve-mobile-pairing'])
-    ).toThrow(/--mobile-pairing needs --bind 0\.0\.0\.0/)
+    ).toThrow(/--mobile-pairing needs a network --bind/)
+    for (const loopback of ['0:0:0:0:0:0:0:1', '::ffff:127.0.0.1']) {
+      expect(() =>
+        getServeOptions(['/AppRun', '--serve', '--serve-bind', loopback, '--serve-mobile-pairing'])
+      ).toThrow(/--mobile-pairing needs a network --bind/)
+    }
+    expect(
+      getServeOptions([
+        '/AppRun',
+        '--serve',
+        '--serve-bind',
+        '100.64.1.20',
+        '--serve-mobile-pairing'
+      ]).mobilePairing
+    ).toBe(true)
     expect(
       getServeOptions(['/AppRun', '--serve', '--serve-bind', '0.0.0.0', '--serve-mobile-pairing'])
         .mobilePairing

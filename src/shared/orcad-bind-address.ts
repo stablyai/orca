@@ -1,9 +1,12 @@
 // SSH forwarding needs only loopback; network exposure must be an explicit operator choice.
-import { isIP } from 'node:net'
+import { BlockList, isIP } from 'node:net'
 
 export const ORCAD_LOOPBACK_BIND_HOST = '127.0.0.1'
 const ALL_INTERFACES_V4 = '0.0.0.0'
 const ALL_INTERFACES_V6 = '::'
+const ALL_INTERFACES_ADDRESSES = new BlockList()
+ALL_INTERFACES_ADDRESSES.addAddress(ALL_INTERFACES_V4, 'ipv4')
+ALL_INTERFACES_ADDRESSES.addAddress(ALL_INTERFACES_V6, 'ipv6')
 
 export class OrcadBindAddressError extends Error {
   readonly code = 'orcad_invalid_bind_address'
@@ -36,14 +39,29 @@ export function resolveOrcadBindHost(raw?: string): string {
   return value
 }
 
-export function bindHostIsNetworkExposed(host: string): boolean {
-  if (host === ALL_INTERFACES_V4 || host === ALL_INTERFACES_V6) {
+const LOOPBACK_ADDRESSES = new BlockList()
+LOOPBACK_ADDRESSES.addSubnet('127.0.0.0', 8, 'ipv4')
+LOOPBACK_ADDRESSES.addAddress('::1', 'ipv6')
+
+/** BlockList canonicalizes literals, so expanded IPv6 and IPv4-mapped spellings of loopback match too. */
+export function isLoopbackBindHost(host: string): boolean {
+  // orcad validates the raw flag before resolveOrcadBindHost maps 'localhost' to 127.0.0.1.
+  const value = host.trim()
+  if (value.toLowerCase() === 'localhost') {
     return true
   }
-  if (isIP(host) === 4) {
-    return !host.startsWith('127.')
-  }
-  return host !== '::1'
+  const family = isIP(value)
+  return family !== 0 && LOOPBACK_ADDRESSES.check(value, family === 6 ? 'ipv6' : 'ipv4')
+}
+
+export function isAllInterfacesBindHost(host: string): boolean {
+  const value = host.trim()
+  const family = isIP(value)
+  return family !== 0 && ALL_INTERFACES_ADDRESSES.check(value, family === 6 ? 'ipv6' : 'ipv4')
+}
+
+export function bindHostIsNetworkExposed(host: string): boolean {
+  return isAllInterfacesBindHost(host) || !isLoopbackBindHost(host)
 }
 
 export function describeOrcadBindExposure(host: string): string {
