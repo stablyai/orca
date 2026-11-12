@@ -1,4 +1,3 @@
-import { extname } from 'node:path'
 import {
   resolveJsonlRpcPeerOptions,
   type JsonlRpcPeerOptions
@@ -10,6 +9,8 @@ import {
 } from '../../../../shared/agent-session/agent-session-attachments'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatImageRefBlock } from '../../../../shared/native-chat/native-chat-types'
+import { agentInlineImageMimeType } from '../../../../shared/agent-inline-image-types'
+import { detectImageFileSignature } from '../../../media/image-file-signature'
 import {
   agentSessionFailureFact,
   type SubmissionRejectionFact
@@ -43,13 +44,6 @@ export const PI_RPC_PEER_OPTIONS = {
   maxLineBytes: MAX_LINE_BYTES,
   maxQueuedWriteBytes: PEER_DEFAULTS.maxQueuedWriteBytes + MAX_LINE_BYTES
 } satisfies JsonlRpcPeerOptions
-const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
-  '.gif': 'image/gif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp'
-}
 
 export type PiRpcPrompt = Record<string, unknown> & {
   type: 'prompt'
@@ -75,34 +69,6 @@ function attachmentError(
   return new PiRpcPromptError(message, agentSessionFailureFact('attachmentInvalid', { attachment }))
 }
 
-function imageMime(bytes: Uint8Array): string | null {
-  if (
-    bytes.length >= 8 &&
-    Buffer.from(bytes.subarray(0, 8)).equals(Buffer.from('89504e470d0a1a0a', 'hex'))
-  ) {
-    return 'image/png'
-  }
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return 'image/jpeg'
-  }
-  if (
-    bytes.length >= 6 &&
-    Buffer.from(bytes.subarray(0, 6))
-      .toString('ascii')
-      .match(/^GIF8[79]a$/)
-  ) {
-    return 'image/gif'
-  }
-  if (
-    bytes.length >= 12 &&
-    Buffer.from(bytes.subarray(0, 4)).toString('ascii') === 'RIFF' &&
-    Buffer.from(bytes.subarray(8, 12)).toString('ascii') === 'WEBP'
-  ) {
-    return 'image/webp'
-  }
-  return null
-}
-
 async function readImage(
   block: NativeChatImageRefBlock,
   maxBytes: number
@@ -113,7 +79,7 @@ async function readImage(
   if (!block.path) {
     throw attachmentError('Pi image needs a local path', { reason: 'noSource' })
   }
-  const mimeType = MIME_BY_EXTENSION[extname(block.path).toLowerCase()]
+  const mimeType = agentInlineImageMimeType(block.path)
   if (!mimeType) {
     throw attachmentError('Pi image file type is unsupported', { reason: 'unsupportedType' })
   }
@@ -132,7 +98,7 @@ async function readImage(
   if (bytes.byteLength === 0) {
     throw attachmentError('Pi image is empty', { reason: 'empty' })
   }
-  if (imageMime(bytes) !== mimeType) {
+  if (detectImageFileSignature(bytes)?.mimeType !== mimeType) {
     throw attachmentError('Pi image file did not contain a supported image', {
       reason: 'unsupportedType'
     })

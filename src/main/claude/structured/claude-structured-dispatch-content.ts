@@ -18,6 +18,7 @@ import {
   AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
   AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
 } from '../../../shared/agent-session/agent-session-attachments'
+import { agentInlineImageMimeType } from '../../../shared/agent-inline-image-types'
 import { claudeRecord } from './journal/claude-structured-item-translation'
 
 export class ClaudeDispatchContentError extends Error {
@@ -108,14 +109,6 @@ export async function readClaudeImage(
   }
 }
 
-const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
-  '.gif': 'image/gif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp'
-}
-
 async function imageContent(
   block: Extract<NativeChatBlock, { type: 'image-ref' }>,
   budget: ImageBudget
@@ -147,7 +140,7 @@ async function imageContent(
       }
     )
   }
-  const mediaType = IMAGE_MIME_BY_EXTENSION[extname(block.path).toLowerCase()]
+  const mediaType = agentInlineImageMimeType(block.path)
   if (!mediaType) {
     throw attachmentError(`Claude does not support the image type ${extname(block.path)}`, {
       reason: 'unsupportedType'
