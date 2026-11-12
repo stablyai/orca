@@ -186,7 +186,7 @@ describe('CR-cmd-quiet: Orca’s staged agent line leaves no trace on a cloud ho
     const rows = Math.ceil((visible.length + staged.command.length) / 120)
     expect(eraseRows(coloured, 120)).toBe(rows)
     // Only the prompt's last line shares a row with the typed line.
-    expect(eraseRows(String.raw`first line\n` + 'ubuntu@ik-card:~/w$ ', 400)).toBe(1)
+    expect(eraseRows(String.raw`first line\nubuntu@ik-card:~/w$ `, 400)).toBe(1)
   })
 
   it('drops the line from bash history', () => {
