@@ -268,6 +268,12 @@ export async function holdCloudAgentLaunch({
         notify()
         return
       }
+      // Only a real renewal (the account or a key covers it) starts it; a paused or withdrawn agent
+      // (kill switch, never offered) or an unknown coverage stays held.
+      const coverage = orcaCloudAgentCoverageFromAccounts(hold.agent, accounts)?.kind
+      if (coverage !== 'account' && coverage !== 'key') {
+        return
+      }
       if (restored) {
         // After a restart the person starts it: renewed, it waits for Start (V3-01).
         holds.set(hold.paneKey, { ...entry, reason: 'awaitingStart', awaiting: 'renewed' })

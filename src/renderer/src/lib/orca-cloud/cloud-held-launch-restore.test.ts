@@ -8,7 +8,7 @@ import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/hosted
 
 const mocks = vi.hoisted(() => {
   const state: {
-    coverage: 'notSetUp' | 'covered' | 'expired'
+    coverage: 'notSetUp' | 'covered' | 'expired' | 'killSwitch'
     /** 'loading' with a failing read: Orca couldn't check the sign-in. */
     load: 'ready' | 'loading'
     closed: string[]
@@ -46,8 +46,8 @@ vi.mock('./orca-cloud-agent-accounts-model', async (importOriginal) => ({
     kind:
       mocks.coverage === 'covered'
         ? 'account'
-        : mocks.coverage === 'expired'
-          ? 'expired'
+        : mocks.coverage === 'expired' || mocks.coverage === 'killSwitch'
+          ? mocks.coverage
           : 'notSetUp'
   })
 }))
@@ -232,47 +232,6 @@ describe('after a restart', () => {
     expect(create).not.toHaveBeenCalled()
   })
 
-  it('an expired hold whose sign-in is removed (not renewed) never starts: it becomes the setup', async () => {
-    mocks.coverage = 'expired'
-    setTabs([TAB])
-    const create = vi.fn(async (args: CreateWebRuntimeSessionTerminalOnHostArgs) =>
-      args.agent ? created('host-agent') : created(HOST_TAB)
-    )
-    void createWithCloudAgentHold(
-      { worktreeId: WT, environmentId: ENV, agent: 'claude', prompt: 'p' },
-      create
-    )
-    await flush()
-    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.reason).toBe('accountExpired')
-    mocks.coverage = 'notSetUp'
-    for (const listener of mocks.listeners) {
-      listener()
-    }
-    await flush()
-    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.reason).toBe('notSetUp')
-    expect(create).toHaveBeenCalledTimes(1)
-  })
-
-  it('in-session (not restored), an expired hold still starts on Renew as before', async () => {
-    mocks.coverage = 'expired'
-    setTabs([TAB])
-    const create = vi.fn(async (args: CreateWebRuntimeSessionTerminalOnHostArgs) =>
-      args.agent ? created('host-agent') : created(HOST_TAB)
-    )
-    const launch = createWithCloudAgentHold(
-      { worktreeId: WT, environmentId: ENV, agent: 'claude', prompt: 'p' },
-      create
-    )
-    await flush()
-    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.reason).toBe('accountExpired')
-    mocks.coverage = 'covered'
-    for (const listener of mocks.listeners) {
-      listener()
-    }
-    await launch
-    expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ agent: 'claude' }))
-  })
-
   it('Cancel forgets the record and launches nothing', async () => {
     remember()
     setTabs([TAB])
@@ -309,5 +268,74 @@ describe('after a restart', () => {
     await flush()
     await flush()
     expect(readCloudAgentHold(cloudTabHoldKey(TAB))).not.toBeNull()
+  })
+})
+
+describe('in session (not restored)', () => {
+  it('in-session (not restored), an expired hold still starts on Renew as before', async () => {
+    mocks.coverage = 'expired'
+    setTabs([TAB])
+    const create = vi.fn(async (args: CreateWebRuntimeSessionTerminalOnHostArgs) =>
+      args.agent ? created('host-agent') : created(HOST_TAB)
+    )
+    const launch = createWithCloudAgentHold(
+      { worktreeId: WT, environmentId: ENV, agent: 'claude', prompt: 'p' },
+      create
+    )
+    await flush()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.reason).toBe('accountExpired')
+    mocks.coverage = 'covered'
+    for (const listener of mocks.listeners) {
+      listener()
+    }
+    await launch
+    expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ agent: 'claude' }))
+  })
+
+  it('an expired hold whose sign-in is removed (not renewed) never starts: it becomes the setup', async () => {
+    mocks.coverage = 'expired'
+    setTabs([TAB])
+    const create = vi.fn(async (args: CreateWebRuntimeSessionTerminalOnHostArgs) =>
+      args.agent ? created('host-agent') : created(HOST_TAB)
+    )
+    void createWithCloudAgentHold(
+      { worktreeId: WT, environmentId: ENV, agent: 'claude', prompt: 'p' },
+      create
+    )
+    await flush()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.reason).toBe('accountExpired')
+    mocks.coverage = 'notSetUp'
+    for (const listener of mocks.listeners) {
+      listener()
+    }
+    await flush()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.reason).toBe('notSetUp')
+    expect(create).toHaveBeenCalledTimes(1)
+  })
+
+  it('a paused (kill switch) agent never starts the expired hold; a real renewal does', async () => {
+    mocks.coverage = 'expired'
+    setTabs([TAB])
+    const create = vi.fn(async (args: CreateWebRuntimeSessionTerminalOnHostArgs) =>
+      args.agent ? created('host-agent') : created(HOST_TAB)
+    )
+    const launch = createWithCloudAgentHold(
+      { worktreeId: WT, environmentId: ENV, agent: 'claude', prompt: 'p' },
+      create
+    )
+    await flush()
+    mocks.coverage = 'killSwitch'
+    for (const listener of mocks.listeners) {
+      listener()
+    }
+    await flush()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.reason).toBe('accountExpired')
+    expect(create).toHaveBeenCalledTimes(1)
+    mocks.coverage = 'covered'
+    for (const listener of mocks.listeners) {
+      listener()
+    }
+    await launch
+    expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ agent: 'claude' }))
   })
 })
