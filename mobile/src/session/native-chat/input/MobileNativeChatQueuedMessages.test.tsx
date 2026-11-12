@@ -12,6 +12,7 @@ import type { ActionSheetAction } from '../../../components/ActionSheetModal'
 import { MobileNativeChatQueueAbovePromptContext } from '../mobile-native-chat-lower-region-context'
 
 let fontScale = 1
+let windowWidth = 390
 vi.mock('../../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
   const { useRef } = await import('react')
@@ -23,7 +24,7 @@ vi.mock('react-native-reanimated', async () => {
 })
 
 vi.mock('react-native', () => ({
-  useWindowDimensions: () => ({ fontScale, width: 390 }),
+  useWindowDimensions: () => ({ fontScale, width: windowWidth }),
   ActivityIndicator: 'ActivityIndicator',
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
@@ -84,6 +85,7 @@ describe('MobileNativeChatQueuedMessages', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks()
+    windowWidth = 390
     act(() => renderer?.unmount())
     renderer = null
     await activateMobileUiLocale('en')
@@ -188,14 +190,29 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(rows(mounted)).toHaveLength(1)
   })
 
-  it('lets the open list, not the fold row, give up height on a short screen', async () => {
-    const mounted = await mount({ cards: three() }, true)
-    await act(async () => foldToggle(mounted).props.onPress())
-    const scroll = mounted.root.find((node) => node.type === 'ScrollView')
-    // The box shrinks under a height limit; the list scrolls so Show less below it stays whole.
-    expect(scroll.parent!.props.style).toMatchObject({ flexShrink: 1, minHeight: 0 })
-    expect(scroll.props.style).toMatchObject({ flexShrink: 1, minHeight: 0 })
-  })
+  it.each([390, 320])(
+    'lets the open list, not the fold row, give up height on a short %ipt screen',
+    async (width) => {
+      windowWidth = width
+      const mounted = await mount({ cards: three() }, true)
+      await act(async () => foldToggle(mounted).props.onPress())
+      const flat = (style: unknown): Record<string, unknown> =>
+        Object.assign({}, ...[style].flat(Infinity).filter(Boolean))
+      const box = mounted.root.find(
+        (node) => typeof node.type === 'string' && node.props.testID === 'queued-box'
+      )
+      const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+      // The box shrinks under a height limit; the list scrolls so Show less below it stays whole.
+      expect(flat(box.props.style)).toMatchObject({ flexShrink: 1, minHeight: 0 })
+      expect(flat(scroll.parent!.props.style)).toMatchObject({ flexShrink: 1, minHeight: 0 })
+      expect(flat(scroll.props.style)).toMatchObject({
+        maxHeight: width < 340 ? 264 : 212,
+        flexShrink: 1,
+        minHeight: 0
+      })
+      expect(flat(foldToggle(mounted).props.style({ pressed: false })).flexShrink).toBeUndefined()
+    }
+  )
 
   it('opens by default above the composer, and folds again when a prompt card arrives', async () => {
     const mounted = await mount({ cards: three() })
