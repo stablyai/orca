@@ -123,6 +123,7 @@ it('discards row-free authority changes before publishing an asynchronous observ
   const projections = new StructuredAgentSessionJournalProjections()
   let revision = 0
   let contextId: string | null = null
+  let latestStop: JournalWorkAuthority['stop'] = null
   let attached = true
   const held: string[] = []
   const capture = () => {
@@ -142,8 +143,8 @@ it('discards row-free authority changes before publishing an asynchronous observ
       openedThrough: journal.openingCursor(),
       reopenFloor: null,
       operationalRevision: revision,
-      stopRevision: 0,
-      stop: null
+      stopRevision: journal.stopMarks.revision(),
+      stop: journal.stopMarks.withCurrentSettlement(latestStop)
     }
     return { authority, contextId }
   }
@@ -234,6 +235,13 @@ it('discards row-free authority changes before publishing an asynchronous observ
   ])
   expect(await projections.readSql(journal, capture, () => {})).toMatchObject({ workRevision: 2 })
   revision = 3
+  await journal.appendStopEvent({ reason: 'user-stop' }, 1)
+  latestStop = await journal.stopMarks.latest()
+  expect(latestStop).not.toBeNull()
+  const captureNarrow = () => {
+    const captured = capture()!
+    return { ...captured, authority: { ...captured.authority, stop: null } }
+  }
   const workEntered = Promise.withResolvers<void>()
   const workRelease = Promise.withResolvers<void>()
   const workRead = journal.reads.work.bind(journal.reads)
@@ -243,11 +251,15 @@ it('discards row-free authority changes before publishing an asynchronous observ
     await workRelease.promise
     return answer
   })
-  const pendingWork = projections.readWorkSql(journal, capture)
+  const pendingWork = projections.readWorkSql(journal, captureNarrow)
   await workEntered.promise
   const published = await projections.readSql(journal, capture, () => {})
   workRelease.resolve()
   await pendingWork
   expect(projections.currentSql(journal, capture())).toBe(published)
-  expect(projections.savedStop(journal, contextId)).toEqual({ value: null })
+  expect(await projections.readWorkSql(journal, captureNarrow)).toMatchObject({
+    result: { kind: 'state' }
+  })
+  expect(projections.currentSql(journal, capture())).toBe(published)
+  expect(projections.savedStop(journal, contextId)).toEqual({ value: latestStop })
 })

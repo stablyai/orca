@@ -98,6 +98,33 @@ export class StructuredAgentSessionJournalProjections {
       : null
   }
 
+  private currentWorkSql(
+    journal: SqlAgentSessionJournal,
+    captured: CapturedWork
+  ): JournalSqlWorkResult | undefined {
+    const authority = copyJournalCurrentWorkAuthority(captured.authority)
+    const entry = this.currentEntry(journal)
+    const answer: JournalSqlWorkResult | undefined =
+      entry?.kind === 'work-only'
+        ? entry.contextId === captured.contextId
+          ? entry.answer
+          : undefined
+        : entry?.projection.work &&
+            entry.projection.contextId === captured.contextId &&
+            entry.projection.authority
+          ? {
+              cursor: { epoch: entry.projection.epoch, sequence: entry.projection.sequence },
+              physicalCursor: entry.physicalCursor,
+              authority: copyJournalCurrentWorkAuthority(entry.projection.authority),
+              result: { kind: 'state', state: entry.projection.work }
+            }
+          : undefined
+    return answer &&
+      journalSqlWorkAnswerIsCurrent(journal, () => captured.authority, authority, answer)
+      ? answer
+      : undefined
+  }
+
   /** Narrow work and full status occupy the same validated per-journal entry. */
   async readWorkSql(journal: SqlAgentSessionJournal, capture: () => CapturedWork | null) {
     for (;;) {
@@ -106,29 +133,11 @@ export class StructuredAgentSessionJournalProjections {
         this.byJournal.delete(journal)
         return null
       }
-      const authority = copyJournalCurrentWorkAuthority(captured.authority)
-      const entry = this.currentEntry(journal)
-      const answer: JournalSqlWorkResult | undefined =
-        entry?.kind === 'work-only'
-          ? entry.contextId === captured.contextId
-            ? entry.answer
-            : undefined
-          : entry?.projection.work &&
-              entry.projection.contextId === captured.contextId &&
-              entry.projection.authority
-            ? {
-                cursor: { epoch: entry.projection.epoch, sequence: entry.projection.sequence },
-                physicalCursor: entry.physicalCursor,
-                authority: copyJournalCurrentWorkAuthority(entry.projection.authority),
-                result: { kind: 'state', state: entry.projection.work }
-              }
-            : undefined
-      if (
-        answer &&
-        journalSqlWorkAnswerIsCurrent(journal, () => captured.authority, authority, answer)
-      ) {
+      const answer = this.currentWorkSql(journal, captured)
+      if (answer) {
         return answer
       }
+      const authority = copyJournalCurrentWorkAuthority(captured.authority)
       const result = await journal.reads.work({ authority, operation: { kind: 'state' } })
       const recaptured = capture()
       if (!recaptured) {
@@ -141,7 +150,10 @@ export class StructuredAgentSessionJournalProjections {
       ) {
         continue
       }
-      if (!this.currentSql(journal, recaptured)) {
+      if (
+        this.currentEntry(journal)?.kind !== 'full' ||
+        !this.currentWorkSql(journal, recaptured)
+      ) {
         this.byJournal.set(journal, {
           kind: 'work-only',
           answer: result,
