@@ -125,7 +125,7 @@ export async function readGitReviewBranchSources(
       if (destinations.size > 1) {
         throw new Error('Review push destination is ambiguous')
       }
-      const branchName = destinations.values().next().value ?? branch
+      let branchName = destinations.values().next().value ?? branch
       if (destinations.size === 0) {
         if (!localTracking && remote === trackedRemote) {
           const merge = get(`branch.${branch}.merge`)
@@ -139,8 +139,11 @@ export async function readGitReviewBranchSources(
           ) {
             trackedBranchName = tracked
           }
-          if (get('push.default') === 'upstream' && !merge) {
-            throw new Error('Review upstream is unavailable')
+          if (get('push.default') === 'upstream') {
+            if (!tracked) {
+              throw new Error('Review upstream is unavailable')
+            }
+            branchName = tracked
           }
         } else if (
           get('push.default') === 'upstream' &&

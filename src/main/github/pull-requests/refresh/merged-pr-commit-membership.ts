@@ -140,5 +140,8 @@ async function wasForcePushedAwayFromPR(
   if (timeline.nodes.some((node) => node?.beforeCommit?.oid.toLowerCase().startsWith(oid))) {
     return 'contained'
   }
-  return timeline.totalCount > timeline.nodes.length ? 'unknown' : 'not-contained'
+  return timeline.totalCount > timeline.nodes.length ||
+    timeline.nodes.some((node) => !node?.beforeCommit?.oid)
+    ? 'unknown'
+    : 'not-contained'
 }

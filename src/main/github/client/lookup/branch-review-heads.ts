@@ -11,7 +11,11 @@ import {
   type TrackedUpstreamBranch
 } from './tracked-upstream-cache'
 
-export type BranchHead = { branch: TrackedUpstreamBranch; headRepo: OwnerRepo }
+export type BranchHead = {
+  branch: TrackedUpstreamBranch
+  headRepo: OwnerRepo
+  configuredPush?: boolean
+}
 
 /**
  * Where a plain `git push` publishes this branch: branch.<name>.pushRemote, remote.pushDefault, a
@@ -45,7 +49,11 @@ export async function getConfiguredPushHead(
   ) {
     return null
   }
-  return { branch: { remoteName: source.remoteName, branchName: source.branchName }, headRepo }
+  return {
+    branch: { remoteName: source.remoteName, branchName: source.branchName },
+    headRepo,
+    configuredPush: true
+  }
 }
 
 export function branchHeadKey(repo: OwnerRepo, branchName: string): string {

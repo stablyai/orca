@@ -50,6 +50,11 @@ function scriptForcePushes(beforeOids: (string | null)[]): void {
 }
 
 describe('isCommitPartOfMergedPR', () => {
+  it('preserves uncertainty when a force-push event has no prior commit', async () => {
+    scriptForcePushes([null])
+    await expect(membership()).resolves.toBe('unknown')
+  })
+
   beforeEach(() => {
     ghExecFileAsyncMock.mockReset()
     resetMergedPRCommitMembershipCacheForTest()

@@ -77,7 +77,9 @@ function isForeignSameNamedHead(
 ): boolean {
   const expectedHeads = [
     context.originHeadRepo,
-    ...context.secondaryHeads.map((head) => head.headRepo)
+    ...context.secondaryHeads
+      .filter((head) => !head.configuredPush || head.branch.branchName === data.headRefName)
+      .map((head) => head.headRepo)
   ].filter((head) => head != null)
   if (data.headRefName !== context.branchName) {
     return false

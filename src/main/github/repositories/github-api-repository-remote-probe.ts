@@ -153,9 +153,6 @@ export async function getGitHubApiRepositoryForRemoteUrl(
   if (github.kind === 'github') {
     return { ...github.ownerRepo, host: 'github.com' }
   }
-  if (github.kind === 'indeterminate') {
-    return null
-  }
   return (
     (await getEnterpriseGitHubRepoSlugForRemoteUrl(
       repoPath,
