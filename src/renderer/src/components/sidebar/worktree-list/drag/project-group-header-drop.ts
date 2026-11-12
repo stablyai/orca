@@ -1,3 +1,4 @@
+import { measureSidebarHeaderDragRect } from './sidebar-header-drag-geometry'
 import {
   computeWorktreeSidebarHeaderDropPreview,
   type WorktreeSidebarHeaderDropPreview
@@ -123,27 +124,6 @@ export function getProjectGroupTabOrderUpdatesForSidebarDrop(args: {
   return updates
 }
 
-function getVirtualRowStart(virtualRow: HTMLElement | null): number | null {
-  if (!virtualRow) {
-    return null
-  }
-  const rawStart = virtualRow.getAttribute('data-worktree-virtual-row-start')
-  if (rawStart === null) {
-    return null
-  }
-  const start = Number(rawStart)
-  return Number.isFinite(start) ? start : null
-}
-
-function getOptionalNumberAttribute(element: HTMLElement, attribute: string): number | undefined {
-  const rawValue = element.getAttribute(attribute)
-  if (rawValue === null) {
-    return undefined
-  }
-  const value = Number(rawValue)
-  return Number.isFinite(value) ? value : undefined
-}
-
 export function measureProjectGroupHeaderDragRects(
   container: HTMLElement,
   bucketKey?: ProjectGroupHeaderDragBucketKey
@@ -161,20 +141,16 @@ export function measureProjectGroupHeaderDragRects(
     if (bucketKey !== undefined && elementBucketKey !== bucketKey) {
       return
     }
-    const rect = element.getBoundingClientRect()
-    const virtualRow = element.closest<HTMLElement>('[data-worktree-virtual-row]')
-    const virtualRowStart = getVirtualRowStart(virtualRow)
-    const top =
-      virtualRow && virtualRowStart !== null
-        ? virtualRowStart + rect.top - virtualRow.getBoundingClientRect().top
-        : rect.top - containerRect.top + container.scrollTop
     rects.push({
       groupId,
       bucketKey: elementBucketKey,
       headerIndex,
-      top,
-      bottom: top + rect.height,
-      sectionBottom: getOptionalNumberAttribute(element, 'data-project-group-header-section-end')
+      ...measureSidebarHeaderDragRect(
+        element,
+        container,
+        containerRect,
+        'data-project-group-header-section-end'
+      )
     })
   })
   rects.sort((left, right) => left.top - right.top)

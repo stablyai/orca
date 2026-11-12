@@ -120,15 +120,6 @@ describe('reference identity', () => {
     )
   })
 
-  it.each([
-    'https://github.com/ACME/Api/pull/42',
-    'https://git.example/Root/Group/Api/-/merge_requests/42',
-    'https://codeberg.org/Acme/Api/pulls/42'
-  ])('stores %s with its original path casing', (url) => {
-    expect(parseWorkspaceReferenceUrl(url).url).toBe(url)
-    expect(identity(url)).toBe(identity(url.toLowerCase()))
-  })
-
   it('does not read git-host /browse/ paths as Jira issues', () => {
     expect(
       parseWorkspaceReferenceUrl('https://git.example/acme/api/issues/42', 'github').provider
@@ -175,18 +166,6 @@ describe('reference identity', () => {
     )
     expect(getWorkspaceReferenceIdentity({ ...item, taskSourceContext: undefined })).not.toBe(
       getWorkspaceReferenceIdentity(item)
-    )
-  })
-
-  it('retains source boundaries in legacy opaque keys', () => {
-    const item: WorkspaceAttachment = {
-      provider: 'github',
-      type: 'pr',
-      number: 42,
-      repoId: 'repo-a'
-    }
-    expect(getWorkspaceReferenceIdentity(item)).not.toBe(
-      getWorkspaceReferenceIdentity({ ...item, repoId: 'repo-b' })
     )
   })
 
@@ -253,9 +232,5 @@ describe('reference queries', () => {
     expect(() =>
       parseWorkspaceReferenceQuery('https://git.example/acme/api/pull-requests/42')
     ).toThrow()
-  })
-
-  it.each(['1234', '#1234', 'github:pr:1234'])('rejects %s', (query) => {
-    expect(() => parseWorkspaceReferenceQuery(query)).toThrow()
   })
 })

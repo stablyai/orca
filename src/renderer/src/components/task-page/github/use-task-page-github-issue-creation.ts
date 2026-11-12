@@ -1,12 +1,12 @@
 import type { TaskPageWorkspaceActionsModel } from '../use-task-page-workspace-actions'
 import { useCallback } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store/index'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 type TaskPageGitHubIssueCreationInput = Pick<
   TaskPageWorkspaceActionsModel,
   | 'setTaskRefreshNonce'

@@ -14,7 +14,7 @@ vi.mock('@/store', () => ({
     getState: () => mocks.state
   })
 }))
-vi.mock('@/runtime/runtime-environment-ssh-state', () => ({
+vi.mock('@/runtime/hosts/ssh/runtime-environment-ssh-state', () => ({
   connectRuntimeEnvironmentSshTarget: mocks.connectRuntimeEnvironmentSshTarget,
   hydrateRuntimeEnvironmentSshState: vi.fn(async () => {})
 }))

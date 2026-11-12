@@ -1,15 +1,19 @@
-import { AgentConversationCopyError } from '../native-chat/agent-conversation-copy-error'
+import { TEXT_GENERATION_FAILURE_COPY } from '../../shared/text-generation-failure-copy'
+import { codexForkHistory } from './codex-fork-history'
+import {
+  AgentConversationCopyError,
+  AgentConversationCopyStartError,
+  agentConversationCopyRefusal
+} from '../native-chat/agent-conversation-copy-error'
+import { isAgentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import { join } from 'node:path'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { asRecord, parseJsonObject } from '../ai-vault/session-scanner-values'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { createLegacyIdentityTracker } from '../native-chat/agent-session-journal/journal-legacy-identity'
-import { readCodexLocalHistory } from '../native-chat/codex-local-history'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { decodeCodexTranscriptLine } from '../native-chat/transcript-line-decoders-codex'
 import {
-  CodexAppServerTimeoutError,
+  isCodexAppServerUnsupportedError,
   type CodexAppServerRpc
 } from './app-server/codex-app-server-session'
 import {
@@ -18,107 +22,28 @@ import {
 } from './structured/session-lifecycle/codex-provider-session-rename'
 
 type CopyInput = Parameters<NonNullable<StructuredAgentSessionAdapter['copyConversation']>>[0]
-type Root = { id?: string; terminal: boolean; prompt: boolean }
 
 function unavailable(): never {
-  throw new AgentConversationCopyError(
-    'Codex could not locate an exact saved boundary in this older chat. Fork a response in a newer chat.'
-  )
-}
-
-/** Use the importer's physical lineage and identity accounting, including discarded window rows. */
-export async function codexForkHistory(input: {
-  path: string
-  roots: string[]
-  selectedItemId: string
-  turnId?: string
-  sessionId: string
-  signal?: AbortSignal
-}) {
-  const identity = parseAgentJournalItemKey(input.selectedItemId)
-  const tracker = createLegacyIdentityTracker({
-    transcriptAgent: 'codex',
-    agent: 'codex',
-    sessionId: input.sessionId
-  })
-  const roots: Root[] = []
-  let selected: Root | undefined
-  let lineIndex = 0
-  await readCodexLocalHistory({
-    filePath: input.path,
-    roots: input.roots,
-    visit: (line, fallbackId, _selected, recordId) => {
-      input.signal?.throwIfAborted()
-      const tracked = tracker.identify(line, lineIndex++)
-      const raw = parseJsonObject(line)
-      const payload = asRecord(raw?.payload)
-      if (
-        raw?.type === 'event_msg' &&
-        payload?.type === 'thread_rolled_back' &&
-        typeof payload.num_turns === 'number'
-      ) {
-        roots.splice(Math.max(0, roots.length - payload.num_turns))
-        return
-      }
-      if (raw?.type === 'event_msg' && payload?.type === 'task_started') {
-        roots.push({
-          id: typeof payload.turn_id === 'string' ? payload.turn_id : undefined,
-          terminal: false,
-          prompt: false
-        })
-      }
-      const message = decodeCodexTranscriptLine(line, fallbackId, { historyImport: true })
-      if (message?.role === 'user') {
-        const previous = roots.at(-1)
-        if (!previous || (previous.prompt && (!previous.id || previous.terminal))) {
-          roots.push({ terminal: false, prompt: true })
-        } else {
-          previous.prompt = true
-        }
-      }
-      const root = roots.at(-1)
-      if (
-        root &&
-        raw?.type === 'event_msg' &&
-        (payload?.type === 'task_complete' || payload?.type === 'turn_aborted') &&
-        (!payload.turn_id || payload.turn_id === root.id)
-      ) {
-        root.terminal = true
-      }
-      const importedMatch =
-        identity?.provider === 'legacy' &&
-        identity.recordId ===
-          (recordId ?? (tracked.provider === 'legacy' ? tracked.recordId : undefined))
-      if (
-        root &&
-        ((importedMatch && message?.role === 'assistant') ||
-          (input.turnId && root.id === input.turnId))
-      ) {
-        if (selected && selected !== root) {
-          return unavailable()
-        }
-        selected = root
-      }
-    }
-  })
-  const index = selected ? roots.indexOf(selected) : -1
-  if (index < 0) {
-    return unavailable()
-  }
-  return { roots, index, selected: roots[index] }
+  throw new AgentConversationCopyError('Codex could not verify the copied chat.')
 }
 
 async function turns(
   rpc: CodexAppServerRpc,
   threadId: string,
-  count: number
-): Promise<{ id: string }[]> {
-  const all: { id: string }[] = []
+  through: number | string
+): Promise<{ id: string; status?: unknown }[]> {
+  const all: { id: string; status?: unknown }[] = []
   let cursor: string | null = null
   const seen = new Set<string>()
   do {
     const page = asRecord(
-      await rpc.request('thread/turns/list', { threadId, cursor, sortDirection: 'asc', limit: 100 })
+      await rpc.request('thread/turns/list', {
+        threadId,
+        cursor,
+        sortDirection: 'asc',
+        limit: 100,
+        itemsView: 'summary'
+      })
     )
     if (!Array.isArray(page?.data)) {
       return unavailable()
@@ -128,7 +53,13 @@ async function turns(
       if (typeof turn?.id !== 'string') {
         return unavailable()
       }
-      all.push({ id: turn.id })
+      all.push({ id: turn.id, status: turn.status })
+      if (turn.id === through) {
+        return all
+      }
+    }
+    if (page.nextCursor != null && (typeof page.nextCursor !== 'string' || !page.nextCursor)) {
+      return unavailable()
     }
     cursor = typeof page.nextCursor === 'string' ? page.nextCursor : null
     if (cursor && seen.has(cursor)) {
@@ -137,7 +68,7 @@ async function turns(
     if (cursor) {
       seen.add(cursor)
     }
-  } while (cursor && all.length < count)
+  } while (cursor && (typeof through === 'string' || all.length < through))
   return all
 }
 
@@ -145,60 +76,151 @@ export async function copyCodexConversation(
   input: CopyInput,
   invocation: CodexProviderInvocationDeps | undefined
 ) {
-  if (!input.record || !input.checkpoint || !invocation) {
-    return unavailable()
-  }
-  const { record, checkpoint } = input
-  const signal = AbortSignal.any([
-    AbortSignal.timeout(60_000),
-    ...(input.signal ? [input.signal] : [])
-  ])
-  const home = requireLegacyAgentSessionAccountHome(record.accountHome).path
-  const stores = [join(home, 'sessions'), join(home, 'archived_sessions')]
-  const find = async (id: string) =>
-    (await resolveSessionFilePath(
-      'codex',
-      id,
-      { codexSessionsDirs: stores, strictErrors: true },
-      signal
-    )) ?? unavailable()
-  const history = await codexForkHistory({
-    path: await find(input.providerSessionId),
-    roots: stores,
-    selectedItemId: checkpoint.selectedItemId,
-    turnId: checkpoint.turnId,
-    sessionId: input.providerSessionId,
-    signal
-  })
-  const beforeTurnId = history.roots[history.index + 1]?.id
-  const lastTurnId = history.selected.id
-  if (!checkpoint.settled && !history.selected.terminal && !beforeTurnId) {
-    throw new AgentConversationCopyError(
-      "Codex hasn't finished this response yet. Wait for it to finish, then try again."
-    )
-  }
-  return runCodexProviderAppServer(
-    record,
-    { ...invocation, resolveLaunchArgs: () => record.launchArgs ?? invocation.resolveLaunchArgs() },
-    { timeoutMs: 60_000, signal, experimentalApi: !lastTurnId && Boolean(beforeTurnId) },
-    async (rpc, cwd) => {
-      const fork = asRecord(
-        await rpc.request('thread/fork', {
-          threadId: input.providerSessionId,
-          ...(lastTurnId ? { lastTurnId } : beforeTurnId ? { beforeTurnId } : {}),
-          excludeTurns: true,
-          cwd
-        })
+  let starting = false
+  let dispatched = false
+  try {
+    if (!input.record || !input.checkpoint || !invocation) {
+      return unavailable()
+    }
+    const { record, checkpoint } = input
+    const signal = AbortSignal.any([
+      AbortSignal.timeout(60_000),
+      ...(input.signal ? [input.signal] : [])
+    ])
+    const home = requireLegacyAgentSessionAccountHome(record.accountHome).path
+    const stores = [join(home, 'sessions'), join(home, 'archived_sessions')]
+    const legacy = parseAgentJournalItemKey(checkpoint.selectedItemId)?.provider === 'legacy'
+    const find = async (id: string) =>
+      (await resolveSessionFilePath(
+        'codex',
+        id,
+        { codexSessionsDirs: stores, strictErrors: true },
+        signal
+      )) ?? unavailable()
+    const physicalHistory = async (turnId: string | undefined) => {
+      const path = await find(input.providerSessionId)
+      return codexForkHistory({
+        path,
+        roots: stores,
+        selectedItemId: checkpoint.selectedItemId,
+        turnId,
+        sessionId: input.providerSessionId,
+        signal
+      })
+    }
+    const missing = (): never => {
+      throw agentConversationCopyRefusal(
+        'agent_session_operation_invalid',
+        { reason: 'savedConversationMissing' },
+        'Codex could not find this response in the saved chat. Open the chat again, then fork a response still in its history.'
       )
-      const thread = asRecord(fork?.thread)
-      const id = thread?.id
-      if (typeof id !== 'string' || !id.trim() || id === input.providerSessionId) {
-        return unavailable()
-      }
-      if (!lastTurnId && !beforeTurnId) {
-        // Reconcile against the child's actual capture; a parent can grow while fork runs.
-        if (thread?.historyMode !== 'paginated') {
+    }
+    let history = legacy && !checkpoint.turnId ? await physicalHistory(undefined) : undefined
+    starting = true
+    return await runCodexProviderAppServer(
+      record,
+      {
+        ...invocation,
+        resolveLaunchArgs: () => record.launchArgs ?? invocation.resolveLaunchArgs()
+      },
+      { timeoutMs: 60_000, signal, experimentalApi: true },
+      async (rpc, cwd) => {
+        starting = false
+        let metadata
+        try {
+          metadata = asRecord(
+            asRecord(
+              await rpc.request('thread/read', {
+                threadId: input.providerSessionId,
+                includeTurns: false
+              })
+            )?.thread
+          )
+          if (
+            metadata?.id !== input.providerSessionId ||
+            (metadata.historyMode != null &&
+              metadata.historyMode !== 'legacy' &&
+              metadata.historyMode !== 'paginated')
+          ) {
+            throw new Error('Invalid source metadata')
+          }
+        } catch (error) {
+          if (!isCodexAppServerUnsupportedError(error)) {
+            throw error
+          }
+        }
+        let native = metadata?.historyMode === 'paginated'
+        let sourceTurns =
+          native && checkpoint.turnId
+            ? await turns(rpc, input.providerSessionId, checkpoint.turnId)
+            : undefined
+        if (!native || !sourceTurns || sourceTurns.at(-1)?.id !== checkpoint.turnId) {
+          if (native && !legacy) {
+            return missing()
+          }
+          history ??= await physicalHistory(native && legacy ? undefined : checkpoint.turnId)
+          if (native && history.selected.id) {
+            sourceTurns = await turns(rpc, input.providerSessionId, history.selected.id)
+            if (sourceTurns.at(-1)?.id !== history.selected.id) {
+              return missing()
+            }
+          } else {
+            native = false
+          }
+        }
+        const lastTurnId = native ? sourceTurns!.at(-1)!.id : history!.selected.id
+        const beforeTurnId = native ? undefined : history!.roots[history!.index + 1]?.id
+        const terminal = native
+          ? ['completed', 'failed', 'interrupted'].includes(String(sourceTurns!.at(-1)?.status))
+          : history!.selected.terminal
+        if (!checkpoint.settled && !terminal && !beforeTurnId) {
+          throw agentConversationCopyRefusal(
+            'agent_session_operation_invalid',
+            { reason: 'turnActive' },
+            "Codex hasn't finished this response yet. Wait for it to finish, then try again."
+          )
+        }
+        const prefix = native ? sourceTurns! : history!.roots.slice(0, history!.index + 1)
+        sourceTurns = native
+          ? sourceTurns!
+          : prefix.every((root) => root.id)
+            ? prefix.map((root) => ({ id: root.id! }))
+            : await turns(rpc, input.providerSessionId, history!.roots.length)
+        if (
+          sourceTurns.length < prefix.length ||
+          prefix.some((root, index) => root.id && root.id !== sourceTurns![index]?.id)
+        ) {
+          return missing()
+        }
+        const coverage = {
+          unit: 'codex-turn' as const,
+          ids: sourceTurns.slice(0, prefix.length).map((turn) => turn.id)
+        }
+        rpc.signal?.throwIfAborted()
+        signal.throwIfAborted()
+        dispatched = true
+        const fork = asRecord(
+          await rpc.request('thread/fork', {
+            threadId: input.providerSessionId,
+            ...(lastTurnId ? { lastTurnId } : beforeTurnId ? { beforeTurnId } : {}),
+            excludeTurns: true,
+            cwd
+          })
+        )
+        const thread = asRecord(fork?.thread)
+        const id = thread?.id
+        if (typeof id !== 'string' || !id.trim() || id === input.providerSessionId) {
           return unavailable()
+        }
+        if (native) {
+          const captured = await turns(rpc, id, lastTurnId!)
+          if (
+            captured.length !== coverage.ids.length ||
+            captured.some((turn, index) => turn.id !== coverage.ids[index])
+          ) {
+            return unavailable()
+          }
+          return { sessionId: id, coverage }
         }
         const captured = await codexForkHistory({
           path: await find(id),
@@ -206,51 +228,74 @@ export async function copyCodexConversation(
           selectedItemId: checkpoint.selectedItemId,
           turnId: checkpoint.turnId,
           sessionId: id,
+          inheritedOnly: true,
           signal
         })
-        const childTurns = await turns(rpc, id, captured.roots.length + 1)
-        if (childTurns.length !== captured.roots.length) {
+        if (
+          captured.index !== history!.index ||
+          captured.roots.length < prefix.length ||
+          captured.roots
+            .slice(0, prefix.length)
+            .some((root, index) => root.id && root.id !== coverage.ids[index])
+        ) {
           return unavailable()
         }
-        for (const [index, root] of captured.roots.entries()) {
-          if (root.id && root.id !== childTurns[index]?.id) {
+        if (lastTurnId || beforeTurnId) {
+          if (captured.roots.length !== prefix.length) {
             return unavailable()
           }
-        }
-        const firstRemoved = childTurns[captured.index + 1]
-        if (firstRemoved) {
-          await rpc.request('thread/revert', { threadId: id, beforeTurnId: firstRemoved.id })
-          const kept = await turns(rpc, id, captured.index + 2)
-          if (
-            kept.length !== captured.index + 1 ||
-            kept.at(-1)?.id !== childTurns[captured.index]?.id
-          ) {
+        } else {
+          // Trim the actual capture; coverage identities were frozen on the source before fork.
+          if (thread?.historyMode !== 'paginated') {
             return unavailable()
           }
+          const childTurns = await turns(rpc, id, captured.roots.length + 1)
+          if (childTurns.length !== captured.roots.length) {
+            return unavailable()
+          }
+          for (const [index, root] of captured.roots.entries()) {
+            if (root.id && root.id !== childTurns[index]?.id) {
+              return unavailable()
+            }
+          }
+          const firstRemoved = childTurns[captured.index + 1]
+          if (firstRemoved) {
+            await rpc.request('thread/revert', { threadId: id, beforeTurnId: firstRemoved.id })
+            const kept = await turns(rpc, id, captured.index + 2)
+            if (
+              kept.length !== captured.index + 1 ||
+              kept.at(-1)?.id !== childTurns[captured.index]?.id
+            ) {
+              return unavailable()
+            }
+          }
         }
+        return { sessionId: id, coverage }
       }
-      return { sessionId: id }
+    )
+  } catch (error) {
+    input.signal?.throwIfAborted()
+    if (!dispatched) {
+      const refusal = isAgentSessionRefusalError(error)
+        ? error
+        : agentConversationCopyRefusal(
+            'agent_session_identity_required',
+            { reason: 'transcriptUnreadable' },
+            starting
+              ? TEXT_GENERATION_FAILURE_COPY.agentCouldNotStart.replace('{{label}}', 'Codex')
+              : 'Codex could not read the saved chat. Open it again, then try forking the response.'
+          )
+      if (starting) {
+        refusal.cause = new AgentConversationCopyStartError(refusal.refusal.message)
+      }
+      refusal.refusal.createAttemptRefusedBeforeCommit = true
+      throw refusal
     }
-  ).catch((error: unknown) => {
     if (error instanceof AgentConversationCopyError) {
       throw error
     }
-    if (error instanceof CodexAppServerTimeoutError || signal.aborted) {
-      throw new AgentConversationCopyError('Codex took too long to copy this chat. Try again.', {
-        cause: error
-      })
-    }
-    if (
-      error instanceof Error &&
-      /(?:in[- ]progress|active turn|turn.*running)/i.test(error.message)
-    ) {
-      throw new AgentConversationCopyError(
-        'Codex could not copy this chat while a response was running. Wait for it to finish, then try again.',
-        { cause: error }
-      )
-    }
-    throw new AgentConversationCopyError('Codex could not copy this chat. Try again.', {
+    throw new AgentConversationCopyError('Codex could not verify the copied chat.', {
       cause: error
     })
-  })
+  }
 }

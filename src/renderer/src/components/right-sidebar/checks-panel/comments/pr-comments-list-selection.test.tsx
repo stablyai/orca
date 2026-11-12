@@ -5,8 +5,13 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 import { act, StrictMode, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, waitFor } from '@testing-library/react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
+const uploads = vi.hoisted(() => ({ capture: vi.fn(), upload: vi.fn() }))
+vi.mock('@/components/github/github-image-upload', () => ({
+  captureGitHubImageUpload: uploads.capture
+}))
 vi.mock('@/components/ui/dropdown-menu', () => {
   // Radix keeps the selection callback on the group, so the mocked items need it too.
   let onRadioValueChange: ((value: string) => void) | undefined
@@ -188,4 +193,40 @@ describe('PRCommentsList comment resolution selection', () => {
     expect(hasButton('Send 1 queued comment to AI')).toBe(false)
     expect(container.querySelector('button[role="checkbox"]')).toBeNull()
   })
+})
+
+it('routes an image from a resolved thread reply to that list owner', async () => {
+  const address = {
+    runtime: { kind: 'local' as const },
+    target: { kind: 'repo' as const, repo: 'resolved-repo', source: 'origin' as const }
+  }
+  uploads.capture.mockReset().mockReturnValue(uploads.upload)
+  uploads.upload
+    .mockReset()
+    .mockResolvedValue('https://github.com/user-attachments/assets/resolved')
+  act(() =>
+    root.render(
+      <TooltipProvider>
+        <PRCommentsList
+          comments={[comment({ threadId: 'thread', isResolved: true, path: 'a.ts', line: 1 })]}
+          commentsLoading={false}
+          imageUploadAddress={address}
+          onReply={vi.fn().mockResolvedValue({ ok: true })}
+        />
+      </TooltipProvider>
+    )
+  )
+  clickButton('Resolved')
+  clickButton('Reply')
+  const textarea = container.querySelector('textarea')
+  if (!textarea) {
+    throw new Error('Reply field did not open')
+  }
+  fireEvent.paste(textarea, {
+    clipboardData: { files: [new File(['png'], 'reply.png', { type: 'image/png' })] }
+  })
+  await waitFor(() => expect(uploads.capture).toHaveBeenCalledWith(address))
+  await waitFor(() =>
+    expect(textarea.value).toContain('https://github.com/user-attachments/assets/resolved')
+  )
 })

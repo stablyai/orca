@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { runProcess } from '@orca/process-host'
-import type { MacosUpgradeSupport } from '../../shared/macos-upgrade-support'
+import { isVenturaRequirement, type MacosUpgradeSupport } from '../../shared/macos-upgrade-support'
 
 // Ventura's Intel model boundaries: https://support.apple.com/en-us/102861.
 const VENTURA_INTEL_MODELS = {
@@ -45,7 +45,7 @@ async function readIntelVenturaSupport(): Promise<MacosUpgradeSupport> {
   return model ? getIntelVenturaSupport(model) : 'unknown'
 }
 
-/** Whether Apple supports `minimumMacosVersion` on this Mac; only macOS 13 has model data. */
+/** Whether Apple supports `minimumMacosVersion` on this Mac; only macOS 13.x has model data. */
 export function getMacosUpgradeSupport(minimumMacosVersion: unknown): Promise<MacosUpgradeSupport> {
   if (process.platform !== 'darwin') {
     return Promise.resolve('unknown')
@@ -54,7 +54,7 @@ export function getMacosUpgradeSupport(minimumMacosVersion: unknown): Promise<Ma
   if (process.arch === 'arm64' || app.runningUnderARM64Translation) {
     return Promise.resolve('supported')
   }
-  if (minimumMacosVersion !== '13') {
+  if (!isVenturaRequirement(minimumMacosVersion)) {
     return Promise.resolve('unknown')
   }
   return (intelVenturaSupport ??= readIntelVenturaSupport().catch(() => 'unknown'))

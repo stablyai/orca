@@ -1,13 +1,13 @@
 import React from 'react'
-import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
+import type { ActiveRightSidebarTab, ActivityBarPosition } from '../../../../shared/ui-chrome-types'
 import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { ActivityBarButton, TopActivityOverflowMenu } from './activity-bar-buttons'
 import type { ActivityBarItem } from './activity-bar-buttons'
-import { ActivityBarPositionMenu } from './activity-bar-position-menu'
+import { ActivityBarPositionMenu, useActivityBarContextPlugin } from './activity-bar-position-menu'
 import {
   RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
   RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME,
@@ -35,12 +35,17 @@ export function RightSidebarTopActivityBar({
   activityBarPosition: ActivityBarPosition
   onChangeActivityBarPosition: (pos: ActivityBarPosition) => void
 }): React.JSX.Element {
+  const contextPlugin = useActivityBarContextPlugin()
   return (
     <ContextMenu>
       <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
         {!hasDesktopWindowChrome && (
-          <TooltipProvider delayDuration={400}>
-            <ContextMenuTrigger asChild>
+          <TooltipProvider>
+            <ContextMenuTrigger
+              asChild
+              onContextMenu={contextPlugin.onContextMenu}
+              onPointerDown={contextPlugin.onPointerDown}
+            >
               <div
                 ref={topActivityStripRef}
                 className={RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME}
@@ -81,7 +86,7 @@ export function RightSidebarTopActivityBar({
           </TooltipProvider>
         )}
         {hasDesktopWindowChrome && (
-          <TooltipProvider delayDuration={400}>
+          <TooltipProvider>
             <div
               className={cn(
                 'ml-auto flex shrink-0 items-center pr-1',
@@ -94,8 +99,12 @@ export function RightSidebarTopActivityBar({
         )}
       </div>
       {hasDesktopWindowChrome && (
-        <TooltipProvider delayDuration={400}>
-          <ContextMenuTrigger asChild>
+        <TooltipProvider>
+          <ContextMenuTrigger
+            asChild
+            onContextMenu={contextPlugin.onContextMenu}
+            onPointerDown={contextPlugin.onPointerDown}
+          >
             <div
               ref={topActivityStripRef}
               className={RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME}
@@ -128,6 +137,7 @@ export function RightSidebarTopActivityBar({
       <ActivityBarPositionMenu
         currentPosition={activityBarPosition}
         onChangePosition={onChangeActivityBarPosition}
+        pluginKey={contextPlugin.pluginKey}
       />
     </ContextMenu>
   )

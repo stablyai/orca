@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithEmitDaemonPtyTransientFact } from './terminal-transient-facts'
 import { getDecorativeTitleGateKey } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
-import { shouldEmitTitleFactForFrame } from '../../decorative-title-fact-emission'
+import { shouldEmitTitleFactForFrame } from './decorative-title-fact-emission'
 import type { RuntimePtyTitleTrackerEntry } from '../records/runtime-terminal-state-records'
 import {
   type TerminalTitleFactMeta,

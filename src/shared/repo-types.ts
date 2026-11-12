@@ -1,3 +1,4 @@
+import type { DictationTerm } from './dictation-dictionary'
 import type { RepoIcon } from './repo-icon'
 import type { GhAccountBinding } from './github/account-binding'
 import type { GitHubRepositoryIdentity } from './github/pull-request-types'
@@ -9,6 +10,8 @@ import type { RepoProjectHostSetupMethod } from './project-types'
 import type { JiraProjectReference } from './jira/jira-project-reference'
 import type { OrcadRetainedMarker } from './orcad-retained-marker'
 import type { EditorFormatter } from './editor-formatter'
+import type { AgentWorkspaceTrustDecision } from './agent-launch/permissions/agent-workspace-trust-decision'
+import type { RepoWorkspaceCleanupPolicy } from './workspace-cleanup/workspace-cleanup-policy'
 
 export type RepoKind = 'git' | 'folder'
 
@@ -68,6 +71,8 @@ export type Repo = {
   ghAccount?: GhAccountBinding
   /** Controls Orca's fork-default-branch sync offer for repos with upstream metadata. */
   forkSyncMode?: ForkSyncMode
+  /** Whether Orca pre-trusts this repo's worktrees for agents. Absent means undecided: desktop launches ask once. */
+  agentWorkspaceTrust?: AgentWorkspaceTrustDecision
   /** Canonical identity for the repo remote Orca should use for provider-level grouping. */
   gitRemoteIdentity?: GitRemoteIdentity | null
   /** Controls whether worktrees Orca did not create appear in the sidebar. */
@@ -88,6 +93,8 @@ export type Repo = {
   worktreeVisibilitySourcePreferences?: WorktreeVisibilitySourcePreferences
   /** User permanently opted out of the new-external-worktree inbox for this repo. */
   externalWorktreeDiscoverySuppressedAt?: number
+  /** When the user hid this host's copy of the project from the sidebar; view-only, nothing stops. */
+  hiddenAt?: number
   /** Relative paths to APFS-clone on macOS when possible, otherwise symlink, into new worktrees. Absent/empty creates none. */
   symlinkPaths?: string[]
   /** Durable sidebar-only repo organization. Execution remains repo-scoped. */
@@ -96,10 +103,14 @@ export type Repo = {
   projectGroupOrder?: number
   /** Repo-specific source-control AI overrides. Missing fields inherit global settings. */
   sourceControlAi?: RepoSourceControlAiOverrides
+  /** Project override of the host's cleanup rules; absent inherits them. */
+  workspaceCleanupPolicy?: RepoWorkspaceCleanupPolicy
   /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */
   projectHostSetupMethod?: RepoProjectHostSetupMethod
   /** Local row a WSL host now owns, kept for a downgrade; set only by the mover's retention pass. */
   orcadRetained?: OrcadRetainedMarker
+  /** Dictation terms used only in this repo, kept in Orca (on the repo's host), never in the checkout. */
+  dictationTerms?: DictationTerm[]
 }
 
 /** Shared IPC shape for repos:getBaseRefDefault across main/preload/renderer; remoteCount avoids a second hint lookup. */

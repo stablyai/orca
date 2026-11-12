@@ -3,7 +3,8 @@ import type { MobilePairingConnectionMode } from '../../../../../shared/remote-r
 import type { MobilePushRegistration } from '../../../../../shared/mobile-push-contract'
 import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
-import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
+import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
+import type { NetworkSourceClass } from '../../transports/websocket/source-admission/network-source-class'
 
 export type DeviceEntry = {
   deviceId: string
@@ -13,6 +14,8 @@ export type DeviceEntry = {
   scope: DeviceScope
   pairedAt: number
   lastSeenAt: number
+  // Where its latest direct (non-Relay) connection came from; absent until one after this field shipped.
+  lastSourceClass?: NetworkSourceClass
   relayBinding?: RelayDeviceBinding
   mobilePairingConnectionMode?: MobilePairingConnectionMode
   // STA-2370: local-only grants prove no off-host reach for listener binding.
@@ -35,6 +38,18 @@ export type DeviceEntry = {
   forkedFrom?: string
   // Session-only browser key (memory only); the row is dropped on host restart and after idling.
   ephemeral?: true
+  // A never-seen offer stops authenticating here; absent (older rows, headless offers) never expires.
+  offerExpiresAt?: number
+  // Last sign-in used the older E2EE framing (set then; a v2 sign-in clears it). Local-only notice data.
+  legacyE2EEAuthAt?: number
+  // Minted as a pairing offer by a host that can exchange it; clients that never exchange keep using it.
+  ticket?: true
+  // Client-chosen replacement; first sign-in with it retires the pairing token (see pairing-ticket-exchange.ts).
+  exchangeToken?: string
+  // First sign-in with a ticket; exchange is offered only shortly after it.
+  ticketFirstSeenAt?: number
+  // A plain-http browser re-registers a session-only key from this link on each page load.
+  servesSessionBrowsers?: true
 }
 
 export type TokenDeviceEntry = DeviceEntry & { token: string }
@@ -51,6 +66,12 @@ export type DeviceKeyLookup =
 export function isPendingTokenRow(device: DeviceEntry): device is TokenDeviceEntry {
   return (
     device.lastSeenAt === 0 && device.token !== undefined && device.credentialKind === undefined
+  )
+}
+
+export function isExpiredPairingOffer(device: DeviceEntry, now: number): boolean {
+  return (
+    device.lastSeenAt === 0 && device.offerExpiresAt !== undefined && device.offerExpiresAt <= now
   )
 }
 
@@ -87,7 +108,10 @@ export function isStillAuthenticated(
 ): boolean {
   return (
     (device.credentialRevision ?? 0) === principal.credentialRevision &&
-    (principal.deviceToken === undefined || device.token === principal.deviceToken) &&
+    (principal.deviceToken === undefined ||
+      device.token === principal.deviceToken ||
+      // Signed in with the replacement while retiring the pairing token failed to persist.
+      device.exchangeToken === principal.deviceToken) &&
     // A keyed socket cannot survive replacement by a bearer row.
     (principal.deviceToken !== undefined || device.credentialKind === 'device-key')
   )
@@ -116,10 +140,20 @@ function withPairedParent(
 
 export function findTokenDevice(
   devices: readonly DeviceEntry[],
-  token: string
+  token: string,
+  // Sightings whose persist failed still count, or a connected client would be locked out.
+  seen: ReadonlySet<string> = new Set(),
+  now = Date.now()
 ): DeviceEntry | null {
-  const device = token && devices.find((d) => d.credentialKind === undefined && d.token === token)
-  return device ? withPairedParent(device, devices) : null
+  const device =
+    token &&
+    devices.find(
+      (d) => d.credentialKind === undefined && (d.token === token || d.exchangeToken === token)
+    )
+  if (!device || (isExpiredPairingOffer(device, now) && !seen.has(device.deviceId))) {
+    return null
+  }
+  return withPairedParent(device, devices)
 }
 
 export function findPrincipalDevice(

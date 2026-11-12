@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { PortForwardEntry } from '../../../../shared/ssh-types'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/workspace-ports'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   addressForPort,
   addressForPortForwardEntry,
@@ -14,7 +14,7 @@ const { activateAndRevealWorktreeMock } = vi.hoisted(() => ({
   activateAndRevealWorktreeMock: vi.fn()
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: activateAndRevealWorktreeMock
 }))
 

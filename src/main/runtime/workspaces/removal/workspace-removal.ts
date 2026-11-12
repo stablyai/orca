@@ -1,6 +1,6 @@
 import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { isStaleLocalWorktreeRegistration } from '../catalog/stale-worktree-registration-preflight'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { RuntimeWorkspaceMetadata } from '../workspace-metadata'
 import {
@@ -36,7 +36,8 @@ import { removeOrphanOrFolderWorktree } from './workspace-registration-removal'
 import {
   assertWslMoveWorkspaceWritable,
   isWslMoveSourceHost
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
 
 export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorkspaceMetadata {
   abstract removeWorktreeMetadataAndHistory(
@@ -77,10 +78,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
       allowFailedArchiveHook = false,
       hostId
     } = options
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const store = this.store
+    const store = this.requireStore()
     const cleanupHostId = parseExecutionHostId(hostId)?.id
     const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector, cleanupHostId)
     // The repo row names the host; a caller may omit hostId for a worktree on another host.
@@ -95,12 +93,14 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
     if (pending) {
       return options.waitForBackgroundRemoval ? await pending : { removing: true }
     }
-    const emitRemoved = (): void =>
-      this.emitWorktreeLifecycle({
-        kind: 'removed',
-        worktreeId: removalTarget.id,
-        path: removalTarget.path
-      })
+    // Identity read now: the purge drops the row before listeners hear `removed`.
+    const removed = {
+      kind: 'removed' as const,
+      worktreeId: removalTarget.id,
+      path: removalTarget.path,
+      ...worktreeHostIdentity(store, removalTarget.id, fenceHostId)
+    }
+    const emitRemoved = (): void => this.emitWorktreeLifecycle(removed)
     const cleanupScopeKey = preservedBranchCleanupScopeKey({
       worktreeId: removalTarget.id,
       hostId: cleanupHostId
@@ -144,7 +144,8 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
           removalTarget,
           cleanupHostId,
           removalHostId,
-          repo
+          repo,
+          archive: { runHooks, allowFailedArchiveHook }
         })
         if (orphanOrFolderResult) {
           return orphanOrFolderResult
@@ -295,9 +296,11 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
       if (!accepted.removing) {
         emitRemoved()
       }
-      return options.waitForBackgroundRemoval
-        ? finishAcceptedWorktreeRemoval(accepted, removalTarget.id, cleanupHostId)
-        : accepted
+      if (!options.waitForBackgroundRemoval) {
+        return accepted
+      }
+      // oxlint-disable-next-line typescript/return-await -- the in-flight entry covers acceptance only, not the background wait
+      return finishAcceptedWorktreeRemoval(accepted, removalTarget.id, cleanupHostId)
     } finally {
       this.removeManagedWorktreeInFlight.release(cleanupScopeKey, removal)
     }

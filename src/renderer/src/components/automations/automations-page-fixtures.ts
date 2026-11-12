@@ -1,22 +1,25 @@
 /** Default to runnable local records so Run Now reaches its handler; cases needing refusal override the relevant fields. */
 
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type {
-  Automation,
   AutomationRun,
-  AutomationRunUsage,
-  ExternalAutomationManager
-} from '../../../../shared/automations-types'
+  AutomationRunUsage
+} from '../../../../shared/automations/history/automation-run'
+import type { ExternalAutomationManager } from '../../../../shared/automations/external/external-automation'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
-import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import type { AutomationHostCatalogEntry } from './hosts/automation-host-catalog-types'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   ExternalAutomationScope,
   ScopedExternalAutomationManager
-} from './external-automation-scope-client'
-import { automationListRowKey, type AutomationListRow } from './automation-list-row-identity'
-import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../shared/automation-host-filter'
+} from './external/external-automation-scope-client'
+import {
+  automationListRowKey,
+  type AutomationListRow
+} from './listing/automation-list-row-identity'
+import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../shared/automations/ownership/automation-host-filter'
 import { getDefaultSettings } from '../../../../shared/constants'
 
 export const REPO_ID = 'repo-1'

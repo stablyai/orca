@@ -5,6 +5,7 @@ import { openCodexAppServerConnection } from './codex-app-server-connection'
 import type { CodexAppServerConnection } from './codex-app-server-connection-types'
 
 const ITERATIONS = 40
+const RACE_BATCH = 4
 
 const DETACHED_GRANDCHILD_APP_SERVER = String.raw`
   const { spawn } = require('node:child_process')
@@ -164,15 +165,20 @@ describe.runIf(process.platform !== 'win32')('Codex app-server process teardown'
   it.concurrent('does not settle a stdin-close/root-exit race before the descendant is reaped', async ({
     expect
   }) => {
-    for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
-      const server = await openServer(iteration, 'stdin-race')
-      try {
-        await expect(server.connection.close()).resolves.toBe(true)
-        expect(processExists(server.supervisorPid)).toBe(false)
-        expect(processExists(server.descendantPid)).toBe(false)
-      } finally {
-        await cleanupServer(server)
-      }
+    // Independent races, so a few run at once; each still closes its own server.
+    for (let batch = 0; batch < ITERATIONS; batch += RACE_BATCH) {
+      await Promise.all(
+        Array.from({ length: RACE_BATCH }, async (_, offset) => {
+          const server = await openServer(batch + offset, 'stdin-race')
+          try {
+            await expect(server.connection.close()).resolves.toBe(true)
+            expect(processExists(server.supervisorPid)).toBe(false)
+            expect(processExists(server.descendantPid)).toBe(false)
+          } finally {
+            await cleanupServer(server)
+          }
+        })
+      )
     }
   }, 60_000)
 })

@@ -9,9 +9,9 @@ import {
 } from '../../shared/native-chat/native-chat-visual-shell'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { nativeChatScratchRootFor } from '../native-chat/native-chat-scratch-folder'
-import { browserSiteDisplayController } from '../browser/site-settings/browser-site-display-controller'
+import { browserSiteDisplayController } from '../browser/site-settings/display/browser-site-display-controller'
 import { isNativeChatVisualGuestLocation } from '../native-chat/native-chat-visual-guest-location'
-import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { localSshBrowserProfileIdForSession } from '../browser/routing/local-host-partitions/local-ssh-browser-partitions'
 
 /** Install before the host loads: an unanswered synchronous preload request blocks its guest. */

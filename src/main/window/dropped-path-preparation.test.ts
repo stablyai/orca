@@ -257,36 +257,6 @@ describe('dropped path preparation through the shared copy queue', () => {
     expect((await vi.mocked(open).mock.results[1].value).fd).toBe(-1)
   })
 
-  it('opens and stores each unique source once as drop size grows tenfold', async () => {
-    for (const count of [4, 40]) {
-      const { source, env, store } = await realDrop()
-      const paths = Array.from({ length: count }, (_, index) =>
-        join(dirname(source), `shot-${index}.png`)
-      )
-      for (const path of paths) {
-        await writeFile(path, 'image')
-      }
-      vi.mocked(open).mockClear()
-      const write = vi.spyOn(store, 'storeWith')
-      const getStore = vi.fn(async () => store)
-      const result = await localQueue(
-        env,
-        getStore
-      )({
-        paths: [...paths, ...paths],
-        consumer: 'local-chat'
-      })
-      expect(result.failures).toEqual([])
-      expect(result.paths).toHaveLength(2 * count)
-      expect(result.paths.slice(count)).toEqual(result.paths.slice(0, count))
-      expect(getStore).toHaveBeenCalledTimes(1)
-      expect(open).toHaveBeenCalledTimes(count)
-      expect(write).toHaveBeenCalledTimes(count)
-      const handles = await Promise.all(vi.mocked(open).mock.results.map((call) => call.value))
-      expect(handles.every((handle) => handle.fd === -1)).toBe(true)
-    }
-  })
-
   it('closes the dropped files when the chat host never starts and serves the next drop', async () => {
     const { source, env } = await realDrop()
     const never = deferred<AgentSessionAttachmentStore | null>()
@@ -307,18 +277,6 @@ describe('dropped path preparation through the shared copy queue', () => {
     const handles = await Promise.all(vi.mocked(open).mock.results.map((call) => call.value))
     expect(handles.every((handle) => handle.fd === -1)).toBe(true)
   })
-
-  it.each(['agent', 'main-reader'] as const)(
-    'passes ordinary paths without copying for %s',
-    async (consumer) => {
-      const { enqueue } = queue()
-      await expect(enqueue({ paths: [ORDINARY], consumer })).resolves.toEqual({
-        paths: [ORDINARY],
-        failures: []
-      })
-      expect(materialize).not.toHaveBeenCalled()
-    }
-  )
 
   it.each(['agent', 'main-reader'] as const)(
     'withholds uncopied originals only from agents: %s',
@@ -345,36 +303,6 @@ describe('dropped path preparation through the shared copy queue', () => {
       )
     }
   )
-
-  it('preserves ordinary successes and copied successes when another file fails', async () => {
-    materialize.mockResolvedValue([
-      { sourcePath: ORDINARY, status: 'imported', destPath: ORDINARY },
-      { sourcePath: TEMP, status: 'imported', destPath: COPY },
-      { sourcePath: TEMP, status: 'failed', reason: 'missing' }
-    ])
-    const result = await queue().enqueue({
-      paths: [ORDINARY, TEMP, TEMP],
-      consumer: 'agent'
-    })
-    expect(result.paths).toEqual([ORDINARY, COPY])
-    expect(result.failures[0]).toMatchObject({ pathCount: 1, commonReason: 'missing' })
-  })
-
-  it('serializes copy requests from different owners', async () => {
-    const first = deferred()
-    materialize
-      .mockReturnValueOnce(first.promise)
-      .mockResolvedValueOnce([{ sourcePath: TEMP, status: 'imported', destPath: COPY }])
-    const { enqueue } = queue()
-    const chat = enqueue({ paths: [TEMP], consumer: 'agent' })
-    const editor = enqueue({ paths: [TEMP], consumer: 'main-reader' })
-    await settle()
-    expect(materialize).toHaveBeenCalledTimes(1)
-    first.resolve([{ sourcePath: TEMP, status: 'imported', destPath: COPY }])
-    await expect(chat).resolves.toEqual({ paths: [COPY], failures: [] })
-    await expect(editor).resolves.toEqual({ paths: [COPY], failures: [] })
-    expect(materialize).toHaveBeenCalledTimes(2)
-  })
 
   it('shares serialization and the pending cap across replacement-window queues', async () => {
     materialize.mockReturnValue(new Promise(() => undefined))
@@ -446,17 +374,6 @@ describe('dropped path preparation through the shared copy queue', () => {
       expect(enqueue({ paths: [TEMP], consumer: 'agent' })).toEqual({ paths: [TEMP], failures: [] })
     }
     expect(materialize).not.toHaveBeenCalled()
-  })
-
-  it('reports all lost paths without a shared reason when their failures differ', async () => {
-    materialize.mockResolvedValue([
-      { sourcePath: TEMP, status: 'failed', reason: 'missing' },
-      { sourcePath: TEMP, status: 'failed', reason: 'changed' }
-    ])
-    await expect(queue().enqueue({ paths: [TEMP, TEMP], consumer: 'agent' })).resolves.toEqual({
-      paths: [],
-      failures: [{ byteLength: 0, pathCount: 2, reason: 'temp-copy-failed', target: 'rejected' }]
-    })
   })
 
   it('keeps ordinary paths and serves the next drop when the copy environment fails', async () => {

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { View, Text, Pressable, type KeyboardTypeOptions } from 'react-native'
+import { ActivityIndicator, View, Text, Pressable, type KeyboardTypeOptions } from 'react-native'
+import type { LucideIcon } from 'lucide-react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -21,11 +22,18 @@ type SheetProps = {
   error?: string | null
   /** A save in flight: Save is disabled so it can't be sent twice. */
   busy?: boolean
+  /** Why Save is off or still waiting (e.g. the desktop is offline); shown under the field. */
+  notice?: { icon: LucideIcon; text: string } | null
+  /** Save is off for a reason the notice gives; the text stays editable. */
+  submitBlocked?: boolean
   onSubmit: (value: string) => void
   onCancel: () => void
 }
 
-type Props = Omit<SheetProps, 'value' | 'onChangeText' | 'error' | 'busy'> & {
+type Props = Omit<
+  SheetProps,
+  'value' | 'onChangeText' | 'error' | 'busy' | 'notice' | 'submitBlocked'
+> & {
   visible: boolean
   defaultValue?: string
   /** Called once the drawer has gone, which is when the field stops holding the focus. */
@@ -78,13 +86,16 @@ export function TextInputSheetContent({
   keyboardType,
   error,
   busy = false,
+  notice,
+  submitBlocked = false,
   onSubmit,
   onCancel
 }: SheetProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
 
-  const canSubmit = !busy && (allowEmpty || value.trim().length > 0)
+  const canSubmit = !busy && !submitBlocked && (allowEmpty || value.trim().length > 0)
+  const NoticeIcon = notice?.icon
 
   function handleSubmit() {
     if (canSubmit) {
@@ -112,7 +123,14 @@ export function TextInputSheetContent({
         onSubmitEditing={handleSubmit}
       />
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <Text style={styles.error}>{error}</Text>
+      ) : notice && NoticeIcon ? (
+        <View style={styles.notice}>
+          <NoticeIcon size={13} color={colors.textSecondary} style={styles.noticeIcon} />
+          <Text style={styles.noticeText}>{notice.text}</Text>
+        </View>
+      ) : null}
 
       <View style={styles.actions}>
         <Pressable
@@ -130,6 +148,9 @@ export function TextInputSheetContent({
           disabled={!canSubmit}
           onPress={handleSubmit}
         >
+          {busy ? (
+            <ActivityIndicator size="small" color={colors.bgBase} style={styles.submitSpinner} />
+          ) : null}
           <Text style={styles.submitText}>{submitLabel ?? t('common.save', 'Save')}</Text>
         </Pressable>
       </View>
@@ -158,6 +179,21 @@ const styles = themedStyleSheet(() => ({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.xs
   },
+  notice: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xs
+  },
+  noticeIcon: {
+    marginTop: 2
+  },
+  noticeText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    lineHeight: 17
+  },
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -170,6 +206,9 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.control
   },
   submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
@@ -177,6 +216,12 @@ const styles = themedStyleSheet(() => ({
   },
   buttonPressed: {
     opacity: 0.7
+  },
+  // Keeps the button's height while it spins.
+  submitSpinner: {
+    width: 14,
+    height: 14,
+    transform: [{ scale: 0.7 }]
   },
   submitButtonDisabled: {
     opacity: 0.4

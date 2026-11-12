@@ -1,8 +1,9 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   removeClaudeProviderAccount,
   removeCodexProviderAccount
-} from '@/runtime/runtime-provider-accounts-client'
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { Button } from '../../ui/button'
 import {
   Dialog,
@@ -17,7 +18,8 @@ import type { AccountsPaneSectionModel, RemoveAccountTarget } from './accounts-p
 export function renderAccountsRemovalDialogs(
   model: AccountsPaneSectionModel,
   removeCodexTarget: RemoveAccountTarget | null,
-  removeClaudeTarget: RemoveAccountTarget | null
+  removeClaudeTarget: RemoveAccountTarget | null,
+  t: Translate = translate
 ): React.JSX.Element {
   const {
     runClaudeAccountAction,
@@ -35,13 +37,10 @@ export function renderAccountsRemovalDialogs(
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>
-              {translate(
-                'auto.components.settings.AccountsPane.0d47394635',
-                'Remove Codex Account?'
-              )}
+              {t('auto.components.settings.AccountsPane.0d47394635', 'Remove Codex Account?')}
             </DialogTitle>
             <DialogDescription>
-              {translate(
+              {t(
                 'auto.components.settings.AccountsPane.380a7736cc',
                 'Removing this account permanently deletes its managed Codex home, including all Codex session history and MCP logins stored inside. This cannot be undone. If the account is currently active, Orca falls back to the system default Codex login.'
               )}
@@ -49,7 +48,7 @@ export function renderAccountsRemovalDialogs(
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoveCodexTarget(null)}>
-              {translate('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
+              {t('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -66,7 +65,7 @@ export function renderAccountsRemovalDialogs(
                 )
               }}
             >
-              {translate('auto.components.settings.AccountsPane.c2d2751587', 'Remove Account')}
+              {t('auto.components.settings.AccountsPane.699680a328', 'Remove account')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -78,13 +77,10 @@ export function renderAccountsRemovalDialogs(
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>
-              {translate(
-                'auto.components.settings.AccountsPane.63843e37e2',
-                'Remove Claude Account?'
-              )}
+              {t('auto.components.settings.AccountsPane.63843e37e2', 'Remove Claude Account?')}
             </DialogTitle>
             <DialogDescription>
-              {translate(
+              {t(
                 'settings.accounts.claudeRemoveFolder',
                 "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
               )}
@@ -92,7 +88,7 @@ export function renderAccountsRemovalDialogs(
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoveClaudeTarget(null)}>
-              {translate('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
+              {t('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -109,7 +105,7 @@ export function renderAccountsRemovalDialogs(
                 )
               }}
             >
-              {translate('auto.components.settings.AccountsPane.c2d2751587', 'Remove Account')}
+              {t('auto.components.settings.AccountsPane.699680a328', 'Remove account')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -75,11 +75,20 @@ function desktopTab(page: Page, hostTabId: string) {
 
 /** Drops one desktop tab onto the leading edge of another, as a user drags in the tab strip. */
 async function dragTab(page: Page, hostTabId: string, ontoHostTabId: string): Promise<void> {
+  // The active tab docks at a scrolled strip's edge until a drag starts, so drop where it really sits.
+  const onto = desktopTab(page, ontoHostTabId)
+  await onto.hover()
+  await page.mouse.wheel(0, -10_000)
+  await expect
+    .poll(() =>
+      onto.evaluate((tab) => tab.closest('[data-tab-strip-slot]')?.parentElement?.scrollLeft)
+    )
+    .toBe(0)
   const from = (await desktopTab(page, hostTabId).boundingBox())!
-  const onto = (await desktopTab(page, ontoHostTabId).boundingBox())!
+  const target = (await onto.boundingBox())!
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
   await page.mouse.down()
-  await page.mouse.move(onto.x + onto.width * 0.25, onto.y + onto.height / 2, { steps: 8 })
+  await page.mouse.move(target.x + target.width * 0.25, target.y + target.height / 2, { steps: 8 })
   await page.mouse.up()
 }
 
@@ -149,14 +158,15 @@ test('phone shows the desktop tab strip of a server workspace, also with the win
     )
     await expect.poll(() => desktop.page.locator(SORTABLE_TAB).count(), { timeout: 30_000 }).toBe(3)
 
-    // A server-placed browser page sits in the same strip.
-    await call(
-      socket,
-      'browser.tabCreate',
-      { worktree, url: 'about:blank', activate: false },
-      z.looseObject({}),
-      serverHostId
-    )
+    // A server-placed browser page sits in the same strip. Created by the server itself: one the phone
+    // creates through the desktop is hosted by the desktop (relayed-browser-tab-create.ts).
+    const { browserPageId } = (
+      await host.client.call<{ browserPageId: string }>('browser.tabCreate', {
+        worktree,
+        url: 'about:blank',
+        activate: false
+      })
+    ).result
     const phoneStrip = async (): Promise<Strip> =>
       ((await phoneTabs()).tabGroups ?? []).map((group) => group.tabOrder)
     await expect
@@ -206,9 +216,9 @@ test('phone shows the desktop tab strip of a server workspace, also with the win
       (await phoneTabs()).tabs.filter((tab) => tab.type === 'browser').map((tab) => tab.id)
     ).toHaveLength(1)
     expect(await publishedStrip()).toEqual(arranged)
-    // Only the server holds this workspace's tabs; the desktop's own answer has none of them.
+    // Only the server holds this workspace's tabs; the desktop serves its phone just the server page it mirrors (#36447).
     const untargeted = await call(socket, 'session.tabs.list', { worktree }, SessionTabsSchema)
-    expect(untargeted.tabs).toEqual([])
+    expect(untargeted.tabs.map((tab) => tab.id)).toEqual([browserPageId])
 
     // Selection is each device's own, as for a local workspace.
     await call(

@@ -4,26 +4,28 @@ import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as Browser
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
 import { OrcaRuntimeWithStructuredSessionTabProjection } from './restored-chat-tab-changes'
+import type { BrowserTabInfo } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
-  BrowserTabInfo,
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionRetiredTerminalSurface,
-  RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
-} from '../../../shared/runtime-types'
+} from '../../../shared/runtime-mobile-session-tab-contracts'
+import type {
+  RuntimeMobileSessionRetiredTerminalSurface,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../shared/runtime-session-contracts'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { BrowserSessionTabSelectionOptions } from '../browser/tabs/browser-tab-create-publication'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { applyBrowserSessionTabSelection } from '../browser/tabs/browser-session-tab-selection-snapshot'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/structured-agent-session-host-lifetime'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
 import {
   chatTabId,
   withChatTabChanges,
   type ChatTabChange
 } from '../agent-session/agent-session-tab-layout'
-import { createChatTabLayoutQueue } from '../agent-session-tab-layout-queue'
+import { createChatTabLayoutQueue } from '../agent-session/agent-session-tab-layout-queue'
 import type * as LayoutCommands from '../terminal/layout/runtime-layout-apply'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'

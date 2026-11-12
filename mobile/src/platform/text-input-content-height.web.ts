@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 
 const COPIED_STYLES = [
   'fontFamily',
@@ -21,9 +21,17 @@ const COPIED_STYLES = [
   'paddingLeft'
 ] as const
 
+export function copyTextInputStyles(source: HTMLTextAreaElement, copy: HTMLElement): void {
+  const computed = getComputedStyle(source)
+  for (const property of COPIED_STYLES) {
+    copy.style[property] = computed[property]
+  }
+  copy.style.width = `${source.clientWidth}px`
+}
+
 // Measure a hidden copy: resizing the live textarea clamps scrolling ancestors in WebKit.
 export function useTextInputContentHeight(
-  input: RefObject<TextInput | null>,
+  input: RefObject<TextInputInstance | null>,
   value: string
 ): number | undefined {
   const [height, setHeight] = useState<number>()
@@ -37,10 +45,7 @@ export function useTextInputContentHeight(
       return
     }
     const computed = getComputedStyle(source)
-    for (const property of COPIED_STYLES) {
-      copy.style[property] = computed[property]
-    }
-    copy.style.width = `${source.clientWidth}px`
+    copyTextInputStyles(source, copy)
     // A trailing newline only takes up a line once something follows it.
     copy.value = text.current.endsWith('\n') ? `${text.current} ` : text.current
     // The copy has no border; the field's own border sits outside its scrollHeight.

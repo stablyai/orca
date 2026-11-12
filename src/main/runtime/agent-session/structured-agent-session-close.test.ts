@@ -6,13 +6,13 @@ import { agentSessionConversationView } from '../../../shared/agent-session/life
 // Child exit proof precedes advisory tab cleanup; failed stops retain the original surface.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/structured-agent-session-host-lifetime'
+import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 
 const hostRef: { current: unknown } = { current: null }
 
-vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 

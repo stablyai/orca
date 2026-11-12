@@ -1,16 +1,16 @@
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
-} from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionAdapterStop } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapterStop } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
 import { answerClaudePrompt, cancelClaudeTurn } from '../claude-structured-control-actions'
-import { leaveClaudePlanModeOnApproval } from '../../claude-plan-approval-mode'
-import type { ClaudeLateDispatchSettlement } from '../../claude-replay-turn-resolution'
+import { leaveClaudePlanModeOnApproval } from '../permissions/claude-plan-approval-mode'
+import type { ClaudeLateDispatchSettlement } from '../turns/claude-replay-turn-resolution'
 import { buildClaudePromptReply, claudePromptDismissal } from './claude-structured-prompt-replies'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import type { ClaudePendingPrompt } from '../../claude-prompt-registry'
-import { CLAUDE_STOP_GRACE_MS } from '../../claude-request-end-wait'
+import type { ClaudePendingPrompt } from '../permissions/claude-prompt-registry'
+import { CLAUDE_STOP_GRACE_MS } from '../turns/claude-request-end-wait'
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 
 type CancelInput = Parameters<StructuredAgentSessionAdapter['cancelTurn']>[0]

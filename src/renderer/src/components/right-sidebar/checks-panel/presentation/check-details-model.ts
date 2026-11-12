@@ -43,7 +43,10 @@ export function isFailedCheck(check: PRCheckDetail): boolean {
   )
 }
 
-export function formatCheckTimestamp(input: string | null | undefined): string | null {
+export function formatCheckTimestamp(
+  input: string | null | undefined,
+  intlLocale: string = getIntlLocale()
+): string | null {
   if (!input) {
     return null
   }
@@ -51,7 +54,7 @@ export function formatCheckTimestamp(input: string | null | undefined): string |
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  return date.toLocaleString(getIntlLocale(), {
+  return date.toLocaleString(intlLocale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

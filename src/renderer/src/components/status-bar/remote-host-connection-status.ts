@@ -1,11 +1,12 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { RuntimeHostBlockedReason } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimePairingRepairRoute } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
-import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
-import '@/runtime/runtime-host-connection-state'
+import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
+import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   runtimeStatusForOverall,
   type HostStatus,
@@ -56,31 +57,29 @@ export function runtimeHostBlockedRecovery(
 export function runtimeHostBlockedCopy(
   reason: RuntimeHostBlockedReason,
   compatibility?: RuntimeCompatVerdict,
-  repairRoute: RuntimePairingRepairRoute = 'access-link'
+  repairRoute: RuntimePairingRepairRoute = 'access-link',
+  t: Translate = translate
 ): RuntimeHostBlockedCopy {
   if (reason === 'access-revoked') {
     return {
-      label: translate(
-        'auto.components.status.bar.RuntimeHostStatusRow.access_revoked',
-        'Access revoked'
-      ),
-      summary: translate(
+      label: t('auto.components.status.bar.RuntimeHostStatusRow.access_revoked', 'Access revoked'),
+      summary: t(
         'auto.components.status.bar.RuntimeHostStatusRow.access_revoked_summary',
         'This server revoked access for this computer'
       ),
       // Why: Orca pairs a managed server over SSH by itself; it reaches here only when that failed.
       explanation:
         repairRoute === 'access-link'
-          ? translate(
+          ? t(
               'auto.components.status.bar.RuntimeHostStatusRow.access_revoked_explanation',
               'Re-pair with a new pairing link from the server to reconnect.'
             )
           : repairRoute === 'ssh'
-            ? translate(
+            ? t(
                 'auto.components.status.bar.RuntimeHostStatusRow.managed_access_revoked_explanation',
                 "Orca couldn't pair with it again over SSH. Connect to try again."
               )
-            : translate(
+            : t(
                 'auto.components.status.bar.RuntimeHostStatusRow.connect_access_revoked_explanation',
                 'Connect to try again.'
               )
@@ -88,42 +87,40 @@ export function runtimeHostBlockedCopy(
   }
   if (reason === 'server-replaced') {
     return {
-      label: translate(
+      label: t(
         'auto.components.status.bar.RuntimeHostStatusRow.server_replaced',
         'Different server'
       ),
-      summary: translate(
+      summary: t(
         'auto.components.status.bar.RuntimeHostStatusRow.server_replaced_summary',
         'This host now runs a different Orca server than the one this computer paired with'
       ),
       // Why: SSH access alone can't re-pin another server key, so reconnecting can't fix this.
-      explanation: translate(
+      explanation: t(
         'auto.components.status.bar.RuntimeHostStatusRow.server_replaced_explanation',
         'Orca connects to the host as a different SSH user, or its server was reinstalled. In Settings › Remote Orca Servers, open the ⋯ menu on this server and choose Forget…, then connect the SSH host to pair with its current server.'
       )
     }
   }
   return {
-    label: translate(
-      'auto.components.status.bar.RuntimeHostStatusRow.update_required',
-      'Update required'
-    ),
-    summary: translate(
+    label: t('auto.components.status.bar.RuntimeHostStatusRow.update_required', 'Update required'),
+    summary: t(
       'auto.components.status.bar.RuntimeHostStatusRow.update_required_summary',
       'Orca versions are not compatible'
     ),
-    explanation: translate(
+    explanation: t(
       'auto.components.status.bar.RuntimeHostStatusRow.update_required_explanation',
       'Update Orca on this computer or on the server, then connect again.'
     ),
     ...(compatibility?.kind === 'blocked'
-      ? { detail: describeRuntimeCompatBlock(compatibility) }
+      ? { detail: describeRuntimeCompatBlock(compatibility, t) }
       : {})
   }
 }
 
 export function runtimeHostConnectionDetail(
-  remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
+  remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null,
+  t: Translate = translate
 ): string | undefined {
   if (!remoteControl) {
     return undefined
@@ -135,7 +132,7 @@ export function runtimeHostConnectionDetail(
     return undefined
   }
   if (remoteControl.state === 'reconnecting') {
-    return translate(
+    return t(
       'auto.components.status.bar.SshStatusSegment.runtime_reconnect_attempt',
       'Attempt {{value0}}',
       { value0: String(remoteControl.reconnectAttempt + 1) }
@@ -145,7 +142,7 @@ export function runtimeHostConnectionDetail(
     return remoteControl.lastError
   }
   if (remoteControl.lastClose?.reason) {
-    return translate(
+    return t(
       'auto.components.status.bar.SshStatusSegment.runtime_last_close_reason',
       'Closed: {{value0}}',
       { value0: remoteControl.lastClose.reason }

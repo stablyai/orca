@@ -12,7 +12,7 @@ import {
   MAX_ID_LENGTH,
   SessionId
 } from './structured-agent-session-identifiers'
-import { z } from 'zod'
+import * as z from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isStructuredAgentId } from '../agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
@@ -335,8 +335,6 @@ export const HistoryParams = z
   })
   .strict()
 
-export const SubscribeParams = OptionsParams.extend({ cursor: JournalCursor.optional() }).strict()
-
 // Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
 export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })
 
@@ -357,7 +355,5 @@ export const RewindParams = z
     expectedEpoch: Identifier('Invalid journal epoch')
   })
   .strict()
-
-export { RespondToQuestionParams } from './structured-agent-session-question-params'
 
 export { MutationEnvelope } from './structured-agent-session-mutation-envelope'

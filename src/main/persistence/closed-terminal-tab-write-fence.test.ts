@@ -13,7 +13,7 @@ import {
   WORKTREE_ID,
   WORKTREE_PATH,
   makeSession
-} from '../runtime/__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
+} from '../runtime/__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
 import { advanceTerminalTopologyRevision } from './terminal-topology/terminal-topology-membership'
 
 const SSH_HOST_ID = 'ssh:target-1'

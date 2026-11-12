@@ -8,22 +8,35 @@ import { getPsProcessIdentity } from './daemon-process-identity-query'
 
 export const START_TIME_TOLERANCE_MS = 1_500
 
+let cachedLinuxTicksPerSecond: number | null = null
+
+// CLK_TCK is fixed for the kernel's lifetime; forking getconf per read blocked the main thread.
+function getLinuxTicksPerSecond(): number | null {
+  if (cachedLinuxTicksPerSecond !== null) {
+    return cachedLinuxTicksPerSecond
+  }
+  const ticksPerSecond = Number(
+    execFileSync('getconf', ['CLK_TCK'], {
+      encoding: 'utf8',
+      timeout: 1_000
+    }).trim()
+  )
+  if (Number.isFinite(ticksPerSecond) && ticksPerSecond > 0) {
+    cachedLinuxTicksPerSecond = ticksPerSecond
+  }
+  return cachedLinuxTicksPerSecond
+}
+
 function getLinuxProcessStartedAtMs(pid: number): number | null {
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
     const startTicks = parseLinuxProcStartTicks(stat)
     const bootTimeSeconds = parseLinuxBootTimeSeconds(readFileSync('/proc/stat', 'utf8'))
-    const ticksPerSecond = Number(
-      execFileSync('getconf', ['CLK_TCK'], {
-        encoding: 'utf8',
-        timeout: 1_000
-      }).trim()
-    )
+    const ticksPerSecond = getLinuxTicksPerSecond()
     if (
       !Number.isFinite(startTicks) ||
       !Number.isFinite(bootTimeSeconds) ||
-      !Number.isFinite(ticksPerSecond) ||
-      ticksPerSecond <= 0
+      ticksPerSecond === null
     ) {
       return null
     }

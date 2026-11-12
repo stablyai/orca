@@ -1,3 +1,4 @@
+import { withoutGitGraph } from '../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -83,6 +84,46 @@ describe('Store.applyLayoutCommand pane operations', () => {
     }
     return store
   }
+
+  it('keeps window-detach visibility and pane bindings through the atomic commit', async () => {
+    const store = await storeWithSplitTab(['local'])
+    const groupId = store.getWorkspaceSession().tabGroups?.[WORKTREE]?.[0]!.id
+    await store.applyLayoutCommand({
+      type: 'openEditorTab',
+      workspace: WORKTREE,
+      tabId: 'graph',
+      fileId: 'graph',
+      contentType: 'git-graph',
+      view: {
+        view: { mode: 'git-graph' },
+        file: { filePath: 'graph', relativePath: 'graph', language: 'plaintext' }
+      },
+      groupId,
+      index: 0
+    })
+    const reply = await store.applyLayoutCommand(
+      {
+        type: 'movePaneToNewTab',
+        workspace: WORKTREE,
+        tabId: TAB,
+        leafId: LEAF_B,
+        groupId,
+        index: 0,
+        windowDetach: { ptyId: 'pty-b' }
+      },
+      ['local'],
+      { visibility: withoutGitGraph }
+    )
+    if (!reply.ok) {
+      throw new Error(reply.code)
+    }
+    const session = store.getWorkspaceSession()
+    expect(session.tabGroups?.[WORKTREE]?.[0]?.tabOrder).toEqual(['graph', reply.result.tabId, TAB])
+    expect(session.terminalLayoutsByTabId[reply.result.tabId!]?.ptyIdsByLeafId).toEqual({
+      [LEAF_B]: 'pty-b'
+    })
+    expect(leafIds(session.terminalLayoutsByTabId[TAB]?.root)).toEqual([LEAF_A])
+  })
 
   it('closes the pane in every partition holding the tab', async () => {
     const store = await storeWithSplitTab(['local', 'ssh:target-1'])

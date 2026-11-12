@@ -14,7 +14,7 @@ import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import { buildHeadlessMobileSessionTerminalTabs } from '../../terminal/surface/mobile-session-terminal-projection'
 import {
@@ -30,7 +30,7 @@ import type { WorkspaceLayoutStream } from '../../terminal/surface/workspace-lay
 import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'
 import { HistoryReader } from '../../../daemon/history/restoration/history-reader'
 import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
-import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
+import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'

@@ -4,7 +4,7 @@ import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-l
 import {
   collectActivePluginCustomEditors,
   customEditorsForFile
-} from '@/store/plugin-custom-editors'
+} from '@/store/plugins/file-editors/plugin-custom-editors'
 
 function plugin(
   overrides: Partial<PluginHostListEntry> & Pick<PluginHostListEntry, 'pluginKey'>

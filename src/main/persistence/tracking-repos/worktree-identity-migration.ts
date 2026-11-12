@@ -290,6 +290,9 @@ export function migrateWorktreeIdentity(
   if (state.ui?.explorerDisplayRootByWorktree) {
     changed = moveKey(state.ui.explorerDisplayRootByWorktree) || changed
   }
+  if (state.ui?.gitGraphFiltersByWorktree) {
+    changed = moveKey(state.ui.gitGraphFiltersByWorktree) || changed
+  }
   const showDotfiles = state.ui?.showDotfilesByWorktree
   if (showDotfiles) {
     changed = moveKey(showDotfiles) || changed

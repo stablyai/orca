@@ -1,24 +1,22 @@
-import { useEffect, useLayoutEffect, type MutableRefObject, type RefObject } from 'react'
-import { translate } from '@/i18n/i18n'
 import {
-  normalizeBrowserNavigationUrl,
-  redactKagiSessionToken
-} from '../../../../../shared/browser-url'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+  issueBrowserGuestNavigation,
+  cachedBrowserGuestMetadata
+} from '../host-guest/browser-guest-metadata-cache'
+import { useEffect, useLayoutEffect, type MutableRefObject, type RefObject } from 'react'
+import { useAppStore } from '@/store'
+import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { normalizeBrowserGuestSrc } from '../../../../../shared/browser/extensions/browser-extension-url'
 import {
   applyBrowserPageViewportLayout,
   syncBrowserPageChromeInset
 } from '../host-guest/browser-page-viewport'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
-import { isChromiumErrorPage } from '../describe-page/browser-page-url-display'
-import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 
 export function useBrowserPageWebviewUrlSync({
   browserTabId,
   browserTabUrl,
-  browserTabLoading,
+  workspaceId,
   isActive,
   isPaintable,
   slotViewport,
@@ -27,14 +25,11 @@ export function useBrowserPageWebviewUrlSync({
   lastKnownWebviewUrlRef,
   keepAddressBarFocusRef,
   addressBarInputRef,
-  browserTabUrlRef,
-  addressBarValueRef,
-  onUpdatePageStateRef,
   focusWebviewNow
 }: {
   browserTabId: string
   browserTabUrl: string
-  browserTabLoading: boolean
+  workspaceId: string
   isActive: boolean
   isPaintable: boolean
   slotViewport: HTMLDivElement | null
@@ -43,9 +38,6 @@ export function useBrowserPageWebviewUrlSync({
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
   keepAddressBarFocusRef: MutableRefObject<boolean>
   addressBarInputRef: RefObject<HTMLInputElement | null>
-  browserTabUrlRef: MutableRefObject<string>
-  addressBarValueRef: MutableRefObject<string>
-  onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   focusWebviewNow: () => boolean
 }): void {
   useLayoutEffect(() => {
@@ -75,7 +67,14 @@ export function useBrowserPageWebviewUrlSync({
     if (!webview) {
       return
     }
-    const normalizedUrl = normalizeBrowserGuestSrc(browserTabUrl)
+    const page = useAppStore
+      .getState()
+      .browserPagesByWorkspace[workspaceId]?.find((page) => page.id === browserTabId)
+    if (!page) {
+      return
+    }
+    // Attach can adopt a retained document before this render's URL effect runs.
+    const normalizedUrl = normalizeBrowserGuestSrc(page.url)
     if (!normalizedUrl) {
       return
     }
@@ -83,13 +82,7 @@ export function useBrowserPageWebviewUrlSync({
     if (lastKnownWebviewUrlRef.current === normalizedUrl) {
       return
     }
-    let liveUrl: string | null = null
-    try {
-      liveUrl = webview.getURL() || null
-    } catch {
-      // Why: a newly attached guest can reject getURL(); skip so a transient error isn't misread as a mismatch and force-navigated.
-      return
-    }
+    const liveUrl = cachedBrowserGuestMetadata(webview)?.url ?? null
     const normalizedLiveUrl = liveUrl ? (normalizeBrowserNavigationUrl(liveUrl) ?? liveUrl) : null
     const declaredSrc = webview.getAttribute('src')
     if (
@@ -98,7 +91,9 @@ export function useBrowserPageWebviewUrlSync({
       declaredSrc !== normalizedUrl
     ) {
       lastKnownWebviewUrlRef.current = normalizedUrl
-      webview.src = normalizedUrl
+      issueBrowserGuestNavigation(webview, () => {
+        webview.src = normalizedUrl
+      })
       if (normalizedUrl !== ORCA_BROWSER_BLANK_URL) {
         keepAddressBarFocusRef.current = false
         if (document.activeElement === addressBarInputRef.current) {
@@ -108,58 +103,12 @@ export function useBrowserPageWebviewUrlSync({
     }
   }, [
     addressBarInputRef,
+    browserTabId,
     browserTabUrl,
     focusWebviewNow,
     keepAddressBarFocusRef,
     lastKnownWebviewUrlRef,
-    webviewRef
-  ])
-
-  useEffect(() => {
-    if (!shouldPollChromiumErrorPage({ isActive, loading: browserTabLoading })) {
-      return
-    }
-
-    const detectChromiumErrorPage = (): void => {
-      const webview = webviewRef.current
-      if (!webview) {
-        return
-      }
-      try {
-        const currentUrl = webview.getURL() || webview.src || ''
-        if (!isChromiumErrorPage(currentUrl)) {
-          return
-        }
-
-        const attemptedUrl = browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
-        onUpdatePageStateRef.current(browserTabId, {
-          loading: false,
-          loadError: {
-            code: -1,
-            description: translate(
-              'auto.components.browser.pane.BrowserPane.e48569ac6d',
-              'This site could not be reached.'
-            ),
-            validatedUrl: redactKagiSessionToken(attemptedUrl)
-          }
-        })
-      } catch {
-        // Why: ignore transient getURL() errors from a mid-attach guest; this poll is only a fallback.
-      }
-    }
-
-    // Some Electron builds omit did-fail-load; poll loading visible pages only, then re-read durable guest state on visibility return.
-    return installWindowVisibilityInterval({
-      run: detectChromiumErrorPage,
-      intervalMs: 250
-    })
-  }, [
-    addressBarValueRef,
-    browserTabId,
-    browserTabLoading,
-    browserTabUrlRef,
-    isActive,
-    onUpdatePageStateRef,
-    webviewRef
+    webviewRef,
+    workspaceId
   ])
 }

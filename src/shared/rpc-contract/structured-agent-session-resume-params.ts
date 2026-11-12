@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { Identifier, SessionId } from './structured-agent-session-identifiers'
 
 /** Identity only: derive transcript/account paths host-side so clients cannot choose imported files or credential directories. */

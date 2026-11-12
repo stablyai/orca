@@ -1,10 +1,12 @@
+import { selectWorktreesByRepo } from '../../../store/workspaces/catalog/workspace-record-fields'
 import { getProviderChecksOutcome } from '../../../../../shared/source-control/checks/provider-check-summary'
 import type { AppState } from '../../../store/types'
-import { getRepoMapFromState, getWorktreeMapFromState } from '../../../store/selectors'
+import { getIndexedRepoMap } from '../../../store/repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '../../../store/slices/worktrees/listing/worktree-catalog-index'
 import type { CheckStatus as CoarseCheckStatus } from '../../../../../shared/github/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
-import { getHostedReviewCacheKey } from '../../../store/slices/hosted-review-cache-identity'
+import { getHostedReviewCacheKey } from '../../../store/slices/hosted-review/hosted-review-cache-identity'
 import { isGitHubPRSuppressed } from '../../../../../shared/worktree/github-pr-suppression'
 
 // Derive input types and cache keys together so a newly read field must also invalidate the cache.
@@ -69,13 +71,13 @@ export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStat
 
 function computeActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus | null {
   const activeWorktree = state.activeWorktreeId
-    ? (getWorktreeMapFromState(state).get(state.activeWorktreeId) ?? null)
+    ? (getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(state.activeWorktreeId) ?? null)
     : null
   if (!activeWorktree) {
     return null
   }
 
-  const activeRepo = getRepoMapFromState(state).get(activeWorktree.repoId)
+  const activeRepo = getIndexedRepoMap(state.repos).get(activeWorktree.repoId)
   if (!activeRepo) {
     return null
   }

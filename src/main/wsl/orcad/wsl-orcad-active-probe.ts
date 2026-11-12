@@ -2,7 +2,7 @@
  * WSL reads an active slot's liveness, readiness and pid in one guest command; SSH keeps
  * `probeActiveOrcadReadiness`'s separate reads. The answers are judged exactly as those are.
  */
-import type { OrcadHostTarget } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTarget } from '../../managed-server/install/orcad-host-transport'
 import type { OrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'
 import { orcadLivenessProbeCommand } from '../../managed-server/install/orcad-remote-launch'
 import { readOrcadReadinessNowCommand } from '../../managed-server/install/orcad-remote-readiness-wait'
@@ -13,12 +13,12 @@ import {
   activeOrcadReadinessFromOutput,
   assertActiveOrcadLive,
   OrcadActiveReadinessError
-} from '../../ssh/orcad-active-readiness'
-import { computeLocalOrcadBuildHash } from '../../ssh/orcad-local-build-hash'
+} from '../../managed-server/activation/orcad-active-readiness'
+import { computeLocalOrcadBuildHash } from '../../managed-server/install/orcad-local-build-hash'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { joinRemotePath } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 
 const SECTION_END = '__ORCA_WSL_ACTIVE_PROBE_END__'
 

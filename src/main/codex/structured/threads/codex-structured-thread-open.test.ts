@@ -1,4 +1,4 @@
-import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'

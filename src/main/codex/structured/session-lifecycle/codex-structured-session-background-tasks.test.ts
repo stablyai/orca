@@ -11,8 +11,8 @@ import { CodexStructuredSessionAdapter } from './codex-structured-session-adapte
 import { CodexBackgroundTaskTracker } from '../background-work/codex-background-task-tracker'
 import { CodexJournalItems } from '../journal/codex-structured-journal-items'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
-import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 type Published = { sessionId: string; evidence: AgentChildWorkEvidence['type'][] }

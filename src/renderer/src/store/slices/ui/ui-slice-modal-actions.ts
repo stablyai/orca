@@ -1,5 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import { settleEvictedModalData } from '../modal-slot-dismissal'
+import { settleEvictedModalData } from './modal-slot-dismissal'
 
 export function createUiModalActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {

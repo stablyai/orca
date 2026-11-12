@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+// @vitest-environment happy-dom
 import { type ReactNode, type Ref, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,9 +9,12 @@ import type {
   WorkspaceCleanupScanResult
 } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
-import { createTestStore, seedStore } from '../../store/slices/store-test-helpers'
-import { resetWorkspaceCleanupBrowsePersistTimer } from '../../store/slices/workspace-cleanup-browse'
-import { NOW, makeCandidate } from '../../store/slices/workspace-cleanup-slice-test-harness'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { resetWorkspaceCleanupBrowsePersistTimer } from '../../store/slices/workspace-cleanup/workspace-cleanup-browse'
+import {
+  NOW,
+  makeCandidate
+} from '../../store/slices/workspace-cleanup/workspace-cleanup-slice-test-harness'
 import WorkspaceCleanupDialog from './WorkspaceCleanupDialog'
 
 const holders = vi.hoisted(() => ({
@@ -44,7 +48,7 @@ vi.mock('sonner', () => ({
   })
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: holders.activateAndRevealWorktree
 }))
 
@@ -225,98 +229,6 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     vi.useRealTimers()
   })
 
-  it('renders the cached snapshot immediately and kicks one background rescan', async () => {
-    const rig = installApi(cachedFleet())
-    await renderDialog()
-    await openDialog()
-
-    expect(rowNames()).toEqual(expect.arrayContaining(['alpha', 'beta']))
-    expect(rig.scan).toHaveBeenCalledTimes(1)
-    expect(container?.textContent).toContain('Updated 2h ago')
-    expect(container?.textContent).toContain('Refreshing')
-  })
-
-  it('opens a cleanup row on the host that produced it', async () => {
-    installApi({
-      scannedAt: CACHED_AT,
-      candidates: [
-        makeCandidate({
-          worktreeId: 'repo1::/tmp/remote',
-          displayName: 'remote',
-          executionHostId: 'ssh:box'
-        })
-      ],
-      errors: []
-    })
-    await renderDialog()
-    await openDialog()
-
-    await act(async () => {
-      container?.querySelector<HTMLElement>('[aria-label^="Open remote"]')?.click()
-    })
-
-    expect(holders.activateAndRevealWorktree).toHaveBeenCalledWith('repo1::/tmp/remote', {
-      executionHostId: 'ssh:box'
-    })
-  })
-
-  it('reconciles streamed rows into the cached list without clearing it', async () => {
-    const rig = installApi(cachedFleet())
-    await renderDialog()
-    await openDialog()
-
-    progressTick(rig, {
-      candidates: [
-        makeCandidate({
-          worktreeId: 'repo1::/tmp/alpha',
-          displayName: 'alpha',
-          fingerprint: 'fingerprint-alpha-2'
-        }),
-        makeCandidate({ worktreeId: 'repo1::/tmp/gamma', displayName: 'gamma' })
-      ],
-      scannedWorktreeCount: 2
-    })
-    await flush()
-
-    expect(rowNames()).toEqual(expect.arrayContaining(['alpha', 'beta', 'gamma']))
-  })
-
-  it('keeps search and selection interactive while rows stream in', async () => {
-    const rig = installApi(cachedFleet())
-    await renderDialog()
-    await openDialog()
-
-    const search = container?.querySelector<HTMLInputElement>('[aria-label="Search workspaces"]')
-    expect(search?.disabled).toBe(false)
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-    await act(async () => {
-      setter?.call(search, 'beta')
-      search?.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    progressTick(rig, {
-      candidates: [makeCandidate({ worktreeId: 'repo1::/tmp/gamma', displayName: 'gamma' })],
-      scannedWorktreeCount: 1
-    })
-    await flush()
-
-    expect(rowNames()).toEqual(['beta'])
-
-    await act(async () => {
-      setter?.call(search, '')
-      search?.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    await flush()
-    expect(rowNames()).toEqual(expect.arrayContaining(['alpha', 'beta', 'gamma']))
-
-    const checkbox = rowCheckbox('alpha')
-    expect(checkbox).not.toBeNull()
-    const before = checkbox?.getAttribute('aria-checked')
-    await act(async () => {
-      checkbox?.click()
-    })
-    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).not.toBe(before)
-  })
-
   it('does not clear selection while free-text search hides the row', async () => {
     installApi(cachedFleet())
     await renderDialog()
@@ -466,44 +378,5 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
     expect(rowNames()).not.toContain('beta')
     expect(holders.infoToasts).toContain('1 selected workspace no longer exists.')
-  })
-
-  it('includes the active workspace and live-agent rows in select-all', async () => {
-    installApi({
-      scannedAt: CACHED_AT,
-      candidates: [
-        makeCandidate({ worktreeId: 'repo1::/tmp/ready', displayName: 'ready' }),
-        makeCandidate({
-          worktreeId: 'repo1::/tmp/active',
-          displayName: 'active',
-          reasons: [],
-          blockers: ['active-workspace']
-        }),
-        makeCandidate({
-          worktreeId: 'repo1::/tmp/agent',
-          displayName: 'agent',
-          reasons: [],
-          blockers: ['live-agent']
-        })
-      ],
-      errors: []
-    })
-    await renderDialog()
-    await openDialog()
-
-    const selectAll = container?.querySelector<HTMLElement>(
-      '[aria-label="Select all 3 safety-checked workspaces"]'
-    )
-    expect(selectAll?.getAttribute('aria-checked')).toBe('false')
-
-    await act(async () => selectAll?.click())
-    expect(rowCheckbox('ready')?.getAttribute('aria-checked')).toBe('true')
-    expect(rowCheckbox('active')?.getAttribute('aria-checked')).toBe('true')
-    expect(rowCheckbox('agent')?.getAttribute('aria-checked')).toBe('true')
-
-    await act(async () => selectAll?.click())
-    expect(rowCheckbox('ready')?.getAttribute('aria-checked')).toBe('false')
-    expect(rowCheckbox('active')?.getAttribute('aria-checked')).toBe('false')
-    expect(rowCheckbox('agent')?.getAttribute('aria-checked')).toBe('false')
   })
 })

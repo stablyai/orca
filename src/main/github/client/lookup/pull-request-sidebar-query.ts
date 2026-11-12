@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ghExecFileAsync } from '../../gh-utils'
-import { extractExecError } from '../../../git/exec-error'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
 import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import type { GhExecOptions } from '../github-exec-scope'
@@ -117,7 +117,8 @@ async function readQuery(
 export async function readPullRequestSidebarQuery(
   repository: GitHubApiRepository,
   number: number,
-  options: GhExecOptions
+  options: GhExecOptions,
+  checkPageLimit?: number
 ): Promise<PullRequestLookupData | null | undefined> {
   if (repository.host?.toLowerCase() !== 'github.com') {
     return undefined
@@ -177,7 +178,8 @@ export async function readPullRequestSidebarQuery(
         headRefOid: pr.headRefOid,
         commits: prCheckRollupCommitsSchema.parse(pr.commits)
       },
-      createPRCheckRollupPageReader(repository, number, options)
+      createPRCheckRollupPageReader(repository, number, options),
+      checkPageLimit
     )
   } catch {
     // Metadata remains usable when complete checks need REST recovery.

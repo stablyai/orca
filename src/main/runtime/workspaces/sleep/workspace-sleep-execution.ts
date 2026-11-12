@@ -31,6 +31,9 @@ export type WorkspaceSleepDeps = {
     worktreeId: string,
     markAsleep: boolean
   ) => Promise<AgentSessionWorkspaceSleepResult>
+  /** Settles once a wake of the workspace's VM that is under way has finished (whatever its
+   *  outcome): a sleep stops what the woken server runs. */
+  vmWakeSettled: (worktreeId: string) => Promise<void>
   /** Suspends the VM once its turn comes, unless `wanted` no longer holds by then. */
   suspendVm: ((worktreeId: string, wanted: () => boolean) => Promise<void>) | null
   /** The wake records main keeps for this host's workspace, read after its terminals stopped. */
@@ -186,6 +189,7 @@ async function sleepWorkspace(
 ): Promise<WorkspaceSleepAttempt> {
   const { worktreeId } = target
   const move = projectMovePauseId ? { projectMovePauseId } : {}
+  await deps.vmWakeSettled(worktreeId)
   deps.notify({ worktreeId, phase: 'started', ...move })
   let failure: string | undefined
   let vmSuspendFailure: string | undefined

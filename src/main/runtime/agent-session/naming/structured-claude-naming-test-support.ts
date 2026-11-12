@@ -3,7 +3,7 @@ import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { appendTranscriptEntries } from '../../../claude/claude-provider-session-rename'
+import { appendTranscriptEntries } from '../../../claude/transcripts/claude-provider-session-rename'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { fakeClaude } from '../../../claude/structured/claude-structured-session-test-support'
 import type { FakeConnection } from '../../../claude/structured/claude-structured-session-test-support'
@@ -12,14 +12,14 @@ import { createStructuredChatNamingHandler } from '../../../native-chat/structur
 import {
   createTestParams,
   CREATE_TEST_CALLER
-} from '../../../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
 import {
   hostTestMessage,
   HOST_TEST_SESSION
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime

@@ -1,0 +1,266 @@
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import type {
+  RuntimeTerminalFocus,
+  RuntimeTerminalListResult,
+  RuntimeTerminalRead,
+  RuntimeTerminalRename,
+  RuntimeTerminalSetPaneTitle,
+  RuntimeTerminalShow,
+  RuntimeTerminalSplit,
+  RuntimeTerminalWait
+} from '../../shared/runtime-terminal-contracts'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { shouldUseRendererBackedInteractiveTerminal } from './codex-command-classification'
+import {
+  formatTerminalCreate,
+  formatTerminalFocus,
+  formatTerminalList,
+  formatTerminalRead,
+  formatTerminalRename,
+  formatTerminalSetPaneTitle,
+  formatTerminalShow,
+  formatTerminalSplit,
+  formatTerminalWait
+} from './terminal-format'
+import { printResult } from '../output/command-result-output'
+import {
+  getOptionalPositiveIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredStringFlag,
+  getRequiredStringFlagAllowingEmpty
+} from '../arguments/flags'
+import {
+  annotateOmittedHostScope,
+  type WithAnnotatedHostScope
+} from '../hosts/omitted-host-scope-selectors'
+import { RuntimeClientError } from '../runtime/types'
+import {
+  isSupportedWindowsShellOverride,
+  listSupportedWindowsShellOverrides
+} from '../../shared/windows-terminal-shell'
+import '../../shared/protocol-version'
+import {
+  TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
+  TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY
+} from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
+import {
+  getBrowserWorktreeSelector,
+  getOptionalWorktreeSelector,
+  getRequiredWorktreeSelector
+} from '../workspace-selection/workspace-selector'
+import { getTerminalHandle } from './terminal-selector'
+import { revealPairedTerminalOnLocalDesktop } from './paired-terminal-desktop-reveal'
+import { terminalCloseHandler } from './terminal-close'
+import { terminalSendHandler } from './terminal-send'
+
+// Long terminal waits must outlive the ordinary transport timeout.
+const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
+
+const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
+  const terminal = await getTerminalHandle(flags, cwd, client)
+  // Why first: the desktop on the CLI's machine is the one to move, even when the paired host is a
+  // desktop that would navigate its own window (#31073). That window moves only as the fallback.
+  if (client.isRemote && (await revealPairedTerminalOnLocalDesktop(client, terminal))) {
+    const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
+      terminal,
+      navigation: 'caller'
+    })
+    result.result.focus.navigated = true
+    printResult(result, json, formatTerminalFocus)
+    return
+  }
+  const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
+    terminal,
+    navigation: 'host'
+  })
+  printResult(result, json, formatTerminalFocus)
+}
+
+export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
+  'terminal list': async ({ flags, client, cwd, json }) => {
+    const result = await client.call<WithAnnotatedHostScope<RuntimeTerminalListResult>>(
+      'terminal.list',
+      {
+        worktree: await getOptionalWorktreeSelector(flags, 'worktree', cwd, client),
+        limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
+        // Omit topology from JSON unless requested to keep agent responses small.
+        includeVisualLayouts: !json || flags.has('include-visual-layouts')
+      }
+    )
+    await annotateOmittedHostScope(result.result)
+    printResult(result, json, formatTerminalList)
+  },
+  'terminal show': async ({ flags, client, cwd, json }) => {
+    const result = await client.call<{ terminal: RuntimeTerminalShow }>('terminal.show', {
+      terminal: await getTerminalHandle(flags, cwd, client)
+    })
+    printResult(result, json, formatTerminalShow)
+  },
+  'terminal read': async ({ flags, client, cwd, json }) => {
+    const cursorFlag = getOptionalStringFlag(flags, 'cursor')
+    const cursor =
+      cursorFlag !== undefined && /^\d+$/.test(cursorFlag)
+        ? Number.parseInt(cursorFlag, 10)
+        : undefined
+    if (cursorFlag !== undefined && cursor === undefined) {
+      throw new RuntimeClientError('invalid_argument', '--cursor must be a non-negative integer')
+    }
+    const screen = flags.get('screen') === true
+    // A screen is one current frame; a cursor would falsely imply pageable history.
+    if (screen && cursorFlag !== undefined) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--screen reads the current rendered screen, which has no cursor to page from. Use --cursor without --screen to page through accumulated output.'
+      )
+    }
+    const result = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
+      terminal: await getTerminalHandle(flags, cwd, client),
+      ...(cursor !== undefined ? { cursor } : {}),
+      ...(screen ? { screen: true } : {}),
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
+    })
+    // Older hosts ignore screen and return a stream without source; never present that as a screen.
+    if (screen && result.result.terminal.source === undefined) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This Orca host does not support --screen reads, so it answered with accumulated output instead of the rendered screen. Update Orca on the host, or drop --screen to read accumulated output deliberately.'
+      )
+    }
+    printResult(result, json, formatTerminalRead)
+  },
+  'terminal send': terminalSendHandler,
+  'terminal wait': async ({ flags, client, cwd, json }) => {
+    const timeoutMs = getOptionalPositiveIntegerFlag(flags, 'timeout-ms')
+    const result = await client.call<{ wait: RuntimeTerminalWait }>(
+      'terminal.wait',
+      {
+        terminal: await getTerminalHandle(flags, cwd, client),
+        for: getRequiredStringFlag(flags, 'for'),
+        timeoutMs
+      },
+      {
+        timeoutMs: timeoutMs ? timeoutMs + 5000 : DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS
+      }
+    )
+    printResult(result, json, formatTerminalWait)
+    if (result.result.wait.satisfied === false) {
+      // Chained commands such as wait && send need a failing exit for an unsatisfied condition.
+      process.exitCode = 1
+    }
+  },
+  'terminal stop': async ({ flags, client, cwd, json }) => {
+    const result = await client.call<{ stopped: number }>('terminal.stop', {
+      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+    })
+    printResult(result, json, (value) => `Stopped ${value.stopped} terminals.`)
+  },
+  'terminal rename': async ({ flags, client, cwd, json }) => {
+    const result = await client.call<{ rename: RuntimeTerminalRename }>('terminal.rename', {
+      terminal: await getTerminalHandle(flags, cwd, client),
+      title: getOptionalStringFlag(flags, 'title') ?? null
+    })
+    printResult(result, json, formatTerminalRename)
+  },
+  'terminal set-pane-title': async ({ flags, client, cwd, json }) => {
+    const title = getRequiredStringFlagAllowingEmpty(flags, 'title')
+    const result = await client.call<{ paneTitle: RuntimeTerminalSetPaneTitle }>(
+      'terminal.setPaneTitle',
+      { terminal: await getTerminalHandle(flags, cwd, client), title }
+    )
+    printResult(result, json, formatTerminalSetPaneTitle)
+  },
+  'terminal create': async ({ flags, client, cwd, json }) => {
+    if (client.isRemote && !flags.has('worktree')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Remote terminal create requires --worktree because the client cwd cannot identify a server worktree.'
+      )
+    }
+    const command = getOptionalStringFlag(flags, 'command')
+    const useRendererBackedInteractiveTerminal =
+      !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
+    const focus = flags.get('focus') === true
+    const shell = getOptionalStringFlag(flags, 'shell')
+    if (shell !== undefined) {
+      if (!isSupportedWindowsShellOverride(shell)) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          `--shell must be one of: ${listSupportedWindowsShellOverrides().join(', ')}`
+        )
+      }
+      // Older hosts ignore shell and successfully create the wrong default shell; check support first.
+      const status = await client.getCliStatus()
+      // An unreachable host reports no capabilities at all; that is not evidence it lacks --shell.
+      if (!status.result.runtime.reachable) {
+        throw new RuntimeClientError(
+          'runtime_unavailable',
+          'Orca could not verify --shell support on the execution host, so no terminal was created. Wait for the execution host to become reachable and retry.'
+        )
+      }
+      if (
+        status.result.runtime.capabilities?.includes(
+          TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY
+        ) !== true
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca host does not support --shell, and would silently create a terminal running its default shell instead. No terminal was created; update Orca on the execution host.'
+        )
+      }
+    }
+    const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
+      worktree: await getBrowserWorktreeSelector(flags, cwd, client),
+      command,
+      ...(shell !== undefined ? { shell } : {}),
+      title: getOptionalStringFlag(flags, 'title'),
+      focus,
+      ...(focus ? { presentation: 'focused' } : {}),
+      // Compat: hosts before v1.4.211 (#22384) need renderer startup replies; remove once unsupported.
+      ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
+    })
+    printResult(result, json, formatTerminalCreate)
+  },
+  'terminal switch': terminalFocusHandler,
+  'terminal close': terminalCloseHandler,
+  'terminal split': async ({ flags, client, cwd, json }) => {
+    const directionFlag = getOptionalStringFlag(flags, 'direction')
+    if (
+      directionFlag !== undefined &&
+      directionFlag !== 'horizontal' &&
+      directionFlag !== 'vertical'
+    ) {
+      throw new RuntimeClientError('invalid_argument', '--direction must be horizontal or vertical')
+    }
+    // A blank id (an unset variable) must not fall through to a fresh split of the same command.
+    const retrySplit = flags.has('retry-split')
+      ? getRequiredStringFlag(flags, 'retry-split')
+      : undefined
+    // Why refused rather than sent: an older host strips the unknown param and splits again,
+    // starting a second copy of the command the retry exists to avoid.
+    if (retrySplit !== undefined) {
+      const status = await client.getCliStatus()
+      if (!status.result.runtime.reachable) {
+        throw new RuntimeClientError(
+          'runtime_unavailable',
+          'Orca could not verify --retry-split support on the execution host, so nothing was split. Wait for the execution host to become reachable and retry.'
+        )
+      }
+      if (
+        status.result.runtime.capabilities?.includes(TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY) !==
+        true
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca host does not support --retry-split and would split again. Nothing was split; check `orca terminal list --json` for the pane instead.'
+        )
+      }
+    }
+    const result = await client.call<{ split: RuntimeTerminalSplit }>('terminal.split', {
+      terminal: await getTerminalHandle(flags, cwd, client),
+      direction: directionFlag,
+      command: getOptionalStringFlag(flags, 'command'),
+      ...(retrySplit !== undefined ? { retrySplit } : {})
+    })
+    printResult(result, json, formatTerminalSplit)
+  }
+}

@@ -7,7 +7,7 @@ import type {
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
 import { UpdateErrorCardContent, type UpdateErrorCardModel } from '../../UpdateErrorCardContent'
 import { LinuxPackageInstallRecoveryCard } from '../../LinuxPackageInstallRecoveryCard'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { UpdateCheckFeedback } from './UpdateCheckFeedback'
 import {
   UpdateAvailableRichContent,
@@ -51,11 +51,12 @@ export function UpdateCardStateContent({
   onDismiss: () => void
   onCollapse: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (status.state === 'checking') {
     return (
       <UpdateCheckFeedback
         icon="spinner"
-        text={translate('auto.components.UpdateCard.ba5ffc949c', 'Checking for updates...')}
+        text={t('auto.components.UpdateCard.ba5ffc949c', 'Checking for updates...')}
       />
     )
   }
@@ -66,12 +67,12 @@ export function UpdateCardStateContent({
         icon="check"
         text={
           unsupported
-            ? translate(
+            ? t(
                 'macosUpdateRequirement.settingsStatus',
                 'Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac.',
                 { version: unsupported.version, macos: unsupported.minimumMacosVersion }
               )
-            : translate('auto.components.UpdateCard.ea2a41adbe', "You're on the latest version.")
+            : t('auto.components.UpdateCard.ea2a41adbe', "You're on the latest version.")
         }
       />
     )
@@ -101,11 +102,11 @@ export function UpdateCardStateContent({
           <div className="flex items-center gap-2">
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
             <h3 className="text-sm font-semibold">
-              {translate('updates.installBlock.preparingTitle', 'Preparing your update')}
+              {t('updates.installBlock.preparingTitle', 'Preparing your update')}
             </h3>
           </div>
           <p className="text-sm text-muted-foreground">
-            {translate(
+            {t(
               'updates.installBlock.preparingSummary',
               'Checking running Orca instances before restarting.'
             )}
@@ -115,9 +116,7 @@ export function UpdateCardStateContent({
     }
     return hasStartedDownload ? (
       <div className="p-4">
-        <p className="text-sm">
-          {translate('auto.components.UpdateCard.09a55c39b5', 'Installing...')}
-        </p>
+        <p className="text-sm">{t('auto.components.UpdateCard.09a55c39b5', 'Installing...')}</p>
       </div>
     ) : (
       <UpdateReadyToInstallContent

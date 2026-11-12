@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAutoAckTabTargets } from './agent-auto-ack-targets'
 import { computeLapsedManualUnreadProtections } from '@/attention/agent-attention-acknowledgement'
-import { makeUnifiedTab } from '../store/slices/store-test-helpers'
+import { makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
 
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'

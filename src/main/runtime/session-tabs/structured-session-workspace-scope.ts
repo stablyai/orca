@@ -5,8 +5,7 @@ import {
   isNativeLocalLocation,
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId,
-  getRepoExecutionHostId,
-  getRepoRoutingConnectionId
+  getRepoExecutionHostId
 } from '../../../shared/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import {
@@ -15,14 +14,13 @@ import {
 } from '../../../shared/floating-workspace-worktree'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
+import { composeWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { resolveWorktreeHostRouting } from '../workspaces/catalog/worktree-launch-host-repo'
-import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import type { RuntimeWorkspaceFileTargets } from '../workspaces/workspace-file-session-targets'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
 import type { RuntimeWorkspaceCatalog } from '../workspaces/catalog/workspace-catalog'
 import type { RuntimeWorkspaceSelectors } from '../workspaces/workspace-selectors'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { NotificationAttentionAcknowledgement } from '../../../shared/notification-settings-types'
 
 export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStructuredSessionAccountHome {
@@ -34,13 +32,13 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     OrcaRuntimeWithTransitionGraphReloadToTerminalState['resolveFolderWorkspaceSelector']
   >
 
-  protected abstract projectCachedWorktrees(
-    ...args: Parameters<RuntimeWorkspaceCatalog['projectCachedWorktrees']>
-  ): ReturnType<RuntimeWorkspaceCatalog['projectCachedWorktrees']>
+  protected abstract buildResolvedWorktreeFromId(
+    ...args: Parameters<RuntimeWorkspaceSelectors['buildResolvedWorktreeFromId']>
+  ): ReturnType<RuntimeWorkspaceSelectors['buildResolvedWorktreeFromId']>
 
-  protected abstract matchWorktreeSelector(
-    ...args: Parameters<RuntimeWorkspaceSelectors['matchWorktreeSelector']>
-  ): ReturnType<RuntimeWorkspaceSelectors['matchWorktreeSelector']>
+  protected abstract selectReposBySelector(
+    ...args: Parameters<RuntimeWorkspaceSelectors['selectReposBySelector']>
+  ): ReturnType<RuntimeWorkspaceSelectors['selectReposBySelector']>
 
   protected abstract listRepoWorktreesForResolution(
     ...args: Parameters<RuntimeWorkspaceCatalog['listRepoWorktreesForResolution']>
@@ -104,7 +102,9 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     }
   }
 
-  private projectStructuredAgentCatalogTarget(selector: string) {
+  /** The one workspace a catalog read names, derived from its selector and the repo rows without
+   *  listing worktrees: a model picker's cost must not grow with the fleet. */
+  private structuredAgentCatalogTarget(selector: string) {
     const folder = this.resolveFolderWorkspaceSelector(selector)
     if (folder) {
       return {
@@ -114,60 +114,34 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
         )
       }
     }
-    const snapshot = this.projectCachedWorktrees()
-    const explicitId = this.getValidatedExplicitWorktreeIdSelector(selector)
-    const repoId = explicitId ? splitWorktreeIdForFilesystem(explicitId)?.repoId : undefined
-    for (const repo of this.store?.getRepos() ?? []) {
-      if (repoId && repo.id !== repoId) {
-        continue
-      }
-      if (
-        snapshot.unscannedRepoKeys.has(
-          getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo))
-        ) &&
-        !(explicitId && getRepoRoutingConnectionId(repo) && this.store?.getWorktreeMeta(explicitId))
-      ) {
+    let worktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
+    if (selector.startsWith('path:')) {
+      const repos = this.selectReposBySelector(selector)
+      // The same path on two hosts names no one workspace.
+      if (new Set(repos.map(getRepoExecutionHostId)).size !== 1) {
         return null
       }
+      worktreeId = composeWorktreeId(repos[0].id, repos[0].path)
+    } else if (!worktreeId && splitWorktreeIdForFilesystem(selector)) {
+      worktreeId = selector
     }
-    return this.runtimeFileTargetForWorktree(
-      this.matchWorktreeSelector(selector, snapshot.worktrees)
-    )
+    const worktree = worktreeId ? this.buildResolvedWorktreeFromId(worktreeId) : null
+    return worktree ? this.runtimeFileTargetForWorktree(worktree) : null
   }
 
-  structuredAgentSessionCatalogWorkspaceIdentity(selector: string): string | null {
-    if (isFloatingWorkspaceSelector(selector)) {
-      const settings = this.store?.getSettings()
-      return JSON.stringify([
-        'floating',
-        settings?.floatingTerminalCwd,
-        settings?.floatingTerminalTrustedCwds
-      ])
-    }
+  /** The folder a model catalog read may inspect for project settings; null when the selected
+   *  workspace is not a native local directory or names no single workspace. */
+  async resolveStructuredAgentCatalogWorkspacePath(selector: string): Promise<string | null> {
     try {
-      const target = this.projectStructuredAgentCatalogTarget(selector)
-      return target
-        ? JSON.stringify([
-            target.worktree.path,
-            this.structuredAgentSessionLocationForTarget(target)
-          ])
+      const target = isFloatingWorkspaceSelector(selector)
+        ? await this.resolveRuntimeFileTarget(selector)
+        : this.structuredAgentCatalogTarget(selector)
+      return target && isNativeLocalLocation(this.structuredAgentSessionLocationForTarget(target))
+        ? target.worktree.path
         : null
-    } catch (error) {
-      return JSON.stringify(['unresolved', error instanceof Error ? error.message : 'unknown'])
+    } catch {
+      return null
     }
-  }
-
-  async resolveStructuredAgentCatalogWorkspace(selector: string) {
-    const target = await this.resolveRuntimeFileTarget(selector)
-    const location = this.structuredAgentSessionLocationForTarget(target)
-    const identity = this.structuredAgentSessionCatalogWorkspaceIdentity(selector)
-    if (
-      !isFloatingWorkspaceSelector(selector) &&
-      identity !== JSON.stringify([target.worktree.path, location])
-    ) {
-      throw new Error('workspace_scope_changed')
-    }
-    return { identity, path: isNativeLocalLocation(location) ? target.worktree.path : null }
   }
 
   /** Where a structured chat here would run, from the same target as its location. */

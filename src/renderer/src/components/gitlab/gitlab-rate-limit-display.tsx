@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Gauge, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { cn } from '@/lib/class-names'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 import type {
@@ -13,19 +13,24 @@ import type {
 import { getProviderRateLimitScope } from '@/components/provider-accounts/provider-account-scope'
 import { ProviderHostScopeControl } from '@/components/provider-accounts/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 
 const REFRESH_INTERVAL_MS = 60_000
 
-export function formatGitLabRateLimitReset(resetAt: number | null): string {
+export function formatGitLabRateLimitReset(
+  resetAt: number | null,
+  t: Translate = translate,
+  intlLocale?: string
+): string {
   if (resetAt === null) {
-    return translate('auto.components.gitlab.gitlab.rate.limit.display.resetUnknown', 'unknown')
+    return t('auto.components.gitlab.gitlab.rate.limit.display.resetUnknown', 'unknown')
   }
   const deltaSec = Math.max(0, resetAt - Math.floor(Date.now() / 1000))
   if (deltaSec < 60) {
-    return formatUiNarrowDuration(deltaSec, 'second')
+    return formatUiNarrowDuration(deltaSec, 'second', intlLocale)
   }
-  return formatUiNarrowDuration(Math.round(deltaSec / 60), 'minute')
+  return formatUiNarrowDuration(Math.round(deltaSec / 60), 'minute', intlLocale)
 }
 
 export function toneForGitLabBucket(remaining: number, limit: number): 'ok' | 'warn' | 'crit' {
@@ -117,11 +122,13 @@ function GitLabRateLimitRows({
 }: {
   snapshot: GitLabRateLimitSnapshot
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const rest = snapshot.rest
   if (!rest) {
     return (
       <div className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.gitlab.gitlab.rate.limit.display.953f7c6062',
           'This GitLab host did not return rate-limit headers.'
         )}
@@ -133,7 +140,7 @@ function GitLabRateLimitRows({
     <div className="flex flex-col gap-1 text-xs">
       <div className="flex items-center justify-between gap-3">
         <span className="text-muted-foreground">
-          {translate('auto.components.gitlab.gitlab.rate.limit.display.0a891e8935', 'REST API')}
+          {t('auto.components.gitlab.gitlab.rate.limit.display.0a891e8935', 'REST API')}
         </span>
         <span
           className={cn(
@@ -142,13 +149,13 @@ function GitLabRateLimitRows({
             tone === 'warn' && 'text-amber-700 dark:text-amber-300'
           )}
         >
-          {translate(
+          {t(
             'auto.components.gitlab.gitlab.rate.limit.display.remainingOfLimit',
             '{{remaining}} of {{limit}} left, resets in {{reset}}',
             {
               remaining: rest.remaining,
               limit: rest.limit,
-              reset: formatGitLabRateLimitReset(rest.resetAt)
+              reset: formatGitLabRateLimitReset(rest.resetAt, t, intlLocale)
             }
           )}
         </span>
@@ -165,8 +172,9 @@ export function GitLabRateLimitPanel({
   /** The host chosen at the top of Settings. */
   target: RuntimeClientTarget
 }): React.JSX.Element {
+  const t = useTranslate()
   const { snapshot, hasError, isFetching, refresh } = useGitLabRateLimitSnapshot(target)
-  const budgetScope = getProviderRateLimitScope(target, 'GitLab')
+  const budgetScope = getProviderRateLimitScope(target, 'GitLab', t)
 
   return (
     <div className={cn('space-y-3 rounded-md border border-border/60 p-3', className)}>
@@ -174,19 +182,16 @@ export function GitLabRateLimitPanel({
         <div className="space-y-0.5">
           <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
             <Gauge className="size-4" />
-            {translate(
-              'auto.components.gitlab.gitlab.rate.limit.display.14e144f7a7',
-              'GitLab API Budget'
-            )}
+            {t('auto.components.gitlab.gitlab.rate.limit.display.14e144f7a7', 'GitLab API Budget')}
           </div>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.gitlab.gitlab.rate.limit.display.2f9c16d6c3',
               'Orca uses REST through the GitLab CLI.'
             )}
           </p>
           <ProviderHostScopeControl
-            labelPrefix={translate(
+            labelPrefix={t(
               'auto.components.gitlab.gitlab.rate.limit.display.budget_scope_prefix',
               'Budget scope'
             )}
@@ -200,7 +205,7 @@ export function GitLabRateLimitPanel({
           size="icon-xs"
           onClick={() => void refresh(true)}
           disabled={isFetching}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.gitlab.gitlab.rate.limit.display.a2f68645ac',
             'Refresh GitLab API budget'
           )}
@@ -210,7 +215,7 @@ export function GitLabRateLimitPanel({
       </div>
       {hasError ? (
         <div className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.gitlab.gitlab.rate.limit.display.a2d3d1fdde',
             'GitLab API budget is unavailable.'
           )}
@@ -219,7 +224,7 @@ export function GitLabRateLimitPanel({
         <GitLabRateLimitRows snapshot={snapshot} />
       ) : (
         <div className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.gitlab.gitlab.rate.limit.display.ebc0e8ecf1',
             'Loading GitLab API budget...'
           )}

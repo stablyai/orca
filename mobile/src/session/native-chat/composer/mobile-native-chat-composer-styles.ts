@@ -14,12 +14,16 @@ export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
     paddingBottom: spacing.sm
   },
   bar: composerInputStyles.box,
-  dictationMeter: {
+  leadingControls: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-    flexGrow: 6,
-    flexShrink: 0
+    gap: spacing.sm
+  },
+  // One line while dictating: a long computer name truncates instead of wrapping and growing the composer.
+  dictationLeading: {
+    flexWrap: 'nowrap'
   }
 }))

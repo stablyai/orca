@@ -1,17 +1,17 @@
 import { useWorktreeAgentActivation } from './use-worktree-agent-activation'
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/hooks/use-now'
-import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
+import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
 import {
   selectSendTargetControlInputs,
   selectSendTargetInputs
 } from './worktree-card-send-target-inputs'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
 import { CompactAgentExpansion, CompactAgentSummaryButton } from './worktree-card-compact-agents'
@@ -19,17 +19,18 @@ import { CompactAgentRow } from './worktree-card-compact-agent-row'
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
 import { revealCompactAgentCard } from '../../worktree-list/navigation/worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
-import { translate } from '@/i18n/i18n'
-import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
+import { useTranslate } from '@/i18n/use-translate'
+import { agentSendDisabledReasonLabel } from '@/lib/agent-session/messaging/agent-send-disabled-reason-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { activateRetainedAgentRow } from './activate-retained-agent-row'
 import { selectAgentRowsUnread } from './worktree-card-agent-ack-inputs'
-import { opensClaudeParentConversation } from '@/lib/claude-agent-row-view'
+import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { lineageAncestorPaneKeys } from './worktree-card-agent-lineage-disclosure'
 import {
   ChildAgentsWithIdleGroup,
   buildCollapsedChildAgentSignalStates
 } from './worktree-card-idle-child-agents'
+import { recomputeOn } from '@/lib/recompute-on'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -70,6 +71,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   agents,
   className
 }: BodyProps) {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const { agentActivityDisplayMode, showAgentModels } = useWorktreeAgentDisplay()
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
@@ -101,46 +103,49 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   )
 
   const isAgentSendTargetModeActive = agentSendPopoverTargetMode !== null
-  const sendTargetsByPaneKey = useMemo(() => {
-    void agentStatusEpoch
-    void languageRevision
-    if (!isAgentSendTargetModeActive) {
-      return new Map<
-        string,
-        { status: 'eligible' | 'disabled' | 'sending'; disabledReason?: string }
-      >()
-    }
+  const sendTargetsByPaneKey = useMemo(
+    () =>
+      recomputeOn([agentStatusEpoch, languageRevision], () => {
+        if (!isAgentSendTargetModeActive) {
+          return new Map<
+            string,
+            { status: 'eligible' | 'disabled' | 'sending'; disabledReason?: string }
+          >()
+        }
 
-    return new Map(
-      deriveRunningAgentSendTargets(sendTargetInputs, worktreeId).map((target) => [
-        target.paneKey,
-        agentSendPopoverTargetMode?.status === 'sending' &&
-        agentSendPopoverTargetMode.sendingPaneKey === target.paneKey
-          ? {
-              status: 'sending' as const,
-              disabledReason: translate(
-                'auto.components.sidebar.WorktreeCardAgents.sendingTarget',
-                'Sending...'
-              )
-            }
-          : target.disabledReason
-            ? {
-                status: target.status,
-                disabledReason: agentSendDisabledReasonLabel(target.disabledReason)
-              }
-            : { status: target.status }
-      ])
-    )
-  }, [
-    // Freshness timers advance this epoch without replacing the status map.
-    agentStatusEpoch,
-    languageRevision,
-    agentSendPopoverTargetMode?.sendingPaneKey,
-    agentSendPopoverTargetMode?.status,
-    isAgentSendTargetModeActive,
-    sendTargetInputs,
-    worktreeId
-  ])
+        return new Map(
+          deriveRunningAgentSendTargets(sendTargetInputs, worktreeId).map((target) => [
+            target.paneKey,
+            agentSendPopoverTargetMode?.status === 'sending' &&
+            agentSendPopoverTargetMode.sendingPaneKey === target.paneKey
+              ? {
+                  status: 'sending' as const,
+                  disabledReason: t(
+                    'auto.components.sidebar.WorktreeCardAgents.sendingTarget',
+                    'Sending...'
+                  )
+                }
+              : target.disabledReason
+                ? {
+                    status: target.status,
+                    disabledReason: agentSendDisabledReasonLabel(target.disabledReason)
+                  }
+                : { status: target.status }
+          ])
+        )
+      }),
+    [
+      // Freshness timers advance this epoch without replacing the status map.
+      agentStatusEpoch,
+      languageRevision,
+      agentSendPopoverTargetMode?.sendingPaneKey,
+      agentSendPopoverTargetMode?.status,
+      isAgentSendTargetModeActive,
+      sendTargetInputs,
+      worktreeId,
+      t
+    ]
+  )
 
   const handleSendTargetClick = useCallback(
     (paneKey: string) => {
@@ -207,7 +212,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     isAgentSendTargetModeActive
       ? (sendTargetsByPaneKey.get(paneKey) ?? {
           status: 'disabled' as const,
-          disabledReason: translate(
+          disabledReason: t(
             'auto.components.sidebar.WorktreeCardAgents.agentUnavailable',
             'Agent is not available'
           )
@@ -327,10 +332,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           now={now}
           parentConversationDescription={
             opensClaudeParentConversation(agent)
-              ? translate(
-                  'auto.lib.claudeAgentRowView.openParentConversation',
-                  'Open parent conversation'
-                )
+              ? t('auto.lib.claudeAgentRowView.openParentConversation', 'Open parent conversation')
               : undefined
           }
           isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
@@ -372,7 +374,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     const summaryAgents = hasLineage ? rootAgents : agents
     // Collapse compact multi-agent lists except when their rows are the send-target picker.
     const shouldUseSummaryRow = summaryAgents.length > 1 && !isAgentSendTargetModeActive
-    const subjectLabel = translate('sidebar.agentSummary.agentCount', '{{count}} agents', {
+    const subjectLabel = t('sidebar.agentSummary.agentCount', '{{count}} agents', {
       count: hasLineage ? rootAgents.length : agents.length,
       defaultValue_one: '{{count}} agent'
     })
@@ -386,7 +388,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         onMouseDown={stopBubble}
         onPointerDown={stopBubble}
         role={hasLineage ? 'tree' : 'group'}
-        aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
+        aria-label={t('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
         data-compact-agent-list="true"
       >
         {agents.length === 0 ? null : shouldUseSummaryRow ? (
@@ -427,7 +429,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       onMouseDown={stopBubble}
       onPointerDown={stopBubble}
       role={hasLineage ? 'tree' : 'group'}
-      aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
+      aria-label={t('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
     >
       {rootAgents.map((rootAgent) => renderAgentBranch(rootAgent))}
     </div>

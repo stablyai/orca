@@ -139,6 +139,8 @@ export type AiVaultSession = {
   previewMessagesTruncated?: boolean
   /** Bounded opening-prompt identity for Antigravity history joins; never a rolling preview. */
   antigravityOpeningPrompt?: { hash: string; timestamp: string | null }
+  /** One top-level artifact file in the agy conversation folder; revealing it opens that folder. */
+  antigravityArtifactPath?: string
   /** Full first non-injected prompt only on on-demand getFirstUserPrompt reparses; list scans omit it for payload/cost. */
   firstUserPrompt?: string | null
   /** Latest provider-authenticated user prompt; absent when the transcript has no trustworthy signal. */
@@ -235,8 +237,25 @@ export type AiVaultListArgs = {
   force?: boolean
   // Scope paths preserve older relevant sessions outside the globally recency-capped result.
   scopePaths?: readonly string[]
+  /** Return only scopePaths sessions, without the global recency pass. Older hosts ignore it; clients still filter. */
+  scopeOnly?: boolean
   executionHostScope?: ExecutionHostScope
   requestToken?: string
+}
+
+/** Cap scope paths for a host; a capped scope can't answer alone, so it drops scopeOnly. */
+export function boundedAiVaultScopeArgs(
+  scopePaths: readonly string[] | undefined,
+  scopeOnly: boolean | undefined
+): Pick<AiVaultListArgs, 'scopePaths' | 'scopeOnly'> {
+  if (!scopePaths) {
+    return {}
+  }
+  return scopeOnly === true &&
+    scopePaths.length > 0 &&
+    scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT
+    ? { scopePaths, scopeOnly: true }
+    : { scopePaths: scopePaths.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT) }
 }
 
 export type AiVaultListResult = {

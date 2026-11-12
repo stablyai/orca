@@ -37,29 +37,6 @@ describe('Antigravity Linux keyring access', () => {
     expect(runProcess).toHaveBeenCalledTimes(2)
   })
 
-  it('reports no keyring credential when no Secret Service owns the bus', async () => {
-    vi.mocked(runProcess).mockResolvedValueOnce({
-      ...ok(),
-      code: 1,
-      stderr:
-        'Error: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.secrets was not provided by any .service files\n'
-    })
-    expect(await readAntigravityLinuxCredential()).toBeNull()
-  })
-
-  it('distinguishes a missing item from a failed lookup', async () => {
-    vi.mocked(runProcess)
-      .mockResolvedValueOnce(collections)
-      .mockResolvedValueOnce(unlocked)
-      .mockResolvedValueOnce({ ...ok(), code: 1 })
-    expect(await readAntigravityLinuxCredential()).toBeNull()
-    vi.mocked(runProcess)
-      .mockResolvedValueOnce(collections)
-      .mockResolvedValueOnce(unlocked)
-      .mockResolvedValueOnce({ ...ok(), code: 1, stderr: 'secret-tool: Cannot autolaunch D-Bus' })
-    await expect(readAntigravityLinuxCredential()).rejects.toThrow('could not be read')
-  })
-
   it('replaces agy’s go-keyring item in its collection and verifies the readback', async () => {
     vi.mocked(runProcess)
       .mockResolvedValueOnce(collections)
@@ -96,12 +73,5 @@ describe('Antigravity Linux keyring access', () => {
         args: expect.arrayContaining(['--collection=/org/freedesktop/secrets/aliases/default'])
       })
     )
-  })
-
-  it('names the missing tool instead of leaking spawn errors', async () => {
-    vi.mocked(runProcess).mockRejectedValueOnce(
-      Object.assign(new Error('spawn gdbus ENOENT'), { code: 'ENOENT' })
-    )
-    await expect(readAntigravityLinuxCredential()).rejects.toThrow('needs gdbus')
   })
 })

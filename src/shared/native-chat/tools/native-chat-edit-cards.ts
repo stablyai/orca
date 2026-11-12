@@ -95,8 +95,24 @@ const diffSummaries = new WeakMap<
   }
 >()
 
+const rowEditSummaries = new WeakMap<NativeChatBlock[], ReturnType<typeof deriveEditSummaries>>()
+
+export function buildEditSummaries(
+  blocks: NativeChatBlock[]
+): ReadonlyMap<
+  NativeChatToolCallBlock,
+  { files: NativeChatEditFileSummary[]; key: string; result: NativeChatToolResultBlock | undefined }
+> {
+  let summaries = rowEditSummaries.get(blocks)
+  if (!summaries) {
+    summaries = deriveEditSummaries(blocks)
+    rowEditSummaries.set(blocks, summaries)
+  }
+  return summaries
+}
+
 // Only the journal's path-only Diff envelope has counts that can be read without tool normalization.
-export function buildEditSummaries(blocks: NativeChatBlock[]): Map<
+function deriveEditSummaries(blocks: NativeChatBlock[]): Map<
   NativeChatToolCallBlock,
   {
     files: NativeChatEditFileSummary[]

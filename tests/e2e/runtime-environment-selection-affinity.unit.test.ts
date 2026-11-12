@@ -12,9 +12,9 @@ import {
   structuredSessionSelectionController,
   forgetStructuredSessionSelection,
   registerStructuredSelectionCatalogStore
-} from '@/lib/structured-agent-session-selection-controller'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+} from '@/lib/agent-session/options/structured-agent-session-selection-controller'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { resetRuntimeEnvironmentStatusOwners } from '../../src/main/ipc/runtime-environments/runtime-environment-request-connections'
 import { pairingCode } from '../../src/main/ipc/runtime-environments/runtime-environments-ipc-test-harness'
 
@@ -28,9 +28,11 @@ vi.mock('electron', () => ({
   app: { getPath: getPathMock },
   ipcMain: { handle: vi.fn(), on: vi.fn(), removeHandler: vi.fn(), removeAllListeners: vi.fn() }
 }))
-vi.mock('../../src/shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
-  subscribeRemoteRuntimeRequest: vi.fn()
+vi.mock('../../src/shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: sendRemoteRuntimeRequestMock
+}))
+vi.mock('../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport', () => ({
+  subscribeRemoteRuntimeTransport: vi.fn()
 }))
 vi.mock(
   '../../src/main/ipc/runtime-environments/runtime-environment-request-connections',

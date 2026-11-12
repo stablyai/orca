@@ -1,20 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
-import { firstFrameOptionState } from '@/components/native-chat/structured-agent-session-option-first-frame'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { firstFrameOptionState } from '@/components/native-chat/session/options/structured/structured-agent-session-option-first-frame'
 import { structuredAgentSessionSeedCatalog } from '../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
+  settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
 } from '../../../../shared/agent-session/options/structured-agent-session-options'
+import { structuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
+import { joinHostModelListingWait } from '../../../../shared/host-model-listing-waits'
+import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
+import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionShownSnapshot
 } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { encodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
-import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
+import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 
 export function usePendingNativeChatOptions(
@@ -33,48 +39,65 @@ export function usePendingNativeChatOptions(
     state: StructuredAgentSessionOptionState
   } | null>(null)
   const [demand, setDemand] = useState(0)
+  // A local chat seeds the saved selection and permission default, as its launch will; a paired host names its own.
+  const settings = useAppStore((s) => s.settings)
+  const launchSeed = useMemo(
+    () =>
+      target?.kind === 'local' && agent ? structuredLaunchSeedOptions(settings, agent) : undefined,
+    [agent, settings, target?.kind]
+  )
+  const seedsModel = launchSeed?.model !== undefined
   const seed = useMemo(
     () =>
       agent && target
         ? firstFrameOptionState(agent, target, {
             newLaunch: true,
-            worktree: worktreeId,
-            seedsModel: false
+            ...(worktreeId ? { worktree: toRuntimeWorktreeSelector(worktreeId) } : {}),
+            seedsModel
           })
         : null,
-    [agent, target, worktreeId]
+    [agent, seedsModel, target, worktreeId]
   )
   useEffect(() => {
-    if (!agent || !target) {
+    if (!agent || !target || !seed) {
       return
     }
-    let current = true
-    void callStructuredAgentSession<AgentSessionModelCatalogResult>(
-      target,
-      'agentSession.modelCatalog',
-      {
-        agent,
-        ...(worktreeId ? { worktree: worktreeId } : {}),
-        waitForListing: true
+    // Re-reads while the host's listing runs; a failed read falls back to the built-in list instead of a dead pill.
+    return joinHostModelListingWait(
+      `${structuredAgentSessionHostKey(target)}\u0000${agent}\u0000${key}`,
+      () =>
+        callStructuredAgentSession<AgentSessionModelCatalogResult>(
+          target,
+          'agentSession.modelCatalog',
+          { agent, ...(worktreeId ? { worktree: worktreeId } : {}), waitForListing: true }
+        ),
+      (answer) => {
+        if (answer && worktreeId) {
+          // The worktree's chat opens from this answer instead of waiting for its own read.
+          recordHostModelCatalogSnapshot(
+            target,
+            agent,
+            toRuntimeWorktreeSelector(worktreeId),
+            answer
+          )
+        }
+        setCatalog((previous) => ({
+          key,
+          state: answer
+            ? applyStructuredAgentSessionModelCatalog(
+                seed,
+                structuredAgentSessionSeedCatalog(agent),
+                answer,
+                { newLaunch: true }
+              )
+            : // A failed re-read keeps a list an earlier read already brought.
+              settleStructuredAgentSessionBuiltinCatalog(
+                previous?.key === key ? previous.state : seed,
+                false
+              )
+        }))
       }
     )
-      .then((answer) => {
-        if (current && seed) {
-          setCatalog({
-            key,
-            state: applyStructuredAgentSessionModelCatalog(
-              seed,
-              structuredAgentSessionSeedCatalog(agent),
-              answer,
-              { newLaunch: true }
-            )
-          })
-        }
-      })
-      .catch(() => {})
-    return () => {
-      current = false
-    }
   }, [agent, demand, key, seed, target, worktreeId])
   const state = catalog?.key === key ? catalog.state : seed
   const picks =
@@ -83,13 +106,13 @@ export function usePendingNativeChatOptions(
     () =>
       state
         ? structuredAgentSessionShownSnapshot(
-            structuredAgentSessionOptionView(state, undefined, picks ?? {})
+            structuredAgentSessionOptionView(state, launchSeed, picks ?? {})
           ).map((option) => ({
             ...option,
             settable: option.settable && entry?.chatInputHandedOff !== true
           }))
         : [],
-    [entry?.chatInputHandedOff, picks, state]
+    [entry?.chatInputHandedOff, launchSeed, picks, state]
   )
   const creationId = entry?.creationId
   const surface = useMemo<SessionOptionsSurface>(

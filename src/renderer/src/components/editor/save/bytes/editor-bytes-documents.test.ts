@@ -42,7 +42,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 const writeRuntimeFileBytes = vi.fn()
-vi.mock('@/runtime/runtime-file-bytes-write', () => ({
+vi.mock('@/runtime/files/mutations/runtime-file-bytes-write', () => ({
   writeRuntimeFileBytes: (...args: unknown[]) => writeRuntimeFileBytes(...args)
 }))
 

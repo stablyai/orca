@@ -1,10 +1,10 @@
 import type React from 'react'
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../store/index'
 import { normalizeSettingsSearchQuery } from '../search/settings-search'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type AppearanceAdvancedDisclosureProps = {
   label?: string
@@ -24,6 +24,7 @@ export function AppearanceAdvancedDisclosure({
   contentClassName,
   children
 }: AppearanceAdvancedDisclosureProps): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const [open, setOpen] = useState(false)
@@ -46,8 +47,7 @@ export function AppearanceAdvancedDisclosure({
             expanded && 'rotate-90'
           )}
         />
-        {label ??
-          translate('auto.components.settings.AppearanceAdvancedDisclosure.advanced', 'Advanced')}
+        {label ?? t('auto.components.settings.AppearanceAdvancedDisclosure.advanced', 'Advanced')}
       </button>
       {expanded ? <div className={cn('pt-1', contentClassName)}>{children}</div> : null}
     </div>

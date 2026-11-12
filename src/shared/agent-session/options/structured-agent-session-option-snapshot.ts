@@ -26,6 +26,7 @@ import {
 import { withUnlistedEffort } from './structured-agent-session-unlisted-effort'
 import { listedModelDescribing } from './structured-agent-session-listed-model'
 import { structuredAgentSessionPermissionDescriptor } from './structured-agent-session-permission-option'
+import { structuredAgentSessionInteractionDescriptor } from './agent-session-interaction-mode'
 import type { StructuredAgentSessionOptionState } from './structured-agent-session-options'
 
 /** Unpickable placeholder cannot become a launch selection before a real model answer. */
@@ -38,6 +39,18 @@ const PROVIDER_DEFAULT_MODEL_PLACEHOLDER: SessionOptionDescriptor = {
   transport: 'agent-session',
   settable: false,
   disabledReason: 'available-after-session-start'
+}
+
+/** A session that lists no models picks one itself; display-only, so Send never captures it. */
+const AGENT_CHOSEN_MODEL: SessionOptionDescriptor = {
+  id: 'model',
+  label: 'Model',
+  category: 'model',
+  kind: { type: 'select', choices: [] },
+  valueSource: 'unknown',
+  reportedModel: 'auto',
+  transport: 'agent-session',
+  settable: false
 }
 
 /** Name a catalog default only when the host says this launch runs it; otherwise use it solely for controls. */
@@ -182,7 +195,7 @@ function drawnModelControls(state: StructuredAgentSessionOptionState) {
   return { catalog, models, ...shown, controls, values }
 }
 
-/** Without model evidence, retain saved nonstandard speed and allow Standard to disable it. */
+/** Without model evidence, a saved speed some model lists stays shown so Standard can turn it off. */
 function modellessControls(
   catalog: AgentSessionOptionCatalog,
   record: StructuredAgentSessionOptionRecord
@@ -197,7 +210,7 @@ function modellessControls(
       option.id === 'serviceTier' && option.kind.type === 'select' ? option.kind.choices : []
     )
     .find((choice) => choice.value === tier)
-  return [serviceTierOption([named ?? { value: tier, label: tier }])]
+  return named ? [serviceTierOption([named])] : []
 }
 
 function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionOptionDescriptor[] {
@@ -214,8 +227,10 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
     models.length === 0
       ? []
       : nativeChatSessionOptionDescriptors({
+          agent: state.record.agent,
           catalog,
           models,
+          legacyInventory: catalog.models,
           mode: 'live',
           modelLabel: 'Model',
           liveTransport: 'agent-session',
@@ -224,16 +239,18 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
           values,
           modelIsCliDefault: isCliDefault
         })
-  return snapshot.length > 0 || state.catalogSource === 'live'
-    ? withUnlistedEffort(
-        catalog,
-        controlsModelId,
-        values.effort,
-        state.verifiedModelIds,
-        snapshot,
-        state.record.agent
-      )
-    : [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
+  if (snapshot.length === 0 && state.catalogSource !== 'live') {
+    return [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
+  }
+  const shownSnapshot = withUnlistedEffort(
+    catalog,
+    controlsModelId,
+    values.effort,
+    state.verifiedModelIds,
+    snapshot,
+    state.record.agent
+  )
+  return snapshot.length === 0 ? [AGENT_CHOSEN_MODEL, ...shownSnapshot] : shownSnapshot
 }
 
 export function structuredAgentSessionOptionSnapshot(
@@ -247,7 +264,8 @@ export function structuredAgentSessionOptionSnapshot(
         ? { ...option, reportedModel: state.reportedModel }
         : option
   )
-  return permission ? [...options, permission] : options
+  const interaction = structuredAgentSessionInteractionDescriptor(state)
+  return [...options, ...(permission ? [permission] : []), ...(interaction ? [interaction] : [])]
 }
 
 /** Presentation only until a launch or fence can carry picks. */
@@ -273,7 +291,7 @@ export function canSetStructuredAgentSessionOption(
   if (!interactionReady || pending || (id === 'fastMode' && state.fastModeRestricted)) {
     return false
   }
-  if (id === 'permissionMode') {
+  if (id === 'permissionMode' || id === 'interactionMode') {
     const descriptor = snapshot.find((entry) => entry.id === id)
     return (
       descriptor?.settable === true &&

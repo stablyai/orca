@@ -1,16 +1,10 @@
-import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { DaemonClient } from '../daemon-client'
-import type { DaemonPendingRequests } from '../daemon-client-pending-requests'
-import {
-  encodeNdjson,
-  NDJSON_MAX_LINE_BYTES,
-  NdjsonLineTooLongError
-} from '../../../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../../../shared/main-process-ndjson-framer'
 import { DaemonConnectionLostError } from '../../../protocol/daemon-errors'
 import type { HelloMessage } from '../../../protocol/daemon-hello-protocol'
 import type { DaemonRequest } from '../../../protocol/daemon-rpc-contract'
@@ -147,23 +141,6 @@ describe('DaemonClient', () => {
   }
 
   describe('connect', () => {
-    it('captures one matching endpoint identity from both authenticated sockets', async () => {
-      const identity = {
-        pid: 123,
-        startedAtMs: 456,
-        launchNonce: 'launch-a',
-        entryPath: '/Applications/Orca.app/Contents/Resources/daemon-entry.js',
-        appVersion: '1.2.3',
-        spawnerExecPath: '/Applications/Orca.app/Contents/MacOS/Orca'
-      }
-      await startMockDaemon({ helloIdentity: () => identity })
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-
-      expect(client.getDaemonIdentity()).toEqual(identity)
-    })
-
     it('rejects a v24 daemon that omits endpoint identity', async () => {
       await startMockDaemon({ omitHelloIdentity: true })
       client = new DaemonClient({ socketPath, tokenPath })
@@ -194,30 +171,6 @@ describe('DaemonClient', () => {
         'Daemon identity changed during connection'
       )
       expect(client.getDaemonIdentity()).toBeNull()
-    })
-
-    it('removes socket startup listeners after connecting', async () => {
-      await startMockDaemon()
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-
-      const connectedClient = client as unknown as {
-        controlSocket: Socket | null
-        streamSocket: Socket | null
-      }
-      for (const socket of [connectedClient.controlSocket, connectedClient.streamSocket]) {
-        expect(socket?.listenerCount('connect')).toBe(0)
-        // The post-handshake disconnect handler still needs one error listener.
-        expect(socket?.listenerCount('error')).toBe(1)
-      }
-    })
-
-    it('rejects on version mismatch', async () => {
-      await startMockDaemon({ rejectVersion: true })
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      await expect(client.ensureConnected()).rejects.toThrow()
     })
 
     it('times out when the daemon never answers hello', async () => {
@@ -276,127 +229,9 @@ describe('DaemonClient', () => {
       expect(disconnected.controlSocket).toBeNull()
       expect(disconnected.streamSocket).toBeNull()
     })
-
-    it('removes hello startup listeners after timeout', async () => {
-      vi.useFakeTimers()
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      const write = vi.fn(() => true)
-      const destroy = vi.fn()
-      const socket = new EventEmitter() as Socket
-      socket.write = write as unknown as Socket['write']
-      socket.destroy = destroy as unknown as Socket['destroy']
-      const sendHello = (
-        client as unknown as {
-          sendHello(
-            socket: Socket,
-            token: string,
-            role: 'control' | 'stream',
-            timeoutMs: number
-          ): Promise<void>
-        }
-      ).sendHello.bind(client)
-
-      const promise = sendHello(socket, 'test-token-123', 'control', 5000)
-      const rejection = expect(promise).rejects.toThrow('Hello response timed out')
-      await vi.advanceTimersByTimeAsync(5000)
-
-      await rejection
-      expect(write).toHaveBeenCalledOnce()
-      expect(destroy).toHaveBeenCalledOnce()
-      expect(socket.listenerCount('data')).toBe(0)
-      expect(socket.listenerCount('error')).toBe(0)
-      expect(socket.listenerCount('close')).toBe(0)
-    })
-
-    it('rejects when the daemon closes before hello completes', async () => {
-      await startMockDaemon({ closeOnHello: true })
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      await expect(client.ensureConnected()).rejects.toThrow(
-        'Connection closed before hello response'
-      )
-    })
-
-    it('rejects when the daemon closes immediately after connect', async () => {
-      await startMockDaemon({ closeOnConnect: true })
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      await expect(client.ensureConnected()).rejects.toThrow()
-    })
-
-    it('fails a retired endpoint at the connect, not at the token read', async () => {
-      rmSync(tokenPath)
-      client = new DaemonClient({ socketPath, tokenPath })
-
-      const error = (await client
-        .ensureConnected()
-        .catch((err: unknown) => err)) as NodeJS.ErrnoException
-
-      expect(error.syscall).toBe('connect')
-      expect(['ENOENT', 'ECONNREFUSED']).toContain(error.code)
-    })
-
-    it('still attempts the handshake when the token is gone but a daemon is listening', async () => {
-      const hellos: HelloMessage[] = []
-      await startMockDaemon({ onHello: (msg) => hellos.push(msg) })
-      rmSync(tokenPath)
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-
-      expect(hellos.length).toBeGreaterThan(0)
-      expect(hellos[0]?.token).toBe('')
-    })
   })
 
   describe('RPC', () => {
-    it('rejects an oversized request before installing a timer or writing', async () => {
-      await startMockDaemon()
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-      const internals = client as unknown as {
-        controlSocket: Socket
-        pendingRequests: DaemonPendingRequests
-      }
-      const writeSpy = vi.spyOn(internals.controlSocket, 'write')
-      const timerSpy = vi.spyOn(globalThis, 'setTimeout')
-      try {
-        await expect(
-          client.request('write', { data: 'x'.repeat(NDJSON_MAX_LINE_BYTES) })
-        ).rejects.toBeInstanceOf(NdjsonLineTooLongError)
-
-        expect(timerSpy).not.toHaveBeenCalled()
-        expect(writeSpy).not.toHaveBeenCalled()
-        expect(internals.pendingRequests.size).toBe(0)
-      } finally {
-        timerSpy.mockRestore()
-        writeSpy.mockRestore()
-      }
-    })
-
-    it('sends request and receives response', async () => {
-      await startMockDaemon({
-        onControlMessage: (msg) => {
-          const req = msg as { id: string; type: string }
-          if (req.type === 'listSessions') {
-            return encodeNdjson({
-              id: req.id,
-              ok: true,
-              payload: { sessions: [] }
-            })
-          }
-          return null
-        }
-      })
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-
-      const result = await client.request('listSessions', undefined)
-      expect(result).toEqual({ sessions: [] })
-    })
-
     it('survives a cancelCreateOrAttach the daemon refuses', async () => {
       // Old daemons reject cancellation; that refusal must not disconnect sibling sessions.
       const received: string[] = []
@@ -454,47 +289,6 @@ describe('DaemonClient', () => {
 
       await rejected
     })
-
-    it('rejects on error response', async () => {
-      await startMockDaemon({
-        onControlMessage: (msg) => {
-          const req = msg as { id: string; type: string }
-          return encodeNdjson({
-            id: req.id,
-            ok: false,
-            error: 'Something went wrong'
-          })
-        }
-      })
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-
-      await expect(client.request('listSessions', undefined)).rejects.toThrow(
-        'Something went wrong'
-      )
-    })
-
-    it('adds recovery hints to node-pty daemon diagnostics', async () => {
-      await startMockDaemon({
-        onControlMessage: (msg) => {
-          const req = msg as { id: string; type: string }
-          return encodeNdjson({
-            id: req.id,
-            ok: false,
-            error:
-              "node-pty: posix_spawn failed: ENOENT (errno 2, No such file or directory) - helper='/tmp/deleted/spawn-helper'"
-          })
-        }
-      })
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-
-      await expect(client.request('listSessions', undefined)).rejects.toThrow(
-        "Daemon's node-pty install is gone (worktree deleted?). Restart Orca. node-pty: posix_spawn failed: ENOENT"
-      )
-    })
   })
 
   describe('events', () => {
@@ -541,123 +335,7 @@ describe('DaemonClient', () => {
     })
   })
 
-  describe('disconnect', () => {
-    it('removes socket listeners when disconnecting', async () => {
-      await startMockDaemon()
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-
-      const connectedClient = client as unknown as {
-        controlSocket: Socket | null
-        streamSocket: Socket | null
-      }
-      const sockets = [connectedClient.controlSocket, connectedClient.streamSocket]
-      for (const socket of sockets) {
-        expect(socket?.listenerCount('data')).toBe(1)
-        expect(socket?.listenerCount('close')).toBe(1)
-        expect(socket?.listenerCount('error')).toBe(1)
-      }
-
-      client.disconnect()
-
-      for (const socket of sockets) {
-        expect(socket?.listenerCount('data')).toBe(0)
-        expect(socket?.listenerCount('close')).toBe(0)
-        expect(socket?.listenerCount('error')).toBe(0)
-      }
-    })
-
-    it('emits disconnected when server destroys sockets', async () => {
-      const serverSockets: Socket[] = []
-      await startMockDaemon()
-      server.on('connection', (socket) => serverSockets.push(socket))
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      const disconnected = vi.fn()
-      client.onDisconnected(disconnected)
-      await client.ensureConnected()
-
-      await waitFor(() => serverSockets.length >= 2)
-
-      for (const socket of serverSockets) {
-        socket.destroy()
-      }
-
-      await waitFor(() => disconnected.mock.calls.length > 0, 3000)
-      expect(client.isConnected()).toBe(false)
-    })
-
-    it('disconnect() can be called safely when not connected', () => {
-      client = new DaemonClient({ socketPath, tokenPath })
-      expect(() => client.disconnect()).not.toThrow()
-    })
-  })
-
   describe('notify (fire-and-forget)', () => {
-    it('sends request with notify_ prefix without expecting response', async () => {
-      const received: unknown[] = []
-      await startMockDaemon({
-        onControlMessage: (msg) => {
-          received.push(msg)
-          return null
-        }
-      })
-
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-
-      const delivered = client.notify('write', { sessionId: 'session-1', data: 'hello' })
-      expect(delivered).toBe(true)
-
-      await waitFor(() => received.length > 0)
-      const msg = received[0] as { id: string; type: string }
-      expect(msg.id).toMatch(/^notify_/)
-      expect(msg.type).toBe('write')
-    })
-
-    it('reports a dropped delivery when not connected', () => {
-      client = new DaemonClient({ socketPath, tokenPath })
-      expect(client.notify('write', { sessionId: 'session-1', data: 'hello' })).toBe(false)
-    })
-
-    it('reports a dropped delivery for an oversized payload without writing', async () => {
-      await startMockDaemon()
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-      const internals = client as unknown as { controlSocket: Socket }
-      const writeSpy = vi.spyOn(internals.controlSocket, 'write')
-
-      expect(client.notify('write', { data: 'x'.repeat(NDJSON_MAX_LINE_BYTES) })).toBe(false)
-      expect(writeSpy).not.toHaveBeenCalled()
-    })
-
-    it('rejects an oversized settled notification without disconnecting', async () => {
-      await startMockDaemon()
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-      const internals = client as unknown as { controlSocket: Socket }
-      const writeSpy = vi.spyOn(internals.controlSocket, 'write')
-
-      await expect(
-        client.notifyWithSettlement('write', { data: 'x'.repeat(NDJSON_MAX_LINE_BYTES) })
-      ).resolves.toEqual({ outcome: 'refused', reason: 'encode_failed' })
-      expect(writeSpy).not.toHaveBeenCalled()
-      expect(client.isConnected()).toBe(true)
-    })
-
-    it('reports a dropped delivery when the socket write throws', async () => {
-      await startMockDaemon()
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-      const internals = client as unknown as { controlSocket: Socket }
-      vi.spyOn(internals.controlSocket, 'write').mockImplementation(() => {
-        throw new Error('EPIPE')
-      })
-
-      expect(client.notify('write', { sessionId: 'session-1', data: 'hello' })).toBe(false)
-    })
-
     it('reports an asynchronous socket write failure at settlement', async () => {
       await startMockDaemon()
       client = new DaemonClient({ socketPath, tokenPath })

@@ -9,24 +9,24 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { journalDatabasePath } from '../../../native-chat/agent-session-journal/journal-host-database'
+import { journalDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import {
   closeTestJournalHostDatabase,
   closeTestJournalHostDatabases,
   insertTestJournalRowJson,
   openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import * as journalFactory from '../../../native-chat/agent-session-journal/journal-store-factory'
-import { publishJournalSessionEpoch } from '../../../native-chat/agent-session-journal/journal-row-table'
-import { createQueuedRigProvider } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig-provider.test-fixture'
-import { createStructuredSessionObservationClock } from '../../../native-chat/agent-session-wire/structured-agent-session-observation-clock.test-fixture'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import { publishJournalSessionEpoch } from '../../../native-chat/agent-session-journal/durable-rows/journal-row-table'
+import { createQueuedRigProvider } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
+import { createStructuredSessionObservationClock } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-observation-clock.test-fixture'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { mintAgentSessionOperationId } from '../../orchestration/structured-pointer-operation-id'
-import { journalIdentityFor } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
-import { attachParamsForRecord } from '../../../native-chat/agent-session-wire/structured-agent-session-conversation-open'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { mintAgentSessionOperationId } from '../../orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
+import { journalIdentityFor } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
+import { attachParamsForRecord } from '../../../native-chat/agent-session-wire/host/structured-agent-session-conversation-open'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type * as AgentSessionRecordRows from './agent-session-record-rows'
 import {
   seedTestAgentSessionRecordStore,
@@ -37,7 +37,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from '../structured-agent-session-runtime'
-import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 

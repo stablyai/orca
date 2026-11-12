@@ -11,6 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type {
   BrowserWebAuthnAccount,
@@ -19,17 +20,19 @@ import type {
 
 function accountLabels(
   account: BrowserWebAuthnAccount,
-  index: number
+  index: number,
+  t: Translate = translate
 ): { primary: string; secondary: string | null } {
   const primary =
     account.displayName?.trim() ||
     account.name?.trim() ||
-    `${translate('auto.components.browser.webauthn.account.fallback', 'Passkey')} ${index + 1}`
+    `${t('auto.components.browser.webauthn.account.fallback', 'Passkey')} ${index + 1}`
   const secondary = account.name?.trim()
   return { primary, secondary: secondary && secondary !== primary ? secondary : null }
 }
 
 export function BrowserWebAuthnAccountDialog(): React.JSX.Element {
+  const t = useTranslate()
   const [requests, setRequests] = useState<BrowserWebAuthnAccountRequest[]>([])
   const [respondingRequestId, setRespondingRequestId] = useState<string | null>(null)
   const requestsRef = useRef(requests)
@@ -120,10 +123,10 @@ export function BrowserWebAuthnAccountDialog(): React.JSX.Element {
       >
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.browser.webauthn.account.title', 'Choose a passkey')}
+            {t('auto.components.browser.webauthn.account.title', 'Choose a passkey')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.browser.webauthn.account.description',
               'Choose the account to use with this security key.'
             )}
@@ -132,7 +135,7 @@ export function BrowserWebAuthnAccountDialog(): React.JSX.Element {
 
         <div className="space-y-2">
           {displayedRequest?.accounts.map((account, index) => {
-            const labels = accountLabels(account, index)
+            const labels = accountLabels(account, index, t)
             return (
               <Button
                 key={account.credentialId}
@@ -159,13 +162,13 @@ export function BrowserWebAuthnAccountDialog(): React.JSX.Element {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          {translate('auto.components.browser.webauthn.account.site', 'Site')}{' '}
+          {t('auto.components.browser.webauthn.account.site', 'Site')}{' '}
           <span className="font-mono text-foreground">{displayedRequest?.relyingPartyId}</span>
         </p>
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => respond(null)}>
-            {translate('auto.components.browser.webauthn.account.cancel', 'Cancel')}
+            {t('auto.components.browser.webauthn.account.cancel', 'Cancel')}
           </Button>
         </DialogFooter>
       </DialogContent>

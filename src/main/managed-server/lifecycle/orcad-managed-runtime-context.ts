@@ -7,16 +7,16 @@ import {
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import type { ServeReadiness } from '../../server/serve-readiness'
-import { computeLocalOrcadBuildHash } from '../../ssh/orcad-local-build-hash'
-import { sshOrcadHostTransport } from '../../ssh/orcad-ssh-host-transport'
-import type { OrcadHostTarget } from '../../ssh/orcad-host-transport'
+import { computeLocalOrcadBuildHash } from '../install/orcad-local-build-hash'
+
+import type { OrcadHostTarget } from '../install/orcad-host-transport'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import { admitOrcadRecordForIntent, type OrcadUpdateIntent } from './orcad-managed-update-decision'
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../../shared/orcad-terminal-census'
-import { probeActiveOrcadReadiness } from '../../ssh/orcad-active-readiness'
+import { probeActiveOrcadReadiness } from '../activation/orcad-active-readiness'
 import { resolveOrcadRemoteContext, type OrcadRemoteContext } from '../install/orcad-remote-context'
 import { ORCAD_INSTALL_MODEL } from '../install/remote-install-model'
 import { computeRemoteInstallDir } from '../install/remote-versioned-install'
@@ -74,7 +74,7 @@ export async function resolveLinkedOrcadContext(
     throw new Error('The SSH registration for this host’s Orca server is no longer valid.')
   }
   const connection = await connectionManager.connect(target)
-  return resolveOrcadRemoteContext(target, sshOrcadHostTransport(connection), signal)
+  return resolveOrcadRemoteContext(target, connection, signal)
 }
 
 export function managedOrcadSlot(

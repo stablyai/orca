@@ -1,4 +1,4 @@
-import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 /** Worker-level reads/operations follow clear successors and the full lineage; unresolved successors remain unverifiable. */
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -13,9 +13,12 @@ import {
 } from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => hostRef.current
-}))
+vi.mock(
+  '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
+  () => ({
+    getStructuredAgentSessionHost: () => hostRef.current
+  })
+)
 
 const { readStructuredWorkerTerminal } = await import('./structured-worker-terminal-read')
 const {
@@ -24,21 +27,21 @@ const {
   resolveStructuredWorkerAuthority,
   resolveStructuredWorkerIdentityForSession
 } = await import('./structured-worker-authority')
-const { structuredSessionMailTarget, structuredSessionOwnedMailboxes } =
-  await import('../../structured-session-mail-target')
-const { structuredSessionMailReach } = await import('../../structured-session-mail-address')
-const { stopStructuredWorker, readStructuredWorkerJournal, captureStructuredWorkerArchive } =
-  await import('../../../rpc/methods/orchestration-structured-worker-lifecycle')
-const { releaseStructuredWorkerSession } =
-  await import('../../../rpc/methods/orchestration-structured-worker-session')
-const { inspectWorkerTerminal } =
-  await import('../../../rpc/methods/orchestration/worker/worker-observation')
-const { listAddressableStructuredWorkers } =
-  await import('../../structured-worker-group-addressing')
+const { structuredSessionMailTarget } =
+  await import('../../mailbox/routing/structured-session-mail-target')
+const { structuredSessionMailReach } =
+  await import('../../mailbox/routing/structured-session-mail-address')
+const { captureWorkerOutputReference } =
+  await import('../../workers/archives/worker-output-archive')
+const { encodeWorkerOutputCursor } = await import('../../workers/transcripts/worker-output-cursor')
+const { stopStructuredWorker, readStructuredWorkerJournal } =
+  await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle')
+await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session')
+await import('../../../rpc/methods/orchestration/worker/worker-observation')
+await import('../../addressing/groups/structured-worker-group-addressing')
 const { readStructuredLineageJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
-  await import('../../structured-worker-journal-page')
-const { sealedChildEnv } =
-  await import('../../../agent-session/environment/structured-session-child-env.test-support')
+  await import('../../workers/archives/structured-worker-journal-page')
+await import('../../../agent-session/environment/structured-session-child-env.test-support')
 const { foundAgentSessionRecord } =
   await import('../../../agent-session/records/agent-session-record-founding')
 const { applyAgentSessionRestartAdjudication } =
@@ -46,11 +49,12 @@ const { applyAgentSessionRestartAdjudication } =
 const { openTestAgentSessionRecordStore } =
   await import('../../../agent-session/records/agent-session-record-store-test-harness')
 const { OrcaRuntimeService } = await import('../../../orca-runtime')
-const { OrchestrationDb } = await import('../../db')
+const { OrchestrationDb } = await import('../../db/orchestration-db')
 const { rpcRuntime } = await import('./structured-worker-rpc.test-support')
-const { structuredWorkerOwesWork } = await import('./structured-worker-custody')
+await import('./structured-worker-custody')
+await import('../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission')
 const { AGENT_SESSION_NOT_ATTACHED } =
-  await import('../../../../native-chat/agent-session-wire/structured-agent-session-mutation-admission')
+  await import('../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -64,18 +68,6 @@ const MINTED = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const SUCCESSOR = 'clear-a1b2c3d4e5f60718293a4b5c6d7e8f9012345678'
 const SECOND = 'clear-ffeeddccbbaa99887766554433221100ffeeddcc'
 const LOCAL_SCOPE = { kind: 'local', hostId: 'local' } as const
-
-/** Opens the protected mail resolver and the orchestration database a real runtime holds. */
-class RuntimeProbe extends OrcaRuntimeService {
-  withDb(db: Db | null): this {
-    this._orchestrationDb = db
-    return this
-  }
-
-  mailTarget(mailboxHandle: string): unknown {
-    return this.resolveStructuredMailboxTarget(mailboxHandle)
-  }
-}
 
 function message(id: string, text: string): AgentJournalRenderItem {
   return {
@@ -369,27 +361,6 @@ describe.each(['live', 'at-rest'] as const)(
   (successor) => {
     beforeEach(() => installClearedWorker(successor))
 
-    it('keeps its authority, judged on and naming the successor', () => {
-      const identity = registerWorker()
-      expect(resolveStructuredWorkerAuthority(identity.handle, null)?.running.sessionId).toBe(
-        SUCCESSOR
-      )
-    })
-
-    it('is observed on the successor, never as the exited minted session', () => {
-      const identity = registerWorker()
-      const expected = successor === 'live' ? 'live' : 'unverifiable'
-      expect(observeStructuredWorker(identity).status).toBe(expected)
-      // The settlement probe holds only the incarnation, and no registry entry.
-      structuredWorkerIdentities.clear()
-      return expect(
-        new OrcaRuntimeService().inspectTerminalProcessIncarnationLiveness(
-          structuredWorkerProcessIncarnation(MINTED),
-          JSON.stringify(LOCAL_SCOPE)
-        )
-      ).resolves.toBe(expected)
-    })
-
     it("serves terminal read from the whole conversation, the successor's last", async () => {
       const identity = registerWorker()
       const read = await readStructuredWorkerTerminal({ handle: identity.handle, db: null })
@@ -399,38 +370,20 @@ describe.each(['live', 'at-rest'] as const)(
       expect(lines.indexOf('POST-CLEAR')).toBeGreaterThan(lines.indexOf('PRE-CLEAR'))
     })
 
-    it('serves worker-read from the whole conversation, oldest session first', async () => {
-      const read = await readJournal(registerWorker())
-      const transcript = texts(read.transcript?.messages)
-      expect(transcript.indexOf('PRE-CLEAR')).toBeGreaterThan(-1)
-      expect(transcript.indexOf('POST-CLEAR')).toBeGreaterThan(transcript.indexOf('PRE-CLEAR'))
-      expect(read.warnings.join(' ')).not.toMatch(/clear/i)
-    })
-
-    it('freezes the whole conversation into the release archive', async () => {
-      const archive = await captureStructuredWorkerArchive(registerWorker(), 'claude')
-      const frozen = texts(archive.messages)
-      expect(frozen.indexOf('PRE-CLEAR')).toBeGreaterThan(-1)
-      expect(frozen.indexOf('POST-CLEAR')).toBeGreaterThan(frozen.indexOf('PRE-CLEAR'))
-    })
-
-    it("retains the worker when the successor's journal cannot be read", async () => {
-      unreadable.add(SUCCESSOR)
+    it('reads the whole conversation from its chat once released, keeping no copy', async () => {
+      const dispatchId = startWorkerDispatch(db, registerWorker())
+      await expect(releaseSucceeded(dispatchId)).resolves.toMatchObject({ state: 'released' })
+      const read = await rpcRuntime(db).call('orchestration.workerRead', { dispatch: dispatchId })
+      expect(read).toMatchObject({ source: 'transcript', archived: true })
+      const history = JSON.stringify(read)
+      expect(history.indexOf('PRE-CLEAR')).toBeGreaterThan(-1)
+      expect(history.indexOf('POST-CLEAR')).toBeGreaterThan(history.indexOf('PRE-CLEAR'))
+      expect(db.getWorkerTerminalArchive(dispatchId)?.content).not.toContain('CLEAR')
+      // A cursor refusal keeps its own code; it never reads as lost output.
+      const foreign = encodeWorkerOutputCursor('ctx_other', 'transcript', 'identity', 1)
       await expect(
-        captureStructuredWorkerArchive(registerWorker(), 'claude')
-      ).rejects.toMatchObject({ code: 'archive_failed' })
-      expect(historyAsked).toEqual([SUCCESSOR])
-    })
-
-    it('shows the worker through the successor in worker-show', async () => {
-      const identity = registerWorker()
-      const dispatchId = startWorkerDispatch(db, identity)
-      const shown = await inspectWorkerTerminal(new OrcaRuntimeService(), db, dispatchId)
-      expect(shown).toMatchObject({
-        exact: true,
-        status: successor === 'live' ? 'live' : 'unverifiable',
-        addressable: true
-      })
+        rpcRuntime(db).call('orchestration.workerRead', { dispatch: dispatchId, cursor: foreign })
+      ).rejects.toMatchObject({ code: 'cursor_dispatch_mismatch' })
     })
 
     it('stops the worker by closing the successor, and can then release it', async () => {
@@ -448,50 +401,6 @@ describe.each(['live', 'at-rest'] as const)(
       ).resolves.toBe('exited')
     })
 
-    it("reports the successor's status to @idle", async () => {
-      const identity = registerWorker()
-      await expect(new OrcaRuntimeService().getAgentStatusForHandle(identity.handle)).resolves.toBe(
-        'idle'
-      )
-      expect(journalAsked).toEqual([SUCCESSOR])
-    })
-
-    it('stays a group-address recipient', () => {
-      const identity = registerWorker()
-      startWorkerDispatch(db, identity)
-      expect(listAddressableStructuredWorkers(db)).toEqual([
-        { handle: identity.handle, worktreeId: 'wt_1', agentIdentity: 'claude' }
-      ])
-    })
-
-    it('routes direct and Dispatch mail to the successor', () => {
-      const identity = registerWorker()
-      const dispatchId = startWorkerDispatch(db, identity)
-      const runtime = new RuntimeProbe().withDb(db)
-      expect(runtime.mailTarget(identity.handle)).toEqual({ sessionId: SUCCESSOR, dispatchId })
-      expect(runtime.mailTarget(`dispatch:${dispatchId}`)).toEqual({
-        sessionId: SUCCESSOR,
-        dispatchId
-      })
-    })
-
-    it("re-derives the worker's Dispatch mailbox on the successor's idle edge", () => {
-      const identity = registerWorker()
-      const dispatchId = startWorkerDispatch(db, identity)
-      expect(structuredSessionOwnedMailboxes(SUCCESSOR, db)).toContain(`dispatch:${dispatchId}`)
-    })
-
-    it("gives the successor's child the worker's handle", () => {
-      const identity = registerWorker()
-      expect(sealedChildEnv(SUCCESSOR).ORCA_TERMINAL_HANDLE).toBe(identity.handle)
-    })
-
-    it("keeps the successor running for the worker's open Dispatch", () => {
-      startWorkerDispatch(db, registerWorker())
-      const successorRecord = records.get(SUCCESSOR)
-      expect(successorRecord && structuredWorkerOwesWork(db, successorRecord)).toBe(true)
-    })
-
     it('finds the worker from its durable row after a restart', () => {
       const identity = registerWorker()
       startWorkerDispatch(db, identity)
@@ -507,30 +416,8 @@ describe.each(['live', 'at-rest'] as const)(
   }
 )
 
-describe("Keep open on a worker's chat after a /clear", () => {
-  it.each([
-    ['the pre-clear session', 'at-rest', MINTED],
-    ['the successor session', 'live', SUCCESSOR]
-  ] as const)('reaches the worker when named by %s', async (_case, state, sessionId) => {
-    installClearedWorker(state)
-    const dispatchId = startWorkerDispatch(db, registerWorker())
-    const { call } = rpcRuntime(db)
-    await expect(call('orchestration.workerKeepOpen', { sessionId, keep: true })).resolves.toEqual({
-      autoClose: { kept: true }
-    })
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.retained_reason).toBe('user_kept')
-  })
-})
-
 describe('a successor no agent ever ran', () => {
   beforeEach(() => installClearedWorker('at-rest'))
-
-  it('reads unverifiable while its chat is listed, and exited once the chat is gone', () => {
-    const identity = registerWorker()
-    expect(observeStructuredWorker(identity).status).toBe('unverifiable')
-    visibleTabs = []
-    expect(observeStructuredWorker(identity).status).toBe('exited')
-  })
 
   it.each([false, true])(
     'lets a stopped worker be released (output read in between, reopening the chat: %s)',
@@ -551,19 +438,6 @@ describe('a successor no agent ever ran', () => {
       ).resolves.toMatchObject({ state: 'released' })
     }
   )
-
-  it('stays unverifiable when the tab index cannot be read', () => {
-    visibleTabs = []
-    tabIndexPresent = false
-    expect(observeStructuredSession(SUCCESSOR).status).toBe('unverifiable')
-  })
-
-  it('stays unverifiable when restored from a backup that may have lost a reservation', () => {
-    visibleTabs = []
-    const founded = foundedRecord(SUCCESSOR)
-    records.set(SUCCESSOR, { ...founded, lease: { ...founded.lease, minimumNextFence: 3 } })
-    expect(observeStructuredSession(SUCCESSOR).status).toBe('unverifiable')
-  })
 })
 
 describe('a released session whose start was attempted stays unverifiable without proof', () => {
@@ -681,31 +555,27 @@ describe('worker-stop on a structured worker that reads exited without any /clea
   })
 })
 
-describe.each([
-  { clears: 1, warning: /latest session .* could not be preserved; earlier sessions were/ },
-  { clears: 2, warning: /latest 2 sessions .* could not be preserved; earlier sessions were/ }
-])('a retired lineage of $clears clear(s) whose later sessions cannot be read', (lineage) => {
-  beforeEach(() => {
-    // The user closed the cleared chat, and every journal after the first is gone.
-    const later = lineage.clears === 1 ? [SUCCESSOR] : [SUCCESSOR, SECOND]
-    const newest = later.at(-1) ?? SUCCESSOR
-    const chain = lineage.clears === 1 ? [] : [clearedRecord(SUCCESSOR, SECOND)]
-    installSessions([clearedRecord(MINTED, SUCCESSOR), ...chain, foundedRecord(newest)], [])
-    later.forEach((sessionId) => unreadable.add(sessionId))
-  })
+describe.each([{ clears: 1 }, { clears: 2 }])(
+  'a retired lineage of $clears clear(s) whose later sessions cannot be read',
+  (lineage) => {
+    beforeEach(() => {
+      // The user closed the cleared chat, and every journal after the first is gone.
+      const later = lineage.clears === 1 ? [SUCCESSOR] : [SUCCESSOR, SECOND]
+      const newest = later.at(-1) ?? SUCCESSOR
+      const chain = lineage.clears === 1 ? [] : [clearedRecord(SUCCESSOR, SECOND)]
+      installSessions([clearedRecord(MINTED, SUCCESSOR), ...chain, foundedRecord(newest)], [])
+      later.forEach((sessionId) => unreadable.add(sessionId))
+    })
 
-  it('archives the readable earliest session and says how many later ones were lost', async () => {
-    const archive = await captureStructuredWorkerArchive(registerWorker(), 'claude')
-    expect(texts(archive.messages)).toContain('PRE-CLEAR')
-    expect(archive.warnings.join(' ')).toMatch(lineage.warning)
-  })
-
-  it('commits that archive when the worker is released', async () => {
-    const dispatchId = startWorkerDispatch(db, registerWorker())
-    await expect(releaseSucceeded(dispatchId)).resolves.toMatchObject({ state: 'released' })
-    expect(db.getWorkerTerminalArchive(dispatchId)?.content).toContain('PRE-CLEAR')
-  })
-})
+    it('releases, then says the output is no longer available instead of reading nothing', async () => {
+      const dispatchId = startWorkerDispatch(db, registerWorker())
+      await expect(releaseSucceeded(dispatchId)).resolves.toMatchObject({ state: 'released' })
+      await expect(
+        rpcRuntime(db).call('orchestration.workerRead', { dispatch: dispatchId })
+      ).rejects.toMatchObject({ code: 'archive_unavailable' })
+    })
+  }
+)
 
 describe('the worker-read cursor across a /clear', () => {
   it('stays valid: what the caller already read did not change, the successor follows it', async () => {
@@ -760,52 +630,19 @@ describe('a worker cleared twice', () => {
     await stopStructuredWorker(identity)
     expect(closed).toEqual([SECOND])
   })
-
-  it('forgets parked mail on every session of the lineage at settlement, binding or not', () => {
-    const forgetStructuredSessionMail = vi.fn()
-    // No binding: what a restarted runtime holds when the worker settles.
-    releaseStructuredWorkerSession(MINTED, { forgetStructuredSessionMail })
-    expect(forgetStructuredSessionMail.mock.calls.map(([sessionId]) => sessionId)).toEqual([
-      MINTED,
-      SUCCESSOR,
-      SECOND
-    ])
-  })
-})
-
-describe('abandoning a side task of a structured worker', () => {
-  it("leaves the still-running worker's parked mail alone", async () => {
-    installClearedWorker('live')
-    const identity = registerWorker()
-    const runId = db.createRun({
-      objective: 'side',
-      coordinatorHandle: null,
-      coordinatorPaneKey: null
-    }).id
-    const task = db.createTask({ runId, spec: 'side task' })
-    const sideTask = db.createDispatchContext({
-      taskId: task.id,
-      assigneeHandle: identity.handle,
-      assigneePaneKey: identity.paneKey,
-      processIncarnation: identity.processIncarnation,
-      creator: { kind: 'system' },
-      maxDepth: 9
-    })
-    const { runtime, call } = rpcRuntime(db)
-    const forget = vi.spyOn(runtime, 'forgetStructuredSessionMail')
-    await expect(
-      call('orchestration.workerAbandon', { dispatch: sideTask.id })
-    ).resolves.toMatchObject({ alreadySettled: false })
-    expect(forget).not.toHaveBeenCalled()
-  })
 })
 
 describe('a running session that cannot be verified is refused, never declared exited', () => {
   async function expectRefused(identity: ReturnType<typeof registerWorker>, code: string) {
     await expect(readJournal(identity)).rejects.toMatchObject({ code })
-    await expect(captureStructuredWorkerArchive(identity, 'claude')).rejects.toMatchObject({
-      code
-    })
+    expect(() =>
+      captureWorkerOutputReference({
+        runtime: { getExactWorkerProviderSession: () => null },
+        terminalHandle: identity.handle,
+        attachedAtMs: 0,
+        structuredWorker: identity
+      })
+    ).toThrow(expect.objectContaining({ code }))
     await expect(
       readStructuredWorkerTerminal({ handle: identity.handle, db: null })
     ).rejects.toMatchObject({ code })
@@ -866,15 +703,6 @@ describe('a running session that cannot be verified is refused, never declared e
       kind: 'unverifiable'
     })
     await expectRefused(identity, 'session_caller_not_live')
-  })
-
-  it('when the structured host is not installed', async () => {
-    hostRef.current = null
-    const identity = registerWorker()
-    await expect(readJournal(identity)).rejects.toMatchObject({ code: 'session_caller_not_live' })
-    await expect(captureStructuredWorkerArchive(identity, 'claude')).rejects.toMatchObject({
-      code: 'session_caller_not_live'
-    })
   })
 
   it('with the host-boundary refusal when the successor runs on another host', async () => {

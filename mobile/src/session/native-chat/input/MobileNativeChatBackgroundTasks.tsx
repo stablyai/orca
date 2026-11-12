@@ -18,7 +18,7 @@ import {
 } from 'lucide-react-native'
 import type { AgentChildRowModel } from '../../../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { AgentSessionBackgroundTask } from '../../../../../src/shared/agent-session/agent-session-background-task-wire'
-import { sayMobileBackgroundTask as say } from '../../mobile-background-task-copy'
+import { sayMobileBackgroundTask as say } from './mobile-background-task-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   backgroundTasksHeaderContent,
@@ -38,12 +38,15 @@ import { useNow } from '../../../hooks/use-now'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
+import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import {
   useMobileBackgroundTaskStops,
   type MobileBackgroundTaskStopping as Stopping
-} from '../../use-mobile-background-task-stops'
-import { mobileAgentChildRowName, mobileAgentChildRowText } from '../../mobile-agent-child-row-text'
+} from './use-mobile-background-task-stops'
+import {
+  mobileAgentChildRowName,
+  mobileAgentChildRowText
+} from '../../../worktree/mobile-agent-child-row-text'
 import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
 
 type TaskKind = AgentSessionBackgroundTask['kind']

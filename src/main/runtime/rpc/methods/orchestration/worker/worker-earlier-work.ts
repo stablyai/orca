@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { DispatchContextRow } from '../../../../orchestration/types'
+import type { DispatchContextRow } from '../../../../orchestration/db/orchestration-records'
 
 const EARLIER_WORK_CLIP = 2_000
 

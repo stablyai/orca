@@ -5,20 +5,20 @@ import {
   normalizeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../shared/execution-host'
-import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type {
   TerminalPaneAdmission,
   TerminalPaneAdmissionOutcome
 } from '../../../persistence/terminal-topology/terminal-pane-admission'
 import type { LayoutRefusalCode } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
-import type { RuntimeStore } from '../../runtime-store-contract'
-import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import {
   paneStartFailure,
   type PaneResumeOutcomes,
   type PaneStartStatuses
-} from '../../pane-start-statuses'
+} from '../surface/pane-start-statuses'
 
 type Spawn = NonNullable<RuntimePtyController['spawn']>
 type PaneStartStatusSink = Pick<PaneStartStatuses, 'set' | 'clear'>

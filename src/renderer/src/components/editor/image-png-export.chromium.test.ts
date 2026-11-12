@@ -43,7 +43,7 @@ describe.skipIf(!browser)('renderImagePngDataUrl in Chromium', () => {
         }
         const { renderImagePngDataUrl } = globalThis.pngExport
         const src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
-        return renderImagePngDataUrl(src, { width: 120, height: 40 }, '#ffffff').then(
+        return renderImagePngDataUrl(src, { width: 120, height: 40 }, '#ffffff', true).then(
           (png) => png.slice(0, 22),
           (error: Error) => error.message
         )

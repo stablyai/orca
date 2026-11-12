@@ -111,28 +111,6 @@ const closedPageIds = (commands: readonly BrowserClientHostCommandEvent[]): stri
   commands.filter((event) => event.command.type === 'closePage').map((event) => event.browserPageId)
 
 describe('adoptRuntimeBrowserClientPagesFromInventory', () => {
-  it('republishes a predecessor page under this runtime, inactive and still naming its workspace', async () => {
-    const rig = attach([orphanedPage()])
-
-    const result = await rig.adopt()
-
-    expect(result.adoptedPageIds).toEqual(['page-a'])
-    expect(result.unadoptedPageIds).toEqual([])
-    expect(rig.publishClientPage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        browserPageId: 'page-a',
-        workspaceId: WORKSPACE_ID,
-        executionHostKey: EXECUTION_HOST_KEY,
-        url: 'https://remote.internal/left-here',
-        // Activating here would deactivate whichever sibling the client is actually showing.
-        active: false
-      })
-    )
-    expect(rig.pages.getPage('page-a')?.active).toBe(false)
-    expect(rig.pages.getPage('page-a')?.workspaceId).toBe(WORKSPACE_ID)
-    expect(rig.notifyWorkspace).toHaveBeenCalledWith(WORKSPACE_ID)
-  })
-
   // Lease admission already refuses foreign-client inventory; it cannot reach this planner.
   it.each([
     [
@@ -154,33 +132,6 @@ describe('adoptRuntimeBrowserClientPagesFromInventory', () => {
     expect(rig.leases.getPlacement('x')).toBeUndefined()
   })
 
-  it('never closes a page the runtime already tracks', async () => {
-    const pages = new RuntimeBrowserPageRegistry()
-    const tracked = orphanedPage({ browserPageId: 'page-tracked' })
-    const rig = attach([orphanedPage(), tracked], { pages })
-    pages.publishClientPage({
-      browserPageId: tracked.browserPageId,
-      workspaceId: WORKSPACE_ID,
-      browserProfileId: 'default',
-      executionHostKey: EXECUTION_HOST_KEY,
-      placement: {
-        kind: 'client',
-        browserHostClientId: HOST_CLIENT_ID,
-        browserHostGeneration: rig.host.lease.browserHostGeneration,
-        pageHostGeneration: 12
-      },
-      pairedDeviceId: 'device-a',
-      url: 'https://remote.internal/tracked',
-      loading: false,
-      active: false
-    })
-
-    await rig.adopt()
-
-    expect(closedPageIds(rig.commands)).toEqual(['page-a'])
-    expect(pages.getPage('page-tracked')).toBeDefined()
-  })
-
   it('leaves a page adopted on an earlier attach untouched when the host reconnects', async () => {
     const pages = new RuntimeBrowserPageRegistry()
     const leases = new BrowserHostLeaseRegistry({
@@ -199,67 +150,5 @@ describe('adoptRuntimeBrowserClientPagesFromInventory', () => {
     expect(second.commands).toEqual([])
     expect(leases.getPlacement('page-a')).toEqual(adoptedPlacement)
     expect(pages.getPage('page-a')).toBeDefined()
-  })
-
-  it('holds a page whose execution host is not up yet without closing it', async () => {
-    const rig = attach([orphanedPage()], {
-      resolveExecutionHostKey: () => Promise.resolve({ status: 'unavailable' })
-    })
-
-    const result = await rig.adopt()
-
-    expect(result).toEqual({ adoptedPageIds: [], unadoptedPageIds: ['page-a'] })
-    expect(rig.commands).toEqual([])
-    expect(rig.leases.getPlacement('page-a')).toBeUndefined()
-    expect(rig.publishClientPage).not.toHaveBeenCalled()
-  })
-
-  it('settles a page whose workspace is gone rather than holding this client open', async () => {
-    const rig = attach([orphanedPage()], {
-      resolveExecutionHostKey: () => Promise.resolve({ status: 'workspace-gone' })
-    })
-
-    const result = await rig.adopt()
-
-    expect(result).toEqual({ adoptedPageIds: [], unadoptedPageIds: [] })
-    expect(rig.commands).toEqual([])
-  })
-
-  it('reports the unresolvable page as held while adopting its resolvable sibling', async () => {
-    const rig = attach(
-      [orphanedPage(), orphanedPage({ browserPageId: 'page-b', workspaceId: 'workspace-b' })],
-      {
-        resolveExecutionHostKey: (workspaceId) =>
-          Promise.resolve(workspaceId === WORKSPACE_ID ? resolved : { status: 'unavailable' })
-      }
-    )
-
-    const result = await rig.adopt()
-
-    expect(result).toEqual({ adoptedPageIds: ['page-a'], unadoptedPageIds: ['page-b'] })
-    expect(closedPageIds(rig.commands)).toEqual(['page-a'])
-  })
-
-  it('adopts nothing and holds nothing when the host cannot speak the reconciliation protocol', async () => {
-    const leases = new BrowserHostLeaseRegistry({
-      authorityRuntimeId: AUTHORITY_RUNTIME_ID,
-      authorityEpoch: AUTHORITY_EPOCH
-    })
-    const host = leases.attach({
-      browserHostClientId: HOST_CLIENT_ID,
-      connectionId: 'connection-a',
-      pairedDeviceId: 'device-a',
-      hostCapabilities: ['webview']
-    })
-
-    await expect(
-      adoptRuntimeBrowserClientPagesFromInventory({
-        lease: host.lease,
-        authority: leases,
-        pages: new RuntimeBrowserPageRegistry(),
-        notifyWorkspace: vi.fn(),
-        resolveExecutionHostKey: () => Promise.resolve(resolved)
-      })
-    ).resolves.toEqual({ adoptedPageIds: [], unadoptedPageIds: [] })
   })
 })

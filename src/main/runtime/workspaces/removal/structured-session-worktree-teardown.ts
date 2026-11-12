@@ -8,7 +8,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { STILL_LIVE_DETAIL_PREFIX } from '../../../../shared/worktree/removal'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   observeStructuredSession,
   structuredSessionCloseSettled

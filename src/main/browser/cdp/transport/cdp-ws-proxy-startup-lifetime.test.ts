@@ -107,7 +107,7 @@ describe('CdpWsProxy startup ownership', () => {
     debuggerHandle.sendCommand.mockRejectedValueOnce(new Error('Page domain is not ready'))
     const proxy = makeProxy(mock)
 
-    await expect(proxy.start()).resolves.toBe('ws://127.0.0.1:9222')
+    await expect(proxy.start()).resolves.toMatch(/^ws:\/\/127\.0\.0\.1:9222\//)
     await proxy.stop()
 
     expectNoListeners(mock)

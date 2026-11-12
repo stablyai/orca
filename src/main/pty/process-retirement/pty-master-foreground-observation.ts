@@ -1,3 +1,4 @@
+import type { PtyForegroundGroupReader } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 import {
   getCommandTokenPathBasename,
   getFirstCommandToken
@@ -40,6 +41,11 @@ export function readPtyForegroundGroup(proc: unknown): number | null | undefined
   } catch {
     return null
   }
+}
+
+/** ConPTY has no foreground process group, so Windows PTYs get no reader. */
+export function ptyForegroundGroupReader(proc: unknown): PtyForegroundGroupReader | undefined {
+  return process.platform === 'win32' ? undefined : () => readPtyForegroundGroup(proc)
 }
 
 export function resolvePtyForegroundMembers(
@@ -131,7 +137,7 @@ export async function observePtyForeground(
     ) {
       return unknown('terminal_unavailable')
     }
-    const rows = await readPtyTerminalRows(tty, deadlineMs - Date.now())
+    const rows = await readPtyTerminalRows(tty, proc.pid, deadlineMs - Date.now())
     if (!alive()) {
       return unknown('session_changed')
     }

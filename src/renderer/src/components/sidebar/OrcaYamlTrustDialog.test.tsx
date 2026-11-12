@@ -5,7 +5,11 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import OrcaYamlTrustDialog from './OrcaYamlTrustDialog'
 import { useAppStore } from '@/store'
-import { __resetTrustPromptChainForTests, ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import {
+  __resetTrustPromptChainForTests,
+  confirmCreatedWorktreeSetupContent,
+  ensureHooksConfirmed
+} from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import type { Repo } from '../../../../shared/repo-types'
 
 const hooksCheck = vi.fn()
@@ -113,5 +117,41 @@ describe('OrcaYamlTrustDialog Always trust', () => {
     )
     clickButton("Don't run")
     await expect(edited).resolves.toBe('skip')
+  })
+})
+
+describe('OrcaYamlTrustDialog created branch review', () => {
+  it("saves a created branch's approved setup alongside the primary checkout's", async () => {
+    useAppStore.setState({ repos: [makeRepo('local')] })
+    serveSetupScript('pnpm install')
+    const primary = confirmSetup()
+    await waitForPrompt()
+    clickButton('Run hooks')
+    await expect(primary).resolves.toBe('run')
+    const primaryHash = useAppStore.getState().trustedOrcaHooks['repo-1']?.setup?.contentHash
+
+    const reviewBranch = (): ReturnType<typeof confirmCreatedWorktreeSetupContent> =>
+      confirmCreatedWorktreeSetupContent(
+        () => useAppStore.getState(),
+        'repo-1',
+        'pnpm install && pnpm build',
+        'local'
+      )
+    const review = reviewBranch()
+    await waitForPrompt()
+    expect(document.body.textContent).toContain('pnpm install && pnpm build')
+    clickButton('Run hooks')
+    const approval = await review
+    expect(approval.decision).toBe('run')
+
+    expect(useAppStore.getState().trustedOrcaHooks['repo-1']?.setup).toEqual({
+      contentHash: approval.approvedContentHash,
+      approvedAt: expect.any(Number),
+      previousContentHashes: [primaryHash]
+    })
+    // Neither the primary checkout's script nor the branch's prompts again.
+    await expect(confirmSetup()).resolves.toBe('run')
+    await expect(reviewBranch()).resolves.toEqual(approval)
+    expect(useAppStore.getState().activeModal).toBe('none')
   })
 })

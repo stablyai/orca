@@ -9,7 +9,7 @@ import {
 import { nativeChatPreferenceFor } from '../../../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { chatProviderAgents } from '@/lib/chat-provider-agents'
+import { chatProviderAgents } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { useAppStore } from '../../../store/index'
 import { createAgentSettingsUpdateQueue } from './agent-settings-update-queue'
 
@@ -100,17 +100,20 @@ export function buildAgentOpensAs({
   cliDetected,
   chatProgramHere,
   settings,
-  updateSettings
+  updateSettings,
+  includeDisabled = false
 }: {
   agent: TuiAgent
   cliDetected: boolean | null
   chatProgramHere: boolean
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  /** Keep the choice for a turned-off agent so its row can show it grayed out. */
+  includeDisabled?: boolean
 }): AgentOpensAs | undefined {
   const offered =
     chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined).includes(agent) &&
-    isTuiAgentEnabled(agent, settings.disabledTuiAgents)
+    (includeDisabled || isTuiAgentEnabled(agent, settings.disabledTuiAgents))
   if (!offered) {
     return undefined
   }

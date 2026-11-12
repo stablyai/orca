@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SearchResult } from '../../../../../../shared/code-search-types'
+import type { SearchResult } from '../../../../../../shared/file-search/code-search-types'
 import { useFileSearchRunner } from './useFileSearchRunner'
 
 const mocks = vi.hoisted(() => ({
@@ -11,11 +11,11 @@ const mocks = vi.hoisted(() => ({
   searchRuntimeFiles: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: mocks.getConnectionId
 }))
 
-vi.mock('@/runtime/runtime-file-search-client', () => ({
+vi.mock('@/runtime/files/search/runtime-file-search-client', () => ({
   searchRuntimeFiles: mocks.searchRuntimeFiles
 }))
 

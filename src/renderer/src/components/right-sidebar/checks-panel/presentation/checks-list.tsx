@@ -10,19 +10,23 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
-import { translate } from '@/i18n/i18n'
-import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
+import { cn } from '@/lib/class-names'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
+import { useTranslate } from '@/i18n/use-translate'
+import { CHECK_COLOR, CHECK_ICON, checkPresentationKey } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
 import { CheckRunTime } from './check-run-time'
 import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { getCheckConclusion } from '@/components/pr-check-counts'
 import { type ChecksListProps, useChecksListState } from '../refresh/use-checks-list-state'
-import { openAppHttpLink, openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import {
+  openAppHttpLink,
+  openAppHttpLinkFromAnchor
+} from '@/lib/browser/navigation/app-http-link-open'
 import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {
+  const t = useTranslate()
   const {
     checks,
     pipelineCheck,
@@ -67,7 +71,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
           {passingCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleCheck className="size-3 text-emerald-500" />
-              {translate(
+              {t(
                 'auto.components.right.sidebar.checks.panel.content.passingCount',
                 '{{count}} passing',
                 { count: passingCount, defaultValue_one: '{{count}} passing' }
@@ -77,7 +81,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
           {failingCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleX className="size-3 text-rose-500" />
-              {translate(
+              {t(
                 'auto.components.right.sidebar.checks.panel.content.failingCount',
                 '{{count}} failing',
                 { count: failingCount, defaultValue_one: '{{count}} failing' }
@@ -88,13 +92,13 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
             <span className="flex items-center gap-1 text-muted-foreground">
               <CircleDashed className="size-3" />
               {cancelledCount}{' '}
-              {translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}
+              {t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}
             </span>
           )}
           {pendingCount > 0 && (
             <span className="flex items-center gap-1">
               <LoaderCircle className="size-3 text-amber-500" />
-              {translate(
+              {t(
                 'auto.components.right.sidebar.checks.panel.content.pendingCount',
                 '{{count}} pending',
                 { count: pendingCount, defaultValue_one: '{{count}} pending' }
@@ -105,7 +109,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
           {neutralCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleDashed className="size-3 text-muted-foreground" />
-              {translate(
+              {t(
                 'auto.components.right.sidebar.checks.panel.content.unresolvedCount',
                 '{{count}} unresolved',
                 { count: neutralCount, defaultValue_one: '{{count}} unresolved' }
@@ -130,7 +134,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
         </div>
       ) : checks.length === 0 ? (
         <div className="px-4 py-8 text-[11px] text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.right.sidebar.checks.panel.content.991f50c7e4',
             'No checks configured'
           )}
@@ -176,7 +180,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                               variant="ghost"
                               size="icon-xs"
                               className="size-6 text-muted-foreground hover:text-foreground focus-visible:text-foreground"
-                              aria-label={translate(
+                              aria-label={t(
                                 'auto.components.right.sidebar.checks.panel.content.0dca6bfab5',
                                 'Open check details'
                               )}
@@ -189,7 +193,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="left" sideOffset={4}>
-                            {translate(
+                            {t(
                               'auto.components.right.sidebar.checks.panel.content.0dca6bfab5',
                               'Open check details'
                             )}
@@ -218,7 +222,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
             <div
               role="separator"
               aria-orientation="horizontal"
-              title={translate(
+              title={t(
                 'auto.components.right.sidebar.checks.panel.content.7f793b571d',
                 'Drag to resize checks'
               )}
@@ -230,7 +234,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
           )}
           {checks.length >= 100 && (
             <div className="border-b border-border px-3 py-1.5 text-[10px] text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.right.sidebar.checks.panel.content.cbcc4ab3db',
                 'Showing first 100 checks'
               )}
@@ -244,9 +248,10 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
 
 // The icon already shows the state, so its word lives in the icon's tooltip and accessible name, not beside it.
 function CheckStatusIcon({ check }: { check: PRCheckDetail }): React.JSX.Element {
-  const conclusion = getCheckConclusion(check)
+  const t = useTranslate()
+  const conclusion = checkPresentationKey(check)
   const Icon = CHECK_ICON[conclusion] ?? CircleDashed
-  const label = getCheckStatusLabel(check)
+  const label = getCheckStatusLabel(check, t)
   return (
     <Tooltip>
       <TooltipTrigger asChild>

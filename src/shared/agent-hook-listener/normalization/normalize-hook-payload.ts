@@ -29,6 +29,7 @@ import { readString } from '../tool-input-preview'
 import { readClaudeBatchSettledRequests } from '../claude-settled-permission-requests'
 import { withClaudeToolRequestId } from '../claude-tool-request-identity'
 import { hasSeparateHookSessionAdmission, readPaneSessionContext } from '../pane-provider-session'
+import { routeJcodeHelperHook } from '../providers/jcode-helper-permission-wait'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 
 export function normalizeHookPayload(
@@ -66,6 +67,11 @@ export function normalizeHookPayload(
   }
   const sessions = readPaneSessionContext(state, source, envelope, eventName)
   const { providerSession, statusAdmissionSession } = sessions
+  // Before prompt and tool caches: a helper's turn must not reset the root turn's caches either.
+  const helper = routeJcodeHelperHook(state, source, envelope, options.bindingStatusByPaneKey)
+  if (helper !== undefined) {
+    return helper
+  }
   if (source === 'opencode' && record.opencodeTui === 1 && !providerSession) {
     return null
   }
@@ -302,6 +308,7 @@ export function normalizeHookPayload(
     ...(statusAdmissionSession ? { statusAdmissionSession } : {}),
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...dispatched.hostTurnSignals,
+    ...(dispatched.replyCandidate ? { replyCandidate: dispatched.replyCandidate } : {}),
     payload: transportPayload
   }
 }

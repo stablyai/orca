@@ -1,14 +1,17 @@
 import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
 import { useEffect } from 'react'
 import { translate } from '@/i18n/i18n'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
-import { gitLabApiFor, type GitLabCapabilityChecks } from '@/runtime/gitlab-owner-api'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
+import {
+  gitLabApiFor,
+  type GitLabCapabilityChecks
+} from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
 import type { Repo } from '../../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import type { GitLabDialogRepoSelector } from '../../gitlab-item-dialog/gitlab-item-dialog-types'
 import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab-types'
-import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 import { isGitLabIssueFilter, isGitLabMRFilter } from '../task-page-source-context'
 
 // Leave headroom below the runtime RPC foreground concurrency of eight for sidebar and other callers.

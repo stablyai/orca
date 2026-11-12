@@ -1,7 +1,7 @@
 import React from 'react'
 import type { AutomationsPageController } from './use-automations-page-controller'
-import { AutomationsListPanel } from './AutomationsListPanel'
-import { nextAutomationListSort } from './automation-list-view'
+import { AutomationsListPanel } from './listing/AutomationsListPanel'
+import { nextAutomationListSort } from './listing/automation-list-view'
 
 export function AutomationsPageListPanel({
   controller,
@@ -96,6 +96,7 @@ export function AutomationsPageListPanel({
       hostTargetFor={destination.automationHostTargetFor}
       hostLabelById={presentation.hostLabelById}
       isActionEnabled={destination.isAutomationRowActionEnabled}
+      needsMigration={(row) => !!destination.rowRecoveryHost(row.key)?.servedBy}
       externalActionKey={externalActionKey}
       selectAutomationRow={list.selectAutomationRow}
       selectExternalKey={local.selectExternalKey}
@@ -103,6 +104,7 @@ export function AutomationsPageListPanel({
       runNow={(row) => void runActions.runNow(row)}
       openEditDialog={(row) => void editorActions.openEditDialog(row)}
       toggleAutomation={(row) => void managementActions.toggleAutomation(row)}
+      reviewSkippedSetup={managementActions.reviewSkippedSetup}
       requestDeleteAutomation={managementActions.requestDeleteAutomation}
       requestExternalAction={externalActions.requestExternalAction}
       openCreateDialog={editorActions.openCreateDialog}

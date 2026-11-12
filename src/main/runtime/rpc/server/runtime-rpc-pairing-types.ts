@@ -1,8 +1,9 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcAnyMethodDeclaration } from '../core'
 import type { DeviceRegistry } from './pairing/device-registry'
-import type { E2EEKeypair } from '../../e2ee-keypair'
-import type { MobileSocketTransportMetadata } from '../mobile-socket-wiring'
+import type { E2EEKeypair } from './pairing/e2ee-keypair'
+import type { MobileSocketTransportMetadata } from '../mobile/mobile-socket-wiring'
+import type { ServeNetworkSourceOptions } from './serve-network-source-policy'
 import type { PairingRelay } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
@@ -43,6 +44,8 @@ export type OrcaRuntimeRpcServerOptions = {
   exposeNetworkByDefault?: boolean
   /** Explicit address pins govern the whole process: override startup exposure and reconnect defaults, and refuse pairing-time widening. Loopback must survive pairing and restart. */
   pinnedBindHost?: string
+  // `orca serve` only: refuse public source addresses unless allowed (desktop listeners never filter).
+  serveNetworkSources?: ServeNetworkSourceOptions
   webClientRoot?: string
   // Test-only timing overrides; production keeps design §3.1 defaults.
   keepaliveIntervalMs?: number
@@ -75,6 +78,8 @@ export type MobilePairingOfferAvailable = {
   endpoint: string
   deviceId: string
   webClientUrl: string | null
+  /** Null when the offer stays valid until scanned. */
+  offerExpiresAt: number | null
   /** Mode the offer actually encodes. */
   connectionMode: MobilePairingConnectionMode
 }

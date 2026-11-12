@@ -6,9 +6,10 @@ import {
   getRepoSearchRefsProbeLimit,
   isRepoSearchRefsRequestLimit
 } from '../../../shared/repo-search-limits'
-import { getBaseRefDefault } from '../../git/repo-default-base-ref'
-import { getRemoteCount } from '../../git/repo'
-import { searchBaseRefDetails } from '../../git/repo-base-ref-search'
+import { getDefaultBaseRefAsync as getBaseRefDefault } from '../../git/refs/resolution/repo-default-base-ref'
+import { getRemoteCount } from '../../git/remotes/repo-remote-queries'
+import { searchRemoteRefPage } from '../../git/refs/resolution/repo-remote-ref-search'
+import { searchBaseRefDetails } from '../../git/refs/resolution/repo-base-ref-search'
 import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 
@@ -23,7 +24,8 @@ export class RuntimeRepositoryRefQueries {
     repoSelector: string,
     query: string,
     limit: number,
-    includeQualifiedRefs = true
+    includeQualifiedRefs = true,
+    namespace?: 'remote'
   ): Promise<RuntimeRepoSearchRefs> {
     if (!isRepoSearchRefsRequestLimit(limit)) {
       throw new Error('invalid_limit')
@@ -33,6 +35,13 @@ export class RuntimeRepositoryRefQueries {
     const repo = await this.deps.resolveRepo(repoSelector)
     if (isFolderRepo(repo)) {
       return { refs: [], truncated: false }
+    }
+    if (namespace === 'remote') {
+      if (getRepoRoutingConnectionId(repo)) {
+        throw new Error('This project is not served by this host.')
+      }
+      const page = await searchRemoteRefPage(repo.path, query, effectiveLimit)
+      return { ...page, refs: page.refDetails.map((row) => row.refName), namespace }
     }
     // Unserved SSH hosts report no refs; never search local files for them.
     const refDetails = getRepoRoutingConnectionId(repo)

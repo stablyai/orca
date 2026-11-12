@@ -1,16 +1,15 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
+import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import {
   chatAssigneeSessionId,
-  observeChatAssignee,
-  type ChatAssigneeObservation
-} from '../../../../orchestration/chat-assignee'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+  observeChatAssignee
+} from '../../../../orchestration/workers/lifecycle/chat-assignee'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
   holdStructuredWorker,
   observeStructuredSession
 } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
-import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
+import { resolveStructuredWorkerForDispatch } from '../structured-workers/orchestration-structured-worker-lifecycle'
 
 export type SessionWorkerObservation = {
   terminal: null
@@ -45,6 +44,7 @@ export async function inspectSessionWorker(
   if (!structured) {
     return null
   }
+  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   // Structured registry proves pane/lineage identity without a PTY.
   // Omit agentWait: terminal scans cannot see journal questions, and null falsely claims no wait.
   const exact = db.isDispatchProcessCurrent({
@@ -69,14 +69,18 @@ export async function inspectSessionWorker(
   }
 }
 
-/** A fleet page's chat verdicts, read off the session records a restart leaves uninstalled. */
-export async function chatAssigneeObserver(
+/** Session verdicts read records that a restart leaves uninstalled until something asks. */
+export async function ensureSessionWorkerRecords(
   runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
-  db: OrchestrationDb,
   rows: readonly { agentTerminalHandle: string | null }[]
-): Promise<(sessionId: OrcaSessionId) => ChatAssigneeObservation> {
-  if (rows.some((row) => chatAssigneeSessionId(row.agentTerminalHandle))) {
+): Promise<void> {
+  if (
+    rows.some(
+      (row) =>
+        chatAssigneeSessionId(row.agentTerminalHandle) ||
+        isStructuredWorkerHandle(row.agentTerminalHandle)
+    )
+  ) {
     await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   }
-  return (sessionId) => observeChatAssignee(sessionId, db)
 }

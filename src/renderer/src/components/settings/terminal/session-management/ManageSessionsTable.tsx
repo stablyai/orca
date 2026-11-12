@@ -3,7 +3,7 @@ import { LoaderCircle, RefreshCw, RotateCw, Trash2, X } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { formatState, formatWorkspace } from './manage-sessions-format'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ManageSessionsTableProps = {
   sessions: PtyManagementSession[]
@@ -34,12 +34,13 @@ export function ManageSessionsTable({
   onNavigate,
   onRequestKill
 }: ManageSessionsTableProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-border/60">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-muted-foreground">
-            {translate('auto.components.settings.ManageSessionsSection.a795a9552a', 'Sessions')}
+            {t('auto.components.settings.ManageSessionsSection.a795a9552a', 'Sessions')}
             {hasLoadedOnce ? <span className="ml-1 tabular-nums">({sessionCount})</span> : null}
           </span>
           <Button
@@ -47,10 +48,7 @@ export function ManageSessionsTable({
             size="icon-xs"
             onClick={() => void onRefresh()}
             disabled={isBusy || isRefreshing}
-            aria-label={translate(
-              'auto.components.settings.ManageSessionsSection.b3b1cc5708',
-              'Refresh'
-            )}
+            aria-label={t('auto.components.settings.ManageSessionsSection.b3b1cc5708', 'Refresh')}
             className="text-muted-foreground"
           >
             <RefreshCw className={isRefreshing ? 'animate-spin' : ''} />
@@ -64,7 +62,7 @@ export function ManageSessionsTable({
                 size="icon-xs"
                 disabled={isBusy || sessionCount === 0}
                 onClick={onKillAll}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.settings.ManageSessionsSection.3282db098c',
                   'Kill all sessions'
                 )}
@@ -78,10 +76,7 @@ export function ManageSessionsTable({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate(
-                'auto.components.settings.ManageSessionsSection.3282db098c',
-                'Kill all sessions'
-              )}
+              {t('auto.components.settings.ManageSessionsSection.3282db098c', 'Kill all sessions')}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -91,7 +86,7 @@ export function ManageSessionsTable({
                 size="icon-xs"
                 disabled={isBusy}
                 onClick={onRestartDaemon}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.settings.ManageSessionsSection.5ed15e778c',
                   'Restart daemon'
                 )}
@@ -105,10 +100,7 @@ export function ManageSessionsTable({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate(
-                'auto.components.settings.ManageSessionsSection.5ed15e778c',
-                'Restart daemon'
-              )}
+              {t('auto.components.settings.ManageSessionsSection.5ed15e778c', 'Restart daemon')}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -116,11 +108,11 @@ export function ManageSessionsTable({
 
       {!hasLoadedOnce ? (
         <div className="flex items-center justify-center px-3 py-8 text-xs text-muted-foreground">
-          {translate('auto.components.settings.ManageSessionsSection.39c53d6d74', 'Loading…')}
+          {t('auto.components.settings.ManageSessionsSection.39c53d6d74', 'Loading…')}
         </div>
       ) : sessions.length === 0 ? (
         <div className="flex items-center justify-center px-3 py-8 text-xs text-muted-foreground">
-          {translate('auto.components.settings.ManageSessionsSection.e26a60d9eb', 'No sessions.')}
+          {t('auto.components.settings.ManageSessionsSection.e26a60d9eb', 'No sessions.')}
         </div>
       ) : (
         <div className="max-h-[360px] overflow-y-auto scrollbar-sleek">
@@ -139,7 +131,7 @@ export function ManageSessionsTable({
                     onClick={rowClickable ? () => onNavigate(tabId) : undefined}
                     aria-label={
                       rowClickable
-                        ? translate(
+                        ? t(
                             'auto.components.settings.ManageSessionsSection.2896a50f50',
                             'Go to terminal {{value0}}',
                             { value0: formatWorkspace(session) }
@@ -174,7 +166,7 @@ export function ManageSessionsTable({
                           onRequestKill(session)
                         }}
                         disabled={isBusy}
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.settings.ManageSessionsSection.33c2a1e1b4',
                           'Kill session {{value0}}',
                           { value0: session.sessionId }

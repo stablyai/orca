@@ -68,6 +68,25 @@ function catalog(id: string, url: string): PluginMarketplaceHostSourceState {
 }
 
 describe('plugin list entries', () => {
+  it("adds the publisher to a community plugin that shares an official one's name", () => {
+    const community = {
+      ...installed('vale-c.catppuccin', 'Catppuccin for Orca'),
+      publisher: 'vale-c',
+      official: false
+    }
+    const { installed: mine, available } = buildPluginListEntries(
+      [community],
+      [
+        listing('stablyai.orca-catppuccin-theme', { name: 'Catppuccin for Orca' }),
+        listing('vale-c.catppuccin', { name: 'Catppuccin for Orca', official: false })
+      ]
+    )
+    expect(mine[0]?.name).toBe('Catppuccin for Orca (vale-c)')
+    expect(mine[0]?.nameShowsPublisher).toBe(true)
+    expect(available.map((entry) => entry.name)).toEqual(['Catppuccin for Orca'])
+    expect(available[0]?.nameShowsPublisher).toBeUndefined()
+  })
+
   it('joins an installed plugin to the catalog it came from, and updates only from there', () => {
     const plugin = fromCatalog(installed('acme.notes', 'Notes'), 'https://mirror.invalid/c.git')
     const sources = [

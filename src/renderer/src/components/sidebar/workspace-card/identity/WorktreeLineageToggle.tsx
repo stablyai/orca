@@ -2,9 +2,10 @@ import { useId, type MouseEventHandler } from 'react'
 import { ChevronDown, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
+import type { WorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
+import { cn } from '@/lib/class-names'
 import StatusIndicator from '../surface/StatusIndicator'
 import { useWorktreeActivityStatuses } from '../activity/use-worktree-activity-statuses'
 
@@ -35,6 +36,7 @@ export function WorktreeLineageToggle({
   count: number
   onToggle?: MouseEventHandler<HTMLButtonElement>
 }) {
+  const t = useTranslate()
   const descriptionId = useId()
   const statuses = useWorktreeActivityStatuses(childWorktreeIds)
   const counts = new Map<WorktreeStatus, number>()
@@ -100,8 +102,8 @@ export function WorktreeLineageToggle({
         </TooltipTrigger>
         <TooltipContent side="right" sideOffset={8}>
           {collapsed
-            ? translate('auto.components.sidebar.WorktreeCard.8cb634cda6', 'Show child workspaces')
-            : translate('auto.components.sidebar.WorktreeCard.57eaa61b55', 'Hide child workspaces')}
+            ? t('auto.components.sidebar.WorktreeCard.8cb634cda6', 'Show child workspaces')
+            : t('auto.components.sidebar.WorktreeCard.57eaa61b55', 'Hide child workspaces')}
           {description ? <div>{description}</div> : null}
         </TooltipContent>
       </Tooltip>

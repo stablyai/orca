@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
 import '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import '@/attention/agent-subject-read-actions'
-import '../worktrees-slice-test-fixtures'
+
 import { ringBell, setWindowOnScreen } from './workspace-unread-characterization-driver'
 import {
   addLiveTerminalTab,

@@ -1,3 +1,7 @@
+import {
+  DEFAULT_STATUS_BAR_USAGE_FORMAT,
+  normalizeStatusBarUsageFormat
+} from '../../../../../shared/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
@@ -26,7 +30,7 @@ import {
 import {
   ALL_AUTOMATION_HOSTS_FILTER,
   toPersistedAutomationHostFilter
-} from '../../../../../shared/automation-host-filter'
+} from '../../../../../shared/automations/ownership/automation-host-filter'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -39,6 +43,7 @@ import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-stat
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
+    gitGraphFiltersByWorktree: {},
     sidebarBody: 'workspaces',
     setSidebarBody: (body) => set({ sidebarBody: body }),
 
@@ -271,6 +276,12 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         usagePercentageDisplay: normalized,
         usagePercentageDisplayChangeNoticeDismissed: true
       })
+    },
+    statusBarUsageFormat: { ...DEFAULT_STATUS_BAR_USAGE_FORMAT },
+    setStatusBarUsageFormat: (format) => {
+      const normalized = normalizeStatusBarUsageFormat(format)
+      window.api.ui.set({ statusBarUsageFormat: normalized }).catch(console.error)
+      set({ statusBarUsageFormat: normalized })
     },
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     setStatusBarUsageMode: (mode) => {

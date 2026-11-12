@@ -17,7 +17,7 @@ import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { readAllWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {
   runtimeVisibleFolderWorkspaces,
   runtimeVisibleRepos

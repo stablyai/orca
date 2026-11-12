@@ -262,6 +262,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   resumeProviderSession?: AgentSessionResume.AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: StartupCommandDelivery
   title?: string
@@ -338,6 +339,7 @@ export type RuntimeTerminalWaitBlockedReason =
   | 'agent-interactive-prompt'
   | 'agent-approval-prompt'
   | 'agent-sign-in-prompt'
+  | 'agent-startup-menu-prompt'
 
 export type RuntimeTerminalWait = {
   handle: string

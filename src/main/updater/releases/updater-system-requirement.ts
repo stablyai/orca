@@ -1,6 +1,7 @@
 import { release } from 'node:os'
 import type { UpdateInfo } from 'electron-updater'
 import type { UnsupportedSystemUpdate } from '../../../shared/update-status-types'
+import { macosVersionForDarwinFloor } from '../../../shared/macos-darwin-floor'
 import { compareVersions } from './updater-fallback'
 
 function darwinParts(version: string): number[] | null {
@@ -16,14 +17,6 @@ function isDarwinOlder(current: number[], minimum: number[]): boolean {
     }
   }
   return false
-}
-
-// macOS 11-15 run Darwin 20-24; macOS 26 runs Darwin 25.
-function macosMajorForDarwinMajor(darwinMajor: number): number | null {
-  if (darwinMajor < 20) {
-    return null
-  }
-  return darwinMajor <= 24 ? darwinMajor - 9 : darwinMajor + 1
 }
 
 /** The newer release electron-updater withheld because this Mac's macOS is below its manifest gate. */
@@ -44,8 +37,6 @@ export function getUnsupportedSystemUpdate(
   if (!minimum || !current || !isDarwinOlder(current, minimum)) {
     return undefined
   }
-  const macosMajor = macosMajorForDarwinMajor(minimum[0])
-  return macosMajor === null
-    ? undefined
-    : { version: info.version, minimumMacosVersion: String(macosMajor) }
+  const minimumMacosVersion = macosVersionForDarwinFloor(minimum)
+  return minimumMacosVersion === null ? undefined : { version: info.version, minimumMacosVersion }
 }

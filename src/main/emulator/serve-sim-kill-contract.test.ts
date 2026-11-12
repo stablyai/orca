@@ -8,8 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { serveSimKillArgs } from './serve-sim-execution'
 
 const SERVE_SIM_ENTRY = join(
-  dirname(createRequire(import.meta.url).resolve('serve-sim/package.json')),
-  'dist',
+  dirname(createRequire(import.meta.url).resolve('serve-sim/middleware')),
   'serve-sim.js'
 )
 const DEVICE_A = 'AAAAAAAA-0000-0000-0000-000000000001'

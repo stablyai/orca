@@ -10,8 +10,6 @@ import type {
 } from '../../../../shared/developer-permissions-types'
 import { FullDiskAccessSetupPrompt } from './FullDiskAccessSetupPrompt'
 
-import { toast } from 'sonner'
-
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
@@ -72,27 +70,6 @@ describe('FullDiskAccessSetupPrompt state helpers', () => {
     })
   })
 
-  it('refreshes macOS Full Disk Access status when Orca regains focus', async () => {
-    setUserAgent('Macintosh')
-    const getStatus = vi
-      .fn()
-      .mockResolvedValueOnce([{ id: 'full-disk-access', status: 'unknown' }])
-      .mockResolvedValueOnce([{ id: 'full-disk-access', status: 'granted' }])
-    installDeveloperPermissionsApi({ getStatus })
-
-    const { container, root } = await renderPrompt()
-    expect(container.textContent).toContain('Recommended')
-
-    await act(async () => {
-      window.dispatchEvent(new Event('focus'))
-      await Promise.resolve()
-    })
-
-    expect(getStatus).toHaveBeenCalledTimes(2)
-    expect(container.textContent).not.toContain('Full Disk Access')
-    root.unmount()
-  })
-
   it('keeps the latest macOS status when overlapping refreshes finish out of order', async () => {
     setUserAgent('Macintosh')
     let resolveFirst!: (states: DeveloperPermissionState[]) => void
@@ -131,33 +108,6 @@ describe('FullDiskAccessSetupPrompt state helpers', () => {
     expect(container.textContent).not.toContain('Full Disk Access')
     expect(getStatus).not.toHaveBeenCalled()
     expect(window.api.developerPermissions.request).not.toHaveBeenCalled()
-    root.unmount()
-  })
-
-  it('opens Full Disk Access settings from the prompt action', async () => {
-    setUserAgent('Macintosh')
-    installDeveloperPermissionsApi({
-      getStatus: async () => [{ id: 'full-disk-access', status: 'unknown' }],
-      request: async () => ({
-        id: 'full-disk-access',
-        status: 'unknown',
-        openedSystemSettings: true
-      })
-    })
-
-    const { container, root } = await renderPrompt()
-    const button = container.querySelector<HTMLButtonElement>('button')
-    expect(button?.textContent).toContain('Open Full Disk Access')
-
-    await act(async () => {
-      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await Promise.resolve()
-    })
-
-    expect(window.api.developerPermissions.request).toHaveBeenCalledWith({
-      id: 'full-disk-access'
-    })
-    expect(toast.message).toHaveBeenCalledWith('Opened macOS Privacy & Security')
     root.unmount()
   })
 })

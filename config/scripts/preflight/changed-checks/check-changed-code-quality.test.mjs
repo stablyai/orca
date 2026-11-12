@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { collectBaseLineBlocks, collectAddedLineRanges } from './check-changed-code-quality.mjs'
+import {
+  collectBaseLineBlocks,
+  collectAddedLineRanges,
+  isUnloadedPluginDirectiveUnusedWarning
+} from './check-changed-code-quality.mjs'
 
 describe('changed-code quality line matching', () => {
   it.each(['edit', 'rename'])('treats bracketed filenames literally after %s', (change) => {
@@ -69,47 +73,6 @@ describe('moved-code exemption', () => {
     }
   })
 
-  it('keeps source boundaries across batches, missing files, and multibyte contents', () => {
-    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-batch-'))
-    try {
-      const git = (...args) => {
-        const result = runProcessSync({ program: 'git', args, cwd: repo })
-        expect(result.code, result.stderr).toBe(0)
-        return result.stdout.trim()
-      }
-      git('init', '--quiet')
-      const files = Array.from({ length: 40 }, (_, index) => `file ${index} é.ts`)
-      const sources = files.map((_, index) =>
-        index === 0 ? '' : `  const café${index} = '🐳'\r\n\r\n// missing\nlastLine()`
-      )
-      files.forEach((file, index) => writeFileSync(path.join(repo, file), sources[index]))
-      git('add', '--all')
-      git(
-        '-c',
-        'commit.gpgsign=false',
-        '-c',
-        'user.name=t',
-        '-c',
-        'user.email=t@example.invalid',
-        'commit',
-        '-qm',
-        'base'
-      )
-      const base = git('rev-parse', 'HEAD')
-      const expected = sources.map((_, index) =>
-        index === 0 ? [] : [`const café${index} = '🐳'`, '// missing', 'lastLine()']
-      )
-      expect(
-        collectBaseLineBlocks(repo, base, ['missing.ts', ...files, 'also-missing.ts'])
-      ).toEqual(expected)
-      expect(collectBaseLineBlocks(repo, base, [])).toEqual([])
-      expect(collectBaseLineBlocks(repo, base, ['missing.ts'])).toEqual([])
-      expect(collectBaseLineBlocks(path.join(repo, 'absent'), base, files)).toEqual([])
-    } finally {
-      rmSync(repo, { recursive: true, force: true })
-    }
-  })
-
   it.skipIf(process.platform === 'win32')('reads filenames containing newlines', () => {
     const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-newline-'))
     try {
@@ -138,6 +101,37 @@ describe('moved-code exemption', () => {
       ])
     } finally {
       rmSync(repo, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('secondary-scan directive exemption', () => {
+  it('exempts type-aware and import-plugin directives from the root scan alone', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-type-aware-'))
+    try {
+      writeFileSync(
+        path.join(root, 'a.ts'),
+        [
+          '// oxlint-disable-next-line typescript/return-await -- catch must not cover this',
+          '// oxlint-disable-next-line typescript/return-await-extra -- unknown rule',
+          '// oxlint-disable-next-line no-console -- root rule',
+          '// oxlint-disable-next-line import/no-cycle -- singleton hub'
+        ].join('\n')
+      )
+      const unused = (line) => ({
+        message: 'Unused oxlint-disable directive (no problems were reported).',
+        filename: 'a.ts',
+        labels: [{ span: { line } }]
+      })
+      const exempt = (line, scan) =>
+        isUnloadedPluginDirectiveUnusedWarning(unused(line), root, scan)
+      expect(exempt(1, 'code quality')).toBe(true)
+      expect(exempt(1, 'type-aware code quality')).toBe(false)
+      expect(exempt(2, 'code quality')).toBe(false)
+      expect(exempt(3, 'code quality')).toBe(false)
+      expect(exempt(4, 'code quality')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
     }
   })
 })

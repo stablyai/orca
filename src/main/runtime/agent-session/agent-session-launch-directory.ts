@@ -1,7 +1,7 @@
 import { stat } from 'node:fs/promises'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
-import { AgentSessionPreSpawnError } from '../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
+import { AgentSessionPreSpawnError } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 import { agentSessionPinnedLaunchDirectory } from './records/agent-session-record-launch-directory'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'

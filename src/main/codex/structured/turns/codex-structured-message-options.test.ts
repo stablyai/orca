@@ -4,8 +4,8 @@ import {
   createStructuredAgentSessionOptionState
 } from '../../../../shared/agent-session/options/structured-agent-session-options'
 import { structuredAgentSessionMessageSelection } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
-import { captureStructuredExecutionOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-execution-options'
-import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { captureStructuredExecutionOptions } from '../../../native-chat/agent-session-wire/options/structured-agent-session-execution-options'
+import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 import { describe, expect, it, vi } from 'vitest'
 import { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { optionSession } from '../catalog/codex-structured-option-session.test-fixture'
@@ -169,3 +169,45 @@ it.each([true, false])(
     }
   }
 )
+
+it('sends native Plan and Build on fresh turns while a steer keeps its running mode', async () => {
+  const request = vi.fn(async (_method: string, _params?: Record<string, unknown>) => ({
+    turn: { id: 'mode-turn' }
+  }))
+  const session = optionSession(request)
+  session.reportedOptions = { model: 'retired-model', effort: 'high' }
+  session.appliedTurnOptions = undefined
+  for (const [id, interactionMode] of [
+    ['plan', 'plan'],
+    ['build', 'default']
+  ]) {
+    session.activeTurnIds = new Set()
+    await startCodexTurn(session, {
+      clientMessageId: id!,
+      body: USER_MESSAGE,
+      turnOptions: { interactionMode: interactionMode! }
+    })
+    expect(request.mock.calls.at(-1)?.slice(0, 2)).toEqual([
+      'turn/start',
+      expect.objectContaining({
+        collaborationMode: {
+          mode: interactionMode,
+          settings: {
+            model: 'retired-model',
+            reasoning_effort: 'high',
+            developer_instructions: null
+          }
+        }
+      })
+    ])
+    expect(request.mock.calls.at(-1)?.[1]).not.toHaveProperty('interactionMode')
+  }
+  session.activeTurnIds = new Set(['mode-turn'])
+  await startCodexTurn(session, {
+    clientMessageId: 'steer-plan',
+    body: USER_MESSAGE,
+    turnOptions: { interactionMode: 'plan' }
+  })
+  expect(request.mock.calls.at(-1)?.[0]).toBe('turn/steer')
+  expect(request.mock.calls.at(-1)?.[1]).not.toHaveProperty('collaborationMode')
+})

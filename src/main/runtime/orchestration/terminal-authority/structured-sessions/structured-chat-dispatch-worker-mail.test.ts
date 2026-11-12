@@ -1,10 +1,9 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
 // Worker mail belongs to its Dispatch mailbox; a message the provider may have taken before it died is never handed over again, even after a later turn, a restart or a clear: check keeps it.
 
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
-import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import {
   COORDINATOR,
   PEER_CHAT,

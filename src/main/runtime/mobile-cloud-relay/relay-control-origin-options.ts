@@ -1,6 +1,6 @@
 import type WebSocket from 'ws'
-import type { E2EEKeypair } from '../e2ee-keypair'
-import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
+import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
+import type { MobileSocketWiring } from '../rpc/mobile/mobile-socket-wiring'
 import type { RelayIdentity } from './relay-session-broker-contract'
 import type { RelayAssignment } from './relay-http-client'
 import type { RelayControlOrigin } from './relay-control-origin'

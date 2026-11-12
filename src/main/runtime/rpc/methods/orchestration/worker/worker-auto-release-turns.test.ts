@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
-import { WorkerAutoReleaseActivity } from '../../../../orchestration/worker-auto-release-activity'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
+import { WorkerAutoReleaseActivity } from '../../../../orchestration/terminal-authority/release/worker-auto-release-activity'
 import type { AgentPhase } from '../../../../../../shared/agent-status/lifecycle/agent-transitions'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 

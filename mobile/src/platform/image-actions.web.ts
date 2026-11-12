@@ -3,9 +3,9 @@ import {
   agentSessionAttachmentAppends,
   base64DecodedByteLength
 } from '../../../src/shared/agent-session/agent-session-attachments'
-import { readRasterImageDataUri } from '../../../src/shared/image-data-uri'
-import { isKnownRasterImageMimeType } from '../../../src/shared/raster-image-preview-limits'
-import { isSvgFilePath } from '../../../src/shared/svg-document'
+import { readRasterImageDataUri } from '../../../src/shared/file-preview/image-data-uri'
+import { isKnownRasterImageMimeType } from '../../../src/shared/file-preview/raster-image-preview-limits'
+import { isSvgFilePath } from '../../../src/shared/file-preview/svg-document'
 import type {
   BridgeImageOperation,
   BridgeImageRunParams

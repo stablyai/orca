@@ -3,10 +3,10 @@ import { BrowserWindow, ipcMain, shell } from 'electron'
 import { showSingleFlightOpenDialog } from './single-flight-open-dialog'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, extname, posix, win32 } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
+  ShellOpenFileResult,
   ShellOpenLocalPathResult
 } from '../../shared/shell/opening/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
@@ -30,9 +30,11 @@ import {
 } from './shell-editor-ssh-host'
 import {
   isLocallyOwned,
+  localFileUriPath,
   resolveOwnedPathTarget,
   validateLocalPathTarget
 } from './shell-owned-path-target'
+import { inspectLinkedFile } from './linked-file-inspection'
 import { registerShellPathExistenceHandlers } from './shell-path-existence-handlers'
 
 export { EXTERNAL_EDITOR_CLI_COMMAND }
@@ -112,19 +114,36 @@ async function openInExternalEditor(
   }
 }
 
-async function openWithSystemDefault(pathValue: string, ownerHostId: unknown): Promise<boolean> {
+/**
+ * Open a linked file with the OS default app unless that would run it. Launchable binaries and
+ * bundles are revealed; launchable text (scripts) is revealed too, or with `textInEditor` left to
+ * the caller to show in Orca. Main decides; the renderer only learns the outcome.
+ */
+async function openWithSystemDefault(
+  pathValue: string,
+  ownerHostId: unknown,
+  textInEditor: boolean
+): Promise<ShellOpenFileResult> {
   if (!isLocallyOwned(ownerHostId)) {
-    return false
+    return 'failed'
   }
   const target = await validateLocalPathTarget(pathValue)
   if (!target.ok) {
-    return false
+    return 'failed'
   }
   try {
+    const action = await inspectLinkedFile(target.path)
+    if (action === 'view-as-text' && textInEditor) {
+      return 'open-in-editor'
+    }
+    if (action !== 'open') {
+      shell.showItemInFolder(target.path)
+      return 'revealed'
+    }
     const errorMessage = await shell.openPath(target.path)
-    return errorMessage.length === 0
+    return errorMessage.length === 0 ? 'opened' : 'failed'
   } catch {
-    return false
+    return 'failed'
   }
 }
 
@@ -170,42 +189,17 @@ export function registerShellHandlers(
   ipcMain.handle(
     'shell:openFilePath',
     async (_event, filePath: string, ownerHostId: unknown): Promise<boolean> =>
-      openWithSystemDefault(filePath, ownerHostId)
+      (await openWithSystemDefault(filePath, ownerHostId, false)) !== 'failed'
   )
 
-  ipcMain.handle('shell:openFileUri', async (_event, rawUri: string, ownerHostId: unknown) => {
-    if (!isLocallyOwned(ownerHostId)) {
-      return
+  ipcMain.handle(
+    'shell:openFileUri',
+    async (_event, rawUri: string, ownerHostId: unknown): Promise<ShellOpenFileResult> => {
+      const filePath = localFileUriPath(rawUri)
+      // Callers of this channel show `open-in-editor` results in an Orca editor tab.
+      return filePath === null ? 'failed' : openWithSystemDefault(filePath, ownerHostId, true)
     }
-    let parsed: URL
-    try {
-      parsed = new URL(rawUri)
-    } catch {
-      return
-    }
-
-    if (parsed.protocol !== 'file:') {
-      return
-    }
-
-    if (parsed.hostname && parsed.hostname !== 'localhost') {
-      return
-    }
-
-    let filePath: string
-    try {
-      filePath = fileURLToPath(parsed)
-    } catch {
-      return
-    }
-
-    const target = await validateLocalPathTarget(filePath)
-    if (!target.ok) {
-      return
-    }
-
-    await openWithSystemDefault(target.path, ownerHostId)
-  })
+  )
 
   registerShellPathExistenceHandlers()
 

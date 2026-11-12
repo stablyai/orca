@@ -5,7 +5,7 @@ import {
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { prepareCodexAdoption } from '../../native-chat/codex-adoption-preparation'
 import { isAiVaultTitleAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
-import { generatedSessionTitle } from '../../ai-vault/session-scanner-accumulator'
+import { generatedSessionTitle } from '../../ai-vault/parsing/session-scanner-accumulator'
 import { resolveLocalAiVaultSessionTitles } from '../../ai-vault/session-titles/session-title-resolver'
 import type { NativeCodexResumePreparation } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/structured-agent-session-create'
@@ -22,9 +22,9 @@ import {
   type AgentSessionExecutionLocation,
   agentSessionExecutionLocationsEqual
 } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
-import { listStructuredProviderSessionOwnership } from '../../native-chat/agent-session-wire/structured-provider-session-ownership'
+import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { listStructuredProviderSessionOwnership } from '../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 import {
   findCommittedStructuredAgentSessionAdoptionReplay,
   findConflictingStructuredAdoption,

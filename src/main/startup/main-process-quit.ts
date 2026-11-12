@@ -10,16 +10,16 @@ import {
   shutdownDaemon
 } from '../daemon/providers/lifecycle/daemon-provider-state'
 import { beginSshShutdown } from '../ipc/ssh/ssh-shutdown-drain'
-import { agentHookServer } from '../agent-hooks/server'
-import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
-import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-controls'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
+import { removeManagedAgentHooksAsync } from '../agent-hooks/installation/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../runtime/agent-session/structured-agent-session-runtime'
 import { setStructuredAgentSessionTeardownTrigger } from '../runtime/agent-session/structured-agent-session-runtime-teardown'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
 import { clearRuntimeMetadataIfOwned } from '../runtime/rpc/server/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { disposeDesktopBrowserBridge } from '../ipc/browser/desktop-browser-bridge-wiring'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../codex/history/index/codex-state-db-backfill-recovery'
 import { stopCodexAccountSessionBridges } from '../codex/history/bridges/codex-account-session-bridge'
 import { awaitPackedRefsLockRelease } from '../git/refs/maintenance/local-repo-ref-maintenance'
@@ -39,7 +39,7 @@ import { desktopConnectorCloud } from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
 import { isDevParentShutdownRequested } from './configure-process'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
-import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
+import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
 let daemonDisconnectDone = false
@@ -235,12 +235,9 @@ function installWillQuitHandler(): void {
     const sshShutdown = Promise.resolve(finalSaves).then((saves) => saves.sshShutdown)
     const storeFlush = Promise.resolve(finalSaves).then((saves) => saves.storeFlush)
     const watcherShutdown = Promise.resolve(finalSaves).then((saves) => saves.watcherShutdown)
-    // Capture queued usage writes before awaiting teardown or quit can lose the last enabled/scan snapshot.
     const usageCacheFlush = Promise.all([
-      state.claudeUsage?.flush(),
-      state.codexUsage?.flush(),
-      state.openCodeUsage?.flush(),
-      state.museUsage?.flush()
+      state.backend?.stop(),
+      state.usageWorktreeHistory?.flush()
     ]).then(() => {})
     disposeDesktopBrowserBridge()
     const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()

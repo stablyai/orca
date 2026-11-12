@@ -4,8 +4,8 @@ import type { OrcadActivationRecord } from '../../managed-server/activation/orca
 import { recordOrcadUpdateFailedThisLaunch } from '../../managed-server/lifecycle/orcad-managed-update-failure-memory'
 import type { ServeReadiness } from '../../server/serve-readiness'
 
-import type { OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import type { OrcadSlotOptions } from '../../managed-server/activation/orcad-recovery-slot'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { admitWslOrcadUpdate } from './wsl-orcad-update-admission'
 
 const { adoptRunningOrcadVersion, readOrcadActivationRecord } = vi.hoisted(() => ({
@@ -13,7 +13,9 @@ const { adoptRunningOrcadVersion, readOrcadActivationRecord } = vi.hoisted(() =>
   readOrcadActivationRecord: vi.fn()
 }))
 
-vi.mock('../../ssh/orcad-running-version-adoption', () => ({ adoptRunningOrcadVersion }))
+vi.mock('../../managed-server/activation/orcad-running-version-adoption', () => ({
+  adoptRunningOrcadVersion
+}))
 vi.mock('../../managed-server/activation/orcad-activation-record-store', () => ({
   readOrcadActivationRecord
 }))

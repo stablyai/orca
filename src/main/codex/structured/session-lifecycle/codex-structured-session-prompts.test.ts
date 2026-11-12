@@ -7,9 +7,9 @@ import {
   identityFor
 } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { AgentSessionPromptAnswerRejectedError } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionPromptAnswerRejectedError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 
 describe('CodexStructuredSessionAdapter prompts', () => {

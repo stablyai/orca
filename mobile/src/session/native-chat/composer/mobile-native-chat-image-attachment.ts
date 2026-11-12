@@ -1,5 +1,5 @@
-import { saveMobileClipboardImageAsTempFile } from '../../mobile-clipboard-image'
-import type { MobileClipboardImageRpcSender } from '../../mobile-clipboard-image-operations'
+import { saveMobileClipboardImageAsTempFile } from '../../../files/attachments/mobile-clipboard-image'
+import type { MobileClipboardImageRpcSender } from '../../../files/attachments/mobile-clipboard-image-operations'
 // Keep picker dependencies type-only so this upload module stays free of Expo/React Native at runtime.
 import type { MobileImageSource, PickedMobileImage } from '../../../platform/media-picker-contract'
 
@@ -35,6 +35,8 @@ export type UploadNativeChatImagesDeps<S = MobileImageSource> = {
     | AsyncIterable<PickedMobileImage>
     | Promise<Iterable<PickedMobileImage> | AsyncIterable<PickedMobileImage>>
   readonly onUploadStart?: () => void
+  // Injected so this module stays free of the page's canvas.
+  readonly fitImage?: (image: PickedMobileImage) => Promise<PickedMobileImage>
   /** Retains each completed upload if a later image in the same selection fails. */
   readonly onImageUploaded?: (image: Omit<PendingNativeChatImage, 'id'>) => void
 }
@@ -48,6 +50,7 @@ export async function uploadMobileNativeChatImages<S>(
     getConnectionId,
     pickImages,
     onUploadStart,
+    fitImage,
     onImageUploaded
   }: UploadNativeChatImagesDeps<S>
 ): Promise<Omit<PendingNativeChatImage, 'id'>[]> {
@@ -57,7 +60,7 @@ export async function uploadMobileNativeChatImages<S>(
   if (canContinue?.() === false) {
     return uploaded
   }
-  for await (const image of picked) {
+  for await (const pickedImage of picked) {
     if (canContinue?.() === false) {
       break
     }
@@ -68,6 +71,7 @@ export async function uploadMobileNativeChatImages<S>(
     if (canContinue?.() === false) {
       break
     }
+    const image = fitImage ? await fitImage(pickedImage) : pickedImage
     const path = await saveMobileClipboardImageAsTempFile(client, image.base64, { connectionId })
     const previewUri = image.uri ?? `data:image/png;base64,${image.base64}`
     const result = {

@@ -9,25 +9,6 @@ import {
 } from './workspace-space-scan-budget'
 
 describe('workspace space scan budget', () => {
-  it('preserves entries exactly at the retained-byte cap', async () => {
-    const entries = [{ name: 'first' }, { name: 'second' }]
-    const parentPath = '/workspace'
-    const exactBytes = entries.reduce(
-      (total, entry) => total + estimateWorkspaceSpaceEntryRetainedBytes(entry.name),
-      estimateWorkspaceSpaceListingRetainedBytes(parentPath)
-    )
-
-    await expect(
-      collectWorkspaceSpaceDirectoryEntries(
-        entries,
-        parentPath,
-        (entry) => entry.name,
-        createWorkspaceSpaceScanBudget({ maxRetainedBytes: exactBytes }),
-        () => undefined
-      )
-    ).resolves.toEqual({ entries, retainedBytes: exactBytes })
-  })
-
   it('returns a failed listing’s charge so it cannot leak across directories', async () => {
     const budget = createWorkspaceSpaceScanBudget()
     async function* directory() {

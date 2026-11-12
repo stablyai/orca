@@ -25,13 +25,14 @@ vi.mock('electron', () => ({
   webContents: { fromId: browserMocks.webContentsFromIdMock }
 }))
 
-vi.mock('../../guest-lifecycle/popups/popup-origin-bar-window', () => ({
+vi.mock('../../guest-lifecycle/popups/presentation/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { createBrowserClientPageGuestBinding } from './browser-client-page-guest-binding'
 import {
+  guestNavigationMethods,
   resetBrowserManagerMocks,
   resetBrowserManagerState
 } from '../../guest-lifecycle/manager/browser-manager-test-harness'
@@ -73,6 +74,7 @@ describe('staged guest binding', () => {
 
 function createGuest(id: number) {
   return {
+    ...guestNavigationMethods(),
     id,
     isDestroyed: vi.fn(() => false),
     isCurrentlyAudible: vi.fn(() => false),

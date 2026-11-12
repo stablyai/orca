@@ -1,5 +1,5 @@
 import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
-import type { AtRestCommandScan } from '../../../native-chat/agent-session-wire/at-rest-command-catalog'
+import type { AtRestCommandScan } from '../../../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import type * as Source from './codex-at-rest-skills-probe'
 
 const MAX_PROBE_PROCESSES = 2
@@ -7,7 +7,6 @@ const FAILED_START_BACKOFF_MS = [10_000, 30_000, 90_000, 5 * 60_000] as const
 
 export type FolderRequest = {
   cwd: string
-  generation: number
   isCurrent: () => boolean
   admitted: () => void
   answer: PromiseWithResolvers<AtRestCommandScan>

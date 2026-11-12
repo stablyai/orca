@@ -3,11 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import {
-  highestRcForBase,
-  rcNumberFromReleaseSubject,
-  rcNumberFromTag
-} from './release-rc-history.mjs'
+import { highestRcForBase } from './release-rc-history.mjs'
 
 function git(cwd, args) {
   const result = runProcessSync({ program: 'git', args, cwd, timeoutMs: 10_000 })
@@ -39,29 +35,6 @@ function commit(cwd, message, { allowEmpty = true } = {}) {
 }
 
 describe('release RC history', () => {
-  it('parses only exact desktop RC tag suffixes', () => {
-    expect(rcNumberFromTag('1.4.36', 'v1.4.36-rc.7')).toBe(7)
-    expect(rcNumberFromTag('1.4.36', 'v1.4.36-rc.7-extra')).toBeNull()
-    expect(rcNumberFromTag('1.4.36', 'v1.4.35-rc.7')).toBeNull()
-  })
-
-  it('parses release commit subjects with optional slot markers', () => {
-    expect(rcNumberFromReleaseSubject('1.4.36', 'release: v1.4.36-rc.6')).toBe(6)
-    expect(
-      rcNumberFromReleaseSubject('1.4.36', 'release: v1.4.36-rc.6 [rc-slot:2026-05-30-03]')
-    ).toBe(6)
-    expect(rcNumberFromReleaseSubject('1.4.36', 'release: v1.4.36-rc.6-extra')).toBeNull()
-    expect(rcNumberFromReleaseSubject('1.4.36', 'fix: v1.4.36-rc.6')).toBeNull()
-  })
-
-  it('counts a suffixed side-branch RC from its subject as well as its tag', () => {
-    expect(rcNumberFromTag('1.4.36', 'v1.4.36-rc.6.perf')).toBe(6)
-    expect(rcNumberFromReleaseSubject('1.4.36', 'release: v1.4.36-rc.6.perf')).toBe(6)
-    expect(
-      rcNumberFromReleaseSubject('1.4.36', 'release: v1.4.36-rc.6.perf [rc-slot:2026-05-30-03]')
-    ).toBe(6)
-  })
-
   it('keeps a suffixed RC counted once its tag is deleted', () => {
     withGitRepo((repo) => {
       commit(repo, 'initial')

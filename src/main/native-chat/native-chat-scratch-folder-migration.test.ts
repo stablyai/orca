@@ -40,7 +40,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     }
   }
 })
-import type { StructuredAgentSessionLogger } from './agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
 import { nativeChatScratchFolderFor, nativeChatScratchRootFor } from './native-chat-scratch-folder'
 import { migrateLegacyNativeChatVisualsFolders } from './native-chat-scratch-folder-migration'
 import { readNativeChatVisualFile } from './native-chat-visual-file-read'

@@ -1,12 +1,12 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { View } from 'react-native'
+import { View, type HostInstance } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-error-state'
 import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
-import { mountTerminalWebDocument, type TerminalWebDocument } from './terminal-web-document-mount'
+import type { TerminalWebDocument } from './terminal-web-document-mount'
 import { useTerminalWebViewController } from './use-terminal-webview-controller'
 
 type Props = TerminalWebViewProps
@@ -27,7 +27,7 @@ export type { TerminalWebViewHandle } from './terminal-webview-contract'
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
     useMobileTranslation()
-    const hostRef = useRef<View>(null)
+    const hostRef = useRef<HostInstance>(null)
     const documentRef = useRef<TerminalWebDocument | null>(null)
     // Readiness fires inside mount before a handle exists; buffer its synchronous controller flush until the handle returns.
     const beforeMountRef = useRef<(TerminalWebViewCommand & { id: number })[]>([])
@@ -45,7 +45,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     const controller = useTerminalWebViewController(props, {
       post,
       // The page has no separate content process; losing its modules also loses this component.
-      pingsOnForegroundRecovery: () => false
+      pingsOnForegroundRecovery: () => false,
+      coalesce: false
     })
     const { clearEngineError, engineError, handle, receive, resetReadiness } = controller
     // Reload replaces the host div as well as the document so xterm cannot inherit the old mount.
@@ -67,27 +68,52 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
       if (!(host instanceof HTMLElement)) {
         return
       }
-      let live
-      try {
-        live = mountTerminalWebDocument(host, (message) => receiveRef.current?.(message), atMount)
-      } catch (error) {
+      let live: TerminalWebDocument | null = null
+      let disposed = false
+      const reportStartupFailure = (error: unknown) => {
         // Startup failure has no handle or later error notify; report its cause now instead of waiting for readiness timeout.
         receiveRef.current?.({
           type: 'error',
           fatal: true,
           message: describeTerminalDocumentStartupError(error)
         })
-        return
       }
-      documentRef.current = live
-      // Replay the pre-handle ready flush; theme/scale also ride init today, but future commands may not.
-      for (const command of beforeMountRef.current) {
-        live.send(command)
-      }
-      beforeMountRef.current = []
+      // Load xterm with the first terminal so chat-only sessions never parse it; posts queue in beforeMountRef meanwhile.
+      void import('./terminal-web-document-mount').then(
+        ({ mountTerminalWebDocument }) => {
+          if (disposed) {
+            return
+          }
+          try {
+            live = mountTerminalWebDocument(
+              host,
+              (message) => receiveRef.current?.(message),
+              atMount
+            )
+            documentRef.current = live
+            // Replay the pre-handle ready flush; theme/scale also ride init today, but future commands may not.
+            for (const command of beforeMountRef.current) {
+              live.send(command)
+            }
+            beforeMountRef.current = []
+          } catch (error) {
+            // A throw here would escape the promise unseen; ready already stopped the watchdog, so show the overlay.
+            documentRef.current = null
+            live?.dispose()
+            live = null
+            reportStartupFailure(error)
+          }
+        },
+        (error: unknown) => {
+          if (!disposed) {
+            reportStartupFailure(error)
+          }
+        }
+      )
       return () => {
+        disposed = true
         documentRef.current = null
-        live.dispose()
+        live?.dispose()
       }
       // Mount once per generation; callback-driven controller changes must not discard terminal scrollback.
     }, [atMount, generation])

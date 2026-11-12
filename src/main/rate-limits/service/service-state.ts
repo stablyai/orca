@@ -6,7 +6,7 @@ import type {
   ProviderRateLimits,
   RateLimitState
 } from '../../../shared/rate-limit-types'
-import type { AntigravityAccountUsageRecorder } from '../antigravity-account-usage'
+import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/antigravity-account-usage'
 import {
   type ActiveRateLimitProvider,
   type InactiveCodexAccountInfo,
@@ -17,15 +17,16 @@ import {
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
+  type MuseUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
-  type NormalizedCodexAccountSelectionTarget,
-  type NormalizedClaudeAccountSelectionTarget,
-  type InactiveClaudeAccountInfo,
-  type NetworkProxySettings,
   DEFAULT_POLL_MS
 } from './service-types'
-import { readGrokAuthSession } from '../grok-auth'
+import type { NormalizedCodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
+import type { InactiveClaudeAccount } from '../providers/claude/claude-managed-account-usage'
+import type { NetworkProxySettings } from '../../../shared/network-proxy'
+import { readGrokAuthSession } from '../providers/grok/grok-auth'
 
 export abstract class RateLimitServiceState {
   protected state: InternalRateLimitState = {
@@ -38,7 +39,8 @@ export abstract class RateLimitServiceState {
     minimax: null,
     grok: null,
     cursor: null,
-    zcode: null
+    zcode: null,
+    muse: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
   // Async Keychain/desktop DB probing belongs in fetch cycles, never synchronous construction.
@@ -58,7 +60,8 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
-    zcode: 0
+    zcode: 0,
+    muse: 0
   }
   // Failures increase activation backoff; success/unavailable resets it.
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -71,7 +74,8 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
-    zcode: 0
+    zcode: 0,
+    muse: 0
   }
   protected mainWindow: BrowserWindow | null = null
   /** Paired clients streaming usage (accounts.subscribe); headless hosts have no window to watch. */
@@ -90,6 +94,10 @@ export abstract class RateLimitServiceState {
   protected lastClaudeCheckCompletedAt: number | null = null
   // Capture account attribution once per cycle instead of rerunning auth preparation on every post.
   protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
+  /** Where the applied host-runtime Claude/Codex readings were taken. */
+  protected usageReadingAccounts: Partial<
+    Record<'claude' | 'codex', { home: string; provenance: string }>
+  > = {}
   protected opencodeFetchGeneration = 0
   protected minimaxFetchGeneration = 0
   protected zcodeFetchGeneration = 0
@@ -118,7 +126,8 @@ export abstract class RateLimitServiceState {
   protected antigravityFetchTarget: LocalAccountRuntimeTarget = { runtime: 'host', wslDistro: null }
   protected antigravityAccountUsageRecorder: AntigravityAccountUsageRecorder | null = null
   protected antigravityAccounts: AntigravityAccountUsage[] = []
-  protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
+  protected museUsageEnabledResolver: MuseUsageEnabledResolver | null = null
+  protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccount[]) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
   protected inactiveClaudeCache = new Map<string, ProviderRateLimits>()
@@ -168,6 +177,22 @@ export abstract class RateLimitServiceState {
       }
     }
     return result
+  }
+
+  protected rememberUsageReadingAccount(
+    provider: 'claude' | 'codex',
+    target: { runtime: 'host' | 'wsl' },
+    home: string | null | undefined,
+    provenance: string | null
+  ): void {
+    const previous = this.usageReadingAccounts[provider]
+    // The same object while unchanged: its identity is how readers see the reading's source move.
+    this.usageReadingAccounts[provider] =
+      target.runtime !== 'host' || !home || provenance === null
+        ? undefined
+        : previous?.home === home && previous.provenance === provenance
+          ? previous
+          : { home, provenance }
   }
 
   protected updateState(next: InternalRateLimitState): void {

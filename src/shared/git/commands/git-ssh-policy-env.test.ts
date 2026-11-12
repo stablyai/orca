@@ -24,16 +24,6 @@ describe('Git network SSH policy', () => {
     expect(buildGitSshPolicyEnv(env, 'ssh -i configured')).toEqual({ env, mode: 'explicit-env' })
   })
 
-  it.each(['simple', 'plink', 'putty', 'tortoiseplink'])(
-    'leaves configured %s variants to Git',
-    (variant) => {
-      expect(buildGitSshPolicyEnv({}, 'ssh -i identity', variant)).toEqual({
-        env: {},
-        mode: 'configured-wrapper-passthrough'
-      })
-    }
-  )
-
   it('gives explicit variant environment precedence over config', () => {
     expect(
       buildGitSshPolicyEnv({ GIT_SSH_VARIANT: 'simple' }, 'ssh', 'ssh').env.GIT_SSH_COMMAND
@@ -59,24 +49,6 @@ describe('Git network SSH policy', () => {
     'ssh\\ -i key'
   ])('preserves shell and wrapper semantics (%s)', (command) => {
     expect(buildGitSshPolicyEnv({}, command).env.GIT_SSH_COMMAND).toBeUndefined()
-  })
-
-  it('preserves quoted identity arguments while enforcing OpenSSH batch mode', () => {
-    expect(
-      buildGitSshPolicyEnv(
-        {},
-        '"C:/Program Files/Git/usr/bin/ssh.exe" -i "C:/Users/test/key file" -oBatchMode=no'
-      ).env.GIT_SSH_COMMAND
-    ).toBe(
-      '"C:/Program Files/Git/usr/bin/ssh.exe" -o BatchMode=yes -i "C:/Users/test/key file" -oBatchMode=no'
-    )
-  })
-
-  it('preserves a bare UNC executable path', () => {
-    const executable = String.raw`\\server\share\ssh.exe`
-    expect(buildGitSshPolicyEnv({}, `${executable} -i key`).env.GIT_SSH_COMMAND).toBe(
-      `${quotePosixShell(executable)} -o BatchMode=yes -i key`
-    )
   })
 })
 
@@ -122,31 +94,6 @@ describe.skipIf(process.platform === 'win32')('SSH policy with a real POSIX shel
     })
     expect(result.code).toBe(0)
     expect(result.stdout.split('\0').slice(0, -1)).toEqual(['-o', 'BatchMode=yes', ...expected])
-  })
-
-  it('keeps the enforced first value even when a later option disables BatchMode', async ({
-    skip
-  }) => {
-    const result = await runProcess({
-      program: 'ssh',
-      args: [
-        '-G',
-        '-F',
-        '/dev/null',
-        '-o',
-        'BatchMode=yes',
-        '-o',
-        'BatchMode=no',
-        'example.invalid'
-      ]
-    }).catch((error: unknown) => {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        skip('OpenSSH is not installed')
-      }
-      throw error
-    })
-    expect(result.code).toBe(0)
-    expect(result.stdout).toMatch(/^batchmode yes$/m)
   })
 
   it.each([

@@ -3,7 +3,7 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
-import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
+import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 

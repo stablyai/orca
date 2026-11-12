@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import type {
   WorkspaceCleanupFailure,
   WorkspaceCleanupRemoveResult
-} from '@/store/slices/workspace-cleanup'
+} from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { translate } from '@/i18n/i18n'
 import { showPreservedBranchBatchToast } from '../sidebar/workspace-actions/deletion/preserved-branch-batch-toast'
 

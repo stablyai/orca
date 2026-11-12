@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { PluginMarketplaceHostListing } from '../../../../../preload/api-types'
-import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugin-themes'
+import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugins/appearance/plugin-themes'
 import type { PluginArtPalette } from '../list/PluginCardArt'
 
 type CatalogThemePreview = NonNullable<

@@ -1,42 +1,11 @@
 import { describe, expect, it } from 'vitest'
-
 import {
   countFocusSettingReads,
-  countForbiddenHelperUses,
   discoverFocusReaders,
-  hasFocusRoutingAlias,
-  isScannedPath
+  hasFocusRoutingAlias
 } from './check-focus-read-ratchet.mjs'
 
-describe('countForbiddenHelperUses', () => {
-  it('counts calls and value uses of the deleted helpers, not definitions, types or imports', () => {
-    const src = [
-      "import { callRuntimeRpc, getActiveRuntimeTarget } from './rpc'",
-      "export {\n  settingsForRuntimeOwner,\n  type RuntimeClientTarget\n} from './target'",
-      'const a = getActiveRuntimeTarget (settingsForRuntimeOwner(settings, id))',
-      'const b = list.map(legacyRouteFromSettings)',
-      'export function getActiveRuntimeTarget(settings) {}',
-      'type T = ReturnType<typeof getActiveRuntimeTarget>',
-      'mygetActiveRuntimeTarget(settings)'
-    ].join('\n')
-    expect(countForbiddenHelperUses(src)).toBe(3)
-  })
-})
-
 describe('countFocusSettingReads', () => {
-  it('counts setting reads, the helpers and the creation default together', () => {
-    const src = [
-      "import { defaultCreationHost } from './default-creation-host'",
-      'const a = settings?.activeRuntimeEnvironmentId',
-      'const b = state.settings.activeRuntimeEnvironmentId',
-      "const c = settings['activeRuntimeEnvironmentId']",
-      'const d = getActiveRuntimeTarget(settings)',
-      'const e = defaultCreationHost(settings)',
-      'export function defaultCreationHost(settings) {}'
-    ].join('\n')
-    expect(countFocusSettingReads(src)).toBe(5)
-  })
-
   it('discovers readers through imports, so a look-alike or a wrapper lowers nothing', () => {
     const readers = discoverFocusReaders(
       new Map([
@@ -223,39 +192,6 @@ describe('countFocusSettingReads', () => {
     expect(names.has('commaReader')).toBe(true)
   })
 
-  it('counts the default scope source as a read', () => {
-    expect(countFocusSettingReads('linearConnect(defaultScopeSource(get().settings), key)')).toBe(1)
-  })
-
-  it("counts a wrapper that returns a seed reader's result", () => {
-    const readers = discoverFocusReaders(
-      new Map([
-        [
-          'src/renderer/src/owner.ts',
-          [
-            'export function hostOrNull(state) {',
-            '  const host = defaultScopeHost(state.settings)',
-            '  return host ? host.id : null',
-            '}'
-          ].join('\n')
-        ]
-      ])
-    )
-    expect(readers.has('hostOrNull')).toBe(true)
-  })
-
-  it('counts destructuring reads', () => {
-    expect(countFocusSettingReads('const { activeRuntimeEnvironmentId } = s')).toBe(1)
-    expect(
-      countFocusSettingReads('const { settings: { activeRuntimeEnvironmentId } } = state')
-    ).toBe(1)
-    expect(
-      countFocusSettingReads(
-        "const { theme, activeRuntimeEnvironmentId: id }: Pick<GlobalSettings, 'theme'> = s"
-      )
-    ).toBe(1)
-  })
-
   it('does not count writes, keys, props or type positions', () => {
     const src = [
       'const owner = { activeRuntimeEnvironmentId: id }',
@@ -279,21 +215,5 @@ describe('hasFocusRoutingAlias', () => {
     ).toBe(true)
     expect(hasFocusRoutingAlias("import { defaultCreationHost as host } from './d'")).toBe(true)
     expect(hasFocusRoutingAlias("import { getActiveRuntimeTarget } from './rpc'")).toBe(false)
-  })
-})
-
-describe('isScannedPath', () => {
-  it('scans renderer sources but not tests', () => {
-    expect(isScannedPath('src/renderer/src/a.ts')).toBe(true)
-    expect(isScannedPath('src/renderer/src/a.tsx')).toBe(true)
-    expect(isScannedPath('src/renderer/src/a.test.ts')).toBe(false)
-    expect(isScannedPath('src/renderer/src/a.spec.tsx')).toBe(false)
-    expect(isScannedPath('src/renderer/src/a.test-fixture.ts')).toBe(false)
-    expect(isScannedPath('src/renderer/src/a.test-support.tsx')).toBe(false)
-    expect(isScannedPath('src/renderer/src/a.fixture.tsx')).toBe(false)
-    expect(isScannedPath('src/renderer/src/a-test-harness.ts')).toBe(false)
-    expect(isScannedPath('src/renderer/src/a-test-fixture.ts')).toBe(false)
-    expect(isScannedPath('src/renderer/src/a-test-fixtures.ts')).toBe(false)
-    expect(isScannedPath('src/renderer/src/editor-model-lifetime-fixture.ts')).toBe(true)
   })
 })

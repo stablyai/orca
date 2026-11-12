@@ -1,4 +1,4 @@
-import { normalizeRelativePath } from '@/lib/path'
+import { normalizeRelativePath } from '../../../../../../shared/cross-platform-path'
 
 const SEARCH_GLOB_LITERAL_META = new Set(['\\', '*', '?', '[', ']', '{', '}', '!', ','])
 

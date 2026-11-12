@@ -1,4 +1,4 @@
-import { boundInlineText } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+import { boundInlineText } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { MAX_CODEX_DETAIL_BYTES } from '../journal/codex-structured-journal-limits'
 import {
   readCodexItemStreamRecord,

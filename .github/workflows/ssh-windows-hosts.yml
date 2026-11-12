@@ -8,16 +8,18 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
-      - 'src/main/ssh/remote-*'
-      - 'src/main/ssh/*runtime*'
-      - 'src/main/ssh/orcad-*'
+      - 'src/main/ssh/runtime-access/**'
       - 'src/main/managed-server/**'
+      - 'src/main/ssh/migration-source/**'
+      - 'src/main/persistence/migrating-orcad-catalog/**'
       - 'src/main/orcad/orcad-artifact-materializer.ts'
       - 'src/main/orcad/orcad-host-unavailable.ts'
       - 'src/main/node-runtime/**'
-      - 'src/main/ssh/ssh-remote-*'
+      - 'src/main/ssh/remote-exec/**'
+      - 'src/main/ssh/remote-host/**'
+      - 'src/main/ssh/filesystem/**'
       - 'src/main/ssh/hostile-host-test-support/**'
-      - 'src/main/ssh/ssh-windows-host-*'
+      - 'src/main/ssh/hostile-host-test-support/ssh-windows-host-*'
       - 'src/wsl-guest/**'
       - 'src/packages/process-host/**'
       - 'pnpm-workspace.yaml'
@@ -48,12 +50,18 @@ on:
       - 'src/main/ipc/ssh/ssh-host-server-*.ts'
       # The deploy runs over this SSH transport.
       - 'src/main/ssh/connection/**'
-      - 'src/main/ssh/ssh-reconnect-error-classification.ts'
-      - 'src/main/ssh/ssh-posix-command-wrapper.ts'
+      - 'src/main/ssh/file-transfer/ssh-connection-file-transfers.ts'
+      - 'src/main/ssh/targets/ssh-connection-store.ts'
+      - 'src/main/ssh/targets/testing/ssh-connection-store-test-fixture.ts'
+      - 'src/main/ssh/targets/ssh-target-runtime-ownership.ts'
+      - 'src/main/ssh/authentication/ssh2-credential-fallback.ts'
+      - 'src/main/ssh/authentication/ssh2-handshake.ts'
+      - 'src/main/ssh/host-keys/ssh2-host-key-verification.ts'
+      - 'src/main/ssh/connection/reconnect/ssh-reconnect-error-classification.ts'
+      - 'src/main/ssh/remote-exec/ssh-posix-command-wrapper.ts'
       - 'src/shared/shell/launch/shell-argument-quoting.ts'
       - '!src/**/*.test.ts'
       - 'src/main/managed-server/host-state/orcad-windows-host-lane.test.ts'
-      - 'tests/e2e/ssh-orcad-auto-convert.spec.ts'
       - 'tests/e2e/helpers/orcad-convert-host.ts'
       - 'tests/e2e/helpers/orcad-convert-flow.ts'
       - 'tests/e2e/helpers/orcad-upgrade-profile.ts'
@@ -69,7 +77,7 @@ on:
   workflow_dispatch:
     inputs:
       cells:
-        description: Comma-separated cell ids from src/main/ssh/ssh-windows-host-cells.ts; empty runs the default set (orcad-cli-* cells run only when named).
+        description: Comma-separated cells orcad-cmd, orcad-powershell, or orcad-cli-managed; empty runs the two shell cells.
         required: false
         default: ''
       preparation_mode:
@@ -135,7 +143,7 @@ jobs:
         with:
           persist-credentials: false
           # Keep complete server/test trees; missing future imports fail the unchanged builds.
-          # All of src: the orcad-convert cell builds the full e2e app and the bundled CLI.
+          # All of src: the managed CLI cell builds the full e2e app and bundled CLI.
           # mobile: the template ships the mobile web page, which builds from mobile/.
           # cloud: config/tsconfig.vitest-transform.json references the cloud projects, so vitest needs them.
           sparse-checkout: |
@@ -233,10 +241,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path $receipts | Out-Null
           $cells=@($env:CELLS -split ',' | ForEach-Object {$_.Trim()} | Where-Object {$_})
           if(-not $cells.Count){$cells=@('orcad-cmd','orcad-powershell')}
-          # One Windows host runs the app-level conversion; it is last because it switches native modules.
-          if(-not $env:CELLS -and '${{ matrix.arch }}' -eq 'x64' -and '${{ matrix.server }}' -eq 'inbox'){$cells+='orcad-convert'}
           # App cells reach the managed server through an SSH local forward, which provisioning grants to the last accounts only.
-          $appCellIds=@('orcad-convert','orcad-cli-managed','orcad-cli-convert')
+          $appCellIds=@('orcad-cli-managed')
           $cells=@($cells | Where-Object {$appCellIds -notcontains $_})+@($cells | Where-Object {$appCellIds -contains $_})
           $forwarding=@($cells | Where-Object {$appCellIds -contains $_}).Count
           $archive=''

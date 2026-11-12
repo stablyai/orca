@@ -1,7 +1,7 @@
 import type React from 'react'
 import { CircleDashed } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { isCompletePRCheckOwner } from '../../../shared/github/complete-pr-check-owner'
 import type { ProviderCheckSummary } from '../../../shared/github/pull-request-types'
 
@@ -24,13 +24,14 @@ export function PRCheckEmptyDetails({
   summaryColor: string
   summaryLabel: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const complete = owner && isCompletePRCheckOwner(owner)
   const noChecks = !complete || owner.checksSummary?.total === 0
   const detailLabel = noChecks
     ? dialog
-      ? translate('auto.components.GitHubItemDialog.e52bed9264', 'No checks reported yet')
-      : translate('auto.components.PullRequestPage.a18d01cda3', 'No checks reported yet')
-    : translate('auto.components.prCheckCounts.noCheckDetails', 'No check details available')
+      ? t('auto.components.GitHubItemDialog.e52bed9264', 'No checks reported yet')
+      : t('auto.components.PullRequestPage.a18d01cda3', 'No checks reported yet')
+    : t('auto.components.prCheckCounts.noCheckDetails', 'No check details available')
   if (variant === 'compact') {
     return (
       <>
@@ -50,18 +51,18 @@ export function PRCheckEmptyDetails({
           <span className="truncate text-[13px] font-medium text-foreground">
             {noChecks
               ? dialog
-                ? translate('auto.components.GitHubItemDialog.ecffebc251', 'No checks found')
-                : translate('auto.components.PullRequestPage.45877f5089', 'No checks found')
+                ? t('auto.components.GitHubItemDialog.ecffebc251', 'No checks found')
+                : t('auto.components.PullRequestPage.45877f5089', 'No checks found')
               : summaryLabel}
           </span>
           <span className="truncate text-[11px] text-muted-foreground">
             {noChecks
               ? dialog
-                ? translate(
+                ? t(
                     'auto.components.GitHubItemDialog.90020cc1f3',
                     'This pull request has no reported checks yet.'
                   )
-                : translate(
+                : t(
                     'auto.components.PullRequestPage.3912daf310',
                     'This pull request has no reported checks yet.'
                   )

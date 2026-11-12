@@ -3,22 +3,22 @@ import * as VisuallyHidden from 'radix-ui/visually-hidden'
 
 import { LinearIssueTextEditor } from '@/components/LinearIssueTextEditor'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
-import { findLinearIssueWorkspaceAttachment } from '@/lib/linear-issue-workspace-attachment'
-import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
-import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
+import { findLinearIssueWorkspaceAttachment } from '@/lib/work-items/linear/linear-issue-workspace-attachment'
+import { openLinearIssueWorkspaceOrStart } from '@/lib/work-items/linear/linear-issue-workspace-open'
+import { getWorktreeAttachmentLabel } from '@/lib/workspace/display/worktree-attachment-label'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
-import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
+import { useAppStore } from '@/store/index'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { translate } from '@/i18n/i18n'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { useTranslate } from '@/i18n/use-translate'
 import { LinearIssueActivity } from './linear-issue-activity'
 import { LinearIssueSubIssues } from './linear-issue-sub-issues'
 import { useLinearIssueWorkspaceDetail } from './linear-issue-workspace-detail-state'
 import { LinearIssueWorkspaceHeader } from './linear-issue-workspace-header'
 import { LinearIssueWorkspaceSidebar } from './linear-issue-workspace-sidebar'
-import { defaultScopeSource } from '@/lib/default-creation-host'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type LinearIssueWorkspaceProps = {
   issue: LinearIssue | null
@@ -50,6 +50,7 @@ function LinearIssueWorkspaceIssue({
   sourceContext,
   requestKey
 }: LinearIssueWorkspaceIssueProps): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((state) => state.settings)
   const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const allWorktrees = useAllWorktrees()
@@ -138,12 +139,12 @@ function LinearIssueWorkspaceIssue({
         <VisuallyHidden.Root asChild>
           <SheetTitle>
             {detail.displayed.title ??
-              translate('auto.components.LinearIssueWorkspace.61f424f8ca', 'Linear issue')}
+              t('auto.components.LinearIssueWorkspace.61f424f8ca', 'Linear issue')}
           </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            {translate(
+            {t(
               'auto.components.LinearIssueWorkspace.ad5dec37b7',
               'Preview, edit, and start work from the selected issue.'
             )}

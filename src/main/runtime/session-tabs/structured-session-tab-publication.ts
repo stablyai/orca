@@ -3,21 +3,19 @@ import {
   selectMobileSessionTab
 } from './mobile-session-tab-selection'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type {
-  RuntimeMobileSessionAgentTab,
-  RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-types'
+import type { RuntimeMobileSessionAgentTab } from '../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { getHeadlessMobileSessionGroupId } from '../terminal/surface/mobile-session-layout-projection'
 import type { StructuredSessionSurface } from '../agent-session/structured-agent-session-close'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { insertTabIdIntoOrder } from '../../../shared/workspace-layout/tab-order'
+import { insertTabIdIntoOrder } from '../../../shared/workspace-layout/tab-groups/tab-order'
 import {
   chatTabId,
   resolveChatTabPlacement,
   type ChatTabPlacement
 } from '../agent-session/agent-session-tab-layout'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { mobileChatTabId, newReopenedChatTabId } from '../agent-session/agent-session-tab-identity'
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { MainSessionTabRows } from './main-session-tab-rows'

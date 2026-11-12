@@ -13,7 +13,7 @@ import { createOpenCodeSqliteProcessClient } from './session-scanner-opencode-sq
 import type { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 import { buildRelayAiVaultServiceEnv } from '../../../scan-service/session-scanner-service-env'
-import { AiVaultScanIssueError } from '../../../session-scan-issues'
+import { AiVaultScanIssueError } from '../../../parsing/session-scan-issues'
 import {
   AI_VAULT_SCAN_ISSUE_COPY,
   aiVaultScanIssueText

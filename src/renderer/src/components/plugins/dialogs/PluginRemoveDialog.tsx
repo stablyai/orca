@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import {
   Dialog,
@@ -25,6 +25,7 @@ export function PluginRemoveDialog({
   onCancel,
   onConfirm
 }: PluginRemoveDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const cancelRef = useRef<HTMLButtonElement>(null)
   return (
     <Dialog open={Boolean(plugin)} onOpenChange={(open) => !open && !busy && onCancel()}>
@@ -38,20 +39,24 @@ export function PluginRemoveDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.settings.PluginRemoveDialog.title', 'Remove {{value0}}?', {
+            {t('auto.components.settings.PluginRemoveDialog.title', 'Remove {{value0}}?', {
               value0: plugin?.name ?? ''
             })}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.PluginRemoveDialog.description',
               'Its data is removed too.'
+            )}{' '}
+            {t(
+              'auto.components.settings.PluginRemoveDialog.pausesAutomations',
+              'Automations it created are paused, and stay paused if you install it again.'
             )}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button ref={cancelRef} variant="ghost" disabled={busy} onClick={onCancel}>
-            {translate('auto.components.settings.PluginRemoveDialog.cancel', 'Cancel')}
+            {t('auto.components.settings.PluginRemoveDialog.cancel', 'Cancel')}
           </Button>
           <Button
             variant="destructive"
@@ -59,7 +64,7 @@ export function PluginRemoveDialog({
             onClick={() => plugin && onConfirm(plugin.pluginKey)}
           >
             {busy ? <Loader2 className="animate-spin" /> : null}
-            {translate('auto.components.settings.PluginRemoveDialog.remove', 'Remove')}
+            {t('auto.components.settings.PluginRemoveDialog.remove', 'Remove')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,6 +1,5 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
-  getWorktreeExecutionHostId,
   normalizeExecutionHostOrder,
   parseExecutionHostId,
   type ExecutionHostId,
@@ -17,10 +16,12 @@ import {
 } from '../workspace-creator-visibility'
 import type { WorkspaceRowFilters } from '../workspace-view/workspace-row-filters'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import { hiddenProjectRowFacts, indexHiddenProjects } from '../hidden-projects'
 import { collectActiveRowKeys } from './active-workspace'
 import {
   buildFeedHostOptions,
   feedPairedDeviceIdsByEnvironment,
+  feedWorktreeHostId,
   indexSidebarFeed,
   rankSidebarFeedWorktrees,
   type SidebarFeedIndex
@@ -51,6 +52,7 @@ import type {
 } from './row-types'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import { planSidebarRows } from './sidebar-row-plan'
+import type { FeedLineagePolicy } from './sidebar-feed-lineage-parents'
 import type { SortBy } from './smart-sort'
 import { selectVisibleSidebarWorktrees } from './visible-worktrees'
 import { isIdleWorkspaceActivity } from './workspace-activity-facts'
@@ -156,12 +158,10 @@ export function planSidebarFeedRows(
     filters: view.filters,
     facts: {
       isArchived: (worktree) => worktree.isArchived,
+      ...hiddenProjectRowFacts(indexHiddenProjects(repos, defaultHostId)),
       isFolderWorkspace: () => false,
       repoId: (worktree) => worktree.repoId,
-      hostId: (worktree) => {
-        const repo = index.repoOf(worktree)
-        return repo ? getWorktreeExecutionHostId(worktree, repo, defaultHostId) : null
-      },
+      hostId: (worktree) => feedWorktreeHostId(index, worktree, defaultHostId),
       isOtherClient: (worktree) =>
         isWorkspaceOwnedBySomeoneElse(worktree, pairedDeviceIdsByEnvironment),
       isDefaultBranch: (worktree) => factsOf(worktree)?.defaultBranch === true,
@@ -216,7 +216,8 @@ export function planSidebarFeedRows(
     repos: visibleRepos,
     worktreesByRepo,
     visibleWorktrees,
-    filterRepoIds: view.filters.filterRepoIds
+    filterRepoIds: view.filters.filterRepoIds,
+    hiddenProjects: indexHiddenProjects(repos, defaultHostId)
   })
   const plan = planSidebarRows({
     groupBy,
@@ -295,9 +296,10 @@ export function renderSidebarFeedRows(
 export function buildSidebarFeedRows(
   domains: SidebarFeedDomains,
   catalog: SidebarFeedCatalog,
-  view: SidebarFeedView
+  view: SidebarFeedView,
+  lineagePolicy: FeedLineagePolicy = {}
 ): SidebarFeedRows {
-  const index = indexSidebarFeed(domains, catalog.repos)
+  const index = indexSidebarFeed(domains, catalog.repos, lineagePolicy)
   const planned = planSidebarFeedRows(
     domains,
     index,

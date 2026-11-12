@@ -5,7 +5,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { TaskPageJiraIssueAssigneeField } from './IssueAssigneeField'
 
 const search = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/runtime-jira-client', () => ({ jiraListAssignableUsersForProject: search }))
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForProject: search
+}))
 afterEach(cleanup)
 
 it('drops old provider candidates before another host with identical project IDs can select them', async () => {

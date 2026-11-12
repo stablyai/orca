@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto'
 import type SyncDatabase from '../sqlite/sync-database'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
-import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import { extractString } from '../../shared/trimmed-string'
+import { parseJsonObject } from '../ai-vault/parsing/session-json-object'
 import {
   opencodeMessages,
   OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
@@ -17,7 +19,7 @@ import type {
 const MAX_PAGE_BYTES = 16 * 1024 * 1024
 const MAX_SCAN_ROWS = 10_000
 
-function sessionExists(db: SyncDatabase, sessionId: string): boolean {
+export function hasOpenCode2Session(db: SyncDatabase, sessionId: string): boolean {
   return (
     tableExists(db, 'session_v2') &&
     tableExists(db, 'session_message') &&
@@ -32,7 +34,7 @@ export function readOpenCode2TranscriptSignal(
   db: SyncDatabase,
   sessionId: string
 ): OpenCodeTranscriptSignal | null {
-  if (!sessionExists(db, sessionId)) {
+  if (!hasOpenCode2Session(db, sessionId)) {
     return null
   }
   const row = asRecord(
@@ -186,7 +188,7 @@ export function readOpenCode2TranscriptPage(
     beforeMessageRowId?: number
   }
 ): OpenCodeTranscriptPage | null {
-  if (!sessionExists(db, args.sessionId)) {
+  if (!hasOpenCode2Session(db, args.sessionId)) {
     return null
   }
   const limit = openCodeTranscriptPageLimit(args.limit)

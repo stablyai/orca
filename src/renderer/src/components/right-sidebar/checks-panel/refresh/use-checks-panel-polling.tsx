@@ -21,7 +21,7 @@ import {
   gitLabMRCommentsToPRComments
 } from '../gitlab-review-client'
 import { checksPanelLoadErrorMessage } from '../checks-panel-forge-owner'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
 import { translate } from '@/i18n/i18n'
 

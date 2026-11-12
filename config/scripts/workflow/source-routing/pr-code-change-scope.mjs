@@ -102,8 +102,8 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/trust/identity/codex-trust-identity',
   'src/main/codex/trust/toml/config-toml-hook-trust-',
   'src/main/codex/configuration/toml/config-toml-key-path',
-  'src/main/agent-hooks/posix-hook-command',
-  'src/main/agent-hooks/hook-post-command',
+  'src/main/agent-hooks/installation/commands/posix-hook-command',
+  'src/main/agent-hooks/installation/scripts/hook-post-command',
   'src/main/codex-cli/codex-read-only-app-server-args',
   'src/main/agent-launch/trust/agent-trust-presets',
   'src/main/codex/trust/toml/config-toml-trust',
@@ -209,9 +209,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/protocol-version',
   'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser/client-hosting/browser-client-host-protocol',
-  'src/shared/browser-network-tunnel-protocol',
+  'src/shared/browser/network/tunnels/browser-network-tunnel-protocol',
   // Both released/current WebSocket transports must accept web upgrade marker (cross-version-web-upgrade-marker).
-  'src/main/runtime/rpc/ws-transport.ts',
+  'src/main/runtime/rpc/transports/websocket/ws-transport.ts',
   'src/shared/web-origin-security.ts',
   'src/shared/browser/client-hosting/browser-client-host-placement',
   'src/shared/agent-launch/contracts/agent-launch-intent',
@@ -241,7 +241,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session-record',
   'src/shared/agent-session-provider-handle',
   'src/shared/agent-session/journal/',
-  'src/main/ai-vault/structured-session-ownership.ts',
+  'src/main/ai-vault/structured-sessions/structured-session-ownership.ts',
   'src/main/native-chat/agent-session-journal/',
   'src/main/native-chat/agent-session-wire/',
   // The released phone contract runs the current discovery owner and Claude producer.
@@ -251,32 +251,37 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-lister.ts',
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-listing-waiters.ts',
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner.ts',
-  'src/main/claude/claude-model-catalog-probe.ts',
-  'src/main/runtime/agent-session-record-store',
+  'src/main/claude/model-catalog/claude-model-catalog-probe.ts',
   'src/main/runtime/agent-session/records/agent-session-record-store',
   'src/main/runtime/agent-session/records/agent-session-recovery-capsule',
   'src/shared/agent-session-resume-marker',
   'src/main/runtime/rpc/dispatcher',
   // Run on every request the suites dispatch, whatever its method.
   'src/main/runtime/rpc/core.ts',
-  'src/main/runtime/rpc/errors.ts',
-  'src/main/runtime/rpc/orchestration-contract-fence.ts',
-  'src/main/runtime/rpc/orchestration-session-caller.ts',
-  'src/main/runtime/rpc/orchestration-legacy-compatibility.ts',
-  'src/main/runtime/rpc/orchestration-mutation-executor.ts',
-  'src/shared/orchestration-rpc-contract.ts',
-  'src/main/runtime/rpc/methods/agent-launch',
-  'src/main/runtime/rpc/methods/ai-vault.ts',
+  'src/main/runtime/rpc/responses/rpc-response.ts',
+  'src/main/runtime/rpc/orchestration/compatibility/orchestration-contract-fence.ts',
+  'src/main/runtime/rpc/orchestration/callers/orchestration-session-caller.ts',
+  'src/main/runtime/rpc/orchestration/compatibility/orchestration-legacy-compatibility.ts',
+  'src/main/runtime/rpc/orchestration/mutations/orchestration-mutation-executor.ts',
+  'src/shared/orchestration/orchestration-rpc-contract.ts',
+  'src/main/runtime/rpc/methods/agent-launch/agent-launch',
+  'src/main/runtime/rpc/methods/history/ai-vault.ts',
   'src/shared/rpc-contract/browser-tab-create-params',
-  'src/main/runtime/rpc/methods/session-tabs.ts',
-  'src/main/runtime/rpc/methods/structured-agent-session',
-  'src/main/runtime/rpc/methods/terminal',
+  'src/main/runtime/rpc/methods/session-tabs/session-tabs.ts',
+  'src/main/runtime/rpc/methods/structured-sessions/',
+  'src/shared/rpc-contract/structured-agent-session-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-continue-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-rename-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-queued-edit-params.ts',
+  'src/main/runtime/rpc/methods/terminal/',
   'src/main/runtime/runtime-worktree-agent-',
   'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-',
   'src/main/runtime/workspaces/startup/runtime-worktree-agent-startup',
   'src/main/runtime/workspaces/process-listing/runtime-worktree-pty-agent-sources',
   'src/shared/runtime-worktree-contracts',
-  'src/renderer/src/runtime/remote-runtime-terminal-multiplexer',
+  'src/renderer/src/runtime/hosted-terminals/streams/',
+  'src/renderer/src/runtime/hosted-terminals/snapshots/',
+  'src/renderer/src/runtime/rpc/subscriptions/runtime-environment-subscription-handle.ts',
   // Turn-end status a newer host publishes and an older desktop reads (cross-version-host-observed-turn-end).
   'src/shared/agent-status/lifecycle/agent-turn-outcome',
   'src/shared/agent-status/contracts/agent-status-types',
@@ -288,14 +293,13 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/workspace-session/workspace-session-sleeping-agents',
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
   'src/shared/structured-native-chat-launch-route.ts',
-  'src/renderer/src/lib/agent-launch-routing.ts',
-  'src/renderer/src/runtime/paired-host-client-capabilities.ts',
+  'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
+  'src/renderer/src/runtime/rpc/targets/paired-host-client-capabilities.ts',
   'src/shared/electron-remote-runtime-client-capabilities.ts',
   'src/shared/remote-runtime/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
-  'src/main/runtime/orchestration/db.ts',
   'src/main/runtime/orchestration/db/',
-  'src/main/runtime/orchestration/orchestration-schema-version-skew'
+  'src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew'
 ]
 
 const MANAGED_HOOK_PREFIXES = [
@@ -564,12 +568,17 @@ function isProductBundlePath(file, extraPrefixes) {
 // These shared fixtures are consumed only by unit tests.
 export function isUnitTestSupportSource(file) {
   return (
-    file === 'src/renderer/src/store/slices/editor-slice-test-harness.ts' ||
-    file === 'src/renderer/src/store/slices/browser-slice-test-harness.ts' ||
-    file === 'src/renderer/src/runtime/web-runtime-session-test-harness.ts' ||
-    file === 'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts' ||
-    file === 'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts' ||
-    file === 'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx'
+    file === 'src/renderer/src/store/slices/editor/editor-slice-test-harness.ts' ||
+    file === 'src/renderer/src/store/slices/browser/browser-slice-test-harness.ts' ||
+    file === 'src/renderer/src/store/slices/linear/linear-slice-test-harness.ts' ||
+    file ===
+      'src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture.ts' ||
+    file ===
+      'src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness.ts' ||
+    file ===
+      'src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture.ts' ||
+    file ===
+      'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx'
   )
 }
 

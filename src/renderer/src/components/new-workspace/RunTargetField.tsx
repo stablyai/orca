@@ -1,10 +1,10 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React, { useState } from 'react'
 import { ChevronDown, Cloud } from 'lucide-react'
 import { PopoverAnchor } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { HostRowIcon } from './RunTargetComboboxRow'
 import { COMBOBOX_FIELD_SHELL } from './type-ahead-combobox-styles'
@@ -41,6 +41,7 @@ export default function RunTargetField({
   inputRef: React.RefObject<HTMLInputElement | null>
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
   return (
     <Tooltip open={tooltipOpen && committed && !open} onOpenChange={setTooltipOpen}>
@@ -69,10 +70,7 @@ export default function RunTargetField({
                 type="text"
                 role="combobox"
                 data-run-target-combobox-root="true"
-                aria-label={translate(
-                  'auto.components.new.workspace.RunTargetCombobox.label',
-                  'Run on'
-                )}
+                aria-label={t('auto.components.new.workspace.RunTargetCombobox.label', 'Run on')}
                 aria-expanded={open}
                 aria-controls={listId}
                 aria-autocomplete="list"
@@ -81,10 +79,7 @@ export default function RunTargetField({
                 placeholder={
                   committed
                     ? ''
-                    : translate(
-                        'auto.components.NewWorkspaceComposerCard.chooseRunTarget',
-                        'Choose target'
-                      )
+                    : t('auto.components.NewWorkspaceComposerCard.chooseRunTarget', 'Choose target')
                 }
                 onChange={(event) => onQueryChange(event.target.value)}
                 onFocus={onOpenRequest}
@@ -106,7 +101,7 @@ export default function RunTargetField({
             <button
               type="button"
               tabIndex={-1}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.new.workspace.RunTargetCombobox.browse',
                 'Browse run targets'
               )}

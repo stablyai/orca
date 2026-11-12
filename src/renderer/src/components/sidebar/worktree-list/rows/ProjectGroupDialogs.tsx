@@ -1,6 +1,6 @@
 import React from 'react'
-import { translate } from '@/i18n/i18n'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { useTranslate } from '@/i18n/use-translate'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
@@ -28,6 +28,7 @@ export function SidebarWorktreeListDialogs({
   onConfirmSuppressExternalWorktreeInbox: () => void
   onOpenWorktreeVisibility: (repo: Repo) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog } = dialogs
   return (
     <>
@@ -35,16 +36,16 @@ export function SidebarWorktreeListDialogs({
         open={nameDialog !== null}
         title={
           nameDialog?.type === 'rename'
-            ? translate('auto.components.sidebar.WorktreeList.f9dc6cc5d3', 'Rename Project Group')
-            : translate('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
+            ? t('auto.components.sidebar.WorktreeList.f9dc6cc5d3', 'Rename Project Group')
+            : t('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
         }
         description={
           nameDialog?.type === 'rename'
-            ? translate(
+            ? t(
                 'auto.components.sidebar.WorktreeList.bc1460beb3',
                 'Update the group name shown in the sidebar.'
               )
-            : translate(
+            : t(
                 'auto.components.sidebar.WorktreeList.d880ea0744',
                 'Create a group and move this project into it.'
               )
@@ -53,7 +54,7 @@ export function SidebarWorktreeListDialogs({
           nameDialog?.type === 'rename'
             ? nameDialog.currentName
             : nameDialog
-              ? translate(
+              ? t(
                   'auto.components.sidebar.ProjectGroupNameDialog.defaultGroupName',
                   '{{name}} group',
                   { name: nameDialog.repo.displayName }
@@ -62,8 +63,8 @@ export function SidebarWorktreeListDialogs({
         }
         confirmLabel={
           nameDialog?.type === 'rename'
-            ? translate('auto.components.sidebar.ProjectGroupNameDialog.rename', 'Rename')
-            : translate('auto.components.sidebar.ProjectGroupNameDialog.create', 'Create')
+            ? t('auto.components.sidebar.ProjectGroupNameDialog.rename', 'Rename')
+            : t('auto.components.sidebar.ProjectGroupNameDialog.create', 'Create')
         }
         onOpenChange={(open) => {
           if (!open) {

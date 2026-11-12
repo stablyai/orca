@@ -9,7 +9,7 @@ import {
   blockingAiVaultScanIssue,
   skippedAiVaultTranscriptIssues
 } from '../../../../../../shared/ai-vault/scanning/ai-vault-scan-issue-state'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
 
 const SKIPPED_TRANSCRIPT_REASON_LIMIT = 3
@@ -35,6 +35,7 @@ export function AiVaultScanIssueBanners({
 }: {
   scanResult: AiVaultListResult | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const blocking = blockingAiVaultScanIssue(scanResult)
   const skipped = skippedAiVaultTranscriptIssues(scanResult)
 
@@ -67,7 +68,7 @@ export function AiVaultScanIssueBanners({
           ))}
           {skipped.length > 0 ? (
             <div className="border-b border-sidebar-border px-3 py-1.5 text-[11px] text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.right.sidebar.AiVaultPanel.transcriptsSkippedCount',
                 '{{count}} transcripts skipped',
                 { count: skipped.length, defaultValue_one: '{{count}} transcript skipped' }

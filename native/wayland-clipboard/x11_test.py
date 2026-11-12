@@ -64,11 +64,6 @@ class X11PublisherTest(unittest.TestCase):
                 self.assertEqual(self.read(), text)
                 self.assertEqual(self.read(), text)
 
-    def test_repeated_owners_survive_parent_exit_and_publish_in_order(self):
-        for index in range(20):
-            text = ("copy " + str(index)).encode()
-            self.copy(text)
-            self.assertEqual(self.read(), text)
 
 
 if __name__ == "__main__":

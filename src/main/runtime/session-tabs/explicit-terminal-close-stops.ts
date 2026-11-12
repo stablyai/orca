@@ -1,5 +1,5 @@
 import type { WorktreePtyHostFence } from '../workspaces/removal/worktree-pty-host-fence'
-import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
+import type { RuntimeTerminalClose } from '../../../shared/runtime-terminal-contracts'
 import type { RuntimePtyTabCloseAuthority } from '../terminal/records/runtime-terminal-state-records'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'

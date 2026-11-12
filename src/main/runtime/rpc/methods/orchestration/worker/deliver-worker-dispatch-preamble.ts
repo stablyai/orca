@@ -1,23 +1,23 @@
-import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-terminal-send-contract'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../../../../../shared/orca-session-address'
-import { canonicalOrcaSessionId } from '../../../../orchestration/canonical-orca-session-id'
+import { canonicalOrcaSessionId } from '../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import {
   orcaSessionIdOrHandle,
   resolveDispatchAssigneeParty
-} from '../../../../orchestration/orchestration-party'
-import { buildDispatchPreamble } from '../../../../orchestration/preamble'
-import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
+} from '../../../../orchestration/addressing/orchestration-party'
+import { buildDispatchPreamble } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
+import { sendAgentTurn } from '../../../../orchestration/turn-delivery/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../../../terminal/wait/launched-agent-write-guard'
-import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
+import { sendStructuredWorkerPreamble } from '../structured-workers/orchestration-structured-worker-session'
 import { chatAssigneeOf } from '../chat-assignee-admission'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { sendChatTask, type ChatTaskDelivery } from '../chat-task-delivery'
-import { dispatchTaskSource } from '../../../../orchestration/dispatch-task-source'
+import { dispatchTaskSource } from '../../../../orchestration/coordinator/dispatch/dispatch-task-source'
 import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
@@ -60,6 +60,7 @@ export async function deliverWorkerDispatchPreamble(args: {
     dispatchId: args.dispatchId,
     taskSpec: args.taskSpec,
     coordinatorHandle: orcaSessionIdOrHandle(args.coordinatorHandle, args.db),
+    coordinatedFrom: args.db.getPeerRun(args.runId)?.home_label,
     // Its mailbox stays keyed by the handle; its commands name its Orca session ID, which binds to it.
     workerHandle:
       structuredSession && isOrcaSessionId(structuredSession.identity.sessionId)

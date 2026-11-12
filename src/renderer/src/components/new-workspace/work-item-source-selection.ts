@@ -1,4 +1,4 @@
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import { getMatchingJiraSites, parseJiraIssueUrl } from '../../../../shared/jira/jira-issue-url'
 import type { JiraSite } from '../../../../shared/jira/jira-types'
 import {

@@ -6,7 +6,7 @@ import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-i
 import { groupPRComments } from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { isBotPRComment } from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
 import { translate } from '../../i18n/mobile-i18n'
-import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
+import { isPrSidebarDetailsPlaceholder } from '../../source-control/review/mobile-pr-sidebar-state'
 import { checkOutcome, summarizePRChecks } from './pr-checks-presentation'
 
 // passed: green check. blocking: red. waiting: amber. idle: muted, nothing to do. loading: spinner.

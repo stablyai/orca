@@ -22,12 +22,7 @@ it.each([
   'empty-selection'
 ])('preserves complete shard coverage with %s planning evidence', async (kind) => {
   root = mkdtempSync(join(tmpdir(), 'unit-sequencer-'))
-  const files = [
-    'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts',
-    'src/b.test.ts',
-    'src/c.test.ts',
-    'src/d.test.ts'
-  ]
+  const files = ['src/a.test.ts', 'src/b.test.ts', 'src/c.test.ts', 'src/d.test.ts']
   const plan = {
     version: 1,
     sourceSha: kind === 'stale' ? 'old' : 'current',
@@ -52,7 +47,7 @@ it.each([
     const specs = files.map((file, position) => ({
       moduleId: join(root, file),
       project: {
-        name: position === 0 ? 'node-measurement' : position % 2 ? 'bun' : 'node-runtime',
+        name: position === 0 ? 'synthetic-late' : position % 2 ? 'bun' : 'node-runtime',
         config: { sequence: { groupOrder: position === 0 ? 2 : 1 }, isolate: true }
       }
     }))

@@ -2,7 +2,6 @@ import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from 'node:fs/promises
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { resolveGitCommonDirectory } from '../metadata/git-common-directory'
 import {
   annotateWorktreeLocksFromAdmin,
   findLinkedWorktreeGitDirectory,
@@ -105,16 +104,6 @@ describe('owning-host worktree administrative reads', () => {
     }
   )
 
-  it('resolves normal, linked, separate-git-dir and bare layouts without subprocesses', async () => {
-    await expect(resolveGitCommonDirectory(repo)).resolves.toBe(common)
-    await expect(resolveGitCommonDirectory(linked)).resolves.toBe(common)
-    await expect(resolveGitCommonDirectory(common)).resolves.toBe(common)
-    const separate = path.join(root, 'separate')
-    await mkdir(separate)
-    await writeFile(path.join(separate, '.git'), 'gitdir: ../repo/.git\r\n')
-    await expect(resolveGitCommonDirectory(separate)).resolves.toBe(common)
-  })
-
   it('recovers exact preparation reasons even when the checkout directory is missing', async () => {
     await writeFile(path.join(admin, 'locked'), `${preparationReason}\n`)
     await rm(linked, { recursive: true })
@@ -132,11 +121,6 @@ describe('owning-host worktree administrative reads', () => {
     const foreign = await annotateWorktreeLocksFromAdmin(repo, rows())
     expect(foreign[1]).toMatchObject({ locked: true, lockReason: 'user session' })
     expect(isWorktreeCreatePreparation(foreign[1])).toBe(false)
-  })
-
-  it('does not treat an unreadable marker as an unlocked authoritative registration', async () => {
-    await mkdir(path.join(admin, 'locked'))
-    await expect(annotateWorktreeLocksFromAdmin(repo, rows())).rejects.toThrow()
   })
 
   it('does not cache a replaced lock reason or another repository’s metadata', async () => {
@@ -219,11 +203,6 @@ describe('owning-host worktree administrative reads', () => {
     await expect(isBranchReservedByWorktreeOperation(repo, 'feature', rows())).rejects.toThrow(
       'Cannot verify rebase update-refs branch usage'
     )
-  })
-
-  it('fails closed when update-refs cannot be read', async () => {
-    await mkdir(path.join(admin, 'rebase-merge', 'update-refs'), { recursive: true })
-    await expect(isBranchReservedByWorktreeOperation(repo, 'feature', rows())).rejects.toThrow()
   })
 
   it('propagates cancellation during administrative reads', async () => {

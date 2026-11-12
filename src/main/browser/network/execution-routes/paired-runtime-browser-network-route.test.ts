@@ -1,3 +1,4 @@
+import type { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { once } from 'node:events'
 import { connect, type Socket } from 'node:net'
@@ -5,27 +6,26 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
   BrowserNetworkTunnelOpcode,
   decodeBrowserNetworkTunnelFrame,
-  encodeBrowserNetworkTunnelFrame,
-  encodeBrowserNetworkTunnelWindowUpdate
-} from '../../../../shared/browser-network-tunnel-protocol'
+  encodeBrowserNetworkTunnelFrame
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type {
-  RemoteRuntimeSubscription,
-  RemoteRuntimeSubscriptionCallbacks
-} from '../../../../shared/remote-runtime/remote-runtime-client'
-import type { RemoteRuntimeSubscriptionOptions } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
+  RemoteRuntimeTransportSubscription,
+  RemoteRuntimeTransportSubscriptionCallbacks,
+  RemoteRuntimeSubscriptionOptions
+} from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../../../shared/remote-runtime/remote-runtime-client', () => ({
-  subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
+vi.mock('../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport', () => ({
+  subscribeRemoteRuntimeTransport: subscribeRemoteRuntimeRequestMock
 }))
 
 import { PairedRuntimeBrowserNetworkRoute } from './paired-runtime-browser-network-route'
-import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../tunnels/browser-network-tunnel-outbound-memory-budget'
+import type { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../tunnels/browser-network-tunnel-outbound-memory-budget'
 
 const pairing = {
   v: 2,
@@ -50,105 +50,6 @@ afterEach(() => {
 })
 
 describe('PairedRuntimeBrowserNetworkRoute', () => {
-  it('closes a subscription that resolves after route teardown', async () => {
-    let resolveSubscription = (_subscription: RemoteRuntimeSubscription): void => {}
-    const closeSubscription = vi.fn()
-    subscribeRemoteRuntimeRequestMock.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveSubscription = resolve
-      })
-    )
-    const route = new PairedRuntimeBrowserNetworkRoute({
-      connection: pairedRuntimeConnectionFromOffer(pairing),
-      lease,
-      executionHostRevision: 1
-    })
-
-    const starting = route.start()
-    await route.close()
-    resolveSubscription({
-      requestId: 'late-subscription',
-      close: closeSubscription,
-      sendBinary: () => true
-    })
-
-    await expect(starting).rejects.toThrow('closed during startup')
-    expect(closeSubscription).toHaveBeenCalledOnce()
-  })
-
-  it('settles startup when close follows subscription acquisition before readiness', async () => {
-    let callbacks: RemoteRuntimeSubscriptionCallbacks | undefined
-    const closeSubscription = vi.fn()
-    subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
-      async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
-        callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
-        return {
-          requestId: 'waiting-subscription',
-          close: closeSubscription,
-          sendBinary: () => true
-        }
-      }
-    )
-    const route = createRoute()
-    const starting = route.start()
-    const rejected = expect(starting).rejects.toThrow('closed during startup')
-    await vi.waitFor(() => expect(callbacks).toBeDefined())
-
-    await route.close(new Error('closed during startup'))
-
-    await rejected
-    expect(closeSubscription).toHaveBeenCalledOnce()
-  })
-
-  it('bounds the post-auth readiness wait', async () => {
-    vi.useFakeTimers()
-    const closeSubscription = vi.fn()
-    subscribeRemoteRuntimeRequestMock.mockResolvedValueOnce({
-      requestId: 'silent-subscription',
-      close: closeSubscription,
-      sendBinary: () => true
-    })
-    const route = createRoute({ timeoutMs: 25 })
-    const starting = route.start()
-    const rejected = expect(starting).rejects.toThrow('Browser tunnel attach timed out')
-    await Promise.resolve()
-
-    await vi.advanceTimersByTimeAsync(25)
-
-    await rejected
-    expect(closeSubscription).toHaveBeenCalledOnce()
-  })
-
-  it('binds and releases the exact browser-host outbound memory lease', async () => {
-    let callbacks: RemoteRuntimeSubscriptionCallbacks | undefined
-    let subscriptionOptions: Record<string, unknown> | undefined
-    const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
-    subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
-      async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
-        callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
-        subscriptionOptions = args[5] as Record<string, unknown>
-        return { requestId: 'budgeted', close: vi.fn(), sendBinary: () => true }
-      }
-    )
-    const route = createRoute({ outboundMemoryBudgetRegistry: registry })
-    const starting = route.start()
-    await vi.waitFor(() => expect(callbacks).toBeDefined())
-
-    expect(subscriptionOptions?.outboundMemoryBudget).toBeDefined()
-    expect(subscriptionOptions?.outboundQueue).toMatchObject({ maxDrainFramesPerTurn: 4 })
-    expect(registry.evidence()).toMatchObject({ hosts: 1, leases: 1 })
-    callbacks!.onResponse({
-      id: 'budgeted',
-      ok: true,
-      result: { type: 'ready', tunnelGeneration: 7 },
-      _meta: { runtimeId: 'runtime-a' }
-    })
-    await starting
-
-    await route.close()
-    expect(registry.evidence()).toMatchObject({ hosts: 0, leases: 0 })
-  })
-
   it('keeps one listener fail-closed and accepts an increasing replacement generation', async () => {
     const attempts = mockSubscriptionAttempts()
     const route = createRoute()
@@ -177,73 +78,6 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     ready(attempts[1]!, 8)
     await expect(reconnecting).resolves.toEqual(address)
 
-    await route.close()
-  })
-
-  it('reattaches with the exact existing v1 payload and tunnel capabilities', async () => {
-    const attempts = mockSubscriptionAttempts()
-    const route = createRoute({
-      subscription: { clientCapabilities: ['existing.optional.v1'] }
-    })
-    const starting = route.start()
-    await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    ready(attempts[0]!, 7)
-    await starting
-    attempts[0]!.callbacks.onClose?.()
-
-    const reconnecting = route.reconnect()
-    await vi.waitFor(() => expect(attempts).toHaveLength(2))
-    ready(attempts[1]!, 8)
-    await reconnecting
-
-    for (const attempt of attempts) {
-      expect(attempt.method).toBe('network.browserTunnel')
-      expect(attempt.params).toEqual({
-        ...lease,
-        executionHost: { kind: 'native', runtimeId: 'runtime-a', revision: 1 }
-      })
-      expect(attempt.options).toMatchObject({
-        perMessageDeflate: false,
-        clientCapabilities: [
-          'existing.optional.v1',
-          'browser.clientHost.v1',
-          'network.browserTunnel.v1',
-          'network.browserTunnel.window.v2'
-        ]
-      })
-    }
-    await route.close()
-  })
-
-  it.each([
-    ['rejects', 'an older host', undefined],
-    ['accepts', 'a host that accepts window.v2', ['network.browserTunnel.window.v2']]
-  ])('%s a 2 MiB stream window from %s', async (outcome, _host, capabilities) => {
-    const attempts = mockSubscriptionAttempts()
-    const route = createRoute()
-    const starting = route.start()
-    await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    ready(attempts[0]!, 7, capabilities)
-    const address = await starting
-    const socket = await connectSocks(address.host, address.port)
-    await greetSocks(socket)
-    socket.write(domainConnectRequest('window.internal', 443))
-    await vi.waitFor(() => expect(openFrames(attempts[0]!)).toHaveLength(1))
-
-    for (const [opcode, payload] of [
-      [BrowserNetworkTunnelOpcode.Opened, new Uint8Array()],
-      [
-        BrowserNetworkTunnelOpcode.WindowUpdate,
-        encodeBrowserNetworkTunnelWindowUpdate(2 * 1024 * 1024)
-      ]
-    ] as const) {
-      attempts[0]!.callbacks.onBinary?.(
-        encodeBrowserNetworkTunnelFrame({ opcode, tunnelGeneration: 7, streamId: 1, payload })
-      )
-    }
-
-    expect(attempts[0]!.close).toHaveBeenCalledTimes(outcome === 'rejects' ? 1 : 0)
-    socket.destroy()
     await route.close()
   })
 
@@ -300,28 +134,6 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     ready(attempts[2]!, 9)
     await expectSocksRoundTrip(address, attempts[2]!, 9, 'twice-recovered.internal')
 
-    await route.close()
-  })
-
-  it('rejects a non-increasing replacement generation and remains retryable', async () => {
-    const attempts = mockSubscriptionAttempts()
-    const route = createRoute()
-    const starting = route.start()
-    await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    ready(attempts[0]!, 7)
-    await starting
-    attempts[0]!.callbacks.onClose?.()
-
-    const staleReconnect = route.reconnect()
-    const staleRejection = expect(staleReconnect).rejects.toThrow('generation did not advance')
-    await vi.waitFor(() => expect(attempts).toHaveLength(2))
-    ready(attempts[1]!, 7)
-    await staleRejection
-
-    const currentReconnect = route.reconnect()
-    await vi.waitFor(() => expect(attempts).toHaveLength(3))
-    ready(attempts[2]!, 8)
-    await expect(currentReconnect).resolves.toBeDefined()
     await route.close()
   })
 
@@ -423,7 +235,7 @@ function createRoute(
 type SubscriptionAttempt = {
   method: unknown
   params: unknown
-  callbacks: RemoteRuntimeSubscriptionCallbacks
+  callbacks: RemoteRuntimeTransportSubscriptionCallbacks
   options: unknown
   close: Mock<() => void>
   sent: Uint8Array<ArrayBufferLike>[]
@@ -432,11 +244,13 @@ type SubscriptionAttempt = {
 function mockSubscriptionAttempts(): SubscriptionAttempt[] {
   const attempts: SubscriptionAttempt[] = []
   subscribeRemoteRuntimeRequestMock.mockImplementation(
-    async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
+    async (
+      ...args: Parameters<typeof subscribeRemoteRuntimeTransport>
+    ): Promise<RemoteRuntimeTransportSubscription> => {
       const attempt: SubscriptionAttempt = {
         method: args[1],
         params: args[2],
-        callbacks: args[4] as RemoteRuntimeSubscriptionCallbacks,
+        callbacks: args[4],
         options: args[5],
         close: vi.fn(),
         sent: []

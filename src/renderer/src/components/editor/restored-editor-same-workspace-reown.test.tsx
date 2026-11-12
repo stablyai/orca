@@ -3,36 +3,33 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeFileReadClient from '@/runtime/runtime-file-read-client'
+import type * as RuntimeFileReadClient from '@/runtime/files/reads/runtime-file-read-client'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
-import type { FileContent } from './editor-panel-content-types'
-import {
-  useEditorPanelFileContentLoader,
-  type EditorPanelFileContentLoader
-} from './useEditorPanelFileContentLoader'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import type { FileContent, EditorPanelFileContentLoader } from './editor-panel-content-types'
+import { useEditorPanelFileContentLoader } from './useEditorPanelFileContentLoader'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn() }))
-vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeFileReadClient>()),
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 // Use main-owned layout frames and move acknowledgments.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

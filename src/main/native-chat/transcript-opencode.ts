@@ -1,4 +1,4 @@
-import { createImportedForkTip } from './agent-session-journal/imported-fork-tip'
+import { createImportedForkTip } from './agent-session-journal/history-import/imported-fork-tip'
 import type {
   OpenCodeForkTipEvent,
   OpenCodeTranscriptItem,
@@ -10,7 +10,7 @@ import {
   OPENCODE_CAPTURE_TEXT_LIMIT
 } from '../ai-vault/scanners/opencode/sqlite/opencode-transcript-capture-limits'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
-import { errorMessage } from '../ai-vault/session-scanner-values'
+import { errorMessage } from '../../shared/error-message'
 import type { ReadTranscriptResult } from './transcript-reader'
 import {
   readOpenCodeTranscriptPageViaWorker,

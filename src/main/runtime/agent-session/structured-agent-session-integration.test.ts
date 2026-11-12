@@ -1,5 +1,4 @@
-import '../rpc/unused-default-rpc-methods.test-fixture'
-import { scriptedCodexCatalogSession } from '../scripted-codex-model-catalog.test-fixture'
+import { scriptedCodexCatalogSession } from './model-catalog/scripted-codex-model-catalog.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,20 +12,20 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../ipc/desktop-renderer-runtime-capabilities'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-create-capabilities'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { attachFingerprintFields } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { attachFingerprintFields } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest, RpcResponse } from '../rpc/core'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import type { NativeChatShellEnvironmentPolicy } from '../../../shared/native-chat/native-chat-shell-environment'
-import { STRUCTURED_AGENT_SESSION_METHODS } from '../rpc/methods/structured-agent-session'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../rpc/methods/structured-sessions/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
 

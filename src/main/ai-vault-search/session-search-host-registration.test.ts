@@ -1,3 +1,4 @@
+import './worker/session-search-worker.test-fixture'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
@@ -7,13 +8,13 @@ import {
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,
   type SessionSearchIndexerHarness
-} from './session-search-indexer-test-fixture'
+} from './indexing/session-search-indexer-test-fixture'
 import { searchSessionService } from './session-search-service-registry'
 import { resetSessionSearchPolicyForTests } from './session-search-policy'
 import { resetSessionSearchServiceInitForTests } from './session-search-service-init'
 
 const localAiVaultScanRoots = vi.hoisted(() => vi.fn())
-vi.mock('../ai-vault/cached-session-list', async (importOriginal) => ({
+vi.mock('../ai-vault/discovery/ai-vault-scan-roots', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   localAiVaultScanRoots
 }))

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PluginDeclarativeIssue } from './use-plugin-declarative-tree'
 
 /** How long the "Reloaded" mark stays after a dev hot reload. */
@@ -22,6 +22,7 @@ export function PluginDeclarativeIssueNotice({
   showingLastGood: boolean
   onDismiss: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (issue.source === 'load') {
     return (
       <div
@@ -32,12 +33,12 @@ export function PluginDeclarativeIssueNotice({
         <div className="min-w-0 flex-1">
           <p>
             {showingLastGood
-              ? translate(
+              ? t(
                   'auto.components.rightSidebar.PluginDeclarativePanel.loadFailedKeptLastGood',
                   '{{value0}} failed to load. Showing the last version that loaded.',
                   { value0: title }
                 )
-              : translate(
+              : t(
                   'auto.components.rightSidebar.PluginDeclarativePanel.loadFailed',
                   '{{value0}} failed to load.',
                   { value0: title }
@@ -49,7 +50,7 @@ export function PluginDeclarativeIssueNotice({
           variant="ghost"
           size="icon-xs"
           onClick={onDismiss}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.rightSidebar.PluginDeclarativePanel.dismissLoadError',
             'Dismiss'
           )}
@@ -66,7 +67,7 @@ export function PluginDeclarativeIssueNotice({
       className="border-b border-border px-3 py-1.5 text-xs break-words text-muted-foreground"
     >
       {issue.source === 'plugin'
-        ? translate(
+        ? t(
             'auto.components.rightSidebar.PluginDeclarativePanel.pluginMessage',
             'Message from {{value0}}: {{value1}}',
             { value0: title, value1: issue.message }
@@ -78,6 +79,7 @@ export function PluginDeclarativeIssueNotice({
 
 /** A brief, still (no motion) mark that a dev save reloaded the panel; remount it per reload. */
 export function PluginDeclarativeReloadedNotice(): React.JSX.Element | null {
+  const t = useTranslate()
   const [shown, setShown] = useState(true)
   useEffect(() => {
     const timer = setTimeout(() => setShown(false), PLUGIN_DECLARATIVE_RELOADED_NOTICE_MS)
@@ -87,7 +89,7 @@ export function PluginDeclarativeReloadedNotice(): React.JSX.Element | null {
     <div role="status" className="pointer-events-none absolute top-1.5 right-2 z-10">
       {shown ? (
         <span className="rounded-md border border-border bg-background px-1.5 py-0.5 text-2xs text-muted-foreground">
-          {translate('auto.components.rightSidebar.PluginDeclarativePanel.reloaded', 'Reloaded')}
+          {t('auto.components.rightSidebar.PluginDeclarativePanel.reloaded', 'Reloaded')}
         </span>
       ) : null}
     </div>

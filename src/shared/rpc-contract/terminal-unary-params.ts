@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../terminal/images/terminal-kitty-file'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
@@ -10,6 +10,7 @@ import {
 } from '../windows-terminal-shell'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../feature-education-telemetry'
 import { OptionalExecutionHostId } from './worktree-params'
+import { AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH } from '../agent-status/contracts/agent-status-types'
 
 // Refuse at the authoritative host boundary instead of returning an opaque relay spawn failure.
 export const WindowsShellOverrideParam = z
@@ -186,6 +187,12 @@ export const TerminalSend = TerminalHandle.extend({
     })
     .optional(),
   requireAgentStatus: z.enum(['sendable']).optional(),
+  // A startup-dialog card's choice: refused unless the screen still reads as this card. Older hosts strip it.
+  requireStartupDialog: z
+    .string()
+    .min(1)
+    .max(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
+    .optional(),
   // Why: terminal-generated replies are valid input but must not transfer the shared terminal floor.
   inputKind: z.enum(['query-reply']).optional(),
   // Identify the driver; older clients fall back to the latest mobile actor (docs/mobile-presence-lock.md).
@@ -262,6 +269,7 @@ export const TerminalCreateParams = z.object({
   // Older hosts drop it and resume as before.
   resumeOrigin: z.literal('saved').optional(),
   launchToken: OptionalString,
+  trustWorktreeId: z.string().min(1).max(32_768).optional(),
   launchAgent: z.string().refine(isTuiAgent).optional(),
   terminalKittyKeyboardProtocol: z.boolean().optional(),
   terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),

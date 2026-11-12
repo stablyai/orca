@@ -107,11 +107,23 @@ export function getGitLabPipelineNotLatestCommitSha(
   return pipeline.sha.toLowerCase() === mrHeadSha.toLowerCase() ? undefined : pipeline.sha
 }
 
+export function gitLabPipelineJobOutcome(job: {
+  status?: string
+  allowFailure?: boolean
+}): Pick<PRCheckDetail, 'status' | 'conclusion' | 'gitlabAllowedFailure'> {
+  const status = job.status ?? ''
+  const allowedFailure = status.toLowerCase() === 'failed' && job.allowFailure === true
+  return {
+    status: mapGitLabPipelineJobStatusToCheckStatus(status),
+    conclusion: allowedFailure ? 'neutral' : mapGitLabPipelineJobStatusToConclusion(status),
+    ...(allowedFailure ? { gitlabAllowedFailure: true } : {})
+  }
+}
+
 export function gitLabPipelineJobsToPRChecks(jobs: GitLabPipelineJob[]): PRCheckDetail[] {
   return jobs.map((job) => ({
     name: job.stage ? `${job.stage}: ${job.name}` : job.name,
-    status: mapGitLabPipelineJobStatusToCheckStatus(job.status),
-    conclusion: mapGitLabPipelineJobStatusToConclusion(job.status),
+    ...gitLabPipelineJobOutcome(job),
     url: job.webUrl || null,
     ...checkRunTimes(job.startedAt, job.finishedAt),
     // Truthiness, not != null: the runtime RPC schema requires a positive int.

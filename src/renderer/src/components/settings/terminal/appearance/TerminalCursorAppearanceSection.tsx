@@ -1,4 +1,3 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import {
   NumberField,
   SettingsRow,
@@ -7,8 +6,9 @@ import {
   SettingsSwitchRow
 } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { clampNumber } from '@/lib/terminal-theme'
-import { translate } from '@/i18n/i18n'
+import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
+import { useTranslate } from '@/i18n/use-translate'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
 type TerminalCursorAppearanceSectionProps = {
   settings: GlobalSettings
@@ -19,10 +19,11 @@ export function TerminalCursorAppearanceSection({
   settings,
   updateSettings
 }: TerminalCursorAppearanceSectionProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader
-        title={translate(
+        title={t(
           'auto.components.settings.TerminalAppearanceSection.abcb4dd019',
           'Terminal Cursor'
         )}
@@ -30,47 +31,41 @@ export function TerminalCursorAppearanceSection({
 
       <div className="ml-4 divide-y divide-border/40">
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.TerminalAppearanceSection.db270cc9a9',
-            'Cursor Shape'
-          )}
-          description={translate(
+          title={t('auto.components.settings.TerminalAppearanceSection.4adb9364f4', 'Cursor shape')}
+          description={t(
             'auto.components.settings.TerminalAppearanceSection.d455f2ef4f',
             'Default cursor appearance for Orca terminal panes.'
           )}
           keywords={['terminal', 'cursor', 'bar', 'block', 'underline']}
         >
           <SettingsRow
-            label={translate(
-              'auto.components.settings.TerminalAppearanceSection.db270cc9a9',
-              'Cursor Shape'
+            label={t(
+              'auto.components.settings.TerminalAppearanceSection.4adb9364f4',
+              'Cursor shape'
             )}
             control={
               <SettingsSegmentedControl
-                ariaLabel={translate(
-                  'auto.components.settings.TerminalAppearanceSection.db270cc9a9',
-                  'Cursor Shape'
+                ariaLabel={t(
+                  'auto.components.settings.TerminalAppearanceSection.4adb9364f4',
+                  'Cursor shape'
                 )}
                 value={settings.terminalCursorStyle}
                 onChange={(option) => updateSettings({ terminalCursorStyle: option })}
                 options={[
                   {
                     value: 'bar',
-                    label: translate(
-                      'auto.components.settings.TerminalAppearanceSection.e070e8aeba',
-                      'Bar'
-                    )
+                    label: t('auto.components.settings.TerminalAppearanceSection.e070e8aeba', 'Bar')
                   },
                   {
                     value: 'block',
-                    label: translate(
+                    label: t(
                       'auto.components.settings.TerminalAppearanceSection.52854a5608',
                       'Block'
                     )
                   },
                   {
                     value: 'underline',
-                    label: translate(
+                    label: t(
                       'auto.components.settings.TerminalAppearanceSection.2e5aec3cf6',
                       'Underline'
                     )
@@ -82,18 +77,18 @@ export function TerminalCursorAppearanceSection({
         </SearchableSetting>
 
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.TerminalAppearanceSection.74736cc9b1',
             'Blinking Cursor'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.TerminalAppearanceSection.2de6b5a699',
             'Uses the blinking variant of the selected cursor shape.'
           )}
           keywords={['terminal', 'cursor', 'blink']}
         >
           <SettingsSwitchRow
-            label={translate(
+            label={t(
               'auto.components.settings.TerminalAppearanceSection.74736cc9b1',
               'Blinking Cursor'
             )}
@@ -103,20 +98,20 @@ export function TerminalCursorAppearanceSection({
         </SearchableSetting>
 
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.TerminalAppearanceSection.b9f1804422',
-            'Cursor Opacity'
+          title={t(
+            'auto.components.settings.TerminalAppearanceSection.55c3f22e7c',
+            'Cursor opacity'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.TerminalAppearanceSection.04cdf85dec',
             'Opacity of the terminal cursor.'
           )}
           keywords={['terminal', 'cursor', 'opacity', 'transparency']}
         >
           <NumberField
-            label={translate(
-              'auto.components.settings.TerminalAppearanceSection.b9f1804422',
-              'Cursor Opacity'
+            label={t(
+              'auto.components.settings.TerminalAppearanceSection.55c3f22e7c',
+              'Cursor opacity'
             )}
             description=""
             value={settings.terminalCursorOpacity ?? 1}

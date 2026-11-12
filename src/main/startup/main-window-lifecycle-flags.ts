@@ -1,6 +1,6 @@
-import { resolveExpectedTeardownScope } from '../crash-reporting/expected-teardown-state'
-import type { ExpectedTeardownScope } from '../crash-reporting/process-gone-classification'
-import { recordProcessGoneCrash as recordProcessGoneCrashEvent } from '../crash-reporting/process-gone-recorder'
+import { resolveExpectedTeardownScope } from '../crash-reporting/process-exits/expected-teardown-state'
+import type { ExpectedTeardownScope } from '../crash-reporting/process-exits/process-gone-classification'
+import { recordProcessGoneCrash as recordProcessGoneCrashEvent } from '../crash-reporting/process-exits/process-gone-recorder'
 import { isQuittingForUpdate } from '../updater/updater-service'
 import { mainProcessState as state } from './main-process-state'
 

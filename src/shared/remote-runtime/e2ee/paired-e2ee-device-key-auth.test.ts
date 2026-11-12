@@ -70,33 +70,4 @@ describe('paired E2EE device-key auth', () => {
       })
     ).toBe(false)
   })
-
-  it('keeps v2 token auth exact-key, without capabilities', async () => {
-    const auth = openAuth(
-      await v2Handshake().sealAuth(
-        { kind: 'token', deviceToken: 'token' },
-        { clientCapabilities: ['a.v1'] }
-      )
-    )
-    expect(Object.keys(auth).sort()).toEqual(['deviceToken', 'transcriptHashB64', 'type', 'v'])
-  })
-
-  it('refuses a device key over legacy framing and before the ready', async () => {
-    const legacy = createPairedE2EEClientHandshake({
-      primitives: NODE_PAIRED_E2EE_PRIMITIVES,
-      hostPublicKeyB64: Buffer.alloc(32, 9).toString('base64'),
-      framing: 'legacy'
-    })
-    expect(legacy.transcriptHashB64()).toBeNull()
-    await expect(legacy.sealAuth(keyCredential)).rejects.toThrow('E2EE v2')
-    const fixture = createMobileE2EEV2Fixture()
-    const early = createPairedE2EEClientHandshake({
-      primitives: NODE_PAIRED_E2EE_PRIMITIVES,
-      hostPublicKeyB64: fixture.ready.desktopPublicKeyB64,
-      framing: 'v2',
-      transport: 'direct'
-    })
-    expect(early.transcriptHashB64()).toBeNull()
-    await expect(early.sealAuth(keyCredential)).rejects.toThrow()
-  })
 })

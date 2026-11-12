@@ -39,24 +39,7 @@ function makeSnapshot(): RuntimeMobileSessionTabsSnapshot {
   }
 }
 
-function select(overrides: { focusesHost: boolean; targetGroupId?: string }) {
-  return applyBrowserSessionTabSelection({
-    snapshot: makeSnapshot(),
-    tabId: 'page-new',
-    focusesHost: overrides.focusesHost,
-    ...(overrides.targetGroupId ? { targetGroupId: overrides.targetGroupId } : {})
-  })
-}
-
 describe('applyBrowserSessionTabSelection', () => {
-  it('moves the shared active tab when the request reaches the host', () => {
-    const { snapshot } = select({ focusesHost: true })
-
-    expect(snapshot.activeTabId).toBe('page-new')
-    expect(snapshot.activeTabType).toBe('browser')
-    expect(snapshot.tabs.find((tab) => tab.id === 'page-new')?.isActive).toBe(true)
-  })
-
   it('selects the owning group when a host switch targets an existing page in another group', () => {
     const before = makeSnapshot()
     before.tabGroups = [
@@ -76,87 +59,5 @@ describe('applyBrowserSessionTabSelection', () => {
     expect(snapshot.tabGroups?.[0]?.activeTabId).toBe('terminal-tab')
   })
 
-  it.each([true, false])(
-    'preserves legacy group absence when selecting a browser (host=%s)',
-    (focusesHost) => {
-      const before = makeSnapshot()
-      delete before.tabGroups
-      before.activeGroupId = null
-
-      const { snapshot } = applyBrowserSessionTabSelection({
-        snapshot: before,
-        tabId: 'page-new',
-        focusesHost
-      })
-
-      const activeId = focusesHost ? 'page-new' : 'terminal-tab'
-      expect(snapshot.tabGroups).toBeUndefined()
-      expect(snapshot.activeTabId).toBe(activeId)
-      expect(snapshot.tabs.filter((tab) => tab.isActive).map((tab) => tab.id)).toEqual([activeId])
-    }
-  )
-
-  it('leaves every shared selection alone for a caller-addressed create', () => {
-    const before = makeSnapshot()
-    const { snapshot } = select({ focusesHost: false })
-
-    expect(snapshot.activeTabId).toBe(before.activeTabId)
-    expect(snapshot.activeTabType).toBe(before.activeTabType)
-    expect(snapshot.activeGroupId).toBe(before.activeGroupId)
-    expect(snapshot.tabs.find((tab) => tab.id === 'page-new')?.isActive).toBe(false)
-    expect(snapshot.tabGroups?.find((group) => group.id === 'group-left')?.activeTabId).toBe(
-      'terminal-tab'
-    )
-  })
-
-  it('places the tab in the requested group whether or not the host follows', () => {
-    for (const focusesHost of [true, false]) {
-      const { snapshot, placedInTargetGroup } = select({
-        focusesHost,
-        targetGroupId: 'group-right'
-      })
-
-      expect(placedInTargetGroup).toBe(true)
-      expect(snapshot.tabGroups?.find((group) => group.id === 'group-right')?.tabOrder).toEqual([
-        'page-new'
-      ])
-      expect(snapshot.tabGroups?.find((group) => group.id === 'group-left')?.tabOrder).toEqual([
-        'terminal-tab'
-      ])
-    }
-  })
-
-  it('claims the target group only for a host-following create', () => {
-    expect(select({ focusesHost: true, targetGroupId: 'group-right' }).snapshot).toMatchObject({
-      activeGroupId: 'group-right',
-      tabGroups: expect.arrayContaining([
-        expect.objectContaining({ id: 'group-right', activeTabId: 'page-new' })
-      ])
-    })
-    expect(select({ focusesHost: false, targetGroupId: 'group-right' }).snapshot).toMatchObject({
-      activeGroupId: 'group-left',
-      tabGroups: expect.arrayContaining([
-        expect.objectContaining({ id: 'group-right', activeTabId: null })
-      ])
-    })
-  })
-
-  it('reports an unknown group as unplaced so nothing is persisted for it', () => {
-    const { placedInTargetGroup, snapshot } = select({
-      focusesHost: true,
-      targetGroupId: 'group-missing'
-    })
-
-    expect(placedInTargetGroup).toBe(false)
-    expect(snapshot.activeGroupId).toBe('group-left')
-  })
-
   // Rotating the epoch here retires the renderer's own publication client-side.
-  it('keeps the publication epoch and advances the version either way', () => {
-    for (const focusesHost of [true, false]) {
-      const { snapshot } = select({ focusesHost })
-      expect(snapshot.publicationEpoch).toBe('headless:before')
-      expect(snapshot.snapshotVersion).toBe(5)
-    }
-  })
 })

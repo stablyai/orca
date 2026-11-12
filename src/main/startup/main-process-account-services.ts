@@ -10,10 +10,10 @@ import {
   hasOpenCodeGoApiKey,
   readOpenCodeGoApiKey,
   saveOpenCodeGoApiKey
-} from '../opencode/opencode-go-api-key-store'
-import { agentHookServer } from '../agent-hooks/server'
+} from '../opencode/accounts/opencode-go-api-key-store'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { prewarmStructuredAgentModelCatalogs } from '../runtime/agent-session/model-catalog/structured-agent-model-catalog-wiring'
 import { mainProcessState as state } from './main-process-state'
 
@@ -31,13 +31,7 @@ const MODEL_CATALOG_ACCOUNT_SETTINGS = [
 
 export function initializeMainProcessAccountServices(): void {
   const store = state.store
-  if (
-    !store ||
-    !state.claudeUsage ||
-    !state.codexUsage ||
-    !state.openCodeUsage ||
-    !state.museUsage
-  ) {
+  if (!store || !state.claudeUsage || !state.codexUsage) {
     throw new Error('Usage stores must be initialized before account services')
   }
   state.codexSessionMigration = createCodexSessionMigrationScheduler({
@@ -78,10 +72,11 @@ export function initializeMainProcessAccountServices(): void {
   state.keybindings = new KeybindingService({
     homePath: app.getPath('home'),
     getLegacyOverrides: () => store.getSettings().keybindings,
-    legacyTabSwitchSeed: {
-      isPending: () => store.getSettings().tabSwitchKeybindingSeed === 'pending',
-      markSeeded: () => store.updateSettings({ tabSwitchKeybindingSeed: 'done' })
-    }
+    legacyTabSwitchDefaults: store.getSettings().tabSwitchKeybindingSeed === 'legacy',
+    legacySearchDefaults:
+      (process.platform === 'darwin'
+        ? store.getSettings().searchKeybindingSeed
+        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy'
   })
   browserManager.setSettingsResolver(() => ({ keybindings: state.keybindings?.getOverrides() }))
 }

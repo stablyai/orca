@@ -1,11 +1,12 @@
 // Use session launch resolvers, including missing-program env refresh, for probes so catalogs match the binary/account sessions actually use.
 
-import { createAcpModelCatalogProbe } from '../../../acp/acp-model-catalog-probe'
-import { acpListingNeedsChatFolder, type AcpLaunchSpec } from '../../../acp/acp-launch-specs'
+import { createAcpModelCatalogProbe } from '../../../acp/discovery/acp-model-catalog-probe'
+import { acpListingNeedsChatFolder } from '../../../acp/discovery/acp-model-discovery-policy'
+import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import {
   createClaudeModelCatalogProbe,
   type ClaudeModelCatalogProbeDeps
-} from '../../../claude/claude-model-catalog-probe'
+} from '../../../claude/model-catalog/claude-model-catalog-probe'
 import { createCodexModelCatalogProbe } from '../../../codex/structured/catalog/codex-model-catalog-probe'
 import type { AgentModelCatalogDiscovery } from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { StructuredAgentModelCatalogContext } from '../installation/structured-agent-runtime-registration-types'

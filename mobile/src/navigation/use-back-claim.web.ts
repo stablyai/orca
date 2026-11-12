@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { usePageBridgeClientIfPresent } from '../transport/client-context.web'
+import { usePageBridgeClientIfPresent } from '../transport/connection/client-context.web'
 import type { BackClaim } from './use-back-claim'
 
 // Claim shell Back on empty/nonempty stack edges; RN Web cannot intercept it. Older shells keep native pop behavior.

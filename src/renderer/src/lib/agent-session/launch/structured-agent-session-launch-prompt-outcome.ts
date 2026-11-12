@@ -5,11 +5,11 @@ import {
 } from './structured-agent-session-launch-errors'
 import type { StructuredLaunchCaller } from './structured-agent-session-launch-callers'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
-import { STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS } from '@/components/native-chat/structured-agent-session-send-runtime'
+import { STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime'
 import {
   notifyStructuredLaunchListeners,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 
 /** Completing the caller leaves uncertain opening content independent of live startup work. */
 export function trackStructuredLaunchPromptOutcome(
@@ -38,7 +38,7 @@ export function trackStructuredLaunchPromptOutcome(
       state.visibilityUnknown = true
       group.outcome = 'unknown'
     }
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(state.intent.sessionId)
   })
 }
 
@@ -61,7 +61,7 @@ export function trackStructuredLaunchConfirmationDeadline(
     }
     state.visibilityUnknown = true
     state.callers.outcome = 'unknown'
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(state.intent.sessionId)
   }, STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS)
   const clear = (): void => clearTimeout(deadline)
   void promise.then(clear, clear)

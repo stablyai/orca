@@ -1,9 +1,10 @@
 import type { RepoIconPickResult } from '../../shared/repo-icon-pick-failure-copy'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { ShellPathExistence } from '../../shared/path-existence-batch'
+import type { ShellPathExistence } from '../../shared/file-access/path-existence-batch'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
+  ShellOpenFileResult,
   ShellOpenLocalPathResult
 } from '../../shared/shell/opening/shell-open-types'
 
@@ -19,7 +20,7 @@ export type ShellApi = {
   ) => Promise<ShellOpenExternalEditorResult>
   openUrl: (url: string) => Promise<void>
   openFilePath: (path: string, ownerHostId: ExecutionHostId) => Promise<boolean>
-  openFileUri: (uri: string, ownerHostId: ExecutionHostId) => Promise<void>
+  openFileUri: (uri: string, ownerHostId: ExecutionHostId) => Promise<ShellOpenFileResult>
   pathsExist?: (paths: string[]) => Promise<ShellPathExistence[]>
   /** `wakeWslDistro`: a click, a user act that may start a stopped WSL distro. */
   pathExists: (path: string, options?: { wakeWslDistro?: boolean }) => Promise<boolean>

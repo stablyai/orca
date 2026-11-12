@@ -6,7 +6,9 @@ export const BUILT_IN_EDITOR_COMMANDS = {
   cursor: 'cursor',
   zed: 'zed',
   // Devin Desktop (formerly Windsurf) installs this launcher; `devin` is the Devin CLI agent.
-  'devin-desktop': 'devin-desktop'
+  'devin-desktop': 'devin-desktop',
+  // Antigravity IDE's bundled launcher; `agy` is the Antigravity CLI agent.
+  'antigravity-ide': 'antigravity-ide'
 } as const
 export type BuiltInEditorId = keyof typeof BUILT_IN_EDITOR_COMMANDS
 

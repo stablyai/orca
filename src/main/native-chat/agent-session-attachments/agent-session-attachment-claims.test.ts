@@ -7,7 +7,7 @@ import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
-} from '../agent-session-journal/journal-host-database-test-support'
+} from '../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { isAgentSessionAttachmentExpiredError } from './agent-session-attachment-claims'
 import {

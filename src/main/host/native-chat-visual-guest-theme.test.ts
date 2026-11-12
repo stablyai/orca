@@ -4,11 +4,11 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, IpcMainEvent } from 'electron'
-import type * as SiteDisplayController from '../browser/site-settings/browser-site-display-controller'
+import type * as SiteDisplayController from '../browser/site-settings/display/browser-site-display-controller'
 import {
   configureBrowserSiteDisplayStore,
   updateBrowserSiteDisplay
-} from '../browser/site-settings/browser-site-display-store'
+} from '../browser/site-settings/display/browser-site-display-store'
 import {
   NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH as PUBLISH,
   NATIVE_CHAT_VISUAL_GUEST_THEME_READ as READ
@@ -36,10 +36,10 @@ vi.mock('../native-chat/native-chat-scratch-folder', () => ({
 vi.mock('../native-chat/native-chat-visual-guest-location', () => ({
   isNativeChatVisualGuestLocation: classify
 }))
-vi.mock('../browser/site-settings/browser-site-display-controller', () => ({
+vi.mock('../browser/site-settings/display/browser-site-display-controller', () => ({
   browserSiteDisplayController: display
 }))
-vi.mock('../browser/sessions/browser-session-registry', () => ({
+vi.mock('../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: { profileIdForSession: profileForSession }
 }))
 vi.mock('../browser/routing/local-host-partitions/local-ssh-browser-partitions', () => ({
@@ -48,7 +48,7 @@ vi.mock('../browser/routing/local-host-partitions/local-ssh-browser-partitions',
 import { installNativeChatVisualGuestTheme } from './native-chat-visual-guest-theme'
 
 const { BrowserSiteDisplayController } = await vi.importActual<typeof SiteDisplayController>(
-  '../browser/site-settings/browser-site-display-controller'
+  '../browser/site-settings/display/browser-site-display-controller'
 )
 
 function contents(id: number, hostWebContents: EventEmitter | null = null) {

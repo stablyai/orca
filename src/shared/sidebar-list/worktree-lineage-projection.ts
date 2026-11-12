@@ -5,6 +5,7 @@ import {
 import type { ExecutionHostId } from '../execution-host'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import type { WorktreeLineage } from '../worktree/lineage-types'
+import type { FolderLineageRecordOf } from '../worktree/folder-lineage-parents'
 import type { CrossStoreLineageView } from '../worktree/cross-store-lineage-resolution'
 import {
   getProjectedWorktreeLineage,
@@ -173,11 +174,17 @@ export type SidebarLineageParentIdentities = ReadonlyMap<string, string>
 export function resolveSidebarLineageParentIdentities(
   lineageById: Readonly<Record<string, WorktreeLineage>>,
   completeRowsByHostIdentity: ReadonlyMap<string, Worktree>,
-  crossStoreLineage: CrossStoreLineageView
+  crossStoreLineage: CrossStoreLineageView | undefined,
+  folderRecordOf?: FolderLineageRecordOf
 ): SidebarLineageParentIdentities {
   return new Map(
     [
-      ...resolveWorkspaceLineageParents(lineageById, completeRowsByHostIdentity, crossStoreLineage)
+      ...resolveWorkspaceLineageParents(
+        lineageById,
+        completeRowsByHostIdentity,
+        crossStoreLineage,
+        folderRecordOf
+      )
     ].map(([identity, parent]) => [identity, getWorktreeHostIdentity(parent)])
   )
 }

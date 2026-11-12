@@ -3,17 +3,18 @@ import type {
   AutomationOwnerPrecondition,
   AutomationDestination,
   AutomationUpdatePreconditions
-} from '../../../../shared/automation-owner-precondition'
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+} from '../../../../shared/automations/ownership/automation-owner-precondition'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type {
   RuntimeAutomationCreateInput,
   RuntimeAutomationUpdateInput
-} from '../../runtime-automation-run-context'
+} from '../../integrations/automations/runtime-automation-run-context'
 import {
   automationChangePublications,
   type AutomationChangeSelector,
   type AutomationListResult
-} from '../../../../shared/automation-list-scope'
+} from '../../../../shared/automations/ownership/automation-list-scope'
 import type { AutomationService } from '../../../automations/service'
 import { OrcaRuntimeWithCrewOperations } from './crew-operations'
 
@@ -56,6 +57,20 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
     )
   }
 
+  showAutomationRun(
+    automationId: string,
+    runId: string,
+    expectedOwner?: AutomationOwnerPrecondition
+  ): AutomationRun {
+    const run = this.readAutomationRuns(automationId, expectedOwner, () =>
+      this.automation.listRuns(automationId).find((entry) => entry.id === runId)
+    )
+    if (!run) {
+      throw new Error('Automation run not found.')
+    }
+    return run
+  }
+
   showAutomation(id: string, expectedOwner?: AutomationOwnerPrecondition): Automation {
     const automation = this.automation.show(id)
     this.automation.assertOwner(id, expectedOwner, 'read')
@@ -78,10 +93,11 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
 
   createAutomation(
     input: RuntimeAutomationCreateInput,
-    destination?: AutomationDestination
+    destination?: AutomationDestination,
+    beforeWrite?: () => void
   ): Promise<Automation> {
     return this.automation.withExternalProbePriority(() =>
-      this.automation.create(input, destination).then((automation) => {
+      this.automation.create(input, destination, beforeWrite).then((automation) => {
         const selector = this.automationChangeSelector(automation.id)
         this.publishAutomationDefinitionChange(selector, selector)
         return automation

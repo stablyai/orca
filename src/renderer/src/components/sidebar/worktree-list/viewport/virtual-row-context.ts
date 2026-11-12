@@ -133,6 +133,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       worktreeMap: props.worktreeMap,
       worktreeLineageById: props.worktreeLineageById,
       workspaceLineageByChildKey: props.workspaceLineageByChildKey,
+      crossStoreChildrenByFolderId: props.crossStoreChildrenByFolderId,
       prCache: props.prCache,
       hostedReviewCache: props.hostedReviewCache,
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
@@ -140,7 +141,9 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       onContextMenuSelect: props.onContextMenuSelect,
       onImmediateActivate: primaryActive.handleImmediateWorktreeRowActivate,
       onRowClickCapture: args.onRowClickCapture,
-      onRowPointerDown: args.onRowPointerDown
+      onRowPointerDown: args.onRowPointerDown,
+      worktreeDragState: runtime.worktreeDragState,
+      nativeLineageDropTargetIdentity: runtime.nativeLineageDropTargetIdentity
     }
   }
 }

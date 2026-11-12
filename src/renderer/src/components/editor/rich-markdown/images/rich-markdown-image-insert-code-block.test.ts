@@ -7,13 +7,13 @@ import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { useLocalImagePick } from './useLocalImagePick'
 
-vi.mock('@/runtime/runtime-file-import-client', () => ({
+vi.mock('@/runtime/files/imports/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: vi.fn().mockResolvedValue({
     results: [{ status: 'imported', destPath: '/repo/shot.png' }]
   })
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcDispatcher } from '../../../dispatcher'
 import { createFederationWorkerStartRequest as startRequest } from './federation-request.test-support'

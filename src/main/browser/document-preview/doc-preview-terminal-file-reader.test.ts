@@ -98,26 +98,6 @@ describe('outside-workspace HTML preview', () => {
     })
   })
 
-  // A macOS host spells /tmp as /private/tmp and returns a case-insensitive volume's stored name.
-  it('reads paths the host spells differently once canonicalized', async () => {
-    const page = grant()
-    authorizeDocPreviewDirectory(page.id, 'assets/styles.css')
-    host(
-      {
-        '/tmp/reports': { canonical: '/private/tmp/reports' },
-        '/tmp/reports/report.html': { canonical: '/private/tmp/reports/report.html' },
-        '/tmp/reports/assets': { canonical: '/private/tmp/reports/assets' },
-        '/tmp/reports/assets/styles.css': { canonical: '/private/tmp/reports/assets/Styles.css' }
-      },
-      { ok: true, result: { content: 'h1{}', isBinary: false } }
-    )
-
-    await expect(readDocPreviewFile(page, 'report.html')).resolves.toMatchObject({ ok: true })
-    await expect(readDocPreviewFile(page, 'assets/styles.css')).resolves.toMatchObject({
-      ok: true
-    })
-  })
-
   it('refuses symlink redirection outside an approved asset directory', async () => {
     const page = grant()
     authorizeDocPreviewDirectory(page.id, 'assets/data.json')

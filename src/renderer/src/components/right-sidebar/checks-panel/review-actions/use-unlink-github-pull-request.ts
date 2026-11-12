@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeSlice } from '@/store/slices/worktree-helpers'
+import type { WorktreeSlice } from '@/store/slices/worktrees/worktree-slice-contract'
 
 type UseUnlinkGitHubPullRequestArgs = {
   activeReview: HostedReviewInfo | null

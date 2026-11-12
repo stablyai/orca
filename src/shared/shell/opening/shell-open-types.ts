@@ -34,5 +34,14 @@ export type ShellOpenLocalPathResult =
 
 export type ShellOpenExternalEditorResult =
   | { ok: true }
-  | { ok: false; reason: Exclude<ShellOpenPathFailureReason, 'ssh-alias-required'> }
+  | {
+      ok: false
+      reason: Exclude<ShellOpenPathFailureReason, 'ssh-alias-required'>
+    }
   | { ok: false; reason: 'ssh-alias-required'; host: string; port: number }
+
+/**
+ * Outcome of opening a linked local file. `open-in-editor`: main did not hand the file to the OS
+ * because it is a script or launcher that is readable text; the caller shows it in Orca instead.
+ */
+export type ShellOpenFileResult = 'opened' | 'revealed' | 'open-in-editor' | 'failed'

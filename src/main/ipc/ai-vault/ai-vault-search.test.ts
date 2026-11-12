@@ -22,11 +22,12 @@ vi.mock('../ssh/ssh', () => ({
   getActiveSshAiVaultHostInfos: sshHostInfos
 }))
 
+import { createChildSessionSearchService } from '../../ai-vault-search/session-search-child-service'
 import { registerAiVaultSearchHandlers } from './ai-vault-search'
 import { aiVaultApi } from '../../../preload/api/ai-vault-bridge'
 import { setSessionSearchService } from '../../ai-vault-search/session-search-service-registry'
 import { fakeSearchService } from '../../../shared/ai-vault/search/ai-vault-search-test-fixture'
-import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 beforeEach(() => {
   handlers.clear()
   sshSearch.mockReset()
@@ -101,4 +102,19 @@ describe('desktop IPC and preload search boundary', () => {
     expect(runtimeSearch).not.toHaveBeenCalled()
     expect(sshSearch).not.toHaveBeenCalled()
   })
+})
+
+it('preserves a child reader failure through registry, IPC and preload', async () => {
+  const service = fakeSearchService()
+  service.search.mockRejectedValue(new Error('reader deadline exceeded'))
+  setSessionSearchService(
+    createChildSessionSearchService({
+      search: service.search,
+      status: service.status,
+      reconcile: service.reconcile
+    })
+  )
+  await expect(aiVaultApi.searchSessions({ query: 'needle' }, 'local')).rejects.toThrow(
+    'reader deadline exceeded'
+  )
 })

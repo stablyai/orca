@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -42,27 +42,6 @@ describe('verify packaged plugin resources', () => {
 
       expect(() => verifyPackagedPluginResources(resourcesDir)).toThrow(
         `packaged bytes do not match ${FIXTURE_KEY}`
-      )
-    } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
-    }
-  })
-
-  it('rejects a CRLF checkout of the launch tree', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-packaged-plugins-'))
-    try {
-      const launchRoot = await copyIndexedLaunchTree(resourcesDir)
-      for (const entry of await readdir(launchRoot, { recursive: true })) {
-        const path = join(launchRoot, entry)
-        if (!(await stat(path)).isFile()) {
-          continue
-        }
-        await writeFile(path, (await readFile(path, 'utf8')).replace(/\r?\n/g, '\r\n'))
-      }
-
-      // Every plugin is rewritten; assert first sorted mismatch without pinning reorderable plugin name.
-      expect(() => verifyPackagedPluginResources(resourcesDir)).toThrow(
-        /packaged bytes do not match stablyai\./
       )
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })

@@ -1,15 +1,13 @@
-import { automationCanonicalLaunchSetup } from '../../shared/automation-launch-setup'
-import { automationLaunchInputs } from '../../shared/automation-launch-setup-source'
-import type { Automation, AutomationRun } from '../../shared/automations-types'
+import { automationCanonicalLaunchSetup } from '../../shared/automations/launch/automation-canonical-launch-setup'
+import { automationLaunchInputs } from '../../shared/automations/launch/automation-launch-choices'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { launchAgentOnHost } from '../runtime/rpc/methods/agent-launch'
+import { launchAgentOnHost } from '../runtime/rpc/methods/agent-launch/agent-launch'
 import { reuseAutomationChat } from './automation-chat-session-reuse'
-import { buildHeadlessAutomationWorkspaceName } from './headless-workspace-create'
+import { buildHeadlessAutomationWorkspaceName } from './automation-workspace-create'
 import type { AutomationRunTargetResult } from './run-target-resolution'
-import {
-  AutomationRunLaunchError,
-  type HeadlessAutomationDispatchLaunch
-} from './headless-dispatch'
+import { AutomationRunLaunchError, type AutomationLaunch } from './automation-launch'
 import {
   publishedLaunchTarget,
   enrichAutomationRunTarget,
@@ -19,7 +17,7 @@ import { automationRunOperationId, AUTOMATION_AGENT_CALLER } from './automation-
 import { createAutomationDispatchToken } from './dispatch-tokens'
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 
-export type AutomationChatAgentLaunch = HeadlessAutomationDispatchLaunch & {
+export type AutomationChatAgentLaunch = AutomationLaunch & {
   terminalHandle: string | null
 }
 
@@ -85,6 +83,9 @@ async function launchChat(
                   name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
                   ...(automation.baseBranch ? { baseBranch: automation.baseBranch } : {}),
                   setupDecision: automation.setupDecision ?? 'skip',
+                  ...(automation.setupTrustHash
+                    ? { approvedSetupHash: automation.setupTrustHash }
+                    : {}),
                   activate: false,
                   automationProvenanceRequest: {
                     automationId: automation.id,

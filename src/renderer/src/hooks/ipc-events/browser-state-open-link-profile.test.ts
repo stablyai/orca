@@ -11,7 +11,7 @@ const { createBrowserTabMock, dispatchEventMock, storeState } = vi.hoisted(() =>
 vi.mock('../../store', () => ({
   useAppStore: { getState: () => storeState.value }
 }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 vi.mock('@/components/browser-pane/describe-page/live-browser-url-registry', () => ({

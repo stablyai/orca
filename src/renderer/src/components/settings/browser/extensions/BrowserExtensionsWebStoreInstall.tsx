@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { CHROME_WEB_STORE_HOME_URL } from '../../../../../../shared/browser/extensions/browser-extension-webstore'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { LoadingSpinner } from '../../../LoadingSpinner'
 import { Button } from '../../../ui/button'
@@ -19,6 +19,7 @@ export function BrowserExtensionsWebStoreInstall({
   disabled,
   onFinished
 }: BrowserExtensionsWebStoreInstallProps): React.JSX.Element {
+  const t = useTranslate()
   const [input, setInput] = useState('')
   const [installing, setInstalling] = useState(false)
   const openBrowserProfileTab = useAppStore((state) => state.openBrowserProfileTabInActiveWorkspace)
@@ -34,7 +35,7 @@ export function BrowserExtensionsWebStoreInstall({
       if (result.status === 'installed') {
         setInput('')
         toast.success(
-          translate('settings.browser.extensions.webStore.added', 'Added {{name}}', {
+          t('settings.browser.extensions.webStore.added', 'Added {{name}}', {
             name: result.name
           })
         )
@@ -52,7 +53,7 @@ export function BrowserExtensionsWebStoreInstall({
       closeSettingsPage()
     } else {
       toast.error(
-        translate(
+        t(
           'settings.browser.extensions.webStore.openFailed',
           'Open a workspace to browse the Chrome Web Store.'
         )
@@ -73,11 +74,11 @@ export function BrowserExtensionsWebStoreInstall({
           value={input}
           onChange={(event) => setInput(event.target.value)}
           disabled={disabled || installing}
-          placeholder={translate(
+          placeholder={t(
             'settings.browser.extensions.webStore.placeholder',
             'Chrome Web Store link or extension ID'
           )}
-          aria-label={translate(
+          aria-label={t(
             'settings.browser.extensions.webStore.inputLabel',
             'Add from Chrome Web Store'
           )}
@@ -94,8 +95,8 @@ export function BrowserExtensionsWebStoreInstall({
         >
           {installing ? <LoadingSpinner className="size-4" /> : null}
           {installing
-            ? translate('settings.browser.extensions.webStore.adding', 'Adding…')
-            : translate('settings.browser.extensions.webStore.add', 'Add')}
+            ? t('settings.browser.extensions.webStore.adding', 'Adding…')
+            : t('settings.browser.extensions.webStore.add', 'Add')}
         </Button>
       </form>
       <Button
@@ -106,7 +107,7 @@ export function BrowserExtensionsWebStoreInstall({
         disabled={disabled}
         onClick={() => void openStore()}
       >
-        {translate('settings.browser.extensions.webStore.browse', 'Browse the Chrome Web Store')}
+        {t('settings.browser.extensions.webStore.browse', 'Browse the Chrome Web Store')}
       </Button>
     </div>
   )

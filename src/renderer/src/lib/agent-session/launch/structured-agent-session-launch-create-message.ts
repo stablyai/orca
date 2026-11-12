@@ -9,20 +9,20 @@ import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../shared/agen
 import {
   type StructuredLaunchState,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 import {
   prepareStructuredLaunchPromptForCreate,
   hasStagedStructuredLaunchPrompt,
   issueStructuredLaunchPromptForCreate,
   prepareLegacyStructuredLaunchPrompts
-} from './structured-agent-session-launch-prompt'
+} from './structured-agent-session-staged-prompt'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection
 } from '../../../../../shared/agent-session/options/structured-agent-session-option-view'
-import { firstFrameOptionState } from '@/components/native-chat/structured-agent-session-option-first-frame'
+import { firstFrameOptionState } from '@/components/native-chat/session/options/structured/structured-agent-session-option-first-frame'
 import {
   applyStructuredLaunchHeldOptions,
   applyStructuredLaunchExplicitOptions,
@@ -56,7 +56,7 @@ export function prepareStructuredLaunchCreateMessage(
   if (intent.createMessageSupport !== true) {
     prepareLegacyStructuredLaunchPrompts(intent.sessionId)
     intent.createPrepared = true
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(intent.sessionId)
     return
   }
   const hadPrompt = hasStagedStructuredLaunchPrompt(intent.sessionId)
@@ -94,7 +94,7 @@ export function prepareStructuredLaunchCreateMessage(
     }
   }
   intent.createPrepared = true
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(intent.sessionId)
 }
 
 /** Hosts before options-mode may refuse an action's mode (older permission tables): the chat takes

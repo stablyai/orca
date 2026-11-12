@@ -3,8 +3,10 @@ import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revok
 import type { DeviceEntry } from './device-entry'
 import { parseMobilePushRegistration } from '../../../../../shared/mobile-push-contract'
 import { isDevicePublicKeyB64 } from '../../../../../shared/remote-runtime/pairing/device-key-proof'
-import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from '../../rpc-method-permission'
+import { isExchangeDeviceToken } from '../../../../../shared/remote-runtime/pairing/ticket-exchange-contract'
+import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import { isRecord } from '../../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
+import { NETWORK_SOURCE_CLASSES } from '../../transports/websocket/source-admission/network-source-class'
 
 const GRANTABLE: ReadonlySet<string> = new Set(RUNTIME_DEVICE_GRANTS)
 
@@ -64,6 +66,7 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
     token: typeof device.token === 'string' ? device.token : undefined,
     pairedAt: device.pairedAt,
     lastSeenAt: device.lastSeenAt,
+    lastSourceClass: NETWORK_SOURCE_CLASSES.find((value) => value === device.lastSourceClass),
     // Legacy registries held phones only; missing scope must not grant CLI powers.
     scope: device.scope === 'runtime' ? 'runtime' : 'mobile',
     grants: validGrants(device.grants, device.scope === 'runtime' ? 'runtime' : 'mobile'),
@@ -86,6 +89,12 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
       typeof device.callerFingerprint === 'string' && device.callerFingerprint.length > 0
         ? device.callerFingerprint
         : undefined,
+    // Unreadable expiry fails open to today's never-expiring offer.
+    offerExpiresAt: isTimestamp(device.offerExpiresAt) ? device.offerExpiresAt : undefined,
+    ticket: device.ticket === true ? true : undefined,
+    exchangeToken: isExchangeDeviceToken(device.exchangeToken) ? device.exchangeToken : undefined,
+    ticketFirstSeenAt: isTimestamp(device.ticketFirstSeenAt) ? device.ticketFirstSeenAt : undefined,
+    servesSessionBrowsers: device.servesSessionBrowsers === true ? true : undefined,
     ...validDeviceKeyFields(device)
   }
 }

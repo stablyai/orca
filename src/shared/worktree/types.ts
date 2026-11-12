@@ -1,7 +1,7 @@
 import type { ExecutionHostId } from '../execution-host'
 import type { WorktreeCatalogVersion } from './catalog-version'
-import type { AutomationExecutionTargetType } from '../automations-types'
-import type { TaskSourceContext } from '../task-source-context'
+import type { AutomationExecutionTargetType } from '../automations/automation-definition'
+import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { DiffComment, MobileDiffReviewState } from '../diff-comment-types'
 import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
@@ -258,6 +258,8 @@ export type DetectedWorktreeListResult = {
   failureKind?: WorktreeScanFailureKind
   /** Which catalog this listing describes; additive, older hosts omit it. */
   catalogVersion?: WorktreeCatalogVersion
+  /** The producer's workspaceMetadata position when this listing read metadata; additive, older hosts omit it. */
+  workspaceMetadata?: { epoch: string; seq: number }
   /** The repo's WSL distro is stopped or unverifiable, so rows are stored ones; additive, older hosts omit it. */
   wslDistroStopped?: { distro: string; state: 'stopped' | 'unverifiable' }
 }

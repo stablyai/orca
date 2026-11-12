@@ -17,7 +17,7 @@ const CREATE_COMMANDS: readonly { provider: Provider; command: RegExp }[] = [
 
 // Where a shell starts a command, past `NAME=value` assignments and wrappers like `timeout 60`.
 // A create command anywhere else, as in `echo "gh pr create"`, is text, not a command that runs.
-const COMMAND_START =
+export const COMMAND_START =
   '(?:^|[;&|({`\\n]|\\b(?:do|then|else)\\s)\\s*(?:(?:\\w+=\\S*|env|time|nohup|timeout\\s+\\S+)\\s+)*'
 const CREATE_RUNS = CREATE_COMMANDS.map(({ provider, command }) => ({
   provider,
@@ -41,7 +41,7 @@ function createCount(code: string): number {
 }
 
 /** The commands a script runs, without the text it carries. */
-function shellCode(script: string): string {
+export function shellCode(script: string): string {
   return script.replace(HEREDOC_BODY, '<<').replace(QUOTED_OR_COMMENT, (text) =>
     // A line continuation (backslash-LF) joins lines, as the shell removes it; any other text,
     // including a backslash before CR, becomes one word.
@@ -49,8 +49,80 @@ function shellCode(script: string): string {
   )
 }
 
+// Quoted text, escapes and comments match first and are skipped; then an unquoted heredoc
+// operator (`<<EOF`, `<<'EOF'`, `<<"EOF"`, `<<-EOF`, never a `<<<` here-string), or a line end.
+const TEXT_HEREDOC_OR_LINE_END = new RegExp(
+  `(${QUOTED_OR_COMMENT.source})|(?<!<)<<(-?)[ \\t]*(['"]?)(\\w+)\\3|\\n`,
+  'gmu'
+)
+
+/** Where the body that starts at `start` ends: after its delimiter line, or at the script's end. */
+function heredocBodyEnd(script: string, start: number, delimiter: string, tabs: boolean): number {
+  let lineStart = start
+  while (lineStart < script.length) {
+    const newline = script.indexOf('\n', lineStart)
+    const lineEnd = newline === -1 ? script.length : newline
+    const line = script.slice(lineStart, lineEnd)
+    if ((tabs ? line.replace(/^\t+/u, '') : line) === delimiter) {
+      return newline === -1 ? script.length : newline + 1
+    }
+    lineStart = lineEnd + 1
+  }
+  // Unterminated: everything after the declaration is the body, never commands.
+  return script.length
+}
+
+/**
+ * A script without its heredoc bodies and delimiter lines. Each declaration line keeps its own
+ * commands, separators and spelling (`cat <<'EOF' > notes.md; git push 2>&1`), and the newline that
+ * ends it, so the line after the delimiter still starts a new command.
+ */
+export function withoutHeredocBodyLines(script: string): string {
+  const scan = new RegExp(TEXT_HEREDOC_OR_LINE_END)
+  const pending: { delimiter: string; tabs: boolean }[] = []
+  let kept = ''
+  let from = 0
+  for (let match = scan.exec(script); match; match = scan.exec(script)) {
+    if (match[1] !== undefined) {
+      continue
+    }
+    if (match[4] !== undefined) {
+      pending.push({ delimiter: match[4], tabs: match[2] === '-' })
+      continue
+    }
+    if (pending.length === 0) {
+      continue
+    }
+    // Bodies follow the declaration line in the order their operators appeared.
+    let end = match.index + 1
+    for (const { delimiter, tabs } of pending.splice(0)) {
+      end = heredocBodyEnd(script, end, delimiter, tabs)
+    }
+    kept += script.slice(from, match.index + 1)
+    from = end
+    scan.lastIndex = end
+  }
+  return kept + script.slice(from)
+}
+
+// Redirections outside quotes: an fd copy or close (`2>&1`, `>&2`, `<&-`), or a file target
+// (`>out`, `2>>log`, `&>log`, `>|f`, `< in`). Quoted text and escapes match first and stay.
+const FD = '(?:(?<=^|\\s)\\d+)?'
+const TARGET = `(?:[^\\s;&|<>()'"\\\\]|\\\\[\\s\\S]|'[^']*'|"(?:\\\\[\\s\\S]|[^"\\\\])*")+`
+const TEXT_OR_REDIRECTION = new RegExp(
+  `(${QUOTED_OR_COMMENT.source})|${FD}[<>]&(?:\\d+|-)(?=$|\\s)|(?:${FD}(?:>>|>\\||<>|>|<)|&>>|&>)\\s*${TARGET}`,
+  'gmu'
+)
+
+/** A command with its unquoted redirections removed, so `git push 2>&1` reads as `git push`. */
+export function withoutShellRedirections(command: string): string {
+  return command.replace(TEXT_OR_REDIRECTION, (match, text: string | undefined) =>
+    text === undefined ? ' ' : match
+  )
+}
+
 /** A script split at command separators that sit outside quotes. */
-function shellSegments(script: string): string[] {
+export function shellSegments(script: string): string[] {
   const segments: string[] = []
   let current = ''
   let quote: string | null = null
@@ -73,6 +145,12 @@ function shellSegments(script: string): string[] {
       continue
     }
     const pair = script.slice(index, index + 2)
+    // `>|` is one redirection token, a clobbering write, not `>` before a pipe.
+    if (pair === '>|') {
+      current += pair
+      index++
+      continue
+    }
     if (pair === '&&' || pair === '||' || char === ';' || char === '|' || char === '\n') {
       segments.push(current)
       current = ''

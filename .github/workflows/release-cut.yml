@@ -843,8 +843,11 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- \
-            src/main/skills/skill-provider-runtime-roots.test.ts
+          SKILL_ROOTS_TEST=src/main/skills/providers/skill-provider-runtime-roots.test.ts
+          if [ ! -f src/main/skills/providers/skill-provider-runtime-roots.ts ]; then
+            SKILL_ROOTS_TEST=src/main/skills/skill-provider-runtime-roots.test.ts
+          fi
+          git show "$WORKFLOW_SHA:src/main/skills/providers/skill-provider-runtime-roots.test.ts" > "$SKILL_ROOTS_TEST"
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -901,8 +904,11 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- \
-            src/main/skills/skill-provider-runtime-roots.test.ts
+          SKILL_ROOTS_TEST=src/main/skills/providers/skill-provider-runtime-roots.test.ts
+          if [ ! -f src/main/skills/providers/skill-provider-runtime-roots.ts ]; then
+            SKILL_ROOTS_TEST=src/main/skills/skill-provider-runtime-roots.test.ts
+          fi
+          git show "$WORKFLOW_SHA:src/main/skills/providers/skill-provider-runtime-roots.test.ts" > "$SKILL_ROOTS_TEST"
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -1032,6 +1038,21 @@ jobs:
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
       fast_runners: false
+
+  # Server-only Linux tarballs from the same qualified template. Nothing depends on this job, so a
+  # failure here never holds the desktop release.
+  orca-server-artifact:
+    needs:
+      - cut
+      - orcad-template
+    if: ${{ !cancelled() && needs.cut.outputs.should_release == 'true' && needs.orcad-template.result == 'success' }}
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/orca-server-artifact.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      template_artifact: orcad-template
 
   # Gate SignPath artifact requests behind blocking tests to avoid approvals for unpublishable builds.
   release-preflight:
@@ -1300,7 +1321,7 @@ jobs:
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           SHARED_JAVASCRIPT: ${{ needs.release-javascript.outputs.supported }}
           ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.source_sha }}
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
@@ -2235,6 +2256,39 @@ jobs:
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
 
+  # After publish: the draft's asset checks and undraft never see these, and a failure here only
+  # leaves the server tarballs missing from an already published release.
+  publish-orca-server-artifact:
+    needs:
+      - cut
+      - publish-release
+      - orca-server-artifact
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.orca-server-artifact.result == 'success' && needs.orca-server-artifact.outputs.packed == 'true' && needs.cut.outputs.tag != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: orca-server-linux-*
+          path: orca-server
+          merge-multiple: true
+      - name: Write the checksum manifest and upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        working-directory: orca-server
+        run: |
+          set -euo pipefail
+          cat orca-server-linux-x64.tar.gz.sha256 orca-server-linux-arm64.tar.gz.sha256 > orca-server-sha256sums.txt
+          sha256sum -c orca-server-sha256sums.txt
+          gh release upload "$TAG" \
+            orca-server-linux-x64.tar.gz \
+            orca-server-linux-arm64.tar.gz \
+            orca-server-sha256sums.txt \
+            --clobber --repo "$GITHUB_REPOSITORY"
+
   post-release-e2e:
     needs:
       - cut
@@ -2298,6 +2352,17 @@ jobs:
           done
           echo "::error::Failed to dispatch docs deployment for $TAG after 3 attempts."
           exit 1
+
+  release-mirror-r2:
+    needs:
+      - cut
+      - publish-release
+    # Why stable-only: orca.dev's mirror link tracks GitHub's latest release, which skips RCs.
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' && !contains(needs.cut.outputs.tag, '-rc.') && startsWith(needs.cut.outputs.tag, 'v') }}
+    uses: ./.github/workflows/release-mirror-r2.yml
+    with:
+      tag: ${{ needs.cut.outputs.tag }}
+    secrets: inherit
 
   homebrew-bump-published-rc-draft:
     needs:

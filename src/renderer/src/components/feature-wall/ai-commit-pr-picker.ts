@@ -11,10 +11,12 @@ import {
   resolveCommitMessageSelectedModel,
   resolveCommitMessageSelectedThinking
 } from './ai-commit-pr-settings-helpers'
+import type { Translate } from '../../i18n/use-translate'
 
 export function aiCommitPrPickerEntry(
   capability: CommitMessageAgentCapability,
-  config: CommitMessageAiSettings
+  config: CommitMessageAiSettings,
+  t?: Translate
 ): AgentPickerEntry {
   const model = resolveCommitMessageSelectedModel(config, capability)
   const effort = resolveCommitMessageSelectedThinking(config, model)
@@ -45,12 +47,12 @@ export function aiCommitPrPickerEntry(
       fetchedAt: 0,
       models: capability.models.map((model) => ({
         id: model.id,
-        label: sourceControlModelLabel(model),
+        label: sourceControlModelLabel(model, t),
         isDefault: model.id === capability.defaultModelId,
         efforts:
           model.thinkingLevels?.map((level) => ({
             value: level.id,
-            label: sourceControlThinkingLabel(level)
+            label: sourceControlThinkingLabel(level, t)
           })) ?? [],
         defaultEffort: model.defaultThinkingLevel
       }))

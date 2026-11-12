@@ -3,6 +3,14 @@ import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
 } from '../../agent-status/contracts/agent-status-types'
+import {
+  agentChildWorkLiveness,
+  type AgentChildWorkLiveness
+} from '../../agent-status/child-work/agent-status-child-work-liveness'
+import {
+  continueMainAgentStatus,
+  foldAgentLeadStatus
+} from '../../agent-status/lifecycle/agent-lead-status-fold'
 import { createMuseSessionLogState, readMusePendingUserInput } from '../../muse-session-log'
 import type { HookListenerState, MusePaneState } from '../listener-state'
 import {
@@ -13,10 +21,15 @@ import {
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 
+// Reminders use role names (skill-reminder); spawned children use UUIDs.
+const BACKGROUND_SUBAGENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Why: a child whose SubagentStop is lost must not hold the row forever.
+const CHILD_INACTIVITY_LIMIT_MS = 10 * 60 * 1000
+
 function getMusePaneState(state: HookListenerState, paneKey: string): MusePaneState {
   let pane = state.musePaneStateByPaneKey.get(paneKey)
   if (!pane) {
-    pane = { childSessionIds: new Set() }
+    pane = { childSessionIds: new Set(), runningChildren: new Map() }
     state.musePaneStateByPaneKey.set(paneKey, pane)
   }
   return pane
@@ -29,6 +42,20 @@ function isChildSessionEvent(pane: MusePaneState, hookPayload: Record<string, un
   }
   // Muse1.3 children reuse session_id as turn_id, including after a listener restart loses SubagentStart.
   return pane.childSessionIds.has(sessionId) || readString(hookPayload, 'turn_id') === sessionId
+}
+
+function readChildSessionId(hookPayload: Record<string, unknown>): string | undefined {
+  return readString(hookPayload, 'child_session_id') ?? readString(hookPayload, 'session_id')
+}
+
+/** Spawned children outlive the main agent's turn; Muse wakes the main agent when they finish. */
+function museChildWorkLiveness(pane: MusePaneState, now: number): AgentChildWorkLiveness {
+  for (const [childSessionId, lastHookAt] of pane.runningChildren) {
+    if (now - lastHookAt >= CHILD_INACTIVITY_LIMIT_MS) {
+      pane.runningChildren.delete(childSessionId)
+    }
+  }
+  return agentChildWorkLiveness(Array.from(pane.runningChildren.keys(), () => ({ kind: 'agent' })))
 }
 
 export function hasMuseSessionLog(state: HookListenerState, paneKey: string): boolean {
@@ -48,15 +75,32 @@ export function normalizeMuseEvent(
 
   const pane = getMusePaneState(state, paneKey)
   if (eventName === 'SubagentStart') {
-    const childSessionId =
-      readString(hookPayload, 'child_session_id') ?? readString(hookPayload, 'session_id')
+    const childSessionId = readChildSessionId(hookPayload)
     if (childSessionId) {
       pane.childSessionIds.add(childSessionId)
+      if (BACKGROUND_SUBAGENT_ID.test(readString(hookPayload, 'subagent_id') ?? '')) {
+        pane.runningChildren.set(childSessionId, Date.now())
+      }
+    }
+    return null
+  }
+  if (eventName === 'SubagentStop') {
+    const childSessionId = readChildSessionId(hookPayload)
+    if (childSessionId) {
+      pane.runningChildren.delete(childSessionId)
     }
     return null
   }
   if (isChildSessionEvent(pane, hookPayload)) {
+    const childSessionId = readString(hookPayload, 'session_id')
+    if (childSessionId && pane.runningChildren.has(childSessionId)) {
+      pane.runningChildren.set(childSessionId, Date.now())
+    }
     return null
+  }
+  if (eventName === 'Interrupt' || eventName === 'SessionStart' || eventName === 'SessionEnd') {
+    // Why: the user stopped or replaced the session; the transcript poll's replay of a held Stop then reaches done.
+    pane.runningChildren.clear()
   }
   const sessionId = readString(hookPayload, 'session_id')
   if (sessionId && pane.log?.sessionId !== sessionId) {
@@ -125,9 +169,24 @@ export function normalizeMuseEvent(
 
   const interrupted =
     eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
+  const now = Date.now()
+  // Why: lead verdicts never retire background subagents; only their own end, inactivity or the session's does.
+  const resolution = foldAgentLeadStatus({
+    leadState: stateName,
+    childWorkLiveness: stateName === 'done' ? museChildWorkLiveness(pane, now) : null
+  })
+  const heldOpen = resolution.stateName !== stateName
+  pane.mainAgent = continueMainAgentStatus(
+    pane.mainAgent,
+    {
+      state: stateName,
+      outcome: interrupted ? 'cancellation' : eventName === 'StopFailure' ? 'failure' : undefined
+    },
+    now
+  )
 
   return normalizeAgentStatusPayload({
-    state: stateName,
+    state: resolution.stateName,
     // Notification message is status copy, never the user prompt.
     prompt: resolvePrompt(state, paneKey, eventName === 'Notification' ? '' : promptText, {
       resetOnNewTurn: isNewTurnEvent('muse', eventName)
@@ -138,6 +197,8 @@ export function normalizeMuseEvent(
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
-    interrupted
+    interrupted,
+    // Published only while held, so unheld rows keep their existing interrupt handling.
+    ...(heldOpen ? { mainAgent: pane.mainAgent } : {})
   })
 }

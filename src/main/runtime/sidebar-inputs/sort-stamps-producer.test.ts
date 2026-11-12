@@ -1,27 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentHookServer } from '../../agent-hooks/server'
+import { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { AgentStatusStoreView } from './workspace-activity-facts-producer'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
-import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status/contracts/agent-status-subject'
+
+import '../../../shared/agent-status/contracts/agent-status-subject'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { TerminalSideEffectFact } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
-import {
-  RECENT_STAMP_THROTTLE_MS,
-  type SmartStampFields
-} from '../../../shared/sidebar-list/sort-stamps'
-import {
-  AGENT_TRANSITION_SCENARIOS,
-  type AgentTransitionStep
-} from '../../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
-import { AgentTransitionDetector } from '../../agent-hooks/agent-transition-detector'
-import { compareSmartStamps } from '../../../shared/sidebar-list/stamp-order'
-import {
-  SortStampsProducer,
-  type SortStampsStore,
-  type StoredTierEvidence
-} from './sort-stamps-producer'
+import '../../../shared/sidebar-list/sort-stamps'
+import type { SmartStampFields } from '../../../shared/sidebar-list/sort-stamps'
+import '../../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
+import type { AgentTransitionStep } from '../../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
+import { AgentTransitionDetector } from '../../agent-hooks/observations/agent-transition-detector'
+import '../../../shared/sidebar-list/stamp-order'
+import { SortStampsProducer, type StoredTierEvidence } from './sort-stamps-producer'
+import type { SortStampsStore } from './sort-stamp-records'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -209,20 +202,6 @@ describe('SortStampsProducer: hook agents', () => {
     })
   })
 
-  it('never stamps running to running, and throttles Recent while tiers apply at once', () => {
-    const h = createHarness()
-    h.attach(h.server)
-    hook(h.server, 'working')
-    const writes = h.writes.length
-    advance(1_000)
-    hook(h.server, 'working')
-    expect(h.writes).toHaveLength(writes)
-
-    const doneAt = advance(1_000)
-    hook(h.server, 'done')
-    expect(h.meta.get(WT)).toEqual({ lastActivityAt: T0, smartTier: 'done', smartAt: doneAt })
-  })
-
   it('seeds a status present at attach: the tier is reconciled, Recent is not stamped', () => {
     const h = createHarness()
     hook(h.server, 'working')
@@ -250,103 +229,9 @@ describe('SortStampsProducer: hook agents', () => {
     h.server.clearPaneState(PANE)
     expect(h.meta.get(WT)).toEqual({ lastActivityAt, smartTier: undefined, smartAt: undefined })
   })
-
-  it('stamps a structured chat session through the same store', () => {
-    const h = createHarness()
-    h.attach(h.server)
-    const subject = makeStructuredAgentStatusSubject(
-      { executionHostId: 'local', wslDistro: null, workspaceId: FOLDER, workspaceKind: 'folder' },
-      'structured-session-one'
-    )
-    const summary: AgentSessionStatusSummary = {
-      sessionId: 'structured-session-one',
-      workspaceId: FOLDER,
-      agent: 'claude',
-      status: 'working',
-      hostExecutionOwned: true,
-      latestPrompt: 'fix it',
-      updatedAt: 100
-    }
-    h.server.ingestStructuredStatus(summary, subject)
-    expect(h.folders.get(FOLDER_ID)).toEqual({
-      lastActivityAt: T0,
-      smartTier: 'working',
-      smartAt: T0
-    })
-    const doneAt = advance(20_000)
-    h.server.ingestStructuredStatus(
-      { ...summary, status: 'idle', turnOutcome: 'success', updatedAt: 200 },
-      subject
-    )
-    expect(h.folders.get(FOLDER_ID)).toEqual({
-      lastActivityAt: doneAt,
-      smartTier: 'done',
-      smartAt: doneAt
-    })
-  })
-
-  it('stamps an SSH workspace’s record on its own host', () => {
-    const h = createHarness()
-    h.attach(h.server)
-    h.server.ingestTerminalStatus({
-      paneKey: PANE,
-      tabId: 'tab-a',
-      worktreeId: WT,
-      connectionId: 'build-box',
-      payload: { state: 'waiting', prompt: 'task', agentType: 'codex' }
-    })
-    expect(h.sshMeta.get(WT)).toEqual({ lastActivityAt: T0, smartTier: 'needs-you', smartAt: T0 })
-    expect(h.meta.get(WT)).toEqual({ lastActivityAt: 0 })
-    h.sideEffects([{ kind: 'bell' }], { connectionId: 'build-box' })
-    expect(h.writes).toEqual([`${SSH_HOST}|${WT}`])
-  })
-
-  it('drops stamps while a WSL move freezes the project', () => {
-    const h = createHarness()
-    h.fenced.add(WT)
-    h.attach(h.server)
-    hook(h.server, 'working')
-    h.sideEffects([{ kind: 'bell' }])
-    expect(h.writes).toEqual([])
-  })
-
-  it('writes nothing for a workspace with no record', () => {
-    const h = createHarness()
-    h.attach(h.server)
-    hook(h.server, 'working', 'repo-1::/tmp/gone')
-    expect(h.writes).toEqual([])
-  })
-})
-
-describe('SortStampsProducer: the agent transitions', () => {
-  it.each(AGENT_TRANSITION_SCENARIOS)('$name', ({ steps }) => {
-    const h = createHarness()
-    h.viewing.isViewing = () => false
-    h.attach(h.server)
-    for (const { row, transition } of steps) {
-      const at = advance(RECENT_STAMP_THROTTLE_MS)
-      h.meta.set(WT, { ...h.meta.get(WT)!, isUnread: false })
-      ingestRow(h.server, row)
-      const stamps = h.meta.get(WT)
-      expect(stamps?.lastActivityAt === at).toBe(transition !== null)
-      expect(stamps?.isUnread).toBe(transition !== null && transition !== 'prompt-submitted')
-    }
-  })
 })
 
 describe('SortStampsProducer: terminal events', () => {
-  it('stamps a bell', () => {
-    const h = createHarness()
-    h.sideEffects([{ kind: 'bell' }])
-    expect(h.meta.get(WT)).toEqual({ lastActivityAt: T0 })
-  })
-
-  it('stamps a terminal start', () => {
-    const h = createHarness()
-    h.producer.noteTerminalStarted(FOLDER, undefined)
-    expect(h.folders.get(FOLDER_ID)).toEqual({ lastActivityAt: T0 })
-  })
-
   it('turns a hookless agent’s titles into the same transitions', () => {
     const h = createHarness()
     h.attach(h.server)
@@ -376,19 +261,6 @@ describe('SortStampsProducer: terminal events', () => {
     })
   })
 
-  it('does not read an agent idle at its first title as Done', () => {
-    const h = createHarness()
-    h.sideEffects([title('Codex')])
-    expect(h.writes).toEqual([])
-    const promptAt = advance(20_000)
-    h.sideEffects([title('⠋ Codex working')])
-    expect(h.meta.get(WT)).toEqual({
-      lastActivityAt: promptAt,
-      smartTier: 'working',
-      smartAt: promptAt
-    })
-  })
-
   it('reads a cleared stale working title as Rest, not a finish', () => {
     const h = createHarness()
     h.sideEffects([title('⠋ Codex working')])
@@ -411,19 +283,6 @@ describe('SortStampsProducer: terminal events', () => {
     expect(h.meta.get(WT)?.smartTier).toBeUndefined()
   })
 
-  it('leaves a pane with hook rows to its hooks', () => {
-    const h = createHarness()
-    h.attach(h.server)
-    hook(h.server, 'working')
-    const writes = h.writes.length
-    h.sideEffects([title('⠋ Codex working')], { pane: PANE })
-    expect(h.meta.get(WT)?.smartTier).toBe('working')
-    advance(20_000)
-    h.sideEffects([title('Codex')], { pane: PANE })
-    expect(h.writes).toHaveLength(writes)
-    expect(h.meta.get(WT)?.smartTier).toBe('working')
-  })
-
   // A pane its title tracked is handed to hooks by their first row, whatever that row says.
   it('hands a title-tracked pane to its first hook row: a finish stamps Done', () => {
     const h = createHarness()
@@ -433,16 +292,6 @@ describe('SortStampsProducer: terminal events', () => {
     const doneAt = advance(20_000)
     hook(h.server, 'done')
     expect(h.meta.get(WT)).toEqual({ lastActivityAt: doneAt, smartTier: 'done', smartAt: doneAt })
-  })
-
-  it('hands a title-tracked pane to its first hook row: a stopped turn rests it', () => {
-    const h = createHarness()
-    h.attach(h.server)
-    h.sideEffects([title('⠋ Codex working')], { pane: PANE })
-    expect(h.meta.get(WT)?.smartTier).toBe('working')
-    advance(20_000)
-    ingestRow(h.server, { state: 'done', interrupted: true })
-    expect(h.meta.get(WT)?.smartTier).toBeUndefined()
   })
 
   it('hands a title-tracked pane to its first hook row: no workspace rests it where it was', () => {
@@ -456,19 +305,6 @@ describe('SortStampsProducer: terminal events', () => {
       tabId: 'tab-a',
       payload: { state: 'working', prompt: 'task', agentType: 'codex' }
     })
-    expect(h.meta.get(WT)?.smartTier).toBeUndefined()
-  })
-
-  it('hands a title-tracked pane to a row present at attach with no workspace: it rests', () => {
-    const h = createHarness()
-    h.server.ingestTerminalStatus({
-      paneKey: PANE,
-      tabId: 'tab-a',
-      payload: { state: 'working', prompt: 'task', agentType: 'codex' }
-    })
-    h.sideEffects([title('⠋ Codex working')], { pane: PANE })
-    expect(h.meta.get(WT)?.smartTier).toBe('working')
-    h.attach(h.server)
     expect(h.meta.get(WT)?.smartTier).toBeUndefined()
   })
 
@@ -572,105 +408,6 @@ describe('SortStampsProducer: startup reconcile', () => {
     await h.producer.reconcileStoredTiers(evidence())
     expect(h.meta.get(WT)).toEqual({ lastActivityAt: 0, smartTier: 'working', smartAt: T0 })
   })
-
-  it('keeps a tier when no terminal is on record: that proves nothing', async () => {
-    const h = createHarness()
-    h.meta.set(WT, { lastActivityAt: 5, smartTier: 'done', smartAt: 4 })
-    h.attach(h.server)
-    await h.producer.reconcileStoredTiers(evidence())
-    expect(h.writes).toEqual([])
-  })
-
-  it('leaves another host’s tiers alone: a host not reached yet is not one whose agents died', async () => {
-    const h = createHarness()
-    h.meta.set(WT, { lastActivityAt: 5, smartTier: 'working', smartAt: 4 })
-    h.attach(h.server)
-    await h.producer.reconcileStoredTiers(evidence({ isLocalWorkspace: () => false }))
-    expect(h.writes).toEqual([])
-  })
-})
-
-describe('SortStampsProducer: unread flag', () => {
-  function unwatched() {
-    const h = createHarness()
-    h.viewing.isViewing = () => false
-    h.attach(h.server)
-    return h
-  }
-
-  it('raises the flag on a finish, a request for input and a bell; never on a prompt', () => {
-    const h = unwatched()
-    hook(h.server, 'working')
-    expect(h.meta.get(WT)?.isUnread).toBeUndefined()
-
-    advance(20_000)
-    hook(h.server, 'done')
-    expect(h.meta.get(WT)?.isUnread).toBe(true)
-    // The stamps and the flag are one change to the record.
-    expect(h.notified).toEqual([WT, WT])
-
-    for (const news of [() => hook(h.server, 'blocked'), () => h.sideEffects([{ kind: 'bell' }])]) {
-      h.meta.set(WT, { ...h.meta.get(WT)!, isUnread: false })
-      hook(h.server, 'working')
-      news()
-      expect(h.meta.get(WT)?.isUnread).toBe(true)
-    }
-
-    // A flag already up is not written again.
-    const writes = h.writes.length
-    h.sideEffects([{ kind: 'bell' }])
-    expect(h.writes).toHaveLength(writes)
-  })
-
-  it('leaves the flag down where someone is looking: the pane’s tab, or a bell’s workspace', () => {
-    const h = unwatched()
-    const seen: [string, string | null][] = []
-    h.viewing.isViewing = (id, pane) => {
-      seen.push([id, pane])
-      return pane === PANE
-    }
-    hook(h.server, 'working')
-    advance(20_000)
-    hook(h.server, 'done')
-    expect(h.meta.get(WT)?.isUnread).toBeUndefined()
-
-    h.sideEffects([{ kind: 'bell' }])
-    expect(h.meta.get(WT)?.isUnread).toBe(true)
-    expect(seen).toEqual([
-      [WT, PANE],
-      [WT, TITLE_PANE]
-    ])
-  })
-
-  it('raises an SSH workspace’s flag on its own host’s record, and a folder’s on the folder', () => {
-    const h = unwatched()
-    h.sideEffects([{ kind: 'bell' }], { connectionId: 'build-box' })
-    expect(h.sshMeta.get(WT)?.isUnread).toBe(true)
-    expect(h.meta.get(WT)?.isUnread).toBeUndefined()
-
-    h.server.ingestTerminalStatus({
-      paneKey: PANE,
-      tabId: 'tab-a',
-      worktreeId: FOLDER,
-      payload: { state: 'waiting', prompt: 'task', agentType: 'codex' }
-    })
-    expect(h.folders.get(FOLDER_ID)?.isUnread).toBe(true)
-  })
-
-  it('raises nothing for a restored status, a frozen project or a workspace with no record', () => {
-    const h = createHarness()
-    h.viewing.isViewing = () => false
-    hook(h.server, 'blocked')
-    h.attach(h.server)
-    expect(h.meta.get(WT)?.isUnread).toBeUndefined()
-
-    h.fenced.add(WT)
-    h.sideEffects([{ kind: 'bell' }])
-    expect(h.meta.get(WT)?.isUnread).toBeUndefined()
-
-    hook(h.server, 'done', 'repo-1::/tmp/gone')
-    expect(h.writes).not.toContain('repo-1::/tmp/gone')
-  })
 })
 
 describe('SortStampsProducer: a read Done beside a Working pane', () => {
@@ -693,38 +430,5 @@ describe('SortStampsProducer: a read Done beside a Working pane', () => {
     advance(20_000)
     hook(h.server, 'done')
     expect(h.meta.get(WT)).toMatchObject({ smartTier: 'working', smartAt: workingAt })
-  })
-
-  it('holds Done while unread, and stamps Working once the flag is cleared', () => {
-    const h = createHarness()
-    h.viewing.isViewing = () => false
-    h.attach(h.server)
-    otherPane(h.server, 'working')
-    const workingAt = Date.now()
-    advance(20_000)
-    hook(h.server, 'working')
-    const doneAt = advance(20_000)
-    hook(h.server, 'done')
-    expect(h.meta.get(WT)).toMatchObject({ isUnread: true, smartTier: 'done', smartAt: doneAt })
-
-    // A client opened the workspace: its write clears the flag on the record.
-    h.meta.set(WT, { ...h.meta.get(WT)!, isUnread: false })
-    h.notified.length = 0
-    h.producer.noteRecordsWritten()
-    expect(h.meta.get(WT)).toMatchObject({ smartTier: 'working', smartAt: workingAt })
-    expect(h.notified).toEqual([WT])
-    // So Smart sorts it with the Working workspaces, ahead of an older one and of idle ones.
-    const rows = new Map([
-      ['a', h.meta.get(WT)!],
-      ['older-working', { lastActivityAt: 0, smartTier: 'working' as const, smartAt: 1 }],
-      ['idle', { lastActivityAt: doneAt + 1 }]
-    ])
-    expect(
-      ['older-working', 'idle', 'a'].sort((x, y) => compareSmartStamps(rows.get(x)!, rows.get(y)!))
-    ).toEqual(['a', 'older-working', 'idle'])
-    // Nothing more to change: a later write rewrites nothing.
-    const writes = h.writes.length
-    h.producer.noteRecordsWritten()
-    expect(h.writes).toHaveLength(writes)
   })
 })

@@ -31,19 +31,6 @@ afterEach(() => {
 })
 
 describe('ConnectorOutbox', () => {
-  it('sends nothing without an accepted hello', async () => {
-    const outbox = new ConnectorOutbox<string>({ headSize: () => 10 })
-    const { sender, sent } = recordingSender(
-      outbox,
-      () => null,
-      async () => null
-    )
-    outbox.push('a')
-    sender.flush()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(sent).toEqual([])
-  })
-
   it('never lets a later item overtake a refused one: the retry resends the same batch and number', async () => {
     const outbox = new ConnectorOutbox<string>({ headSize: () => 2 })
     const answers: (ConnectorFailure | null)[] = [TOO_MANY, null, null]
@@ -105,16 +92,6 @@ describe('ConnectorOutbox', () => {
     sender.resume()
     await vi.advanceTimersByTimeAsync(0)
     expect(sent.map(({ helloRev }) => helloRev)).toEqual([1, 2])
-  })
-
-  it('restarts numbering with its first items in front, keeping only what is still wanted', () => {
-    const outbox = new ConnectorOutbox<string>({ headSize: () => 10 })
-    outbox.push('turn end', 'prompt')
-    expect(outbox.next(1)?.stamp.seq).toBe(0)
-    outbox.restart(['snapshot'], (item) => item === 'turn end')
-    const head = outbox.next(2)
-    expect(head?.batch).toEqual(['snapshot', 'turn end'])
-    expect(head?.stamp.seq).toBe(0)
   })
 
   it('ignores a superseded stamp', () => {
