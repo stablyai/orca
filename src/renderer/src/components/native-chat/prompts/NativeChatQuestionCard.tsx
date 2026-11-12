@@ -334,7 +334,7 @@ export function NativeChatQuestionCard({
             {questionAllowsOther ? (
               <div
                 className={cn(
-                  'flex min-h-9 min-w-0 flex-1 gap-3 rounded-[10px] border border-question-option-border px-2.5 py-1.5 transition-colors focus-within:border-chat-focus-ring',
+                  'flex min-h-9 min-w-0 flex-1 gap-3 rounded-[10px] border border-question-option-border px-2.5 py-1.5 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-chat-focus-ring',
                   freeTextInput?.multiline ? 'items-start' : 'items-center'
                 )}
               >
@@ -363,7 +363,7 @@ export function NativeChatQuestionCard({
                     onChange={(e) => setOther(index, e.target.value)}
                     onClick={autoAdvance.cancel}
                     placeholder={answerPlaceholder}
-                    className="scrollbar-sleek min-h-16 min-w-0 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50"
+                    className="scrollbar-sleek max-h-[12lh] min-h-16 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent [field-sizing:content] text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50"
                   />
                 ) : (
                   <ImeTextarea

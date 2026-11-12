@@ -7,7 +7,8 @@ const PROMPT_CARD_FOCUS_TARGET_SELECTOR =
 
 function focusPromptCard(card: HTMLElement): void {
   const target = card.querySelector<HTMLElement>(PROMPT_CARD_FOCUS_TARGET_SELECTOR) ?? card
-  target.focus()
+  // Show the ring even when a mouse click opened the card; number keys and Enter act on this row.
+  target.focus({ focusVisible: true })
 }
 
 /** Focus the shown card requesting it unless keep already names a control inside it; return false when ineligible. */

@@ -149,13 +149,13 @@ describe('NativeChatQuestionCard', () => {
     // Focus is a ring only; the picked look (primary border, fill) is reserved for aria-pressed rows.
     expect(rows[0]!.getAttribute('aria-pressed')).toBe('false')
     expect(rows[0]!.className).not.toMatch(/(^|\s)(focus:)?bg-accent(\s|$)/)
-    expect(rows[0]!.className).not.toContain('border-primary')
+    expect(rows[0]!.parentElement!.className).not.toContain('border-primary')
     expect(confirmButton().textContent).toBe('Skip')
 
     act(() => rows[1]!.click())
     expect(rows[1]!.getAttribute('aria-pressed')).toBe('true')
-    expect(rows[1]!.className).toContain('border-primary')
-    expect(rows[0]!.className).not.toContain('border-primary')
+    expect(rows[1]!.parentElement!.className).toContain('border-primary')
+    expect(rows[0]!.parentElement!.className).not.toContain('border-primary')
     // The Enter hint is decoration; the button's name stays "Submit".
     const submit = confirmButton()
     expect(submit.querySelector('[aria-hidden]')?.textContent).toBe('↵')

@@ -27,8 +27,15 @@ export function NativeChatQuestionOption({
   onSelect: () => void
 }): React.JSX.Element {
   return (
+    // The tile wraps the row and its preview, so the preview reads as part of the picked option.
     // One root whether or not the preview shows, so selecting never remounts the focused row.
-    <div>
+    // p-px leaves a 1px gap between the inset focus ring and the tile's border.
+    <div
+      className={cn(
+        'rounded-[10px] border p-px transition-colors',
+        selected ? 'border-primary bg-foreground/8' : 'border-question-option-border'
+      )}
+    >
       <button
         type="button"
         disabled={disabled}
@@ -37,10 +44,8 @@ export function NativeChatQuestionOption({
         data-native-chat-prompt-card-focus-target={initialFocus || undefined}
         // Focus is an inset ring, never the selected fill, so the row that opens focused does not read as picked.
         className={cn(
-          'flex w-full items-start gap-3 rounded-[10px] border px-3 py-2.5 text-left text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-chat-focus-ring disabled:pointer-events-none',
-          selected
-            ? 'border-primary bg-foreground/8'
-            : 'border-question-option-border hover:bg-foreground/5'
+          'flex w-full items-start gap-3 rounded-[8px] px-3 py-2.5 text-left text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-chat-focus-ring disabled:pointer-events-none',
+          !selected && 'hover:bg-foreground/5'
         )}
       >
         <span
@@ -62,10 +67,11 @@ export function NativeChatQuestionOption({
           ) : null}
         </span>
       </button>
+      {/* Indented to the label column (padding + badge + gap) and pulled up against the description. */}
       {preview && selected ? (
         <pre
           ref={revealPreview}
-          className="mt-1.5 max-h-56 overflow-auto whitespace-pre rounded-md border border-chat-code-border bg-chat-code-surface px-2.5 py-2 font-mono text-chat-code leading-snug text-chat-foreground scrollbar-sleek"
+          className="-mt-2 mr-3 mb-2.5 ml-[calc(var(--spacing)*11.5)] max-h-56 overflow-auto whitespace-pre rounded-md bg-chat-code-surface px-2.5 py-2 font-mono text-chat-code leading-snug text-chat-foreground scrollbar-sleek"
         >
           {preview}
         </pre>
