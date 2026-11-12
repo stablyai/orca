@@ -215,6 +215,7 @@ export function TerminalPaneSurface({
               paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
+              onRestoreTerminalFocus={() => activePane.terminal.focus()}
               onRetry={
                 isPaneOwnerRecoveryError(visibleTerminalError.error)
                   ? () =>

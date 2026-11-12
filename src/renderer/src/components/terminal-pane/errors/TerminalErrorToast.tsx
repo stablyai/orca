@@ -27,6 +27,7 @@ export function TerminalErrorToast({
   onDismiss,
   onRestartDaemon,
   onRetry,
+  onRestoreTerminalFocus,
   onOpenNewTerminal,
   onClosePane
 }: {
@@ -37,6 +38,7 @@ export function TerminalErrorToast({
   onDismiss: () => void
   onRestartDaemon?: () => void
   onRetry?: () => Promise<boolean>
+  onRestoreTerminalFocus?: () => void
   /** Leaves this pane and its saved session untouched. */
   onOpenNewTerminal?: () => void
   /** Dismissing only hides the toast; the dead pane needs a way out from where the user is looking (#21342). */
@@ -91,6 +93,7 @@ export function TerminalErrorToast({
     if (!onRetry || retrying) {
       return
     }
+    onRestoreTerminalFocus?.()
     setRetrying(true)
     setRetryFailed(false)
     try {
@@ -108,7 +111,6 @@ export function TerminalErrorToast({
       data-terminal-error-toast
       data-terminal-error-kind={paneOwnerUnverified ? 'owner-unverified' : ssh ? 'ssh' : 'error'}
       role="alert"
-      tabIndex={0}
       className={`scrollbar-sleek pointer-events-auto absolute inset-x-3 bottom-[min(0.75rem,10%)] z-50 flex max-h-[calc(100%-min(1.5rem,20%))] flex-col overflow-y-auto rounded-xl border bg-card text-card-foreground shadow-floating outline-none focus-visible:ring-2 focus-visible:ring-ring ${paneOwnerUnverified || ssh ? 'border-border' : 'border-destructive/50'}`}
     >
       <div className="flex shrink-0 items-start gap-3 p-4">
