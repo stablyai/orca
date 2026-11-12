@@ -121,6 +121,8 @@ export type ComputerActionVerification =
         | 'value_mismatch'
         // The accessibility call succeeded but the window and the app's windows looked the same about a second later.
         | 'suspected_noop'
+        // Typed or pasted text was read back and the focused field does not hold what inserting it should produce.
+        | 'text_mismatch'
       // Only on value_mismatch from a non-secure field; results never repeat the requested value.
       actualPreview?: string | null
     }

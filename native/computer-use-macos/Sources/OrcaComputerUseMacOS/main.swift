@@ -985,14 +985,16 @@ final class Provider {
     private func typeText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
         let text = try requiredString(params, "text")
-        if let focused = focusedRecord(snapshot), let verification = try TextInput.replaceSelection(focused.element, with: text) {
+        let focused = focusedRecord(snapshot)?.element
+        if let focused, let verification = try TextInput.replaceSelection(focused, with: text) {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
         }
+        let insertion = TextInput.Insertion(into: focused, text: text)
         try deliverKeys(try withTransportErrors { try BackgroundInputTransport.textEvents(text) }, snapshot: snapshot, params: params)
         return actionMetadata(
             path: "synthetic",
             actionName: "typeText",
-            verification: unverifiedAction(reason: "synthetic_input")
+            verification: insertion?.verification() ?? unverifiedAction(reason: "synthetic_input")
         )
     }
 
@@ -1027,17 +1029,19 @@ final class Provider {
     private func pasteText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
         let text = try requiredString(params, "text")
-        if let focused = focusedRecord(snapshot), let verification = try TextInput.replaceSelection(focused.element, with: text) {
+        let focused = focusedRecord(snapshot)?.element
+        if let focused, let verification = try TextInput.replaceSelection(focused, with: text) {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
         }
         let pasteKeys = try Input.keyEvents("cmd+v")
+        let insertion = TextInput.Insertion(into: focused, text: text)
         try Input.withPasteboardText(text) {
             try deliverKeys(pasteKeys, snapshot: snapshot, params: params)
         }
         return actionMetadata(
             path: "clipboard",
             actionName: "paste",
-            verification: unverifiedAction(reason: "clipboard_paste")
+            verification: insertion?.verification() ?? unverifiedAction(reason: "clipboard_paste")
         )
     }
 
@@ -3217,6 +3221,46 @@ private enum TextInput {
             return unverifiedAction(reason: "accessibility_action_unasserted")
         }
         return verifiedAction(property: "focusedText")
+    }
+
+    /// Text sent as keys or a paste: what the focused field should read once it lands.
+    struct Insertion {
+        let element: AXUIElement
+        let expected: String
+
+        /// Nil when the field can't prove the result: none focused, a secure field, or no readable value and selection.
+        init?(into element: AXUIElement?, text: String) {
+            guard let element,
+                  !AXSnapshotReader().isSecureTextElement(element),
+                  let current = rawStringAttribute(element, kAXValueAttribute as String)
+            else {
+                return nil
+            }
+            let selection = TextInput.selectedTextRange(element).flatMap { range -> Range<Int>? in
+                range.location >= 0 && range.length >= 0 ? range.location..<(range.location + range.length) : nil
+            }
+            guard let expected = TextInsertionReadback.expectedValue(current: current, selection: selection, inserting: text) else {
+                return nil
+            }
+            self.element = element
+            self.expected = expected
+        }
+
+        /// Nil when the field can no longer be read.
+        func verification() -> [String: Any]? {
+            let outcome = TextInsertionReadback.settle(expected: expected) {
+                rawStringAttribute(element, kAXValueAttribute as String)
+            }
+            switch outcome {
+            case .landed:
+                return verifiedAction(property: "focusedText")
+            case .mismatch:
+                // Why: the field may hold part of the text, so the result never shows what it reads.
+                return unverifiedAction(reason: "text_mismatch")
+            case .unreadable:
+                return nil
+            }
+        }
     }
 
     static func selectAll(_ element: AXUIElement) -> Bool {

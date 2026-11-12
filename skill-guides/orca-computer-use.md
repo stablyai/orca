@@ -116,11 +116,12 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
   - `unverified (accessibility action unasserted)` means the accessibility call succeeded but no post-state assertion was made.
   - `unverified (suspected noop)` means the accessibility call succeeded but the window's tree and the app's windows were unchanged about a second later. Web and Electron controls often ignore it. Do not repeat the same element click; if the effect you expect would show in the window, retry once with `click --x --y` at the control from a fresh screenshot. If the effect lives elsewhere (clipboard, another app), check there first.
   - `unverified (synthetic input)` means input was fired into the void and is unverifiable.
+  - `unverified (text mismatch)` means typed or pasted text was read back and the focused field does not hold what inserting it should produce: it may be missing, partly entered, reformatted or autocompleted. Do not type it again blindly, or it may land twice; run `get-app-state` and fix the field from what it actually holds.
   - Missing verification metadata is unverified, including responses from older runtimes.
   - Never report an unverified action as success. If it could have sent, submitted, bought, or deleted something, say the effect is unproven.
 - Prefer semantic actions: `set-value` for editable fields, `click` for controls, and `perform-secondary-action` only for listed action names.
 - After any UI-changing action, use the returned state or rerun `get-app-state` before choosing the next element index.
-- Use `type-text` only after focusing a field and confirming the app has a focused text receiver; synthetic keyboard delivery is reported as unverified, so inspect the returned state before assuming text landed.
+- Use `type-text` only after focusing a field and confirming the app has a focused text receiver; unless the result says `verified focusedText`, inspect the returned state before assuming text landed.
 - Use `press-key` for single/navigation keys such as Return, Escape, Tab, and arrows. Use `hotkey` only for one modifier chord plus one key, such as `CmdOrCtrl+A` or `CmdOrCtrl+Shift+P`; prefer `CmdOrCtrl+...` for cross-platform combos.
 - Use `click --modifiers <chord>` for modifier-clicks. Never synthesize separate modifier-down and modifier-up commands around a click; interruption can leave a modifier logically held.
 - Coordinates are window-local; use coordinates from the latest screenshot/state for the same target window.
