@@ -4,7 +4,7 @@ import type { CdpClientResponseWriter } from '../transport/cdp-client-response-w
 import type { CdpDebuggerChannel } from '../debugger/cdp-debugger-channel'
 import type { TextInsertionRoute } from './guest-direct-key-input'
 
-/** Replay DOM.focus before insertion because native focusing can blur the target. */
+/** Replay DOM.focus before insertion so pipelined inserts use the resolved element. */
 export class CdpDomFocusReplay {
   private pendingDomFocusBySession = new Map<
     string | undefined,
@@ -72,7 +72,7 @@ export class CdpDomFocusReplay {
     return pendingFocus
   }
 
-  /** Choose the route before replay: native fallback focus can blur the target. */
+  /** Choose a page-bound route before replaying the selected element. */
   async insertText(
     client: WebSocket,
     clientId: number,
@@ -97,18 +97,14 @@ export class CdpDomFocusReplay {
       this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)
       return
     }
-    try {
-      await this.replayAndDeliver(
-        client,
-        clientId,
-        params,
-        effectiveSessionId,
-        pendingFocusParams,
-        route
-      )
-    } finally {
-      route.release()
-    }
+    await this.replayAndDeliver(
+      client,
+      clientId,
+      params,
+      effectiveSessionId,
+      pendingFocusParams,
+      route
+    )
   }
 
   private async replayAndDeliver(
