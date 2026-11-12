@@ -13,6 +13,7 @@ function repo(id: string, extra: Partial<Repo> = {}): Repo {
 function setup(args: {
   repos: Repo[]
   byBucket: Map<ProjectHeaderDragBucketKey, string[]>
+  byHostBucket?: Map<string, string[]>
   rootProjectHeaderKeys?: string[]
   usesProjectGroupOrdering?: boolean
 }) {
@@ -23,6 +24,7 @@ function setup(args: {
     useProjectHeaderMoveToTop({
       orderedRepoIds: args.repos.map((r) => r.id),
       sidebarRepoHeaderIdsByBucket: args.byBucket,
+      sidebarRepoHeaderIdsByHostBucket: args.byHostBucket,
       repoById: new Map(args.repos.map((r) => [r.id, r])),
       getLiveRepos: () => args.repos,
       usesProjectGroupOrdering: args.usesProjectGroupOrdering ?? false,
@@ -74,6 +76,21 @@ describe('project header move to top', () => {
     expect(s.result.current.isFirst(repos[0])).toBe(true)
     s.result.current.move(repos[1])
     expect(s.onCommitRootProjectOrder).toHaveBeenCalledWith(keys, 'repo:b', 0)
+  })
+
+  it('moves a project to the top of its own host section', () => {
+    const repos = [repo('b'), repo('c'), repo('a')]
+    const s = setup({
+      repos,
+      byBucket: new Map([['ungrouped', ['a', 'b', 'c']]]),
+      byHostBucket: new Map([
+        ['["local","ungrouped"]', ['a']],
+        ['["ssh:box","ungrouped"]', ['b', 'c']]
+      ])
+    })
+    expect(s.result.current.isFirst(repos[0], 'ssh:box')).toBe(true)
+    s.result.current.move(repos[1], 'ssh:box')
+    expect(s.onCommitRepoOrder).toHaveBeenCalledWith(['c', 'b', 'a'])
   })
 
   it('does nothing when the project is already first', () => {

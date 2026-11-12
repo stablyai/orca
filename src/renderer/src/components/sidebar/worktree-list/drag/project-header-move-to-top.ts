@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
 import type { UseRepoHeaderDragArgs } from './project-header-drag-contract'
-import { getProjectHeaderDragBucketKey } from './project-header-drop'
+import { getProjectHeaderDragBucketKey, getProjectHeaderHostBucketKey } from './project-header-drop'
 import { getRootProjectHeaderDragKeys } from './root-project-header-drop'
 
 export type ProjectHeaderMoveToTop = {
@@ -22,7 +22,14 @@ function getMoveToTopList(args: UseRepoHeaderDragArgs, repo: Repo, rowHostId?: s
     rootKey,
     hostId
   )
-  const ids = rootProjectHeaderKeys ?? args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
+  // Why: a bucket spans every host section; "top" means the top of this header's own section.
+  const ids =
+    rootProjectHeaderKeys ??
+    args.sidebarRepoHeaderIdsByHostBucket?.get(
+      getProjectHeaderHostBucketKey(rowHostId, bucketKey)
+    ) ??
+    args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ??
+    []
   return {
     session: { repo, bucketKey, rootProjectHeaderKeys, sidebarRepoHeaderIds: ids },
     ownId: rootProjectHeaderKeys ? rootKey : repo.id

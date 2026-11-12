@@ -162,6 +162,14 @@ export function useWorktreeSidebarHeaderDrag(args: {
       ),
     [rows]
   )
+  const sidebarRepoHeaderIdsByHostBucket = useMemo(
+    () =>
+      getSidebarOrderedRepoHeaderIdsByBucket(
+        rows.filter((row): row is Row => row.type !== 'host-header'),
+        true
+      ),
+    [rows]
+  )
   const sidebarProjectGroupHeaderIdsByBucket = useMemo(
     () =>
       getSidebarOrderedProjectGroupHeaderIdsByBucket(
@@ -233,6 +241,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
   const repoDragArgs: UseRepoHeaderDragArgs = {
     orderedRepoIds: allRepoIds,
     sidebarRepoHeaderIdsByBucket,
+    sidebarRepoHeaderIdsByHostBucket,
     repoById: repoMap,
     getLiveRepos: readLiveRepos,
     usesProjectGroupOrdering: hasProjectGroups,
