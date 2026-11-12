@@ -183,7 +183,8 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
       > & { linkedContext?: LinkedWorkItemContext })
     | null
     | undefined,
-  note: string
+  note: string,
+  initialPrompt?: string
 ): { prompt: string; draftPrompt: string | null } {
   const trimmedNote = note.trim()
   const linearBlock = isLinearWorkItemReference(linkedWorkItem)
@@ -202,6 +203,13 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
       ? [trimmedNote, linkedUrl].filter(Boolean).join('\n\n')
       : null
   const isLinearTypedOnly = linkedWorkItem?.number === 0 && Boolean(trimmedNote) && !draftPrompt
+  if (initialPrompt?.trim()) {
+    const context = draftPrompt ?? (isLinearTypedOnly ? trimmedNote : '')
+    return {
+      prompt: context ? [initialPrompt, context].join('\n\n') : initialPrompt,
+      draftPrompt: null
+    }
+  }
   return {
     prompt: isLinearTypedOnly ? trimmedNote : '',
     draftPrompt

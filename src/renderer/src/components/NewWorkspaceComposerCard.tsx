@@ -17,6 +17,7 @@ import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
 import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 import { translate } from '@/i18n/i18n'
+import { Textarea } from '@/components/ui/textarea'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
@@ -58,6 +59,7 @@ export default function NewWorkspaceComposerCard(
   props: NewWorkspaceComposerCardProps
 ): React.JSX.Element {
   const t = useTranslate()
+  const initialPromptId = React.useId()
   useTranslation()
   const {
     contextualTourSource,
@@ -343,6 +345,23 @@ export default function NewWorkspaceComposerCard(
           defaultTuiAgent={defaultTuiAgent}
           handleSetDefaultAgent={handleSetDefaultAgent}
         />
+        {props.quickAgent && !sparseEditing && (
+          <div className="min-w-0 space-y-1">
+            <label htmlFor={initialPromptId} className="text-xs font-medium text-muted-foreground">
+              {t('auto.components.NewWorkspaceComposerCard.initialPrompt', 'Initial prompt')}{' '}
+              <span className="text-muted-foreground/70">
+                {t('auto.components.NewWorkspaceComposerCard.0c5d6a479c', '[Optional]')}
+              </span>
+            </label>
+            <Textarea
+              id={initialPromptId}
+              rows={2}
+              className="resize-none"
+              value={props.agentPrompt}
+              onChange={(event) => props.onAgentPromptChange(event.target.value)}
+            />
+          </div>
+        )}
         <NewWorkspaceComposerAdvancedSection
           {...props}
           onSparseEditingChange={setSparseEditing}

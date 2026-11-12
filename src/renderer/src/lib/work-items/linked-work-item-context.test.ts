@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildContainedLinkedContextBlock } from './linked-work-item-context'
+import {
+  buildContainedLinkedContextBlock,
+  resolveQuickCreateLinkedWorkItemPrompt
+} from './linked-work-item-context'
 
 describe('contained linked context block', () => {
   it('escapes terminal and unicode format controls from linked context source data', () => {
@@ -20,5 +23,29 @@ describe('contained linked context block', () => {
     expect(block).not.toContain('\u180E')
     expect(block).not.toContain('\uFFF9')
     expect(block).not.toContain(tagLatinSmallLetterA)
+  })
+})
+
+describe('quick create initial prompt', () => {
+  it('auto-submits a multiline prompt verbatim when no work item is linked', () => {
+    expect(
+      resolveQuickCreateLinkedWorkItemPrompt(null, '', '  Fix login\nAdd a regression test.\n')
+    ).toEqual({
+      prompt: '  Fix login\nAdd a regression test.\n',
+      draftPrompt: null
+    })
+  })
+
+  it('includes the linked work item when auto-submitting a typed prompt', () => {
+    expect(
+      resolveQuickCreateLinkedWorkItemPrompt(
+        { number: 42, url: 'https://github.com/acme/app/issues/42' },
+        '',
+        'Fix this issue'
+      )
+    ).toEqual({
+      prompt: 'Fix this issue\n\nhttps://github.com/acme/app/issues/42',
+      draftPrompt: null
+    })
   })
 })

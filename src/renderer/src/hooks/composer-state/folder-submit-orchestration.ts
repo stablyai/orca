@@ -105,6 +105,7 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
           linkedTaskSourceContext: taskSourceContext,
           note,
           quickAgent: agent,
+          initialPrompt: options?.initialPrompt,
           launchChoice: options?.launchChoice,
           launchInputs: options?.launchInputs,
           legacyLaunchInputs: options?.legacyLaunchInputs,

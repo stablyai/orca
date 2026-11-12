@@ -3116,6 +3116,7 @@
         "estimateValue": "Estimate {{estimate}}"
       },
       "NewWorkspaceComposerCard": {
+        "initialPrompt": "Initial prompt",
         "openExistingWorkspace": "Open existing workspace",
         "createMultiple": "Create more",
         "cbb47ee0dc": "Only available for local Git projects.",

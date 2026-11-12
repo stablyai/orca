@@ -118,6 +118,7 @@ export async function prepareQuickComposerStartup(
     executionHostId: ComposerModel['selectedRepoExecutionHostId']
     linkedWorkItem: Parameters<typeof resolveQuickCreateLinkedWorkItemPrompt>[0]
     note: string
+    initialPrompt?: string
     legacyLaunchInputs?: WorktreeCreationRequest['legacyLaunchInputs']
     ephemeralVm?: boolean
   }
@@ -131,7 +132,8 @@ export async function prepareQuickComposerStartup(
     : undefined
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
     input.agent ? input.linkedWorkItem : null,
-    input.note
+    input.note,
+    input.agent ? input.initialPrompt : undefined
   )
   const settings = input.settings
     ? {

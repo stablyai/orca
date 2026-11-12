@@ -1,3 +1,4 @@
+import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/work-items/linked-work-item-context'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
@@ -43,6 +44,7 @@ export async function submitFolderWorkspaceCreate({
   note,
   quickAgent,
   launchChoice,
+  initialPrompt,
   launchInputs,
   legacyLaunchInputs,
   sessionOptions: requestedSessionOptions,
@@ -104,8 +106,12 @@ export async function submitFolderWorkspaceCreate({
           : (preferences?.agentLaunchChoices ?? settings.agentLaunchChoices)
       }
     : settings
+  const typedPrompt = quickAgent && initialPrompt?.trim() ? initialPrompt : null
+  const prompt = typedPrompt
+    ? resolveQuickCreateLinkedWorkItemPrompt(linkedWorkItem, note, typedPrompt).prompt
+    : note
   const startupPlan =
-    quickAgent && launchPlatform && linkedWorkItem
+    quickAgent && launchPlatform && linkedWorkItem && !typedPrompt
       ? buildFolderWorkspaceLinkedStartupPlan({
           agent: quickAgent,
           settings: effectiveSettings,
@@ -131,13 +137,15 @@ export async function submitFolderWorkspaceCreate({
               isRemote: launchIsRemote
             }),
             ...(agentEnv ? { agentEnv } : {}),
-            prompt: note,
+            prompt,
             allowEmptyPromptLaunch: true
           })
         : null
   // Argv prefill embeds the draft in launchCommand, so draftPrompt alone cannot detect it.
   const launchDraftPrompt =
-    quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
+    quickAgent && linkedWorkItem && !typedPrompt
+      ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note)
+      : null
   const launchRequest = quickAgent
     ? {
         requestId: createBrowserUuid(),
@@ -149,7 +157,7 @@ export async function submitFolderWorkspaceCreate({
           runtimeEnvironmentId,
           executionHostId: getRepoExecutionHostId(projectGroup)
         },
-        prompt: launchDraftPrompt ?? note,
+        prompt: launchDraftPrompt ?? prompt,
         promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const)
       }
     : null
@@ -179,7 +187,7 @@ export async function submitFolderWorkspaceCreate({
     !name.trim() &&
     !linkedWorkItem &&
     Boolean(quickAgent) &&
-    note.trim().length > 0
+    prompt.trim().length > 0
 
   const workspace = await createFolderWorkspace({
     projectGroupId: projectGroup.id,
@@ -210,7 +218,7 @@ export async function submitFolderWorkspaceCreate({
           freshAgentLaunch: {
             agentArgs: launchInputs ? launchInputs.agentArgs : requestedAgentArgs,
             sessionOptions,
-            prompt: launchDraftPrompt ?? note,
+            prompt: launchDraftPrompt ?? prompt,
             promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const),
             legacy: () => ({
               startupPlan,
