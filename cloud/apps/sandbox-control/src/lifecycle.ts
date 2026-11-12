@@ -176,6 +176,8 @@ export type Ready = {
    * ('update') in the VM (create with cloneInBackground); GET /clone reports it.
    */
   cloning?: 'clone' | 'update'
+  /** The VM was told member git setup is pending (CREATE-GIT-ASYNC): the caller must finish it. */
+  gitSetupPending?: boolean
 }
 
 /** Phase durations for one lifecycle call (logged + Server-Timing); counts only, no ids or secrets. */
@@ -371,6 +373,8 @@ async function boot(
     billFrom?: number
     /** First boot only: prepares the checkout (environment build link, empty repos) before orcad. */
     prelude?: StartInputs['prelude']
+    /** A create whose caller installs member git identities after it answers (CREATE-GIT-ASYNC). */
+    deferMemberGit?: boolean
   }
 ): Promise<Ready> {
   if (state.sandbox.tags.orcaSandbox !== row.id) {
@@ -378,6 +382,7 @@ async function boot(
   }
   const routed = routedRow(row, prep)
   const git = prep.minted ? { expiresAt: prep.minted.expiresAt } : null
+  const gitSetupPending = Boolean(options.deferMemberGit) && memberGitApplies(deps, row)
   // A resumed session keeps its last policy (an expired repo token); swap it in while orcad boots.
   // Nothing in the VM uses git or model keys before orcad answers and the desktop attaches.
   const needsPolicy =
@@ -406,7 +411,8 @@ async function boot(
         shareProxyKey: deps.config.shareLinkSecret
           ? await shareProxyKey(deps.config.shareLinkSecret, row.id, state.session.id)
           : undefined,
-        prelude: options.prelude
+        prelude: options.prelude,
+        gitSetupPending: gitSetupPending || undefined
       })
     })
   ])
@@ -429,9 +435,17 @@ async function boot(
     ...sessionFields(deps, state),
     ...(options.billFrom !== undefined ? { usage_settled_at: options.billFrom } : {})
   })
-  // Per-member git identities for `orca-git-as` (policy routes were refreshed above).
-  if (deps.memberIdentity && (await connectedMembers(deps.db, running)).length > 0) {
-    await syncMemberGit(deps, running, state.session.id)
+  // Per-member git identities for `orca-git-as` (policy routes were refreshed above). A create that
+  // defers them (CREATE-GIT-ASYNC) installs them after it answers, once the owner device is recorded.
+  if (!gitSetupPending && memberGitApplies(deps, running)) {
+    if ((await connectedMembers(deps.db, running)).length > 0) {
+      // Recorded like a create's: a failure marks the VM (its git refuses commits and pushes) and the row
+      // (gitSetup 'failed'); only a later successful install clears them. Restart re-runs this.
+      await settleMemberGit(deps, running, state.session.id, true)
+    } else if (running.git_setup_failed_at) {
+      // Nobody's identity to install on this boot: nothing is failing any more.
+      await deps.db.prepare('UPDATE sandboxes SET git_setup_failed_at = NULL WHERE id = ?').bind(running.id).run()
+    }
   }
   await deps.hooks?.afterBoot?.(running, state.session.id).catch(() => undefined)
   // Secrets saved while this VM booted missed prep's env; re-check once it is running (env-refresh.ts).
@@ -442,7 +456,7 @@ async function boot(
       deps.background(work)
     }
   }
-  return { row: running, connection, timings: options.timer.timings }
+  return { row: running, connection, timings: options.timer.timings, ...(gitSetupPending ? { gitSetupPending } : {}) }
 }
 
 /** Mints a fresh repo token and swaps it into the live policy; null when the repo has no app install. */
@@ -514,19 +528,81 @@ export async function refreshRuntime(deps: LifecycleDeps, row: SandboxRow, sessi
  * Who may push from this workspace changed (boot, grant, revoke): refresh the egress routes and the
  * VM's per-member git configs (`orca-git-as`). Best effort: a failure leaves pushes on the app identity.
  */
+/** Member identities apply: a repo behind the egress proxy, with member identities on. */
+export function memberGitApplies(deps: LifecycleDeps, row: Pick<SandboxRow, 'repo_url'>): boolean {
+  return Boolean(deps.memberIdentity && deps.config.egressProxyUrl && row.repo_url)
+}
+
 export async function syncMemberGit(deps: LifecycleDeps, row: SandboxRow, sessionId: string): Promise<number> {
-  if (!deps.memberIdentity || !deps.config.egressProxyUrl || !row.repo_url) {
+  if (!memberGitApplies(deps, row)) {
     return 0
   }
   try {
-    await ensureEntryPoints(deps, sessionId)
-    await refreshGitCredentials(deps, row, sessionId)
-    const configs = await memberGitConfigs({ db: deps.db, identity: deps.memberIdentity }, row)
-    const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(configs))))
-    await deps.provider.runCommand(sessionId, { command: MEMBERS_COMMAND, env: { ORCA_MEMBERS_B64: encoded }, sudo: true, timeoutMs: 30_000 })
-    return configs.length
+    return await installMemberGit(deps, row, sessionId)
   } catch {
     return 0
+  }
+}
+
+/** Throws when the VM did not take the identities; on success the VM's setup reads ready. */
+async function installMemberGit(deps: LifecycleDeps, row: SandboxRow, sessionId: string): Promise<number> {
+  await ensureEntryPoints(deps, sessionId)
+  await refreshGitCredentials(deps, row, sessionId)
+  const configs = await memberGitConfigs({ db: deps.db, identity: deps.memberIdentity! }, row)
+  const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(configs))))
+  const result = await deps.provider.runCommand(sessionId, {
+    command: MEMBERS_COMMAND,
+    env: { ORCA_MEMBERS_B64: encoded },
+    sudo: true,
+    timeoutMs: 30_000
+  })
+  if (result.exitCode !== 0) {
+    throw new Error(`members_exit_${result.exitCode}`)
+  }
+  if (row.git_setup_failed_at) {
+    await deps.db.prepare('UPDATE sandboxes SET git_setup_failed_at = NULL WHERE id = ?').bind(row.id).run()
+  }
+  return configs.length
+}
+
+/** Marks this boot's member setup in the VM (its `git` reads it); best effort, a lost mark times out there. */
+export const GIT_SETUP_MARK_SCRIPT =
+  'state="$HOME/.orca-sandbox"; mkdir -p "$state" && rm -f "$state"/git-setup.pending "$state"/git-setup.ready "$state"/git-setup.failed && date +%s >"$state/git-setup.$1"'
+
+async function markGitSetup(deps: LifecycleDeps, sessionId: string, outcome: 'ready' | 'failed'): Promise<void> {
+  await deps.provider
+    .runCommand(sessionId, { command: 'bash', args: ['-c', GIT_SETUP_MARK_SCRIPT, 'git-setup', outcome], timeoutMs: 15_000 })
+    .catch(() => undefined)
+}
+
+/**
+ * Installs member identities and records the outcome (CREATE-GIT-ASYNC): after a create answered, and on
+ * every later boot that installs them. `install` false (the VM is not running) only marks it. A failure
+ * marks the VM (`git-setup.failed`, its git refuses commits and pushes) and the row (gitSetup 'failed')
+ * until a later install succeeds.
+ */
+export async function settleMemberGit(
+  deps: LifecycleDeps,
+  row: SandboxRow,
+  sessionId: string,
+  install: boolean
+): Promise<'ready' | 'failed'> {
+  try {
+    if (install) {
+      await installMemberGit(deps, row, sessionId)
+    } else {
+      await markGitSetup(deps, sessionId, 'ready')
+    }
+    return 'ready'
+  } catch (error) {
+    console.log(JSON.stringify({ event: 'git_setup_failed', sandboxId: row.id, error: String(error).slice(0, 200) }))
+    await markGitSetup(deps, sessionId, 'failed')
+    await deps.db
+      .prepare('UPDATE sandboxes SET git_setup_failed_at = ? WHERE id = ?')
+      .bind(deps.now(), row.id)
+      .run()
+      .catch(() => undefined)
+    return 'failed'
   }
 }
 
@@ -550,6 +626,8 @@ export async function createSandbox(
      * after ready instead of inside it. Older clients wait for the clone inside create.
      */
     cloneInBackground?: boolean
+    /** The caller installs member git identities after it answers (CREATE-GIT-ASYNC). */
+    deferMemberGit?: boolean
   },
   options: { pool?: boolean; fallback?: boolean } = {}
 ): Promise<Ready> {
@@ -673,7 +751,14 @@ export async function createSandbox(
       const state = await timer.time('vm', () =>
         adoptPooledVm(deps, pooled, egressPolicy(deps, routedRow(row, prep), prep.minted?.token, prep.memberPlaceholders))
       )
-      const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, billFrom: claimedAt, prelude })
+      const ready = await boot(deps, row, state, prep, {
+        repo: request.repo,
+        policyApplied: true,
+        timer,
+        billFrom: claimedAt,
+        prelude,
+        deferMemberGit: request.deferMemberGit
+      })
       console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', pooled: true, ms: timer.timings }))
       return cloning ? { ...ready, cloning } : ready
     } catch (error) {
@@ -723,7 +808,7 @@ export async function createSandbox(
     throw error
   }
   try {
-    const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, prelude })
+    const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, prelude, deferMemberGit: request.deferMemberGit })
     console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', fromBuild: source?.buildId ?? null, ms: timer.timings }))
     return cloning ? { ...ready, cloning } : ready
   } catch (error) {

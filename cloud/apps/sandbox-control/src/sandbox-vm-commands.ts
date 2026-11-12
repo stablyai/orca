@@ -55,6 +55,11 @@ export type StartInputs = {
    * every shell it opens sees it. Best effort: a failure keeps the provider's name.
    */
   hostname?: string
+  /**
+   * A create that installs member git identities after it answers (CREATE-GIT-ASYNC): the start script
+   * marks git setup pending, and the VM's `git` holds commits and pushes until it is ready.
+   */
+  gitSetupPending?: boolean
 }
 
 /** A hostname label from a workspace name: lowercase letters, digits and dashes, at most 63 chars. */
@@ -127,6 +132,9 @@ export async function startOrcad(
   }
   if (inputs.hostname) {
     env.ORCA_HOSTNAME = inputs.hostname
+  }
+  if (inputs.gitSetupPending) {
+    env.ORCA_GIT_SETUP = 'pending'
   }
   const hostnameStep = inputs.hostname ? `${HOSTNAME_STEP}; ` : ''
   // The prelude rides in an env var (the start script's `env -i` keeps it out of orcad) so one

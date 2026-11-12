@@ -11,7 +11,7 @@ import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import { isDeviceSessionLive } from './device-sessions'
 import { markRevoked, runVmRevoke, type GrantRow } from './grant-revokes'
-import { LifecycleError, resumeSandbox, syncMemberGit, type LifecycleDeps } from './lifecycle'
+import { LifecycleError, settleMemberGit, resumeSandbox, syncMemberGit, type LifecycleDeps, type Ready } from './lifecycle'
 import { ensureEntryPoints } from './golden-images'
 import type { CommandResult } from './sandbox-provider'
 import { ORCAD_PORT } from './sandbox-vm-commands'
@@ -308,6 +308,31 @@ export async function recordOwnerDevice(db: D1Database, row: SandboxRow, pairing
 export async function recordOwnerDeviceAndSync(deps: LifecycleDeps, row: SandboxRow, pairingCode: string): Promise<void> {
   if ((await recordOwnerDevice(deps.db, row, pairingCode, deps.now())) && row.status === 'running' && row.session_id) {
     await syncMemberGit(deps, row, row.session_id)
+  }
+}
+
+/**
+ * A create's owner device (CREATE-GIT-ASYNC): records it now and, when the VM was told member setup
+ * is pending, installs the identities after the response (`deps.background`), so the create answers
+ * at ready. The VM's `git` holds commits and pushes until this settles. Otherwise as before.
+ */
+export async function recordOwnerDeviceForCreate(deps: LifecycleDeps, ready: Ready): Promise<void> {
+  if (!ready.gitSetupPending) {
+    await recordOwnerDeviceAndSync(deps, ready.row, ready.connection.pairingCode)
+    return
+  }
+  await recordOwnerDevice(deps.db, ready.row, ready.connection.pairingCode, deps.now())
+  const sessionId = ready.row.session_id
+  if (!sessionId) {
+    return
+  }
+  // Always one full install: the boot skipped its own (connected members included), so even a retried
+  // create whose device was already recorded must install, and the install is what marks setup ready.
+  const work = settleMemberGit(deps, ready.row, sessionId, ready.row.status === 'running')
+  if (deps.background) {
+    deps.background(work)
+  } else {
+    await work
   }
 }
 

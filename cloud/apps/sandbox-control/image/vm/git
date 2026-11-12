@@ -13,8 +13,37 @@ for arg in "$@"; do
     *) sub="$arg"; break ;;
   esac
 done
+# CREATE-GIT-ASYNC: a new workspace answers before teammates' GitHub identities are installed. Until
+# they are (orca-sandbox-members writes git-setup.ready), commits and pushes wait up to 15 s rather
+# than go out under the workspace identity; a failed or stalled setup stops them with what to do.
+# Read-only git and fetches never wait (they use the workspace's own credentials, set before ready).
+hold_for_member_setup() {
+  local state="${HOME:-/nonexistent}/.orca-sandbox" ticks=0 since
+  # A failed install on any boot (create or a later restart) refuses even with nothing pending.
+  [ -f "$state/git-setup.pending" ] || [ -f "$state/git-setup.failed" ] || return 0
+  since="$(cat "$state/git-setup.pending" 2>/dev/null || echo 0)"
+  case "$since" in '' | *[!0-9]*) since=0 ;; esac
+  while [ -f "$state/git-setup.pending" ] && [ ! -f "$state/git-setup.ready" ] && [ ! -f "$state/git-setup.failed" ]; do
+    # 15 s per command; a mark older than 2 min is a setup that died, not one still running.
+    if [ "$ticks" -ge "${ORCA_GIT_SETUP_WAIT_TICKS:-150}" ] || [ $(($(date +%s) - since)) -gt 120 ]; then
+      break
+    fi
+    sleep 0.1
+    ticks=$((ticks + 1))
+  done
+  if [ -f "$state/git-setup.ready" ] || { [ ! -f "$state/git-setup.pending" ] && [ ! -f "$state/git-setup.failed" ]; }; then
+    return 0
+  fi
+  if [ -f "$state/git-setup.failed" ]; then
+    printf '%s\n' "orca: Orca couldn't set up your GitHub identity in this sandbox, so it stopped \`git $sub\` rather than use the wrong identity. Restart this workspace (right-click it in the sidebar > Restart), then try again." >&2
+  else
+    printf '%s\n' "orca: Orca is still setting up your GitHub identity in this sandbox, so it stopped \`git $sub\` rather than use the wrong identity. Try again in a few seconds. If this keeps happening, restart this workspace (right-click it in the sidebar > Restart)." >&2
+  fi
+  exit 1
+}
 case "$sub" in
   commit | push | merge | rebase | cherry-pick | revert | am | pull | tag)
+    hold_for_member_setup
     # Outside an agent turn (no attested sender) orca-git-as falls back to the workspace identity.
     if [ -n "${ORCA_TERMINAL_HANDLE:-}${ORCA_AGENT_SESSION_ID:-}" ] && [ -x /opt/orca/bin/orca-git-as ]; then
       PATH="/usr/bin:/bin:$PATH" exec /opt/orca/bin/orca-git-as "$@" 2> >(grep -v '^orca-git-as: no teammate identity' >&2)
