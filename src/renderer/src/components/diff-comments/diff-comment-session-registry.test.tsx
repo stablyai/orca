@@ -4,7 +4,7 @@ import { Profiler, StrictMode } from 'react'
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { DiffCommentCard } from './DiffCommentCard'
-import { DiffCommentFileSession } from './diff-comment-session'
+import { DiffCommentFileSession, type DiffCommentDraftSession } from './diff-comment-session'
 import {
   DiffCommentSessionScope,
   useDiffCommentFileSession,
@@ -211,7 +211,7 @@ it.each([
   const a = file.openDraft({ lineNumber: 5 }, async () => request.promise)!
   a.setBody('Draft A')
   const pending = file.submitDraft(a, () => request.promise, 'Draft A')
-  let b = null
+  let b: DiffCommentDraftSession | null = null
   if (outcome.includes('b')) {
     b = file.openDraft({ lineNumber: 9 }, async () => true)!
     b.setBody('Draft B')

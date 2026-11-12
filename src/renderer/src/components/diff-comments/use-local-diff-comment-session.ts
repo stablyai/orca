@@ -1,25 +1,27 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 
 export function useLocalDiffCommentSession<T extends { dispose(): void }>(
   create: () => T,
   external?: T
 ): T {
-  const owned = useRef<T | null>(null)
-  if (!external && !owned.current) {
-    owned.current = create()
+  const [local, setLocal] = useState<T | null>(() => (external ? null : create()))
+  let owned = local
+  if (!external && !owned) {
+    owned = create()
+    setLocal(owned)
   }
-  const revision = useRef(0)
-  const local = owned.current
+  const revision = useRef({ value: 0 })
   useLayoutEffect(() => {
-    const retained = ++revision.current
+    const lifetime = revision.current
+    const retained = ++lifetime.value
     return () => {
       // Effect replay reacquires the owner before actual teardown.
       queueMicrotask(() => {
-        if (revision.current === retained) {
-          local?.dispose()
+        if (lifetime.value === retained) {
+          owned?.dispose()
         }
       })
     }
-  }, [local])
-  return external ?? local!
+  }, [owned])
+  return external ?? owned!
 }

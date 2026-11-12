@@ -2,7 +2,7 @@ import { DiffCommentSessionScope } from '../../diff-comments/diff-comment-sessio
 import { useDiffCommentView } from '../../diff-comments/use-diff-comment-owner'
 import { diffCommentOwnerKey } from '@/store/slices/diff-comments/diff-comment-owner'
 import { editorViewPlacement } from '@/store/slices/editor/tabs/editor-view-placement'
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/file-preview'
 import { useVisibleWorktreeDiffComments } from '../../diff-comments/use-visible-worktree-diff-comments'
@@ -48,10 +48,11 @@ type CombinedDiffViewerProps = {
 
 export default function CombinedDiffViewer(props: CombinedDiffViewerProps): React.JSX.Element {
   const { owner, comments } = useDiffCommentView(props.file.worktreeId, props.file)
-  const previousScope = useRef('unresolved')
-  const scope = owner ? diffCommentOwnerKey(owner) : previousScope.current
-  if (owner) {
-    previousScope.current = scope
+  const resolvedScope = owner ? diffCommentOwnerKey(owner) : null
+  const [previousScope, setPreviousScope] = useState(resolvedScope ?? 'unresolved')
+  const scope = resolvedScope ?? previousScope
+  if (scope !== previousScope) {
+    setPreviousScope(scope)
   }
   const knownNoteIds = useMemo(
     () => (comments ? new Set(comments.map((note) => note.id)) : undefined),

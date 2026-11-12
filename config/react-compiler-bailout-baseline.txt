@@ -79,7 +79,7 @@
 3 src/renderer/src/components/crash-report/use-crash-report-copy.ts
 1 src/renderer/src/components/dashboard/useAgentBucketCounts.ts
 1 src/renderer/src/components/dashboard/useLiveDashboardSnapshot.ts
-2 src/renderer/src/components/diff-comments/DiffCommentCard.tsx
+1 src/renderer/src/components/diff-comments/DiffCommentCard.tsx
 5 src/renderer/src/components/diff-comments/DiffCommentPopover.tsx
 1 src/renderer/src/components/diff-comments/diff-comment-draft-zone.ts
 1 src/renderer/src/components/diff-comments/useDiffCommentDecorator.tsx
