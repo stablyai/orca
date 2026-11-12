@@ -1,5 +1,5 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { invalidateAiVaultSessionListCache } from '../../../ai-vault/listing/cached-session-list'
@@ -489,7 +489,7 @@ describe('agent.resume of a past session', () => {
     })
   })
 
-  it('starts a moved legacy Codex session from its copy in the system Codex home', async () => {
+  it('starts a legacy Codex session from its recorded transcript, which the launch moves itself', async () => {
     const legacy = '/u/.orca/codex-runtime-home/home'
     const rollout = 'sessions/2026/01/02/rollout-2026-01-02T00-00-00-s-1.jsonl'
     const rpc = pastRuntime({
@@ -504,7 +504,7 @@ describe('agent.resume of a past session', () => {
     })
     expect(await resume(rpc, 'codex')).toMatchObject({ ok: true })
     expect(paramsOf(rpc, 'terminal.ensureAgentSession')).toMatchObject({
-      providerSession: { transcriptPath: join(homedir(), '.codex', rollout) }
+      providerSession: { transcriptPath: `${legacy}/${rollout}` }
     })
   })
 

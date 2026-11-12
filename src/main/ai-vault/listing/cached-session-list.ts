@@ -128,6 +128,11 @@ export async function listAiVaultSessions(
           current.expiresAt <= Date.now() ||
           !aiVaultCachedDepthServes(current.depth, depth, args?.scopePaths)
         ) {
+          // A forced refresh supersedes every list: an older one for another scope (the
+          // scope-only view a full list also serves) must not be served after it.
+          if (args?.force === true) {
+            cachedLists.clear()
+          }
           rememberCachedList({
             key,
             depth,

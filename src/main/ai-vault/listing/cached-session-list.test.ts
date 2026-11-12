@@ -47,4 +47,25 @@ describe('AI Vault session list cache', () => {
     await listAiVaultSessions({ scopePaths: ['/a'], scopeOnly: true })
     expect(scanAiVaultSessionsInBackground).toHaveBeenCalledTimes(6)
   })
+
+  it('serves the refreshed list, not an older scope-only one, after a forced refresh', async () => {
+    const row = (title: string) => ({ id: title, title, cwd: '/src/r1', filePath: `/t/${title}` })
+    scanAiVaultSessionsInBackground.mockResolvedValueOnce({
+      sessions: [row('old')],
+      issues: [],
+      scannedAt: 's1'
+    })
+    const project = { scopePaths: ['/src/r1'], scopeOnly: true }
+    await listAiVaultSessions(project)
+    scanAiVaultSessionsInBackground.mockResolvedValueOnce({
+      sessions: [row('new')],
+      issues: [],
+      scannedAt: 's2'
+    })
+    // All, with the same scope paths, refreshed by hand.
+    await listAiVaultSessions({ scopePaths: ['/src/r1'], force: true })
+    const back = await listAiVaultSessions(project)
+    expect(back.sessions.map((session) => session.title)).toEqual(['new'])
+    expect(scanAiVaultSessionsInBackground).toHaveBeenCalledTimes(2)
+  })
 })

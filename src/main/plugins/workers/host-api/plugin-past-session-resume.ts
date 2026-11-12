@@ -13,7 +13,6 @@ import {
 } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ProviderSession } from '../../../../shared/rpc-contract/agent-session-params'
-import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
 import { codexDatedRolloutRelativePath } from '../../../codex/history/resume/codex-session-resume-home'
 import type { PluginHostMethodContext } from './plugin-host-method-bind'
 import { PluginHostCallError } from './plugin-host-call-scope'
@@ -34,25 +33,25 @@ export function resumableTranscript(path: string | undefined): string | undefine
 }
 
 /**
- * The transcript in the home the desktop's resume pins as CODEX_HOME once the host prepared the
- * session: the selected account's hard-linked copy, or the copy moved into the system home. The
- * launch picks the account whose home holds the transcript it is given, so naming this copy starts
- * the agent where the desktop would.
+ * The transcript to resume from once the host prepared the session. Repinned to the selected
+ * account (`substituteCodexHome`): that account's hard-linked copy, since the launch picks the
+ * account whose home holds the transcript it is given, as the desktop pins that home. Otherwise
+ * the recorded transcript: for `useRealCodexHome` the launch moves a legacy session into the
+ * system home itself, wherever that home is configured.
  */
 export function preparedResumeTranscript(
   session: Pick<PluginHistorySession, 'filePath' | 'codexHome'>,
   result: AiVaultPrepareSessionResumeResult
 ): string {
   const prepared = aiVaultSessionAfterResumePreparation(session, result)
-  if (!session.codexHome || prepared.codexHome === session.codexHome) {
+  if (!session.codexHome || !prepared.codexHome || prepared.codexHome === session.codexHome) {
     return session.filePath
   }
   const rollout = codexDatedRolloutRelativePath(
     join(session.codexHome, 'sessions'),
     resolve(session.filePath)
   )
-  const home = prepared.codexHome ?? getSystemCodexHomePath()
-  return rollout ? join(home, 'sessions', rollout) : session.filePath
+  return rollout ? join(prepared.codexHome, 'sessions', rollout) : session.filePath
 }
 
 async function findPastSession(
