@@ -301,7 +301,7 @@ export function HostWorkspaceList({
               ) : null}
             </>
           }
-          ListFooterComponent={listState}
+          ListFooterComponent={listState ?? undefined}
           onScroll={pageTitle?.collapsing.onScroll}
           {...pageTitle?.collapsing.touchHandlers}
           scrollEventThrottle={16}

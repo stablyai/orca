@@ -2449,8 +2449,7 @@
     "tabStrip": {
       "checkingCapabilities": "正在檢查桌面版支援的功能，請稍後再試",
       "newTab": "新分頁",
-      "quickCommandsUpdateRequired": "需更新桌面版才能使用快速命令",
-      "tabStatus": "{{title}}，{{status}}"
+      "quickCommandsUpdateRequired": "需更新桌面版才能使用快速命令"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清除終端機",
@@ -2493,6 +2492,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "加入附件失敗（重新連線中）"
+    },
+    "useCloseActions": {
+      "closeFailed": "無法關閉分頁。請再試一次。",
+      "closeFailedDesktopNotReady": "無法關閉分頁。電腦上的 Orca 仍在載入中，請稍後再試。"
     },
     "useContentCreateActions": {
       "browserCommandFailed": "瀏覽器命令執行失敗",

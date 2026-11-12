@@ -13,7 +13,7 @@ vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../../git/command-runner/glab-exec-file', async (importOriginal) => ({
+vi.mock('../../git/command-runner/hosted-cli/glab-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   glabExecFileAsync: glabExecFileAsyncMock
 }))

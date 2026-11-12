@@ -1,7 +1,7 @@
 import { runCoalescedProbe, type CoalescedProbes } from '../../git/remotes/coalesced-probe'
 import { codeHostReadExecutionScope } from '../../source-control/code-host-read-execution-scope'
 import { readLocalGitConfigSignature } from '../../github/local-git-config-signature'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import { glabHostnameArgs, glabRepoExecOptions } from '../projects/gitlab-project-ref-resolution'
 import type { LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import type { ProjectRef } from '../projects/project-ref-parser'

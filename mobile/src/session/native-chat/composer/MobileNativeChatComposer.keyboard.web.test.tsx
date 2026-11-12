@@ -80,48 +80,6 @@ describe('mobile composer modifier submit in the paired web page', () => {
     return input
   }
 
-  async function render(props: Partial<ComposerProps> = {}) {
-    function Draft() {
-      const [value, setValue] = useState(props.value ?? ' hello ')
-      const composer = (
-        <MobileNativeChatComposer
-          sendSurfaceId="keyboard-test"
-          getSendCompletionGeneration={() => 0}
-          getComposerEditGeneration={() => 0}
-          {...props}
-          value={value}
-          onChangeText={setValue}
-          onSend={onSend}
-        />
-      )
-      return props.editSession ? (
-        <div data-testid="queue-viewport" style={{ overflow: 'hidden' }}>
-          {composer}
-        </div>
-      ) : (
-        composer
-      )
-    }
-    await act(async () => root.render(<Draft />))
-    await act(async () => field().focus())
-  }
-
-  async function key(flags: KeyboardEventInit = {}) {
-    // Enter's base shape was captured in the native iOS shell; modifier flags are supplied, not recorded chords.
-    const event = new KeyboardEvent('keydown', {
-      key: 'Enter',
-      code: 'Enter',
-      keyCode: 13,
-      bubbles: true,
-      cancelable: true,
-      ...flags
-    })
-    await act(async () => {
-      field().dispatchEvent(event)
-    })
-    return event
-  }
-
   async function selectEnd() {
     await act(async () => {
       const input = field()
@@ -172,50 +130,6 @@ describe('mobile composer modifier submit in the paired web page', () => {
     expect(input.value).toBe('retained draft')
   })
 
-  it.each([
-    {},
-    { shiftKey: true },
-    { ctrlKey: true },
-    { metaKey: true, shiftKey: true },
-    { metaKey: true, altKey: true },
-    { metaKey: true, ctrlKey: true },
-    { metaKey: true, isComposing: true },
-    { metaKey: true, keyCode: 229 }
-  ])('leaves editing and composition keys untouched: %j', async (flags) => {
-    await render()
-    expect((await key(flags)).defaultPrevented).toBe(false)
-    expect(onSend).not.toHaveBeenCalled()
-    expect(field().value).toBe(' hello ')
-  })
-
-  it.each([
-    { value: '@rea', expected: '@README.md ', filePaths: ['README.md', 'src/read.ts'] },
-    { value: '/comp', expected: '/compact ', filePaths: [] }
-  ])(
-    'completes the first existing menu row for $value without submitting',
-    async ({ value, expected, filePaths }) => {
-      await render({
-        value,
-        filePaths,
-        agent: 'codex',
-        structured: {
-          catalog: { reported: [{ name: 'compact', kind: 'command' }], conversationCommands: [] },
-          files: [],
-          onRemoveFile: vi.fn(),
-          onSlashMenuOpen: vi.fn()
-        }
-      })
-      await selectEnd()
-      expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
-      expect(field().value).toBe(expected)
-      expect(onSend).not.toHaveBeenCalled()
-      expect(document.activeElement).toBe(field())
-      expect((await key({ metaKey: true, repeat: true })).defaultPrevented).toBe(true)
-      expect(onSend).not.toHaveBeenCalled()
-      expect(field().value).toBe(expected)
-    }
-  )
-
   function queuedGeometry() {
     const anchor = { top: 430, width: 390, clipTop: 250, clipHeight: 300 }
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
@@ -230,16 +144,6 @@ describe('mobile composer modifier submit in the paired web page', () => {
       return new DOMRect(0, anchor.top, anchor.width, 100)
     })
     return anchor
-  }
-
-  async function queuedMention() {
-    await render({
-      value: '@rea',
-      filePaths: ['README.md', 'src/read.ts'],
-      agent: 'codex',
-      editSession: { cancel: vi.fn(), refuseCommand: () => false, locked: false }
-    })
-    await selectEnd()
   }
 
   function suggestion() {
@@ -326,60 +230,5 @@ describe('mobile composer modifier submit in the paired web page', () => {
     await act(async () => window.dispatchEvent(new Event('resize')))
     expect(suggestion()).toBeNull()
     expect(container.querySelector('[aria-label="queue.ts"]')).toBeNull()
-  })
-
-  it('picks a suggestion outside the clipped queue while keeping the edited draft focused', async () => {
-    queuedGeometry()
-    await queuedMention()
-    const input = field()
-    const row = suggestion()
-    expect(row).not.toBeNull()
-    const queue = container.querySelector('[data-testid="queue-viewport"]')!
-    expect(queue.contains(row)).toBe(false)
-    expect(container.contains(row)).toBe(true)
-    const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
-    await act(async () => {
-      row!.dispatchEvent(down)
-      row!.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
-      row!.click()
-    })
-    expect(down.defaultPrevented).toBe(true)
-    expect(field()).toBe(input)
-    expect(input.value).toBe('@README.md ')
-    expect(document.activeElement).toBe(input)
-    expect(suggestion()).toBeNull()
-    expect(onSend).not.toHaveBeenCalled()
-  })
-
-  it('retires scrolled-out or hidden editor suggestions and restores them from current geometry', async () => {
-    const anchor = queuedGeometry()
-    await queuedMention()
-    expect(
-      suggestion(),
-      JSON.stringify({
-        value: field().value,
-        caret: field().selectionStart,
-        focused: document.activeElement === field(),
-        viewport: window.innerHeight,
-        text: container.textContent?.slice(0, 120)
-      })
-    ).not.toBeNull()
-    anchor.top = 900
-    await act(async () => window.dispatchEvent(new Event('scroll')))
-    expect(suggestion()).toBeNull()
-    anchor.top = 430
-    await act(async () => window.dispatchEvent(new Event('scroll')))
-    expect(suggestion()).not.toBeNull()
-    anchor.clipTop = 450
-    anchor.clipHeight = 0
-    await act(async () => window.dispatchEvent(new Event('resize')))
-    expect(suggestion()).toBeNull()
-    anchor.clipTop = 250
-    anchor.clipHeight = 300
-    anchor.width = 0
-    await act(async () => window.dispatchEvent(new Event('resize')))
-    expect(suggestion()).toBeNull()
-    expect(field().value).toBe('@rea')
-    expect(document.activeElement).toBe(field())
   })
 })

@@ -2455,8 +2455,7 @@
     "tabStrip": {
       "checkingCapabilities": "正在检查桌面支持的功能，请稍后重试",
       "newTab": "新标签页",
-      "quickCommandsUpdateRequired": "使用快捷命令需更新桌面应用",
-      "tabStatus": "{{title}}，{{status}}"
+      "quickCommandsUpdateRequired": "使用快捷命令需更新桌面应用"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清空终端",
@@ -2499,6 +2498,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "添加附件失败（重新连接中）"
+    },
+    "useCloseActions": {
+      "closeFailed": "无法关闭标签页。请重试。",
+      "closeFailedDesktopNotReady": "无法关闭标签页。电脑上的 Orca 仍在加载，请稍后重试。"
     },
     "useContentCreateActions": {
       "browserCommandFailed": "浏览器命令执行失败",

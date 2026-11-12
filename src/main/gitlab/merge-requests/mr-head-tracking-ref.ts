@@ -5,7 +5,7 @@ import {
   REVIEW_HEAD_FETCH_TIMEOUT_MS
 } from '../../../shared/review-head-tracking-ref'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
-import { getReviewHeadRemoteComponent } from '../../git/review-head-remote-identity'
+import { getReviewHeadRemoteComponent } from '../../git/remotes/review-head-remote-identity'
 import {
   SSH_GIT_RECONNECT_MESSAGE,
   SshHostNotServedError

@@ -1,6 +1,6 @@
 // Resolve bound credentials into child environments only; never mutate process-wide auth or log tokens.
-import { ghExecFileAsync } from '../git/runner'
-import type { GhCaptureLifetimeHooks } from '../git/command-runner/gh-capture-lifetime'
+import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
+import type { GhCaptureLifetimeHooks } from '../git/command-runner/hosted-cli/gh-capture-lifetime'
 import { addWslEnvKeys } from '../../shared/wsl-env'
 import {
   ghTokenEnvVarForHost,

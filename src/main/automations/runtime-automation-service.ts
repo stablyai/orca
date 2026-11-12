@@ -1,10 +1,9 @@
+import type { AutomationUsageClient } from '../../shared/backend-service-contract'
 import { observeAutomationChatRun } from './runtime-chat-run-observer'
 import { readAutomationRunReceipt } from './automation-run-receipt'
 import { publishedLaunchTarget } from './automation-agent-run-result'
 import { launchAutomationChatAgent } from './automation-chat-agent-launch'
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
-import type { ClaudeUsageStore } from '../claude-usage/store'
-import type { CodexUsageStore } from '../codex-usage/store'
 import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -29,8 +28,8 @@ const MAX_REMEMBERED_LAUNCHES = 256
 export function createRuntimeAutomationService(input: {
   store: Store
   runtime: OrcaRuntimeService
-  claudeUsage?: ClaudeUsageStore
-  codexUsage?: CodexUsageStore
+  claudeUsage?: AutomationUsageClient
+  codexUsage?: AutomationUsageClient
   /** Only server processes execute remote_host_service schedules. */
   allowRemoteHostScheduling: boolean
 }): AutomationService {

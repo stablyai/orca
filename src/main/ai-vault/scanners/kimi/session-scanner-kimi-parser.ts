@@ -1,4 +1,7 @@
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import {
   openTranscriptReadStream,
   wslGatedReadFile
@@ -10,8 +13,8 @@ import {
   createAccumulator,
   finalizeSession,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent, addSessionText } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent, addSessionText } from '../../parsing/session-scanner-messages'
 import {
   kimiPrimaryAgentWirePath,
   kimiSessionIdFromStatePath,
@@ -20,10 +23,14 @@ import {
 } from './session-scanner-kimi-paths'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractContentText, normalizeTitleText } from '../../session-scanner-text-normalization'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
-import { numberValue } from '../../session-scanner-token-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import {
+  extractContentText,
+  normalizeTitleText
+} from '../../parsing/session-scanner-text-normalization'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { numberValue } from '../../parsing/session-scanner-token-values'
 
 // State supplies metadata, session_index supplies cwd, and the wire transcript supplies messages and usage.
 export async function parseKimiSessionFile(
