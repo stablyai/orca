@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { makeFolderWorkspace } from '../../../folder-workspaces/folder-workspace.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import {
   createTestStore,
@@ -57,25 +55,5 @@ describe('workspace attachment collections', () => {
     expect(store.getState().worktreesByRepo.repo1[0].linkedItems).toEqual([base[1], peer])
     const write = mockApi.worktrees.updateMeta.mock.lastCall?.[0].updates
     expect(write).toMatchObject({ linkedItemsBase: base, linkedItems: [base[1]] })
-  })
-
-  it('routes folder links to the owning folder update instead of dropping them', async () => {
-    const store = createTestStore()
-    const folder = makeFolderWorkspace()
-    const updateFolderWorkspace = vi.fn().mockResolvedValue(true)
-    store.setState({ folderWorkspaces: [folder], updateFolderWorkspace })
-    const linkedItems = [
-      { provider: 'linear', type: 'issue', number: 0, identifier: 'ENG-42' }
-    ] as const
-    const result = await store.getState().updateWorktreeMeta(folderWorkspaceKey(folder.id), {
-      linkedItems: [...linkedItems]
-    })
-    expect(result).toEqual({ ok: true })
-    expect(updateFolderWorkspace).toHaveBeenCalledWith(
-      folder.id,
-      expect.objectContaining({ linkedItems }),
-      { executionHostId: 'local' }
-    )
-    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 })

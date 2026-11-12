@@ -1,7 +1,7 @@
 import { GITHUB_BODY_MEDIA_TYPE } from '../../body-image-urls'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
-import { extractExecError } from '../../../git/exec-error'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-item-ssh-error'
 import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
@@ -9,8 +9,11 @@ import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../gith
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
 import { assertRateLimitBudget } from './../lookup/pr-lookup-rate-limit'
 import { REVIEW_THREADS_QUERY } from './pr-review-threads-query'
-import type { parsePRConversationResponse } from './pr-conversation-response'
-import { parseRestPRCommentPage } from './pr-conversation-response'
+
+import {
+  type parsePRConversationResponse,
+  parseRestPRCommentPage
+} from './pr-conversation-response'
 import {
   readCompletePRConversation,
   IncompletePRConversationError

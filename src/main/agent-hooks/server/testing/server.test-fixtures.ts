@@ -1,4 +1,5 @@
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { createProgramStatusProjector } from '../../../../shared/program-status/agent-status-projector'
 import type { AgentHookServer } from '../agent-hook-server'
 
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111'
@@ -42,6 +43,22 @@ export function buildBody(payload: Record<string, unknown>, overrides: Partial<B
     payload,
     ...overrides
   }
+}
+
+/** Feed one OSC 7501 report to the server as the runtime does: its facet, then its status row. */
+export function ingestProgramStatusOsc(server: AgentHookServer, osc: string) {
+  const { payloads, facet } = createProgramStatusProjector().process(osc)
+  server.ingestProgramStatusFacet({ paneKey: PANE, facet: facet ?? null })
+  const event = {
+    paneKey: PANE,
+    tabId: 'tab-1',
+    worktreeId: 'wt-1',
+    connectionId: null,
+    fromProgramStatus: true as const,
+    payload: payloads[0]!.payload
+  }
+  server.ingestTerminalStatus(event)
+  return event
 }
 
 // Stay within the seven-day hydration limit without racing now.

@@ -1,4 +1,4 @@
-import { e2eConfig } from '@/lib/e2e-config'
+import { e2eConfig } from '@/app-shell/startup/e2e-config'
 
 /** Hold runtime metadata stale deterministically; normal publish lag is sub-second, and snapshot waits would miss both that window and outright failure. */
 type MetadataPublishFaultApi = {

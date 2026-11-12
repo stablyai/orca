@@ -6,7 +6,7 @@ import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { teardownStops } from '../workspaces/removal/owned-session-teardown-policy'
 import { assertNoProjectWorktreeCreate } from '../../workspaces/creation/worktree-create-in-flight'
 import { releaseWorktreeCreatePreparationsForRepo } from '../../workspaces/creation/preparation/worktree-create-preparation-project-removal'
@@ -41,6 +41,7 @@ type RepositoryUpdates = Partial<
     | 'worktreeBasePath'
     | 'kind'
     | 'symlinkPaths'
+    | 'dictationTerms'
     | 'issueSourcePreference'
     | 'defaultJiraProject'
     | 'externalWorktreeVisibility'
@@ -55,6 +56,7 @@ type RepositoryUpdates = Partial<
 > & {
   projectGroupOrder?: number | null
   sourceControlAi?: Repo['sourceControlAi'] | null
+  workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null

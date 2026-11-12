@@ -80,3 +80,37 @@ it('drops the subscriber a client unsubscribes, and keeps its sibling (U-02)', a
   await vi.waitFor(() => expect(kept.length).toBeGreaterThan(1))
   expect(ended.slice(before).every((frame) => JSON.stringify(frame).includes('"end"'))).toBe(true)
 })
+
+// #39926: a frame the transport fails to send must end the stream, never leave it open and silent.
+// The opening catch-up already sends a batch after the snapshot, so this covers a failure inside open.
+it('ends the stream once when a frame fails to send', async () => {
+  await foundRestTestChat(rig)
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const frames: RpcResponse[] = []
+  await dispatcher.dispatchStreaming(
+    {
+      id: 'frame-a',
+      authToken: 'token',
+      method: 'agentSession.subscribe',
+      params: { sessionId: SESSION }
+    },
+    (raw) => {
+      if (raw.includes('"type":"batch"')) {
+        throw new Error('frame could not be sent')
+      }
+      frames.push(JSON.parse(raw))
+    },
+    CLIENT
+  )
+
+  expect(subscriberCount()).toBe(0)
+  expect(frames.map((frame) => JSON.stringify(frame).match(/"type":"(\w+)"/)?.[1])).toEqual([
+    'snapshot',
+    'end'
+  ])
+
+  // Later publications reach no one and end nothing twice.
+  const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
+  await rig.host.send(CALLER, restTestSend('after the failed frame', fence))
+  expect(frames.filter((frame) => JSON.stringify(frame).includes('"type":"end"'))).toHaveLength(1)
+})

@@ -16,7 +16,7 @@ import {
   WorkspaceReviewFactsSnapshotSchema,
   type WorkspaceReviewFact
 } from '../../../shared/sidebar-list/workspace-review-facts'
-import { fixture } from '../../persistence/loading-store/profile-state-delayed-authority-fixture'
+import { fixture } from '../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { ProducerRevision } from './producer-revision'
 import { SidebarInputsFeed } from './sidebar-inputs-feed'
 import {

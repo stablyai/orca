@@ -19,7 +19,7 @@ import {
   makePaneKey,
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import {
   ptyHoldsRecordedSurface,
   type PtySurfaceTopology
@@ -211,7 +211,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     if (!record) {
       const ptyId = context
         ? context.reversePtyIds(handle)[0]
-        : [...this.handleByPtyId.entries()].find(([, mappedHandle]) => mappedHandle === handle)?.[0]
+        : this.terminalIdentity.firstReversePtyId(handle)
       const pty = ptyId ? this.ptysById.get(ptyId) : null
       if (pty) {
         // Why: graph reload clears renderer handle records, but runtime-owned PTY handles remain the caller's control identity.

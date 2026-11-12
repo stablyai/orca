@@ -1,8 +1,11 @@
-import { Pressable, type View } from 'react-native'
+import { Pressable, type HostInstance } from 'react-native'
 import { useContext, type RefObject } from 'react'
 import { MobileDictationLiveContext } from '../../../dictation/mobile-dictation-live-context'
 import { dictationControlsCopy } from '../../../dictation/mobile-dictation-controls-copy'
-import { MobileDictationMicIcon } from '../../../dictation/MobileDictationLiveControls'
+import {
+  MobileDictationMicIcon,
+  MobileDictationRetryButton
+} from '../../../dictation/MobileDictationLiveControls'
 import { useMobileDictationCancelDrop } from '../../../dictation/use-mobile-dictation-cancel-drop'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { keepHeldPressThroughLongPress } from '../../../platform/held-press-long-press'
@@ -38,11 +41,14 @@ export function MobileNativeChatComposerMic({
 }: MobileNativeChatMicProps & {
   disabled: boolean
   // The composer's ✕ that a held mic may be released over.
-  cancelRef?: RefObject<View | null>
+  cancelRef?: RefObject<HostInstance | null>
 }): React.JSX.Element {
   useMobileTranslation()
   const live = useContext(MobileDictationLiveContext)
   const release = useMobileDictationCancelDrop(cancelRef, live?.cancel, onMicPressOut)
+  if (live?.failureReason != null) {
+    return <MobileDictationRetryButton onRetry={live.retry} labelled />
+  }
   return (
     <Pressable
       accessibilityRole="button"

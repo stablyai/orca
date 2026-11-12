@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 
 export function showFileLinkNotFoundToast(filePath: string): void {
   toast.error(
@@ -20,6 +20,17 @@ export function showFileLinkUnverifiableToast(filePath: string, error: unknown):
         value0: filePath,
         value1: readIpcErrorMessage(error) ?? String(error)
       }
+    )
+  )
+}
+
+/** The path exists, but this computer has no route to it (e.g. a paired workspace folder no explorer owns). */
+export function showFileLinkFolderUnavailableToast(filePath: string): void {
+  toast.error(
+    translate(
+      'components.native-chat.fileLinks.folderUnavailable',
+      "This computer can't open the folder {{value0}}",
+      { value0: filePath }
     )
   )
 }

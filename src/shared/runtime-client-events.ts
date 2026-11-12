@@ -10,6 +10,7 @@ import type { TerminalSideEffectBatch } from './terminal/output/terminal-side-ef
 import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'
 import type { RuntimeNavigationTarget } from './runtime-navigation'
 import type { WorktreeSortOrderUpdate } from './worktree/sort-order-update'
+import type { WorkspaceMetadataSet } from './worktree/workspace-metadata-set'
 import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-feed-contract'
 import type { BrowserClientHostRequestEvent } from './browser/client-hosting/browser-client-host-request-protocol'
 
@@ -38,8 +39,12 @@ export type RuntimeClientEvent =
     }
   /** An agent row changed (coalesced, no ids); phones re-read worktree.ps. Sent only while the sidebar feed is off. */
   | { type: 'worktreeRowsChanged' }
+  // Why: addressed workspace metadata; old clients drop the unknown type and see it on their next listing.
+  | ({ type: 'workspaceMetadataSet' } & WorkspaceMetadataSet)
   /** What mobileRelay.hosts.list answers changed; phones re-read it instead of polling. */
   | { type: 'relayHostsChanged' }
+  /** A desktop PR refresh found this checkout's PR (or its absence) changed; phones re-read it. */
+  | { type: 'pullRequestChanged'; worktreeId: string; repoId: string; branch: string }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
   /** Only while this host's own phone reads the sidebar feed; every other reader drops it. */

@@ -11,6 +11,7 @@ export const STT_WORKER_HUNG_ERROR = 'The speech engine stopped responding. Try 
 
 export type SttWorkerRequest =
   | ({ type: 'init' } & SttRecognizerInit)
+  | { type: 'open'; streamId: string; vocabulary: string[] }
   | { type: 'feed'; streamId: string; samples: Float32Array; sampleRate: number }
   | { type: 'stop'; streamId: string }
   | { type: 'discard'; streamId: string }

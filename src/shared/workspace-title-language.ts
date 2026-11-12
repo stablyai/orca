@@ -4,6 +4,11 @@ import { SUPPORTED_UI_LOCALES, resolveUiLocale, type SupportedUiLocale } from '.
 
 export type WorkspaceTitleLanguage = 'branch' | 'ui' | SupportedUiLocale
 
+export type WorkspaceTitleLanguageSettings = {
+  /** Absent follows the branch; localized titles are generated separately from the Git slug. */
+  workspaceTitleLanguage?: WorkspaceTitleLanguage
+}
+
 export function normalizeWorkspaceTitleLanguage(value: unknown): WorkspaceTitleLanguage {
   if (value === 'ui' || value === 'branch') {
     return value

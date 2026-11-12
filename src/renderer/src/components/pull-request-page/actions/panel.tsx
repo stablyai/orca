@@ -19,9 +19,9 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-request-merge-methods'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'

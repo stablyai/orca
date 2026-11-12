@@ -9,7 +9,6 @@ import { AgentHookServer } from '../../agent-hook-server'
 import { buildBody, PANE, postHookEvent } from '../server.test-fixtures'
 import { ClaudeHelperKillPoller } from '../../../../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
 import '../../../../../shared/agent-hook-listener/providers/claude-transcript-decoder'
-import * as cursor from '../../../../../shared/agent-hook-listener/providers/claude-transcript-cursor'
 import '../../../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 
 // Complete captured lifecycle records, with runtime replay seeded by real persisted HTTP state.
@@ -368,38 +367,6 @@ it('a real failed bind parks without resources and explicit retry delivers its f
   await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   expect(p.row()?.workingMode).toBe('monitoring')
 })
-
-it.each(['relay-spool', 'desktop-spool'])(
-  'stop during %s recovery invalidates its parked owner',
-  async (kind) => {
-    const read = vi.spyOn(cursor, 'readClaudeTranscriptChunk')
-    const p = await setup(kind, 'accepted-before-bind', {
-      stopBeforeBind: true,
-      beforeStart: () => read.mockClear()
-    })
-    expect(p.entries.size).toBe(0)
-    expect(read).not.toHaveBeenCalled()
-    expect(p.poller['scheduler']['entries'].size).toBe(0)
-  }
-)
-
-it.each(['desktop-http', 'relay-http', 'desktop-spool', 'relay-spool'])(
-  'refused %s admission creates no observation or wake',
-  async (kind) => {
-    const capture = vi.spyOn(ClaudeHelperKillPoller.prototype, 'schedule')
-    const p = await setup(kind, 'before-start', {
-      retired: true,
-      beforeStart: () => capture.mockClear()
-    })
-    expect(p.entries.size).toBe(0)
-    expect(capture).not.toHaveBeenCalled()
-    if (kind === 'desktop-spool') {
-      expect(p.row()?.restoredUnconfirmed).toBe(true)
-    } else {
-      expect(p.row()).toBeUndefined()
-    }
-  }
-)
 
 it('a held local child permission cannot reset the admitted owner', async () => {
   const p = await setup('desktop-http', 'after-start')

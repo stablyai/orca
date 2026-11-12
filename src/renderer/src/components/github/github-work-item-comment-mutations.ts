@@ -9,7 +9,7 @@ import { emitGitHubWorkItemDetailsCacheMutation } from '@/lib/work-items/github/
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
-} from '@/lib/github-source-runtime-context'
+} from '@/lib/work-items/github/github-source-runtime-context'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 

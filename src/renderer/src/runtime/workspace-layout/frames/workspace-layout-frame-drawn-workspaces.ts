@@ -1,7 +1,7 @@
 // Track locally held frame-drawn workspaces and their shown terminal panes.
 
 import type { AppState } from '@/store/types'
-import type { PublishedWorkspaceLayout } from '../../../../../shared/workspace-layout/workspace-layout-published'
+import type { PublishedWorkspaceLayout } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import { pairedServerMirrors } from './paired-server-workspace'
 
 type HeldWorkspacesStore = {

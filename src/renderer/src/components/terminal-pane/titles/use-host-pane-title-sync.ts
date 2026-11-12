@@ -2,7 +2,8 @@ import { useEffect } from 'react'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import { collectLeafIdsInOrder } from '../layout/terminal-layout-leaf-traversal'
+import '../layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { TerminalPaneLayoutController } from '../layout/persistence/use-terminal-pane-layout-persistence'
 
 /** Sync owner-published pane titles while retaining pending local renames until host echo. */
@@ -17,7 +18,7 @@ export function hostPaneTitleUpdates(args: {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN && !ptyIds.some((ptyId) => isRemoteRuntimePtyId(ptyId))) {
     return updates
   }
-  const hostLeafIds = new Set(collectLeafIdsInOrder(args.layout.root))
+  const hostLeafIds = new Set(collectLayoutLeafIdsInOrder(args.layout.root))
   for (const pane of args.panes) {
     if (!hostLeafIds.has(pane.leafId)) {
       continue

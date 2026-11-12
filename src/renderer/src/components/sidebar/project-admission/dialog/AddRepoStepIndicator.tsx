@@ -5,21 +5,24 @@ import { useTranslate } from '@/i18n/use-translate'
 type AddRepoStepIndicatorProps = {
   step: AddRepoDialogStep
   isAdding: boolean
+  hideBack?: boolean
   onBack: () => void
 }
 
 export function AddRepoStepIndicator({
   step,
   isAdding,
+  hideBack = false,
   onBack
 }: AddRepoStepIndicatorProps): React.JSX.Element | null {
   const t = useTranslate()
   const showBack =
-    step === 'clone' ||
-    step === 'remote' ||
-    step === 'server-path' ||
-    step === 'create' ||
-    step === 'nested'
+    !hideBack &&
+    (step === 'clone' ||
+      step === 'remote' ||
+      step === 'server-path' ||
+      step === 'create' ||
+      step === 'nested')
 
   if (!showBack) {
     return null

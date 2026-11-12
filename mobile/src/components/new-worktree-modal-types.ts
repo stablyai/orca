@@ -1,7 +1,7 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { Repo as SharedRepo } from '../../../src/shared/repo-types'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { SetupHookTrust } from '../tasks/setup-hook-trust'
+import type { SetupHookTrust } from '../new-workspace/creation/setup-hook-trust'
 import { resolveRepoBadgeColor } from '../../../src/shared/repo-badge-color'
 
 export type MobileWorkspaceRepo = Pick<SharedRepo, 'id' | 'displayName' | 'path'> &
@@ -17,6 +17,30 @@ export type MobileWorkspaceRepo = Pick<SharedRepo, 'id' | 'displayName' | 'path'
       | 'gitRemoteIdentity'
     >
   >
+
+/** Opened from a folder's empty state: that repo and name, created attached to the folder. */
+export type NewWorktreeFolderLaunch = {
+  repoId: string
+  /** The repo's host, so a same-id copy on another host isn't picked. */
+  executionHostId: ExecutionHostId
+  name: string
+  /** The folder's workspace key, `folder:<id>`. */
+  parentWorkspace: string
+  submit: NewWorktreeFolderSubmit
+}
+
+/** A folder's create, kept from admission until its outcome is known. */
+export type NewWorktreeFolderSubmission = {
+  settle: (outcome: 'created' | 'uncertain' | 'failed' | 'cancelled') => void
+}
+
+/** How the folder screen owns its composer's creates. */
+export type NewWorktreeFolderSubmit = {
+  /** Admits a create for the picked repo before anything is sent; null while another is out for it. */
+  begin: (repo: MobileWorkspaceRepo) => NewWorktreeFolderSubmission | null
+  /** False once the folder screen is left: the create runs on, without haptics. */
+  presenting: () => boolean
+}
 
 export type NewWorktreeModalProps = {
   visible: boolean
@@ -37,6 +61,7 @@ export type NewWorktreeModalProps = {
     executionHost?: ExecutionHostId
   ) => void
   onClose: () => void
+  folderLaunch?: NewWorktreeFolderLaunch
 }
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'

@@ -7,7 +7,7 @@ import {
   peekStoredChatTranscript,
   readStoredChatTranscript,
   storedTabChatTranscriptIdentity
-} from './native-chat/mobile-native-chat-transcript-store'
+} from './native-chat/transcript/mobile-native-chat-transcript-store'
 import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
 
 /**

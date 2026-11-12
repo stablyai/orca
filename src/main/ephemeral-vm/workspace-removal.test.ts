@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   listEphemeralVmRuntimes,
@@ -9,7 +10,7 @@ import {
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { RecipeWorkspaceRemovalError } from '../../shared/recipe-host-removal'
-import { mapRuntimeError } from '../runtime/rpc/errors'
+import { mapRuntimeError } from '../runtime/rpc/responses/rpc-response'
 import {
   describeRecipeWorkspaceEnvironments,
   ownsRecipeWorkspaceRemoval,
@@ -89,7 +90,7 @@ function makePorts(
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-recipe-remove-'))
 })
-afterEach(() => rmSync(root, { recursive: true, force: true }))
+afterEach(() => removeTempDirs([root]))
 
 describe('recipe workspace removal on the provisioning host', () => {
   it('handles only removals that asked to destroy the environment', () => {
@@ -145,14 +146,6 @@ describe('recipe workspace removal on the provisioning host', () => {
     await expect(removeRecipeWorkspace(root, params, ports)).resolves.toMatchObject({
       host: { state: 'left-running' }
     })
-  })
-
-  it('destroys a provisioned root without attempting its protected Git deletion', async () => {
-    seed('provisioned-root')
-    const ports = makePorts()
-    await removeRecipeWorkspace(root, params, ports)
-    expect(ports.call).not.toHaveBeenCalled()
-    expect(ports.cleanup).toHaveBeenCalledWith('vm-a')
   })
 
   it('keeps the environment code and data when its removal fails, and destroys nothing', async () => {

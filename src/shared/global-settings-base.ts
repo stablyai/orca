@@ -23,9 +23,12 @@ import type { NestedWorkerDepthSettings } from './orchestration/workers/nested-w
 import type { SshRemoteControlSettings } from './ssh-remote-control-settings'
 import type { AgentWorkspaceTrustSettings } from './agent-launch/permissions/agent-workspace-trust-decision'
 import type { KeybindingGlobalSettings } from './keybindings/global-settings'
+import type { WorkspaceCleanupPolicySettings } from './workspace-cleanup/workspace-cleanup-policy'
+import type { WorkspaceTitleLanguageSettings } from './workspace-title-language'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
-export type GlobalSettingsBase = AntigravityChatAuthSettings &
+export type GlobalSettingsBase = WorkspaceTitleLanguageSettings &
+  AntigravityChatAuthSettings &
   EmulatorOpeningSettings &
   SshRemoteControlSettings &
   ClaudeAgentViewSettings &
@@ -49,4 +52,5 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   BrowserPasswordsGlobalSettings &
   NestedWorkerDepthSettings &
   AgentWorkspaceTrustSettings &
-  KeybindingGlobalSettings
+  KeybindingGlobalSettings &
+  WorkspaceCleanupPolicySettings

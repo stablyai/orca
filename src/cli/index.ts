@@ -65,6 +65,10 @@ export async function main(
     return
   }
   if (argv[0] === 'claude-teams') {
+    if (argv.length === 2 && (argv[1] === '--help' || argv[1] === '-h')) {
+      printHelp(COMMAND_SPECS, ['claude-teams'])
+      return
+    }
     await runClaudeTeams(argv.slice(1), cwd)
     return
   }
@@ -105,7 +109,20 @@ export async function main(
     refuseConflictingSessionCallerFlags(commandSpec, parsed.flags)
     await refuseLocalManagementSelector(parsed.commandPath, parsed.flags)
     const RuntimeClientClass = await loadRuntimeClientClass()
-    const ignoreRemoteSelection = ignoresRemoteSelection(parsed.commandPath)
+    // `--on` runs on the caller's own Orca, which reaches that server; an inherited selection never reroutes it.
+    const onCallersOrca = runsOnCallersOrca(parsed.commandPath, parsed.flags)
+    if (
+      onCallersOrca &&
+      (parsed.flags.has('pairing-code') ||
+        (parsed.flags.has('environment') &&
+          !isLocalEnvironmentSelector(parsed.flags.get('environment'))))
+    ) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--on already names the server; drop --environment. Your own Orca reaches it.'
+      )
+    }
+    const ignoreRemoteSelection = onCallersOrca || ignoresRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
     // An explicit local route suppresses ambient ORCA_ENVIRONMENT and pairing codes.
@@ -190,6 +207,19 @@ export async function main(
     })
     process.exitCode = cliErrorExitCode(error, parsed.commandPath)
   }
+}
+
+const ON_CALLERS_ORCA_COMMANDS: ReadonlySet<string> = new Set(['send', 'reply', 'worker-start'])
+
+function runsOnCallersOrca(
+  commandPath: readonly string[],
+  flags: ReadonlyMap<string, string | boolean>
+): boolean {
+  return (
+    commandPath[0] === 'orchestration' &&
+    ON_CALLERS_ORCA_COMMANDS.has(commandPath[1] ?? '') &&
+    flags.has('on')
+  )
 }
 
 async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {

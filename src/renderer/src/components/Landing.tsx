@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
-import { cn } from '../lib/utils'
-import { useAppStore } from '../store'
+import { cn } from '../lib/class-names'
+import { useAppStore } from '../store/index'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import {

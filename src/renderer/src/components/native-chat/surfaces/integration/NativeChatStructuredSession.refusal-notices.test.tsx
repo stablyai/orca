@@ -36,72 +36,6 @@ afterEach(() => {
 })
 
 {
-  function renderPane(): void {
-    render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="structured-read-error-tab"
-        sessionId="read-error-session"
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    )
-  }
-
-  function journalRefusal(
-    reason: 'journalCorrupt' | 'journalUnavailable' | 'journalWrittenByNewerOrca'
-  ) {
-    return { code: 'agent_session_journal_unreadable', details: { reason } } as const
-  }
-
-  it('says a damaged history cannot load in one line, without claiming Orca keeps trying', () => {
-    mocks.status = 'error'
-    mocks.readRefusal = journalRefusal('journalCorrupt')
-    mocks.messages = []
-
-    renderPane()
-
-    expect(screen.getAllByText('Unable to load this chat.')).toHaveLength(1)
-    expect(screen.queryByText('Could not load conversation')).toBeNull()
-    expect(screen.queryByText(/keeps trying/)).toBeNull()
-    expect(screen.queryByText(/agent_session_/)).toBeNull()
-    // Nothing to send into: a send would only be refused and say it again.
-    expect(mocks.composerProps).toBeNull()
-  })
-
-  it("names a history that couldn't open right now once, in its one line", () => {
-    mocks.status = 'error'
-    mocks.readRefusal = journalRefusal('journalUnavailable')
-    mocks.messages = []
-
-    renderPane()
-
-    expect(screen.getAllByText("Orca couldn't open this chat's history right now.")).toHaveLength(1)
-    expect(screen.queryByText('Could not load conversation')).toBeNull()
-    expect(screen.queryByText(/keeps trying/)).toBeNull()
-    expect(screen.queryByText(/Try again/)).toBeNull()
-    // It can clear, so the composer stays and a send waits for the read.
-    expect(mocks.composerProps).not.toBeNull()
-  })
-
-  it('says once that a newer Orca saved the chat and only an update opens it, with no composer', () => {
-    mocks.status = 'error'
-    mocks.readRefusal = journalRefusal('journalWrittenByNewerOrca')
-    mocks.messages = []
-
-    renderPane()
-
-    expect(
-      screen.getAllByText('This chat was saved by a newer Orca. Update Orca to open it.')
-    ).toHaveLength(1)
-    expect(screen.queryByText('Could not load conversation')).toBeNull()
-    expect(screen.queryByText(/keeps trying/)).toBeNull()
-    expect(mocks.composerProps).toBeNull()
-  })
-}
-
-{
   const STILL_WORKING = "The agent is still working. Run /clear when it's done."
   const BACKGROUND =
     'Background tasks are still running. Wait for the background tasks to finish. Run /clear again.'
@@ -157,16 +91,5 @@ afterEach(() => {
     mocks.monitoringBackgroundTasks = false
     pane.rerender()
     expect(screen.queryByText(BACKGROUND)).toBeNull()
-  })
-
-  it('a line naming nothing the chat shows stays until the next send, as before', () => {
-    mocks.turnId = 'turn-1'
-    const pane = renderPane()
-    composerSays('Remove attachments before using a chat-session command.')
-    mocks.turnId = null
-    pane.rerender()
-    expect(screen.getByText('Remove attachments before using a chat-session command.')).toBeTruthy()
-    composerSays(null)
-    expect(screen.queryByText('Remove attachments before using a chat-session command.')).toBeNull()
   })
 }

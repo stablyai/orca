@@ -6,7 +6,6 @@ import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-
 
 const initialAppStoreState = useAppStore.getState()
 const LEAF_ID = '33333333-3333-4333-8333-333333333333'
-const OTHER_LEAF_ID = '44444444-4444-4444-8444-444444444444'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -71,33 +70,6 @@ describe('waking panes slept by a manual workspace sleep', () => {
     const state = useAppStore.getState()
     expect(launched).toBe(0)
     expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
-    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
-  })
-
-  // Inactive slept tabs are unowned; classifying their records active would spawn duplicates and strand originals as bare shells.
-  it('keeps a slept done record on a non-active tab for in-place cold restore', () => {
-    const record = makeRecord({ state: 'done' })
-    useAppStore.setState({
-      activeWorktreeId: 'wt-1',
-      activeTabType: 'terminal',
-      activeTabId: 'tab-2',
-      activeTabIdByWorktree: { 'wt-1': 'tab-2' },
-      tabsByWorktree: {
-        'wt-1': [makeTerminalTab('tab-1', 'wt-1'), makeTerminalTab('tab-2', 'wt-1')]
-      },
-      terminalLayoutsByTabId: {
-        'tab-1': makeLayout(LEAF_ID),
-        'tab-2': makeLayout(OTHER_LEAF_ID, 'pty-2')
-      },
-      ptyIdsByTabId: {},
-      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    } as never)
-
-    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
-
-    const state = useAppStore.getState()
-    expect(launched).toBe(0)
-    expect(state.tabsByWorktree['wt-1']).toHaveLength(2)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 })

@@ -1,7 +1,7 @@
 import type { ComposerDecisions } from './composer-decisions'
 import type { ComposerTargetState } from './composer-target-state-contract'
-import type { ComposerStateInput } from './composer-target-store'
-import { useComposerTargetStore } from './composer-target-store'
+
+import { type ComposerStateInput, useComposerTargetStore } from './composer-target-store'
 import { useComposerInitialTargetState } from './initial-target-state'
 import { useComposerRuntimeTargetSelection } from './runtime-target-selection'
 import { useComposerSourceContextState } from './source-context-state'
@@ -10,7 +10,7 @@ import { useComposerAsyncState } from './async-composer-state'
 import { useComposerProviderRuntimeSync } from './provider-runtime-sync'
 import { useDerivedComposerState } from './derived-composer-state'
 import { useDraftTargetSync } from './draft-target-sync'
-import { needsVisibleRunTargetHost } from '@/lib/run-target-host-visibility'
+import { needsVisibleRunTargetHost } from '@/lib/workspace/creation/run-target-host-visibility'
 
 export function useComposerTargetState(
   options: ComposerStateInput,

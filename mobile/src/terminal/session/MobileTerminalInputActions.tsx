@@ -1,9 +1,9 @@
-import type { RefObject } from 'react'
+import { useContext, type RefObject } from 'react'
 import {
   ActivityIndicator,
   Pressable,
+  type HostInstance,
   type StyleProp,
-  type View,
   type ViewStyle
 } from 'react-native'
 import { ImagePlus } from 'lucide-react-native'
@@ -17,7 +17,11 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { keepHeldPressThroughLongPress } from '../../platform/held-press-long-press'
 import { dictationControlsCopy } from '../../dictation/mobile-dictation-controls-copy'
 import { useMobileDictationCancelDrop } from '../../dictation/use-mobile-dictation-cancel-drop'
-import { MobileDictationMicIcon } from '../../dictation/MobileDictationLiveControls'
+import {
+  MobileDictationMicIcon,
+  MobileDictationRetryButton
+} from '../../dictation/MobileDictationLiveControls'
+import { MobileDictationLiveContext } from '../../dictation/mobile-dictation-live-context'
 
 type DictationState = {
   readonly isStarting: boolean
@@ -33,7 +37,7 @@ type MobileTerminalDictationButtonProps = {
   readonly buttonStyle: StyleProp<ViewStyle>
   readonly disabledButtonStyle: StyleProp<ViewStyle>
   // The ✕ on the field that a held mic may be released over.
-  readonly dictationCancelRef: RefObject<View | null>
+  readonly dictationCancelRef: RefObject<HostInstance | null>
   readonly onDictationToggle: () => void
   readonly onDictationPressIn: () => void
   readonly onDictationPressOut: () => void
@@ -54,11 +58,20 @@ type MobileTerminalInputActionsProps = MobileTerminalDictationButtonProps &
 
 export function MobileTerminalInputActions(props: MobileTerminalInputActionsProps) {
   const { isStarting, isRecording, isProcessing } = props.dictation
-  // Attach steps aside while dictating so the words get the field's room.
+  const live = useContext(MobileDictationLiveContext)
+  // A kept failure is cleared by every start and Retry, so it never shows while dictating.
+  const failureReason = live?.failureReason ?? null
+  // Attach steps aside while dictating or holding a failed recording, so the field gets the room.
   return (
     <>
-      {isStarting || isRecording || isProcessing ? null : <MobileTerminalAttachButton {...props} />}
-      <MobileTerminalDictationButton {...props} />
+      {isStarting || isRecording || isProcessing || failureReason !== null ? null : (
+        <MobileTerminalAttachButton {...props} />
+      )}
+      {failureReason !== null && live ? (
+        <MobileDictationRetryButton onRetry={live.retry} labelled={false} />
+      ) : (
+        <MobileTerminalDictationButton {...props} />
+      )}
     </>
   )
 }

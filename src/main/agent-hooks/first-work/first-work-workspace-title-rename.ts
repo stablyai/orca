@@ -8,7 +8,7 @@ import {
   shouldAutoRenameWorkspaceTitle
 } from '../../../shared/workspace-title-language'
 import type { Repo } from '../../../shared/repo-types'
-import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-environment'
 import {
   generateBranchNameFromContext,

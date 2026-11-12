@@ -4,7 +4,7 @@ import {
   sanitizeCrashReportString,
   type CrashReportBreadcrumbData
 } from '../../shared/crash-reporting'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { loadWindowsSecurity, type WindowsDacl } from '../../shared/windows-security-addon'
 import {
   ACCESS_ALLOWED_ACE_TYPE,

@@ -31,7 +31,9 @@ export function isValidAudioBase64(value: string): boolean {
 
 export const DictationStart = z.object({
   dictationId: requiredString('Missing dictation ID'),
-  modelId: OptionalString
+  modelId: OptionalString,
+  /** Picks the repo's dictionary terms; older hosts strip it. */
+  worktreeId: OptionalString
 })
 
 export const DictationChunk = z.object({
@@ -52,6 +54,13 @@ export const DictationChunk = z.object({
 export const DictationHandle = z.object({
   dictationId: requiredString('Missing dictation ID')
 })
+
+// Nullable: older phones and every read without a worktree send null.
+export const SpeechSetupRead = z
+  .object({
+    worktreeId: OptionalString
+  })
+  .nullable()
 
 export const SpeechModelAction = z.object({
   modelId: requiredString('Missing model ID')

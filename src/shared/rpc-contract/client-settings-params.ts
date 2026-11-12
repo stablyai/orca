@@ -10,6 +10,7 @@ import {
 import { MACHINE_NAME_MAX_LENGTH } from '../machine-name'
 import { normalizePRBotAuthorOverrides } from '../source-control/review-comments/pr-bot-author-overrides'
 import { WorktreeVisibilityDefaultsUpdate } from './worktree-visibility-defaults-params'
+import { WorkspaceCleanupRulesParam } from './workspace-cleanup-policy-params'
 import { AGENT_CHAT_PERMISSION_MODES } from '../agent-launch/permissions/agent-chat-permission-mode'
 import { SUPPORTED_UI_LOCALES } from '../ui-locale'
 
@@ -132,7 +133,8 @@ export const SettingsUpdate = z
       .transform((value) => normalizePRBotAuthorOverrides(value))
       .optional(),
     nativeChatAutoContinueAfterUsageLimit: z.boolean().optional(),
-    nativeChatPermissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional()
+    nativeChatPermissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
+    workspaceCleanupPolicy: WorkspaceCleanupRulesParam.optional()
   })
   .strict()
   .default({})
