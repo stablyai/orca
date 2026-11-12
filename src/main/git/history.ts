@@ -8,7 +8,7 @@ import type {
 import { loadGitHistoryFromExecutor } from '../../shared/git/history/git-history-execution'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 
 export async function getHistory(
   worktreePath: string,

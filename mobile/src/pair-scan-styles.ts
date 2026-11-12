@@ -55,10 +55,10 @@ export const pairScanStyles = themedStyleSheet(() => ({
     borderRadius: radii.surface
   },
   camera: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   reticle: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center'
   },

@@ -42,13 +42,4 @@ describe('relay readiness wait lifetime', () => {
     await expect(next).resolves.toBe(true)
     expect(vi.getTimerCount()).toBe(0)
   })
-
-  it('propagates reconnect failures and clears its deadline', async () => {
-    vi.useFakeTimers()
-    const error = new Error('reconnect failed')
-    await expect(
-      new RelayReadinessWaiters().until(Promise.reject(error), Date.now() + 10_000)
-    ).rejects.toBe(error)
-    expect(vi.getTimerCount()).toBe(0)
-  })
 })

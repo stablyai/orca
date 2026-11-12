@@ -120,7 +120,7 @@ export type PtyApi = {
     id: string,
     data: string,
     inputKind: TerminalInputKind,
-    options?: { requireWriteSettlement?: true }
+    options?: { requireWriteSettlement?: true; requireStartupDialog?: string }
   ) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void

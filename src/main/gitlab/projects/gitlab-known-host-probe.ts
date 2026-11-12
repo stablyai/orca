@@ -2,7 +2,7 @@ import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
 import { runCoalescedProbe, type CoalescedProbes } from '../../git/remotes/coalesced-probe'
 import { extractExecError } from '../../git/exec-error'
 import { NEGATIVE_ENTRY_TTL_MS } from '../../git/remotes/remote-ref-probe-cache'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import { DEFAULT_GITLAB_HOSTS, normalizeGitLabHost } from './project-ref-parser'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
 

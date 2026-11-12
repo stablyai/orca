@@ -2,10 +2,8 @@ import {
   commandLineLength,
   MAX_COMMAND_LINE_CHARS
 } from '../../../shared/windows-command-line-budget'
-import {
-  resolveGitCommandWithoutProbe,
-  wslDistroForCommand
-} from '../command-runner/git-command-resolution'
+import { resolveGitCommandWithoutProbe } from '../command-runner/host-routing/git-command-resolution'
+import { wslDistroForCommand } from '../../../shared/wsl-paths'
 import { WINDOWS_CHECKOUT_GIT_CONFIG_ARGS } from '../wsl-windows-checkout-git-config'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 

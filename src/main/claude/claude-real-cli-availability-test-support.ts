@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
-import { CLAUDE_AUTH_ENV_VARS } from '../claude-accounts/environment'
+import { CLAUDE_AUTH_ENV_VARS } from '../claude-accounts/runtime-auth/environment'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import { resolveRealClaudeCliGate } from './claude-real-cli-test-gate'
 

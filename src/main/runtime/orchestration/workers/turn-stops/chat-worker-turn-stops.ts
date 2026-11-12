@@ -57,9 +57,12 @@ export function chatWorkerTurnStopReporter(
     setTimeout(run, delayMs).unref?.()
   },
   readPrompt: ChatWorkerPromptReader = readChatWorkerPrompt,
-  watchJournal?: ChatJournalWatch
+  watchJournal?: ChatJournalWatch,
+  now: () => number = Date.now
 ) {
   const generations = new Map<string, number>()
+  // A turn begins after its session's previous turn completed; a prompt arrives mid-turn and bounds nothing.
+  const previousCompletionAt = new Map<string, number>()
   const approvals = new ChatWorkerApprovalWatch({ ...deps, readPrompt, watchJournal })
   setTimer(() => {
     approvals.adopt().catch((error: unknown) => {
@@ -86,6 +89,10 @@ export function chatWorkerTurnStopReporter(
       // Any later edge, even one not reported (a failed or cancelled turn), supersedes a pending stop.
       const generation = (generations.get(sessionId) ?? 0) + 1
       generations.set(sessionId, generation)
+      const turnStartedAt = previousCompletionAt.get(sessionId)
+      if (event.type === 'completion') {
+        previousCompletionAt.set(sessionId, now())
+      }
       const stop = chatStop(event)
       const db = stop ? deps.getDb() : null
       if (!stop || !db) {
@@ -140,6 +147,8 @@ export function chatWorkerTurnStopReporter(
                 reason: stop.reason,
                 // The payload names the prompt; the agent's prose before it adds nothing.
                 lastOutput: payload ? undefined : status?.lastAssistantMessage,
+                // Unknown for a session's first turn seen here: a duplicate alert beats hiding a stall.
+                turnStartedAt,
                 ...(stop.awaitsReply ? { awaitsReply: true } : {}),
                 ...(payload ? { approval: payload } : {})
               },

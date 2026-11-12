@@ -1,5 +1,5 @@
 import type { BaseRefSearchResult } from '../../shared/repo-types'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 import { runSearchBaseRefsGit } from './repo-ref-search-command'
 import {
   normalizeRefSearchQuery,

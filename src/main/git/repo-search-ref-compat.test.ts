@@ -14,7 +14,7 @@ vi.mock('./command-runner/git-exec-file-sync', async (importOriginal) => ({
   gitExecFileSync: vi.fn()
 }))
 
-import { clearGitCapabilityStateForTests } from './command-runner/git-capability-state'
+import { clearGitCapabilityStateForTests } from './command-runner/host-routing/git-capability-state'
 import { searchBaseRefs } from './repo'
 
 describe('searchBaseRefs git compatibility', () => {

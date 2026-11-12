@@ -103,6 +103,35 @@ describe('orchestration worker-list pagination', () => {
     expect(second.counts).toEqual({ retained: 105 })
   })
 
+  it('repeats the first page counts on later pages of the same snapshot', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    const run = db.createRun({
+      objective: 'Counted once per snapshot',
+      coordinatorHandle: 'term-coordinator',
+      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    })
+    insertDispatch(db, run.id, 'dispatch-a')
+    insertDispatch(db, run.id, 'dispatch-z')
+
+    const first = await callWorkerList(runtime, { run: run.id, limit: 1 })
+    expect(first.counts).toEqual({ retained: 2 })
+
+    sqliteFor(db)
+      .prepare('UPDATE dispatch_contexts SET assignee_handle = NULL WHERE id = ?')
+      .run('dispatch-a')
+    const second = await callWorkerList(runtime, {
+      run: run.id,
+      limit: 1,
+      cursor: first.page.nextCursor
+    })
+
+    expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-a'])
+    expect(second.page).toEqual({ total: 2, limit: 1, hasMore: false, nextCursor: null })
+    expect(second.counts).toEqual({ retained: 2 })
+  })
+
   it('expires a pre-rowid cursor whose anchor row a reset deleted', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()

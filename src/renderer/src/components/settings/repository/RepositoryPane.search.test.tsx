@@ -118,3 +118,35 @@ it.each([
     expect.anything()
   )
 })
+
+it('shows the wait-for-setup row when searching its title', () => {
+  const repo: Repo = {
+    id: 'project-1',
+    path: '/tmp/sample-project',
+    displayName: 'Sample project',
+    badgeColor: '',
+    addedAt: 0
+  }
+  useAppStore.setState({
+    settings: getDefaultSettings('/tmp'),
+    settingsSearchQuery: 'wait for setup to complete before starting agent',
+    repos: [repo]
+  })
+  render(
+    <TooltipProvider>
+      <RepositoryPane
+        repo={repo}
+        yamlHooks={null}
+        hasHooksFile={false}
+        hooksInspectionReady
+        mayNeedUpdate={false}
+        updateRepo={vi.fn()}
+        removeProject={vi.fn()}
+      />
+    </TooltipProvider>
+  )
+
+  expect(
+    screen.getByRole('switch', { name: 'Wait for setup to complete before starting agent' })
+  ).toBeTruthy()
+})

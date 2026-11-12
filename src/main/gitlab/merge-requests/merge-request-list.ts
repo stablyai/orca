@@ -9,7 +9,7 @@ import { acquire, glabApiWithHeaders, release } from '../requests/glab-request-a
 import { classifyListFetchError } from '../requests/glab-error-classification'
 import { getGlabKnownHosts, type LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import { glabHostnameArgs, glabRepoExecOptions } from '../projects/gitlab-project-ref-resolution'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import { parseGlabJsonList, parseGlabPaginationHeader } from '../requests/glab-api-response'
 import { resolveIssueSource } from '../issues/gitlab-issue-source-resolution'
 import { encodedProject } from '../projects/project-path-encoding'

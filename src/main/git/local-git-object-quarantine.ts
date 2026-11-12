@@ -8,7 +8,7 @@ import {
 } from '../../shared/git/objects/git-object-quarantine'
 import { toLinuxPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { parseWslPath } from '../wsl/filesystem/unc-path-access'
-import { usesHostGitForWslLinkedWorktree } from './command-runner/wsl-linked-worktree-git-routing'
+import { usesHostGitForWslLinkedWorktree } from './command-runner/host-routing/wsl-linked-worktree-git-routing'
 import { readRepoCommonDirFromGit } from './worktrees/catalog/worktree-list-reader'
 
 export type LocalGitObjectQuarantine = {

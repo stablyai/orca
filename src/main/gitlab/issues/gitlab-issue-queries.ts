@@ -4,7 +4,7 @@ import type { IssueSourcePreference } from '../../../shared/repo-types'
 import { mapGitLabIssueInfo } from '../requests/gitlab-response-mapping'
 // prettier-ignore
 import { glabApiWithHeaders, acquire, release } from '../requests/glab-request-admission'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import { getIssueProjectRef, resolveIssueSource } from './gitlab-issue-source-resolution'
 import { classifyGlabError, classifyListFetchError } from '../requests/glab-error-classification'
 import { getGlabKnownHosts, type LocalGitExecOptions } from '../projects/gitlab-known-host-probe'

@@ -17,10 +17,10 @@ const {
   sourceContext: { host: 'github.com', available: true }
 }))
 const gitExecFileAsync = vi.hoisted(() => vi.fn())
-vi.mock('../git/command-runner/exec-file-capture', () => ({
+vi.mock('../git/command-runner/process-capture/exec-file-capture', () => ({
   execFileCaptureToTermination: capture
 }))
-vi.mock('../git/command-runner/wsl-command-resolution', () => ({
+vi.mock('../git/command-runner/host-routing/wsl-command-resolution', () => ({
   resolveCommand: (binary: string, args: string[], cwd?: string, distro?: string) => ({
     binary,
     args,
@@ -30,10 +30,7 @@ vi.mock('../git/command-runner/wsl-command-resolution', () => ({
   }),
   resolveDefaultWslCli: () => null
 }))
-vi.mock('../git/runner', async () => ({
-  ghExecFileAsync: (await import('../git/command-runner/gh-exec-file')).ghExecFileAsync,
-  gitExecFileAsync
-}))
+
 vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<typeof GitExecFileModule>()),
   gitExecFileAsync

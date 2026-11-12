@@ -9,7 +9,7 @@ import {
 } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
-import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/windows-host-git-environment'
+import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRepoName } from '../../git/repo'
 import { inspectGitRepoForRegistrationAsync } from '../../git/repo-detection'
 import { getClonePathComparisonKey, getSavedProjectPathKeys } from '../../git/repo-clone-path'

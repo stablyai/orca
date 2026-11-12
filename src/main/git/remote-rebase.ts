@@ -8,8 +8,8 @@ import {
 } from '../../shared/git/remotes/git-rebase-source'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
-import { withLocalGitCapabilityCacheForExecution } from './command-runner/git-capability-state'
-import { gitExecFileAsync } from './runner'
+import { withLocalGitCapabilityCacheForExecution } from './command-runner/host-routing/git-capability-state'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 
 export async function gitPullRebaseFromBase(

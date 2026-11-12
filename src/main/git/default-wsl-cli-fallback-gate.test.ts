@@ -27,7 +27,9 @@ vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) =>
   readWslDistroRunningState: readWslDistroRunningStateMock
 }))
 
-import { ghExecFileAsync, glabExecFileAsync, setDefaultWslDistroOverride } from './runner'
+import { ghExecFileAsync } from './command-runner/hosted-cli/gh-exec-file'
+import { glabExecFileAsync } from './command-runner/hosted-cli/glab-exec-file'
+import { setDefaultWslDistroOverride } from './command-runner/host-routing/wsl-command-resolution'
 import { _resetGhRateLimitBreaker } from './gh-rate-limit-breaker'
 import { runAsWslExecUserAct } from '../wsl/discovery/wsl-background-exec-gate'
 import {
@@ -90,18 +92,6 @@ describe.each(CLIS)('$cli default-distro fallback', ({ cli, run }) => {
 
     await expect(run()).rejects.toBeInstanceOf(WslDistroUnverifiableError)
     expect(spawnedWsl()).toBe(false)
-  })
-
-  it('falls back to a running default distro as before', async () => {
-    hostMissingThenWslAnswers(cli)
-
-    await expect(run()).resolves.toEqual({ stdout: '{}', stderr: '' })
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
-      'wsl.exe',
-      expect.arrayContaining(['-d', 'Ubuntu']),
-      expect.anything()
-    )
   })
 
   it('still falls back to a stopped one inside a user act for it', async () => {

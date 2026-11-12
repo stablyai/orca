@@ -16,7 +16,8 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { isGitWorktreeMutationInFlight } from './command-runner/git-worktree-mutation-state'
 import { resolveGitDir } from './source-control/resolve-git-dir'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from './git-runtime-options'
-import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
+import { gitOptionalLocksDisabledEnv } from './command-runner/git-environment/git-process-env'
 import { parseCheckoutSkippedPaths } from './checkout-skipped-paths'
 import { readGitCommandFailureStderr } from '../../shared/git/commands/git-command-failure-text'
 

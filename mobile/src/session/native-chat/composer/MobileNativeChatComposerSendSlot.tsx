@@ -1,5 +1,5 @@
 import type { RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { isStructuredAgentSessionHostCommand } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { agentSessionInteractionCommand } from '../../../../../src/shared/agent-session/options/agent-session-interaction-mode'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
@@ -36,7 +36,7 @@ export function MobileNativeChatComposerSendSlot({
   stop,
   onSend
 }: {
-  fieldRef: RefObject<TextInput | null>
+  fieldRef: RefObject<TextInputInstance | null>
   value: string
   draftScopeKey: string | null | undefined
   attachmentCount: number

@@ -1,6 +1,6 @@
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { assertValidGitPushTarget } from '../../shared/git/remotes/git-push-target-validation'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 import type { GitExecOptions as GitCommandExecOptions } from './command-runner/git-exec-options'
 
 type GitExecOptions = Pick<GitCommandExecOptions, 'wslDistro' | 'admissionTier'>

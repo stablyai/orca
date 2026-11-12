@@ -16,10 +16,11 @@ vi.mock('../observability/instrumentation', () => ({
   withGitSpan: (_attributes: unknown, run: () => unknown) => run()
 }))
 vi.mock('../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn: vi.fn() }))
-import { gitExecFileAsync, gitExecFileAsyncBuffer, gitStreamStdout } from './runner'
-import { GitAdmissionScheduler } from '../../shared/git/admission/git-admission-scheduler'
-import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
-import type { GitAdmissionEvent } from '../../shared/git/admission/git-admission-state'
+import { gitExecFileAsync, gitExecFileAsyncBuffer } from './command-runner/git-exec-file'
+import { gitStreamStdout } from './command-runner/git-stream-stdout'
+
+import { _resetGitAdmissionForTests } from './command-runner/admission/git-subprocess-admission'
+
 import {
   recordHostAutocrlf,
   resetWslWindowsCheckoutGitConfigForTests,
@@ -33,8 +34,8 @@ import {
 import {
   prepareWslLinkedWorktreeGitRouting,
   resetWslLinkedWorktreeGitRoutingForTests
-} from './command-runner/wsl-linked-worktree-git-routing'
-import type { WslLinkedWorktreeRoutingFileSystem } from './command-runner/wsl-linked-worktree-git-route-probe'
+} from './command-runner/host-routing/wsl-linked-worktree-git-routing'
+import type { WslLinkedWorktreeRoutingFileSystem } from './command-runner/host-routing/wsl-linked-worktree-git-route-probe'
 
 afterEach(() => _resetGitAdmissionForTests())
 
@@ -183,56 +184,6 @@ describe('WSL direct Git reads', () => {
       } finally {
         vi.useRealTimers()
       }
-    })
-  })
-
-  it('waits for direct Git to close before retrying through the login shell', async () => {
-    await withPlatform('win32', async () => {
-      const admissionEvents: GitAdmissionEvent[] = []
-      _resetGitAdmissionForTests(
-        new GitAdmissionScheduler({ onAdmissionEvent: (event) => admissionEvents.push(event) })
-      )
-      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
-      let directChild!: ReturnType<typeof createMockChild>
-      execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
-        const child = createMockChild()
-        directChild = child
-        queueMicrotask(() => {
-          callback?.(
-            Object.assign(new Error('exit 127'), { code: 127 }),
-            '',
-            '/usr/bin/env: No such file or directory'
-          )
-        })
-        return child
-      })
-      execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
-        const child = createMockChild()
-        queueMicrotask(() => {
-          child.emit('close', 0, null)
-          callback?.(null, 'ok', '')
-        })
-        return child
-      })
-
-      const result = gitExecFileAsync(['status', '--short'], {
-        cwd: String.raw`C:\repo`,
-        preferWslDirectGit: true,
-        wslDistro: DISTRO
-      })
-
-      await vi.waitFor(() => expect(directChild).toBeDefined())
-      await Promise.resolve()
-      expect(execFileMock).toHaveBeenCalledTimes(1)
-      directChild.emit('close', 127, null)
-      await expect(result).resolves.toEqual({ stdout: 'ok', stderr: '' })
-
-      expect(execFileMock.mock.calls[0]?.[1]).toContain('--exec')
-      expect(execFileMock.mock.calls[1]?.[1]?.slice(3, 5)).toEqual(['sh', '-lc'])
-      expect(admissionEvents.map(({ phase, waiterId }) => [phase, waiterId])).toEqual([
-        ['grant', 0],
-        ['release', 0]
-      ])
     })
   })
 

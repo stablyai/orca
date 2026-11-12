@@ -1,6 +1,6 @@
 import { extractExecError } from '../../git/exec-error'
 import { parseGlabApiResponse } from '../requests/glab-api-response'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 
 function isResponseObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null

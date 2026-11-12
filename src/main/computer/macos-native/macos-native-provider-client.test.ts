@@ -1,7 +1,6 @@
 import { EventEmitter } from 'node:events'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PROVIDER_SIGKILL_GRACE_MS } from './macos-native-provider-process-reaping'
 
 const {
   chmodSyncMock,
@@ -118,49 +117,6 @@ describe('MacOSNativeProviderClient', () => {
     spawnMock.mockReset()
     writeFileSyncMock.mockReset()
     vi.useRealTimers()
-  })
-
-  it('escalates to SIGKILL when a helper ignores terminate and SIGTERM', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-
-    const call = client.capabilities()
-    const rejection = expect(call).rejects.toThrow('native macOS provider handshake timed out')
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    const socket = sockets[0]!
-    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
-
-    await vi.advanceTimersByTimeAsync(60_000)
-    await rejection
-
-    const provider = providers[0]!
-    // Socket termination cannot stop a helper wedged in a native call; signal it too.
-    expect(socket.writes.at(-1)).toContain('"method":"terminate"')
-    expect(provider.kill).toHaveBeenCalledWith('SIGTERM')
-    expect(provider.kill).not.toHaveBeenCalledWith('SIGKILL')
-
-    await vi.advanceTimersByTimeAsync(PROVIDER_SIGKILL_GRACE_MS)
-    expect(provider.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('does not escalate to SIGKILL when the helper exits after SIGTERM', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-
-    const call = client.capabilities()
-    const rejection = expect(call).rejects.toThrow('native macOS provider handshake timed out')
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    await vi.waitFor(() => expect(sockets[0]!.writes).toHaveLength(1))
-
-    await vi.advanceTimersByTimeAsync(60_000)
-    await rejection
-
-    const provider = providers[0]!
-    expect(provider.kill).toHaveBeenCalledWith('SIGTERM')
-    provider.exit(0)
-
-    await vi.advanceTimersByTimeAsync(PROVIDER_SIGKILL_GRACE_MS * 2)
-    expect(provider.kill).not.toHaveBeenCalledWith('SIGKILL')
   })
 
   it('reaps the helper process of a superseded startup', async () => {

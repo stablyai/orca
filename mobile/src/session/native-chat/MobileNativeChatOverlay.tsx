@@ -392,5 +392,5 @@ function MobileNativeChatOverlayContent({
 }
 
 const styles = StyleSheet.create({
-  overlay: StyleSheet.absoluteFillObject
+  overlay: StyleSheet.absoluteFill
 })

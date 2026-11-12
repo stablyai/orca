@@ -12,7 +12,7 @@ import {
   withRepoRefMaintenancePaused
 } from './refs/maintenance/local-repo-ref-maintenance'
 import { validateGitPushTarget } from './push-target-validation'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 import { fetchForkRemoteWithStaleRefspecRepair } from './refs/fork-remotes/fork-remote-stale-branch-refspec'
 import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 import { runWithGitWorktreeOperationLock } from '../../shared/git/worktrees/git-worktree-operation-lock'

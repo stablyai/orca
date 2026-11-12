@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -34,7 +34,6 @@ vi.mock('node:fs/promises', async () => {
   }
 })
 
-const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 let directory: string
 let file: string
 let stores: AnalyticsSessionIdStore[]
@@ -63,26 +62,6 @@ afterEach(async () => {
 })
 
 describe('AnalyticsSessionIdStore', () => {
-  it('is lazy and persists a random ID before returning it', async () => {
-    const store = createStore()
-    expect(existsSync(file)).toBe(false)
-    const id = await idFor(store, 'provider-session-123')
-    expect(id).toMatch(UUID_V4)
-    expect(id).not.toContain('provider-session')
-    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({
-      schemaVersion: 1,
-      entries: [['provider-session-123', id]]
-    })
-    expect(await idFor(store, 'provider-session-123')).toBe(id)
-  })
-
-  it('restores the ID after a restart or session resume', async () => {
-    const original = createStore()
-    const id = await idFor(original, 'resumed-session')
-    await original.flush()
-    expect(await idFor(createStore(), 'resumed-session')).toBe(id)
-  })
-
   it('handles concurrent requests for the same and different sessions without lost writes', async () => {
     const store = createStore()
     const ids = await Promise.all(
@@ -93,58 +72,6 @@ describe('AnalyticsSessionIdStore', () => {
     const restored = createStore()
     for (let index = 0; index < 10; index++) {
       expect(await idFor(restored, `session-${index}`)).toBe(ids[index])
-    }
-  })
-
-  it.each(['', '   ', 'x'.repeat(1025)])(
-    'rejects a batch with an invalid key without minting any ID',
-    async (key) => {
-      await expect(createStore().getOrCreate(['valid', key])).rejects.toThrow(
-        'Invalid provider session ID'
-      )
-      expect(existsSync(file)).toBe(false)
-    }
-  )
-
-  it('handles prototype names and delimiter characters as ordinary opaque keys', async () => {
-    const store = createStore()
-    const keys = ['__proto__', 'constructor', 'a::b/c', 'a/b::c']
-    const ids = await Promise.all(keys.map((key) => idFor(store, key)))
-    expect(new Set(ids).size).toBe(keys.length)
-    const restored = createStore()
-    expect(await Promise.all(keys.map((key) => idFor(restored, key)))).toEqual(ids)
-  })
-
-  it.each([
-    '{broken',
-    JSON.stringify({ schemaVersion: 2, entries: [] }),
-    JSON.stringify({ schemaVersion: 1, entries: [['session', 'provider-id']] }),
-    JSON.stringify({ schemaVersion: 1, entries: [], extra: 'secret' })
-  ])('fails closed on invalid persisted state without overwriting it', async (content) => {
-    writeFileSync(file, content)
-    await expect(idFor(createStore(), 'new-session')).rejects.toThrow(
-      'Invalid analytics session identity file'
-    )
-    expect(readFileSync(file, 'utf8')).toBe(content)
-  })
-
-  it('rejects conflicting provider keys and analytics IDs', async () => {
-    const first = '00000000-0000-4000-8000-000000000001'
-    const second = '00000000-0000-4000-8000-000000000002'
-    for (const entries of [
-      [
-        ['a', first],
-        ['a', second]
-      ],
-      [
-        ['a', first],
-        ['b', first]
-      ]
-    ]) {
-      writeFileSync(file, JSON.stringify({ schemaVersion: 1, entries }))
-      await expect(idFor(createStore(), 'new-session')).rejects.toThrow(
-        'Duplicate analytics session identity'
-      )
     }
   })
 

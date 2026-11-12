@@ -1,4 +1,4 @@
-import { gitExecFileAsync } from '../git/runner'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import {
   githubPullRequestHeadLocalRef,
   isSafeReviewHeadFetchRemote,

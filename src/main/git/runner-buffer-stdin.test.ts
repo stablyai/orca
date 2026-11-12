@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { gitExecFileAsync, gitExecFileAsyncBuffer } from './runner'
+import { gitExecFileAsync, gitExecFileAsyncBuffer } from './command-runner/git-exec-file'
 
 const roots: string[] = []
 afterEach(async () => {
