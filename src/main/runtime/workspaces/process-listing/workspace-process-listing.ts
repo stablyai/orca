@@ -67,6 +67,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     () => this._orchestrationDb
   )
 
+  /** The task each pane was dispatched, by pane key, as `worktree.ps` rows title it. */
+  listAgentTasksByPaneKey(): Readonly<Record<string, { taskTitle?: string }>> {
+    return this.agentOrchestrationProjection.buildByPaneKey() ?? {}
+  }
+
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true,

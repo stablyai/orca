@@ -9,8 +9,7 @@ import {
   type AiVaultPrepareChatForkArgs,
   type AiVaultPrepareSessionResumeRequest,
   type AiVaultPrepareSessionResumeResult,
-  isLegacySharedCodexHome,
-  isPerAccountManagedCodexHome
+  aiVaultSessionNeedsResumePreparation
 } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -179,22 +178,6 @@ async function prepareAiVaultSessionHome(
     return { ...session, codexHome: result.substituteCodexHome }
   }
   return session
-}
-
-export function aiVaultSessionNeedsResumePreparation(
-  session: Pick<AiVaultSession, 'agent' | 'codexHome' | 'executionHostId'>
-): boolean {
-  if (session.agent !== 'codex') {
-    return false
-  }
-  if (isLegacySharedCodexHome(session.codexHome)) {
-    return true
-  }
-  // Only local sessions may repin from this client’s account selection; remote sessions retain their recorded home.
-  return (
-    isPerAccountManagedCodexHome(session.codexHome) &&
-    (!session.executionHostId || session.executionHostId === LOCAL_EXECUTION_HOST_ID)
-  )
 }
 
 // Kimi is folder-keyed: wrong cwd rejects resume or silently opens an empty same-ID session (1.52+).

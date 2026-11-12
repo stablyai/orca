@@ -27,7 +27,12 @@ type PluginEvents = {
   wantsEvent(event: PluginEventName): boolean
 }
 
-type RuntimeDelegateSource = Omit<PluginRuntimeDelegate, 'listAgentStatuses' | 'callRuntime'>
+type RuntimeDelegateSource = Omit<
+  PluginRuntimeDelegate,
+  'listAgentStatuses' | 'listAgentTaskTitles' | 'callRuntime'
+> & {
+  listAgentTasksByPaneKey(): Readonly<Record<string, { taskTitle?: string }>>
+}
 
 const WORKSPACE_CHANGE_DEBOUNCE_MS = 150
 
@@ -43,7 +48,15 @@ export function pluginRuntimeDelegate(
     listTerminals: (...args) => runtime.listTerminals(...args),
     sendTerminal: (...args) => runtime.sendTerminal(...args),
     dispatchPluginNotification: (input) => runtime.dispatchPluginNotification(input),
-    listAgentStatuses: agentStatuses
+    listAgentStatuses: agentStatuses,
+    // Only that a pane runs a dispatched task, and its title: never the dispatch's records.
+    listAgentTaskTitles: () =>
+      new Map(
+        Object.entries(runtime.listAgentTasksByPaneKey()).map(([paneKey, task]) => [
+          paneKey,
+          task.taskTitle ?? ''
+        ])
+      )
   }
 }
 

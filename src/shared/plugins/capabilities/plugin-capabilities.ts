@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
 import { PLUGIN_APPEARANCE_SINCE } from '../workers/plugin-host-api-appearance'
 import { PLUGIN_HOST_API_1_8_SINCE } from '../workers/plugin-host-api-1-8'
+import { PLUGIN_HOST_API_1_9_SINCE } from '../workers/plugin-host-api-1-9'
 import {
   pluginFieldDoc,
   PLUGIN_HOST_ACTIONS_SINCE,
@@ -26,7 +27,8 @@ export const PLUGIN_CAPABILITY_KINDS = [
   'appearance:write',
   'workspace:create',
   'automation:read',
-  'automation:write'
+  'automation:write',
+  'history:read'
 ] as const
 
 export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
@@ -46,7 +48,8 @@ export const PLUGIN_CAPABILITY_SINCE: Record<PluginCapabilityKind, string> = {
   'appearance:write': PLUGIN_APPEARANCE_SINCE,
   'workspace:create': PLUGIN_HOST_API_1_8_SINCE,
   'automation:read': PLUGIN_HOST_API_1_8_SINCE,
-  'automation:write': PLUGIN_HOST_API_1_8_SINCE
+  'automation:write': PLUGIN_HOST_API_1_8_SINCE,
+  'history:read': PLUGIN_HOST_API_1_9_SINCE
 }
 
 /** Format 1 capability names and what each now grants. `events:subscribe` split by event domain. */
@@ -92,7 +95,9 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'automation:read':
     'Read your automations: their names, prompts, agents, projects, workspaces and schedules',
   'automation:write':
-    'Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)'
+    'Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)',
+  'history:read':
+    "Read the list of your past agent sessions that Agent Session History finds on this computer (including its running WSL distributions on Windows, but not SSH or other machines): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself"
 }
 
 /** Canonicalize order, duplicates and field order so equivalent grants preserve consent across manifest formatting changes. */
