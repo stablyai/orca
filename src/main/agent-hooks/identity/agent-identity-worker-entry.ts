@@ -1,20 +1,15 @@
 import { randomUUID } from 'node:crypto'
-import { dirname, join } from 'node:path'
+import { parentPort } from 'node:worker_threads'
 
 import SyncDatabase from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import { createStructuredAgentSessionId } from '../../../shared/agent-session/structured-agent-session-create'
 import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
-
-/** One provider conversation as seen from one execution host; '' is the "none" sentinel so the
- *  UNIQUE index applies to every row. */
-export type AgentProviderKey = {
-  executionHost: string
-  wslDistro: string
-  agent: string
-  providerSessionId: string
-  locator: string
-}
+import type { AgentProviderKey } from './agent-provider-key'
+import type {
+  AgentIdentityWorkerRequest,
+  AgentIdentityWorkerResponse
+} from './agent-identity-worker-protocol'
 
 /** Bump only with additive DDL below; a newer file opens read-only, never rebuilt. */
 const SCHEMA_VERSION = 1
@@ -36,13 +31,9 @@ CREATE TABLE IF NOT EXISTS provider_links(
 const SELECT_LINK = `SELECT orca_session_id FROM provider_links
   WHERE execution_host = ? AND wsl_distro = ? AND agent = ? AND provider_session_id = ? AND locator = ?`
 
-export function agentIdentityDatabasePath(lastStatusPath: string): string {
-  return join(dirname(lastStatusPath), 'agent-identities.db')
-}
-
 /** Orca ids for provider conversations, which nothing can rebuild: the file is never deleted, and
- *  an unreadable one throws so ids stay unavailable. A linked key is never relinked. Runs on the
- *  hook server's thread, so lock waits stay short. */
+ *  an unreadable one throws so ids stay unavailable. A linked key is never relinked. Runs only in
+ *  this worker, off the hook server's thread. */
 export class AgentIdentityStore {
   private readonly db: SyncDatabase
   /** A newer build's file: existing ids resolve, nothing is minted. */
@@ -158,4 +149,43 @@ function openIdentityDatabase(
 
 function keyBindings(key: AgentProviderKey): string[] {
   return [key.executionHost, key.wslDistro, key.agent, key.providerSessionId, key.locator]
+}
+
+let store: { path: string; store: AgentIdentityStore } | null = null
+
+function storeFor(path: string): AgentIdentityStore {
+  if (store?.path !== path) {
+    store?.store.close()
+    store = null
+    store = { path, store: new AgentIdentityStore(path) }
+  }
+  return store.store
+}
+
+/** One request at a time: the client serializes calls through its queue. */
+export function handleAgentIdentityRequest(
+  request: AgentIdentityWorkerRequest
+): AgentIdentityWorkerResponse {
+  try {
+    const opened = storeFor(request.path)
+    return request.kind === 'identify'
+      ? { id: request.id, ok: true, value: opened.identify(request.key) }
+      : { id: request.id, ok: true, value: opened.has(request.orcaSessionId) }
+  } catch (error) {
+    // A store that failed to open is reopened by the next request, never rebuilt.
+    store?.store.close()
+    store = null
+    return {
+      id: request.id,
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+const port = parentPort
+if (port) {
+  port.on('message', (request: AgentIdentityWorkerRequest) => {
+    port.postMessage(handleAgentIdentityRequest(request))
+  })
 }

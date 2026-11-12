@@ -19,7 +19,7 @@ import {
 import { replayAcceptedSend } from './send-replay'
 import { sendRemoteMessage } from '../../../../orchestration/legacy-remote/send-remote'
 import { withPeerMailSend } from './peer-mail-send'
-import { mayNameSession } from './session-recipient'
+import { mayNameSession, resolveTerminalAgentRecipient } from './session-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/send-control-mail'
@@ -170,7 +170,8 @@ export const ORCHESTRATION_SEND_METHODS = [
             db,
             handle: to,
             senderRunId: routing.run?.id,
-            explicitRunId: params.run
+            explicitRunId: params.run,
+            terminalRecipient: await resolveTerminalAgentRecipient(to)
           })
           if (!recipient.ok) {
             throw new OrchestrationError(recipient.code, recipient.message)

@@ -23,7 +23,6 @@ import { AgentHookServerAgentIdentities } from './server-agent-identities'
 import { publishedOrcaSessionId } from '../identity/pane-agent-identities'
 
 export abstract class AgentHookServerListeners extends AgentHookServerAgentIdentities {
-  protected providerRowsByTab: Map<string, AgentStatusIpcPayload[]> | null = null
   protected statusChangeNotificationVersion = 0
   protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
 

@@ -5,7 +5,12 @@ import {
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { providerSessionLocatorIdentifies } from '../../../shared/agent-session/lifecycle/agent-provider-session-equality'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
-import { AgentIdentityStore, type AgentProviderKey } from './agent-identity-store'
+import { sameProviderKey, type AgentProviderKey } from './agent-provider-key'
+import {
+  AgentIdentityWorkerClient,
+  type AgentIdentityClient,
+  type AgentIdentityLookup
+} from './agent-identity-worker-client'
 
 const RETRY_DELAY_MS = 30_000
 
@@ -55,12 +60,12 @@ export function agentSightingOf(row: {
 }
 
 /** A row's conversation id, computed when its provider key changes and copied at publication.
- *  `id` null: unresolved, either settled (a read-only file without this link) or `pending` (a
- *  failed lookup a later admission or Copy click retries). */
+ *  `id` null: unresolved, either settled (a read-only file without this link) or `pending` (the
+ *  worker has not answered yet, or failed; a later admission or Copy click asks again). */
 export type RowAgentIdentity = {
   key: AgentProviderKey
   id: OrcaSessionId | null
-  /** The store was unavailable: not settled, so a later admission resolves it again. */
+  /** Not yet answered by the store: published as null so Copy stays offered and waits. */
   pending?: true
 }
 
@@ -72,39 +77,47 @@ export function publishedOrcaSessionId(
   return identity?.id ?? (identity?.pending ? null : undefined)
 }
 
-export type AgentIdentityStoreHandle = Pick<
-  AgentIdentityStore,
-  'identify' | 'has' | 'close' | 'readOnly'
->
+/** A place whose pending identity just settled, for the hook server to re-stamp and publish. */
+export type SettledAgentIdentityPlace = {
+  place: string
+  paneKey: string
+  /** Set for a canonical (tmux-selected) subject; legacy places are status row keys. */
+  canonicalSubject?: string
+  identity: RowAgentIdentity
+}
 
-type IdentifyResult =
-  | { kind: 'id'; id: OrcaSessionId }
-  | { kind: 'absent' }
-  | { kind: 'unavailable' }
+type IndexedPlace = { paneKey: string; identity: RowAgentIdentity; keyString: string }
 
-/** Runtime-only marker for indexed rows that are canonical (tmux) statuses, not legacy rows. */
+/** Marks reverse-index places that are canonical (tmux) subjects, not legacy row keys. */
 const CANONICAL_PLACE = '\u0001'
 
-/** Names provider conversations for the hook server and indexes which rows carry each id. */
+/** Names provider conversations for the hook server and indexes which rows carry each id.
+ *  Admission stays synchronous: a new key is published pending and resolved once, off-thread, by
+ *  the identity worker; its committed answer then re-stamps every current row naming that key. */
 export class PaneAgentIdentities {
-  private store: AgentIdentityStoreHandle | null = null
-  private storePath: string | null = null
-  /** After an open or write failure no SQLite work is tried before this, except by a click. */
+  private client: AgentIdentityClient | null = null
+  private clientPath: string | null = null
+  /** Bumped when the store authority changes; a reply from an older one stamps nothing. */
+  private generation = 0
+  /** After a failed answer no background request is sent before this; a click still is. */
   private retryAt = 0
   private failing = false
-  private readonly placeById = new Map<string, { paneKey: string; id: OrcaSessionId }>()
+  private readonly places = new Map<string, IndexedPlace>()
   private readonly placesById = new Map<string, Set<string>>()
+  private readonly placesByKey = new Map<string, Set<string>>()
   private readonly canonicalBySubject = new Map<string, RowAgentIdentity>()
+  /** One request per exact key, shared by every row, pane and click waiting on it. */
+  private readonly demands = new Map<string, Promise<AgentIdentityLookup>>()
+  private readonly keyStrings = new WeakMap<AgentProviderKey, string>()
 
   constructor(
     private readonly databasePath: () => string | null,
-    private readonly openStore: (path: string) => AgentIdentityStoreHandle = (path) =>
-      new AgentIdentityStore(path)
+    private readonly onSettled: (places: SettledAgentIdentityPlace[]) => void,
+    private readonly createClient: () => AgentIdentityClient = () => new AgentIdentityWorkerClient()
   ) {}
 
-  /** The identity a row carries: the carried one while its provider key is unchanged, else a
-   *  store resolution. Undefined when the row names no key here; `pending` when the store was
-   *  unavailable, so the next admission (after the backoff) or a Copy click retries. */
+  /** The identity a row carries: the carried one while its provider key is unchanged, a current
+   *  row's settled answer for the same key, else pending while the worker resolves it. */
   assign(
     sighting: ProviderSessionSighting,
     carried: RowAgentIdentity | undefined
@@ -113,50 +126,65 @@ export class PaneAgentIdentities {
     if (!key) {
       return undefined
     }
-    if (carried && carried.pending !== true && sameProviderKey(carried.key, key)) {
+    if (carried && sameProviderKey(carried.key, key)) {
+      if (carried.pending) {
+        void this.demand(carried.key, false)
+      }
       return carried
     }
-    const result = this.resolve(key, false)
-    return result.kind === 'id'
-      ? { key, id: result.id }
-      : result.kind === 'absent'
-        ? { key, id: null }
-        : { key, id: null, pending: true }
+    const settled = this.settledFor(this.keyString(key))
+    if (settled) {
+      return settled
+    }
+    void this.demand(key, false)
+    return { key, id: null, pending: true }
   }
 
-  /** An explicit request (a Copy click): one attempt even during a failure backoff. */
-  identify(sighting: ProviderSessionSighting): OrcaSessionId | null {
+  /** An explicit request (a Copy click): joins pending work, or tries once during the backoff. */
+  async identify(sighting: ProviderSessionSighting): Promise<OrcaSessionId | null> {
     const key = agentProviderKeyOf(sighting)
-    const result = key ? this.resolve(key, true) : null
-    return result?.kind === 'id' ? result.id : null
+    if (!key) {
+      return null
+    }
+    const settled = this.settledFor(this.keyString(key))
+    if (settled) {
+      return settled.id
+    }
+    return (await this.demand(key, true))?.id ?? null
   }
 
-  /** Whether this host minted `id` for a terminal conversation. */
-  isTerminalIdentity(id: string): boolean {
+  /** Whether this host minted `id`; a miss in the live index asks the store, since a sleeping or
+   *  closed conversation keeps its id. Undefined when the store cannot answer. */
+  async isTerminalIdentity(id: string): Promise<boolean | undefined> {
     if (this.placesById.has(id)) {
       return true
     }
-    return this.withStore(false, (store) => store.has(id)) === true
+    const path = this.databasePath()
+    return path ? this.currentClient(path).has(path, id) : undefined
   }
 
-  /** Keeps the reverse index exact: `place` is a legacy row key or a canonical subject. */
+  /** Keeps both indexes exact: `place` is a legacy row key or a canonical subject. */
   setPlace(place: string, paneKey: string, identity: RowAgentIdentity | undefined): void {
-    const previous = this.placeById.get(place)
-    if (previous) {
-      const places = this.placesById.get(previous.id)
-      places?.delete(place)
-      if (places?.size === 0) {
-        this.placesById.delete(previous.id)
-      }
-      this.placeById.delete(place)
-    }
-    if (!identity?.id) {
+    const previous = this.places.get(place)
+    if (previous?.identity === identity && previous?.paneKey === paneKey) {
       return
     }
-    this.placeById.set(place, { paneKey, id: identity.id })
-    const places = this.placesById.get(identity.id) ?? new Set<string>()
-    places.add(place)
-    this.placesById.set(identity.id, places)
+    if (previous) {
+      removeFrom(this.placesByKey, previous.keyString, place)
+      if (previous.identity.id) {
+        removeFrom(this.placesById, previous.identity.id, place)
+      }
+      this.places.delete(place)
+    }
+    if (!identity) {
+      return
+    }
+    const keyString = this.keyString(identity.key)
+    this.places.set(place, { paneKey, identity, keyString })
+    addTo(this.placesByKey, keyString, place)
+    if (identity.id) {
+      addTo(this.placesById, identity.id, place)
+    }
   }
 
   /** The rows carrying `id`: a legacy row key, or a canonical subject key with its pane. */
@@ -165,7 +193,7 @@ export class PaneAgentIdentities {
       const canonical = place.startsWith(CANONICAL_PLACE)
       return {
         key: canonical ? place.slice(CANONICAL_PLACE.length) : place,
-        paneKey: this.placeById.get(place)?.paneKey ?? '',
+        paneKey: this.places.get(place)?.paneKey ?? '',
         canonical
       }
     })
@@ -201,72 +229,121 @@ export class PaneAgentIdentities {
   }
 
   close(): void {
-    this.store?.close()
-    this.store = null
-    this.storePath = null
+    this.client?.dispose()
+    this.client = null
+    this.clientPath = null
+    this.generation++
+    this.demands.clear()
     this.retryAt = 0
   }
 
-  private resolve(key: AgentProviderKey, explicit: boolean): IdentifyResult {
-    const id = this.withStore(explicit, (store) => store.identify(key))
-    return id === undefined ? { kind: 'unavailable' } : id ? { kind: 'id', id } : { kind: 'absent' }
-  }
-
-  /** Undefined when the store is unavailable or failed; a failure starts the retry delay. */
-  private withStore<T>(
-    explicit: boolean,
-    read: (store: AgentIdentityStoreHandle) => T
-  ): T | undefined {
-    if (!explicit && Date.now() < this.retryAt) {
-      return undefined
+  private demand(key: AgentProviderKey, explicit: boolean): Promise<AgentIdentityLookup> {
+    const keyString = this.keyString(key)
+    const inFlight = this.demands.get(keyString)
+    if (inFlight) {
+      return inFlight
     }
-    const store = this.currentStore()
-    if (!store) {
-      return undefined
-    }
-    try {
-      const result = read(store)
-      this.failing = false
-      return result
-    } catch (error) {
-      this.retryAt = Date.now() + RETRY_DELAY_MS
-      this.reportFailure(error)
-      return undefined
-    }
-  }
-
-  private currentStore(): AgentIdentityStoreHandle | null {
     const path = this.databasePath()
-    if (path !== this.storePath) {
-      this.close()
-      this.storePath = path
+    if (!path || (!explicit && Date.now() < this.retryAt)) {
+      return Promise.resolve(undefined)
     }
-    if (!path || this.store) {
-      return this.store
-    }
-    try {
-      this.store = this.openStore(path)
-    } catch (error) {
-      this.retryAt = Date.now() + RETRY_DELAY_MS
-      this.reportFailure(error)
-    }
-    return this.store
+    const client = this.currentClient(path)
+    // Read after currentClient: switching stores closes the old one and bumps the generation.
+    const generation = this.generation
+    const request: Promise<AgentIdentityLookup> = client.identify(path, key).then((answer) => {
+      if (this.demands.get(keyString) === request) {
+        this.demands.delete(keyString)
+      }
+      if (generation !== this.generation) {
+        return undefined
+      }
+      if (!answer) {
+        this.retryAt = Date.now() + RETRY_DELAY_MS
+        if (!this.failing) {
+          console.warn('[agent-hooks] agent identities unavailable; retrying after a delay')
+        }
+        this.failing = true
+        return undefined
+      }
+      this.failing = false
+      this.settle(keyString, { key, id: answer.id })
+      return answer
+    })
+    this.demands.set(keyString, request)
+    return request
   }
 
-  private reportFailure(error: unknown): void {
-    if (!this.failing) {
-      console.warn('[agent-hooks] agent identity store unavailable:', error)
+  /** Hands every current place still pending on this key to the hook server to re-stamp. */
+  private settle(keyString: string, identity: RowAgentIdentity): void {
+    const settled: SettledAgentIdentityPlace[] = []
+    for (const place of this.placesByKey.get(keyString) ?? []) {
+      const indexed = this.places.get(place)
+      if (!indexed?.identity.pending) {
+        continue
+      }
+      if (place.startsWith(CANONICAL_PLACE)) {
+        const canonicalSubject = place.slice(CANONICAL_PLACE.length)
+        this.canonicalBySubject.set(canonicalSubject, identity)
+        settled.push({ place, paneKey: indexed.paneKey, canonicalSubject, identity })
+      } else {
+        settled.push({ place, paneKey: indexed.paneKey, identity })
+      }
     }
-    this.failing = true
+    for (const { place, paneKey, canonicalSubject } of settled) {
+      if (canonicalSubject) {
+        this.setPlace(place, paneKey, identity)
+      }
+    }
+    if (settled.length > 0) {
+      this.onSettled(settled)
+    }
+  }
+
+  private settledFor(keyString: string): RowAgentIdentity | undefined {
+    for (const place of this.placesByKey.get(keyString) ?? []) {
+      const identity = this.places.get(place)?.identity
+      if (identity && !identity.pending) {
+        return identity
+      }
+    }
+    return undefined
+  }
+
+  private currentClient(path: string): AgentIdentityClient {
+    if (path !== this.clientPath) {
+      this.close()
+      this.clientPath = path
+    }
+    this.client ??= this.createClient()
+    return this.client
+  }
+
+  private keyString(key: AgentProviderKey): string {
+    let keyString = this.keyStrings.get(key)
+    if (keyString === undefined) {
+      keyString = [
+        key.executionHost,
+        key.wslDistro,
+        key.agent,
+        key.providerSessionId,
+        key.locator
+      ].join('\u0000')
+      this.keyStrings.set(key, keyString)
+    }
+    return keyString
   }
 }
 
-function sameProviderKey(left: AgentProviderKey, right: AgentProviderKey): boolean {
-  return (
-    left.providerSessionId === right.providerSessionId &&
-    left.agent === right.agent &&
-    left.wslDistro === right.wslDistro &&
-    left.locator === right.locator &&
-    left.executionHost === right.executionHost
-  )
+function addTo(index: Map<string, Set<string>>, key: string, place: string): void {
+  const places = index.get(key) ?? new Set<string>()
+  places.add(place)
+  index.set(key, places)
+}
+
+function removeFrom(index: Map<string, Set<string>>, key: string, place: string): void {
+  const places = index.get(key)
+  places?.delete(place)
+  if (places?.size === 0) {
+    index.delete(key)
+  }
 }

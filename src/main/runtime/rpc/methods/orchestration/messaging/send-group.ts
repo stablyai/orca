@@ -1,3 +1,4 @@
+import { resolveTerminalAgentRecipient } from './session-recipient'
 import type {
   MessagePriority,
   MessageType
@@ -204,6 +205,14 @@ export async function sendGroupMessage(args: {
   }
 
   const legacyAdoptedMailboxOwner = db.getLegacyAdoptedRunMailboxOwner()
+  // Terminal agent ids are known to the identity store, which answers asynchronously.
+  const terminalRecipients = new Map(
+    await Promise.all(
+      [...handles, from].map(
+        async (handle) => [handle, await resolveTerminalAgentRecipient(handle)] as const
+      )
+    )
+  )
   const resolvedRecipients = handles.map((handle): BareRecipientResolution => {
     const mailbox = candidates.find((candidate) => candidate.handle === handle)?.mailbox
     return mailbox
@@ -214,7 +223,8 @@ export async function sendGroupMessage(args: {
           handle,
           senderRunId,
           explicitRunId,
-          legacyAdoptedMailboxOwner
+          legacyAdoptedMailboxOwner,
+          terminalRecipient: terminalRecipients.get(handle) ?? null
         })
   })
   const deliverableRecipients = resolvedRecipients.filter(
@@ -225,7 +235,8 @@ export async function sendGroupMessage(args: {
     db,
     handle: from,
     senderRunId,
-    legacyAdoptedMailboxOwner
+    legacyAdoptedMailboxOwner,
+    terminalRecipient: terminalRecipients.get(from) ?? null
   })
   const senderMailboxKey = senderRecipient.ok
     ? `${senderRecipient.runId ?? ''}\u0000${senderRecipient.to}`

@@ -17,10 +17,6 @@ import {
 } from '../../../shared/agent-status/process/agent-process-presence'
 import { probeAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence-probe'
 import { AgentHookServerLifecycle } from './server-lifecycle'
-import type { EnrichedAgentHookEventPayload } from './server-types'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { OrcaSessionId } from '../../../shared/orca-session-address'
-import { agentSightingOf } from '../identity/pane-agent-identities'
 
 export class AgentHookServer extends AgentHookServerLifecycle {
   private readonly presenceChecks = new WeakMap<
@@ -220,74 +216,6 @@ export class AgentHookServer extends AgentHookServerLifecycle {
         'process'
       )
     }
-  }
-
-  /** Panes proven to run terminal agent `id` now, read through the identity's reverse index;
-   *  null when this host never minted it. */
-  terminalAgentPlaces(id: string): { paneKey: string; worktreeId?: string }[] | null {
-    if (!this.agentIdentities.isTerminalIdentity(id)) {
-      return null
-    }
-    const places: { paneKey: string; worktreeId?: string }[] = []
-    for (const place of this.agentIdentities.placesOf(id)) {
-      // Canonical rows are never hydrated; a legacy row counts only once this runtime observed it,
-      // since a saved status (even Done) cannot prove its process survived Orca being closed.
-      const subject = place.canonical
-        ? this.canonicalSubjectsByPane.get(place.paneKey)?.get(place.key)
-        : undefined
-      const row = place.canonical
-        ? subject && this.canonicalStatusStore.getParent(subject)?.status
-        : this.runtimeObservedStatusPaneKeys.has(place.key)
-          ? this.state.lastStatusByPaneKey.get(place.key)
-          : undefined
-      // Resume seeds, exited agents and unconfirmed restored rows prove no running agent.
-      if (
-        row &&
-        row.providerSessionOnly !== true &&
-        row.restoredUnconfirmed !== true &&
-        !('agentPresence' in row && row.agentPresence?.ended === true)
-      ) {
-        places.push({
-          paneKey: place.paneKey,
-          ...(row.worktreeId ? { worktreeId: row.worktreeId } : {})
-        })
-      }
-    }
-    return places
-  }
-
-  /** The pane's terminal agent id, keyed as Copy Session ID picks its id: a confirmed live row
-   *  (legacy or tmux-selected) wins even without a provider session; only an absent or
-   *  unconfirmed row falls back to the pane's sleeping record. An explicit request: a failed
-   *  commit is retried even during the failure backoff. */
-  resolvePaneAgentId(
-    paneKey: string,
-    sleeping:
-      | Pick<SleepingAgentSessionRecord, 'agent' | 'providerSession' | 'connectionId'>
-      | undefined
-  ): OrcaSessionId | null {
-    const resolved = this.resolvePaneKeyAlias(paneKey)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
-    const legacy = this.state.lastStatusByPaneKey.get(resolved) as
-      | EnrichedAgentHookEventPayload
-      | undefined
-    const live = legacy ?? this.getTmuxSelectedStatus(resolved)
-    if (live && live.restoredUnconfirmed !== true) {
-      if (live.structuredHost) {
-        return null
-      }
-      return live.agentIdentity?.id ?? this.agentIdentities.identify(agentSightingOf(live))
-    }
-    // Sleeping records carry no WSL distro; a woken agent's own hook names it. A record from a
-    // foreign connection (a direct SSH relay) names no conversation on this host.
-    if (!sleeping || process.platform === 'win32') {
-      return null
-    }
-    return this.agentIdentities.identify({
-      agent: sleeping.agent,
-      providerSession: sleeping.providerSession,
-      connectionId: sleeping.connectionId ?? null
-    })
   }
 
   /** The last report of this pane's local agent, restored from disk or replayed from the offline

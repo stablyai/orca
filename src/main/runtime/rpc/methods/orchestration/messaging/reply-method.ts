@@ -1,4 +1,5 @@
 import { acceptedAnswerSender } from '../../../../orchestration/mailbox/senders/accepted-answer-sender'
+import { resolveTerminalAgentRecipient } from './session-recipient'
 import { answerSenderRelayReport } from '../../../../orchestration/mailbox/senders/answer-sender-relay-report'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
@@ -154,7 +155,8 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       runtime,
       db,
       originalFrom: original.from_handle,
-      originalRunId: original.run_id
+      originalRunId: original.run_id,
+      terminalRecipient: await resolveTerminalAgentRecipient(original.from_handle)
     })
     db.markAsRead([original.id])
     const reply = db.insertMessage({

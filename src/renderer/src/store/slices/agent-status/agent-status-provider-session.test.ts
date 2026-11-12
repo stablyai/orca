@@ -143,6 +143,20 @@ it('offers Copy Agent ID wherever the host stamped the field, even before it nam
   // A current host whose first link failed stamps null: the click retries on that host.
   report(2_000, null)
   expect(offered()).toBe(true)
+  // A local ID-less update (OSC/title) keeps the host's stamp for the same conversation.
+  store
+    .getState()
+    .setAgentStatus(
+      paneKey,
+      { state: 'working', agentType: 'claude', prompt: 'p' },
+      undefined,
+      { updatedAt: 2_500, stateStartedAt: 2_000 },
+      { worktreeId: 'wt-1' }
+    )
+  expect(offered()).toBe(true)
+  // The host's own answer that it cannot name it (a read-only miss) clears the pending null.
+  report(2_700)
+  expect(offered()).toBe(false)
   report(3_000, 'claude_identity')
   expect(offered()).toBe(true)
 })
