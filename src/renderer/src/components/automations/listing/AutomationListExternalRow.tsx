@@ -112,7 +112,9 @@ export function AutomationListExternalRow({
           tabIndex={0}
           data-automation-external-id={entry.key}
           data-current={isSelected ? 'true' : undefined}
-          aria-label={`${entry.job.name}, ${scheduleLabel}`}
+          aria-label={[entry.job.name, scheduleLabel, showHost ? hostLabel : null]
+            .filter(Boolean)
+            .join(', ')}
           onClick={(event) => {
             // React bubbles portaled menu clicks through this row; ignore them to avoid opening detail.
             if (isPortaledRowMenuClick(event)) {

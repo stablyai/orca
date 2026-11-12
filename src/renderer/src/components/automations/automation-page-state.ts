@@ -32,3 +32,6 @@ export type AutomationRunNowPending = {
   /** The run the host returned, when it returned one. */
   runId: string | null
 }
+
+/** Run now requests in flight, one per automation row, so each row keeps its own busy state. */
+export type AutomationRunNowPendingByRow = Readonly<Record<string, AutomationRunNowPending>>

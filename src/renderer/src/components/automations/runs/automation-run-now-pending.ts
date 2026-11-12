@@ -1,5 +1,8 @@
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
-import type { AutomationRunNowPending } from '../automation-page-state'
+import type {
+  AutomationRunNowPending,
+  AutomationRunNowPendingByRow
+} from '../automation-page-state'
 
 // Hosts stamp createdAt on their clock; tolerate a little skew when matching the new run.
 const RUN_NOW_CLOCK_SKEW_MS = 5_000
@@ -31,15 +34,33 @@ export function isAutomationRunNowPending(
   return pending !== null && pending.rowKey === rowKey && !isAutomationRunNowListed(pending, runs)
 }
 
+/** Record a new request for its row, replacing only that row's earlier one. */
+export function startAutomationRunNowPending(
+  byRow: AutomationRunNowPendingByRow,
+  pending: AutomationRunNowPending
+): AutomationRunNowPendingByRow {
+  return { ...byRow, [pending.rowKey]: pending }
+}
+
 /**
- * Apply an answer (failure, acknowledgement, timeout) to the busy state only if it still
- * belongs to the request that got it. A later click, here or on another automation,
- * replaced the slot, and its own answer settles it.
+ * Apply an answer (failure, acknowledgement, timeout) to a row's busy state only if it still
+ * belongs to the request that got it; a later click on that row owns the slot by then.
+ * Returning null clears the row.
  */
 export function settleAutomationRunNowPending(
-  current: AutomationRunNowPending | null,
+  byRow: AutomationRunNowPendingByRow,
+  rowKey: string,
   requestId: string,
   update: (pending: AutomationRunNowPending) => AutomationRunNowPending | null
-): AutomationRunNowPending | null {
-  return current?.requestId === requestId ? update(current) : current
+): AutomationRunNowPendingByRow {
+  const current = byRow[rowKey]
+  if (current?.requestId !== requestId) {
+    return byRow
+  }
+  const next = update(current)
+  if (next) {
+    return { ...byRow, [rowKey]: next }
+  }
+  const { [rowKey]: _settled, ...rest } = byRow
+  return rest
 }

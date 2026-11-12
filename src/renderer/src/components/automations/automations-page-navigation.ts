@@ -88,7 +88,10 @@ export function createAutomationsPageNavigation({
   }
   /** Apply a back/forward history entry. Automation pages resolve through the deep-link path. */
   const goToLocation = (location: AutomationsPageLocation): void => {
-    setListSearchQuery('')
+    // Why: the list keeps its search; an automation is resolved among all rows, not the filtered ones.
+    if (location.page !== 'list' && location.page !== 'runs') {
+      setListSearchQuery('')
+    }
     switch (location.page) {
       case 'list':
         showList()

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { makeRun } from '../automations-page-fixtures'
 import {
   isAutomationRunNowPending,
-  settleAutomationRunNowPending
+  settleAutomationRunNowPending,
+  startAutomationRunNowPending
 } from './automation-run-now-pending'
 
 const requestedAt = 1_000_000
@@ -65,22 +66,28 @@ describe('isAutomationRunNowPending', () => {
     expect(isAutomationRunNowPending(pending, 'other-row', [])).toBe(false)
   })
 
-  it('ignores a late answer to an earlier click that another click replaced', () => {
+  it('keeps each automation busy on its own; a late answer for A leaves B alone', () => {
     const a = { requestId: 'a', rowKey: 'row-a', requestedAt, acknowledgedAt: null, runId: null }
     const b = { requestId: 'b', rowKey: 'row-b', requestedAt, acknowledgedAt: null, runId: null }
-    // A fails after B started: B stays busy.
-    expect(settleAutomationRunNowPending(b, a.requestId, () => null)).toBe(b)
-    // B's own failure clears it.
-    expect(settleAutomationRunNowPending(b, b.requestId, () => null)).toBeNull()
+    const both = startAutomationRunNowPending(startAutomationRunNowPending({}, a), b)
+    expect(both).toEqual({ 'row-a': a, 'row-b': b })
+    // A fails: only A clears.
+    expect(settleAutomationRunNowPending(both, 'row-a', 'a', () => null)).toEqual({ 'row-b': b })
+    // An answer carrying the wrong request id does nothing.
+    expect(settleAutomationRunNowPending(both, 'row-b', 'a', () => null)).toBe(both)
   })
 
-  it('ignores an earlier same-automation request once a newer one owns the slot', () => {
+  it('ignores an earlier same-automation request once a newer one owns the row', () => {
     const older = { requestId: 'r1', rowKey: 'row', requestedAt, acknowledgedAt: null, runId: null }
     const newer = { ...older, requestId: 'r2' }
-    const acknowledged = settleAutomationRunNowPending(newer, 'r1', (p) => ({
+    const byRow = startAutomationRunNowPending({ row: older }, newer)
+    const acknowledged = settleAutomationRunNowPending(byRow, 'row', 'r1', (p) => ({
       ...p,
       acknowledgedAt: requestedAt + 1
     }))
-    expect(acknowledged).toBe(newer)
+    expect(acknowledged).toBe(byRow)
+    expect(
+      settleAutomationRunNowPending(byRow, 'row', 'r2', (p) => ({ ...p, acknowledgedAt: 5 }))
+    ).toEqual({ row: { ...newer, acknowledgedAt: 5 } })
   })
 })

@@ -110,7 +110,10 @@ export function useAutomationsPageListState({
   )
   const selectedExternal =
     externalAutomationEntries.find((entry) => entry.key === selectedExternalKey) ??
-    (visibleRows.length === 0 ? (externalAutomationEntries[0] ?? null) : null)
+    // Why: a key that no longer resolves (job removed, history replay) must not open another job.
+    (selectedExternalKey === null && visibleRows.length === 0
+      ? (externalAutomationEntries[0] ?? null)
+      : null)
   const selectedRow =
     selectedExternalKey === null && selectedExternal === null
       ? selectedId

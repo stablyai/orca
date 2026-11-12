@@ -361,6 +361,7 @@ export function AutomationDetail({
       <AutomationDetailHealth
         automation={automation}
         runs={runs}
+        runsUnavailable={Boolean(runsNotice)}
         latestRun={latestRun}
         now={now}
         onOpenRun={onOpenRun}

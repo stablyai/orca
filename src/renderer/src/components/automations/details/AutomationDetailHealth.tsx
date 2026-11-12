@@ -84,10 +84,13 @@ export function AutomationDetailHealth({
   runs,
   latestRun,
   now,
+  runsUnavailable = false,
   onOpenRun
 }: {
   automation: Automation
   runs: AutomationRun[]
+  /** The history read failed: spend is unknown, not zero. */
+  runsUnavailable?: boolean
   latestRun: AutomationRun | undefined
   now: number
   onOpenRun?: (run: AutomationRun) => void
@@ -135,7 +138,7 @@ export function AutomationDetailHealth({
   const hasUsage = usage.knownRuns > 0
   const usageValue = hasUsage
     ? formatAutomationCost(usage.estimatedCostUsd, t)
-    : usage.unavailableRuns > 0
+    : usage.unavailableRuns > 0 || runsUnavailable
       ? t('auto.components.automations.AutomationDetail.usageUnavailable', 'Unavailable')
       : t('auto.components.automations.AutomationDetail.noRuns', 'No runs')
   const usageDetail = hasUsage

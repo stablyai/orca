@@ -11,7 +11,10 @@ import { waitForAutomationRerunPendingVisibility } from './automation-run-view-s
 import type { AutomationListRow } from '../listing/automation-list-row-identity'
 import type { AutomationsPageActionContext } from '../automations-page-action-context'
 import type { AutomationRunNowPending } from '../automation-page-state'
-import { settleAutomationRunNowPending } from './automation-run-now-pending'
+import {
+  settleAutomationRunNowPending,
+  startAutomationRunNowPending
+} from './automation-run-now-pending'
 
 /** Run-now/rerun handlers keyed by the selected row's captured host. */
 export function createAutomationRunActions({
@@ -88,14 +91,16 @@ export function createAutomationRunActions({
     const settle = (
       update: (current: AutomationRunNowPending) => AutomationRunNowPending | null
     ): void =>
-      setRunNowPending((current) => settleAutomationRunNowPending(current, requestId, update))
-    setRunNowPending({
-      requestId,
-      rowKey: row.key,
-      requestedAt: Date.now(),
-      acknowledgedAt: null,
-      runId: null
-    })
+      setRunNowPending((byRow) => settleAutomationRunNowPending(byRow, row.key, requestId, update))
+    setRunNowPending((byRow) =>
+      startAutomationRunNowPending(byRow, {
+        requestId,
+        rowKey: row.key,
+        requestedAt: Date.now(),
+        acknowledgedAt: null,
+        runId: null
+      })
+    )
     let result: Awaited<ReturnType<typeof dispatchAutomationRunNow>>
     try {
       result = await dispatchAutomationRunNow(

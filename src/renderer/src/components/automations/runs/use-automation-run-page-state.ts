@@ -129,6 +129,8 @@ export function useAutomationRunPageState({
       return
     }
     const pending = pendingAutomationRunNavigation
+    // Why: a new request replaces any earlier missing-run result; it is resolved from scratch.
+    setRunNotFound(null)
     if (pending.runId) {
       // Why: a deep link (workspace card, notification) undoes to its automation, not the Runs list.
       setRunPageOrigin(pending.origin ?? 'automation')

@@ -154,7 +154,21 @@ export function AutomationsPageSurface({
     (selectedRecoveryHost.stableRef.selector.kind === 'ssh' ||
       selectedRecoveryHost.stableRef.authority.kind === 'runtime')
 
+  const pendingNavigation = store.pendingAutomationRunNavigation
   const renderPage = (): React.ReactNode => {
+    // Why: Back/Forward to an automation resolves through pending navigation; until it lands,
+    // the page being left (a run, the Runs list, another automation) must not stay interactive.
+    if (
+      pendingNavigation &&
+      !pendingNavigation.runId &&
+      (pageView !== 'automations' || isDetailOpen)
+    ) {
+      return (
+        <AutomationsPageFrame nav={tabs('automations')} bodyScroll="content">
+          <AutomationsPageSkeleton />
+        </AutomationsPageFrame>
+      )
+    }
     if (pageView === 'runs') {
       return (
         <AutomationsPageFrame nav={tabs('runs')} bodyScroll="content">

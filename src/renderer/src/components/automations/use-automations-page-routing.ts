@@ -58,36 +58,36 @@ export function useAutomationsPageRouting(
   const selectedAutomationRunPage = setup.selectedAutomationRunPage
 
   // Run now stays busy until its run is listed; a run already in progress never blocks it.
-  // Why: selectedRuns belong to the open automation; another one's manual run must not clear it.
+  // Each automation keeps its own request, so starting another one never frees this one.
+  const selectedPending = selectedRow ? (runNowPending[selectedRow.key] ?? null) : null
   const runNowListed =
-    runNowPending !== null &&
-    runNowPending.rowKey === selectedRow?.key &&
-    isAutomationRunNowListed(runNowPending, setup.selectedRuns)
+    selectedPending !== null && isAutomationRunNowListed(selectedPending, setup.selectedRuns)
   const isRunNowPending = isAutomationRunNowPending(
-    runNowPending,
+    selectedPending,
     selectedRow?.key,
     setup.selectedRuns
   )
   useEffect(() => {
-    if (!runNowPending) {
+    if (!selectedPending) {
       return
     }
-    const { requestId } = runNowPending
+    const { rowKey, requestId } = selectedPending
     const clearThisRequest = (): void =>
-      setRunNowPending((current) => settleAutomationRunNowPending(current, requestId, () => null))
+      setRunNowPending((byRow) =>
+        settleAutomationRunNowPending(byRow, rowKey, requestId, () => null)
+      )
     if (runNowListed) {
       clearThisRequest()
       return
     }
-    // Why: a dispatch that never answers must not lock the button either; the dispatcher's
-    // own in-flight guard still refuses a duplicate after this cap.
+    // Why: a dispatch that never answers must not lock the button forever.
     const deadline =
-      runNowPending.acknowledgedAt === null
-        ? runNowPending.requestedAt + RUN_NOW_DISPATCH_MAX_MS
-        : runNowPending.acknowledgedAt + RUN_NOW_PENDING_MAX_MS
+      selectedPending.acknowledgedAt === null
+        ? selectedPending.requestedAt + RUN_NOW_DISPATCH_MAX_MS
+        : selectedPending.acknowledgedAt + RUN_NOW_PENDING_MAX_MS
     const timer = setTimeout(clearThisRequest, Math.max(0, deadline - Date.now()))
     return () => clearTimeout(timer)
-  }, [runNowListed, runNowPending, setRunNowPending])
+  }, [runNowListed, selectedPending, setRunNowPending])
 
   const selectedHostId = automationRowHostId(selectedRow)
   const isResolving =
