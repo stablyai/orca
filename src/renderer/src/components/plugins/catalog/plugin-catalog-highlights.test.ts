@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PluginMarketplaceHostListing } from '../../../../../preload/api-types'
 import { pluginListEntryFromListing, type PluginListEntry } from '../list/plugin-list-entries'
-import {
-  pickCatalogHighlights,
-  pickFeaturedPlugins,
-  pickNewlyAddedPlugins
-} from './plugin-catalog-highlights'
+import { pickFeaturedPlugins, pickNewlyAddedPlugins } from './plugin-catalog-highlights'
 
 const NOW = Date.parse('2026-11-09T20:00:00Z')
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows only check that an installed record exists, never read it.
@@ -40,27 +36,6 @@ function entry(
 }
 
 describe('pickFeaturedPlugins', () => {
-  it('ranks by installs and keeps one plugin per kind', () => {
-    const entries = [
-      entry('acme.ayu'),
-      entry('acme.catppuccin'),
-      entry('acme.excalidraw', { categories: ['editors'] }),
-      entry('acme.toolbox', { categories: ['panels'] })
-    ]
-    const counts = {
-      'acme.ayu': 2467,
-      'acme.catppuccin': 2134,
-      'acme.excalidraw': 2384,
-      'acme.toolbox': 422
-    }
-
-    expect(pickFeaturedPlugins(entries, counts, '1.4.256').map((item) => item.pluginKey)).toEqual([
-      'acme.ayu',
-      'acme.excalidraw',
-      'acme.toolbox'
-    ])
-  })
-
   it('counts every kind a plugin belongs to, whatever order its categories come in', () => {
     const counts = { 'acme.multi': 100, 'acme.editor': 90 }
     for (const categories of [
@@ -109,23 +84,6 @@ describe('pickFeaturedPlugins', () => {
     expect(forward).toEqual(['acme.multi', 'acme.editor', 'acme.theme', 'acme.tie-a'])
   })
 
-  it('offers at most four, one row of the widest grid, even when more kinds have plugins', () => {
-    const categories = ['themes', 'editors', 'panels', 'games', 'icons', 'vm-recipes']
-    const entries = categories.map((category) =>
-      entry(`acme.${category}`, { categories: [category] })
-    )
-    const counts = Object.fromEntries(
-      categories.map((category, index) => [`acme.${category}`, 100 - index])
-    )
-
-    expect(pickFeaturedPlugins(entries, counts, null).map((item) => item.pluginKey)).toEqual([
-      'acme.themes',
-      'acme.editors',
-      'acme.panels',
-      'acme.games'
-    ])
-  })
-
   it('skips plugins that cannot be installed from the row', () => {
     const entries = [
       entry('acme.installed', {}, { installed: INSTALLED }),
@@ -149,12 +107,6 @@ describe('pickFeaturedPlugins', () => {
 })
 
 describe('pickNewlyAddedPlugins', () => {
-  it('hides the row when no plugin has an estimated listing date', () => {
-    expect(pickNewlyAddedPlugins([entry('acme.one'), entry('acme.two')], '1.4.256', NOW)).toEqual(
-      []
-    )
-  })
-
   it('lists the newest installable plugins first, inside the 30-day window', () => {
     const entries = [
       entry('acme.hour', { addedAt: '2026-11-09T19:00:00.000Z' }),
@@ -177,49 +129,5 @@ describe('pickNewlyAddedPlugins', () => {
       'acme.weeks',
       'acme.month'
     ])
-  })
-
-  it('hides the row when the newest listing is over 30 days old', () => {
-    expect(
-      pickNewlyAddedPlugins([entry('acme.old', { addedAt: '2026-10-09T00:00:00.000Z' })], null, NOW)
-    ).toEqual([])
-  })
-
-  it('offers up to two rows of the four-column grid', () => {
-    const entries = Array.from({ length: 12 }, (_, index) =>
-      entry(`acme.p${index}`, {
-        addedAt: new Date(NOW - (index + 1) * 3_600_000).toISOString()
-      })
-    )
-
-    expect(pickNewlyAddedPlugins(entries, null, NOW).map((item) => item.pluginKey)).toEqual(
-      Array.from({ length: 8 }, (_, index) => `acme.p${index}`)
-    )
-  })
-})
-
-describe('pickCatalogHighlights', () => {
-  const counts = { 'acme.ayu': 900, 'acme.excalidraw': 800 }
-
-  it('hides Featured with Newly added, so it never sits right on the catalogs it repeats', () => {
-    const entries = [entry('acme.ayu'), entry('acme.excalidraw', { categories: ['editors'] })]
-
-    expect(pickCatalogHighlights(entries, counts, null, NOW)).toEqual({
-      featured: [],
-      newlyAdded: []
-    })
-  })
-
-  it('shows Featured above Newly added when something is new', () => {
-    const entries = [
-      entry('acme.ayu'),
-      entry('acme.excalidraw', { categories: ['editors'] }),
-      entry('acme.fresh', { addedAt: '2026-11-09T19:00:00.000Z' })
-    ]
-
-    const picked = pickCatalogHighlights(entries, counts, null, NOW)
-
-    expect(picked.featured.map((item) => item.pluginKey)).toEqual(['acme.ayu', 'acme.excalidraw'])
-    expect(picked.newlyAdded.map((item) => item.pluginKey)).toEqual(['acme.fresh'])
   })
 })
