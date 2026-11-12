@@ -12,7 +12,7 @@ import { EditorDiffFileSurface } from './EditorDiffFileSurface'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import { MarkdownPreviewSizeGate } from './markdown-preview/render-tree/MarkdownPreviewSizeGate'
-import type { FileContent } from './editor-panel-content-types'
+import type { FileContent, ReloadContentOptions } from './editor-panel-content-types'
 import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
 import { useTranslate } from '@/i18n/use-translate'
 import { useEditorConflictNavigation } from './useEditorConflictNavigation'
@@ -21,6 +21,7 @@ import type { MarkdownRenderState } from './markdown/render-mode/markdown-render
 
 // Retry is a user act: it may start a stopped WSL distro.
 const USER_RETRY = { wakeWslDistro: true }
+const HOST_STARTED = { onlyIfFailed: true }
 
 const noopCloseMarkdownTableOfContents = (): void => {}
 
@@ -101,7 +102,7 @@ export function EditorContent({
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<boolean>
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
+  reloadContent: (file: OpenFile, options?: ReloadContentOptions) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const editorViewStateKey =
@@ -212,7 +213,7 @@ export function EditorContent({
           code={fileContent.loadErrorCode}
           worktreeId={activeFile.worktreeId}
           onRetry={() => reloadContent(activeFile, USER_RETRY)}
-          onHostStarted={() => reloadContent(activeFile)}
+          onHostStarted={() => reloadContent(activeFile, HOST_STARTED)}
         />
       )
     }

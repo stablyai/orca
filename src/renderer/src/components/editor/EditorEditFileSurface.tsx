@@ -18,7 +18,7 @@ import {
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
-import type { FileContent } from './editor-panel-content-types'
+import type { FileContent, ReloadContentOptions } from './editor-panel-content-types'
 import { CustomEditorExternalChangeBanner } from './external-changes/CustomEditorExternalChangeBanner'
 import { PluginFileTypeSuggestion } from './PluginFileTypeSuggestion'
 import { BinaryFileDefaultAppButton } from './BinaryFileDefaultAppButton'
@@ -32,6 +32,7 @@ import PluginBytesCustomEditorSurface from './PluginBytesCustomEditorSurface'
 
 // Retry is a user act: it may start a stopped WSL distro.
 const USER_RETRY = { wakeWslDistro: true }
+const HOST_STARTED = { onlyIfFailed: true }
 
 const noopEditorContentChange = (_content: string): void => {}
 const noopEditorSave = async (_content: string): Promise<boolean> => false
@@ -109,7 +110,7 @@ export function EditorEditFileSurface({
   handleContentChange: (content: string) => void
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
+  reloadContent: (file: OpenFile, options?: ReloadContentOptions) => void
 }): React.JSX.Element {
   const t = useTranslate()
   if (activeFile.conflict?.kind === 'conflict-placeholder') {
@@ -140,7 +141,7 @@ export function EditorEditFileSurface({
         code={fileContent.loadErrorCode}
         worktreeId={activeFile.worktreeId}
         onRetry={() => reloadContent(activeFile, USER_RETRY)}
-        onHostStarted={() => reloadContent(activeFile)}
+        onHostStarted={() => reloadContent(activeFile, HOST_STARTED)}
       />
     )
   }

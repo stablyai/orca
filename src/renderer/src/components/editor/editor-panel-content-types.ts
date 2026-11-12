@@ -23,6 +23,12 @@ export const WORKTREE_HOST_UNRESOLVED_CODE = 'editor_host_workspace_unresolved'
 export const WORKTREE_HOST_UNRESOLVED_ERROR =
   "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
 
+export type ReloadContentOptions = {
+  wakeWslDistro?: boolean
+  /** Skip a file that is no longer failed, such as one already reloaded when its host answered. */
+  onlyIfFailed?: boolean
+}
+
 export type FileContent = {
   mediaUrl?: string
   size?: number

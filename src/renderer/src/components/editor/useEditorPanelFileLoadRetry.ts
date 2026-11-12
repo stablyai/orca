@@ -77,6 +77,7 @@ export function wslHostRetryConnection(
   return {
     targetId: `wsl:${environmentId}`,
     connecting: state === 'connecting' || state === 'reconnecting',
+    // Per host, not per connection: main publishes connecting before every ready, which re-arms it.
     connectedEpoch: state === 'ready' ? `wsl:${environmentId}` : null
   }
 }
