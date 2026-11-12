@@ -6,7 +6,7 @@ vi.mock('../command-result-output', async (importOriginal) => {
   const original = await importOriginal<{ printResult: typeof printResult }>()
   return { printResult: vi.fn(original.printResult) }
 })
-vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
+vi.mock('../terminals/terminal-selector', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../command-result-output'

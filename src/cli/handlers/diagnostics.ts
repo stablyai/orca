@@ -1,8 +1,8 @@
 import type { MemorySnapshot } from '../../shared/process-stats-types'
 import type { CommandHandler } from '../dispatch'
-import { formatMemorySnapshot } from '../workspace-format'
+import { formatMemorySnapshot } from '../diagnostics/memory-snapshot-format'
 import { printResult } from '../command-result-output'
-import { TERMINAL_DAEMON_HANDLERS } from './terminal-daemon'
+import { TERMINAL_DAEMON_HANDLERS } from '../terminals/terminal-daemon'
 
 export const DIAGNOSTICS_HANDLERS: Record<string, CommandHandler> = {
   'diagnostics memory': async ({ client, json }) => {

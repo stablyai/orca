@@ -1,7 +1,10 @@
 import { ZodError } from 'zod'
 import { getBoundPluginHostMethod, type PluginHostServices } from './plugin-host-method-bindings'
 import { isQualifiedPluginKey } from '../../../../shared/plugins/manifest/plugin-manifest'
-import { gatePluginHostCall as decidePluginHostCall } from '../../../../shared/plugins/capabilities/plugin-capability-gate'
+import {
+  gatePluginHostCall as decidePluginHostCall,
+  missingPluginParamCapability
+} from '../../../../shared/plugins/capabilities/plugin-capability-gate'
 import type { PluginCapabilityKind } from '../../../../shared/plugins/capabilities/plugin-capabilities'
 import { isPluginJsonObject } from '../../../../shared/plugins/manifest/plugin-json-object'
 import type {
@@ -33,6 +36,8 @@ export type ExecutePluginHostCallInput = {
   surface: PluginSurface
   /** Consented capability kinds; null = unknown/disabled/consent-stale. */
   grantedCapabilities: readonly PluginCapabilityKind[] | null
+  /** A development plugin, which may call proposed methods. */
+  allowProposed?: boolean
   services: PluginHostServices | null
   audit?: Pick<PluginAuditLog, 'record'>
   /** Re-checked right before the side effect; absent only in tests and the relay suite. */
@@ -46,7 +51,11 @@ export async function executePluginHostCall(
     return { ok: false, code: 'invalid_request', error: 'invalid qualified plugin key' }
   }
   const gate = decidePluginHostCall(
-    { grantedCapabilities: input.grantedCapabilities, surface: input.surface },
+    {
+      grantedCapabilities: input.grantedCapabilities,
+      surface: input.surface,
+      allowProposed: input.allowProposed
+    },
     input.method
   )
   if (!gate.granted) {
@@ -59,6 +68,18 @@ export async function executePluginHostCall(
   const prepared = bound.prepare(input.params)
   if (!prepared.ok) {
     return { ok: false, code: 'invalid_params', error: prepared.issue }
+  }
+  const missing = missingPluginParamCapability(
+    bound.spec,
+    prepared.params,
+    input.grantedCapabilities ?? []
+  )
+  if (missing) {
+    return {
+      ok: false,
+      code: 'capability_denied',
+      error: `${missing.param} needs the "${missing.capability}" capability`
+    }
   }
   const services = input.services
   if (!services) {
@@ -161,6 +182,20 @@ function summarizeParams(method: string, params: unknown): string {
     case 'terminal.focus':
     case 'terminal.close':
       return `terminal=${String(record.terminalId)}`
+    case 'workspace.create':
+      return `project=${String(record.projectId)} agent=${String(record.agent ?? 'none')} promptChars=${textLength(record.prompt)} setup=${String(record.setup ?? 'default')} open=${record.open === true}`
+    case 'project.setHidden':
+      return `project=${String(record.projectId)} host=${String(record.hostId ?? 'any')} hidden=${record.hidden === true}`
+    case 'agent.resume':
+      return `workspace=${String(record.workspaceId)} agent=${String(record.agent)} session=${String(record.sessionId)}`
+    case 'automation.create':
+      return `${record.workspaceId ? `workspace=${String(record.workspaceId)}` : `project=${String(record.projectId)}`} agent=${String(record.agent)} promptChars=${textLength(record.prompt)}`
+    case 'automation.update':
+      return `automation=${String(record.automationId)} fields=${Object.keys(record)
+        .filter((key) => key !== 'automationId')
+        .join(',')}`
+    case 'automation.delete':
+      return `automation=${String(record.automationId)}`
     case 'notifications.show': {
       const title = typeof record.title === 'string' ? record.title : ''
       return `titleChars=${title.length}`
@@ -174,4 +209,8 @@ function summarizeParams(method: string, params: unknown): string {
     default:
       return ''
   }
+}
+
+function textLength(value: unknown): number {
+  return typeof value === 'string' ? value.length : 0
 }

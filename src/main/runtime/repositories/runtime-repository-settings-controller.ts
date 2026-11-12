@@ -1,4 +1,5 @@
 import { isFolderRepo } from '../../../shared/repo-kind'
+import { isRepoHidden } from '../../../shared/hidden-projects'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
@@ -58,6 +59,7 @@ type RepositoryUpdates = Partial<
   sourceControlAi?: Repo['sourceControlAi'] | null
   workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+  hiddenAt?: Repo['hiddenAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
 }
@@ -101,6 +103,22 @@ export class RuntimeRepositorySettingsController {
     return updated
   }
 
+  /** View-only: hiding stops nothing, so terminals, agents and automations keep running. */
+  async setHidden(repoSelector: RuntimeRepoSelector, hidden: boolean): Promise<Repo> {
+    const store = this.requireStore()
+    const repo = await this.deps.resolveRepo(repoSelector)
+    if (isRepoHidden(repo) === hidden) {
+      return repo
+    }
+    assertWslMoveRepoWritable(store, repo)
+    const updated = store.updateRepo(repo, { hiddenAt: hidden ? Date.now() : null })
+    if (!updated) {
+      throw new Error('repo_not_found')
+    }
+    this.deps.notifyReposChanged()
+    return updated
+  }
+
   async update(repoSelector: string, updates: RepositoryUpdates): Promise<Repo> {
     const store = this.requireStore()
     const repo = await this.deps.resolveRepo(repoSelector)
@@ -114,6 +132,9 @@ export class RuntimeRepositorySettingsController {
       updates.externalWorktreeDiscoverySuppressedAt === null
     ) {
       sanitizedUpdates.externalWorktreeDiscoverySuppressedAt = undefined
+    }
+    if ('hiddenAt' in updates && updates.hiddenAt === null) {
+      sanitizedUpdates.hiddenAt = undefined
     }
     if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
       sanitizedUpdates.sourceControlAi = null

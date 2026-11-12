@@ -572,7 +572,7 @@
 1 test-no-wall-clock:tests/e2e/host-cold-park-remote-subscriber.unit.test.ts
 1 test-timeout-needs-reason:src/cli/agents/agent-launch-process.test.ts
 1 test-timeout-needs-reason:src/cli/runtime/serve-pid1-init-reaper.test.ts
-1 test-timeout-needs-reason:src/cli/skills-install.test.ts
+1 test-timeout-needs-reason:src/cli/skills/skills-install.test.ts
 2 test-timeout-needs-reason:src/main/acp/journal/acp-structured-broken-stream.test.ts
 4 test-timeout-needs-reason:src/main/agent-hooks/server/testing/http/server-transport-interference.test.ts
 1 test-timeout-needs-reason:src/main/agent-hooks/wsl-relay/testing/wsl-hook-relay-live.integration.test.ts

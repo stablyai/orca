@@ -38,6 +38,25 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca repo set --repo path:/path/to/repo --external-worktree-visibility show --json']
   },
   {
+    path: ['repo', 'hide'],
+    summary: "Hide a project from Orca's sidebar",
+    usage: 'orca repo hide --repo <selector> [--host <host>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'host'],
+    notes: [
+      'Only the view changes: open terminals, agents, automations and scripts keep running, and repo list still lists the repo with hiddenAt set.',
+      "Hiding applies to one host's copy; with --host, it picks which copy of a repo set up on several hosts.",
+      'On a paired Orca server the flag lives on that server, so it hides the project for everyone connected to it.'
+    ],
+    examples: ['orca repo hide --repo name:orca --json']
+  },
+  {
+    path: ['repo', 'unhide'],
+    summary: "Show a hidden project in Orca's sidebar again",
+    usage: 'orca repo unhide --repo <selector> [--host <host>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'host'],
+    notes: ["Shows one host's copy again; on a paired Orca server, for everyone connected to it."]
+  },
+  {
     path: ['repo', 'set-base-ref'],
     summary: "Set the repo's default base ref for future worktrees",
     usage: 'orca repo set-base-ref --repo <selector> --ref <ref> [--json]',

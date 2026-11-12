@@ -84,6 +84,8 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca repo add --path <path> [--kind git|folder] [--json]',
   '  orca repo show --repo <selector> [--json]',
   '  orca repo set --repo <selector> --external-worktree-visibility show|hide|inherit [--json]',
+  '  orca repo hide --repo <selector> [--host <host>] [--json]',
+  '  orca repo unhide --repo <selector> [--host <host>] [--json]',
   '  orca repo set-base-ref --repo <selector> --ref <ref> [--json]',
   '  orca repo search-refs --repo <selector> --query <text> [--limit <n>] [--json]',
   '',

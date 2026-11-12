@@ -7,7 +7,7 @@ import { PLUGIN_HOST_API_MAJOR } from '../workers/plugin-host-api-major'
 import {
   PLUGIN_HOST_API,
   PLUGIN_HOST_API_MINOR,
-  PLUGIN_HOST_METHOD_NAMES,
+  PLUGIN_STABLE_HOST_METHOD_NAMES,
   pluginHostMethodsFor
 } from '../workers/plugin-host-api'
 import { zodTypeText, type SchemaTypeTextOptions } from '../workers/plugin-schema-type-text'
@@ -44,7 +44,9 @@ export function renderPluginHostMethodMembers(
   } = {}
 ): string {
   const names =
-    options.surface === undefined ? PLUGIN_HOST_METHOD_NAMES : pluginHostMethodsFor(options.surface)
+    options.surface === undefined
+      ? PLUGIN_STABLE_HOST_METHOD_NAMES
+      : pluginHostMethodsFor(options.surface)
   return names
     .map((name) => {
       const spec = PLUGIN_HOST_API[name]

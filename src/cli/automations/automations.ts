@@ -34,12 +34,15 @@ import {
   readAutomationRunsPage
 } from './automation-runs-paging'
 import { RuntimeClientError } from '../runtime/types'
-import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
+import {
+  getOptionalWorktreeSelector,
+  resolveCurrentWorktreeSelector
+} from '../workspace-selection/workspace-selector'
 import {
   assertWorkspaceTargetFlagsCompatible,
   hasWorkspaceProjectTarget,
   resolveProjectCreateTarget
-} from '../worktree-project-target'
+} from '../workspaces/worktree-project-target'
 import {
   getEnabledFlag,
   getOptionalProviderFlag,

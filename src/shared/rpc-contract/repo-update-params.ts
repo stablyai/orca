@@ -91,6 +91,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
         .transform((value) => normalizeWorktreeVisibilitySourcePreferences(value))
         .optional(),
       externalWorktreeDiscoverySuppressedAt: z.number().finite().nullable().optional(),
+      hiddenAt: z.number().finite().nullable().optional(),
       projectGroupId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber.nullable().optional(),
       sourceControlAi: RepoSourceControlAiOverrides,

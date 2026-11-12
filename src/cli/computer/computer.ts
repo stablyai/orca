@@ -20,7 +20,7 @@ import {
   formatListWindows
 } from './computer-format'
 import { printResult } from '../command-result-output'
-import { getComputerCommandTarget } from '../selectors'
+import { getComputerCommandTarget } from './computer-command-target'
 import {
   getComputerActionObserveFlags,
   getComputerObserveFlags,

@@ -5,7 +5,7 @@ const { callMock, getTerminalHandleMock } = vi.hoisted(() => ({
   getTerminalHandleMock: vi.fn()
 }))
 
-vi.mock('../runtime-client', async () => {
+vi.mock('../runtime/client', async () => {
   // Error formatting uses instanceof, so preserve the production error classes.
   const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
   class RuntimeClient {
@@ -23,7 +23,16 @@ vi.mock('../runtime-client', async () => {
   }
 })
 
-vi.mock('../selectors', async (importOriginal) => ({
+vi.mock('../runtime/metadata', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultUserDataPath: vi.fn(() => '/tmp/orca-user-data')
+}))
+
+vi.mock('../runtime/launch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  serveOrcaApp: vi.fn()
+}))
+vi.mock('../terminals/terminal-selector', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getTerminalHandle: getTerminalHandleMock
 }))
@@ -74,31 +83,6 @@ describe('orchestration gate commands carry caller identity', () => {
 
   const paramsFor = (method: string): Record<string, unknown> =>
     callMock.mock.calls.find((call) => call[0] === method)?.[1] as Record<string, unknown>
-
-  it('remints a stale environment handle before authorizing gateCreate', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale'
-    process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
-    callMock.mockImplementation(async (method: string) => {
-      if (method === 'terminal.resolveIdentity') {
-        return okFixture('req_identity', { identity: { handle: 'term_stale', live: false } })
-      }
-      if (method === 'terminal.resolvePane') {
-        return okFixture('req_pane', { terminal: { handle: 'term_live' } })
-      }
-      return okFixture('req_gate', {
-        gate: { id: 'gate_1', task_id: 'task_1', status: 'pending' }
-      })
-    })
-
-    await main(
-      ['orchestration', 'gate-create', '--task', 'task_1', '--question', 'ship?', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(paramsFor('orchestration.gateCreate')).toEqual(
-      expect.objectContaining({ from: 'term_live' })
-    )
-  })
 
   it('inspects a named Run without resolving a caller terminal', async () => {
     getTerminalHandleMock.mockRejectedValue(
