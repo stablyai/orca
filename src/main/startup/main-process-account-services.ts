@@ -67,12 +67,12 @@ export function initializeMainProcessAccountServices(): void {
   state.claudeAccounts = services.claudeAccounts
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
   // Why: prune unbounded rollout logs (#16776), but never a copy the migration hasn't published yet.
+  // The root is passed even while migration is ineligible: eligibility follows settings, and a later
+  // switch to the host system default must still find every rollout it would publish.
   void startCodexSessionLogRetentionSweepInBackground(
     getOrcaManagedCodexHomePath(),
-    state.codexRuntimeHome.isHostSystemDefaultSessionMigrationEligible()
-      ? resolveCodexSessionBackfillPaths(resolveHostCodexSessionSourceHome(store.getSettings()))
-          .systemSessionsRoot
-      : undefined
+    resolveCodexSessionBackfillPaths(resolveHostCodexSessionSourceHome(store.getSettings()))
+      .systemSessionsRoot
   )
   // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()

@@ -84,6 +84,29 @@ describe('retention sweep vs. session migration', () => {
     expect(readFileSync(systemRollout, 'utf-8')).toBe('history\n')
   })
 
+  it('keeps an expired rollout when the published path holds a separate, older copy', async () => {
+    const managedRollout = writeExpiredManagedRollout()
+    writeFileSync(managedRollout, 'history\nlater turn\n')
+    const modified = new Date(NOW - 300 * DAY_MS)
+    utimesSync(managedRollout, modified, modified)
+    const systemRollout = join(paths.systemSessionsRoot, ROLLOUT_RELATIVE_PATH)
+    mkdirSync(join(systemRollout, '..'), { recursive: true })
+    writeFileSync(systemRollout, 'history\n')
+
+    const sweep = await pruneExpiredCodexSessionLogs({
+      sessionsRoot: paths.managedSessionsRoot,
+      now: NOW,
+      minRetainedRollouts: 0,
+      publishedSessionsRoot: paths.systemSessionsRoot
+    })
+    // Backfill never replaces an existing target, so deleting here would lose `later turn` for good.
+    const migration = await backfillManagedCodexSessionsIntoSystemHome(paths)
+
+    expect(sweep.removedRollouts).toBe(0)
+    expect(readFileSync(managedRollout, 'utf-8')).toBe('history\nlater turn\n')
+    expect(migration.linkedFiles).toBe(0)
+  })
+
   it('without a published root, a sweep that runs before migration destroys the only copy', async () => {
     writeExpiredManagedRollout()
 

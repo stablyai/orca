@@ -25,6 +25,8 @@ type RolloutFile = {
   path: string
   mtimeMs: number
   size: number
+  dev: number
+  ino: number
 }
 
 /** Resolved retention window in days, or null when the sweep is opted out of. */
@@ -42,7 +44,7 @@ export function resolveCodexSessionLogRetentionDays(
   return parsed === 0 ? null : parsed
 }
 
-/** Never throws; with `publishedSessionsRoot`, only rollouts already published there are removed. */
+/** Never throws; with `publishedSessionsRoot`, only rollouts hardlinked there (same inode) are removed. */
 export async function pruneExpiredCodexSessionLogs({
   sessionsRoot,
   now = Date.now(),
@@ -74,14 +76,21 @@ export async function pruneExpiredCodexSessionLogs({
     }
     if (
       publishedSessionsRoot !== undefined &&
-      !(await isPublished(join(publishedSessionsRoot, relative(sessionsRoot, rollout.path))))
+      !(await isPublished(
+        join(publishedSessionsRoot, relative(sessionsRoot, rollout.path)),
+        rollout
+      ))
     ) {
       continue
     }
     try {
       // Why: Codex may have resumed this session since the scan; deleting it would orphan a live log.
       const current = await stat(rollout.path)
-      if (current.mtimeMs !== rollout.mtimeMs) {
+      if (
+        current.mtimeMs !== rollout.mtimeMs ||
+        current.dev !== rollout.dev ||
+        current.ino !== rollout.ino
+      ) {
         continue
       }
       await unlink(rollout.path)
@@ -116,9 +125,12 @@ export function startCodexSessionLogRetentionSweepInBackground(
   })
 }
 
-async function isPublished(publishedPath: string): Promise<boolean> {
+// Why: a separate file at the published path may be an older, shorter copy, and backfill never
+// replaces an existing target; only the migration's hardlink proves the content is there.
+async function isPublished(publishedPath: string, rollout: RolloutFile): Promise<boolean> {
   try {
-    return (await lstat(publishedPath)).isFile()
+    const published = await lstat(publishedPath)
+    return published.isFile() && published.dev === rollout.dev && published.ino === rollout.ino
   } catch {
     return false
   }
@@ -156,7 +168,13 @@ async function collectRollouts(
     }
     try {
       const stats = await stat(entryPath)
-      rollouts.push({ path: entryPath, mtimeMs: stats.mtimeMs, size: stats.size })
+      rollouts.push({
+        path: entryPath,
+        mtimeMs: stats.mtimeMs,
+        size: stats.size,
+        dev: stats.dev,
+        ino: stats.ino
+      })
     } catch {
       summary.failures += 1
     }
