@@ -3100,7 +3100,6 @@
       "src/main/runtime/terminal/artifacts/orca-runtime-files-terminal-artifact-grants.test.ts": 580,
       "src/main/runtime/terminal/artifacts/orca-runtime-files-terminal-artifact-io.test.ts": 668,
       "src/main/runtime/terminal/artifacts/orca-runtime-files-terminal-artifact-swap-detection.test.ts": 665,
-      "src/main/runtime/terminal/artifacts/orca-runtime-files-terminal-link-host-translation.test.ts": 626,
       "src/main/runtime/files/watch/orca-runtime-files-watch.test.ts": 586,
       "src/main/runtime/session-lifecycle/projection/orca-runtime-mobile-agent-status-ordering.test.ts": 4281,
       "src/main/runtime/session-lifecycle/projection/orca-runtime-mobile-agent-status-title-truthfulness.test.ts": 3908,
