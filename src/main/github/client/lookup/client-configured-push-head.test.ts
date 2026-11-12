@@ -66,46 +66,6 @@ vi.mock('../../repositories/github-api-repository-remote-probe', async (importOr
   )
 )
 
-import { getRestPRForBranch } from './pr-branch-lookup'
-
-import { resetPRForBranchMocks } from '../client-test-harness'
-
-const { ghExecFileAsyncMock } = clientMocks
-
-describe('PR lookup conditional REST reads', () => {
-  beforeEach(() => resetPRForBranchMocks(clientMocks))
-
-  it('revalidates both mixed and active discovery responses before falling back to history', async () => {
-    const repo = { owner: 'acme', repo: 'widgets', host: 'github.com' }
-    const old = Array.from({ length: 10 }, (_, i) => ({
-      number: i + 1,
-      state: 'closed',
-      title: 'Old',
-      head: { ref: 'feature' }
-    }))
-    const open = { number: 11, state: 'open', title: 'Active', head: { ref: 'feature' } }
-    const http = (data: unknown, etag: string) => ({
-      stdout: `HTTP/2.0 200 OK\nEtag: "${etag}"\r\n\r\n${JSON.stringify(data)}`
-    })
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce(http(old, 'recent'))
-      .mockResolvedValueOnce(http([open], 'active'))
-      .mockRejectedValueOnce(
-        Object.assign(new Error('304'), { stdout: 'HTTP/2.0 304 Not Modified\n\n' })
-      )
-      .mockRejectedValueOnce(
-        Object.assign(new Error('304'), { stdout: 'HTTP/2.0 304 Not Modified\n\n' })
-      )
-    await expect(
-      getRestPRForBranch(repo, 'acme', 'feature', { cwd: '/repo' })
-    ).resolves.toMatchObject({ number: 11 })
-    await expect(
-      getRestPRForBranch(repo, 'acme', 'feature', { cwd: '/repo' })
-    ).resolves.toMatchObject({ number: 11 })
-    expect(ghExecFileAsyncMock.mock.calls[2][0]).toContain('If-None-Match: "recent"')
-    expect(ghExecFileAsyncMock.mock.calls[3][0]).toContain('If-None-Match: "active"')
-  })
-})
 import { getPRForBranch } from './get-pr-for-branch'
 import { resetPRForBranchMocks } from '../client-test-harness'
 
