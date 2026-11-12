@@ -93,6 +93,8 @@ export type RepositoryApi = {
   }) => Promise<{ repo: Repo } | RepoCreateFailure>
   isGitAvailable: () => Promise<boolean>
   getDefaultCreateProjectParent: () => Promise<string>
+  /** The runtime's home folder, for the first-run "open a terminal in your home folder" link. */
+  getHomeFolderPath: () => Promise<string>
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
   getBaseRefDefault: (args: {
     repoId: string

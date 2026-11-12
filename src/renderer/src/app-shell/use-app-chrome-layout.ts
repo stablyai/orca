@@ -1,7 +1,10 @@
 import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
-import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
+import {
+  canShowRightSidebarForView,
+  isFirstRunWelcomeShown
+} from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { resolveLeftTitlebarChromeLayout } from '@/app-shell/chrome/titlebar-left-chrome'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
@@ -63,6 +66,13 @@ export function useAppChromeLayout() {
   const creationLayoutActive = useAppStore(selectWorktreeCreationSurfaceShown)
   const workspaceChromeActive =
     activeView === 'terminal' && hasActiveWorktree && !creationLayoutActive
+  const projectCount = useAppStore((s) => s.repos.length)
+  const firstRunWelcomeShown = isFirstRunWelcomeShown({
+    activeView,
+    hasActiveWorktree,
+    creationLayoutActive,
+    projectCount
+  })
   // Activity/Space own full pages and hide the workspace sidebar.
   const showSidebar =
     activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
@@ -124,7 +134,7 @@ export function useAppChromeLayout() {
     shouldMountTerminalWorkbench,
     showSidebar,
     // Keep the pending composer in the same viewport as the workspace it hands off to.
-    showRightSidebarControls: canShowRightSidebarForView(activeView),
+    showRightSidebarControls: canShowRightSidebarForView(activeView) && !firstRunWelcomeShown,
     showTitlebarAppName: settings?.showTitlebarAppName !== false,
     showTitlebarExpandButton: workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded,
     sidebarOpen,

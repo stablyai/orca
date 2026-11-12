@@ -22,6 +22,7 @@ import {
   LandingShortcutList,
   type LandingShortcutItem
 } from './landing-layout'
+import { LandingFirstRunWelcome } from './landing-first-run-welcome'
 
 // Do not deep-link to /stargazers: GitHub 404s that page for users without repo write access.
 const ORCA_GITHUB_URL = 'https://github.com/stablyai/orca'
@@ -250,45 +251,51 @@ export default function Landing(): React.JSX.Element {
     previousWorktreeShortcut
   ])
 
+  const preflightBanner =
+    preflightIssues.length > 0 ? <PreflightBanner issues={preflightIssues} repos={repos} /> : null
+
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background">
-      <div className="w-full max-w-lg px-6">
-        <div className="flex flex-col items-center gap-4 py-8">
-          <LandingBrand />
+      <div className="flex w-full max-w-lg justify-center px-6">
+        {hasProjects ? (
+          <div className="flex w-full flex-col items-center gap-4 py-8">
+            <LandingBrand />
 
-          {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} repos={repos} />}
+            {preflightBanner}
 
-          <p className="text-sm text-muted-foreground text-center">
-            {hasProjects
-              ? t(
-                  'auto.components.Landing.9c00bd4adf',
-                  'Select a workspace from the sidebar to begin.'
-                )
-              : t('auto.components.Landing.cd21242762', 'Add a project to get started.')}
-          </p>
+            <p className="text-sm text-muted-foreground text-center">
+              {t(
+                'auto.components.Landing.9c00bd4adf',
+                'Select a workspace from the sidebar to begin.'
+              )}
+            </p>
 
-          <div className="flex items-center justify-center gap-2.5 flex-wrap">
-            <button className={LANDING_ACTION_BUTTON_CLASS} onClick={() => openModal('add-repo')}>
-              <FolderPlus className="size-3.5" />
-              {t('auto.components.Landing.f9eaa9e12d', 'Add project')}
-            </button>
+            <div className="flex items-center justify-center gap-2.5 flex-wrap">
+              <button className={LANDING_ACTION_BUTTON_CLASS} onClick={() => openModal('add-repo')}>
+                <FolderPlus className="size-3.5" />
+                {t('auto.components.Landing.f9eaa9e12d', 'Add project')}
+              </button>
 
-            <button
-              className={LANDING_ACTION_BUTTON_CLASS}
-              onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
-            >
-              <GitBranchPlus className="size-3.5" />
-              {createActionLabel}
-            </button>
+              <button
+                className={LANDING_ACTION_BUTTON_CLASS}
+                onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
+              >
+                <GitBranchPlus className="size-3.5" />
+                {createActionLabel}
+              </button>
+            </div>
+
+            <LandingShortcutList shortcuts={shortcuts} />
           </div>
-
-          <LandingShortcutList shortcuts={shortcuts} />
-        </div>
+        ) : (
+          // First run: one next step instead of a home-folder terminal (see landing-first-run-welcome).
+          <LandingFirstRunWelcome notice={preflightBanner} />
+        )}
       </div>
 
       {showGitHubSupportFooter && (
         <div className="absolute bottom-6 left-0 right-0 flex justify-center">
-          <GitHubStarButton hasRepos={repos.length > 0} state={starState} setState={setStarState} />
+          <GitHubStarButton hasRepos={hasProjects} state={starState} setState={setStarState} />
         </div>
       )}
     </div>

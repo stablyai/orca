@@ -77,6 +77,12 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       })
       return getDefaultCreateProjectParent(result.resolvedPath)
     },
+    getHomeFolderPath: async () =>
+      (
+        await callRuntimeResult<{ resolvedPath: string }>('files.browseServerDir', {
+          path: '~'
+        })
+      ).resolvedPath,
     onCloneProgress: () => noopUnsubscribe,
     getBaseRefDefault: async ({ repoId }) =>
       callRuntimeResult('repo.baseRefDefault', { repo: repoId }),

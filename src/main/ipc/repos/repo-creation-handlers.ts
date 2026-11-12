@@ -61,6 +61,7 @@ export function registerRepoCreationHandlers(
 ): void {
   ipcMain.handle('repos:isGitAvailable', () => probeLocalGitAvailability())
   ipcMain.handle('repos:getDefaultCreateProjectParent', () => getDefaultCreateProjectParent(store))
+  ipcMain.handle('repos:getHomeFolderPath', () => homedir())
 
   ipcMain.handle(
     'repos:add',

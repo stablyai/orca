@@ -2997,7 +2997,6 @@
         "5beaef5f9e": "GitHub CLI is not installed",
         "b673e7cf1b": "Git is required for Git projects, source control, and workspace management.",
         "e5b7296d9d": "Git is not installed",
-        "cd21242762": "Add a project to get started.",
         "9c00bd4adf": "Select a workspace from the sidebar to begin.",
         "0d0ace8861": "Star on GitHub",
         "ec43b38ba7": "Starred on GitHub",
@@ -22409,6 +22408,13 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence"
+    },
+    "landing": {
+      "firstRun": {
+        "title": "Start with a project",
+        "body": "Orca runs your coding agents in workspaces, each on its own branch. Add a repository to begin.",
+        "openHomeTerminal": "Or open a terminal in your home folder"
+      }
     }
   },
   "dashboardPopout": {
