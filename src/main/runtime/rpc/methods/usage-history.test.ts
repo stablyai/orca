@@ -9,7 +9,6 @@ import { USAGE_HISTORY_METHODS } from './usage-history'
 import { startOrcadUsageHistory } from '../../../orcad/orcad-usage-history'
 import type { OrcadRuntimeCleanup } from '../../../orcad/orcad-runtime-lifetime'
 import { codexUsageAggregation } from '../../../codex-usage/codex-usage-aggregation'
-import { CodexUsageStore } from '../../../codex-usage/store'
 import type { CodexUsageAttributedEvent } from '../../../codex-usage/types'
 import type { UsageHistoryProvider } from '../../../../shared/usage-history-types'
 import {
@@ -24,7 +23,8 @@ vi.mock('../../../usage/scan-worker/usage-scan-worker-spawn', () => ({
   scanCodexUsageFilesViaWorker: vi.fn(),
   scanMuseUsageFilesViaWorker: vi.fn(),
   scanOpenCodeUsageDatabasesViaWorker: vi.fn(),
-  splitUsageCacheFileViaWorker: vi.fn()
+  splitUsageCacheFileViaWorker: vi.fn(),
+  stopUsageScanWorker: vi.fn(async () => {})
 }))
 vi.mock('../../../telemetry/client', () => ({ isTelemetryEnabled: () => false }))
 
@@ -182,28 +182,6 @@ describe('owner historical usage RPC', () => {
     })
     expect(olderClient.ok && olderClient.result).not.toHaveProperty('history')
   })
-  it('awaits persisted-state hydration before serving a snapshot', async () => {
-    const host = boot()
-    const hydration = Promise.withResolvers<void>()
-    vi.spyOn(CodexUsageStore.prototype, 'whenLoaded').mockReturnValue(hydration.promise)
-    const read = vi.spyOn(CodexUsageStore.prototype, 'getSnapshot')
-    const settled = vi.fn()
-    const request = host
-      .call('usage.getSnapshot', {
-        provider: 'codex',
-        scope: 'all',
-        range: 'all',
-        includeHistory: true
-      })
-      .then(settled)
-    await new Promise((resolve) => setImmediate(resolve))
-    expect(read).not.toHaveBeenCalled()
-    expect(settled).not.toHaveBeenCalled()
-    hydration.resolve()
-    await request
-    expect(read).toHaveBeenCalledWith('all', 'all', undefined, true)
-  })
-
   it('finishes an active scan before shutdown releases the persisted host history', async () => {
     const host = boot()
     await host.call('usage.setEnabled', { provider: 'codex', enabled: true })

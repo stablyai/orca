@@ -1,3 +1,4 @@
+import { usageFailureMessage } from './usage-failure-message'
 import { useMemo, useState } from 'react'
 import { CalendarDays, Coins, DatabaseZap, RefreshCw, Sparkles } from 'lucide-react'
 import type { UsageHistoryProvider } from '../../../../shared/usage-history-types'
@@ -93,6 +94,7 @@ export function UsageOverviewPane({
       source.status !== 'ready' ||
       !source.enabled ||
       source.error ||
+      source.failure ||
       source.needsRescan ||
       source.lastScanCompletedAt === null
   )
@@ -259,9 +261,9 @@ export function UsageOverviewPane({
                 )}
               </p>
             ) : null}
-            {source.error ? (
+            {source.error || source.failure ? (
               <p role="status" className="break-words text-destructive">
-                {source.error}
+                {usageFailureMessage(source.failure ?? null, t) ?? source.error}
               </p>
             ) : null}
             {!source.enabled && source.status === 'ready' ? (

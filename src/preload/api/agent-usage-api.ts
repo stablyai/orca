@@ -1,3 +1,7 @@
+import type {
+  BackendConnectionListener,
+  BackendConnectionPurpose
+} from '../../shared/backend-service-contract'
 import type { ClaudeUsageBreakdownKind, ClaudeUsageSnapshot } from '../../shared/claude-usage-types'
 import type { CodexUsageBreakdownKind, CodexUsageSnapshot } from '../../shared/codex-usage-types'
 import type {
@@ -25,11 +29,13 @@ export type UsageQueryArgs<Snapshot extends UsageProviderSnapshot> = Pick<
 >
 
 export type UsageProviderApi<Snapshot extends UsageProviderSnapshot, BreakdownKind> = {
-  getScanState: () => Promise<Snapshot['scanState']>
+  onConnectionChanged?: (listener: BackendConnectionListener) => () => void
+  getScanState: (purpose?: BackendConnectionPurpose) => Promise<Snapshot['scanState']>
   setEnabled: (args: { enabled: boolean }) => Promise<Snapshot['scanState']>
   refresh: (args?: { force?: boolean }) => Promise<Snapshot['scanState']>
   getSnapshot: (
-    args: UsageQueryArgs<Snapshot> & { limit?: number; includeHistory?: boolean }
+    args: UsageQueryArgs<Snapshot> & { limit?: number; includeHistory?: boolean },
+    purpose?: BackendConnectionPurpose
   ) => Promise<Snapshot>
   getSummary: (args: UsageQueryArgs<Snapshot>) => Promise<Snapshot['summary']>
   getDaily: (args: UsageQueryArgs<Snapshot>) => Promise<Snapshot['daily']>

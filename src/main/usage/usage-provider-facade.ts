@@ -1,53 +1,52 @@
-import type { ClaudeUsageStore } from '../claude-usage/store'
-import type { CodexUsageStore } from '../codex-usage/store'
-import type { OpenCodeUsageStore } from '../opencode-usage/store'
-import type { MuseUsageStore } from '../muse-usage/store'
+import type { BackendConnectionPurpose, UsageAction } from '../../shared/backend-service-contract'
 import type { UsageHistoryProvider } from '../../shared/usage-history-types'
-import type { UsageSnapshotQuery } from '../../shared/usage-history-rpc'
+import type { UsageHistorySnapshot, UsageSnapshotQuery } from '../../shared/usage-history-rpc'
 
-export type UsageProviderStores = {
-  claudeUsage: ClaudeUsageStore
-  codexUsage: CodexUsageStore
-  openCodeUsage: OpenCodeUsageStore
-  museUsage: MuseUsageStore
-}
+type UsageHistoryInvoker = (
+  method: string,
+  params: unknown,
+  purpose?: BackendConnectionPurpose
+) => Promise<unknown>
+
+const PROVIDER_PREFIX = {
+  claude: 'claudeUsage',
+  codex: 'codexUsage',
+  opencode: 'openCodeUsage',
+  muse: 'museUsage'
+} as const
 
 export class UsageProviderFacade {
-  private stores: UsageProviderStores | null = null
+  private invoke: UsageHistoryInvoker | null = null
 
-  setStores(stores: UsageProviderStores): void {
-    this.stores = stores
+  setInvoker(invoke: UsageHistoryInvoker): void {
+    this.invoke = invoke
   }
 
-  async getSnapshot(provider: UsageHistoryProvider, query: UsageSnapshotQuery) {
-    const store = this.providerStore(provider)
-    await store.whenLoaded()
-    return query.includeHistory === true
-      ? store.getSnapshot(query.scope, query.range, query.limit, true)
-      : store.getSnapshot(query.scope, query.range, query.limit)
+  async getSnapshot(
+    provider: UsageHistoryProvider,
+    query: UsageSnapshotQuery
+  ): Promise<UsageHistorySnapshot> {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The bundled usage service constructs this provider's typed snapshot; only its private transport erases the return type.
+    return (await this.call(provider, 'getSnapshot', query, 'recovery')) as UsageHistorySnapshot
   }
 
-  async refresh(provider: UsageHistoryProvider, force = false) {
-    return this.providerStore(provider).refresh(force)
+  refresh(provider: UsageHistoryProvider, force = false): Promise<unknown> {
+    return this.call(provider, 'refresh', { force })
   }
 
-  async setEnabled(provider: UsageHistoryProvider, enabled: boolean) {
-    return this.providerStore(provider).setEnabled(enabled)
+  setEnabled(provider: UsageHistoryProvider, enabled: boolean): Promise<unknown> {
+    return this.call(provider, 'setEnabled', { enabled })
   }
 
-  private providerStore(provider: UsageHistoryProvider) {
-    if (!this.stores) {
-      throw new Error('Historical usage stores are not configured on this runtime')
+  private call(
+    provider: UsageHistoryProvider,
+    action: UsageAction,
+    params: unknown,
+    purpose?: BackendConnectionPurpose
+  ): Promise<unknown> {
+    if (!this.invoke) {
+      return Promise.reject(new Error('Historical usage is not configured on this runtime'))
     }
-    switch (provider) {
-      case 'claude':
-        return this.stores.claudeUsage
-      case 'codex':
-        return this.stores.codexUsage
-      case 'opencode':
-        return this.stores.openCodeUsage
-      case 'muse':
-        return this.stores.museUsage
-    }
+    return this.invoke(`${PROVIDER_PREFIX[provider]}:${action}`, params, purpose)
   }
 }

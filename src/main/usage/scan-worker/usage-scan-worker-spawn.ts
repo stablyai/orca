@@ -1,7 +1,4 @@
-import {
-  claudeProfileTranscriptDirs,
-  claudeProfileTranscriptSources
-} from '../../claude-usage/transcript-file-discovery'
+import type { UsageAccountRoot } from '../usage-account-attribution'
 import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
@@ -12,7 +9,6 @@ import {
 import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../../claude-usage/types'
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../../codex-usage/types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../../opencode-usage/types'
-import { openCodeUsageAccountRoots } from '../../opencode-usage/opencode-usage-account-roots'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from '../../muse-usage/types'
 import type { UsageScanWorktreeRef } from '../provider-lifecycle/usage-provider-contract'
 import type {
@@ -53,7 +49,9 @@ function getSharedClient(): UsageScanWorkerClient {
 
 export function scanClaudeUsageFilesViaWorker(
   worktrees: UsageScanWorktreeRef[],
-  sourceCache: UsageSourceCacheRef
+  sourceCache: UsageSourceCacheRef,
+  profileDirs: string[],
+  accountRoots?: UsageAccountRoot[]
 ): Promise<{
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
@@ -61,13 +59,7 @@ export function scanClaudeUsageFilesViaWorker(
   return scanClaudeUsageOnWorker(
     (body) =>
       getSharedClient().scan(
-        body.providerId === 'claude'
-          ? {
-              ...body,
-              profileDirs: claudeProfileTranscriptDirs(),
-              accountRoots: claudeProfileTranscriptSources()
-            }
-          : body
+        body.providerId === 'claude' ? { ...body, profileDirs, accountRoots } : body
       ),
     worktrees,
     sourceCache
@@ -86,18 +78,15 @@ export function scanCodexUsageFilesViaWorker(
 
 export function scanOpenCodeUsageDatabasesViaWorker(
   worktrees: UsageScanWorktreeRef[],
-  sourceCache: UsageSourceCacheRef
+  sourceCache: UsageSourceCacheRef,
+  accountRoots?: UsageAccountRoot[]
 ): Promise<{
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
 }> {
   return scanOpenCodeUsageOnWorker(
     (body) =>
-      getSharedClient().scan(
-        body.providerId === 'opencode'
-          ? { ...body, accountRoots: openCodeUsageAccountRoots() }
-          : body
-      ),
+      getSharedClient().scan(body.providerId === 'opencode' ? { ...body, accountRoots } : body),
     worktrees,
     sourceCache
   )
@@ -118,4 +107,10 @@ export function splitUsageCacheFileViaWorker(
   request: UsageCacheSplitRequest
 ): Promise<UsageCacheSplitResult> {
   return getSharedClient().splitCacheFile(request)
+}
+
+export async function stopUsageScanWorker(): Promise<void> {
+  const client = sharedClient
+  sharedClient = null
+  await client?.dispose()
 }

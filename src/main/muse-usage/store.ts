@@ -1,6 +1,5 @@
 import { localUsageDay } from '../../shared/usage-history-range'
 import { projectEventUsageHistory } from '../usage/usage-history-projection'
-import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import type {
   MuseUsageBreakdownKind,
@@ -12,7 +11,7 @@ import type {
   MuseUsageSnapshot,
   MuseUsageSummary
 } from '../../shared/muse-usage-types'
-import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
+import type { UsageStoreHost } from '../usage/usage-store-host'
 import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
 import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import {
@@ -29,26 +28,15 @@ import {
 } from './snapshot-rollups'
 import type { MuseUsageDailyAggregate, MuseUsagePersistedState, MuseUsageSession } from './types'
 
-let museUsageFile: string | null = null
-
-export function initMuseUsagePath(userDataPath = getAppEnvironment().getPath('userData')): void {
-  museUsageFile = join(userDataPath, 'orca-muse-usage.json')
-}
-
-function getMuseUsageFile(): string {
-  museUsageFile ??= join(getAppEnvironment().getPath('userData'), 'orca-muse-usage.json')
-  return museUsageFile
-}
-
 export class MuseUsageStore extends UsageProviderStoreLifecycle<
   'processedFiles',
   MuseUsagePersistedState,
   'hasAnyMuseData'
 > {
-  constructor(store: UsageWorktreeSource) {
-    super(store, {
+  constructor(host: UsageStoreHost) {
+    super(host, {
       logTag: '[muse-usage]',
-      resolveCacheFile: getMuseUsageFile,
+      resolveCacheFile: () => join(host.userDataPath, 'orca-muse-usage.json'),
       createDefaultState: getDefaultMuseUsageState,
       normalizeState: normalizeMuseUsageState,
       sourceKey: 'processedFiles',

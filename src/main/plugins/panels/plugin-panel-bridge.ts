@@ -26,9 +26,9 @@ import { z } from 'zod'
 
 const PLUGIN_JSON_VALUE = z.json()
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
-import type { PluginWorkerHandle } from '../workers/plugin-host-process'
-import { PluginHostCallError } from '../workers/plugin-host-call-scope'
-import type { PluginRuntimeDelegate } from '../workers/plugin-host-service-bindings'
+import type { PluginWorkerHandle } from '../workers/parent-process/plugin-host-process-types'
+import { PluginHostCallError } from '../workers/host-api/plugin-host-call-scope'
+import type { PluginRuntimeDelegate } from '../workers/host-api/plugin-host-service-bindings'
 import { readPluginWorkspaceChange } from '../plugin-runtime-binding'
 
 type PushChannel = {

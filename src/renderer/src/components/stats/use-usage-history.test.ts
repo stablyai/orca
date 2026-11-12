@@ -3,6 +3,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CodexUsageSnapshot } from '../../../../shared/codex-usage-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { BackendConnectionListener } from '../../../../shared/backend-service-contract'
 import { USAGE_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/usage-history-rpc'
 import { useUsageHistory } from './use-usage-history'
 
@@ -79,12 +80,19 @@ function snapshot(): CodexUsageSnapshot {
 }
 
 function installApi(current: CodexUsageSnapshot | undefined) {
+  const listeners = new Set<BackendConnectionListener>()
+  const onConnectionChanged = (listener: BackendConnectionListener): (() => void) => {
+    listeners.add(listener)
+    return () => listeners.delete(listener)
+  }
   const codex = {
+    onConnectionChanged,
     getSnapshot: vi.fn(async () => current),
     refresh: vi.fn(async () => current?.scanState),
     setEnabled: vi.fn(async () => current?.scanState)
   }
   const unsupported = {
+    onConnectionChanged,
     getSnapshot: vi.fn(async () => undefined),
     refresh: vi.fn(),
     setEnabled: vi.fn()
@@ -98,7 +106,14 @@ function installApi(current: CodexUsageSnapshot | undefined) {
       museUsage: unsupported
     }
   })
-  return codex
+  return {
+    ...codex,
+    emitConnection: (...args: Parameters<BackendConnectionListener>) => {
+      for (const listener of listeners) {
+        listener(...args)
+      }
+    }
+  }
 }
 
 afterEach(() => {
@@ -120,7 +135,7 @@ describe('existing historical source snapshots', () => {
       limit: 0,
       includeHistory: true
     })
-    expect(remote.call).toHaveBeenCalledWith(
+    expect(remote.call).not.toHaveBeenCalledWith(
       target,
       'usage.refresh',
       {
@@ -249,6 +264,102 @@ describe('existing historical source snapshots', () => {
       status: 'error',
       error: 'Fixture source offline',
       lastScanCompletedAt: 200,
+      rows: [expect.objectContaining({ totalTokens: 1200 })]
+    })
+  })
+
+  it('recovers history without replaying a lost Refresh or clearing its warning', async () => {
+    const codex = installApi(snapshot())
+    const { result } = renderHook(() => useUsageHistory())
+    await waitFor(() => expect(result.current.isRefreshing).toBe(false))
+    const pending = Promise.withResolvers<CodexUsageSnapshot['scanState']>()
+    codex.refresh.mockReturnValueOnce(pending.promise)
+    let refreshing = Promise.resolve()
+    act(() => {
+      refreshing = result.current.refresh()
+    })
+    await waitFor(() => expect(codex.refresh).toHaveBeenCalledTimes(1))
+    act(() => codex.emitConnection(false, { unavailable: true }))
+    expect(result.current.sources.find((source) => source.provider === 'codex')).toMatchObject({
+      failure: { terminal: true, refresh: true },
+      rows: [expect.objectContaining({ totalTokens: 1200 })]
+    })
+    const newer = snapshot()
+    newer.history = newer.history?.map((row) => ({ ...row, totalTokens: 2400 }))
+    codex.getSnapshot.mockResolvedValue(newer)
+    act(() => codex.emitConnection(true))
+    await waitFor(() => expect(result.current.isRefreshing).toBe(false))
+    expect(result.current.sources.find((source) => source.provider === 'codex')).toMatchObject({
+      status: 'ready',
+      failure: { terminal: false, refresh: true },
+      rows: [expect.objectContaining({ totalTokens: 2400 })]
+    })
+    expect(codex.refresh).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      pending.resolve(snapshot().scanState)
+      await refreshing
+    })
+    expect(
+      result.current.sources.find((source) => source.provider === 'codex')?.failure
+    ).toMatchObject({
+      refresh: true
+    })
+    const retry = Promise.withResolvers<CodexUsageSnapshot['scanState']>()
+    codex.refresh.mockReturnValueOnce(retry.promise)
+    let retried = Promise.resolve()
+    act(() => {
+      retried = result.current.refresh()
+    })
+    await waitFor(() => expect(codex.refresh).toHaveBeenCalledTimes(2))
+    act(() => codex.emitConnection(true))
+    await act(async () => {
+      retry.resolve(newer.scanState)
+      await retried
+    })
+    expect(result.current.sources.find((source) => source.provider === 'codex')?.failure).toBeNull()
+  })
+
+  it('keeps a lost tracking change unconfirmed through Refresh until the setting is retried', async () => {
+    const disabled = snapshot()
+    disabled.scanState.enabled = false
+    const codex = installApi(disabled)
+    const { result } = renderHook(() => useUsageHistory())
+    await waitFor(() => expect(result.current.isRefreshing).toBe(false))
+    const pending = Promise.withResolvers<CodexUsageSnapshot['scanState']>()
+    codex.setEnabled.mockReturnValueOnce(pending.promise)
+    let enabling = Promise.resolve()
+    act(() => {
+      enabling = result.current.enable('codex')
+    })
+    await waitFor(() => expect(codex.setEnabled).toHaveBeenCalledTimes(1))
+    act(() => codex.emitConnection(false, { unavailable: true }))
+    expect(
+      result.current.sources.find((source) => source.provider === 'codex')?.failure
+    ).toMatchObject({
+      setting: true
+    })
+    act(() => codex.emitConnection(true))
+    await waitFor(() => expect(result.current.isRefreshing).toBe(false))
+    await act(async () => {
+      pending.resolve(disabled.scanState)
+      await enabling
+      await result.current.refresh()
+    })
+    expect(result.current.sources.find((source) => source.provider === 'codex')).toMatchObject({
+      enabled: false,
+      failure: { setting: true },
+      rows: []
+    })
+    const enabled = snapshot()
+    codex.getSnapshot.mockResolvedValue(enabled)
+    codex.setEnabled.mockResolvedValue(enabled.scanState)
+    codex.refresh.mockResolvedValue(enabled.scanState)
+    await act(async () => {
+      await result.current.enable('codex')
+    })
+    expect(result.current.sources.find((source) => source.provider === 'codex')).toMatchObject({
+      enabled: true,
+      failure: null,
       rows: [expect.objectContaining({ totalTokens: 1200 })]
     })
   })

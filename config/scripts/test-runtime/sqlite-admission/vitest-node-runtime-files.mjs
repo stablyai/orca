@@ -153,9 +153,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/mobile-cloud-relay/relay-control-client.test.ts',
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
   'src/main/ipc/runtime-environments/runtime-environment-preference.test.ts',
-  // Real fs.watch file bindings; Bun's watcher is not the one Electron runs.
-  'src/main/ipc/filesystem/watcher-process/rebinding-file-watch.test.ts',
-  'src/main/ipc/filesystem/watcher-process/parcel-watcher-shallow-file-subscription.test.ts',
   'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',

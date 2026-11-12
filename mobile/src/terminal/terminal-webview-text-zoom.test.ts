@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import { createTerminalDocumentScope } from './document/document-scope'
-import { normalizeStatusDotPresentation } from './document/write-queue'
+import { normalizeStatusDotPresentation } from './document/engine/write-queue'
 
 function normalizeStatusDotChunks(chunks: string[]) {
   const scope = createTerminalDocumentScope()

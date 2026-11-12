@@ -2,7 +2,6 @@ import { localUsageDay } from '../../shared/usage-history-range'
 import { filterUsageDaily } from '../usage/reporting/range-query/usage-scope-filters'
 import { projectEventUsageHistory } from '../usage/usage-history-projection'
 import { codexOpenCodeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
-import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import type {
   CodexUsageBreakdownKind,
@@ -15,7 +14,7 @@ import type {
   CodexUsageSummary
 } from '../../shared/codex-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
-import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
+import type { UsageStoreHost } from '../usage/usage-store-host'
 import type { CodexUsagePersistedState } from './types'
 import type { AutomationUsageLookupInput } from './codex-automation-run-attribution'
 import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-provider'
@@ -26,8 +25,6 @@ import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-p
 import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 
 const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
-
-let _codexUsageFile: string | null = null
 
 function getDefaultState(): CodexUsagePersistedState {
   return {
@@ -66,30 +63,19 @@ export function normalizePersistedState(state: CodexUsagePersistedState): CodexU
   }
 }
 
-export function initCodexUsagePath(userDataPath = getAppEnvironment().getPath('userData')): void {
-  _codexUsageFile = join(userDataPath, 'orca-codex-usage.json')
-}
-
-function getCodexUsageFile(): string {
-  if (!_codexUsageFile) {
-    _codexUsageFile = join(getAppEnvironment().getPath('userData'), 'orca-codex-usage.json')
-  }
-  return _codexUsageFile
-}
-
 export class CodexUsageStore extends UsageProviderStoreLifecycle<
   'processedFiles',
   CodexUsagePersistedState,
   'hasAnyCodexData'
 > {
-  constructor(store: UsageWorktreeSource) {
-    super(store, {
+  constructor(host: UsageStoreHost) {
+    super(host, {
       tokenUsage: {
         provider: 'codex',
         selectSessions: (state) => codexOpenCodeTokenSessions(state.sessions)
       },
       logTag: '[codex-usage]',
-      resolveCacheFile: getCodexUsageFile,
+      resolveCacheFile: () => join(host.userDataPath, 'orca-codex-usage.json'),
       createDefaultState: getDefaultState,
       normalizeState: normalizePersistedState,
       sourceKey: 'processedFiles',

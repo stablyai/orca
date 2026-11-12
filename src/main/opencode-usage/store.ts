@@ -1,7 +1,6 @@
 import { localUsageDay } from '../../shared/usage-history-range'
 import { projectEventUsageHistory } from '../usage/usage-history-projection'
 import { codexOpenCodeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
-import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import type {
   OpenCodeUsageBreakdownKind,
@@ -13,7 +12,7 @@ import type {
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../../shared/opencode-usage-types'
-import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
+import type { UsageStoreHost } from '../usage/usage-store-host'
 import type {
   OpenCodeUsageDailyAggregate,
   OpenCodeUsagePersistedState,
@@ -34,39 +33,28 @@ import {
 import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
 import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 
-let _openCodeUsageFile: string | null = null
-
-export function initOpenCodeUsagePath(
-  userDataPath = getAppEnvironment().getPath('userData')
-): void {
-  _openCodeUsageFile = join(userDataPath, 'orca-opencode-usage.json')
-}
-
-function getOpenCodeUsageFile(): string {
-  if (!_openCodeUsageFile) {
-    _openCodeUsageFile = join(getAppEnvironment().getPath('userData'), 'orca-opencode-usage.json')
-  }
-  return _openCodeUsageFile
-}
-
 export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
   'processedDatabases',
   OpenCodeUsagePersistedState,
   'hasAnyOpenCodeData'
 > {
-  constructor(store: UsageWorktreeSource) {
-    super(store, {
+  constructor(host: UsageStoreHost) {
+    super(host, {
       tokenUsage: {
         provider: 'opencode',
         selectSessions: (state) => codexOpenCodeTokenSessions(state.sessions)
       },
       logTag: '[opencode-usage]',
-      resolveCacheFile: getOpenCodeUsageFile,
+      resolveCacheFile: () => join(host.userDataPath, 'orca-opencode-usage.json'),
       createDefaultState: getDefaultState,
       normalizeState: normalizePersistedState,
       sourceKey: 'processedDatabases',
       dataPresenceKey: 'hasAnyOpenCodeData',
-      scan: openCodeUsageProvider.scan,
+      scan: async (worktrees, sourceCache) => {
+        const accountRoots = await host.accountRoots?.('opencode')
+        host.signal.throwIfAborted()
+        return openCodeUsageProvider.scan(worktrees, sourceCache, accountRoots)
+      },
       splitCacheFile: splitUsageCacheFileViaWorker
     })
   }

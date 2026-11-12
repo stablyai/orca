@@ -13,6 +13,7 @@ import {
   type ProviderAccountsSnapshot
 } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import type { ManagedDataAccountsState } from '../../../../shared/managed-account-types'
+import type { BackendConnectionPurpose } from '../../../../shared/backend-service-contract'
 
 const HISTORY_REFRESH_TIMEOUT_MS = 15 * 60_000
 
@@ -65,7 +66,8 @@ export async function supportsUsageHistory(target: RuntimeClientTarget): Promise
 export function usageHistoryApi(target: RuntimeClientTarget, provider: UsageHistoryProvider) {
   if (target.kind === 'environment' || isWebClientLocation()) {
     return {
-      getSnapshot: (query: UsageSnapshotQuery) =>
+      onConnectionChanged: undefined,
+      getSnapshot: (query: UsageSnapshotQuery, _purpose?: BackendConnectionPurpose) =>
         callRuntimeRpc<UsageHistorySnapshot>(target, 'usage.getSnapshot', { provider, ...query }),
       refresh: ({ force }: { force?: boolean }) =>
         callRuntimeRpc(

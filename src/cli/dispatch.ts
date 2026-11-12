@@ -49,5 +49,3 @@ export async function dispatch(commandPath: string[], ctx: HandlerContext): Prom
   }
   await handler(ctx)
 }
-
-export { buildRoutes as buildHandlerRoutes }

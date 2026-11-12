@@ -1,3 +1,6 @@
+import type { BackendConnectionPurpose } from '../../../../shared/backend-service-contract'
+import type { UsageFailure } from '../../store/slices/usage/usage-provider-types'
+import { mergeUsageFailure } from '../../store/slices/usage/usage-provider-slice-state'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { UsageHistoryProvider, UsageHistoryRow } from '../../../../shared/usage-history-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -16,6 +19,7 @@ export type UsageHistorySource = {
   isScanning: boolean
   lastScanCompletedAt: number | null
   error: string | null
+  failure?: UsageFailure | null
   historyToday?: string
   needsRescan?: boolean
   rows: UsageHistoryRow[]
@@ -31,6 +35,7 @@ function initialSources(): UsageHistorySource[] {
     isScanning: false,
     lastScanCompletedAt: null,
     error: null,
+    failure: null,
     rows: []
   }))
 }
@@ -53,10 +58,13 @@ export function useUsageHistory(target: RuntimeClientTarget = LOCAL_TARGET) {
   }))
   const [isRefreshing, setRefreshing] = useState(false)
   const generation = useRef(0)
+  const pendingCommands = useRef<Map<UsageHistoryProvider, 'refresh' | 'setting'> | null>(null)
 
   const load = useCallback(
-    async (force = false, enable?: UsageHistoryProvider) => {
+    async (force = false, enable?: UsageHistoryProvider, purpose?: BackendConnectionPurpose) => {
       const request = ++generation.current
+      const commands = new Map<UsageHistoryProvider, 'refresh' | 'setting'>()
+      pendingCommands.current = commands
       let owner: RuntimeClientTarget =
         environmentId === null ? LOCAL_TARGET : { kind: 'environment', environmentId }
       setRefreshing(true)
@@ -66,14 +74,27 @@ export function useUsageHistory(target: RuntimeClientTarget = LOCAL_TARGET) {
           : { ownerKey, sources: initialSources(), accounts: null }
       )
       const isCurrent = () => generation.current === request
-      const update = (provider: UsageHistoryProvider, patch: Partial<UsageHistorySource>): void => {
+      const finish = (): void => {
+        if (isCurrent()) {
+          pendingCommands.current = null
+          setRefreshing(false)
+        }
+      }
+      const update = (
+        provider: UsageHistoryProvider,
+        patch:
+          | Partial<UsageHistorySource>
+          | ((source: UsageHistorySource) => Partial<UsageHistorySource>)
+      ): void => {
         if (isCurrent()) {
           setOwned((current) =>
             current.ownerKey === ownerKey
               ? {
                   ...current,
                   sources: current.sources.map((source) =>
-                    source.provider === provider ? { ...source, ...patch } : source
+                    source.provider === provider
+                      ? { ...source, ...(typeof patch === 'function' ? patch(source) : patch) }
+                      : source
                   )
                 }
               : current
@@ -101,7 +122,7 @@ export function useUsageHistory(target: RuntimeClientTarget = LOCAL_TARGET) {
               needsRescan: false
             })
           )
-          setRefreshing(false)
+          finish()
           return
         }
         void usageHistoryAccounts(owner)
@@ -121,37 +142,45 @@ export function useUsageHistory(target: RuntimeClientTarget = LOCAL_TARGET) {
             error: error instanceof Error ? error.message : String(error)
           })
         )
-        if (isCurrent()) {
-          setRefreshing(false)
-        }
+        finish()
         return
       }
       await Promise.all(
         PROVIDERS.map(async (provider) => {
-          const api = usageHistoryApi(owner, provider)
+          const settled = (action: 'refresh' | 'setting'): void => {
+            commands.delete(provider)
+            update(provider, (source) => ({
+              failure: mergeUsageFailure(source.failure ?? null, { [action]: false })
+            }))
+          }
           try {
+            const api = usageHistoryApi(owner, provider)
             if (provider === enable) {
+              commands.set(provider, 'setting')
               await api.setEnabled({ enabled: true })
+              settled('setting')
               if (!isCurrent()) {
                 return
               }
             }
-            const read = async (): Promise<boolean> => {
-              const snapshot = await api.getSnapshot({
-                scope: 'all',
-                range: 'all',
-                limit: 0,
-                includeHistory: true
-              })
+            const read = async (): Promise<void> => {
+              const snapshot = await api.getSnapshot(
+                { scope: 'all', range: 'all', limit: 0, includeHistory: true },
+                purpose
+              )
               if (!isCurrent()) {
-                return false
+                return
               }
               if (!snapshot) {
                 update(provider, { status: 'unsupported', rows: [], isScanning: false })
-                return false
+                return
               }
-              update(provider, {
+              update(provider, (source) => ({
                 status: snapshot.history === undefined ? 'unsupported' : 'ready',
+                failure: mergeUsageFailure(source.failure ?? null, {
+                  terminal: false,
+                  read: false
+                }),
                 historyToday: snapshot.historyToday,
                 enabled: snapshot.scanState.enabled,
                 isScanning: snapshot.scanState.isScanning,
@@ -162,38 +191,84 @@ export function useUsageHistory(target: RuntimeClientTarget = LOCAL_TARGET) {
                   snapshot.scanState.enabled && !snapshot.historyNeedsRescan
                     ? (snapshot.history ?? [])
                     : []
-              })
-              return snapshot.history !== undefined && snapshot.scanState.enabled
+              }))
             }
-            if (await read()) {
-              await api.refresh({ force })
-              if (isCurrent()) {
-                await read()
+            if (force) {
+              commands.set(provider, 'refresh')
+              await api.refresh({ force: true })
+              settled('refresh')
+              if (!isCurrent()) {
+                return
               }
             }
+            await read()
           } catch (error) {
-            update(provider, {
+            const pending = commands.get(provider)
+            commands.delete(provider)
+            update(provider, (source) => ({
               status: 'error',
               isScanning: false,
-              error: error instanceof Error ? error.message : String(error)
-            })
+              error: error instanceof Error ? error.message : String(error),
+              failure: mergeUsageFailure(source.failure ?? null, {
+                read: true,
+                ...(pending === 'refresh' ? { refresh: true } : {}),
+                ...(pending === 'setting' ? { setting: true } : {})
+              })
+            }))
           }
         })
       )
-      if (generation.current === request) {
-        setRefreshing(false)
-      }
+      finish()
     },
     [environmentId, ownerKey]
   )
 
   const invalidate = useCallback(() => {
     generation.current++
+    pendingCommands.current = null
   }, [])
   useEffect(() => {
-    void load()
-    return invalidate
-  }, [load, invalidate])
+    let active = true
+    const api = environmentId === null ? usageHistoryApi(LOCAL_TARGET, 'claude') : null
+    const unsubscribe = api?.onConnectionChanged?.((connected, detail) => {
+      if (!active) {
+        return
+      }
+      if (connected) {
+        if (!detail?.initial && pendingCommands.current === null) {
+          void load(false, undefined, 'recovery')
+        }
+        return
+      }
+      const pending = new Map(pendingCommands.current ?? [])
+      invalidate()
+      setRefreshing(false)
+      setOwned((current) =>
+        current.ownerKey === ownerKey
+          ? {
+              ...current,
+              sources: current.sources.map((source) => ({
+                ...source,
+                status: 'error',
+                isScanning: false,
+                failure: mergeUsageFailure(source.failure ?? null, {
+                  terminal: detail?.unavailable === true,
+                  read: true,
+                  ...(pending?.get(source.provider) === 'refresh' ? { refresh: true } : {}),
+                  ...(pending?.get(source.provider) === 'setting' ? { setting: true } : {})
+                })
+              }))
+            }
+          : current
+      )
+    })
+    void load(false, undefined, 'recovery')
+    return () => {
+      active = false
+      unsubscribe?.()
+      invalidate()
+    }
+  }, [environmentId, ownerKey, load, invalidate])
 
   return {
     sources: owned.ownerKey === ownerKey ? owned.sources : initialSources(),

@@ -1,16 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WATCHER_PROCESS_CANCEL_TIMEOUT_MS } from './parcel-watcher-cancellation-tracker'
-import {
-  terminateWatcherChild,
-  WATCHER_PROCESS_EXIT_DEADLINE_MS,
-  WATCHER_PROCESS_HARD_KILL_DELAY_MS
-} from './parcel-watcher-child-termination'
+import { RUNTIME_FILE_WATCH_CANCEL_TIMEOUT_MS as WATCHER_PROCESS_CANCEL_TIMEOUT_MS } from '../../../../shared/file-watch/runtime-file-watch-limits'
+
 import {
   acknowledgeWatcherSubscribe as ackSubscribe,
   currentWatcherChild,
   FakeWatcherChild as FakeChild,
   trackPromiseSettlement
-} from './parcel-watcher-process-test-child'
+} from './supervision/parcel-watcher-process-test-child'
 
 const { forkMock, existsSyncMock, mkdtempSyncMock, parcelSubscribeMock, rmSyncMock } = vi.hoisted(
   () => ({
@@ -56,21 +52,6 @@ describe('subscribeViaWatcherProcess', () => {
     resetRuntimeWatcherProcessForTest()
     vi.unstubAllEnvs()
     vi.clearAllMocks()
-  })
-
-  it('accepts close without exit as physical child termination', async () => {
-    vi.useFakeTimers()
-    try {
-      const child = new FakeChild()
-
-      const termination = terminateWatcherChild(child as never)
-      child.emit('close', -2, null)
-
-      await expect(termination).resolves.toBe(true)
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('rejects and physically cancels a watcher error before subscription readiness', async () => {
@@ -370,48 +351,6 @@ describe('subscribeViaWatcherProcess', () => {
     ])
     ackSubscribe(replacement)
     expect(healthyInterruption).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps process count bounded when a killed child never exits', async () => {
-    vi.useFakeTimers()
-    try {
-      const healthyPromise = subscribeViaWatcherProcess('/healthy', vi.fn(), {})
-      const child = currentChild()
-      ackSubscribe(child)
-      await healthyPromise
-
-      const controller = new AbortController()
-      const pending = subscribeViaWatcherProcess(
-        '/slow',
-        vi.fn(),
-        {},
-        {
-          signal: controller.signal
-        }
-      )
-      const pendingId = child.sent.at(-1)?.id
-      child.emit('message', { op: 'subscribe-started', id: pendingId })
-      controller.abort()
-      const rejected = expect(pending).rejects.toThrow(
-        'file watcher process did not exit after termination deadline'
-      )
-      child.emit('message', { op: 'cancel-requires-restart', id: pendingId })
-
-      await vi.advanceTimersByTimeAsync(WATCHER_PROCESS_HARD_KILL_DELAY_MS)
-      expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
-      expect(forkMock).toHaveBeenCalledTimes(1)
-      await vi.advanceTimersByTimeAsync(
-        WATCHER_PROCESS_EXIT_DEADLINE_MS - WATCHER_PROCESS_HARD_KILL_DELAY_MS
-      )
-
-      await rejected
-      expect(forkMock).toHaveBeenCalledTimes(1)
-      expect(child.listenerCount('exit')).toBe(1)
-      expect(vi.getTimerCount()).toBe(0)
-      await expect(subscribeViaWatcherProcess('/later', vi.fn(), {})).rejects.toThrow('disposed')
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('queues subscribe and unsubscribe behind the retiring child', async () => {
