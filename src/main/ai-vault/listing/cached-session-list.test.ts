@@ -72,9 +72,15 @@ describe('AI Vault session list cache', () => {
   it('does not cache a scan that began before a forced refresh finished', async () => {
     const row = (title: string) => ({ id: title, title, cwd: '/src/r1', filePath: `/t/${title}` })
     const slow = Promise.withResolvers<unknown>()
-    scanAiVaultSessionsInBackground.mockReturnValueOnce(slow.promise)
+    const staleScanEntered = Promise.withResolvers<void>()
+    scanAiVaultSessionsInBackground.mockImplementationOnce(() => {
+      staleScanEntered.resolve()
+      return slow.promise
+    })
     const project = { scopePaths: ['/src/r1'], scopeOnly: true }
     const stale = listAiVaultSessions(project)
+    // The forced refresh must reach the scanner after the stale scan did.
+    await staleScanEntered.promise
     scanAiVaultSessionsInBackground.mockResolvedValueOnce({
       sessions: [row('new')],
       issues: [],
