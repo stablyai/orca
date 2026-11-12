@@ -40,13 +40,20 @@ file of at most 16 KiB, or 64 KiB for an icon theme.
   color), `--chat-code-block` and the diff line and character tints 4.5:1 with the text drawn on
   them. Those surfaces, `--chat-inline-code`, `--chat-selection` and `--host-badge` may be
   translucent; they are checked as painted over the surface beneath.
+- Status colors are checked the same way, and a failure drops only that color. The agent and
+  workspace status hues need 1.5:1 on `--worktree-sidebar`, enough that an icon never vanishes.
+  `--status-success` needs 4.5:1 on its own 10% tint over `--background` and over `--muted`.
+  `--status-warning` is dropped when the warning text Orca derives from it is under 4.5:1 on
+  `--background`; on a dark base that text is `--status-warning` itself.
+  `--agent-question-text` needs 4.5:1 on `--background` and on `--worktree-sidebar`.
 - An omitted surface token paints exactly what Orca paints without a theme. The code editor's
   diff view and links keep Monaco's own colors unless the theme sets a diff token or
   `--text-link`. Setting only `--diff-added` and `--diff-removed` is enough; the line, gutter and
-  changed-character tints follow them.
+  changed-character tints follow them. Likewise the tints and warning text of
+  `--status-success` and `--status-warning` follow those two.
 - When the user picks **Match terminal** or **Tinted** for the left sidebar, it ignores the
   theme's current-row colors (and, for Match terminal, its host badge colors); a chat set to
-  match the terminal ignores the theme's chat and diff colors.
+  match the terminal ignores the theme's chat, diff, success and warning colors.
 - Trust and approval dialogs always use Orca's own colors, whatever theme is active.
 - `pnpm validate:plugin` refuses unknown keys, tokens and slots in every theme file. Orca itself
   skips them, so a theme that sets a token added in a newer release still loads on older ones.

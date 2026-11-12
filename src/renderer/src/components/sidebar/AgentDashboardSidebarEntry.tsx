@@ -9,7 +9,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 const DASHBOARD_BUCKET_DOT_CLASS: Record<'working' | 'done' | 'idle', string> = {
-  working: 'bg-yellow-500',
+  working: 'bg-agent-working',
   done: 'bg-emerald-500',
   idle: 'bg-neutral-500/50'
 }

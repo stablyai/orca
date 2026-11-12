@@ -41,6 +41,11 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
   '--chat-diff-added': { mixForeground: 30, into: '--diff-added' },
   '--chat-diff-removed': { mixForeground: 30, into: '--diff-removed' },
   '--chat-link': { mixForeground: 30, into: '--text-link' },
+  '--status-success-background': { tint: '--status-success', percent: 10 },
+  '--status-warning-text': {
+    light: { tint: '--status-warning', percent: 70, into: '--foreground' },
+    dark: ['--status-warning']
+  },
   // At the default chat contrast setting.
   '--chat-canvas': { light: ['--background'], dark: { mixForeground: 5 } },
   '--chat-foreground': {

@@ -63,7 +63,7 @@ export const KIND_ICONS = {
 
 /** Match the sidebar’s amber monitoring state; other kind icons stay neutral, and running turns dim the strip. */
 function kindIconTone(kind: AgentSessionBackgroundTask['kind'], dimmed: boolean): string {
-  const tone = kind === 'monitor' ? 'text-yellow-500' : 'text-muted-foreground'
+  const tone = kind === 'monitor' ? 'text-agent-working' : 'text-muted-foreground'
   return dimmed ? `${tone}/40` : tone
 }
 

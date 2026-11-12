@@ -262,7 +262,7 @@
   --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
-  /* Keep PR-state hues stable across theme changes. */
+  /* PR-state hues stay the same in light and dark; a plugin theme may set its own. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;

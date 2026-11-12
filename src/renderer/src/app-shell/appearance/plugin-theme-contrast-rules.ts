@@ -17,10 +17,18 @@ export type ContrastRule = {
 export const MIN_TEXT_CONTRAST = 4.5
 // Why 3:1: status hues only tint file names, so a theme's own git palette keeps working.
 const MIN_STATUS_TEXT_CONTRAST = 3
+// Why 1.5:1: Orca's own light working-yellow is 1.75:1 on its sidebar; this only stops a hue vanishing.
+const MIN_STATUS_ICON_CONTRAST = 1.5
 const textPair = (surface: string, text: string): ContrastRule => ({
   surface,
   text,
   min: MIN_TEXT_CONTRAST
+})
+const statusHue = (surface: string, hue: string, min: number): ContrastRule => ({
+  surface,
+  text: hue,
+  min,
+  drop: [hue]
 })
 /** A chat pair; a translucent chat surface is checked as painted over the chat background. */
 const chatPair = (
@@ -125,6 +133,25 @@ const CONTRAST_RULE_DEFINITIONS: readonly ContrastRule[] = [
     text: `--git-decoration-${status}`,
     min: MIN_STATUS_TEXT_CONTRAST,
     drop: [`--git-decoration-${status}`]
+  })),
+  ...[
+    '--agent-working',
+    '--agent-question',
+    '--workspace-status-progress',
+    '--workspace-status-review',
+    '--workspace-status-done'
+  ].map((hue) => statusHue('--worktree-sidebar', hue, MIN_STATUS_ICON_CONTRAST)),
+  // This also covers the raw hue: on a dark base the warning text is `--status-warning` itself.
+  { ...textPair('--background', '--status-warning-text'), drop: ['--status-warning'] },
+  // Success text sits on its own tint, which only lowers its contrast with the surface beneath.
+  ...['--background', '--muted'].map((beneath): ContrastRule => ({
+    ...textPair('--status-success-background', '--status-success'),
+    drop: ['--status-success'],
+    over: beneath
+  })),
+  ...['--background', '--worktree-sidebar'].map((surface): ContrastRule => ({
+    ...textPair(surface, '--agent-question-text'),
+    drop: ['--agent-question-text']
   }))
 ]
 export const CONTRAST_RULES = CONTRAST_RULE_DEFINITIONS.map((rule) => ({
