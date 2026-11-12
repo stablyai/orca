@@ -32,6 +32,12 @@ export type Env = {
   // Optional JSON overriding any field of the default plan catalog (src/plans.ts), e.g.
   // {"pro":{"priceLabel":"$20/mo","includedHoursPerSeat":40}}. Malformed JSON fails closed (503).
   BILLING_PLANS?: string
+  // Plans & entitlements (catalog.ts, grants.ts, resolver in entitlements.ts):
+  //   'off' (default) the legacy computation only (BILLING_PLANS / DEFAULT_PLANS);
+  //   'shadow' the legacy one is served, grants are projected and the resolver's answer is
+  //            compared, every disagreement recorded in entitlement_shadow_diffs;
+  //   'on' the resolver (D1 catalog + grants) is served.
+  ENTITLEMENTS_MODE?: string
 
   // Where Checkout and the portal send the browser back (a page that deep-links into Orca).
   BILLING_RETURN_URL: string

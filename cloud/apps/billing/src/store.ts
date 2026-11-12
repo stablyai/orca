@@ -18,6 +18,8 @@ export type SubscriptionRow = {
   overage_item_id: string | null
   past_due_since: number | null
   member_count: number | null
+  /** The seat price the subscription is on (maps it to its plan version); null on rows from before 0008. */
+  seat_price_id?: string | null
 }
 
 export type AccountSettings = { overage_opt_in: number; spend_cap_cents: number | null }
@@ -77,13 +79,17 @@ export async function currentSubscription(db: D1Database, accountId: string): Pr
     .first<SubscriptionRow>()
 }
 
+export async function subscriptionById(db: D1Database, subscriptionId: string): Promise<SubscriptionRow | null> {
+  return db.prepare('SELECT * FROM subscriptions WHERE stripe_subscription_id = ?1').bind(subscriptionId).first<SubscriptionRow>()
+}
+
 export async function upsertSubscription(db: D1Database, row: SubscriptionRow): Promise<void> {
   await db
     .prepare(
       `INSERT INTO subscriptions (stripe_subscription_id, account_id, stripe_customer_id, status, plan, seats,
          overage_enabled, current_period_start, current_period_end, cancel_at_period_end, updated_at,
-         billing_interval, overage_item_id, past_due_since, member_count)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+         billing_interval, overage_item_id, past_due_since, member_count, seat_price_id)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
        ON CONFLICT (stripe_subscription_id) DO UPDATE SET
          status = excluded.status, plan = excluded.plan, seats = excluded.seats,
          overage_enabled = excluded.overage_enabled, current_period_start = excluded.current_period_start,
@@ -93,7 +99,8 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
          -- Keep the first time it went past due; clear it once paid.
          past_due_since = CASE WHEN excluded.past_due_since IS NULL THEN NULL
                                ELSE COALESCE(subscriptions.past_due_since, excluded.past_due_since) END,
-         member_count = COALESCE(excluded.member_count, subscriptions.member_count)`
+         member_count = COALESCE(excluded.member_count, subscriptions.member_count),
+         seat_price_id = COALESCE(excluded.seat_price_id, subscriptions.seat_price_id)`
     )
     .bind(
       row.stripe_subscription_id,
@@ -110,7 +117,8 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
       row.billing_interval,
       row.overage_item_id,
       row.past_due_since,
-      row.member_count
+      row.member_count,
+      row.seat_price_id ?? null
     )
     .run()
 }

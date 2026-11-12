@@ -6,8 +6,8 @@
 // Metering stays in seconds (exact per segment); Stripe rounds the period total up to a minute.
 import { z } from 'zod'
 import type { Env } from './env'
-import { MACHINE_SIZE_WEIGHT, MACHINE_SIZES, capSeconds, includedSeconds, planCatalog } from './plans'
-import { subscriptionWindow } from './entitlements'
+import { MACHINE_SIZE_WEIGHT, MACHINE_SIZES, capSeconds } from './plans'
+import { accountTerms, subscriptionWindow } from './entitlements'
 import type { StripeClient } from './stripe'
 import {
   accountSettings,
@@ -66,16 +66,17 @@ export async function recordUsage(
   now: number
 ): Promise<{ recorded: boolean; weightedSeconds: number; overageSeconds: number }> {
   const db = env.BILLING_DB
-  const team = planCatalog(env).team
-  const [subscription, settings] = await Promise.all([
+  const [subscription, settings, terms] = await Promise.all([
     currentSubscription(db, report.accountId),
-    accountSettings(db, report.accountId)
+    accountSettings(db, report.accountId),
+    accountTerms(env, report.accountId, now)
   ])
   const wallSeconds = Math.ceil((report.endedAt - report.startedAt) / 1000)
   const weightedSeconds = wallSeconds * MACHINE_SIZE_WEIGHT[report.machineSize]
   // A segment counts in the allowance window it ended in.
   const window = subscription ? subscriptionWindow(subscription, report.endedAt) : null
-  const billable = subscription !== null && settings.overage_opt_in === 1 && subscription.overage_item_id !== null
+  const billable =
+    subscription !== null && settings.overage_opt_in === 1 && subscription.overage_item_id !== null && terms.overageAllowed
   const customer = billable ? await customerFor(db, report.accountId) : null
   const recorded = await insertUsage(db, {
     usageId: report.usageId,
@@ -86,11 +87,11 @@ export async function recordUsage(
     endedAt: report.endedAt,
     weightedSeconds,
     periodStart: window?.start ?? null,
-    includedSeconds: subscription ? includedSeconds(team, subscription.seats) : 0,
+    includedSeconds: subscription ? terms.includedSeconds : 0,
     now,
     userId: report.userId ?? null,
     meterCustomer: customer,
-    meterCapSeconds: capSeconds(team, settings.spend_cap_cents ?? team.defaultSpendCapCents)
+    meterCapSeconds: capSeconds(terms, settings.spend_cap_cents ?? terms.defaultSpendCapCents)
   })
   if (!subscription) {
     // No plan: the segment counts against the one-time trial, if any (never overage).
