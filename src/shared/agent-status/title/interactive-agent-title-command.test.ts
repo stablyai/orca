@@ -43,6 +43,31 @@ describe('titleCommandLaunchesInteractiveTui', () => {
     expect(titleCommandLaunchesInteractiveTui(title, 'claude')).toBe(false)
   })
 
+  it.each([
+    'claude mcp serve',
+    'claude mcp list',
+    'claude doctor',
+    'claude update',
+    'claude install stable',
+    'claude setup-token',
+    'claude plugin install foo',
+    'claude --debug mcp serve',
+    '/usr/local/bin/claude mcp serve'
+  ])('rejects the non-session subcommand %j', (title) => {
+    expect(titleCommandLaunchesInteractiveTui(title, 'claude')).toBe(false)
+  })
+
+  it.each([
+    // A prompt word, a quoted prompt, a prompt after `--`, and the subcommands that open a session.
+    'claude fix the mcp server',
+    'claude "mcp serve"',
+    'claude -- mcp',
+    'claude attach 1a2b',
+    'claude agents'
+  ])('accepts the session launch %j whose words only resemble a subcommand', (title) => {
+    expect(titleCommandLaunchesInteractiveTui(title, 'claude')).toBe(true)
+  })
+
   it.each(['✳ Claude Code', '~/repo', 'zsh', 'less'])(
     'rejects a title that is not a command line launching the agent: %j',
     (title) => {
