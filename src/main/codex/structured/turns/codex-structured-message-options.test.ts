@@ -325,7 +325,7 @@ it('retains legacy fast intent as the successful native tier after a standard tu
   const session = optionSession(vi.fn(async () => ({ turn: { id: 'fast-turn' } })))
   seedMessageDefaults(session)
   session.appliedTurnInputOptions = { model: 'model-a', serviceTier: 'default' }
-  const choices = { model: 'model-a', fastMode: 'true' }
+  const choices = { model: 'model-a', fastMode: 'true' as const }
   await startCodexTurn(session, {
     clientMessageId: 'legacy-fast',
     body: USER_MESSAGE,
