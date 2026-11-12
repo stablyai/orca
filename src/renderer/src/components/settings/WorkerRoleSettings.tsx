@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   INITIAL_WORKER_ROLE_NAMES,
@@ -21,6 +21,7 @@ export function WorkerRoleSettings({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const { detectedIds } = useDetectedAgents({ kind: 'local' })
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -51,20 +52,20 @@ export function WorkerRoleSettings({
   return (
     <section
       className="space-y-4"
-      aria-label={translate('settings.orchestration.roles.title', 'Worker roles')}
+      aria-label={t('settings.orchestration.roles.title', 'Worker roles')}
     >
       <div className="space-y-1">
         <h3 className="text-sm font-medium">
-          {translate('settings.orchestration.roles.title', 'Worker roles')}
+          {t('settings.orchestration.roles.title', 'Worker roles')}
         </h3>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'settings.orchestration.roles.description',
             'Choose which agent handles each role, with a model and reasoning level for each. These profiles are saved on this Orca host.'
           )}
         </p>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'settings.orchestration.roles.catalog',
             'Agents keep their configured commands and permissions. Fast availability depends on the provider, account and workspace.'
           )}
@@ -75,11 +76,11 @@ export function WorkerRoleSettings({
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm font-medium">
               {role === 'research'
-                ? translate('settings.orchestration.roles.research', 'Research')
+                ? t('settings.orchestration.roles.research', 'Research')
                 : role === 'implementation'
-                  ? translate('settings.orchestration.roles.implementation', 'Implementation')
+                  ? t('settings.orchestration.roles.implementation', 'Implementation')
                   : role === 'review'
-                    ? translate('settings.orchestration.roles.review', 'Review')
+                    ? t('settings.orchestration.roles.review', 'Review')
                     : role}
             </span>
             {profiles[role] ? (
@@ -89,7 +90,7 @@ export function WorkerRoleSettings({
                 disabled={pending}
                 onClick={() => void save(role, undefined)}
               >
-                {translate('settings.orchestration.roles.clear', 'Clear profile')}
+                {t('settings.orchestration.roles.clear', 'Clear profile')}
               </Button>
             ) : null}
           </div>
@@ -109,7 +110,7 @@ export function WorkerRoleSettings({
       ))}
       <div className="space-y-2">
         <Label htmlFor="new-worker-role">
-          {translate('settings.orchestration.roles.new', 'Add a role')}
+          {t('settings.orchestration.roles.new', 'Add a role')}
         </Label>
         <div className="flex gap-2">
           <Input
@@ -132,11 +133,11 @@ export function WorkerRoleSettings({
               setNewRole('')
             }}
           >
-            {translate('settings.orchestration.roles.add', 'Add')}
+            {t('settings.orchestration.roles.add', 'Add')}
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'settings.orchestration.roles.nameHint',
             'Use lowercase letters, digits and hyphens. Select an agent to save the role.'
           )}

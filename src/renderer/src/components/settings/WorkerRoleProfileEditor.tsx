@@ -1,6 +1,6 @@
 import { sayNativeChatSessionOptionTranslated as say } from '../native-chat/session/options/controls/native-chat-session-option-labels-text'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   findCatalogModel,
   findCatalogOption
@@ -35,6 +35,7 @@ export function WorkerRoleProfileEditor({
   structuredFast: boolean
   onChange: (profile: WorkerRoleProfile | undefined) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const agents = getAgentCatalog().filter(
     (agent) => isTuiAgentEnabled(agent.id, disabledAgents) && detectedIds?.includes(agent.id)
   )
@@ -46,12 +47,12 @@ export function WorkerRoleProfileEditor({
     error,
     unavailable: catalogUnavailable
   } = useWorkerRoleModelCatalog(profile?.agent, agentAvailable)
-  const unavailable = translate('settings.orchestration.roles.unavailable', 'Unavailable')
-  const notListed = translate('settings.orchestration.roles.notListed', 'Not listed')
+  const unavailable = t('settings.orchestration.roles.unavailable', 'Unavailable')
+  const notListed = t('settings.orchestration.roles.notListed', 'Not listed')
   const agentLabel =
     agents.find((agent) => agent.id === profile?.agent)?.label ?? profile?.agent ?? ''
   const catalogError = error
-    ? translate('settings.orchestration.roles.modelsFailed', 'Could not load models.')
+    ? t('settings.orchestration.roles.modelsFailed', 'Could not load models.')
     : catalogUnavailable?.reason === 'cliMissing'
       ? sayAgentSessionFailureTranslated('cliMissing', { agent: agentLabel })
       : catalogUnavailable?.reason === 'notSignedIn'
@@ -91,7 +92,7 @@ export function WorkerRoleProfileEditor({
     <div className="grid gap-3 sm:grid-cols-2">
       <div className="space-y-1">
         <Label htmlFor={`worker-role-${role}-agent`}>
-          {translate('settings.orchestration.roles.agent', 'Agent')}
+          {t('settings.orchestration.roles.agent', 'Agent')}
         </Label>
         <Select
           value={profile?.agent ?? INHERIT}
@@ -103,7 +104,7 @@ export function WorkerRoleProfileEditor({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={INHERIT}>
-              {translate('settings.orchestration.roles.unconfigured', 'Not configured')}
+              {t('settings.orchestration.roles.unconfigured', 'Not configured')}
             </SelectItem>
             {profile && !agents.some((agent) => agent.id === profile.agent) ? (
               <SelectItem value={profile.agent} disabled>
@@ -111,7 +112,7 @@ export function WorkerRoleProfileEditor({
                   profile.agent}{' '}
                 ·{' '}
                 {detectedIds === null
-                  ? translate('settings.orchestration.roles.checking', 'Checking…')
+                  ? t('settings.orchestration.roles.checking', 'Checking…')
                   : unavailable}
               </SelectItem>
             ) : null}
@@ -125,7 +126,7 @@ export function WorkerRoleProfileEditor({
       </div>
       <div className="space-y-1">
         <Label htmlFor={`worker-role-${role}-model`}>
-          {translate('settings.orchestration.roles.model', 'Model')}
+          {t('settings.orchestration.roles.model', 'Model')}
         </Label>
         <Select
           value={profile?.model ?? INHERIT}
@@ -145,7 +146,7 @@ export function WorkerRoleProfileEditor({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={INHERIT}>
-              {translate('settings.orchestration.roles.agentDefault', 'Agent default')}
+              {t('settings.orchestration.roles.agentDefault', 'Agent default')}
             </SelectItem>
             {profile?.model && !models.some((candidate) => candidate.id === profile.model) ? (
               <SelectItem value={profile.model} disabled>
@@ -154,12 +155,12 @@ export function WorkerRoleProfileEditor({
             ) : null}
             {isRefreshing ? (
               <div role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
-                {translate('settings.orchestration.roles.refreshingModels', 'Refreshing models…')}
+                {t('settings.orchestration.roles.refreshingModels', 'Refreshing models…')}
               </div>
             ) : null}
             {!isRefreshing && !catalogError && models.length === 0 ? (
               <div role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'settings.orchestration.roles.modelsUnavailable',
                   'No models reported by this host.'
                 )}
@@ -184,7 +185,7 @@ export function WorkerRoleProfileEditor({
             {error ? (
               <details className="max-w-full text-xs text-muted-foreground">
                 <summary className="cursor-pointer select-none">
-                  {translate('settings.orchestration.roles.modelErrorDetails', 'Details')}
+                  {t('settings.orchestration.roles.modelErrorDetails', 'Details')}
                 </summary>
                 <div className="scrollbar-sleek mt-1 max-h-40 overflow-auto break-words whitespace-pre-wrap">
                   {error}
@@ -198,14 +199,14 @@ export function WorkerRoleProfileEditor({
               disabled={disabled || isRefreshing}
               onClick={refresh}
             >
-              {translate('settings.orchestration.roles.retryModels', 'Retry')}
+              {t('settings.orchestration.roles.retryModels', 'Retry')}
             </Button>
           </div>
         ) : null}
       </div>
       <div className="space-y-1">
         <Label htmlFor={`worker-role-${role}-effort`}>
-          {translate('settings.orchestration.roles.effort', 'Reasoning effort')}
+          {t('settings.orchestration.roles.effort', 'Reasoning effort')}
         </Label>
         <Select
           value={profile?.effort ?? INHERIT}
@@ -219,7 +220,7 @@ export function WorkerRoleProfileEditor({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={INHERIT}>
-              {translate('settings.orchestration.roles.agentDefault', 'Agent default')}
+              {t('settings.orchestration.roles.agentDefault', 'Agent default')}
             </SelectItem>
             {profile?.effort &&
             (effort?.kind.type !== 'select' ||
@@ -240,7 +241,7 @@ export function WorkerRoleProfileEditor({
       </div>
       <div className="space-y-1">
         <Label htmlFor={`worker-role-${role}-fast`}>
-          {translate('settings.orchestration.roles.fast', 'Fast')}
+          {t('settings.orchestration.roles.fast', 'Fast')}
         </Label>
         <Select
           value={profile?.fastMode === undefined ? INHERIT : profile.fastMode ? 'on' : 'off'}
@@ -254,13 +255,13 @@ export function WorkerRoleProfileEditor({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={INHERIT}>
-              {translate('settings.orchestration.roles.agentDefault', 'Agent default')}
+              {t('settings.orchestration.roles.agentDefault', 'Agent default')}
             </SelectItem>
             <SelectItem value="on" disabled={!supportsFast}>
-              {translate('settings.orchestration.roles.on', 'On')}
+              {t('settings.orchestration.roles.on', 'On')}
             </SelectItem>
             <SelectItem value="off" disabled={!supportsFast}>
-              {translate('settings.orchestration.roles.off', 'Off')}
+              {t('settings.orchestration.roles.off', 'Off')}
             </SelectItem>
           </SelectContent>
         </Select>
