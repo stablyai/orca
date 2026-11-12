@@ -8,6 +8,7 @@ import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-e
 import { resolveIndexedWorktreeOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { withRepoHostOwnership } from '@/store/slices/worktrees/listing/worktree-host-ownership'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
+import { isOrcaCloudExecutionHostId } from '@/lib/orca-cloud/orca-cloud-environment-id'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -57,7 +58,9 @@ function createWorktreeCreationReadyToast(
   const name = resolveWorktreeDisplayName(worktree)
   const repo = getIndexedRepoMap(useAppStore.getState().repos).get(worktree.repoId)
   // Why: a folder repo's workspace is not a git worktree, so its title and button say workspace.
-  const isFolder = repo !== undefined && isFolderRepo(repo)
+  // Orca Cloud: the glossary calls a cloud create a workspace too.
+  const isFolder =
+    (repo !== undefined && isFolderRepo(repo)) || isOrcaCloudExecutionHostId(executionHostId)
   const title = isFolder
     ? translate(
         'components.workspace.creation.workspaceReadyToast',
