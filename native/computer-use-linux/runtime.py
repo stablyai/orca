@@ -654,11 +654,11 @@ KWIN_LAYOUT_SCRIPT = """(function (target) {
                 stackingOrder: window.stackingOrder,
                 shown: !window.minimized && !window.hidden && !window.deleted
                     && onCurrentDesktop(window) && onCurrentActivity(window),
-                desktopWindow: window.desktopWindow === true,
                 ownedPopup: window.popupWindow === true || window.transient === true,
                 client: window.clientGeometry === undefined ? null : rect(window.clientGeometry),
                 buffer: rect(window.bufferGeometry),
-                frame: rect(window.frameGeometry)
+                frame: rect(window.frameGeometry),
+                screen: rect(workspace.clientArea(KWin.FullScreenArea, window))
             });
         }
     } catch (error) {
@@ -794,6 +794,10 @@ def pixel_box(rect):
     return x, y, math.ceil(rect.x + rect.width) - x, math.ceil(rect.y + rect.height) - y
 
 
+def within_capture_limit(width, height):
+    return width <= 16384 and height <= 16384 and width * height <= 67_108_864
+
+
 def capture_wayland_png(bounds, app, window):
     backend = wayland_screenshot_backend()
     if backend is None:
@@ -813,7 +817,7 @@ def capture_wayland_png(bounds, app, window):
     if not same_size(rect, bounds):
         return screenshot_failure("Wayland screenshot skipped: the compositor window size differs from the accessibility bounds")
     x, y, width, height = pixel_box(rect)
-    if width > 16384 or height > 16384 or width * height > 67_108_864:
+    if not within_capture_limit(width, height):
         return screenshot_failure("Wayland window exceeds the screenshot dimension limit")
     try:
         with tempfile.TemporaryFile() as output:
@@ -896,6 +900,9 @@ def kwin_layout(bus):
     report = json.loads(reports[0])
     if not isinstance(report, dict) or report.get("error"):
         raise ValueError("KWin could not list windows: " + str(report.get("error") if isinstance(report, dict) else report)[:120])
+    # Why: Plasma 6 hides windows for Show Desktop without exposing that to scripts.
+    report["showingDesktop"] = attempt(lambda: bus_call(bus, KWIN_SERVICE, "/KWin", "org.freedesktop.DBus.Properties", "Get",
+                                                        GLib.Variant("(ss)", (KWIN_SERVICE, "showingDesktop")), "(v)").unpack()[0])
     return report
 
 
@@ -910,20 +917,22 @@ def kwin_window_rect(report, pid, title, bounds):
     if len(matches) != 1:
         return None, "no single KWin window matches this app and window title"
     target = matches[0]
-    if target.get("shown") is not True:
+    if target.get("shown") is not True or report.get("showingDesktop") is True:
         return None, "the window is minimized, hidden, or on another virtual desktop or activity"
     # Why: Wayland AT-SPI frames are window-local; the KWin rectangle with the toolkit's size is their origin.
     rect = next((rect for rect in (finite_rect(target.get(key)) for key in ("client", "buffer", "frame"))
                  if rect is not None and same_size(rect, bounds)), None)
     if rect is None:
         return None, "the KWin window size differs from the accessibility bounds"
-    if workspace is None or not overlaps(workspace, rect):
+    # Why: the workspace box also spans gaps between unevenly placed monitors that no screen shows.
+    screen = finite_rect(target.get("screen"))
+    if workspace is None or screen is None or not overlaps(screen, rect):
         return None, "the window is not on any screen"
     order = target.get("stackingOrder")
     if isinstance(order, bool) or not isinstance(order, (int, float)):
         return None, "KWin reported no stacking order for the window"
     for other in windows:
-        if other is target or other.get("shown") is not True or other.get("desktopWindow") is True:
+        if other is target or other.get("shown") is not True:
             continue
         # The app's own menus and dialogs are part of what it shows.
         if other.get("pid") == pid and other.get("ownedPopup") is True:
@@ -1012,6 +1021,8 @@ def crop_workspace_png(data, rect, workspace):
     shown_right, shown_bottom = min(right, image.get_width()), min(bottom, image.get_height())
     if shown_right <= shown_left or shown_bottom <= shown_top:
         raise ValueError("the window lies outside the desktop portal's screenshot")
+    if not within_capture_limit(width, height) or not within_capture_limit(right - left, bottom - top):
+        raise ValueError("the window exceeds the screenshot dimension limit")
     if (shown_left, shown_top, shown_right, shown_bottom) == (left, top, right, bottom):
         window = image.new_subpixbuf(left, top, right - left, bottom - top)
     else:

@@ -268,7 +268,8 @@ class KWinScreenshotTest(unittest.TestCase):
         self.app = types.SimpleNamespace(get_process_id=lambda: 42)
         self.window = types.SimpleNamespace(get_name=lambda: "Editor")
         self.target = {"pid": 42, "caption": "Editor", "captionNormal": "Editor", "stackingOrder": 3, "shown": True,
-                       "client": [100, 50, 400, 300], "buffer": [90, 40, 420, 320], "frame": [100, 20, 400, 330]}
+                       "client": [100, 50, 400, 300], "buffer": [90, 40, 420, 320], "frame": [100, 20, 400, 330],
+                       "screen": [-1280, 0, 2560, 800]}
         self.reports = []
         self.portal_calls = []
         self.pixbuf_calls = []
@@ -300,7 +301,7 @@ class KWinScreenshotTest(unittest.TestCase):
                  "frame": [450, 300, 200, 200]}
         for windows in ([], [self.target, dict(self.target)], [{**self.target, "shown": False}],
                         [{**self.target, "pid": 43}], [{**self.target, "client": [100, 50, 500, 300]}],
-                        [{**self.target, "client": [1300, 50, 400, 300]}], [self.target, cover]):
+                        [{**self.target, "screen": [0, 400, 640, 400]}], [self.target, cover]):
             with self.subTest(windows=windows):
                 self.portal_calls.clear()
                 result = self.capture(*windows)
