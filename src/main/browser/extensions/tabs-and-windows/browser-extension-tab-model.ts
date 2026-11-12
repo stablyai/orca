@@ -1,10 +1,12 @@
 /// <reference types="chrome" />
 import { webContents } from 'electron'
 import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
+// oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { createBrowserTabInRenderer } from '../../../runtime/browser/tabs/browser-tab-renderer-create'
 import { closeBrowserTabInRenderer } from '../../../runtime/browser/tabs/browser-tab-renderer-close'
 import { activateBrowserTabInRenderer } from '../../../runtime/browser/tabs/browser-tab-renderer-activate'
+// oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
@@ -22,6 +24,7 @@ import {
 } from '../profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import { whenBrowserMainWindowReady } from '../../guest-lifecycle/browser-main-window-readiness'
+// oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { findDiscardedBrowserTabForPage } from './browser-extension-discarded-tabs'
 import {
   getBrowserExtensionMainWindow,

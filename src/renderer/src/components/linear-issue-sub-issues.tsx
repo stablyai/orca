@@ -1,11 +1,16 @@
-import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
-import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
-import { ImeInput } from '@/lib/ime-text-field'
+import '@/store/slices/linear/linear-issue-read'
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
+import {
+  taskProviderErrorMessage,
+  taskProviderErrorText
+} from '@/lib/work-items/task-provider-error-copy'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, LoaderCircle, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { getLinearStateMarkerStyle } from '@/components/linear-state-pill-style'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -189,6 +194,15 @@ export function LinearIssueSubIssues({
             >
               <span className="shrink-0 font-mono text-xs">{subIssue.identifier}</span>
               <span className="min-w-0 flex-1 truncate">{subIssue.title}</span>
+              {subIssue.state?.name ? (
+                <span className="flex max-w-[30%] shrink-0 items-center gap-1.5 text-xs">
+                  <span
+                    className="size-1.5 shrink-0 rounded-full"
+                    style={getLinearStateMarkerStyle(subIssue.state.color)}
+                  />
+                  <span className="truncate">{subIssue.state.name}</span>
+                </span>
+              ) : null}
               {openingSubIssueId === subIssue.id ? (
                 <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
               ) : (

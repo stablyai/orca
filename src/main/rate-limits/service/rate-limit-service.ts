@@ -33,7 +33,7 @@ import type {
 import {
   type ClaudeAccountSelectionTarget,
   normalizeClaudeAccountSelectionTarget
-} from '../../claude-accounts/runtime-selection'
+} from '../../claude-accounts/selection/runtime-selection'
 import type { InactiveClaudeAccount } from '../providers/claude/claude-managed-account-usage'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { NetworkProxySettings } from '../../../shared/network-proxy'

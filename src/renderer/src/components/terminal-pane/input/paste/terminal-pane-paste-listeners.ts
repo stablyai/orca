@@ -10,12 +10,12 @@ import {
 } from '../../clipboard/terminal-clipboard-event-paste'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../../../shared/clipboard-text'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
-import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
 import {
   APP_MENU_SELECTION_ACTION_EVENT,
   type AppMenuSelectionAction
-} from '@/lib/app-menu-selection-actions'
-import { isEditableTarget } from '@/lib/editable-target'
+} from '@/lib/app-commands/app-menu-selection-actions'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { copyTerminalSelection } from '../../clipboard/terminal-selection-copy'
 import { isInsideNativeChatCover } from '../../chat/native-chat-covered-pane'
 import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'

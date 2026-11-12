@@ -1,12 +1,12 @@
-import { resetMobileNativeChatDraftInputsForTests } from './mobile-native-chat-draft-inputs'
+import { closeMobileNativeChatEditInputs } from './mobile-native-chat-draft-inputs'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import '../../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { RpcResponse, RpcSuccess } from '../../../transport/rpc/rpc-wire-types'
-import { resetMobileNativeChatStaleInputForTests } from '../mobile-native-chat-stale-input'
-import { resetMobileNativeChatTerminalWritesForTests } from '../mobile-native-chat-terminal-write-lock'
+import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
+import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 
 // Stub the media seam so direct Expo imports would expose unsupported Flow syntax and fail the transform.
@@ -16,6 +16,10 @@ vi.mock('../../../../../src/shared/non-secure-context-uuid', () => ({
   createNonSecureContextUuid: () => `img-${++ids.next}`
 }))
 vi.mock('../../../platform/media-picker', () => ({ useMediaPicker: () => ({ pickImages: pick }) }))
+// The canvas fit needs a WebView; this test is about the attaching counter.
+vi.mock('../../../files/attachments/mobile-agent-image-fit', () => ({
+  fitMobileAgentImage: async (image: unknown) => image
+}))
 
 function ok(id: string, result: unknown): RpcSuccess {
   return { id, ok: true, result, _meta: { runtimeId: 'r' } }
@@ -79,6 +83,8 @@ function baseArgs(overrides: Partial<HookArgs> & Pick<HookArgs, 'client'>): Hook
 describe('useMobileNativeChatImageAttachments', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: Hook | null = null
+  let releaseConnection: ((id: string | null) => void) | null = null
+  let firstAttach: Promise<void> | null = null
 
   function Harness({ args }: { args: HookArgs }): null {
     hook = useMobileNativeChatImageAttachments(args)
@@ -86,14 +92,20 @@ describe('useMobileNativeChatImageAttachments', () => {
   }
 
   beforeEach(() => {
-    resetMobileNativeChatDraftInputsForTests()
     ids.next = 0
     pick.mockReset()
     resetMobileNativeChatStaleInputForTests()
     resetMobileNativeChatTerminalWritesForTests()
   })
-  afterEach(() => {
+  afterEach(async () => {
     act(() => renderer?.unmount())
+    closeMobileNativeChatEditInputs(SCOPE_A)
+    await act(async () => {
+      releaseConnection?.(null)
+      await firstAttach
+    })
+    releaseConnection = null
+    firstAttach = null
     renderer = null
     hook = null
   })
@@ -106,7 +118,6 @@ describe('useMobileNativeChatImageAttachments', () => {
 
   it('keeps isAttaching true when a cancelled pick overlaps a genuine in-flight upload', async () => {
     // Hold a real upload after its counter increment; a concurrent cancelled pick must not decrement work it never started.
-    let releaseConnection: ((id: string | null) => void) | null = null
     const client = makeClient([methodNotFound('start'), ok('save', '/tmp/a.png')])
     const args = baseArgs({
       client: client as unknown as RpcClient,
@@ -118,7 +129,6 @@ describe('useMobileNativeChatImageAttachments', () => {
     mount(args)
 
     pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
-    let firstAttach: Promise<void> | null = null
     await act(async () => {
       firstAttach = hook!.attachImage('library')
       for (let i = 0; i < 50 && !releaseConnection; i++) {

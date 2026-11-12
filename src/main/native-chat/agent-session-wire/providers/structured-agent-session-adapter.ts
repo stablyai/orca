@@ -304,6 +304,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   ): Promise<void | Readonly<Record<string, string>>>
   /** Opt in only when setOption can update idle metadata without a provider turn. */
   canSetOptionWhileIdle?(input: StructuredAgentSessionSetOptionInput): boolean
+  /** A saved pick retires this child's earlier execution reports until a turn carries it. */
+  noteOptionPick?(input: { sessionId: string; fence: number; key: string; value: string }): void
   /** Applied inputs for this exact child; observations never decide message admission. */
   readAppliedInputOptions?(input: {
     sessionId: string
@@ -347,6 +349,10 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     inheritance?: boolean
   }): Promise<void> | undefined
   stopProviderNaming?(): void
+  captureConversationTitleOwner?(record: AgentSessionRecord): {
+    isCurrent: (record: AgentSessionRecord) => boolean
+    generate: (firstPrompt: string, shouldExecute: () => boolean) => Promise<unknown>
+  } | null
   /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
   closeSession?(
     sessionId: string,

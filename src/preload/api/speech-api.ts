@@ -1,11 +1,13 @@
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import type {
+  DictationContext,
   OpenAiCompatibleSpeechProvider,
   OpenAiCompatibleSpeechProviderSummary,
   SpeechErrorEvent,
   SpeechLifecycleEvent,
   SpeechModelManifest,
   SpeechModelState,
+  SpeechPendingEvent,
   SpeechTranscriptEvent
 } from '../../shared/speech-types'
 
@@ -28,7 +30,7 @@ export type SpeechApi = {
   deleteModel: (modelId: string) => Promise<void>
   startDictation: (
     modelId: string,
-    hotwords: string[] | undefined,
+    context: DictationContext | undefined,
     sessionId: string
   ) => Promise<void>
   /** Resolves true when this chunk filled a cloud session's upload cap. */
@@ -38,6 +40,7 @@ export type SpeechApi = {
   cancelDictation: (sessionId: string) => Promise<void>
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
   onFinalTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
+  onSpeechPending: (callback: (data: SpeechPendingEvent) => void) => () => void
   onDownloadProgress: (
     callback: (data: { modelId: string; progress: number }) => void
   ) => () => void

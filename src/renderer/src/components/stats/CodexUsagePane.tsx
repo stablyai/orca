@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { usageFailureMessage } from './usage-failure-message'
+import { useUsageObservation } from '../../store/slices/usage/use-usage-observation'
 import { Activity, Brain, Coins, DatabaseZap, FolderKanban, Sparkles } from 'lucide-react'
 import type { CodexUsageRange, CodexUsageScope } from '../../../../shared/codex-usage-types'
 import { useAppStore } from '../../store'
@@ -46,6 +47,8 @@ export function CodexUsagePane(): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const scanState = useAppStore((state) => state.codexUsageScanState)
+  const failure = useAppStore((state) => state.codexUsageFailure)
+  const failureMessage = usageFailureMessage(failure, t)
   const summary = useAppStore((state) => state.codexUsageSummary)
   const daily = useAppStore((state) => state.codexUsageDaily)
   const modelBreakdown = useAppStore((state) => state.codexUsageModelBreakdown)
@@ -53,16 +56,14 @@ export function CodexUsagePane(): React.JSX.Element {
   const recentSessions = useAppStore((state) => state.codexUsageRecentSessions)
   const scope = useAppStore((state) => state.codexUsageScope)
   const range = useAppStore((state) => state.codexUsageRange)
-  const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
+  const observeCodexUsage = useAppStore((state) => state.observeCodexUsage)
   const setCodexUsageEnabled = useAppStore((state) => state.setCodexUsageEnabled)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const setCodexUsageScope = useAppStore((state) => state.setCodexUsageScope)
   const setCodexUsageRange = useAppStore((state) => state.setCodexUsageRange)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
-  useEffect(() => {
-    void fetchCodexUsage()
-  }, [fetchCodexUsage])
+  useUsageObservation(observeCodexUsage)
 
   const handleSetEnabled = (enabled: boolean): void => {
     recordFeatureInteraction('usage-tracking')
@@ -79,6 +80,9 @@ export function CodexUsagePane(): React.JSX.Element {
     return (
       <UsageTrackingPaneShell
         enabled={false}
+        failure={failureMessage}
+        stateKnown={scanState !== null}
+        retry={{ label: t('usage.failure.retry', 'Refresh'), onRefresh: refreshCodexUsage }}
         title={title}
         disabledDescription={t(
           'auto.components.stats.CodexUsagePane.13badcd8f2',
@@ -90,7 +94,11 @@ export function CodexUsagePane(): React.JSX.Element {
     )
   }
 
-  if (!summary && (scanState.isScanning || scanState.lastScanCompletedAt === null)) {
+  if (
+    !failureMessage &&
+    !summary &&
+    (scanState.isScanning || scanState.lastScanCompletedAt === null)
+  ) {
     return (
       <ClaudeUsageLoadingState
         title={title}
@@ -110,6 +118,7 @@ export function CodexUsagePane(): React.JSX.Element {
   return (
     <UsageTrackingPaneShell
       enabled
+      failure={failureMessage}
       title={title}
       status={
         <>

@@ -1,35 +1,36 @@
-import { ensureDesktopNotificationChannel } from './desktop-notification-channel'
+import { ensureDesktopNotificationChannel } from './foreground-delivery/desktop-notification-channel'
 import {
   createHostPushSupportCompletion,
   createHostPushState,
   type HostPushState,
   type HostPushSupportCompletion
-} from './host-push-registration-state'
+} from './push-registration/host-push-registration-state'
 import { AppState } from 'react-native'
-import { startMobilePushLeaseRenewal } from './mobile-push-lease-renewal'
+import { startMobilePushLeaseRenewal } from './push-registration/mobile-push-lease-renewal'
 import {
   loadNotificationDeliveryPreferences,
   notificationPreferencesFilter,
   saveNotificationDeliveryPreferences,
   type NotificationDeliveryPreferences
-} from './notification-delivery-preferences'
-import type {
-  MobilePushFilter,
-  MobilePushRegisterInput
-} from '../../../src/shared/mobile-push-contract'
-import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import type { RpcOperationSender as PushClient } from '../transport/rpc/rpc-operation-sender'
+} from './delivery-policy/notification-delivery-preferences'
+import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY as NOTIFICATIONS_REMOTE_PUSH_CAPABILITY } from '../../../src/shared/mobile-runtime-capabilities'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-capability-probe'
-import { pushRouteRegister, pushRouteUnregister } from './mobile-push-registration-operations'
+import {
+  sendRegister,
+  sendUnregister
+} from './push-registration/mobile-push-registration-operations'
 import {
   loadPushNotificationsEnabled,
   loadRemotePushHostRegistrations,
   savePushNotificationsEnabled,
   saveRemotePushHostRegistrations
 } from '../storage/preferences'
-import { addPushTokenListener, getDevicePushToken, type MobilePushToken } from './push-token'
-
-export const NOTIFICATIONS_REMOTE_PUSH_CAPABILITY = NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY
+import {
+  addPushTokenListener,
+  getDevicePushToken,
+  type MobilePushToken
+} from './push-registration/push-token'
 
 const REQUEST_TIMEOUT_MS = 5_000
 const REMOVAL_TIMEOUT_MS = 2_000
@@ -44,7 +45,7 @@ export function getHostPushSupported(hostId: string): boolean | null {
 }
 export function getHostPushSupportCompletion(
   hostId: string,
-  client: PushClient
+  client: UnvalidatedRpcRequestPort
 ): HostPushSupportCompletion | null {
   const connection = hostsById.get(hostId)?.connection
   return connection?.client === client ? connection.support : null
@@ -96,34 +97,6 @@ async function currentToken(): Promise<MobilePushToken | null> {
     tokenPromise = pending
   }
   return tokenPromise
-}
-
-async function sendRegister(
-  client: PushClient,
-  token: MobilePushToken,
-  filter: MobilePushFilter
-): Promise<boolean> {
-  const params: Omit<MobilePushRegisterInput, 'deviceId'> = {
-    platform: token.platform,
-    token: token.token,
-    ...(token.apnsEnvironment ? { apnsEnvironment: token.apnsEnvironment } : {}),
-    filter
-  }
-  const reply = await pushRouteRegister
-    .request(client, params, { timeoutMs: REQUEST_TIMEOUT_MS, failWhenDisconnected: true })
-    .catch(() => null)
-  const registration = reply && pushRouteRegister.interpret(reply)
-  if (!registration?.accepted) {
-    return false
-  }
-  return registration.value?.registered === true
-}
-
-async function sendUnregister(client: PushClient, timeoutMs: number): Promise<boolean> {
-  const reply = await pushRouteUnregister
-    .request(client, null, { timeoutMs, failWhenDisconnected: true })
-    .catch(() => null)
-  return reply !== null && pushRouteUnregister.interpret(reply).accepted
 }
 
 async function reconcileHost(hostId: string): Promise<void> {
@@ -222,7 +195,10 @@ async function reconcileAllHosts(): Promise<void> {
 }
 
 // Keep tracked host intent across disconnects; this disposer detaches only its current connected client.
-export function attachPushRegistration(hostId: string, client: PushClient): () => void {
+export function attachPushRegistration(
+  hostId: string,
+  client: UnvalidatedRpcRequestPort
+): () => void {
   const state = hostState(hostId)
   if (state.connection.client !== client) {
     state.capabilityProbeStop?.()

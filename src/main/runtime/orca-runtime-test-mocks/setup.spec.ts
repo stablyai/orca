@@ -3,7 +3,7 @@ export * from './gitlab-test-harness'
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
 import { vi, type Mock as TestMock } from 'vitest'
 
-import type * as GitUsernameModule from '../../git/git-username'
+import type * as GitUsernameModule from '../../git/repositories/git-username'
 import './repo-creation.spec'
 import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
 import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/access/filesystem-path-containment'
@@ -76,7 +76,9 @@ export function acknowledgeAgentPromptSubmit(
   }
 }
 
-const electronMocks = vi.hoisted(() => {
+const electronMocks = await vi.hoisted(async () => {
+  const { fakeAppEnvironment } =
+    await import('../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
   type Listener = (...args: unknown[]) => void
   const listeners = new Map<string, Set<Listener>>()
   const ipcMain = {
@@ -101,7 +103,7 @@ const electronMocks = vi.hoisted(() => {
     BrowserWindow: { fromId: vi.fn((_id: number): unknown => null) },
     webContents: { fromId: vi.fn((_id: number): unknown => null) },
     ipcMain,
-    app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
+    app: { getPath: vi.fn(() => fakeAppEnvironment().getPath('userData')), isPackaged: false }
   }
 })
 
@@ -352,8 +354,10 @@ vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
-vi.mock('../../git/git-username', async () => {
-  const actual = await vi.importActual<typeof GitUsernameModule>('../../git/git-username')
+vi.mock('../../git/repositories/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>(
+    '../../git/repositories/git-username'
+  )
   return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
 })
 

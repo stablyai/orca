@@ -1,5 +1,6 @@
 import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
+import { speechModelNotReadyError } from '../../../shared/speech-model-retirement'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel } from '../../speech/model-catalog'
 import {
@@ -11,10 +12,11 @@ import {
   type MobileDictationChunk
 } from './mobile-dictation-chunk-order'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { hostDictationTerms } from './runtime-dictation-terms'
 import {
   DictationTranscript,
   type DictationTranscriptSnapshot
-} from './mobile-dictation-transcript'
+} from '../../../shared/dictation-transcript'
 
 type MobileDictationSession = {
   id: string
@@ -41,6 +43,7 @@ export class RuntimeMobileDictationController {
   async start(params: {
     dictationId: string
     modelId?: string
+    worktreeId?: string
     clientId?: string
   }): Promise<{ dictationId: string; modelId: string; dedupesResentChunks: true }> {
     const store = this.requireStore()
@@ -53,12 +56,12 @@ export class RuntimeMobileDictationController {
       throw new Error('voice_model_not_selected')
     }
     const manifest = getCatalogModel(modelId)
-    if (manifest && isLocalSpeechModel(manifest) && !hasLocalSpeechRecognizer(manifest)) {
+    if (manifest && isLocalSpeechModel(manifest) && !hasLocalSpeechRecognizer()) {
       throw new Error(LOCAL_SPEECH_UNAVAILABLE_ERROR)
     }
     const modelState = await getSpeechModelManager(store).getModelState(modelId)
     if (modelState.status !== 'ready') {
-      throw new Error(`voice_model_not_ready:${modelState.status}`)
+      throw new Error(speechModelNotReadyError(modelState))
     }
     const clientId = params.clientId
     if (!clientId) {
@@ -88,7 +91,7 @@ export class RuntimeMobileDictationController {
       await getSpeechSttService(store).startDictation(
         modelId,
         (event) => acceptEvent(session, event),
-        undefined,
+        hostDictationTerms(store, params.worktreeId),
         owner,
         voice
       )

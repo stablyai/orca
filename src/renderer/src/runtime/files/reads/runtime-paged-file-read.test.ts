@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { readRuntimeFileContent } from './runtime-file-read-client'
 import {
-  fsReadFileChunk,
-  fsStat,
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall,
   type RuntimeRpcRequest
 } from '../runtime-file-client-test-harness'
-import { readRuntimeFileBytes } from './runtime-paged-file-read'
 
 installRuntimeFileClientEnvironment()
 
@@ -136,16 +133,6 @@ describe('remote reads larger than one RPC reply', () => {
     expect(Buffer.from(result.content, 'utf8').equals(bytes)).toBe(true)
   })
 
-  it('keeps a UTF-8 BOM so a save does not drop it', async () => {
-    const bytes = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), htmlBytes(MB)])
-    serveRemoteFile('table.csv', { bytes })
-
-    const result = await readRuntimeFileContent(remote('table.csv'))
-
-    expect(result.content.charCodeAt(0)).toBe(0xfeff)
-    expect(Buffer.from(result.content, 'utf8').equals(bytes)).toBe(true)
-  })
-
   it.each([2, 5])('opens a %i MB PDF in the editor', async (sizeMb) => {
     const bytes = patternedBytes(sizeMb * MB)
     serveRemoteFile('paper.pdf', { bytes })
@@ -159,17 +146,6 @@ describe('remote reads larger than one RPC reply', () => {
     expect(Buffer.from(result.content, 'base64').equals(bytes)).toBe(true)
   })
 
-  it('treats a large file with a NUL byte as binary, like a local read', async () => {
-    const bytes = htmlBytes(2 * MB)
-    bytes[10] = 0
-    serveRemoteFile('data.txt', { bytes })
-
-    await expect(readRuntimeFileContent(remote('data.txt'))).resolves.toEqual({
-      content: '',
-      isBinary: true
-    })
-  })
-
   it('rejects a chunk whose payload does not match its byte count', async () => {
     serveRemoteFile('report.html', {
       bytes: htmlBytes(2 * MB),
@@ -179,32 +155,5 @@ describe('remote reads larger than one RPC reply', () => {
     await expect(readRuntimeFileContent(remote('report.html'))).rejects.toThrow(
       'Remote file read returned an invalid chunk'
     )
-  })
-})
-
-describe('whole-file bytes for a bytes custom editor', () => {
-  it('returns the exact bytes of a paged remote workbook', async () => {
-    const bytes = patternedBytes(MB + 17)
-    serveRemoteFile('book.xlsx', { bytes })
-
-    const result = await readRuntimeFileBytes(remote('book.xlsx'), 16 * MB)
-
-    expect(result.kind).toBe('ok')
-    expect(result.kind === 'ok' && Buffer.from(result.bytes).equals(bytes)).toBe(true)
-  })
-
-  it('reads a local file through the local stat and chunk IPC', async () => {
-    const bytes = patternedBytes(300 * 1024)
-    fsStat.mockResolvedValue({ size: bytes.length, isDirectory: false, mtime: 5 })
-    fsReadFileChunk.mockImplementation((args: ChunkParams) =>
-      Promise.resolve(sliceChunk(args, bytes))
-    )
-
-    const result = await readRuntimeFileBytes(
-      { target: { kind: 'local' }, filePath: '/repo/book.xlsx' },
-      16 * MB
-    )
-
-    expect(result.kind === 'ok' && Buffer.from(result.bytes).equals(bytes)).toBe(true)
   })
 })

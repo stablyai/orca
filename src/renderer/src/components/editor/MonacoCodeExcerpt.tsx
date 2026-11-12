@@ -5,7 +5,7 @@ import {
   editorTypographyTextStyle
 } from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 
 let pythonLanguageRegistrationPromise: Promise<void> | null = null

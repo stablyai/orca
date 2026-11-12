@@ -13,6 +13,7 @@ import type { AgentProviderSessionMetadata } from '../../../../shared/agent-sess
 import { terminalTitleBlocksExplicitAgentStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type { HookLiveAgentRow } from '../../workspaces/process-listing/hook-live-agent-row'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
+import { codexAsyncQuestionOutlivesWorkingTitle } from './codex-async-question-title-hold'
 
 type HookTurnFacts = Pick<
   AgentStatusEntry,
@@ -120,9 +121,10 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   // Same-class Claude title repaints can postdate a fresh permission hook without
   // contradicting it; only a working or released-pane title retires the question (#11761).
   if (
-    (status.state === 'waiting' || status.state === 'blocked') &&
-    pty.lastAgentStatus === 'idle' &&
-    Date.now() - agentStatusAuthorityObservedAt(status) <= AGENT_STATUS_STALE_AFTER_MS
+    ((status.state === 'waiting' || status.state === 'blocked') &&
+      pty.lastAgentStatus === 'idle' &&
+      Date.now() - agentStatusAuthorityObservedAt(status) <= AGENT_STATUS_STALE_AFTER_MS) ||
+    codexAsyncQuestionOutlivesWorkingTitle(status, pty)
   ) {
     return status
   }

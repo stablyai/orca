@@ -32,16 +32,16 @@ export abstract class RuntimeFederationOperations extends OrcaRuntimeWithHasExac
     return this.orchestrationFederation.sync(runId)
   }
 
-  syncOrchestrationFederatedDispatch(dispatchId: string): Promise<void> {
-    return this.orchestrationFederation.syncDispatch(dispatchId)
+  async syncOrchestrationFederatedDispatch(dispatchId: string): Promise<void> {
+    await this.orchestrationFederation.syncDispatch(dispatchId)
   }
 
   syncOrchestrationFederatedDispatchAfterCurrent(dispatchId: string): Promise<void> {
     return this.orchestrationFederation.syncDispatchAfterCurrent(dispatchId)
   }
 
-  ensureOrchestrationFederationRelay(runId?: string): void {
-    this.orchestrationFederation.ensureRelay(runId)
+  ensureOrchestrationFederationRelay(runId?: string, options?: { keepAwake?: boolean }): void {
+    this.orchestrationFederation.ensureRelay(runId, options)
   }
 
   stopOrchestrationFederationRelay(): void {

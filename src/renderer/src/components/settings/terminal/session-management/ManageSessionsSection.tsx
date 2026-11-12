@@ -218,7 +218,7 @@ export function ManageSessionsSection(): React.JSX.Element {
 
   return (
     <SettingsGroup
-      title={t('auto.components.settings.ManageSessionsSection.d1b80fd5cd', 'Manage Sessions')}
+      title={t('auto.components.settings.ManageSessionsSection.0e07cc838b', 'Manage sessions')}
       description={t(
         'auto.components.settings.ManageSessionsSection.7c4889a724',
         'Recover from a frozen or misbehaving terminal by killing sessions or restarting the underlying daemon.'

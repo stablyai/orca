@@ -1,6 +1,6 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useRef, useState } from 'react'
-import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
+import { getGitHubRuntimeRepoId } from '@/lib/work-items/github/github-source-runtime-context'
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { useTranslate } from '@/i18n/use-translate'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'

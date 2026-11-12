@@ -153,6 +153,7 @@ export function GlobalWorktreeVisibilitySourcesSetting({
         customSources={customSources}
         removableSourceIds={removableSourceIds}
         showCounts={false}
+        switches
         disabled={pending || !defaultsSupported}
         sourceDefaultsDisabled={!sourceDefaultsSupported}
         onAdd={handleAdd}

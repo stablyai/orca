@@ -102,7 +102,7 @@ export function NotificationSoundSection({
         <div className="flex items-center gap-2">
           <FileAudio className="size-4" />
           <Label>
-            {t('auto.components.settings.NotificationsPane.88686e6ca8', 'Notification Sound')}
+            {t('auto.components.settings.NotificationsPane.b3c7207c8f', 'Notification sound')}
           </Label>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -140,8 +140,8 @@ export function NotificationSoundSection({
             <Upload className="size-4" />
             <span>
               {notificationSettings.customSoundPath
-                ? t('auto.components.settings.NotificationsPane.76e02467b8', 'Change Custom File')
-                : t('auto.components.settings.NotificationsPane.6e6df3a09a', 'Choose Custom File')}
+                ? t('auto.components.settings.NotificationsPane.0b8141ed49', 'Change custom file')
+                : t('auto.components.settings.NotificationsPane.38e3bbeb25', 'Choose custom file')}
             </span>
           </SelectItem>
         </SelectContent>

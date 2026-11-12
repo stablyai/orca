@@ -1336,6 +1336,30 @@
       "phoneStopped": "Auf diesem Telefon gestoppt",
       "stopped": "Diktat gestoppt",
       "recordingKept": "Aufnahme behalten"
+    },
+    "announce": {
+      "typedInto": "Eingetippt in {{target}}",
+      "insertedIn": "Eingefügt in {{target}}",
+      "listeningOnPhone": "Hört zu. Transkription auf diesem Telefon.",
+      "listeningOn": "Hört zu. Transkription auf {{computer}}.",
+      "listeningOnComputer": "Hört zu. Transkription auf dem Computer.",
+      "finishing": "Wird abgeschlossen.",
+      "inserted": "Eingefügt.",
+      "cancelled": "Diktat abgebrochen.",
+      "movedTo": "Dieses Telefon hat die Transkription beendet. Weiter auf {{computer}}.",
+      "movedToComputer": "Dieses Telefon hat die Transkription beendet. Weiter auf dem Computer.",
+      "stoppedKept": "Diktat gestoppt. {{reason}}. Deine Aufnahme bleibt erhalten.",
+      "stoppedKeptGeneric": "Diktat gestoppt. Deine Aufnahme bleibt erhalten.",
+      "stillListening": "Hört weiter zu."
+    },
+    "pill": {
+      "open": "Öffnen",
+      "listening": "Hört zu",
+      "starting": "Startet",
+      "finishing": "Wird abgeschlossen",
+      "stopped": "Diktat gestoppt",
+      "label": "Diktat in {{target}}, {{duration}}",
+      "hint": "Doppeltippen, um zurückzukehren"
     }
   },
   "files": {
@@ -2140,6 +2164,10 @@
       "providerExitedRejection": "{{agent}} wurde gestoppt, bevor diese Nachricht gesendet wurde.",
       "providerExitedRow": "{{agent}} wurde während dieser Antwort gestoppt. Die Unterhaltung kann fortgesetzt werden.",
       "providerRateLimited": "{{agent}} hat das Ratenlimit erreicht und versucht es erneut.",
+      "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
+      "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
+      "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
+      "selectedModel": "das ausgewählte Modell",
       "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
       "providerRejectedQuoted": "{{agent}} hat diese Nachricht nicht angenommen: {{detail}}.",
       "providerRetryLastError": "Letzter Fehler: {{detail}}.",
@@ -2426,8 +2454,7 @@
     "tabStrip": {
       "checkingCapabilities": "Desktop-Funktionen werden geprüft – gleich erneut versuchen",
       "newTab": "Neuen Tab erstellen",
-      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminal leeren",
@@ -2470,6 +2497,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Anhängen fehlgeschlagen (erneuter Verbindungsaufbau)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Der Tab konnte nicht geschlossen werden. Versuche es erneut.",
+      "closeFailedDesktopNotReady": "Der Tab konnte nicht geschlossen werden. Orca wird auf deinem Computer noch geladen. Versuche es gleich noch einmal."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "Browser-Befehl fehlgeschlagen",
@@ -2540,8 +2571,8 @@
       "insertFailed": "Diktat konnte nicht eingefügt werden",
       "insertFailedCopied": "Diktat konnte nicht eingefügt werden und wurde daher in die Zwischenablage kopiert",
       "inserted": "Diktat eingefügt",
-      "stoppedAfterSilence": "Nach einer Minute Stille beendet",
-      "stoppedAtCloudLimit": "Diktat am 10-Minuten-Limit der Cloud gestoppt."
+      "stoppedAtCloudLimit": "Diktat am 10-Minuten-Limit der Cloud gestoppt.",
+      "stoppedAfterSilenceSeconds": "Nach {{seconds}} Sekunden Stille gestoppt"
     },
     "useNativeChatStop": {
       "stopNotSent": "Stoppbefehl nicht gesendet",
@@ -3336,6 +3367,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} zusammenführen?",
+      "confirmGitHubSquash": "PR #{{number}} mit Squash zusammenführen?",
+      "confirmGitHubRebase": "PR #{{number}} mit Rebase zusammenführen?",
+      "confirmGitLabMerge": "Merge Request #{{number}} zusammenführen?",
+      "confirmGitLabSquash": "Merge Request #{{number}} mit Squash zusammenführen?",
+      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?",
+      "merged": "Zusammengeführt",
+      "closed": "Geschlossen",
+      "conflicts": "Konflikte",
+      "behind": "Nicht aktuell",
+      "blocked": "Blockiert",
+      "checksPending": "Prüfungen ausstehend",
+      "ableToMerge": "Zusammenführen möglich",
+      "unknown": "Unbekannt"
+    },
+    "pagination": {
+      "pageUnreachable": "Seite {{page}} liegt außerhalb des Bereichs der GitHub-Suche.",
+      "loadPageFailed": "Seite {{page}} konnte nicht von GitHub geladen werden.",
+      "noMoreResults": "Keine weiteren Ergebnisse auf Seite {{page}}."
+    },
     "composerSource": {
       "baseFailed": "Der Basis-Branch konnte nicht ermittelt werden.",
       "forkPushWarning": "Bei diesem PR ist „Allow edits from maintainers“ deaktiviert; GitHub könnte einen Push zum Fork ablehnen."

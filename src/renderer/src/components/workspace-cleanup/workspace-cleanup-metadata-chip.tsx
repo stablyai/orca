@@ -1,7 +1,7 @@
 import React from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { StatusPillTone } from './workspace-cleanup-candidate-row-data'
 
 export function WorkspaceCleanupMetadataChip({

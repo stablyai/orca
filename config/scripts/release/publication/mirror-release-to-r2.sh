@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Needs bash 4+ (mapfile); on macOS use Homebrew bash.
 # Mirror Orca release assets from GitHub Releases to the public R2 bucket
-# served at https://downloads.onorca.dev. onorca.dev's "Download started" page
+# served at https://downloads.orca.dev. orca.dev's "Download started" page
 # offers these as an opt-in "mirror link" for when GitHub returns 5xx.
 # Run by .github/workflows/release-mirror-r2.yml after each published release.
 #
@@ -29,7 +29,7 @@ set -euo pipefail
 
 REPO="${REPO:-stablyai/orca}"
 BUCKET="${BUCKET:-orca-downloads}"
-PUBLIC_BASE="${PUBLIC_BASE:-https://downloads.onorca.dev}"
+PUBLIC_BASE="${PUBLIC_BASE:-https://downloads.orca.dev}"
 WEBSITE_ASSETS=(orca-macos-arm64.dmg orca-macos-x64.dmg orca-windows-setup.exe orca-linux.AppImage)
 CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID:-57e6ddd3bb755dbf8e8dc7ff557e9014}"
 R2_ENDPOINT="https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com"

@@ -63,19 +63,20 @@ const grammarSchema = z.object({
   repository: z.record(repositoryKey, ruleSchema).default({})
 })
 
-// Why short, one line and printable: the editor types these as you type or toggle a comment, and
-// real languages need a few characters at most (`<!--`, `"""`, `{{!--`).
+// Why short, one line and printable: the editor types these as you type, and real languages need a
+// few characters at most (`<!--`, `"""`, `{{!--`).
 const literal = z
   .string()
   .regex(
     /^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,8}$/u,
     'must be 1 to 8 printable characters on one line'
   )
-// Why longer: brackets only match and color keywords such as `function`/`end`; they insert nothing.
-const bracketLiteral = z
+// Why longer: brackets match and color keywords such as `function`/`end`, and comment markers are
+// only inserted by Toggle Comment, where some languages need more (Liquid's `{% endcomment %}`).
+const lineLiteral = z
   .string()
   .regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,128}$/u, 'must be printable text on one line')
-const pair = z.tuple([literal, literal])
+const linePair = z.tuple([lineLiteral, lineLiteral])
 const closingPair = z.object({ open: literal, close: literal })
 
 /** `validate:plugin` refuses a bad literal; hosts drop just that entry so the language still loads. */
@@ -89,12 +90,26 @@ function configurationSchema(strictness: PluginArtifactStrictness) {
           .array(optional(item))
           .max(64)
           .transform((items) => items.filter((entry) => entry !== undefined))
-  return z.object({
-    comments: optional(z.object({ lineComment: optional(literal), blockComment: optional(pair) })),
-    brackets: list(z.tuple([bracketLiteral, bracketLiteral])).optional(),
-    autoClosingPairs: list(closingPair).optional(),
-    surroundingPairs: list(closingPair).optional()
-  })
+  return z
+    .object({
+      comments: optional(
+        z.object({ lineComment: optional(lineLiteral), blockComment: optional(linePair) })
+      ),
+      brackets: list(linePair).optional(),
+      autoClosingPairs: list(closingPair).optional(),
+      surroundingPairs: list(closingPair).optional()
+    })
+    .transform((config) => {
+      if (config.autoClosingPairs || !config.brackets) {
+        return config
+      }
+      // Why: without autoClosingPairs Monaco auto-closes every bracket, so long ones would be
+      // typed as you type; spell out only the pairs that pass the typed-pair rule.
+      const autoClosingPairs = config.brackets
+        .map(([open, close]) => ({ open, close }))
+        .filter((pair) => closingPair.safeParse(pair).success)
+      return { ...config, autoClosingPairs }
+    })
 }
 const tolerantConfigurationSchema = configurationSchema('tolerant')
 

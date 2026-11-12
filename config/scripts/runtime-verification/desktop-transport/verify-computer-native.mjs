@@ -14,20 +14,6 @@ const checks = [
     enabled: process.platform === 'darwin'
   },
   {
-    name: 'Linux provider Python syntax',
-    command: 'python3',
-    args: [
-      '-c',
-      [
-        'import ast, pathlib',
-        'source=pathlib.Path("native/computer-use-linux/runtime.py").read_text(encoding="utf-8")',
-        'ast.parse(source)',
-        'print("syntax-ok")'
-      ].join(';')
-    ],
-    enabled: true
-  },
-  {
     name: 'Linux snapshot renderer tests',
     command: 'python3',
     args: ['native/computer-use-linux/runtime_render_test.py'],

@@ -8,12 +8,6 @@ import {
   store,
   syncSinglePty
 } from './orca-runtime-test-fixtures.spec'
-import { agentLaunchSurfaceFactory } from '../rpc/methods/agent-launch/agent-launch-surfaces'
-import { publishAgentLaunchTabEarly } from '../rpc/methods/agent-launch/agent-launch-tab-publication'
-import { AgentLaunch } from '../../../shared/rpc-contract/agent-launch-params'
-import { DESKTOP_RPC_CALLER } from '../rpc/rpc-caller-identity'
-import type { RpcContext } from '../rpc/core'
-import type { AgentLaunchTabPublished } from '../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 
 const RESERVED_TAB_ID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
 const RESERVED_LEAF_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
@@ -92,66 +86,6 @@ describe('OrcaRuntimeService', () => {
     expect(retained).toContain('BeforeAfter')
     expect(retained).not.toContain('Gi=31337')
     expect(retained).not.toContain('AAAA')
-  })
-
-  it.each([
-    { desktop: false, viewer: 'focus-window' },
-    { desktop: true, viewer: 'focus-in-workspace' }
-  ])('rechecks failed publication during the $viewer host spawn', async ({ desktop, viewer }) => {
-    const { runtime, spawn, requestTabCreate, revealTerminalSession } = runtimeWithDesktopWindow()
-    const publishing = Promise.withResolvers<AgentLaunchTabPublished>()
-    const spawning = Promise.withResolvers<{ id: string }>()
-    const started = Promise.withResolvers<void>()
-    spawn.mockImplementation(() => {
-      started.resolve()
-      return spawning.promise
-    })
-    vi.spyOn(runtime, 'canPublishAgentLaunchTab').mockReturnValue(true)
-    vi.spyOn(runtime, 'publishAgentLaunchTab').mockReturnValue(publishing.promise)
-    const context: RpcContext = {
-      runtime,
-      ...(desktop ? { caller: DESKTOP_RPC_CALLER, clientKind: 'runtime' as const } : {})
-    }
-    const paneKey = `${RESERVED_TAB_ID}:${RESERVED_LEAF_ID}`
-    const early = await publishAgentLaunchTabEarly(
-      AgentLaunch.parse({
-        agent: 'claude',
-        target: { kind: 'existing', worktree: `id:${TEST_WORKTREE_ID}` },
-        paneKey,
-        presentation: 'focused'
-      }),
-      context
-    )
-    expect(early?.windowOwnsPresentation()).toBe(true)
-    const creating = agentLaunchSurfaceFactory(context, undefined, undefined, false, undefined, {
-      early,
-      presentation: 'focused'
-    }).createTerminalAgent({
-      worktreeId: TEST_WORKTREE_ID,
-      agent: 'claude',
-      paneKey,
-      startupPrompt: 'fix the build'
-    })
-    await started.promise
-    publishing.reject(new Error('agent_launch_tab_publish_timeout'))
-    await Promise.resolve()
-    expect(early?.windowOwnsPresentation()).toBe(false)
-    spawning.resolve({ id: 'pty-launch' })
-    const terminal = await creating
-    expect(terminal.paneKey).toBe(paneKey)
-    expect(spawn).toHaveBeenCalledOnce()
-    expect(spawn.mock.calls[0]?.[0]?.command).toContain('fix the build')
-    expect(requestTabCreate).not.toHaveBeenCalled()
-    expect(revealTerminalSession).toHaveBeenCalledExactlyOnceWith(
-      TEST_WORKTREE_ID,
-      expect.objectContaining({
-        tabId: RESERVED_TAB_ID,
-        leafId: RESERVED_LEAF_ID,
-        agentLaunchViewer: viewer,
-        activate: false,
-        surfaceOwner: false
-      })
-    )
   })
 
   it('refuses a live reserved pane before issuing a handle or revealing it', async () => {

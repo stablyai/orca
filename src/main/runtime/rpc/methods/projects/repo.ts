@@ -1,5 +1,6 @@
 import { defineMethod } from '../../core'
-import { resolveReplySnapshot } from '../../content-snapshot-id'
+import { resolveReplySnapshot } from '../../workspace-client-views/content-snapshot-id'
+import { PROJECT_GROUP_METHODS } from './project-group-rpc-methods'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from '../workspaces/folder-workspace'
 import {
@@ -16,14 +17,8 @@ import { repoHooksCheckIsBackground } from '../../../../../shared/repo-hooks-che
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient
-} from '../../repo-visibility-projection'
+} from '../../workspace-client-views/repo-visibility-projection'
 import {
-  ProjectGroupCreate,
-  ProjectGroupImportNested,
-  ProjectGroupMoveProject,
-  ProjectGroupScanNested,
-  ProjectGroupSelector,
-  ProjectGroupUpdate,
   RepoClone,
   RepoCreate,
   RepoHooksCheck,
@@ -54,63 +49,8 @@ export const REPO_METHODS = [
     }
   }),
   ...PROJECT_RUNTIME_METHODS,
-  defineMethod({
-    name: 'projectGroup.list',
-    permission: 'workspace',
-    params: null,
-    handler: (_params, { runtime }) => ({ groups: runtime.listVisibleProjectGroups() })
-  }),
-  defineMethod({
-    name: 'projectGroup.create',
-    permission: 'workspace',
-    params: ProjectGroupCreate,
-    handler: async (params, { runtime }) => ({
-      group: await runtime.createProjectGroup(params)
-    })
-  }),
-  defineMethod({
-    name: 'projectGroup.update',
-    permission: 'workspace',
-    params: ProjectGroupUpdate,
-    handler: async (params, { runtime }) => ({
-      group: await runtime.updateProjectGroup(params.groupId, params.updates)
-    })
-  }),
-  defineMethod({
-    name: 'projectGroup.delete',
-    permission: 'workspace',
-    params: ProjectGroupSelector,
-    handler: async (params, { runtime }) => runtime.deleteProjectGroup(params.groupId)
-  }),
-  defineMethod({
-    name: 'projectGroup.moveProject',
-    permission: 'workspace',
-    params: ProjectGroupMoveProject,
-    handler: async (params, context) => ({
-      repo: projectRepoVisibilityForClient(
-        await context.runtime.moveProjectToGroup(
-          params.repo,
-          params.groupId ?? null,
-          params.order,
-          params.connectionId
-        ),
-        context
-      )
-    })
-  }),
+  ...PROJECT_GROUP_METHODS,
   ...FOLDER_WORKSPACE_METHODS,
-  defineMethod({
-    name: 'projectGroup.scanNested',
-    permission: 'workspace',
-    params: ProjectGroupScanNested,
-    handler: async (params, { runtime }) => runtime.scanNestedRepos(params.path)
-  }),
-  defineMethod({
-    name: 'projectGroup.importNested',
-    permission: 'workspace',
-    params: ProjectGroupImportNested,
-    handler: async (params, { runtime }) => runtime.importNestedRepos(params)
-  }),
   defineMethod({
     name: 'repo.sparsePresets',
     permission: 'workspace',

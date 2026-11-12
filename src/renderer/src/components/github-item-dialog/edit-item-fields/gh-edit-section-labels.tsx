@@ -1,7 +1,7 @@
 import React from 'react'
 import { ChevronDown, LoaderCircle, Pencil } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { GitHubLabelsSettingsLink } from './github-labels-settings-link'
 

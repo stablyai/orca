@@ -18,6 +18,7 @@ import { failActiveMobileDictation, retryMobileDictationOnHost } from './mobile-
 import { mobileDictationFailureRetryable } from './mobile-dictation-failure'
 import { finishMobileDictation } from './mobile-dictation-finish'
 import type { MobileDictationEngine } from './mobile-dictation-device-engine'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   releaseMobileDictationEngine,
   startMobileDictation,
@@ -35,9 +36,10 @@ export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
   useMobileTranslation()
   const { client, enabled, onTranscript, onError, removeFillerWords, onAudioLimitReached } = options
+  const { dictationTerms, worktreeId } = options
   // Both capture seams hold the screen while the microphone is open; native uses the device directly and page uses shell audio verbs.
   const capture = useDictationCapture()
-  const speech = useOnDeviceSpeech(removeFillerWords)
+  const speech = useOnDeviceSpeech(removeFillerWords, dictationTerms)
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   // A failure whose recording is kept for Retry; cleared by Retry, discard and the next dictation.
@@ -60,6 +62,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const onTranscriptRef = useRef(onTranscript)
   const onErrorRef = useRef(onError)
   const onAudioLimitReachedRef = useRef(onAudioLimitReached)
+  const worktreeIdRef = useRef(worktreeId)
   const pendingChunksRef = useRef<Set<Promise<void>>>(new Set())
   const pendingAudioBudgetRef = useRef(new MobileDictationPendingAudioBudget())
   const audioPhaseRef = useRef<MobileDictationAudioPhase>('closed')
@@ -78,7 +81,8 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     onTranscriptRef.current = onTranscript
     onErrorRef.current = onError
     onAudioLimitReachedRef.current = onAudioLimitReached
-  }, [client, speech, enabled, onTranscript, onError, onAudioLimitReached])
+    worktreeIdRef.current = worktreeId
+  }, [client, speech, enabled, onTranscript, onError, onAudioLimitReached, worktreeId])
 
   const applyStatus = useCallback(
     // Kept through processing so the text so far stays in place until the final transcript replaces it in the same render.
@@ -145,6 +149,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       finish: finishRef,
       onTranscript: onTranscriptRef,
       onAudioLimitReached: onAudioLimitReachedRef,
+      worktreeId: worktreeIdRef,
       keptTranscript,
       applyStatus,
       showEngine,
@@ -175,16 +180,27 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     await finishDictation(dictationSessionErrorMessage('no-speech'))
   }, [finishDictation])
 
-  const start = useCallback(async () => {
-    if ((!clientRef.current && !speechRef.current) || !enabledRef.current || activeIdRef.current) {
-      return
-    }
-    setError(null)
-    // A new dictation replaces a failed one's kept recording.
-    setKeptFailure(null)
-    recordingRef.current.clear()
-    await startMobileDictation(run, capture)
-  }, [capture, run, setKeptFailure])
+  const start = useCallback(
+    async (startClient?: RpcClient | null) => {
+      // The caller's client, set before the next render commits it: one hook serves whichever session starts.
+      if (startClient !== undefined) {
+        clientRef.current = startClient
+      }
+      if (
+        (!clientRef.current && !speechRef.current) ||
+        !enabledRef.current ||
+        activeIdRef.current
+      ) {
+        return
+      }
+      setError(null)
+      // A new dictation replaces a failed one's kept recording.
+      setKeptFailure(null)
+      recordingRef.current.clear()
+      await startMobileDictation(run, capture)
+    },
+    [capture, run, setKeptFailure]
+  )
 
   const retry = useCallback(async () => {
     const client = clientRef.current

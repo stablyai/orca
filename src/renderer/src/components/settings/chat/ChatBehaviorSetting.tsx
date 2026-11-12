@@ -14,7 +14,10 @@ import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentS
 import { NativeChatIdleStopSetting } from './NativeChatIdleStopSetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
-import { nativeChatScrollsToLatestOnSend } from '../../../../../shared/native-chat/native-chat-appearance-settings'
+import {
+  nativeChatMarksNewMessages,
+  nativeChatScrollsToLatestOnSend
+} from '../../../../../shared/native-chat/native-chat-appearance-settings'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { getChatBehaviorEntriesByKey, getChatBehaviorTitle } from './chat-behavior-search'
 import { getChatPermissionSearchEntry } from './chat-permission-search'
@@ -54,6 +57,7 @@ export function ChatBehaviorSetting({
     ...(hostContinuesUsageLimits ? [entries.autoContinueAfterUsageLimit] : []),
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
     entries.scrollToLatestOnSend,
+    entries.markNewMessages,
     entries.linkPreviews,
     entries.shellEnvironment
   ]
@@ -64,6 +68,7 @@ export function ChatBehaviorSetting({
   const queueFollowUps = nativeChatQueueFollowUps(settings)
   const autoContinueEnabled = settings.nativeChatAutoContinueAfterUsageLimit === true
   const scrollToLatestOnSend = nativeChatScrollsToLatestOnSend(settings)
+  const markNewMessages = nativeChatMarksNewMessages(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
   return (
     <section id="chat-behavior" className="space-y-3">
@@ -160,6 +165,20 @@ export function ChatBehaviorSetting({
                 onChange={() =>
                   updateSettings({ nativeChatScrollToLatestOnSend: !scrollToLatestOnSend })
                 }
+              />
+            </SearchableSetting>
+            <SearchableSetting
+              {...entries.markNewMessages}
+              id={entries.markNewMessages.targetSectionId}
+              forceVisible={forceVisible}
+              className="max-w-none"
+            >
+              <SettingsSwitchRow
+                label={entries.markNewMessages.title}
+                description={entries.markNewMessages.description}
+                checked={markNewMessages}
+                ariaLabel={entries.markNewMessages.title}
+                onChange={() => updateSettings({ nativeChatMarkNewMessages: !markNewMessages })}
               />
             </SearchableSetting>
             <SearchableSetting

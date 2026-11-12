@@ -5,8 +5,8 @@ import {
 import {
   AgentLaunchChoiceCancelled,
   acquireAgentLaunchChoices
-} from '@/lib/host-chat-program-acquisition'
-import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+} from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
+import { agentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'

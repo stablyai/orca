@@ -1,4 +1,5 @@
 import { checkAcpLaunchVersion } from './acp-launch-version'
+import { overlayEnvironmentVariables } from '../../../shared/environment-overlay'
 
 import {
   assertStructuredAgentResolutionCurrent,
@@ -23,7 +24,6 @@ import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-c
 import { AgentCliInstallationError } from '../../native-chat/agent-cli-installation-error'
 import type { JournalLoad } from '../../native-chat/agent-session-journal/replay/journal-open'
 import type { StructuredAgentLaunchPartResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
@@ -116,10 +116,10 @@ async function readAcpLaunchInvocation(
   assertStructuredAgentResolutionCurrent(deps.operation)
   const base = await deps.resolveEnvironment()
   assertStructuredAgentResolutionCurrent(deps.operation)
-  const env: Record<string, string> = spec.account.environment(accountHome, {
-    ...base,
-    ...deps.resolveLaunchEnv?.(spec.agent)
-  })
+  const env: Record<string, string> = spec.account.environment(
+    accountHome,
+    overlayEnvironmentVariables(base, deps.resolveLaunchEnv?.(spec.agent), process.platform)
+  )
   const envToDelete = spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env) ?? []
   Object.assign(env, spec.env)
   const commandSettings = deps.resolveCommandSettings?.()
@@ -214,7 +214,6 @@ export function acpStructuredLaunchPart(
       },
       env: withNativeChatVisualsEnv({ ...env, ...skill?.env }, skill ? visuals : null),
       inheritedEnvToDelete: [
-        ...STRUCTURED_CHILD_ENV_TO_DELETE,
         ...envToDelete,
         // An inherited scratch directory belongs to a different chat.
         ...(skill ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
