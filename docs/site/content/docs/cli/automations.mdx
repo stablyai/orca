@@ -104,6 +104,23 @@ orca automations create \
 
 Use `orca automations edit <automationId> --fresh-session --json` to switch the automation back to a fresh terminal per run.
 
+### Keep exactly one session per workspace
+
+Reuse falls back to a fresh terminal when the previous one cannot take the run: the agent is still working, waiting on a menu, or the pane's newest run never finished. A coordinator automation that must never have two sessions can refuse that fallback with `--on-no-reusable-session skip`:
+
+```bash
+orca automations create \
+  --name "Coordinator" \
+  --trigger "*/5 * * * *" \
+  --prompt "Continue the queue" \
+  --provider claude \
+  --workspace active \
+  --reuse-session \
+  --on-no-reusable-session skip
+```
+
+While a previous session is still live in the workspace but cannot take the run, the run is recorded as `skipped_unavailable` with `errorCode` `sessionBusy` (the agent is mid-turn) or `sessionNotReusable` (the session cannot take a prompt). No second session starts. When no previous session is live in the workspace, the run launches one as usual. Check `orca automations runs --id <automationId> --json` to see the reason.
+
 ## Extra agent arguments
 
 Add arguments to the agent command for one automation, for example a different model:

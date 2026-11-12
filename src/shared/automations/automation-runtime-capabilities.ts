@@ -14,6 +14,9 @@ export const AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY =
   'automations.extra-agent-args.v1' as const
 // Older hosts strip setupDecision and the update's workspace-mode precondition, then launch by their own setup policy.
 export const AUTOMATION_SETUP_CHOICE_RUNTIME_CAPABILITY = 'automations.setup-choice.v1' as const
+// Older hosts strip onNoReusableSession and would start a second session beside the busy one.
+export const AUTOMATION_ON_NO_REUSABLE_SESSION_RUNTIME_CAPABILITY =
+  'automations.on-no-reusable-session.v1' as const
 
 // Surface-only hosts retain this capability when the complete picker setup contract ships.
 export const AUTOMATION_SURFACE_RUNTIME_CAPABILITY = 'automations.surface.v1' as const
@@ -27,7 +30,8 @@ export const AUTOMATION_RUNTIME_CAPABILITIES = [
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
-  AUTOMATION_SETUP_CHOICE_RUNTIME_CAPABILITY
+  AUTOMATION_SETUP_CHOICE_RUNTIME_CAPABILITY,
+  AUTOMATION_ON_NO_REUSABLE_SESSION_RUNTIME_CAPABILITY
 ] as const
 
 export const AUTOMATION_RUNTIME_CLIENT_CAPABILITIES = [

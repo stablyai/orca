@@ -40,6 +40,7 @@ import {
   getAutomationSchedulerOwner,
   applyAutomationSetupTrust,
   normalizeAutomationSessionReuse,
+  automationSessionReuseFields,
   normalizeAutomationSetupDecisionForWorkspaceMode
 } from './automation-context-migration'
 import { refuseManagedOrcadHost } from '../../automations/orcad-fenced-automation'
@@ -134,7 +135,7 @@ export function createAutomation(
       input.workspaceMode,
       input.setupDecision
     ),
-    reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
+    ...automationSessionReuseFields(input),
     timezone: input.timezone,
     rrule: input.rrule,
     dtstart: input.dtstart,
@@ -163,7 +164,9 @@ export function updateAutomation(
   if (index === -1) {
     throw new Error('Automation not found.')
   }
-  const current = operations.state.automations[index]
+  // Read the stored record through the same normalization readers see, so a stale strict
+  // reuse choice cannot ride an unrelated edit back into the record.
+  const current = normalizeAutomationSessionReuse(operations.state.automations[index])
   const projectionContext = automationProjectionContext(
     operations.state,
     operations.storageAuthority,
@@ -256,10 +259,7 @@ export function updateAutomation(
         ? definedUpdates.setupDecision
         : current.setupDecision
     ),
-    reuseSession:
-      workspaceMode === 'existing'
-        ? (updates.reuseSession ?? current.reuseSession ?? false)
-        : false,
+    ...automationSessionReuseFields({ ...current, workspaceMode, ...definedUpdates }),
     rrule,
     dtstart,
     nextRunAt: scheduleChanged

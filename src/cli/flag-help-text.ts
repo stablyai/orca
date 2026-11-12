@@ -117,6 +117,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
     '--full-tree           Return the whole accessibility tree instead of changes since the last snapshot',
   'reuse-session':
     '--reuse-session        Reuse the previous live session for existing-workspace runs',
+  'on-no-reusable-session':
+    '--on-no-reusable-session skip Skip a run instead of starting a second session',
   'fresh-session': '--fresh-session        Disable session reuse for future runs',
   'extra-agent-args':
     '--extra-agent-args=<args> Extra agent arguments for fresh runs; empty clears',

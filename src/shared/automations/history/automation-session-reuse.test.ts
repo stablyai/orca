@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { AutomationRun } from './automation-run'
-import { findReusableAutomationRun } from './automation-session-reuse'
+import {
+  selectAutomationSessionReuse,
+  type AutomationSessionReuse
+} from './automation-session-reuse'
 
 function run(overrides: Partial<AutomationRun>): AutomationRun {
   const createdAt = overrides.createdAt ?? 1
@@ -35,7 +38,7 @@ function find(
     status?: { state: string; agentType?: string }
     livePtyIds?: string[]
   } = {}
-): string | null {
+): AutomationSessionReuse<string> {
   const livePtyIds = new Set(options.livePtyIds ?? runs.map((entry) => entry.terminalPtyId))
   const statusesByPaneKey = new Map(
     runs.map((entry) => [
@@ -43,7 +46,7 @@ function find(
       options.status ?? { state: 'done', agentType: 'claude' }
     ])
   )
-  return findReusableAutomationRun({
+  return selectAutomationSessionReuse({
     automationId: 'auto-1',
     agentId: 'claude',
     worktreeId: 'wt-1',
@@ -54,6 +57,9 @@ function find(
     liveSession: (candidate) => (livePtyIds.has(candidate.terminalPtyId) ? candidate.id : null)
   })
 }
+
+const REUSED_NEW = { outcome: 'reused', session: 'run-new' }
+const BLOCKED_STALE = { outcome: 'blocked', reason: 'sessionNotReusable' }
 
 describe('automation session reuse selection', () => {
   it('picks the newest completed run of this automation in this workspace', () => {
@@ -70,7 +76,7 @@ describe('automation session reuse selection', () => {
           createdAt: 5
         })
       ])
-    ).toBe('run-new')
+    ).toEqual(REUSED_NEW)
   })
 
   it('falls back to an older run when the newer one no longer holds its PTY', () => {
@@ -87,7 +93,7 @@ describe('automation session reuse selection', () => {
         ],
         { livePtyIds: ['pty-old'] }
       )
-    ).toBe('run-old')
+    ).toEqual({ outcome: 'reused', session: 'run-old' })
   })
 
   it('orders panes by dispatch, not creation: a run created first may dispatch last', () => {
@@ -97,13 +103,13 @@ describe('automation session reuse selection', () => {
         run({ id: 'run-late', createdAt: 2, dispatchedAt: 3 }),
         run({ id: 'run-early', status: 'dispatch_failed', createdAt: 1, dispatchedAt: 4 })
       ])
-    ).toBeNull()
+    ).toEqual(BLOCKED_STALE)
     expect(
       find([
         run({ id: 'run-early', createdAt: 1, dispatchedAt: 4 }),
         run({ id: 'run-late', status: 'dispatch_failed', createdAt: 2, dispatchedAt: 3 })
       ])
-    ).toBe('run-early')
+    ).toEqual({ outcome: 'reused', session: 'run-early' })
   })
 
   it('never picks a pane whose newest run is still working in it', () => {
@@ -112,7 +118,7 @@ describe('automation session reuse selection', () => {
         run({ id: 'run-done', createdAt: 1 }),
         run({ id: 'run-working', status: 'dispatched', createdAt: 2 })
       ])
-    ).toBeNull()
+    ).toEqual(BLOCKED_STALE)
   })
 
   it('never picks an older record of a pane a newer run since used', () => {
@@ -121,18 +127,27 @@ describe('automation session reuse selection', () => {
         run({ id: 'run-done', createdAt: 1 }),
         run({ id: 'run-reused-failed', status: 'dispatch_failed', createdAt: 2 })
       ])
-    ).toBeNull()
+    ).toEqual(BLOCKED_STALE)
   })
 
   it('does not reuse legacy runs without exact pane and PTY identity', () => {
-    expect(find([run({ terminalPaneKey: null })])).toBeNull()
-    expect(find([run({ terminalPtyId: null })])).toBeNull()
+    expect(find([run({ terminalPaneKey: null })])).toEqual({ outcome: 'none' })
+    expect(find([run({ terminalPtyId: null })])).toEqual({ outcome: 'none' })
+  })
+
+  it('reports no session once the previous pane is gone, so a run may start one', () => {
+    expect(find([run({ id: 'run-closed', status: 'dispatched' })], { livePtyIds: [] })).toEqual({
+      outcome: 'none'
+    })
   })
 
   it.each([
     ['a working agent', { state: 'working', agentType: 'claude' }],
     ['another agent', { state: 'done', agentType: 'codex' }]
-  ])('rejects a pane holding %s', (_label, status) => {
-    expect(find([run({})], { status })).toBeNull()
+  ])('reports a blocked session for a pane holding %s', (_label, status) => {
+    expect(find([run({})], { status })).toEqual({
+      outcome: 'blocked',
+      reason: status.state === 'done' ? 'sessionNotReusable' : 'sessionBusy'
+    })
   })
 })

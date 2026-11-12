@@ -14,7 +14,8 @@ import {
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { launchAutomationTerminalAgent, runOwnHandle } from './automation-terminal-launch'
+import { launchAutomationTerminalAgent } from './automation-terminal-launch'
+import { runOwnHandle } from './automation-terminal-session-reuse'
 import {
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
   createRuntimeAutomationRunTerminalObserver

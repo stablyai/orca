@@ -103,14 +103,30 @@ export function normalizeAutomationSessionReuse(automation: Automation): Automat
     automation.workspaceMode,
     automation.setupDecision
   )
-  const { extraAgentArgs, setupTrustHash, ...rest } = automation
+  const { extraAgentArgs, setupTrustHash, onNoReusableSession: _staleReuse, ...rest } = automation
   return {
     ...rest,
     ...(hasExtraAgentArgs(extraAgentArgs) ? { extraAgentArgs } : {}),
     precheck: normalizeAutomationPrecheck(automation.precheck),
     setupDecision,
     ...automationSetupTrustHash(setupDecision, setupTrustHash),
-    reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
+    ...automationSessionReuseFields(automation)
+  }
+}
+
+/** Session reuse, and the strict choice inside it, only mean something for an existing workspace. */
+export function automationSessionReuseFields(
+  automation: Pick<Automation, 'workspaceMode'> & {
+    reuseSession?: boolean
+    onNoReusableSession?: Automation['onNoReusableSession']
+  }
+): Pick<Automation, 'reuseSession'> & Pick<Automation, 'onNoReusableSession'> {
+  const reuse = automation.workspaceMode === 'existing' && automation.reuseSession === true
+  return {
+    reuseSession: reuse,
+    ...(reuse && automation.onNoReusableSession === 'skip'
+      ? { onNoReusableSession: 'skip' as const }
+      : {})
   }
 }
 
