@@ -33,6 +33,9 @@ vi.mock('./worktree-removal-records', async (importOriginal) => {
     writeWorktreeRemovalRecords: vi.fn(actual.writeWorktreeRemovalRecords)
   }
 })
+const actualRemovalRecords = await vi.importActual<typeof WorktreeRemovalRecords>(
+  './worktree-removal-records'
+)
 
 const removal = {
   worktreeId: 'repo-1::/work/feature',
@@ -46,8 +49,9 @@ const isPending = (): boolean => waitForPendingWorktreeRemoval(removal.worktreeI
 let directory = ''
 
 beforeEach(async () => {
-  const actual = await vi.importActual<typeof WorktreeRemovalRecords>('./worktree-removal-records')
-  vi.mocked(writeWorktreeRemovalRecords).mockImplementation(actual.writeWorktreeRemovalRecords)
+  vi.mocked(writeWorktreeRemovalRecords).mockImplementation(
+    actualRemovalRecords.writeWorktreeRemovalRecords
+  )
   directory = await mkdtemp(join(tmpdir(), 'orca-worktree-removal-records-'))
   await loadWorktreeRemovalRecords(directory)
 })
@@ -113,16 +117,13 @@ describe('durable worktree removal records', () => {
   })
 
   it('marks the row as removing after a restart and finishes it with the same job', async () => {
-    const actual = await vi.importActual<typeof WorktreeRemovalRecords>(
-      './worktree-removal-records'
-    )
     let releaseWrite!: () => void
     const writing = new Promise<void>((resolve) => {
       releaseWrite = resolve
     })
     vi.mocked(writeWorktreeRemovalRecords).mockImplementationOnce(async (...args) => {
       await writing
-      await actual.writeWorktreeRemovalRecords(...args)
+      await actualRemovalRecords.writeWorktreeRemovalRecords(...args)
     })
     const job = interruptedJob()
     void startBackgroundWorktreeRemoval({ removal, ...job })
@@ -193,9 +194,6 @@ describe('durable worktree removal records', () => {
   })
 
   it('retains the prior failure while a retry is unadmitted and after its save is refused', async () => {
-    const actual = await vi.importActual<typeof WorktreeRemovalRecords>(
-      './worktree-removal-records'
-    )
     const failed = {
       worktreeId: removal.worktreeId,
       repoId: removal.repoId,
@@ -208,7 +206,7 @@ describe('durable worktree removal records', () => {
       requestedAt: 1,
       failure: { message: 'Files are busy. Retry deletion.', failedAt: 2 }
     }
-    await actual.writeWorktreeRemovalRecords(directory, () => [failed])
+    await actualRemovalRecords.writeWorktreeRemovalRecords(directory, () => [failed])
     _resetPendingWorktreeRemovalsForTests()
     await loadWorktreeRemovalRecords(directory)
     let refuseWrite!: (error: Error) => void
@@ -252,9 +250,6 @@ describe('durable worktree removal records', () => {
   })
 
   it('never resumes a refused force deletion captured alongside another repo admission', async () => {
-    const actual = await vi.importActual<typeof WorktreeRemovalRecords>(
-      './worktree-removal-records'
-    )
     let releaseWrite!: () => void
     const writing = new Promise<void>((resolve) => {
       releaseWrite = resolve
@@ -268,7 +263,7 @@ describe('durable worktree removal records', () => {
     vi.mocked(writeWorktreeRemovalRecords)
       .mockImplementationOnce(async (directory, current, committed) => {
         await writing
-        await actual.writeWorktreeRemovalRecords(
+        await actualRemovalRecords.writeWorktreeRemovalRecords(
           directory,
           () => {
             secondReservedAtSnapshot = pendingWorktreeRemovals.has('repo-2::/other/force')
