@@ -179,28 +179,30 @@ function SubagentEntryPreview({
   return (
     <HoverCard openDelay={300} closeDelay={100}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
-      <HoverCardContent side="top" align="start" className="w-72 space-y-1 p-3 text-xs">
-        <div className="truncate text-sm font-medium text-foreground">{agent.label}</div>
-        {role ? <div className="truncate text-muted-foreground">{role}</div> : null}
-        <div className="tabular-nums text-muted-foreground">
-          {subagentStateLabel(state, 1, 1, say)}
-          {agent.startedAt !== undefined ? (
-            <>
-              {' · '}
-              <SubagentElapsed
-                startedAt={agent.startedAt}
-                settledAt={agent.settledAt ?? null}
-                counting={state === 'working'}
-              />
-            </>
+      <HoverCardContent side="top" align="start" variant="workspace-details" className="w-72">
+        <div className="space-y-1">
+          <div className="truncate text-sm font-medium text-foreground">{agent.label}</div>
+          {role ? <div className="truncate text-muted-foreground">{role}</div> : null}
+          <div className="tabular-nums text-muted-foreground">
+            {subagentStateLabel(state, 1, 1, say)}
+            {agent.startedAt !== undefined ? (
+              <>
+                {' · '}
+                <SubagentElapsed
+                  startedAt={agent.startedAt}
+                  settledAt={agent.settledAt ?? null}
+                  counting={state === 'working'}
+                />
+              </>
+            ) : null}
+            {typeof agent.tokens === 'number' ? ` · ${formatSubagentTokens(agent.tokens)}` : null}
+          </div>
+          {text ? (
+            <p className="line-clamp-6 whitespace-pre-wrap break-words pt-1 text-foreground">
+              {text}
+            </p>
           ) : null}
-          {typeof agent.tokens === 'number' ? ` · ${formatSubagentTokens(agent.tokens)}` : null}
         </div>
-        {text ? (
-          <p className="line-clamp-6 whitespace-pre-wrap break-words pt-1 text-foreground">
-            {text}
-          </p>
-        ) : null}
       </HoverCardContent>
     </HoverCard>
   )
