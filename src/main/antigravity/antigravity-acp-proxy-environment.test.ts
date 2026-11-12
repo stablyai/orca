@@ -69,38 +69,49 @@ it('launches managed Antigravity with system routes and loopback bypass under th
 
 it.each([
   [
-    { NO_PROXY: 'upper.example', no_proxy: 'lower.example' },
-    'upper.example,localhost,127.0.0.1,::1,[::1]',
-    'lower.example,localhost,127.0.0.1,::1,[::1]'
+    { NO_PROXY: 'corp.example', no_proxy: 'corp.example' },
+    {
+      NO_PROXY: 'corp.example,localhost,127.0.0.1,::1,[::1]',
+      no_proxy: 'corp.example,localhost,127.0.0.1,::1,[::1]'
+    }
   ],
   [
-    { NO_PROXY: 'upper.example' },
-    'upper.example,localhost,127.0.0.1,::1,[::1]',
-    'upper.example,localhost,127.0.0.1,::1,[::1]'
+    { NO_PROXY: 'corp.example' },
+    {
+      NO_PROXY: 'corp.example,localhost,127.0.0.1,::1,[::1]',
+      no_proxy: 'corp.example,localhost,127.0.0.1,::1,[::1]'
+    }
   ],
   [
-    { NO_PROXY: 'upper.example', no_proxy: '' },
-    'upper.example,localhost,127.0.0.1,::1,[::1]',
-    'localhost,127.0.0.1,::1,[::1]'
+    { no_proxy: 'corp.example', No_proxy: 'corp.example' },
+    {
+      NO_PROXY: 'corp.example,localhost,127.0.0.1,::1,[::1]',
+      no_proxy: 'corp.example,localhost,127.0.0.1,::1,[::1]',
+      No_proxy: 'corp.example,localhost,127.0.0.1,::1,[::1]'
+    }
   ],
-  [
-    { No_Proxy: 'corp.example' },
-    'corp.example,localhost,127.0.0.1,::1,[::1]',
-    'corp.example,localhost,127.0.0.1,::1,[::1]'
-  ],
-  [{ no_proxy: '*' }, '*', '*']
+  [{ no_proxy: '*' }, { NO_PROXY: '*', no_proxy: '*' }]
 ])(
-  'keeps external exclusions per alias under an environment SOCKS proxy: %j',
-  async (bypass, upper, lower) => {
+  'preserves compatible external exclusions and bypasses loopback: %j',
+  async (bypass, expected) => {
     const env: Record<string, string> = { socks_proxy: 'socks5h://127.0.0.1:9090' }
     await prepareAntigravityAcpProxyEnvironment(env, bypass)
-    expect(env).toEqual({
-      socks_proxy: 'socks5h://127.0.0.1:9090',
-      NO_PROXY: upper,
-      no_proxy: lower
-    })
+    expect(env).toEqual({ socks_proxy: 'socks5h://127.0.0.1:9090', ...expected })
   }
 )
+
+it.each([
+  { No_Proxy: 'corp.example' },
+  { NO_PROXY: 'upper.example', No_proxy: 'corp.example' },
+  { NO_PROXY: 'upper.example', no_proxy: 'lower.example' },
+  { NO_PROXY: 'corp.example', no_proxy: '' },
+  { NO_PROXY: '', no_proxy: 'corp.example' },
+  { no_proxy: 'lower.example', No_proxy: 'corp.example' }
+])('leaves incompatible external proxy selections unchanged: %j', async (bypass) => {
+  const env: Record<string, string> = { socks_proxy: 'socks5h://127.0.0.1:9090', ...bypass }
+  await prepareAntigravityAcpProxyEnvironment(env, {})
+  expect(env).toEqual({ socks_proxy: 'socks5h://127.0.0.1:9090', ...bypass })
+})
 
 it.each([
   DEFAULT_SYSTEM_PROXY.replace('*.local', 'googleapis.com'),

@@ -9,7 +9,21 @@ export async function prepareAntigravityAcpProxyEnvironment(
   inherited: NodeJS.ProcessEnv
 ): Promise<void> {
   const effective = overlayEnvironmentVariables(inherited, env, process.platform)
+  const aliases = Object.entries(effective).filter(([key]) => key.toLowerCase() === 'no_proxy')
+  const values = new Set(aliases.map(([, value]) => value ?? ''))
+  const existingBypass = aliases[0]?.[1] ?? ''
+  // Canonicalizing conflicting or Python-only exclusions changes the harness's external route.
+  if (
+    values.size > 1 ||
+    (process.platform !== 'win32' &&
+      existingBypass &&
+      effective.NO_PROXY === undefined &&
+      effective.no_proxy === undefined)
+  ) {
+    return
+  }
   const proxies = pythonEnvironmentProxies(effective)
+  const prepared = { ...env }
   let bypass: readonly string[] = []
   if (!proxies.size) {
     const system = await readMacosPythonProxyEnvironment()
@@ -17,26 +31,23 @@ export async function prepareAntigravityAcpProxyEnvironment(
       return
     }
     for (const [scheme, value] of Object.entries(system.proxies)) {
-      env[`${scheme}_proxy`] = value
+      prepared[`${scheme}_proxy`] = value
       // Retain an uppercase value that another consumer already selects.
       if (!effective[`${scheme.toUpperCase()}_PROXY`]) {
-        env[`${scheme.toUpperCase()}_PROXY`] = value
+        prepared[`${scheme.toUpperCase()}_PROXY`] = value
       }
     }
     bypass = system.bypass
   } else if (![...proxies.keys()].some((scheme) => scheme !== 'no')) {
     return
   }
-  const selectedWindowsBypass =
-    process.platform === 'win32'
-      ? Object.keys(effective)
-          .sort()
-          .find((key) => key.toUpperCase() === 'NO_PROXY')
-      : undefined
-  const upper = selectedWindowsBypass ? effective[selectedWindowsBypass] : effective.NO_PROXY
-  const lower = selectedWindowsBypass ? effective[selectedWindowsBypass] : effective.no_proxy
-  env.NO_PROXY = appendBypass(upper ?? lower ?? proxies.get('no') ?? '', [...bypass, ...LOOPBACK])
-  env.no_proxy = appendBypass(lower ?? upper ?? proxies.get('no') ?? '', [...bypass, ...LOOPBACK])
+  const additions = [...bypass, ...LOOPBACK]
+  for (const [key, value] of aliases) {
+    prepared[key] = appendBypass(value ?? '', additions)
+  }
+  prepared.NO_PROXY = appendBypass(existingBypass, additions)
+  prepared.no_proxy = appendBypass(existingBypass, additions)
+  Object.assign(env, prepared)
 }
 
 function appendBypass(value: string, additions: readonly string[]): string {
