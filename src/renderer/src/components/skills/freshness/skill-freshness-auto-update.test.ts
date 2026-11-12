@@ -4,6 +4,7 @@ import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-targ
 
 const autoUpdate = vi.hoisted(() => vi.fn())
 const toastWarning = vi.hoisted(() => vi.fn())
+const skillsChanged = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { warning: toastWarning } }))
 vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => ({ runtimeEnvironments: [] }) }
@@ -12,7 +13,7 @@ vi.mock('@/runtime/skills/bundled/runtime-bundled-skills-client', () => ({
   autoUpdateBundledSkillsOnTarget: autoUpdate
 }))
 vi.mock('@/hooks/skills/discovery/installed-agent-skill-discovery', () => ({
-  notifyInstalledAgentSkillsChanged: vi.fn()
+  notifyInstalledAgentSkillsChanged: skillsChanged
 }))
 
 const { _resetSkillFreshnessAutoUpdate, autoUpdateUnmodifiedSkills } =
@@ -49,6 +50,7 @@ afterEach(() => {
   _resetSkillFreshnessAutoUpdate()
   autoUpdate.mockReset()
   toastWarning.mockReset()
+  skillsChanged.mockReset()
 })
 
 describe('startup scan of an already-current host', () => {
@@ -66,36 +68,40 @@ describe('startup scan of an already-current host', () => {
     expect(autoUpdate).toHaveBeenCalledTimes(1)
   })
 
-  it('asks again on the next scan when the marking call fails, and not after it succeeds', async () => {
-    const target: BundledSkillTarget = { kind: 'local' }
-    autoUpdate.mockRejectedValueOnce(new Error('offline'))
-    autoUpdate.mockResolvedValue({ scope: 'global', skills: [] })
+  it.each<[string, () => Promise<unknown>]>([
+    ['the marking call keeps failing', () => Promise.reject(new Error('offline'))],
+    [
+      'the host keeps reporting the skill busy',
+      () =>
+        Promise.resolve({
+          scope: 'global',
+          skills: [{ name: 'orca-cli', status: 'busy', ops: [] }]
+        })
+    ]
+  ])(
+    'asks only once per session when %s, though every call refreshes the plan',
+    async (_, reply) => {
+      const target: BundledSkillTarget = { kind: 'local' }
+      autoUpdate.mockImplementation(reply)
+      // The nudge re-plans on every skills-changed signal and scans the fresh plan, as in the app.
+      // The scan runs inline so any new call starts before the assertion; capped so a regression
+      // fails instead of spinning forever.
+      let refreshes = 0
+      skillsChanged.mockImplementation(() => {
+        refreshes += 1
+        if (refreshes < 5) {
+          autoUpdateUnmodifiedSkills(target, currentPlan)
+        }
+      })
 
-    autoUpdateUnmodifiedSkills(target, currentPlan)
-    await vi.waitFor(() => expect(autoUpdate).toHaveBeenCalledTimes(1))
-    await vi.waitFor(() => {
       autoUpdateUnmodifiedSkills(target, currentPlan)
-      expect(autoUpdate).toHaveBeenCalledTimes(2)
-    })
-    await vi.waitFor(() => expect(getSkillUpdateRun('local').state).toBe('idle'))
-    autoUpdateUnmodifiedSkills(target, currentPlan)
-    expect(autoUpdate).toHaveBeenCalledTimes(2)
-  })
+      await vi.waitFor(() => expect(refreshes).toBeGreaterThan(0))
 
-  it('asks again when the host reports the skill busy', async () => {
-    const target: BundledSkillTarget = { kind: 'local' }
-    autoUpdate.mockResolvedValueOnce({
-      scope: 'global',
-      skills: [{ name: 'orca-cli', status: 'busy', ops: [] }]
-    })
-    autoUpdate.mockResolvedValue({ scope: 'global', skills: [] })
-
-    autoUpdateUnmodifiedSkills(target, currentPlan)
-    await vi.waitFor(() => {
-      autoUpdateUnmodifiedSkills(target, currentPlan)
-      expect(autoUpdate).toHaveBeenCalledTimes(2)
-    })
-  })
+      expect(getSkillUpdateRun('local').state).toBe('idle')
+      expect(autoUpdate).toHaveBeenCalledTimes(1)
+      expect(refreshes).toBe(1)
+    }
+  )
 
   it.each<[string, (options: { onSent?: () => void }) => Promise<never>, boolean]>([
     [

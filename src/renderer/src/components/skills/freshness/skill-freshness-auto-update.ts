@@ -27,6 +27,9 @@ type AttemptState = 'running' | 'settled'
 // Keyed by target; each scan prunes what it no longer observes, so the map stays plan-sized.
 const attemptsByTarget = new Map<string, Map<string, AttemptState>>()
 // Current copies asked to record their marker this session; one per target, skill and bytes.
+// Why never released on failure: every call ends in a plan refresh, so a retry would re-run on each
+// refresh while the host stays busy or unreachable. A missing marker is best effort; the next
+// session, a manual update, or any later write of the skill records it.
 const markedCopies = new Set<string>()
 
 /** Drop settled attempts for states this scan no longer sees; running ones still own their skills. */
@@ -140,23 +143,6 @@ function mayHaveWritten(sent: boolean, error: unknown): boolean {
 }
 
 /**
- * Lets the next plan refresh ask again when the host did not run the recording: the call failed,
- * another update held the target, or the host reported the skill busy or changed. A host that
- * predates silent update (null value) cannot record, so its marks stay to avoid a call per scan.
- */
-function releaseUnrecordedMarks(
-  marking: readonly { name: string; mark: string }[],
-  ran: { value: BundledSkillInstallResult | null } | null
-): void {
-  for (const { name, mark } of marking) {
-    const outcome = ran?.value?.skills.find((skill) => skill.name === name)
-    if (!ran || (outcome && outcome.status !== 'ran')) {
-      markedCopies.delete(mark)
-    }
-  }
-}
-
-/**
  * Silently updates each skill's hash-verified Orca copies, at most once per observed state.
  * Returns the skills a running update owns, so the nudge asks only about the rest.
  */
@@ -217,13 +203,9 @@ export function autoUpdateUnmodifiedSkills(
       })
     )
       .then(
-        (ran) => {
-          releaseUnrecordedMarks(marking, ran)
-          reportPreservedEdits(ran?.value ?? null)
-        },
+        (ran) => reportPreservedEdits(ran?.value ?? null),
         // Settling the keys below means the same state is never retried; the nudge takes over.
         (error: unknown) => {
-          releaseUnrecordedMarks(marking, null)
           // A marking-only call can write only if it reached the host and its reply was lost.
           if (started.length > 0 || mayHaveWritten(sent, error)) {
             reportUncertainOutcome(target, plan)
