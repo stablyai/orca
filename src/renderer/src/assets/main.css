@@ -179,6 +179,7 @@
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
   --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
+  --shadow-notice: var(--notice-shadow);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -550,6 +551,31 @@
   --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
 }
 
+/* One lifted surface for toasts and corner notification cards; the default card/popover blends into the app. */
+:root {
+  --notice-surface: var(--popover);
+  --notice-border: color-mix(in srgb, var(--foreground) 14%, transparent);
+  --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
+  --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
+}
+
+.dark {
+  --notice-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
+  --notice-border: color-mix(in srgb, var(--foreground) 15%, transparent);
+  --notice-secondary: color-mix(in srgb, var(--foreground) 10%, var(--notice-surface));
+  --notice-shadow:
+    0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+/* Why: buttons and inner panels paint from these; dark --secondary equals the lifted surface. */
+[data-sonner-toaster],
+.notification-card-stack {
+  --popover: var(--notice-surface);
+  --card: var(--notice-surface);
+  --secondary: var(--notice-secondary);
+}
+
 [data-sonner-toaster] {
   font-family: var(--font-sans);
   /* Why: above the floating workspace (z-45 panel, z-46 launcher), which parks in the toasts' corner. */
@@ -572,7 +598,7 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   flex-wrap: wrap;
   gap: 10px;
   padding: 14px 16px;
-  box-shadow: var(--shadow-floating);
+  box-shadow: var(--notice-shadow);
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] {
@@ -657,23 +683,13 @@ body[data-modal-overlay-open]
   pointer-events: auto;
 }
 
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-close-button] {
   /* Override Sonner’s dark defaults so the close icon contrasts in both themes. */
   color: var(--popover-foreground);
   background: var(--popover);
-  border-color: rgb(0 0 0 / 0.14);
-}
-
-[data-sonner-toaster][data-sonner-theme='dark']
-  [data-sonner-toast][data-styled='true']
-  [data-close-button] {
-  color: var(--popover-foreground);
-  background: var(--popover);
-  border-color: rgb(255 255 255 / 0.14);
-}
-
-.dark [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
-  border-color: rgb(255 255 255 / 0.14);
+  border-color: var(--notice-border);
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
