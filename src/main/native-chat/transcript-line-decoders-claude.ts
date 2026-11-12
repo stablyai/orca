@@ -128,6 +128,13 @@ export function decodeClaudeTranscriptLine(
     return null
   }
   const messageId = extractString(record.uuid) ?? extractString(message?.id)
+  const model =
+    role === 'assistant' &&
+    record.isSidechain !== true &&
+    record.parent_tool_use_id == null &&
+    record.agentId == null
+      ? extractString(message?.model)
+      : null
   return {
     id: messageId ?? fallbackId,
     role: claudeMessageRole(role, blocks, message?.content),
@@ -138,6 +145,7 @@ export function decodeClaudeTranscriptLine(
         : blocks,
     timestamp,
     source: 'transcript',
+    ...(model && model !== '<synthetic>' ? { model } : {}),
     ...parent
   }
 }

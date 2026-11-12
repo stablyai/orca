@@ -54,6 +54,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       answerCommandLocally,
       onSwitchToTerminal,
       readTerminalScreen,
+      transcriptMessages,
       launchSeed,
       structuredTransport,
       steerHead,
@@ -214,6 +215,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       targetPtyId,
       onSwitchToTerminal,
       readTerminalScreen,
+      transcriptMessages,
       paneKey,
       structuredTransport
     })
@@ -407,11 +409,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           launchPrompt={launchPrompt}
           workspaceFooter={
             !editSession && !launchPrompt ? (
-              <NativeChatComposerWorkspace
-                terminalTabId={terminalTabId}
-                structuredTransport={structuredTransport}
-                isWorking={isWorking}
-              />
+              <NativeChatComposerWorkspace {...{ terminalTabId, structuredTransport, isWorking }} />
             ) : undefined
           }
           {...fieldOverrides}
