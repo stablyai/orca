@@ -188,9 +188,9 @@ describe('Kiro V3 session paths', () => {
 describe('Kiro V3 rows outside the scanner', () => {
   it('opens messages.jsonl as the log, not a sibling of session.json', () => {
     const sessionDir = `/home/u/.kiro/sessions/5fab923ac92fb45c/${KIRO_V3_FIXTURE_SESSION_ID}`
-    expect(aiVaultSessionLogFilePath({ agent: 'kiro', filePath: `${sessionDir}/session.json` })).toBe(
-      `${sessionDir}/messages.jsonl`
-    )
+    expect(
+      aiVaultSessionLogFilePath({ agent: 'kiro', filePath: `${sessionDir}/session.json` })
+    ).toBe(`${sessionDir}/messages.jsonl`)
     // The chat store keeps its transcript beside the metadata file.
     expect(
       aiVaultSessionLogFilePath({ agent: 'kiro', filePath: '/home/u/.kiro/sessions/cli/a.json' })
