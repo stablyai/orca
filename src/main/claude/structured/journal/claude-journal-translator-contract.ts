@@ -8,7 +8,7 @@ import type {
 } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeChildToolQueries } from '../../subagents/claude-child-tool-queries'
 import type {
-  ClaudeContextReportPart,
+  ClaudeContextReportListener,
   ClaudeContextReportTarget
 } from '../../context-usage/claude-context-facts'
 import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
@@ -59,18 +59,15 @@ export type ClaudeJournalTranslator = {
   retryPendingCancellations?: () => StructuredAgentSessionSinkAdmission
   /** Streamed blocks awaiting final frames; settlement clears them. */
   readonly pendingStreamedBlocks: number
-  /** Advances on conversation activity and accepted sends, invalidating older context requests. */
+  /** Advances on conversation activity; history catch-up refuses to finish past it. */
   readonly contextActivity: number
   /** Every final snapshot and turn settlement this acquisition tried was admitted. */
   readonly finalOutputAdmitted: boolean
-  markContextActivity: () => void
-  subscribeContextUsageRequests: (
-    listener: (target: ClaudeContextReportTarget) => void
-  ) => () => void
+  subscribeContextUsageRequests: (listener: ClaudeContextReportListener) => () => void
   recordContextReport: (
     target: ClaudeContextReportTarget,
     report: AgentSessionContextReport,
-    part: ClaudeContextReportPart
+    askedAt: number
   ) => void
   /** Defer context estimates until a model change yields a new window. */
   modelMayHaveChanged: () => void
