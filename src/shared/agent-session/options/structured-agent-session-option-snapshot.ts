@@ -46,9 +46,8 @@ const AGENT_CHOSEN_MODEL: SessionOptionDescriptor = {
   id: 'model',
   label: 'Model',
   category: 'model',
-  kind: { type: 'select', choices: [] },
-  valueSource: 'unknown',
-  reportedModel: 'auto',
+  kind: { type: 'select', currentValue: 'auto', choices: [{ value: 'auto', label: 'Auto' }] },
+  valueSource: 'default',
   transport: 'agent-session',
   settable: false
 }
