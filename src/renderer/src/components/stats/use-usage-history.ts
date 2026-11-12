@@ -61,7 +61,11 @@ export function useUsageHistory(target: RuntimeClientTarget = LOCAL_TARGET) {
   const pendingCommands = useRef<Map<UsageHistoryProvider, 'refresh' | 'setting'> | null>(null)
 
   const load = useCallback(
-    async (force = false, enable?: UsageHistoryProvider, purpose?: BackendConnectionPurpose) => {
+    async (
+      mode: 'read' | 'stale' | 'force' = 'read',
+      enable?: UsageHistoryProvider,
+      purpose?: BackendConnectionPurpose
+    ) => {
       const request = ++generation.current
       const commands = new Map<UsageHistoryProvider, 'refresh' | 'setting'>()
       pendingCommands.current = commands
@@ -163,7 +167,7 @@ export function useUsageHistory(target: RuntimeClientTarget = LOCAL_TARGET) {
                 return
               }
             }
-            const read = async (): Promise<void> => {
+            const read = async () => {
               const snapshot = await api.getSnapshot(
                 { scope: 'all', range: 'all', limit: 0, includeHistory: true },
                 purpose
@@ -192,10 +196,17 @@ export function useUsageHistory(target: RuntimeClientTarget = LOCAL_TARGET) {
                     ? (snapshot.history ?? [])
                     : []
               }))
+              return snapshot
             }
-            if (force) {
+            if (mode === 'stale') {
+              const cached = await read()
+              if (!isCurrent() || !cached?.scanState.enabled || cached.history === undefined) {
+                return
+              }
+            }
+            if (mode !== 'read') {
               commands.set(provider, 'refresh')
-              await api.refresh({ force: true })
+              await api.refresh({ force: mode === 'force' })
               settled('refresh')
               if (!isCurrent()) {
                 return
@@ -236,7 +247,7 @@ export function useUsageHistory(target: RuntimeClientTarget = LOCAL_TARGET) {
       }
       if (connected) {
         if (!detail?.initial && pendingCommands.current === null) {
-          void load(false, undefined, 'recovery')
+          void load('read', undefined, 'recovery')
         }
         return
       }
@@ -262,7 +273,7 @@ export function useUsageHistory(target: RuntimeClientTarget = LOCAL_TARGET) {
           : current
       )
     })
-    void load(false, undefined, 'recovery')
+    void load('stale', undefined, 'recovery')
     return () => {
       active = false
       unsubscribe?.()
@@ -274,7 +285,7 @@ export function useUsageHistory(target: RuntimeClientTarget = LOCAL_TARGET) {
     sources: owned.ownerKey === ownerKey ? owned.sources : initialSources(),
     accounts: owned.ownerKey === ownerKey ? owned.accounts : null,
     isRefreshing: owned.ownerKey !== ownerKey || isRefreshing,
-    refresh: () => load(true),
-    enable: (provider: UsageHistoryProvider) => load(true, provider)
+    refresh: () => load('force'),
+    enable: (provider: UsageHistoryProvider) => load('force', provider)
   }
 }

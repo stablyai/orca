@@ -135,7 +135,7 @@ describe('existing historical source snapshots', () => {
       limit: 0,
       includeHistory: true
     })
-    expect(remote.call).not.toHaveBeenCalledWith(
+    expect(remote.call).toHaveBeenCalledWith(
       target,
       'usage.refresh',
       {
@@ -272,6 +272,7 @@ describe('existing historical source snapshots', () => {
     const codex = installApi(snapshot())
     const { result } = renderHook(() => useUsageHistory())
     await waitFor(() => expect(result.current.isRefreshing).toBe(false))
+    codex.refresh.mockClear()
     const pending = Promise.withResolvers<CodexUsageSnapshot['scanState']>()
     codex.refresh.mockReturnValueOnce(pending.promise)
     let refreshing = Promise.resolve()
