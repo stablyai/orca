@@ -60,13 +60,17 @@ export function cloudCardUsageLine(
 export type CloudCardAttention =
   | { kind: 'agentNotSetUp'; agent: string; tabId: string }
   | { kind: 'agentExpired'; agent: string; tabId: string }
+  /** GIT-SETUP: the teammates' git identities couldn't be installed; commits and pushes are off. */
+  | { kind: 'gitSetupOff' }
   | { kind: 'secretsMissing'; count: number }
 
 const URGENCY: Record<CloudCardAttention['kind'], number> = {
   // An agent that can't start blocks the work the workspace was made for.
   agentNotSetUp: 0,
   agentExpired: 1,
-  secretsMissing: 2
+  // Below an agent that can't start, above missing secrets (design-squad).
+  gitSetupOff: 2,
+  secretsMissing: 3
 }
 
 /** At most one row: the most urgent thing that needs doing; null when all is well. */
@@ -90,6 +94,8 @@ export function cloudCardAttentionLabel(item: CloudCardAttention, t: Translate):
       })
     case 'agentExpired':
       return t('orcaCloud.agentHold.expired', '{{agent}} sign-in expired', { agent: item.agent })
+    case 'gitSetupOff':
+      return t('orcaCloudWorkspace.card.gitSetupOff', 'Commits and pushes are off')
     case 'secretsMissing':
       return t('cloudSecretsAsk.missing', '{{count}} secrets missing', {
         count: item.count,

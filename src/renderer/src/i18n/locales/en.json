@@ -27087,6 +27087,7 @@
       "details": "Details",
       "hideDetails": "Hide details",
       "totalSandboxHours": "Total sandbox hours",
+      "gitSetupOff": "Commits and pushes are off",
       "delete": "Delete"
     },
     "statusUnavailable": "Status unavailable",
