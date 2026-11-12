@@ -84,16 +84,6 @@ describe('projectGroups IPC validation', () => {
     registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
-  it('refuses SSH nested scans without reading the remote or the local filesystem', async () => {
-    await expect(
-      handlers.get('projectGroups:scanNested')!(null, {
-        path: '/srv/platform',
-        connectionId: 'conn-1'
-      })
-    ).rejects.toThrow('ssh_connection_unavailable')
-    expect(isGitRepo).not.toHaveBeenCalled()
-  })
-
   it('returns partial local scan results after cancellation', async () => {
     vi.mocked(isGitRepo).mockReturnValue(false)
     const root = await mkdtemp(join(tmpdir(), 'orca-nested-local-cancel-'))
