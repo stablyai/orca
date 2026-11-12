@@ -129,17 +129,23 @@ function StatusSlot({ status }: { status: CloudStripStatus }): React.JSX.Element
 
 /** `…` in a detail is a command: shown as inline code (design-squad). */
 function withInlineCode(text: string): React.ReactNode {
-  const parts = text.split(/`([^`]+)`/)
-  if (parts.length === 1) {
+  if (!text.includes('`')) {
     return text
   }
-  return parts.map((part, index) =>
-    index % 2 === 1 ? (
-      <code key={index} className="rounded bg-muted px-1 font-mono text-[11px]">
-        {part}
+  // Segments keyed by where they start in the text: fixed for a given string.
+  const segments: { at: number; text: string; code: boolean }[] = []
+  let at = 0
+  text.split(/`([^`]+)`/).forEach((part, i) => {
+    segments.push({ at, text: part, code: i % 2 === 1 })
+    at += part.length + (i % 2 === 1 ? 2 : 0)
+  })
+  return segments.map((segment) =>
+    segment.code ? (
+      <code key={segment.at} className="rounded bg-muted px-1 font-mono text-[11px]">
+        {segment.text}
       </code>
     ) : (
-      part
+      <React.Fragment key={segment.at}>{segment.text}</React.Fragment>
     )
   )
 }
