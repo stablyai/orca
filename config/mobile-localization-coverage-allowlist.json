@@ -289,7 +289,7 @@
   {
     "filePath": "mobile/src/settings/about-screen.tsx",
     "kind": "jsx-attribute:title",
-    "text": "onOrca.dev",
+    "text": "orca.dev",
     "dynamic": false,
     "count": 1
   },

@@ -2,7 +2,7 @@
   "name": "@orca/docs",
   "version": "0.1.0",
   "private": true,
-  "description": "Open-source Orca product documentation site (https://www.onorca.dev/docs)",
+  "description": "Open-source Orca product documentation site (https://orca.dev/docs)",
   "scripts": {
     "dev": "next dev --port 3004",
     "build": "next build",
