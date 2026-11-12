@@ -132,11 +132,22 @@ describe('service: the code from the strip, Settings or the chat UI', () => {
   function setup() {
     const children: ReturnType<typeof fakeChild>[] = []
     const broadcasts: OrcaCloudAgentSetups[] = []
-    const client = {
-      putClaude: vi.fn(async () => ({})),
-      credentials: vi.fn(),
-      sources: vi.fn()
-    } as unknown as AgentCredentialsClient
+    const view = {
+      claude: { state: 'active' },
+      codex: { state: 'none' },
+      providerEnabled: { claude: true, codex: true }
+    } as const
+    const client: AgentCredentialsClient = {
+      credentials: vi.fn(async () => view),
+      sources: vi.fn(async () => ({ defaults: {}, coveredByKey: { claude: false, codex: false } })),
+      putClaude: vi.fn(async () => view),
+      remove: vi.fn(async () => view),
+      setDefaultSource: vi.fn(),
+      setWorkspaceSource: vi.fn(),
+      startCodexBroker: vi.fn(),
+      codexBrokerStatus: vi.fn(),
+      cancelCodexBroker: vi.fn(async () => {})
+    }
     const service = createOrcaCloudAgentsService({
       client,
       spawnSetupToken: async () => {
