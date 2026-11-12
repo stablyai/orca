@@ -652,6 +652,25 @@ module.exports = {
         from: 'native/notification-status-macos/.build/release/orca-notification-status',
         to: 'MacOS/orca-notification-status'
       },
+      // Apple Intelligence provider: absent when the build host had no macOS 26 SDK, and the provider hides itself.
+      ...(existsSync(
+        join(
+          __dirname,
+          '..',
+          'native',
+          'on-device-model-macos',
+          '.build',
+          'release',
+          'orca-on-device-model'
+        )
+      )
+        ? [
+            {
+              from: 'native/on-device-model-macos/.build/release/orca-on-device-model',
+              to: 'MacOS/orca-on-device-model'
+            }
+          ]
+        : []),
       {
         from: 'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',
         to: 'MacOS/orca-keyboard-layout'

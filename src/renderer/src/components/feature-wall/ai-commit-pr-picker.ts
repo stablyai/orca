@@ -12,6 +12,34 @@ import {
   resolveCommitMessageSelectedThinking
 } from './ai-commit-pr-settings-helpers'
 import type { Translate } from '../../i18n/use-translate'
+import type { TextGenerationAgentId } from '../../../../shared/on-device-text-generation'
+
+/** The picker keys entries by opaque agent id; on-device is a labelled entry with no CLI launch path. */
+export function pickerAgent(
+  id: TextGenerationAgentId | null | undefined
+): AgentPickerEntry['agent'] | null {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the picker treats the id as an opaque key and only renders the matching entry.
+  return id as AgentPickerEntry['agent'] | null
+}
+
+export function sourceControlAgentPickerEntry(
+  capability: CommitMessageAgentCapability
+): AgentPickerEntry {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: picker entries are keyed by opaque agent id; on-device never reaches a CLI launch path.
+  const agent = capability.id as AgentPickerEntry['agent']
+  return {
+    agent,
+    label: commitMessageAgentLabel(capability.id, capability),
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same opaque picker key; the row only carries the id and its static CLI shape.
+    rows: [{ agent: capability.id as AgentPickerEntry['agent'], kind: 'cli' }],
+    surfaces: ['terminal'],
+    defaultSurface: 'terminal',
+    terminal: {},
+    structured: {},
+    catalog: { origin: 'unknown' },
+    arguments: ''
+  }
+}
 
 export function aiCommitPrPickerEntry(
   capability: CommitMessageAgentCapability,
@@ -21,9 +49,11 @@ export function aiCommitPrPickerEntry(
   const model = resolveCommitMessageSelectedModel(config, capability)
   const effort = resolveCommitMessageSelectedThinking(config, model)
   return {
-    agent: capability.id,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: picker rows are keyed by opaque agent id; on-device never reaches a CLI launch path.
+    agent: capability.id as AgentPickerEntry['agent'],
     label: commitMessageAgentLabel(capability.id, capability),
-    rows: [{ agent: capability.id, kind: 'cli' }],
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same opaque picker key; the row only carries the id and its static CLI shape.
+    rows: [{ agent: capability.id as AgentPickerEntry['agent'], kind: 'cli' }],
     surfaces: ['terminal'],
     defaultSurface: 'terminal',
     terminal: { model: model.id, ...(effort ? { options: { effort } } : {}) },

@@ -1,4 +1,5 @@
 import { CUSTOM_AGENT_ID } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { isOnDeviceTextGenerationId } from '../../../../../../shared/on-device-text-generation'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
   setSourceControlActionDefault,
@@ -31,7 +32,8 @@ export function applySourceControlTextGenerationDefaults(
   return {
     ...current,
     actions: setSourceControlActionDefault(current.actions, actionId, {
-      agentId: params.agentId,
+      // A null per-action agent overrides the whole-setting choice and falls back to a CLI agent.
+      ...(isOnDeviceTextGenerationId(params.agentId) ? {} : { agentId: params.agentId }),
       commandInputTemplate: params.commandInputTemplate ?? '{basePrompt}',
       ...(params.agentArgs !== undefined ? { agentArgs: params.agentArgs } : {})
     })

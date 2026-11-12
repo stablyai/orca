@@ -92,6 +92,8 @@ export type PlatformApi = {
     displayServer: 'wayland' | 'x11' | null
     /** Material this window was created with; secondary windows and the web client are 'off'. */
     windowMaterial: WindowMaterial
+    /** True when this build shipped the on-device model helper and the window was told so. */
+    onDeviceModelInstalled: boolean
   }
 }
 

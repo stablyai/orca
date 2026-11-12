@@ -12,10 +12,13 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { commitMessagePickerModel } from '@/components/feature-wall/ai-commit-pr-picker'
+import {
+  commitMessagePickerModel,
+  pickerAgent,
+  sourceControlAgentPickerEntry
+} from '@/components/feature-wall/ai-commit-pr-picker'
 import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { planSourceControlTextGeneration } from '@/lib/source-control/ai/source-control-generation-plan'
 import {
@@ -29,7 +32,9 @@ import type { SourceControlTextActionId } from '../../../../../../shared/source-
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import type { SourceControlRenderSettings } from '../listing/use-worktree-context'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { isOnDeviceTextGenerationId } from '../../../../../../shared/on-device-text-generation'
+import { useOnDeviceTextGenerationAvailable } from '@/hooks/use-on-device-text-generation-available'
+import { onDeviceSaveDefaultsMessage } from './on-device-defaults-guard'
 import { toast } from 'sonner'
 import { SourceControlActionVariableChips } from '../../../source-control/SourceControlActionVariableChips'
 import { sourceControlTextGenerationDefaultsMatchTarget } from './text-generation-defaults'
@@ -78,10 +83,6 @@ export function getDefaultSourceControlTextGenerationSaveTargetKey(
   return defaultTarget ? sourceControlTextGenerationSaveTargetKey(defaultTarget.target) : 'global'
 }
 
-function agentLabel(agentId: TuiAgent): string {
-  return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
-}
-
 export function SourceControlTextGenerationDialogForm({
   actionId,
   generateLabel,
@@ -96,20 +97,14 @@ export function SourceControlTextGenerationDialogForm({
   onSaveDefaults
 }: SourceControlTextGenerationDialogFormProps): React.JSX.Element {
   const t = useTranslate()
+  const onDeviceAvailable = useOnDeviceTextGenerationAvailable()
+  const capabilities = useMemo(
+    () => listCommitMessageAgentCapabilities({ onDevice: onDeviceAvailable }),
+    [onDeviceAvailable]
+  )
   const entries = useMemo<AgentPickerEntry[]>(
-    () =>
-      listCommitMessageAgentCapabilities().map((capability) => ({
-        agent: capability.id,
-        label: agentLabel(capability.id),
-        rows: [{ agent: capability.id, kind: 'cli' }],
-        surfaces: ['terminal'],
-        defaultSurface: 'terminal',
-        terminal: {},
-        structured: {},
-        catalog: { origin: 'unknown' },
-        arguments: ''
-      })),
-    []
+    () => capabilities.map(sourceControlAgentPickerEntry),
+    [capabilities]
   )
   const pickerModel = useMemo(() => commitMessagePickerModel(entries), [entries])
   const showCustomAgent = Boolean(
@@ -187,12 +182,16 @@ export function SourceControlTextGenerationDialogForm({
       saveTarget: SourceControlTextGenerationSaveTarget,
       options: { showToast: boolean; showErrors: boolean }
     ): Promise<boolean> => {
-      if (!params || saving || !paramsPlanResult?.ok) {
+      // A per-action recipe stores a CLI agent id, so the provider has no default to save.
+      const onDeviceBlocked = Boolean(params && isOnDeviceTextGenerationId(params.agentId))
+      if (!params || saving || !paramsPlanResult?.ok || onDeviceBlocked) {
         if (options.showErrors) {
           setGenerationError(
-            paramsPlanResult && !paramsPlanResult.ok
-              ? paramsPlanResult.error
-              : 'Choose an agent before saving defaults.'
+            onDeviceBlocked
+              ? onDeviceSaveDefaultsMessage()
+              : paramsPlanResult && !paramsPlanResult.ok
+                ? paramsPlanResult.error
+                : 'Choose an agent before saving defaults.'
           )
         }
         return false
@@ -256,7 +255,7 @@ export function SourceControlTextGenerationDialogForm({
             model={pickerModel}
             entries={entries}
             setupDisabled
-            agent={agentId && !isCustomAgentId(agentId) ? agentId : null}
+            agent={pickerAgent(!agentId || isCustomAgentId(agentId) ? null : agentId)}
             triggerLabel={
               isCustomAgentId(agentId)
                 ? t(

@@ -7,6 +7,7 @@ import {
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { isOnDeviceTextGenerationId } from '../../../../../shared/on-device-text-generation'
 
 export type SourceControlGenerationPlanResult =
   | { ok: true; commandLabel: string; delivery: string; caveat: string }
@@ -71,7 +72,16 @@ export function planSourceControlTextGeneration(
       error: t('auto.lib.source.control.generation.plan.dc480d5897', 'Command input is empty.')
     }
   }
-  const planned = planCommitMessageGeneration(params, prompt)
+  if (isOnDeviceTextGenerationId(params.agentId)) {
+    return {
+      ok: true,
+      commandLabel: 'On-device (Apple Intelligence)',
+      delivery: 'The prompt goes straight to the on-device model.',
+      caveat: 'This checks Orca’s plan only. It does not prove the model is enabled on this Mac.'
+    }
+  }
+  const { agentId, ...cliParams } = params
+  const planned = planCommitMessageGeneration({ ...cliParams, agentId }, prompt)
   if (!planned.ok) {
     return { ok: false, error: textGenerationErrorText(planned) }
   }

@@ -1,5 +1,6 @@
 import { getLinuxDisplayServer } from '../preload-runtime-support'
 import { parseWindowMaterialArgument } from '../../shared/window-material'
+import { parseOnDeviceModelArgument } from '../../shared/on-device-text-generation'
 import type { PreloadApi } from '../api-types'
 
 type PlatformInfo = ReturnType<PreloadApi['platform']['get']>
@@ -16,7 +17,8 @@ function resolvePlatformInfo(): PlatformInfo {
     arch: process.arch,
     shell: process.env.SHELL?.trim() || process.env.ComSpec?.trim() || '',
     displayServer: getLinuxDisplayServer(),
-    windowMaterial: parseWindowMaterialArgument(process.argv)
+    windowMaterial: parseWindowMaterialArgument(process.argv),
+    onDeviceModelInstalled: parseOnDeviceModelArgument(process.argv)
   })
 }
 
