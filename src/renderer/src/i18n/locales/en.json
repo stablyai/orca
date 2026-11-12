@@ -13927,7 +13927,8 @@
           "dataLoadFailed": "Couldn’t load its files"
         },
         "PluginSettingsOverview": {
-          "offTitle": "Plugins are off"
+          "offTitle": "Plugins are off",
+          "offAutomations": "Automations plugins created are paused, and stay paused when plugins are turned back on."
         },
         "PluginFilterPopover": {
           "kind": "Category",

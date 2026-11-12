@@ -207,6 +207,16 @@ describe('automation.update and automation.delete', () => {
       expect.anything()
     )
     confirm.mockClear()
+    // A new time zone moves when it runs.
+    await call('automation.update', { automationId: 'a3', timezone: 'Asia/Tokyo' }, rpc, {
+      confirm
+    })
+    expect(confirm).toHaveBeenCalledWith(
+      'samples.demo',
+      expect.objectContaining({ elevated: true, fields: ['timezone'] }),
+      expect.anything()
+    )
+    confirm.mockClear()
     // A rename runs nothing new.
     await call('automation.update', { automationId: 'a3', name: 'Renamed' }, rpc, { confirm })
     expect(confirm).not.toHaveBeenCalled()

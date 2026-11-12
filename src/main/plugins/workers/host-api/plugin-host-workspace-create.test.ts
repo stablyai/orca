@@ -128,24 +128,29 @@ describe('workspace.create', () => {
     expect(isPluginOpenedTerminal('samples.demo', 'term_a')).toBe(true)
   })
 
-  it('names the workspace a failed launch left behind', async () => {
+  it('names the workspace a failed launch left behind, and no other new one', async () => {
     let created = false
-    const rpc = runtime({
-      'worktree.list': () => ({
-        worktrees: created
-          ? [EXISTING, { ...OTTER, repoId: 'r1', path: '/src/r1-otter', hostId: 'local' }]
-          : [EXISTING]
-      }),
-      'agent.launch': () => {
-        created = true
-        throw new PluginRuntimeRpcError('runtime_error', 'agent CLI not found')
-      }
-    })
-    const outcome = await call('workspace.create', { projectId: 'r1', agent: 'codex' }, rpc)
+    const someoneElses = { id: 'r1::/src/r1/walrus', repoId: 'r1', path: '/src/r1/walrus' }
+    const ours = { ...OTTER, repoId: 'r1', path: '/src/r1/otter-2', hostId: 'local' }
+    const failingLaunch = (alsoOurs: boolean) =>
+      runtime({
+        'worktree.list': () => ({
+          worktrees: created ? [EXISTING, someoneElses, ...(alsoOurs ? [ours] : [])] : [EXISTING]
+        }),
+        'agent.launch': () => {
+          created = true
+          throw new PluginRuntimeRpcError('runtime_error', 'agent CLI not found')
+        }
+      })
+    const params = { projectId: 'r1', name: 'otter', agent: 'codex' }
+    const outcome = await call('workspace.create', params, failingLaunch(true))
     expect(outcome).toMatchObject({ ok: false, code: 'action_failed' })
     expect(outcome.ok === false && outcome.error).toMatch(
       /the workspace was created: identity:wt2:local:i9$/
     )
+    created = false
+    const unnamed = await call('workspace.create', params, failingLaunch(false))
+    expect(unnamed.ok === false && unnamed.error).toBe('Orca could not complete this action')
   })
 
   it('names refusals: folder project, two hosts, setup needing a decision', async () => {

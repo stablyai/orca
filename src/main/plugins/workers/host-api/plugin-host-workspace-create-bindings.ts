@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-api'
 import { pluginWorkspaceId } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
-import { suggestCreatureNameForPaths } from '../../../../shared/worktree-name-suggestion'
+import {
+  suggestCreatureNameForPaths,
+  suggestionPathBasename
+} from '../../../../shared/worktree-name-suggestion'
 import { WorktreeCreateSetupChoiceRefusedError } from '../../../runtime/workspaces/creation/worktree-create-setup-choice-refusal'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import { PluginHostCallError } from './plugin-host-call-scope'
@@ -30,7 +33,12 @@ const agentLaunchAnswer = z.object({
 })
 const worktreeListAnswer = z.object({
   worktrees: z.array(
-    worktreeRecord.extend({ repoId: z.string(), path: z.string(), hostId: z.string().optional() })
+    worktreeRecord.extend({
+      repoId: z.string(),
+      path: z.string(),
+      displayName: z.string().optional(),
+      hostId: z.string().optional()
+    })
   )
 })
 
@@ -111,7 +119,7 @@ export const PLUGIN_WORKSPACE_CREATE_HANDLERS = {
       }).catch(async (error: unknown) => {
         const refusal = setupRefusal(error)
         throw refusal === error
-          ? await withCreatedWorkspace(call, project, existing, error)
+          ? await withCreatedWorkspace(call, project, existing, name, error)
           : refusal
       })
     )
@@ -124,19 +132,32 @@ export const PLUGIN_WORKSPACE_CREATE_HANDLERS = {
   ...PLUGIN_AGENT_RESUME_HANDLERS
 } satisfies Record<string, BoundPluginHostMethod>
 
+/** Whether a worktree is the one a create named `name` makes: it shows that name, or its folder
+ *  is that name, or that name with the `-N` Orca adds when the name is taken. */
+function madeFromName(worktree: { path: string; displayName?: string }, name: string): boolean {
+  const folder = suggestionPathBasename(worktree.path)
+  const suffix = folder.startsWith(`${name}-`) ? folder.slice(name.length + 1) : ''
+  return (
+    worktree.displayName === name ||
+    folder === name ||
+    (suffix.length > 0 && [...suffix].every((char) => char >= '0' && char <= '9'))
+  )
+}
+
 /**
  * A launch can fail after its worktree exists; the refusal then names that workspace, so the
- * plugin can use or remove it. Found as the one worktree of the project that is new.
+ * plugin can use or remove it. Found as the one new worktree of the project with this name.
  */
 async function withCreatedWorkspace(
   call: PluginRuntimeRpc,
   project: PluginProjectTarget,
   before: readonly { id: string }[],
+  name: string,
   error: unknown
 ): Promise<unknown> {
   const known = new Set(before.map((worktree) => worktree.id))
   const created = await projectWorktrees(call, project).then(
-    (after) => after.filter((worktree) => !known.has(worktree.id)),
+    (after) => after.filter((worktree) => !known.has(worktree.id) && madeFromName(worktree, name)),
     () => []
   )
   if (created.length !== 1 || !(error instanceof PluginHostCallError)) {

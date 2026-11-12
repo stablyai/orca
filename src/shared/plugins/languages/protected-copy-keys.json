@@ -316,6 +316,8 @@
     "auto.components.settings.PluginRollbackDialog.description",
     "auto.components.settings.PluginRollbackDialog.descriptionVersion",
     "auto.components.settings.PluginRollbackDialog.title",
+    "auto.components.settings.PluginSettingsOverview.offAutomations",
+    "auto.components.settings.PluginSettingsOverview.offTitle",
     "auto.components.settings.PluginUpdateAllDialog.cancel",
     "auto.components.settings.PluginUpdateAllDialog.close",
     "auto.components.settings.PluginUpdateAllDialog.failed",

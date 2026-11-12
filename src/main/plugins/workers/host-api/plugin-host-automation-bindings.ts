@@ -134,8 +134,9 @@ export const PLUGIN_AUTOMATION_HANDLERS = {
     )
     // Another's automation is the person's. One that runs its agent with extra settings (its
     // arguments, permission mode or a precheck) is asked about even for its own creator when a
-    // change would make it run something new: a new prompt, a new schedule, or resuming.
-    const startsNewRun = prompt !== undefined || schedule !== undefined || enabled === true
+    // change would make it run something new: a new prompt, schedule or time zone, or resuming.
+    const startsNewRun =
+      prompt !== undefined || schedule !== undefined || timezone !== undefined || enabled === true
     const refused = await refusalFor(ctx, automationId, (current, own) => {
       const elevated = automationRunsElevated(current) && startsNewRun
       return own && !elevated
