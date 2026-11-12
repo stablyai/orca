@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import '../../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import '../../../../shared/workspace-layout/terminal-surface-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
   ENV,
@@ -10,19 +10,19 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from '../web-session-tabs-sync-test-harness'
+} from './testing/web-session-tabs-sync.test-fixture'
 import { applyWebSessionTabsSnapshot } from './snapshot-api'
 import { decideWebSessionTabsSnapshot } from './tracking-decisions'
 import type { WebSessionTabsSyncState } from './state'
 import './tracking-mappings'
-import '../web-session-close-intent'
-import '../web-session-focus-intent'
+import './closing/web-session-close-intent'
+import './navigation/web-session-focus-intent'
 import {
   isFrameDrawnServerWorkspace,
   resetFrameDrawnServerWorkspacesForTests,
-  resyncMirroredServerWorkspace,
   setFrameDrawnServerWorkspaces
-} from './frame-drawn-server-workspaces'
+} from './frame-drawn-server-workspace-set'
+import { resyncMirroredServerWorkspace } from './frame-drawn-server-workspaces'
 
 const hoisted = vi.hoisted(() => ({
   layoutOwnerIsMain: true,
@@ -35,7 +35,7 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
   }
 }))
 vi.mock('../../store', () => ({ useAppStore: { setState: vi.fn() } }))
-vi.mock('../web-runtime-session-snapshot', () => ({
+vi.mock('./inventory/web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: hoisted.refresh
 }))
 

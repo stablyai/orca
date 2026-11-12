@@ -1,9 +1,9 @@
 import React, { useMemo, useCallback } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { LoaderCircle, Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import { GitHubAssigneeAvatar } from './Avatars'
 export function GitHubIssueLabelSelector({
@@ -21,6 +21,7 @@ export function GitHubIssueLabelSelector({
   disabled: boolean
   onChange: (labels: string[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const selectedSet = useMemo(() => new Set(selectedLabels), [selectedLabels])
   const toggleLabel = useCallback(
     (label: string) => {
@@ -35,7 +36,7 @@ export function GitHubIssueLabelSelector({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <label className="text-[11px] font-medium text-muted-foreground">
-        {translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}
+        {t('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}
       </label>
       <Popover>
         <PopoverTrigger asChild>
@@ -47,7 +48,7 @@ export function GitHubIssueLabelSelector({
           >
             {selectedLabels.length === 0 ? (
               <span className="text-muted-foreground">
-                {translate('auto.components.TaskPage.5ebff3a0aa', 'None')}
+                {t('auto.components.TaskPage.5ebff3a0aa', 'None')}
               </span>
             ) : (
               <span className="flex min-w-0 flex-wrap gap-1.5">
@@ -69,7 +70,7 @@ export function GitHubIssueLabelSelector({
             <div className="px-2 py-2 text-xs text-destructive">{error}</div>
           ) : labels.length === 0 ? (
             <div className="px-2 py-2 text-xs text-muted-foreground">
-              {translate('auto.components.TaskPage.b36f4bf9de', 'No labels.')}
+              {t('auto.components.TaskPage.b36f4bf9de', 'No labels.')}
             </div>
           ) : (
             labels.map((label) => (
@@ -113,6 +114,7 @@ export function GitHubIssueAssigneeSelector({
   disabled: boolean
   onChange: (assignees: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const selectedLogins = useMemo(
     () => new Set(selectedAssignees.map((assignee) => assignee.login.toLowerCase())),
     [selectedAssignees]
@@ -131,7 +133,7 @@ export function GitHubIssueAssigneeSelector({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <label className="text-[11px] font-medium text-muted-foreground">
-        {translate('auto.components.TaskPage.8aba10579d', 'Assignees')}
+        {t('auto.components.TaskPage.8aba10579d', 'Assignees')}
       </label>
       <Popover>
         <PopoverTrigger asChild>
@@ -143,7 +145,7 @@ export function GitHubIssueAssigneeSelector({
           >
             {selectedAssignees.length === 0 ? (
               <span className="text-muted-foreground">
-                {translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+                {t('auto.components.TaskPage.42a9160321', 'Unassigned')}
               </span>
             ) : (
               <span className="flex min-w-0 items-center gap-1.5">
@@ -165,7 +167,7 @@ export function GitHubIssueAssigneeSelector({
             <div className="px-2 py-2 text-xs text-destructive">{error}</div>
           ) : assignees.length === 0 ? (
             <div className="px-2 py-2 text-xs text-muted-foreground">
-              {translate('auto.components.TaskPage.edf4bc4135', 'No assignable users.')}
+              {t('auto.components.TaskPage.edf4bc4135', 'No assignable users.')}
             </div>
           ) : (
             assignees.map((assignee) => {

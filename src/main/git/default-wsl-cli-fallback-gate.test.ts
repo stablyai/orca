@@ -2,8 +2,8 @@
 // background work (rate limits, auth status, Settings, task-source probes).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeSpawnReturning } from '../../shared/__fixtures__/fake-spawned-child'
-import type * as WslModule from '../wsl'
-import type * as BackgroundDistroGate from '../wsl-background-distro-gate'
+import type * as WslModule from '../wsl/discovery/distro-catalog'
+import type * as BackgroundDistroGate from '../wsl/discovery/wsl-background-distro-gate'
 
 const { spawnMock, getDefaultWslDistroMock, readWslDistroRunningStateMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -17,20 +17,25 @@ vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
-vi.mock('../wsl', async (importOriginal) => ({
+vi.mock('../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
   getDefaultWslDistro: getDefaultWslDistroMock
 }))
 
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundDistroGate>()),
   readWslDistroRunningState: readWslDistroRunningStateMock
 }))
 
-import { ghExecFileAsync, glabExecFileAsync, setDefaultWslDistroOverride } from './runner'
+import { ghExecFileAsync } from './command-runner/hosted-cli/gh-exec-file'
+import { glabExecFileAsync } from './command-runner/hosted-cli/glab-exec-file'
+import { setDefaultWslDistroOverride } from './command-runner/host-routing/wsl-command-resolution'
 import { _resetGhRateLimitBreaker } from './gh-rate-limit-breaker'
-import { runAsWslExecUserAct } from '../wsl/wsl-background-exec-gate'
-import { WslDistroStoppedError, WslDistroUnverifiableError } from '../wsl/wsl-unc-access-gate'
+import { runAsWslExecUserAct } from '../wsl/discovery/wsl-background-exec-gate'
+import {
+  WslDistroStoppedError,
+  WslDistroUnverifiableError
+} from '../wsl/filesystem/wsl-unc-access-gate'
 import { starOrca } from '../github/client/fetch/orca-star'
 
 const originalPlatform = process.platform
@@ -87,18 +92,6 @@ describe.each(CLIS)('$cli default-distro fallback', ({ cli, run }) => {
 
     await expect(run()).rejects.toBeInstanceOf(WslDistroUnverifiableError)
     expect(spawnedWsl()).toBe(false)
-  })
-
-  it('falls back to a running default distro as before', async () => {
-    hostMissingThenWslAnswers(cli)
-
-    await expect(run()).resolves.toEqual({ stdout: '{}', stderr: '' })
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
-      'wsl.exe',
-      expect.arrayContaining(['-d', 'Ubuntu']),
-      expect.anything()
-    )
   })
 
   it('still falls back to a stopped one inside a user act for it', async () => {

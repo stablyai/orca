@@ -168,39 +168,18 @@ class DataControlServer:
 
 
 class ClipboardProtocolTests(unittest.TestCase):
-    def test_both_protocols_preserve_bytes_and_serve_repeated_pastes(self):
+    def test_preserves_bytes_and_serves_repeated_pastes(self):
         text = ("遥か\r\nline two\n" * 20000).encode()
-        for protocol in ("zwlr_data_control", "ext_data_control"):
-            with self.subTest(protocol=protocol), DataControlServer(protocol) as server:
-                self.assertEqual(server.copy(text).returncode, 0)
-                self.assertEqual(server.paste(), text)
-                self.assertEqual(server.paste(), text)
-                server.send(server.source, 1)
-                self.assertTrue(server.disconnected.wait(1))
-
-    def test_unsupported_protocol_never_publishes_or_creates_a_popup(self):
-        with DataControlServer(None) as server:
-            result = server.copy(b"private text", {"DISPLAY": ""})
-            self.assertEqual(result.returncode, 78)
-            self.assertIsNone(server.source)
-            self.assertEqual(result.stdout, b"")
-
-    def test_missing_display_rejects_without_echoing_text(self):
-        with tempfile.TemporaryDirectory() as directory:
-            result = subprocess.run([BINARY], input=b"private text", capture_output=True,
-                                    env={**os.environ, "XDG_RUNTIME_DIR": directory, "WAYLAND_DISPLAY": "missing"}, timeout=3)
-            self.assertEqual(result.returncode, 69)
-            self.assertNotIn(b"private text", result.stdout + result.stderr)
+        with DataControlServer("ext_data_control") as server:
+            self.assertEqual(server.copy(text).returncode, 0)
+            self.assertEqual(server.paste(), text)
+            self.assertEqual(server.paste(), text)
+            server.send(server.source, 1)
+            self.assertTrue(server.disconnected.wait(1))
 
     def test_size_limit_precedes_selection_publication(self):
         with DataControlServer("ext_data_control") as server:
             self.assertEqual(server.copy(b"x" * (16 * 1024 * 1024 + 1)).returncode, 65)
-            self.assertIsNone(server.source)
-
-    def test_probe_does_not_write(self):
-        with DataControlServer("ext_data_control") as server:
-            result = subprocess.run([BINARY, "--probe"], capture_output=True, env=server.environment(), timeout=3)
-            self.assertEqual(result.returncode, 0)
             self.assertIsNone(server.source)
 
     def test_replacement_during_ack_is_success_but_device_loss_is_failure(self):

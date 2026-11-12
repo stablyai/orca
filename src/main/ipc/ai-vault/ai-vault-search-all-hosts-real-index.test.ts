@@ -1,0 +1,193 @@
+import '../../ai-vault-search/worker/session-search-worker.test-fixture'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { afterEach, beforeEach, expect, it } from 'vitest'
+import { resetSessionParseCacheForTests } from '../../ai-vault/parse-cache/session-parse-cache-store'
+import { resetTranscriptConsumersForTests } from '../../ai-vault/transcripts/session-transcript-consumers'
+import { SessionSearchInstance } from '../../ai-vault-search/session-search-instance'
+import {
+  claudeLines,
+  openSessionSearchIndexerHarness,
+  type SessionSearchIndexerHarness
+} from '../../ai-vault-search/indexing/session-search-indexer-test-fixture'
+import type { AiVaultSearchResponse } from '../../../shared/ai-vault/search/ai-vault-search-types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
+
+/** Verify merged hit sets, purge fencing and retries against three independent real transcript indexes. */
+
+const HOST_IDS = ['local', 'ssh:alpha', 'ssh:beta'] as const
+const SESSIONS_PER_HOST = [14, 13, 13] as const
+
+type Host = {
+  executionHostId: ExecutionHostId
+  harness: SessionSearchIndexerHarness
+  instance: SessionSearchInstance
+  sessionIds: string[]
+}
+
+let hosts: Host[]
+
+function sessionIdFor(index: number): string {
+  return `aaaaaaaa-bbbb-4ccc-8ddd-${String(index).padStart(12, '0')}`
+}
+
+async function writeSession(harness: SessionSearchIndexerHarness, index: number): Promise<string> {
+  const sessionId = sessionIdFor(index)
+  const path = join(harness.claudeProjectDir, `${sessionId}.jsonl`)
+  await mkdir(harness.claudeProjectDir, { recursive: true })
+  // Give every hit a distinct timestamp to make cross-host ordering total.
+  const lines = claudeLines([`needle transcript ${index}`], sessionId, index * 2)
+  await writeFile(path, `${lines.join('\n')}\n`)
+  return sessionId
+}
+
+beforeEach(async () => {
+  resetSessionParseCacheForTests()
+  resetTranscriptConsumersForTests()
+  hosts = []
+  let nextIndex = 0
+  for (const [position, executionHostId] of HOST_IDS.entries()) {
+    const harness = await openSessionSearchIndexerHarness(`ss-all-hosts-${position}`)
+    const sessionIds: string[] = []
+    for (let n = 0; n < SESSIONS_PER_HOST[position]!; n++) {
+      sessionIds.push(await writeSession(harness, nextIndex++))
+    }
+    const instance = new SessionSearchInstance({
+      databasePath: harness.databasePath,
+      roots: harness.roots,
+      onError: (error) => {
+        throw error
+      }
+    })
+    // Build each host index alone: transcript reads publish to every live consumer in one process.
+    instance.apply({ enabled: true, historyDays: null })
+    await instance.settled()
+    instance.close()
+    hosts.push({ executionHostId, harness, instance, sessionIds })
+  }
+  for (const host of hosts) {
+    host.instance.apply({ enabled: true, historyDays: null })
+    await host.instance.settled()
+    const own = resultsOf(await host.instance.search({ query: 'needle', limit: 100 }))
+    expect(own.hits.map((hit) => hit.sessionId).sort()).toEqual([...host.sessionIds].sort())
+  }
+})
+
+afterEach(async () => {
+  for (const host of hosts) {
+    host.instance.close()
+    await host.harness.cleanup()
+  }
+  resetTranscriptConsumersForTests()
+  resetSessionParseCacheForTests()
+})
+
+function legs(overrides: Partial<Record<string, SessionSearchHostLeg['search']>> = {}) {
+  return hosts.map((host) => ({
+    executionHostId: host.executionHostId,
+    search: overrides[host.executionHostId] ?? ((request) => host.instance.search(request))
+  })) satisfies SessionSearchHostLeg[]
+}
+
+function resultsOf(response: AiVaultSearchResponse) {
+  if (response.kind !== 'results') {
+    throw new Error(`expected results, got ${response.kind}`)
+  }
+  return response
+}
+
+function keysOf(response: AiVaultSearchResponse): string[] {
+  return resultsOf(response).hits.map((hit) => `${hit.executionHostId}/${hit.sessionId}`)
+}
+
+function everyKey(): string[] {
+  return hosts.flatMap((host) =>
+    host.sessionIds.map((sessionId) => `${host.executionHostId}/${sessionId}`)
+  )
+}
+
+it('replays snapshot tails then fences the changed host at its next read while healthy hosts finish', async () => {
+  const request = { query: 'needle', limit: 5 }
+  const first = resultsOf(await searchAllExecutionHosts(request, legs()))
+  expect(first.hosts?.every((host) => host.outcome === 'searched')).toBe(true)
+
+  const purged = hosts[2]!
+  await rm(join(purged.harness.claudeProjectDir, `${purged.sessionIds[0]!}.jsonl`))
+  await purged.instance.reconcile()
+
+  const second = resultsOf(
+    await searchAllExecutionHosts({ ...request, cursor: first.page.cursor! }, legs())
+  )
+  expect(second.hosts).toContainEqual({ executionHostId: 'ssh:beta', outcome: 'searched' })
+  expect(second.hits.some((hit) => hit.executionHostId === 'ssh:beta')).toBe(true)
+
+  const seen = [...keysOf(first), ...keysOf(second)]
+  let cursor = second.page.cursor
+  let pages = 0
+  let stale = false
+  while (cursor !== null) {
+    const page = resultsOf(await searchAllExecutionHosts({ ...request, cursor }, legs()))
+    stale ||=
+      page.hosts?.some((host) => host.executionHostId === 'ssh:beta' && host.outcome === 'stale') ??
+      false
+    seen.push(...keysOf(page))
+    cursor = page.page.cursor
+    // Fail boundedly if a host is never retired.
+    expect((pages += 1)).toBeLessThan(40)
+  }
+  expect(stale).toBe(true)
+  // The first host page was already hydrated, so its carried tail survives the write.
+  expect(new Set(seen).size).toBe(seen.length)
+  const betaEmitted = [39, 38, 37, 36, 35].map((id) => `ssh:beta/${sessionIdFor(id)}`)
+  expect([...seen].sort()).toEqual(
+    [
+      ...hosts[0]!.sessionIds.map((id) => `local/${id}`),
+      ...hosts[1]!.sessionIds.map((id) => `ssh:alpha/${id}`),
+      ...betaEmitted
+    ].sort()
+  )
+})
+
+it('reports an unreachable host, keeps hasMore, and picks it up on the retry', async () => {
+  let reject = true
+  const flaky = () =>
+    reject
+      ? Promise.reject(new Error('relay down'))
+      : hosts[1]!.instance.search({
+          query: 'needle',
+          limit: 5,
+          filters: { sort: 'relevance' }
+        })
+  const request = { query: 'needle', limit: 5 }
+  const first = resultsOf(await searchAllExecutionHosts(request, legs({ 'ssh:alpha': flaky })))
+  expect(first.hosts).toContainEqual({
+    executionHostId: 'ssh:alpha',
+    outcome: 'unreachable'
+  })
+  expect(first.page.hasMore).toBe(true)
+  expect(first.hits.some((hit) => hit.executionHostId === 'ssh:alpha')).toBe(false)
+
+  reject = false
+  const second = resultsOf(
+    await searchAllExecutionHosts({ ...request, cursor: first.page.cursor! }, legs())
+  )
+  expect(second.hosts).toContainEqual({
+    executionHostId: 'ssh:alpha',
+    outcome: 'searched'
+  })
+  expect(second.hits.some((hit) => hit.executionHostId === 'ssh:alpha')).toBe(true)
+
+  const seen = [...keysOf(first), ...keysOf(second)]
+  let cursor = second.page.cursor
+  let pages = 0
+  while (cursor !== null) {
+    const page = resultsOf(await searchAllExecutionHosts({ ...request, cursor }, legs()))
+    seen.push(...keysOf(page))
+    cursor = page.page.cursor
+    // Fail boundedly if a host is never retired.
+    expect((pages += 1)).toBeLessThan(40)
+  }
+  expect(new Set(seen).size).toBe(seen.length)
+  expect([...seen].sort()).toEqual(everyKey().sort())
+})

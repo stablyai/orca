@@ -6,7 +6,8 @@ import { getPRInlineCommentPlacement } from '../../../../../shared/github/pr-inl
 export function buildInlineReviewComments(
   comments: PRComment[],
   repoId: string,
-  prNumber: number
+  prNumber: number,
+  intlLocale?: string
 ): DecoratedDiffComment[] {
   return comments.flatMap((comment): DecoratedDiffComment[] => {
     const placement = getPRInlineCommentPlacement(comment)
@@ -27,7 +28,7 @@ export function buildInlineReviewComments(
         side: 'modified',
         author: comment.author,
         authorAvatarUrl: comment.authorAvatarUrl,
-        createdAtLabel: formatRelativeTime(comment.createdAt),
+        createdAtLabel: formatRelativeTime(comment.createdAt, intlLocale),
         url: comment.url,
         canDelete: false,
         canEdit: false

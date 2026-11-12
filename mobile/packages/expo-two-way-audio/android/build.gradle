@@ -38,3 +38,8 @@ android {
     abortOnError false
   }
 }
+
+dependencies {
+  // alpha2 is built with Kotlin 2.4 metadata, which this app's Kotlin 2.1 compiler can't read.
+  implementation 'com.google.mlkit:genai-speech-recognition:1.0.0-alpha1'
+}

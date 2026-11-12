@@ -1,7 +1,7 @@
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { captureWorkerOutputArchive } from '../../../../orchestration/worker-output-archive'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
-import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { captureWorkerOutputArchive } from '../../../../orchestration/workers/archives/worker-output-archive'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
+import { resolveStructuredWorkerForDispatch } from '../structured-workers/orchestration-structured-worker-lifecycle'
 import { orchestrationTimestampToMs } from './worker-output'
 import { captureWorkerResumeSession } from './worker-resume-session-capture'
 import { withTimeout } from '../../../../../../shared/promise-timeout-fallback'
@@ -28,7 +28,7 @@ export async function archiveWorkerOutputBeforeStop(args: {
     if (
       !resource ||
       resource.ownership_state !== 'owned' ||
-      db.getWorkerTerminalArchive(dispatchId)
+      db.hasWorkerTerminalArchive(dispatchId)
     ) {
       return
     }

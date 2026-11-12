@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { acquirePluginSyntaxLanguage } from '@/lib/monaco-languages/plugin-syntax-runtime'
-import { resolvePluginSyntaxForFile, usePluginSyntaxes } from '@/store/plugin-syntax-packs'
+import {
+  resolvePluginSyntaxForFile,
+  usePluginSyntaxes
+} from '@/store/plugins/syntax/plugin-syntax-packs'
 
 /** The editor language for a file: an enabled plugin syntax that claims it wins unless Orca's language is protected. */
 export function usePluginSyntaxLanguage(filePath: string, coreLanguage: string): string {

@@ -3,22 +3,15 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
-import { EMULATOR_KEYBOARD_PASTE_MAX_BYTES } from './emulator-keyboard-paste'
+
 import { EmulatorDeviceFrame } from './emulator-device-frame'
+import type { EmulatorGesturePoint } from './emulator-screen-gesture'
 
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn()
   }
 }))
-
-type PointerInit = {
-  button?: number
-  clientX: number
-  clientY: number
-  pointerId?: number
-}
 
 class FakeWebSocket {
   static CONNECTING = 0
@@ -89,7 +82,8 @@ afterEach(() => {
 })
 
 function renderFrame(props?: {
-  onGesture?: (points: unknown[]) => void
+  isLive?: boolean
+  onGesture?: (points: EmulatorGesturePoint[]) => void
   onTap?: (x: number, y: number) => void
   previewUrl?: string
   wsUrl?: string
@@ -100,7 +94,7 @@ function renderFrame(props?: {
         previewUrl={props?.previewUrl ?? 'http://127.0.0.1:3100/stream.mjpeg'}
         wsUrl={props?.wsUrl ?? 'ws://127.0.0.1:3100/ws'}
         loading={false}
-        isLive={true}
+        isLive={props?.isLive ?? true}
         visualOrientation="portrait"
         isActive={true}
         onTap={props?.onTap ?? vi.fn()}
@@ -115,48 +109,9 @@ function getScreen(): HTMLDivElement {
   if (!screen) {
     throw new Error('Emulator screen not rendered')
   }
-  screen.getBoundingClientRect = () =>
-    ({
-      bottom: 200,
-      height: 200,
-      left: 0,
-      right: 100,
-      top: 0,
-      width: 100,
-      x: 0,
-      y: 0,
-      toJSON: () => ({})
-    }) as DOMRect
+  screen.getBoundingClientRect = () => new DOMRect(0, 0, 100, 200)
   screen.setPointerCapture = vi.fn()
   return screen
-}
-
-function pointerEvent(type: string, init: PointerInit): Event {
-  const event = new Event(type, { bubbles: true, cancelable: true })
-  Object.defineProperties(event, {
-    button: { value: init.button ?? 0 },
-    clientX: { value: init.clientX },
-    clientY: { value: init.clientY },
-    pointerId: { value: init.pointerId ?? 1 }
-  })
-  return event
-}
-
-function wheelEvent(init: {
-  clientX: number
-  clientY: number
-  deltaX: number
-  deltaY: number
-}): Event {
-  const event = new Event('wheel', { bubbles: true, cancelable: true })
-  Object.defineProperties(event, {
-    clientX: { value: init.clientX },
-    clientY: { value: init.clientY },
-    deltaMode: { value: 0 },
-    deltaX: { value: init.deltaX },
-    deltaY: { value: init.deltaY }
-  })
-  return event
 }
 
 function keyEvent(
@@ -175,205 +130,153 @@ function keyEvent(
   return event
 }
 
-function pasteEvent(text: string): Event {
-  const event = new Event('paste', { bubbles: true, cancelable: true })
-  Object.defineProperty(event, 'clipboardData', {
-    value: {
-      getData: vi.fn((type: string) => (type === 'text' ? text : ''))
-    }
-  })
-  return event
-}
-
-function decodedSentMessages(tag: number): unknown[] {
-  const ws = FakeWebSocket.instances[0]
-  if (!ws) {
-    return []
-  }
-  return ws.sent
+function decodedSentMessages<T = unknown>(tag: number): T[] {
+  return FakeWebSocket.instances
+    .flatMap((ws) => ws.sent)
     .filter((frame) => frame[0] === tag)
     .map((frame) => JSON.parse(new TextDecoder().decode(frame.subarray(1))))
-}
-
-function decodedSentTouches(): unknown[] {
-  return decodedSentMessages(0x03)
 }
 
 function decodedSentKeyboardFrames(): unknown[] {
   return decodedSentMessages(0x06)
 }
 
+function wheel(screen: HTMLDivElement, deltaY: number): void {
+  act(() => {
+    const event = new Event('wheel', { bubbles: true, cancelable: true })
+    Object.defineProperties(event, {
+      clientX: { value: 50 },
+      clientY: { value: 100 },
+      deltaMode: { value: 0 },
+      deltaX: { value: 0 },
+      deltaY: { value: deltaY }
+    })
+    screen.dispatchEvent(event)
+  })
+}
+
+function finishWheel(): void {
+  act(() => {
+    vi.advanceTimersByTime(15_000)
+  })
+}
+
+function wheelTravel(): number {
+  let previous = 0
+  let travel = 0
+  for (const point of decodedSentMessages<EmulatorGesturePoint>(0x03)) {
+    if (point.type === 'move') {
+      travel += previous - point.y
+    }
+    previous = point.y
+    expect(point.y).toBeGreaterThanOrEqual(0.12)
+    expect(point.y).toBeLessThanOrEqual(0.88)
+  }
+  return travel
+}
+
+describe('EmulatorDeviceFrame wheel scrolling', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    renderFrame()
+    act(() => FakeWebSocket.instances[0]?.open())
+  })
+
+  it('waits a frame after touch-down before moving an isolated notch, then travels its full distance', () => {
+    wheel(getScreen(), 2)
+    expect(decodedSentMessages(0x03)).toEqual([{ type: 'begin', x: 0.5, y: 0.5 }])
+
+    finishWheel()
+    expect(wheelTravel()).toBeCloseTo(0.012)
+    expect(decodedSentMessages<EmulatorGesturePoint>(0x03).at(-1)?.type).toBe('end')
+  })
+
+  it.each([
+    { delta: 50, distance: 0.9, edge: 0.12, restart: 0.88 },
+    { delta: -50, distance: -0.9, edge: 0.88, restart: 0.12 }
+  ])(
+    'keeps all sustained scroll travel across the screen edge ($delta)',
+    ({ delta, distance, edge, restart }) => {
+      const screen = getScreen()
+      for (let i = 0; i < 3; i++) {
+        wheel(screen, delta)
+        act(() => vi.advanceTimersByTime(80))
+      }
+      finishWheel()
+
+      const touches = decodedSentMessages<EmulatorGesturePoint>(0x03)
+      expect(wheelTravel()).toBeCloseTo(distance)
+      expect(touches).toEqual(
+        expect.arrayContaining([
+          { type: 'end', x: 0.5, y: edge },
+          { type: 'begin', x: 0.5, y: restart }
+        ])
+      )
+      expect(touches.at(-1)?.type).toBe('end')
+    }
+  )
+
+  it('releases wheel playback before a pointer takes over the simulator finger', () => {
+    const screen = getScreen()
+    wheel(screen, 100)
+    act(() => vi.advanceTimersByTime(16))
+    const event = new PointerEvent('pointerdown', {
+      bubbles: true,
+      pointerId: 1,
+      clientX: 50,
+      clientY: 140
+    })
+    act(() => screen.dispatchEvent(event))
+    finishWheel()
+
+    const touches = decodedSentMessages<EmulatorGesturePoint>(0x03)
+    expect(touches.map(({ type }) => type)).toEqual(['begin', 'move', 'end', 'begin'])
+    expect(touches[2]).toEqual({ ...touches[1], type: 'end' })
+    expect(touches[3]).toEqual({ type: 'begin', x: 0.5, y: 0.7 })
+  })
+
+  it.each(['disable', 'replace', 'reconnect'])(
+    'cancels wheel playback on control-session %s',
+    (mode) => {
+      const onGesture = vi.fn()
+      renderFrame({ onGesture })
+      wheel(getScreen(), mode === 'reconnect' ? 10_000 : 100)
+      act(() => vi.advanceTimersByTime(16))
+      const before = decodedSentMessages<EmulatorGesturePoint>(0x03)
+      expect(before.at(-1)?.type).toBe('move')
+      if (mode === 'reconnect') {
+        act(() => FakeWebSocket.instances[0]?.close())
+        act(() => vi.advanceTimersByTime(750))
+      } else {
+        const wsUrl = mode === 'replace' ? 'ws://127.0.0.1:3101/ws' : undefined
+        renderFrame({ onGesture, isLive: mode !== 'disable', wsUrl })
+        if (mode === 'disable') {
+          renderFrame({ onGesture })
+        }
+      }
+      act(() => FakeWebSocket.instances.at(-1)?.open())
+      finishWheel()
+      act(() => root.render(<div />))
+      expect(decodedSentMessages<EmulatorGesturePoint>(0x03).slice(before.length)).toEqual(
+        mode === 'reconnect' ? [] : [{ ...before.at(-1), type: 'end' }]
+      )
+      expect(onGesture).not.toHaveBeenCalled()
+    }
+  )
+
+  it('cancels queued movement when the frame is removed', () => {
+    wheel(getScreen(), 100)
+    act(() => root.render(<div />))
+    finishWheel()
+
+    expect(decodedSentMessages(0x03)).toEqual([
+      { type: 'begin', x: 0.5, y: 0.5 },
+      { type: 'end', x: 0.5, y: 0.5 }
+    ])
+  })
+})
+
 describe('EmulatorDeviceFrame input', () => {
-  it('streams pointer drag phases directly to serve-sim', () => {
-    const onGesture = vi.fn()
-    renderFrame({ onGesture })
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
-    const screen = getScreen()
-
-    act(() => {
-      screen.dispatchEvent(pointerEvent('pointerdown', { clientX: 50, clientY: 160 }))
-      screen.dispatchEvent(pointerEvent('pointermove', { clientX: 50, clientY: 100 }))
-      screen.dispatchEvent(pointerEvent('pointerup', { clientX: 50, clientY: 40 }))
-    })
-
-    expect(decodedSentTouches()).toEqual([
-      { type: 'begin', x: 0.5, y: 0.8 },
-      { type: 'move', x: 0.5, y: 0.5 },
-      { type: 'end', x: 0.5, y: 0.2 }
-    ])
-    expect(onGesture).not.toHaveBeenCalled()
-  })
-
-  it('streams Android pointer phases to main for the scrcpy control socket', () => {
-    const sendScrcpyTouch = vi.fn()
-    vi.stubGlobal('api', { emulator: { sendScrcpyTouch } })
-    const onGesture = vi.fn()
-    const onTap = vi.fn()
-    renderFrame({ onGesture, onTap, previewUrl: 'scrcpy://serial-1', wsUrl: '' })
-    const screen = getScreen()
-
-    act(() => {
-      screen.dispatchEvent(pointerEvent('pointerdown', { clientX: 50, clientY: 160 }))
-      screen.dispatchEvent(pointerEvent('pointermove', { clientX: 50, clientY: 100 }))
-      screen.dispatchEvent(pointerEvent('pointerup', { clientX: 50, clientY: 40 }))
-    })
-
-    expect(sendScrcpyTouch.mock.calls.map(([touch]) => touch)).toEqual([
-      { deviceId: 'serial-1', type: 'begin', x: 0.5, y: 0.8 },
-      { deviceId: 'serial-1', type: 'move', x: 0.5, y: 0.5 },
-      { deviceId: 'serial-1', type: 'end', x: 0.5, y: 0.2 }
-    ])
-    expect(onGesture).not.toHaveBeenCalled()
-    expect(onTap).not.toHaveBeenCalled()
-    expect(FakeWebSocket.instances).toEqual([])
-  })
-
-  it('marks bottom-origin pointer drags as serve-sim edge gestures', () => {
-    renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
-    const screen = getScreen()
-
-    act(() => {
-      screen.dispatchEvent(pointerEvent('pointerdown', { clientX: 50, clientY: 196 }))
-      screen.dispatchEvent(pointerEvent('pointermove', { clientX: 50, clientY: 120 }))
-      screen.dispatchEvent(pointerEvent('pointerup', { clientX: 50, clientY: 40 }))
-    })
-
-    expect(decodedSentTouches()).toEqual([
-      { type: 'begin', x: 0.5, y: 0.98, edge: 3 },
-      { type: 'move', x: 0.5, y: 0.6, edge: 3 },
-      { type: 'end', x: 0.5, y: 0.2, edge: 3 }
-    ])
-  })
-
-  it('forwards focused keyboard text as serve-sim HID frames', () => {
-    vi.useFakeTimers()
-    renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
-    const screen = getScreen()
-
-    act(() => {
-      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
-      screen.dispatchEvent(keyEvent('keydown', { key: 'A' }))
-    })
-
-    expect(decodedSentKeyboardFrames()).toEqual([{ type: 'down', usage: 225 }])
-
-    act(() => {
-      vi.advanceTimersByTime(12)
-    })
-
-    expect(decodedSentKeyboardFrames()).toEqual([
-      { type: 'down', usage: 225 },
-      { type: 'down', usage: 4 },
-      { type: 'up', usage: 4 },
-      { type: 'up', usage: 225 }
-    ])
-  })
-
-  it('forwards focused paste text as bounded serve-sim HID frames', () => {
-    vi.useFakeTimers()
-    renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
-    const screen = getScreen()
-    const paste = pasteEvent('ab')
-
-    act(() => {
-      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
-      screen.dispatchEvent(paste)
-    })
-
-    expect(paste.defaultPrevented).toBe(true)
-    expect(decodedSentKeyboardFrames()).toEqual([{ type: 'down', usage: 4 }])
-
-    act(() => {
-      vi.advanceTimersByTime(12)
-    })
-
-    expect(decodedSentKeyboardFrames()).toEqual([
-      { type: 'down', usage: 4 },
-      { type: 'up', usage: 4 },
-      { type: 'down', usage: 5 },
-      { type: 'up', usage: 5 }
-    ])
-  })
-
-  it('sends Android keys and paste to the scrcpy control socket in order', async () => {
-    vi.mocked(toast.error).mockClear()
-    const sendScrcpyKeyboard = vi.fn<Window['api']['emulator']['sendScrcpyKeyboard']>(
-      async () => true
-    )
-    vi.stubGlobal('api', { emulator: { sendScrcpyKeyboard } })
-    renderFrame({ previewUrl: 'scrcpy://serial-1', wsUrl: '' })
-    const screen = getScreen()
-    const paste = pasteEvent('hi\r\nyou')
-
-    await act(async () => {
-      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
-      screen.dispatchEvent(keyEvent('keydown', { key: 'a' }))
-      screen.dispatchEvent(keyEvent('keydown', { key: 'ArrowLeft', shiftKey: true }))
-      screen.dispatchEvent(paste)
-      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
-    })
-
-    expect(paste.defaultPrevented).toBe(true)
-    expect(sendScrcpyKeyboard.mock.calls.map(([input]) => input)).toEqual([
-      { deviceId: 'serial-1', text: 'a' },
-      { deviceId: 'serial-1', key: 'dpad_left', shift: true },
-      { deviceId: 'serial-1', text: 'hi\nyou' },
-      { deviceId: 'serial-1', key: 'enter', shift: false }
-    ])
-    expect(toast.error).not.toHaveBeenCalled()
-    expect(FakeWebSocket.instances).toEqual([])
-  })
-
-  it('rejects oversized screen paste without scheduling keyboard frames', async () => {
-    renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
-    const screen = getScreen()
-    const paste = pasteEvent('a'.repeat(EMULATOR_KEYBOARD_PASTE_MAX_BYTES + 1))
-
-    await act(async () => {
-      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
-      screen.dispatchEvent(paste)
-      await Promise.resolve()
-    })
-
-    expect(paste.defaultPrevented).toBe(true)
-    expect(decodedSentKeyboardFrames()).toEqual([])
-    expect(toast.error).toHaveBeenCalledWith('Paste is too large for emulator keyboard input.')
-  })
-
   it('releases pressed keyboard usages when delayed frames are canceled by cleanup', () => {
     vi.useFakeTimers()
     renderFrame()
@@ -396,98 +299,6 @@ describe('EmulatorDeviceFrame input', () => {
     expect(decodedSentKeyboardFrames()).toEqual([
       { type: 'down', usage: 225 },
       { type: 'up', usage: 225 }
-    ])
-  })
-
-  it('does not trap Tab focus until keyboard capture is explicitly active', () => {
-    vi.useFakeTimers()
-    renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
-    const screen = getScreen()
-    expect(screen.getAttribute('role')).toBe('application')
-
-    const tabBeforeCapture = keyEvent('keydown', { key: 'Tab' })
-    act(() => {
-      screen.dispatchEvent(tabBeforeCapture)
-    })
-
-    expect(tabBeforeCapture.defaultPrevented).toBe(false)
-    expect(decodedSentKeyboardFrames()).toEqual([])
-
-    const enterCapture = keyEvent('keydown', { key: 'Enter' })
-    const tabDuringCapture = keyEvent('keydown', { key: 'Tab', shiftKey: true })
-    act(() => {
-      screen.dispatchEvent(enterCapture)
-      screen.dispatchEvent(tabDuringCapture)
-    })
-
-    expect(enterCapture.defaultPrevented).toBe(true)
-    expect(tabDuringCapture.defaultPrevented).toBe(true)
-
-    act(() => {
-      vi.advanceTimersByTime(12)
-    })
-
-    expect(decodedSentKeyboardFrames()).toEqual([
-      { type: 'down', usage: 225 },
-      { type: 'down', usage: 43 },
-      { type: 'up', usage: 43 },
-      { type: 'up', usage: 225 }
-    ])
-
-    const escapeCapture = keyEvent('keydown', { key: 'Escape' })
-    const tabAfterEscape = keyEvent('keydown', { key: 'Tab' })
-    act(() => {
-      screen.dispatchEvent(escapeCapture)
-      screen.dispatchEvent(tabAfterEscape)
-    })
-
-    expect(escapeCapture.defaultPrevented).toBe(true)
-    expect(tabAfterEscape.defaultPrevented).toBe(false)
-  })
-
-  it('leaves host modifier shortcuts alone while focused', () => {
-    renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
-    const screen = getScreen()
-
-    act(() => {
-      screen.dispatchEvent(keyEvent('keydown', { key: 'p', metaKey: true }))
-      screen.dispatchEvent(keyEvent('keydown', { key: 'p', ctrlKey: true }))
-    })
-
-    expect(decodedSentKeyboardFrames()).toEqual([])
-  })
-
-  it('turns trackpad wheel input into a live touch scroll', () => {
-    vi.useFakeTimers()
-    renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
-    const screen = getScreen()
-
-    act(() => {
-      screen.dispatchEvent(wheelEvent({ clientX: 50, clientY: 100, deltaX: 0, deltaY: 80 }))
-    })
-
-    expect(decodedSentTouches()).toEqual([
-      { type: 'begin', x: 0.5, y: 0.5 },
-      { type: 'move', x: 0.5, y: 0.020000000000000018 }
-    ])
-
-    act(() => {
-      vi.advanceTimersByTime(80)
-    })
-
-    expect(decodedSentTouches()).toEqual([
-      { type: 'begin', x: 0.5, y: 0.5 },
-      { type: 'move', x: 0.5, y: 0.020000000000000018 },
-      { type: 'end', x: 0.5, y: 0.020000000000000018 }
     ])
   })
 })

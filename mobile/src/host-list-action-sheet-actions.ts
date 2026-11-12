@@ -1,6 +1,7 @@
 import { Activity, Edit3, PowerOff, RefreshCw } from 'lucide-react-native'
 import type { ActionSheetAction } from './components/ActionSheetModal'
-import type { ConnectionState, HostProfile } from './transport/types'
+import type { ConnectionState } from './transport/connection/connection-state'
+import type { HostProfile } from './host-catalog/host-profile'
 import { translate } from './i18n/mobile-i18n'
 
 // Defer navigation and new drawers until this native Modal unmounts; presenting into a live one freezes iOS (#8791).
@@ -51,28 +52,11 @@ export function getHostListActionSheetActions(args: {
           }
         ]
       : []),
-    {
-      id: 'networkDiagnostics',
-      label: translate(
-        'hostScreen.hostListActionSheetActions.networkDiagnostics',
-        'Network diagnostics'
-      ),
-      icon: Activity,
-      closeBeforePress: true,
-      onPress: () => {
-        args.onDiagnostics(host.id)
-      }
-    },
-    {
-      id: 'editHost',
-      label: translate('hostScreen.hostListActionSheetActions.editHost', 'Edit host'),
-      icon: Edit3,
-      closeBeforePress: true,
-      onPress: () => {
-        args.onDismiss()
-        args.onEdit(host.id)
-      }
-    },
+    hostDiagnosticsAction(() => args.onDiagnostics(host.id)),
+    hostEditAction(() => {
+      args.onDismiss()
+      args.onEdit(host.id)
+    }),
     {
       id: 'remove',
       label: translate('common.remove', 'Remove'),
@@ -83,4 +67,28 @@ export function getHostListActionSheetActions(args: {
       }
     }
   ]
+}
+
+// Shared with the host screen's ⋯ menu; each runs once the sheet or menu it sits in has closed.
+export function hostDiagnosticsAction(onPress: () => void): ActionSheetAction {
+  return {
+    id: 'networkDiagnostics',
+    label: translate(
+      'hostScreen.hostListActionSheetActions.networkDiagnostics',
+      'Network diagnostics'
+    ),
+    icon: Activity,
+    closeBeforePress: true,
+    onPress
+  }
+}
+
+export function hostEditAction(onPress: () => void): ActionSheetAction {
+  return {
+    id: 'editHost',
+    label: translate('hostScreen.hostListActionSheetActions.editHost', 'Edit host'),
+    icon: Edit3,
+    closeBeforePress: true,
+    onPress
+  }
 }

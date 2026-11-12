@@ -11,7 +11,7 @@ import { sshPtyOwnerLeaseSecretSlot } from '../../credentials/protected-secret-p
 import {
   migrateRetirementNamespaceHostIdentity,
   sshHostIdentity
-} from '../../worktree-retirement-namespace'
+} from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 import {
   migrateAutomationHostFilterSshTargetId,
   migrateAutomationsForSshReadoption

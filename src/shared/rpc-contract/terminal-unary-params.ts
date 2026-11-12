@@ -1,7 +1,7 @@
-import { z } from 'zod'
-import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../terminal-kitty-file'
+import * as z from 'zod'
+import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../terminal/images/terminal-kitty-file'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
-import { isTuiAgent } from '../tui-agent-config'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { SpawnIntentParam } from './agent-session-params'
 import {
   canonicalizeWindowsShellOverride,
@@ -10,6 +10,7 @@ import {
 } from '../windows-terminal-shell'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../feature-education-telemetry'
 import { OptionalExecutionHostId } from './worktree-params'
+import { AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH } from '../agent-status/contracts/agent-status-types'
 
 // Refuse at the authoritative host boundary instead of returning an opaque relay spawn failure.
 export const WindowsShellOverrideParam = z
@@ -98,6 +99,8 @@ export const TerminalListParams = z.object({
   includeVisualLayouts: z.boolean().optional(),
   // Readers that never show the output tail drop it; absent includes it, as older hosts always do.
   includePreview: z.boolean().optional(),
+  // Agent sleep asks who else is viewing or typing; older hosts ignore it and report nothing.
+  includeAttention: z.boolean().optional(),
   // Layout-owner hosts show the workspace's unshown live terminals before listing (a window's
   // activation sweep); other hosts drop it, as they did before it existed.
   placeUnshownLiveTerminals: z.boolean().optional()
@@ -162,6 +165,12 @@ export const TerminalSetPaneTitle = TerminalHandle.extend({
 })
 
 export const TerminalSend = TerminalHandle.extend({
+  inputSequence: z
+    .object({
+      sessionId: z.string().min(1).max(128),
+      seq: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+    })
+    .optional(),
   text: OptionalString,
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),
@@ -178,6 +187,12 @@ export const TerminalSend = TerminalHandle.extend({
     })
     .optional(),
   requireAgentStatus: z.enum(['sendable']).optional(),
+  // A startup-dialog card's choice: refused unless the screen still reads as this card. Older hosts strip it.
+  requireStartupDialog: z
+    .string()
+    .min(1)
+    .max(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
+    .optional(),
   // Why: terminal-generated replies are valid input but must not transfer the shared terminal floor.
   inputKind: z.enum(['query-reply']).optional(),
   // Identify the driver; older clients fall back to the latest mobile actor (docs/mobile-presence-lock.md).
@@ -194,6 +209,10 @@ export const TerminalSend = TerminalHandle.extend({
     })
     .optional(),
   claimViewport: z.literal(true).optional()
+})
+
+export const TerminalOpenInputSession = TerminalHandle.extend({
+  client: z.object({ id: requiredString('Missing client ID'), type: z.literal('mobile') })
 })
 
 export const TerminalViewport = z.object({
@@ -250,6 +269,7 @@ export const TerminalCreateParams = z.object({
   // Older hosts drop it and resume as before.
   resumeOrigin: z.literal('saved').optional(),
   launchToken: OptionalString,
+  trustWorktreeId: z.string().min(1).max(32_768).optional(),
   launchAgent: z.string().refine(isTuiAgent).optional(),
   terminalKittyKeyboardProtocol: z.boolean().optional(),
   terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),

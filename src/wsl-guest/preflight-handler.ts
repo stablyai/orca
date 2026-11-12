@@ -4,9 +4,10 @@ import { promisify } from 'node:util'
 import path, { win32 } from 'node:path'
 import type { RelayDispatcher } from './dispatcher'
 import { buildRelayCommandEnv } from './relay-command-env'
-import { isPwshAvailableAsync } from '../main/pwsh'
-import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
-import { isGitBashAvailable } from '../main/git-bash'
+import { isPwshAvailableAsync } from '../main/pty/shell-startup/pwsh'
+import { isWslAvailableAsync } from '../main/wsl/discovery/wsl-availability'
+import { listWslDistrosAsync } from '../main/wsl/discovery/distro-catalog'
+import { isGitBashAvailable } from '../main/pty/shell-startup/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 import { runProcess } from '@orca/process-host'
 
@@ -150,6 +151,8 @@ async function probeCommandVersion(executablePath: string): Promise<string | nul
           ? `${executableDir}${path.delimiter}${inheritedPath}`
           : executableDir
       },
+      // Why: a CLI wrapper that never exits keeps its children alive after a root-only kill.
+      terminationBarrier: true,
       timeoutMs: 5_000,
       maxOutputBytes: 4_096
     })

@@ -1,6 +1,6 @@
-import { isTerminalQueryReply } from '../../../src/shared/terminal-query-reply'
+import { isTerminalQueryReply } from '../../../src/shared/terminal/protocol/queries/terminal-query-reply'
 import { PROGRAM_STATUS_OSC_PREFIX } from '../../../src/shared/program-status/protocol'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { terminalInputSend } from './mobile-terminal-operations'
 
 type TerminalSubscriptionRegistry = {
@@ -9,7 +9,7 @@ type TerminalSubscriptionRegistry = {
 
 type MobileTerminalQueryReplyOptions = {
   bytes: string
-  client: RpcOperationSender | null
+  client: UnvalidatedRpcRequestPort | null
   clientId: string | null
   connected: boolean
   handle: string

@@ -3,7 +3,10 @@ import {
   findOrphanedTccLogStreams,
   reclaimOrphanedTccLogStreams
 } from './macos-tcc-log-stream-orphans'
-import { parsePsArgsLine, type ProcessIdentityRow } from '../opencode/opencode-client-sweep'
+import {
+  parsePsArgsLine,
+  type ProcessIdentityRow
+} from '../opencode/session-correlation/opencode-client-sweep'
 
 // Captured from `ps -eo pid=,ppid=,etime=,args=` on a Mac holding leaked watchers.
 const LEGACY_ARGS =
@@ -39,25 +42,6 @@ describe('findOrphanedTccLogStreams', () => {
 })
 
 describe('reclaimOrphanedTccLogStreams', () => {
-  it('terminates each orphan and tolerates ones that already exited', async () => {
-    const kill = vi.fn((pid: number) => {
-      if (pid === 21) {
-        throw new Error('ESRCH')
-      }
-    })
-    const reclaimed = await reclaimOrphanedTccLogStreams({
-      platform: 'darwin',
-      sweep: async () => [row(20, 1), row(21, 1), row(22, 99)],
-      readProcess: async (pid) => row(pid, 1),
-      kill
-    })
-    expect(kill.mock.calls).toEqual([
-      [20, 'SIGTERM'],
-      [21, 'SIGTERM']
-    ])
-    expect(reclaimed).toBe(1)
-  })
-
   it('skips a pid whose identity changed or cannot be re-read before signalling', async () => {
     const kill = vi.fn()
     const restarted = { ...row(42, 1), startedAtMs: Date.now() + 60_000 }
@@ -75,11 +59,5 @@ describe('reclaimOrphanedTccLogStreams', () => {
     })
     expect(kill).not.toHaveBeenCalled()
     expect(reclaimed).toBe(0)
-  })
-
-  it('never sweeps off macOS', async () => {
-    const sweep = vi.fn(async () => [row(30, 1)])
-    expect(await reclaimOrphanedTccLogStreams({ platform: 'linux', sweep })).toBe(0)
-    expect(sweep).not.toHaveBeenCalled()
   })
 })

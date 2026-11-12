@@ -11,8 +11,8 @@ import type { CodexRateLimitResetResult } from '../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { Store } from '../persistence/loading-store/store'
-import type { RateLimitService } from '../rate-limits/service'
-import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
+import { admitSelfInitiatedTreeKill } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 import type { CodexAccountSelectionTarget } from './runtime-selection'
 import { CodexAccountIdentity, type ResolvedCodexIdentity } from './codex-account-identity'
 import { CodexConfigMirror } from './codex-config-mirror'
@@ -261,7 +261,7 @@ export class CodexAccountService {
   }
 
   private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
-    return this.identity.resolveSystemDefault()
+    return this.identity.resolveSystemDefault(this.configMirror.readHostModelProvider())
   }
 
   private readIdentityFromHome(

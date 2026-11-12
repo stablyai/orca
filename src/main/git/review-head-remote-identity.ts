@@ -1,4 +1,4 @@
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 import { reviewHeadRemoteRefComponent } from '../../shared/review-head-tracking-ref'
 
 type LocalGitExecOptions = {

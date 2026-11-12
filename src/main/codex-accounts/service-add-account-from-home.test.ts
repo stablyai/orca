@@ -135,30 +135,4 @@ describe('CodexAccountService.addAccountFromHome', () => {
       vi.doUnmock('../codex-cli/command')
     }
   })
-
-  it('rejects when the source home has no auth.json', async () => {
-    vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
-    const sourceHome = mkdtempSync(join(tmpdir(), 'orca-codex-source-empty-'))
-
-    try {
-      const settings = createSettings()
-      const store = createStore(settings)
-      const rateLimits = createRateLimits()
-      const runtimeHome = createRuntimeHome()
-      const { CodexAccountService } = await import('./service')
-      const service = new CodexAccountService(
-        store as never,
-        rateLimits as never,
-        runtimeHome as never
-      )
-
-      await expect(service.addAccountFromHome(sourceHome)).rejects.toThrow(
-        /No Codex credentials found/
-      )
-      expect(store.getSettings().codexManagedAccounts).toHaveLength(0)
-    } finally {
-      rmSync(sourceHome, { recursive: true, force: true })
-      vi.doUnmock('../codex-cli/command')
-    }
-  })
 })

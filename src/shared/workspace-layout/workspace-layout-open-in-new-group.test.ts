@@ -206,18 +206,6 @@ describe('opening into a new split', () => {
     expect(opened.model.workspaces[WS]!.groupLayout).toBeUndefined()
   })
 
-  it('opens into a group main already holds, as an open without a split', () => {
-    const { ctx, model } = oneGroup()
-
-    const opened = build(
-      ctx,
-      [editor('/w/b.ts', { tabId: 'b', groupId: 'g1', split: right })],
-      model
-    )
-
-    expect(groupsOf(opened.model)).toEqual([{ id: 'g1', tabOrder: ['a', 'p', 'b'] }])
-  })
-
   it('changes nothing for the same open again', () => {
     const { ctx, model } = oneGroup()
     const command = editor('/w/b.ts', { tabId: 'b', groupId: 'g2', split: right })

@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
+import { getClaudeProfileRouter } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import {
   directoryTranscriptImport,
@@ -17,8 +17,12 @@ const CLAUDE_TRANSCRIPT_IMPORT = directoryTranscriptImport({
     join(homedir(), '.claude'),
     ...(getClaudeProfileRouter()?.accountHomes() ?? [])
   ],
-  findTranscript: ({ providerSessionId, store, strictErrors }) =>
-    resolveSessionFilePath('claude', providerSessionId, { claudeProjectsDir: store, strictErrors })
+  findTranscript: ({ providerSessionId, store, workspaceCwd, strictErrors }) =>
+    resolveSessionFilePath('claude', providerSessionId, {
+      claudeProjectsDir: store,
+      cwd: workspaceCwd,
+      strictErrors
+    })
 })
 
 const CLAUDE_SESSION_HISTORY: StructuredAgentSessionHistory = {

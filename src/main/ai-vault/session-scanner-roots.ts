@@ -1,9 +1,9 @@
-import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
+import { claudeProfileHistoryDirs } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
-import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
-import { resolveOmpSessionsDir } from './omp-session-root'
+import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/shell-startup/codex-home-wsl-env'
+import { ompProfileSessionsDirs, resolveOmpSessionsDir } from './scanners/omp/omp-session-root'
 
 /** Where each transcript agent's session tree sits under a home dir (host or WSL guest). */
 export const AGENT_SESSION_HOME_SEGMENTS = {
@@ -63,14 +63,16 @@ export function uniqueDirs(dirs: readonly string[]): string[] {
   return dirs.filter((dir, index) => dirs.indexOf(dir) === index)
 }
 
-// Use these same roots for discovery and transcript path validation.
+// Use these same roots for discovery, transcript path validation and native chat ID lookup.
 export function ompSessionsRootDirs(args: {
   ompSessionsDir?: string
   wslHomeDirs?: readonly string[]
 }): string[] {
-  return (
+  return uniqueDirs(
     [
       resolveOmpSessionsDir({ sessionsDir: args.ompSessionsDir }),
+      // An explicit sessions dir pins one location.
+      ...(args.ompSessionsDir === undefined ? ompProfileSessionsDirs() : []),
       ...wslHomeSessionDirs('omp', normalizedWslHomeDirs(args.wslHomeDirs))
     ]
       // Reject empty roots: normalizing OMP_CODING_AGENT_DIR=/ can otherwise allowlist the process cwd.

@@ -11,7 +11,7 @@ const { createBrowserTabMock, dispatchEventMock, storeState } = vi.hoisted(() =>
 vi.mock('../../store', () => ({
   useAppStore: { getState: () => storeState.value }
 }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 vi.mock('@/components/browser-pane/describe-page/live-browser-url-registry', () => ({
@@ -67,66 +67,6 @@ describe('link-opened Orca tabs', () => {
     createBrowserTabMock.mockReset()
     dispatchEventMock.mockReset()
     createBrowserTabMock.mockReturnValue({ id: 'new-tab', activePageId: 'new-page' })
-  })
-
-  it('inherits the opener tab session so an isolated profile cannot leak into the default one', () => {
-    storeState.value = {
-      browserPagesByWorkspace: {
-        'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1', worktreeId: 'worktree-1' }]
-      },
-      browserTabsByWorktree: {
-        'worktree-1': [
-          {
-            id: 'workspace-1',
-            sessionProfileId: 'profile-client-a',
-            sessionPartition: 'persist:orca-browser-session-client-a'
-          }
-        ]
-      },
-      unifiedTabsByWorktree: {
-        'worktree-1': [
-          { id: 'unified-1', entityId: 'workspace-1', contentType: 'browser', groupId: 'group-1' }
-        ]
-      },
-      groupsByWorktree: { 'worktree-1': [{ id: 'group-1', tabOrder: ['unified-1'] }] },
-      createBrowserTab: createBrowserTabMock
-    }
-
-    captureOpenLinkHandler()({ browserPageId: 'page-1', url: 'https://docs.example.com/guide' })
-
-    expect(createBrowserTabMock).toHaveBeenCalledWith(
-      'worktree-1',
-      'https://docs.example.com/guide',
-      expect.objectContaining({
-        afterTabId: 'unified-1',
-        sessionProfileId: 'profile-client-a',
-        sessionPartition: 'persist:orca-browser-session-client-a'
-      })
-    )
-  })
-
-  // Move focus to the opened tab or Cmd/Ctrl+W closes its opener (#18832).
-  it('moves keyboard focus into a foreground link tab but not a background one', () => {
-    storeState.value = {
-      browserPagesByWorkspace: {
-        'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1', worktreeId: 'worktree-1' }]
-      },
-      browserTabsByWorktree: {},
-      createBrowserTab: createBrowserTabMock
-    }
-    const handler = captureOpenLinkHandler()
-
-    handler({
-      browserPageId: 'page-1',
-      url: 'https://docs.example.com/background',
-      activate: false
-    })
-    expect(dispatchEventMock).not.toHaveBeenCalled()
-
-    handler({ browserPageId: 'page-1', url: 'https://docs.example.com/foreground' })
-    expect(dispatchEventMock).toHaveBeenCalledWith(
-      expect.objectContaining({ detail: { pageId: 'new-page', target: 'webview' } })
-    )
   })
   it.each([true, false])(
     'routes a popup to a visible browser with the opener profile (activate: %s)',

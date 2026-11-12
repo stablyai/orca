@@ -1,28 +1,40 @@
 import { existsSync } from 'node:fs'
 import { appendFile, readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
-import { checkIgnoredPaths } from './check-ignored-paths'
+import { checkIgnoredPaths } from './source-control/check-ignored-paths'
 import type { GitRuntimeOptions } from './git-runtime-options'
 
 // Offer common dependency/build folders when unignored content saturates status.
-const KNOWN_HUGE_FOLDER_NAMES = ['node_modules', '.next', 'dist', 'build', 'target', 'vendor']
+const KNOWN_HUGE_FOLDER_NAMES = [
+  'node_modules',
+  '.next',
+  'dist',
+  'build',
+  'target',
+  'vendor',
+  '.dart_tool',
+  '.gradle',
+  '.turbo',
+  'Pods'
+]
 
 export async function findKnownHugeFolderPathsToIgnore(
   worktreePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<string[]> {
-  const existing: string[] = []
-  for (const name of KNOWN_HUGE_FOLDER_NAMES) {
-    const full = path.join(worktreePath, name)
-    if (!existsSync(full)) {
-      continue
-    }
-    try {
-      if ((await stat(full)).isDirectory()) {
-        existing.push(name)
-      }
-    } catch {}
-  }
+  const candidates = KNOWN_HUGE_FOLDER_NAMES.filter((name) =>
+    existsSync(path.join(worktreePath, name))
+  )
+  // Fixed six-name allowlist, so the independent stats can all run at once.
+  const isDirectory = await Promise.all(
+    candidates.map((name) =>
+      stat(path.join(worktreePath, name)).then(
+        (stats) => stats.isDirectory(),
+        () => false
+      )
+    )
+  )
+  const existing = candidates.filter((_, index) => isDirectory[index])
   if (existing.length === 0) {
     return []
   }

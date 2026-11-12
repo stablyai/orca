@@ -1,4 +1,4 @@
-import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
+import { measureUtf8ByteLength } from '../../../shared/utf8-byte-limits'
 
 export type TerminalStreamByteLengthMeasurement = {
   byteLength: number
@@ -13,7 +13,7 @@ export const MIN_NATIVE_BYTE_LENGTH_CODE_UNITS = 16
 
 export function terminalStreamByteLength(data: string): number {
   if (data.length < MIN_NATIVE_BYTE_LENGTH_CODE_UNITS) {
-    return measureClipboardTextByteLength(data).byteLength
+    return measureUtf8ByteLength(data).byteLength
   }
   return Buffer.byteLength(data, 'utf8')
 }
@@ -27,7 +27,7 @@ export function terminalStreamByteLengthExceeds(data: string, maxBytes: number):
     return true
   }
   if (data.length < MIN_NATIVE_BYTE_LENGTH_CODE_UNITS) {
-    return measureClipboardTextByteLength(data, { stopAfterBytes: maxBytes }).exceededLimit
+    return measureUtf8ByteLength(data, { stopAfterBytes: maxBytes }).exceededLimit
   }
   return Buffer.byteLength(data, 'utf8') > maxBytes
 }
@@ -48,5 +48,5 @@ export function measureTerminalStreamByteLength(
   ) {
     return { byteLength: Buffer.byteLength(data, 'utf8'), exceededLimit: false }
   }
-  return measureClipboardTextByteLength(data, options)
+  return measureUtf8ByteLength(data, options)
 }

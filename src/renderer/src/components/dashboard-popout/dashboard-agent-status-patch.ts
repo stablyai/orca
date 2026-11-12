@@ -1,5 +1,7 @@
-import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { interactivePromptLabel } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
+import { sayNativeChatApprovalTranslated } from '../native-chat/prompts/native-chat-interactive-prompt'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   dashboardCardBaseDisplayState,
   type DashboardCard,
@@ -78,7 +80,12 @@ export function patchDashboardSnapshotFromAgentStatus(
     askSummary:
       bucket === 'attention'
         ? event.interactivePrompt !== undefined
-          ? event.interactivePrompt || undefined
+          ? interactivePromptLabel(
+              event.interactivePrompt,
+              event.toolName,
+              event.agentType ?? card.agentType,
+              sayNativeChatApprovalTranslated
+            )
           : card.askSummary
         : undefined,
     subagents: patchedSubagents(card, event)

@@ -8,14 +8,18 @@ import {
   liveTestJournalRows,
   openTestJournalHostDatabase,
   type TrackedJournalOpener
-} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
-import { JOURNAL_PREFIX_ORDINAL } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-codec'
-import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
+} from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/replay/journal-open'
+import { JOURNAL_PREFIX_ORDINAL } from '../../../src/main/native-chat/agent-session-journal/outcomes/journal-outcome-codec'
+import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format'
 import type { AgentJournalSnapshot } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
-import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/journal-write-projection'
+import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-schema'
+import {
+  readJournalSessionEpoch,
+  type JournalStoredRow
+} from '../../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-table'
+import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/writing/journal-write-projection'
+import { readPublishedQueuedMessages } from '../../../src/main/native-chat/agent-session-wire/delivery/structured-agent-session-queued-publication'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   editReleasedCard,
@@ -57,7 +61,9 @@ afterEach(() => {
 
 const view = (journal: ContinuedJournal) => ({
   snapshot: journal.snapshot(),
-  cards: [...journal.queuedMessages.list()]
+  cards: [...journal.queuedMessages.displayState().queue.cards.values()].sort(
+    (a, b) => a.position - b.position
+  )
 })
 
 /** What the release wrote: its items, sends and cards, in order. Fields a later build adds to them
@@ -119,16 +125,29 @@ async function carryOn(
       expect(sent.snapshot.submissions).toContainEqual(
         expect.objectContaining({ clientMessageId: 'after-upgrade', dispatchState: 'accepted' })
       )
+      const beforeRewind = journal.cursor()
+      const database = openTestJournalHostDatabase(stateDirectory)
+      const physicalEpoch = readJournalSessionEpoch(database.db, options.identity.sessionId)
+      expect(physicalEpoch).not.toBeNull()
       await rewindReleasedChat(journal, new Set(opened.snapshot.items.map((item) => item.itemId)))
-      expect(journal.epoch).toBe('epoch-rewound')
+      expect(journal.epoch).toMatch(/^context-v1:/)
+      expect(journal.epoch).not.toBe(beforeRewind.epoch)
+      expect(readJournalSessionEpoch(database.db, options.identity.sessionId)).toBe(physicalEpoch)
+      expect(journal.readSince(beforeRewind)).toEqual({ ok: false, reset: 'epoch_changed' })
       const seen = view(journal)
       // The rewind keeps every message the release wrote and every card not taken back, the edit
       // included.
       expect(kept(seen.snapshot.items)).toEqual(kept(opened.snapshot.items))
-      expect(seen.cards.map((card) => card.messageId)).toEqual(
+      const active = seen.cards.filter((card) => card.state !== 'withdrawn')
+      expect(active.map((card) => card.messageId)).toEqual(
         opened.cards.filter((card) => card.state !== 'withdrawn').map((card) => card.messageId)
       )
-      expect(seen.cards).toHaveLength(1)
+      expect(active).toHaveLength(1)
+      expect(active).toEqual(sent.cards.filter((card) => card.state !== 'withdrawn'))
+      expect(seen.cards.filter((card) => card.state === 'withdrawn')).toEqual(
+        opened.cards.filter((card) => card.state === 'withdrawn')
+      )
+      expect(readPublishedQueuedMessages(journal).map((card) => card.messageId)).toEqual(['card-2'])
       for (const result of [sent, seen]) {
         expect(result.cards.find((card) => card.messageId === 'card-2')?.body.blocks).toEqual([
           { type: 'text', text: 'second, edited after the upgrade' }
@@ -139,7 +158,10 @@ async function carryOn(
     .finally(() => opener.closeAll())
   const reopened = await opener
     .open(options)
-    .then(view)
+    .then((journal) => {
+      expect(readPublishedQueuedMessages(journal).map((card) => card.messageId)).toEqual(['card-2'])
+      return view(journal)
+    })
     .finally(() => opener.closeAll())
   expect(reopened).toEqual(carried.seen)
   return carried
@@ -188,6 +210,11 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
 
         const ours = await carryOn(createTrackedJournalOpener(), agent, directory, written, rows)
         if (build !== 'the oldest release with this chat database') {
+          expect(
+            ours.seen.cards
+              .filter((card) => card.state === 'withdrawn')
+              .map((card) => card.messageId)
+          ).toEqual(['card-1'])
           // A release in the window wrote the shapes this build reads, so it opens as written,
           // and the edit records the card the old rows hold in its place among them.
           expect(releaseWritten(ours.opened)).toMatchObject(releaseWritten(written))

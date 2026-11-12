@@ -1,8 +1,8 @@
-import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { FederationAttachStartInput } from '../federation/federation-start-schema'
+import type { FederationAttachStartInput } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
   createWorkerLaunchReceipt,
@@ -12,6 +12,9 @@ import type { WorkerStartInput } from './worker-start-schema'
 
 type WorkerStartLaunch = ReturnType<typeof resolveWorkerLaunchPreferences>
 
+const TERMINAL_WITH_AGENT_REFUSAL =
+  '--terminal continues the agent already running there, in its current conversation. To start fresh, use --worktree or --agent without --terminal.'
+
 export function validateFederatedWorkerStartPlacement(
   params: WorkerStartInput,
   createsWorktree: boolean
@@ -19,7 +22,7 @@ export function validateFederatedWorkerStartPlacement(
   if (createsWorktree && !params.repo) {
     throw new OrchestrationError(
       'invalid_argument',
-      'Remote new-top-level requires an explicit --repo from remote discovery.'
+      'Remote new-child and new-top-level require an explicit --repo from remote discovery.'
     )
   }
   if (createsWorktree && params.terminal) {
@@ -31,14 +34,11 @@ export function validateFederatedWorkerStartPlacement(
   if (!createsWorktree && (params.name || params.repo || params.baseBranch || params.setup)) {
     throw new OrchestrationError(
       'invalid_argument',
-      'Creation and setup options apply only to remote new-top-level worktrees.'
+      'Creation and setup options apply only to remote new-child or new-top-level worktrees.'
     )
   }
   if (params.terminal && params.agent) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      '--terminal reuses an existing agent and cannot combine with --agent.'
-    )
+    throw new OrchestrationError('invalid_argument', TERMINAL_WITH_AGENT_REFUSAL)
   }
   if (!params.terminal && !params.agent) {
     throw new OrchestrationError(
@@ -57,10 +57,7 @@ export function prepareLocalWorkerStart(args: {
   const { params, createsWorktree, runtime } = args
   assertWorkerLaunchPreferencesCreateTerminal(params)
   if (params.terminal && params.agent) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      '--terminal reuses an existing agent and cannot combine with --agent.'
-    )
+    throw new OrchestrationError('invalid_argument', TERMINAL_WITH_AGENT_REFUSAL)
   }
   if (createsWorktree && params.terminal) {
     throw new OrchestrationError(
@@ -116,10 +113,7 @@ export function prepareFederationAttachmentWorkerStart(args: {
     )
   }
   if (params.terminal && params.agent) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      '--terminal reuses an existing agent and cannot combine with --agent.'
-    )
+    throw new OrchestrationError('invalid_argument', TERMINAL_WITH_AGENT_REFUSAL)
   }
   return resolveWorkerStartAgent({
     runtime,

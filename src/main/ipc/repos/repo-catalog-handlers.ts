@@ -1,5 +1,4 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Project, ProjectUpdateArgs } from '../../../shared/project-types'
 import {
@@ -8,23 +7,26 @@ import {
   parseExecutionHostId
 } from '../../../shared/execution-host'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { enrichRepoGitUsernames } from '../../repo-git-username-enrichment'
-import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { enrichRepoGitUsernames } from '../../workspaces/catalog/repo-git-username-enrichment'
+import { enrichMissingRepoGitRemoteIdentities } from '../../workspaces/catalog/repo-git-remote-identity-enrichment'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
-import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../worktree-base-directory-watcher'
+import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../worktrees/creation/worktree-base-directory-watcher'
 import { ProjectUpdateIpcArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-schemas'
-import { visibleProjectHostSetups, visibleRepos } from '../../ssh/orcad-retained-source'
+import {
+  visibleProjectHostSetups,
+  visibleRepos
+} from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
 import {
   assertWslMoveProjectWritable,
   assertWslMoveReposWritable,
   isWslMoveSourceHost
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/wsl-moved-projects'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/desktop-state/wsl-moved-projects'
 import { listHostRepoCatalogSnapshots } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/runtime-environment-registry-root'
-import { isGatedOffWslHost } from '../../wsl/wsl-host-gate'
+import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
 
 export function registerRepoCatalogHandlers(
   mainWindow: BrowserWindow,

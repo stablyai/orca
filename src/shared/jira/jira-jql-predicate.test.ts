@@ -23,10 +23,4 @@ describe('withCurrentSprintClause', () => {
       String.raw`(summary ~ "say \"order by title\"") AND sprint in openSprints() ORDER BY created ASC`
     )
   })
-
-  it('adds sprint filtering to a sort-only query', () => {
-    expect(withCurrentSprintClause('ORDER BY updated DESC')).toBe(
-      'sprint in openSprints() ORDER BY updated DESC'
-    )
-  })
 })

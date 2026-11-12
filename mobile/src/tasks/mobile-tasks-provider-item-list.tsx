@@ -19,7 +19,7 @@ import {
   getHostedMergeLabel,
   type MobileColorScheme
 } from './mobile-tasks-dependencies'
-import { renderMobileTasksListState } from './mobile-tasks-list-state'
+import { ignoreKeptRowPress, renderMobileTasksListState } from './mobile-tasks-list-state'
 import { styles, getPrSignalToneStyle } from './mobile-tasks-legacy-styles'
 import {
   taskRepositoryMeta,
@@ -66,11 +66,12 @@ export function renderMobileTasksProviderItemList(
     refreshTasks,
     refreshing,
     reposById,
-    setActionItem,
     setShowGitHubPagePicker,
     sortedItems,
     taskUiReady
   } = model
+  // The last list, kept before Tasks is ready, is read-only.
+  const setActionItem = taskUiReady ? model.setActionItem : ignoreKeptRowPress
   const listState = renderMobileTasksListState(model, sortedItems.length, bottomBarHeight)
   if (listState) {
     return listState
@@ -173,7 +174,7 @@ export function renderMobileTasksProviderItemList(
               )}
             </Pressable>
           </View>
-        ) : null
+        ) : undefined
       }
       renderItem={({ item: entry }) => {
         if (entry.type === 'section') {

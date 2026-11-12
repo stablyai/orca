@@ -6,7 +6,8 @@ import {
   ScrollView,
   Keyboard,
   Modal,
-  Platform
+  Platform,
+  type ScrollViewInstance
 } from 'react-native'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated'
@@ -75,7 +76,7 @@ export function MountedBottomDrawer({
   const motion = useMemo(() => ({ progress, fade, reducedMotion }), [progress, fade, reducedMotion])
   const keyboardOffset = useSharedValue(0)
   const scrollOffsetY = useSharedValue(0)
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useRef<ScrollViewInstance>(null)
   useEffect(() => {
     if (scrollResetKey !== null) {
       scrollRef.current?.scrollTo({ y: 0, animated: false })
@@ -261,9 +262,13 @@ export function MountedBottomDrawer({
     </ScrollView>
   )
 
+  // A content-sized sheet rides the keyboard by translation, so its cap gives that lift back; fill sheets shrink via fillHeight.
+  const sheetMaxHeight = Math.max(
+    0,
+    screenHeight - insets.top - spacing.lg - (fillAvailable ? 0 : keyboardInset)
+  )
   // Content-sized sheets ease to a new height when what they show changes; fill sheets have a fixed one.
-  const contentCap =
-    screenHeight - insets.top - spacing.lg - (insets.bottom + spacing.lg) - HANDLE_AREA_HEIGHT
+  const contentCap = Math.max(0, sheetMaxHeight - (insets.bottom + spacing.lg) - HANDLE_AREA_HEIGHT)
   const body = (
     <>
       {handle}
@@ -303,7 +308,7 @@ export function MountedBottomDrawer({
               {
                 width: '100%',
                 maxWidth: isWideLayout ? modalMaxWidth : undefined,
-                maxHeight: screenHeight - insets.top - spacing.lg,
+                maxHeight: sheetMaxHeight,
                 // Fill shrinks height and adds marginBottom to align bottom above keys; content-sized mode retains translateY shift.
                 height: fillHeight,
                 marginBottom: fillAvailable ? keyboardInset : 0,

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import type * as NodeProcess from 'node:process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
-import type * as WorkspaceSpaceScanBudgetModule from '../../../shared/workspace-space-scan-budget'
+import type * as WorkspaceSpaceScanBudgetModule from '../../../shared/workspace-disk-space/workspace-space-scan-budget'
 import type { Store } from '../../persistence/loading-store/store'
 
 const { listRepoWorktreesMock } = vi.hoisted(() => ({
@@ -16,9 +16,9 @@ vi.mock('node:process', async () => {
   return { ...actual, platform: 'win32' }
 })
 
-vi.mock('../../../shared/workspace-space-scan-budget', async () => {
+vi.mock('../../../shared/workspace-disk-space/workspace-space-scan-budget', async () => {
   const actual = await vi.importActual<typeof WorkspaceSpaceScanBudgetModule>(
-    '../../../shared/workspace-space-scan-budget'
+    '../../../shared/workspace-disk-space/workspace-space-scan-budget'
   )
   return {
     ...actual,
@@ -26,7 +26,7 @@ vi.mock('../../../shared/workspace-space-scan-budget', async () => {
   }
 })
 
-vi.mock('../../repo-worktrees', () => ({
+vi.mock('../catalog/repo-worktrees', () => ({
   createFolderWorktree: (repo: Repo) => ({
     path: repo.path,
     head: '',

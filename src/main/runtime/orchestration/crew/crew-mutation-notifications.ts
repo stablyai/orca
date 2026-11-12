@@ -1,5 +1,5 @@
 import type { CrewInvalidation } from './crew-changes'
-import type { OrchestrationDb } from '../db'
+import type { OrchestrationDb } from '../db/orchestration-db'
 
 type CrewMutationPrototype = Partial<OrchestrationDb>
 type CrewMutationInvocation = (this: OrchestrationDb, ...args: unknown[]) => unknown

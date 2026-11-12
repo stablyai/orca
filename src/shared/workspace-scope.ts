@@ -1,8 +1,13 @@
-import type { WorkspaceKey, WorkspaceScope } from './folder-workspace-types'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from './worktree/host-qualified-identity'
+
+export type WorkspaceScope =
+  | { type: 'worktree'; worktreeId: string }
+  | { type: 'folder'; folderWorkspaceId: string }
+
+export type WorkspaceKey = `worktree:${string}` | `folder:${string}`
 
 export function worktreeWorkspaceKey(worktreeId: string): WorkspaceKey {
   return `worktree:${worktreeId}`
@@ -22,6 +27,12 @@ export function parseWorkspaceKey(value: string): WorkspaceScope | null {
     return folderWorkspaceId.length > 0 ? { type: 'folder', folderWorkspaceId } : null
   }
   return null
+}
+
+/** The folder workspace id a `folder:<id>` or `id:folder:<id>` selector names. */
+export function folderIdOfSelector(selector: string): string | undefined {
+  const parsed = parseWorkspaceKey(selector.startsWith('id:') ? selector.slice(3) : selector)
+  return parsed?.type === 'folder' ? parsed.folderWorkspaceId : undefined
 }
 
 /** Strip WorkspaceKey or host-qualified visit-recency scope (ssh:target|repo::path); retain already-bare workspace IDs. */

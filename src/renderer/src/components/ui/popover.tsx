@@ -3,10 +3,12 @@
 import * as React from 'react'
 import * as PopoverPrimitive from 'radix-ui/popover'
 
-import { cn } from '@/lib/utils'
-import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { cn } from '@/lib/class-names'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
+import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
-import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
+import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
+import { PortalContainerContext, usePortalContainer } from './portal-container-context'
 
 // React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
 const consumerPreventedWheelEvents = new WeakSet<WheelEvent>()
@@ -64,12 +66,7 @@ function handlePopoverWheel(event: WheelEvent, content: HTMLDivElement): void {
     return
   }
 
-  const delta =
-    event.deltaMode === WheelEvent.DOM_DELTA_LINE
-      ? event.deltaY * 16
-      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-        ? event.deltaY * el.clientHeight
-        : event.deltaY
+  const delta = getWheelScrollDeltaY(event, el.clientHeight)
   const maxScrollTop = el.scrollHeight - el.clientHeight
   const nextScrollTop = Math.max(0, Math.min(maxScrollTop, el.scrollTop + delta))
 
@@ -124,6 +121,7 @@ function PopoverContent({
   portalContainer?: HTMLElement | null
   wheelScroll?: boolean
 }) {
+  const container = usePortalContainer(portalContainer)
   const handleConsumerWheel = React.useCallback(
     (event: React.WheelEvent<HTMLDivElement>): void => {
       onWheel?.(event)
@@ -146,7 +144,7 @@ function PopoverContent({
   const setContentRef = React.useCallback(
     (node: HTMLDivElement | null) => {
       if (node) {
-        return attachPopoverContent(node, portalContainer, forwardedRef)
+        return attachPopoverContent(node, container, forwardedRef)
       }
       if (typeof forwardedRef === 'function') {
         forwardedRef(null)
@@ -155,40 +153,42 @@ function PopoverContent({
       }
       return undefined
     },
-    [forwardedRef, portalContainer]
+    [forwardedRef, container]
   )
 
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(setContentRef)
 
   return (
-    <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
-      <OverlayFocusScope value={scope}>
-        <PopoverPrimitive.Content
-          data-slot="popover-content"
-          align={align}
-          sideOffset={sideOffset}
-          // Match dropdown surface/border/shadow tokens so popovers remain distinct from the dark canvas.
-          className={cn(
-            'z-[60] overflow-hidden rounded-md border border-black/14 bg-floating-surface text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl outline-none dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-            wheelScroll && 'popover-wheel-scroll',
-            className
-          )}
-          ref={focusScopeRef}
-          // Disable native dragging: titlebar drag regions intercept overlapping popover clicks regardless of z-index.
-          style={
-            {
-              ...style,
-              WebkitAppRegion: 'no-drag'
-            } as React.CSSProperties
-          }
-          onWheel={handleConsumerWheel}
-          onWheelCapture={handleConsumerWheelCapture}
-          {...props}
-          onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
-          onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
-        />
-      </OverlayFocusScope>
-    </PopoverPrimitive.Portal>
+    <PortalContainerContext value={container}>
+      <PopoverPrimitive.Portal container={container ?? undefined}>
+        <OverlayFocusScope value={scope}>
+          <PopoverPrimitive.Content
+            data-slot="popover-content"
+            align={align}
+            sideOffset={sideOffset}
+            // Match dropdown surface/border/shadow tokens so popovers remain distinct from the dark canvas.
+            className={cn(
+              'z-[60] overflow-hidden rounded-md border border-black/14 bg-floating-surface text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl outline-none dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+              wheelScroll && 'popover-wheel-scroll',
+              className
+            )}
+            ref={focusScopeRef}
+            // Disable native dragging: titlebar drag regions intercept overlapping popover clicks regardless of z-index.
+            style={
+              {
+                ...style,
+                WebkitAppRegion: 'no-drag'
+              } as React.CSSProperties
+            }
+            onWheel={handleConsumerWheel}
+            onWheelCapture={handleConsumerWheelCapture}
+            {...props}
+            onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
+            onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
+          />
+        </OverlayFocusScope>
+      </PopoverPrimitive.Portal>
+    </PortalContainerContext>
   )
 }
 

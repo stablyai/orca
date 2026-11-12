@@ -7,14 +7,14 @@ import type {
   RuntimeTerminalRead,
   RuntimeTerminalShow
 } from '../../src/shared/runtime-types'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedWebClient
 } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-probe-gap-'))
 const fixturePath = path.join(scratch, 'probe-gap-terminal.mjs')

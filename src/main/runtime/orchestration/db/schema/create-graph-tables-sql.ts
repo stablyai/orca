@@ -1,4 +1,5 @@
-import { CURRENT_CONTRACT_VERSION, LEGACY_RUN_ID } from '../contract-constants'
+import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import {
   REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL,
   RUN_PANE_KEY_MATCH_SUFFIX_SQL
@@ -113,6 +114,34 @@ CREATE TABLE IF NOT EXISTS remote_questions (
 
 CREATE INDEX IF NOT EXISTS idx_remote_questions_dispatch_status
   ON remote_questions(dispatch_id, status);
+
+-- Agent mail between paired Orcas. 'home': this Orca opened it for local_party and pulls replies
+-- from environment_id over the pairing credential peer_fingerprint, so a re-pair opens a new one. 'peer': the paired Orca peer_fingerprint opened it here; its replies wait in
+-- federation_relay_items under dispatch_id = conversation_id until that Orca pulls them.
+CREATE TABLE IF NOT EXISTS peer_mail_conversations (
+  conversation_id  TEXT PRIMARY KEY,
+  role             TEXT NOT NULL CHECK(role IN ('home', 'peer')),
+  environment_id   TEXT,
+  peer_fingerprint TEXT NOT NULL,
+  local_party      TEXT,
+  local_pane_key   TEXT,
+  created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_peer_mail_home_pairing
+  ON peer_mail_conversations(environment_id, local_party, peer_fingerprint) WHERE role = 'home';
+CREATE INDEX IF NOT EXISTS idx_peer_mail_peer_fingerprint
+  ON peer_mail_conversations(peer_fingerprint, role);
+
+-- A message that crossed between paired Orcas: its reply goes back over its conversation, to remote_party.
+CREATE TABLE IF NOT EXISTS peer_mail_messages (
+  message_id      TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL,
+  sender_label    TEXT NOT NULL,
+  remote_party    TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_peer_mail_messages_sender ON peer_mail_messages(sender_label);
 
 -- Deletes from tasks, dispatch_contexts and worker tables are recorded in removed_orchestration_work
 -- (removed-orchestration-work-store.ts).

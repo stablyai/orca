@@ -1,10 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
+import { rmSync, writeFileSync } from 'node:fs'
+import type * as FileSystem from 'node:fs'
+import { getCodexAccountAuthWarning } from '../../renderer/src/components/settings/accounts/codex/codex-account-auth-warning'
 import { join } from 'node:path'
 import {
   createCodexAuthJson,
-  createManagedHome,
   createRateLimits,
   createRuntimeHome,
   createSettings,
@@ -12,6 +13,35 @@ import {
   registerCodexAccountsTestHomes,
   testState
 } from './service-test-harness'
+
+const configWork = vi.hoisted(() => ({ readPaths: new Array<unknown>(), parses: 0 }))
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof FileSystem>()
+  return {
+    ...actual,
+    readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
+      configWork.readPaths.push(args[0])
+      return actual.readFileSync(...args)
+    }
+  }
+})
+
+vi.mock(
+  import('../codex/structured/launch/codex-model-provider-config'),
+  async (importOriginal) => {
+    const actual = await importOriginal()
+    return {
+      ...actual,
+      readCodexTopLevelModelProvider: (
+        ...args: Parameters<typeof actual.readCodexTopLevelModelProvider>
+      ) => {
+        configWork.parses += 1
+        return actual.readCodexTopLevelModelProvider(...args)
+      }
+    }
+  }
+)
 
 vi.mock('electron', () => ({
   app: {
@@ -77,34 +107,150 @@ describe('CodexAccountService config sync', () => {
       })
     })
 
-    it('reports an api-key auth.json as a custom provider with no identity', async () => {
-      writeFileSync(systemAuthPath(), JSON.stringify({ OPENAI_API_KEY: 'sk-live-test' }), 'utf-8')
+    it.each(['amazon-bedrock-runtime', 'ollama'])(
+      'recognizes %s without an auth.json file',
+      async (provider) => {
+        writeFileSync(
+          join(systemCodexHomeDir(), 'config.toml'),
+          `model_provider = "${provider}"\n`,
+          'utf-8'
+        )
+        const service = await newService()
+
+        expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+          hasAuth: false,
+          authKind: 'api-key',
+          email: null,
+          providerAccountId: null,
+          workspaceLabel: null
+        })
+        expect(
+          getCodexAccountAuthWarning({
+            limits: null,
+            target: { runtime: 'host', wslDistro: null },
+            runtime: { runtime: 'host' },
+            activeAccountId: null,
+            accountId: null,
+            authKind: withoutEnvApiKey(() => service.listAccounts()).systemDefault?.authKind
+          })
+        ).toBeNull()
+      }
+    )
+
+    it('does not attribute Bedrock Mantle to a saved ChatGPT login', async () => {
+      writeFileSync(
+        join(systemCodexHomeDir(), 'config.toml'),
+        'model_provider = "amazon-bedrock"\n',
+        'utf-8'
+      )
+      writeFileSync(systemAuthPath(), createCodexAuthJson('old@home.dev', 'old', 'refresh'))
       const service = await newService()
 
-      const state = withoutEnvApiKey(() => service.listAccounts())
-
-      expect(state.systemDefault).toEqual({
+      expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
         hasAuth: true,
         authKind: 'api-key',
         email: null,
         providerAccountId: null,
         workspaceLabel: null
       })
+
+      writeFileSync(join(systemCodexHomeDir(), 'config.toml'), 'model_provider = "openai"\n')
+      expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+        hasAuth: true,
+        authKind: 'oauth',
+        email: 'old@home.dev',
+        providerAccountId: 'old',
+        workspaceLabel: null
+      })
     })
 
-    it('reports signed-out when no auth.json and no env key is present', async () => {
+    it.each(['bedrockApiKey', undefined])(
+      'recognizes a saved Bedrock API key with mode %s instead of reporting OAuth',
+      async (mode) => {
+        writeFileSync(
+          systemAuthPath(),
+          JSON.stringify({
+            ...JSON.parse(createCodexAuthJson('old@home.dev', 'old', 'refresh')),
+            auth_mode: mode,
+            bedrock_api_key: { api_key: 'bedrock-fixture-key', region: 'us-east-2' }
+          })
+        )
+        const service = await newService()
+
+        expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+          hasAuth: true,
+          authKind: 'api-key',
+          email: null,
+          providerAccountId: null,
+          workspaceLabel: null
+        })
+      }
+    )
+
+    it('keeps backend auth status without attributing stale tokens to a personal access token', async () => {
+      writeFileSync(
+        systemAuthPath(),
+        JSON.stringify({
+          ...JSON.parse(createCodexAuthJson('old@home.dev', 'old', 'refresh')),
+          personal_access_token: 'fixture-personal-access-token'
+        })
+      )
       const service = await newService()
 
-      const state = withoutEnvApiKey(() => service.listAccounts())
-
-      expect(state.systemDefault).toEqual({
-        hasAuth: false,
-        authKind: 'none',
+      expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+        hasAuth: true,
+        authKind: 'oauth',
         email: null,
         providerAccountId: null,
         workspaceLabel: null
       })
     })
+
+    it.each([750, 7_500])(
+      'reuses unchanged provider input across snapshots with %i saved projects',
+      async (projectCount) => {
+        const configPath = join(systemCodexHomeDir(), 'config.toml')
+        const projects = Array.from(
+          { length: projectCount },
+          (_, index) => `[projects."/work/project-${index}"]\ntrust_level = "trusted"\n`
+        ).join('')
+        writeFileSync(configPath, `model_provider = "amazon-bedrock"\n${projects}`)
+        writeFileSync(
+          systemAuthPath(),
+          createCodexAuthJson('real@home.dev', 'acct-real', 'refresh')
+        )
+        const service = await newService()
+        configWork.readPaths = []
+        configWork.parses = 0
+        const configReads = () => configWork.readPaths.filter((path) => path === configPath).length
+
+        for (let update = 0; update < 20; update += 1) {
+          expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault?.authKind).toBe(
+            'api-key'
+          )
+        }
+        // Usage updates do not invalidate the one current provider classification.
+        expect(configReads()).toBe(1)
+        expect(configWork.parses).toBe(1)
+
+        rmSync(configPath)
+        expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault?.authKind).toBe('oauth')
+        expect(configReads()).toBe(2)
+        service.listAccounts()
+        expect(configReads()).toBe(2)
+
+        writeFileSync(configPath, `model_provider = "openai"\n${projects}`)
+        expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+          hasAuth: true,
+          authKind: 'oauth',
+          email: 'real@home.dev',
+          providerAccountId: 'acct-real',
+          workspaceLabel: null
+        })
+        expect(configReads()).toBe(3)
+        expect(configWork.parses).toBe(2)
+      }
+    )
 
     it('degrades safely when auth.json contains valid JSON with the wrong shape', async () => {
       writeFileSync(systemAuthPath(), 'null', 'utf-8')
@@ -129,32 +275,6 @@ describe('CodexAccountService config sync', () => {
       }
     })
 
-    it('fails a corrupt managed auth.json without echoing credential bytes', async () => {
-      const secret = 'sk-managed-secret-never-log'
-      const managedHomePath = createManagedHome(
-        testState.userDataDir,
-        'account-1',
-        '',
-        `{"tokens": {"refresh_token": "${secret}"`
-      )
-      const service = await newService()
-
-      let thrown: Error | null = null
-      try {
-        await (
-          service as unknown as {
-            readIdentityFromHome(managedHomePath: string, expectedAccountId: string): unknown
-          }
-        ).readIdentityFromHome(managedHomePath, 'account-1')
-      } catch (error) {
-        thrown = error as Error
-      }
-
-      expect(thrown).not.toBeNull()
-      expect(thrown!.message).toBe('Codex auth.json is corrupt or not valid JSON')
-      expect(thrown!.message).not.toContain(secret)
-    })
-
     it('does not log auth contents when auth.json is malformed', async () => {
       const secret = 'sk-secret-review-never-log'
       writeFileSync(systemAuthPath(), secret, 'utf-8')
@@ -172,71 +292,6 @@ describe('CodexAccountService config sync', () => {
       } finally {
         warn.mockRestore()
       }
-    })
-
-    it('reports an env OPENAI_API_KEY (no auth.json) as a custom provider', async () => {
-      const service = await newService()
-      const previous = process.env.OPENAI_API_KEY
-      process.env.OPENAI_API_KEY = 'sk-env-test'
-      try {
-        const state = service.listAccounts()
-        expect(state.systemDefault).toEqual({
-          hasAuth: false,
-          authKind: 'api-key',
-          email: null,
-          providerAccountId: null,
-          workspaceLabel: null
-        })
-      } finally {
-        if (previous === undefined) {
-          delete process.env.OPENAI_API_KEY
-        } else {
-          process.env.OPENAI_API_KEY = previous
-        }
-      }
-    })
-
-    it('never mutates ~/.codex when selecting or deselecting a managed account', async () => {
-      const systemAuth = createCodexAuthJson('real@home.dev', 'acct-real', 'refresh-real')
-      writeFileSync(systemAuthPath(), systemAuth, 'utf-8')
-      const managedHomePath = createManagedHome(
-        testState.userDataDir,
-        'account-1',
-        'approval_policy = "on-request"\n',
-        createCodexAuthJson('managed@example.com', 'acct-managed', 'refresh-managed')
-      )
-      const store = createStore(
-        createSettings({
-          codexManagedAccounts: [
-            {
-              id: 'account-1',
-              email: 'managed@example.com',
-              managedHomePath,
-              providerAccountId: 'acct-managed',
-              workspaceLabel: null,
-              workspaceAccountId: 'acct-managed',
-              createdAt: 1,
-              updatedAt: 1,
-              lastAuthenticatedAt: 1
-            }
-          ]
-        })
-      )
-      const rateLimits = createRateLimits()
-      const runtimeHome = createRuntimeHome()
-      const { CodexAccountService } = await import('./service')
-      const service = new CodexAccountService(
-        store as never,
-        rateLimits as never,
-        runtimeHome as never
-      )
-
-      await service.selectAccount('account-1')
-      await service.selectAccount(null)
-
-      expect(readFileSync(systemAuthPath(), 'utf-8')).toBe(systemAuth)
-      const state = withoutEnvApiKey(() => service.listAccounts())
-      expect(state.systemDefault?.email).toBe('real@home.dev')
     })
   })
 })

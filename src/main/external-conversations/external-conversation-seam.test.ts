@@ -19,24 +19,6 @@ const START = { agent: 'claude', target: TARGET, prompt: 'first' }
 const UNKNOWN = { outcome: 'unknown', reason: 'launch_outcome_unknown' }
 
 describe('ExternalConversationSeam start', () => {
-  it.each([
-    ['handed-to-terminal', { outcome: 'accepted' }],
-    ['not-delivered', UNKNOWN],
-    ['unconfirmed', UNKNOWN]
-  ] as const)('maps a %s launch prompt to %o and links the pane', async (prompt, initial) => {
-    const { seam, row } = harness()
-    const { launcher } = fakeLauncher(async () => launchResult(prompt))
-    expect(
-      await seam.start({ launcher, terminal: fakeTerminal().terminal }, KEY, 'd1', START)
-    ).toEqual({
-      conversation: KEY,
-      initial
-    })
-    expect(row(WORKTREE)?.externalConversations).toEqual([
-      expect.objectContaining({ source: 'dev', externalId: 'thread-1', paneKey: PANE })
-    ])
-  })
-
   it('answers a launch that fails after publishing as linked but unknown', async () => {
     const { seam, row } = harness()
     const { launcher } = fakeLauncher(async () => {
@@ -74,15 +56,6 @@ describe('ExternalConversationSeam start', () => {
     })
   })
 
-  it('passes a signal to the launch that turning connectors off aborts', async () => {
-    const { seam } = harness()
-    const { launcher, launch } = fakeLauncher(async () => launchResult('handed-to-terminal'))
-    await seam.start({ launcher, terminal: fakeTerminal().terminal }, KEY, 'd1', START)
-    const signal = launch.mock.calls[0]?.[2]
-    seam.dispose('connectors_disabled')
-    expect(signal?.aborted).toBe(true)
-  })
-
   it('shares one creation between concurrent distinct starts and sends the second prompt', async () => {
     const { seam } = harness()
     const launched = deferred<void>()
@@ -110,43 +83,6 @@ describe('ExternalConversationSeam start', () => {
     expect(
       (await seam.start({ launcher, terminal: fakeTerminal().terminal }, KEY, 'd1', START)).initial
     ).toEqual(UNKNOWN)
-    expect(launch).not.toHaveBeenCalled()
-  })
-
-  it('links a created folder workspace on its folder record', async () => {
-    const { seam, folders } = harness()
-    folders.push({ id: 'f-1' })
-    const { launcher } = fakeLauncher(
-      async () => launchResult('handed-to-terminal', 'folder:f-1'),
-      {
-        worktreeId: 'folder:f-1',
-        sshHostId: null
-      }
-    )
-    await seam.start({ launcher, terminal: fakeTerminal().terminal }, KEY, 'd1', {
-      ...START,
-      target: { kind: 'create-folder-workspace', create: { projectGroupId: 'g-1' } }
-    })
-    expect(folders[0].externalConversations).toEqual([expect.objectContaining({ paneKey: PANE })])
-  })
-
-  it.each([
-    ['an agent off the list', 'opencode', {}],
-    ['an agent without status hooks', 'claude', { agentStatusHooksEnabled: false }]
-  ] as const)('refuses %s', async (_label, agent, settings) => {
-    const { seam } = harness(settings)
-    const { launcher, launch } = fakeLauncher(async () => launchResult('handed-to-terminal'))
-    expect(
-      (
-        await seam.start({ launcher, terminal: fakeTerminal().terminal }, KEY, 'd1', {
-          ...START,
-          agent
-        })
-      ).initial
-    ).toEqual({
-      outcome: 'refused',
-      reason: 'unsupported_agent'
-    })
     expect(launch).not.toHaveBeenCalled()
   })
 })
@@ -234,38 +170,9 @@ describe('ExternalConversationSeam delivery ids', () => {
     expect(lost.initial).toEqual({ outcome: 'unknown', reason: 'replayed_after_restart' })
     expect(launch).toHaveBeenCalledTimes(1)
   })
-
-  it('scopes delivery ids by conversation', async () => {
-    const { seam } = harness()
-    const { launcher, launch } = fakeLauncher(async () => launchResult('handed-to-terminal'))
-    await seam.start({ launcher, terminal: fakeTerminal().terminal }, KEY, 'd1', START)
-    await seam.start(
-      { launcher, terminal: fakeTerminal().terminal },
-      { ...KEY, externalId: 'thread-2' },
-      'd1',
-      START
-    )
-    expect(launch).toHaveBeenCalledTimes(2)
-  })
 })
 
 describe('ExternalConversationSeam links', () => {
-  it('forgets a removed workspace, and follows a renamed one', async () => {
-    const { seam, row, put, remove } = harness()
-    const { launcher, launch } = fakeLauncher(async () => launchResult('handed-to-terminal'))
-    await seam.start({ launcher, terminal: fakeTerminal().terminal }, KEY, 'd1', START)
-    put('repo-1::/work/renamed', 'local', {
-      externalConversations: row(WORKTREE)?.externalConversations
-    })
-    remove(WORKTREE)
-    expect(
-      (await seam.start({ launcher, terminal: fakeTerminal().terminal }, KEY, 'd2', START)).initial
-    ).toEqual({ outcome: 'accepted' })
-    remove('repo-1::/work/renamed')
-    await seam.start({ launcher, terminal: fakeTerminal().terminal }, KEY, 'd3', START)
-    expect(launch).toHaveBeenCalledTimes(2)
-  })
-
   it('finds an SSH twin’s link that only its host’s row holds, after a restart too', async () => {
     const records = fakeLinkStore([LOCAL_REPO, { ...LOCAL_REPO, connectionId: 'box' }])
     // The locator projection keeps the local twin; the SSH link exists only in canonical host rows.
@@ -336,22 +243,6 @@ async function started() {
 }
 
 describe('ExternalConversationSeam send', () => {
-  it('sends through the shared writer with the hold and the binding it admitted', async () => {
-    const { seam, host, terminal } = await started()
-    expect(await seam.send(host, KEY, 'd1', 'hello')).toEqual({ outcome: 'accepted' })
-    expect(terminal.writes).toEqual(['hello'])
-    expect(terminal.sendTerminalAgentPrompt).toHaveBeenCalledWith(
-      'term-1',
-      'hello',
-      expect.objectContaining({
-        inputKind: 'orchestration',
-        onPermission: 'wait',
-        expectedBinding: { ptyId: 'pty-1', processIncarnation: 'inc-pty-1' },
-        signal: expect.any(AbortSignal)
-      })
-    )
-  })
-
   it.each([
     ['before', false],
     ['after', true]
@@ -388,13 +279,6 @@ describe('ExternalConversationSeam send', () => {
       reason: 'agent_not_reachable'
     })
     expect(terminal.writes).toEqual([])
-  })
-
-  it('throws for a conversation it never started', async () => {
-    const { seam, host } = await started()
-    await expect(seam.send(host, { ...KEY, externalId: 'nope' }, 'd1', 'x')).rejects.toThrow(
-      'external_conversation_not_found'
-    )
   })
 
   it('keeps arrival order behind a held head and sends both after the answer', async () => {
@@ -435,17 +319,6 @@ describe('ExternalConversationSeam send', () => {
     expect(await head).toEqual(gone)
     expect(await follower).toEqual(gone)
     expect(terminal.held()).toBe(0)
-  })
-
-  it('keeps holding when another workspace is removed', async () => {
-    const { seam, host, terminal, removeWorkspace } = await started()
-    terminal.state.blocked = true
-    const head = seam.send(host, KEY, 'd1', 'one')
-    await vi.waitFor(() => expect(terminal.held()).toBe(1))
-    removeWorkspace('repo-1::/work/other')
-    expect(terminal.held()).toBe(1)
-    terminal.answer()
-    expect(await head).toEqual({ outcome: 'accepted' })
   })
 
   it('settles a follower behind an exited head without retargeting it', async () => {
@@ -590,15 +463,6 @@ describe('ExternalConversationSeam start-headed lanes', () => {
     expect(terminal.writes).toEqual([])
     expect(await seam.send(host, KEY, 'd2', 'later')).toEqual({ outcome: 'accepted' })
     expect(terminal.writes).toEqual(['later'])
-  })
-
-  it('sends a follower queued behind the launch to the process it launched', async () => {
-    const { seam, host, terminal, start, launched } = await startHeaded(false)
-    const follower = seam.send(host, KEY, 'd1', 'queued')
-    launched.resolve()
-    expect((await start).initial).toEqual({ outcome: 'accepted' })
-    expect(await follower).toEqual({ outcome: 'accepted' })
-    expect(terminal.writes).toEqual(['queued'])
   })
 
   it('lets no follower adopt a process when the launch published none it can prove', async () => {

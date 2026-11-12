@@ -26,9 +26,9 @@ import {
 import { SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT } from '../../shared/skills-cli-agent-keys'
 import {
   installBundledSkills,
-  localBundledSkillInput,
   previewBundledSkillInstall
-} from '../../main/skills/bundled-skill-install/cli-entry'
+} from '../../main/skills/bundled-skill-install/bundled-skill-installation'
+import { localBundledSkillInput } from '../../main/skills/bundled-skill-install/bundled-skill-local-host'
 
 export type SkillMutationVerb = 'install' | 'update'
 

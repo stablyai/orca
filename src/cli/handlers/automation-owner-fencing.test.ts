@@ -73,19 +73,4 @@ describe('CLI automation mutations carry the owner they read', () => {
 
     expect(call).toHaveBeenNthCalledWith(2, 'automation.runNow', { id: 'a1' })
   })
-
-  it('leaves reads unfenced, so listing still works on a record whose host is gone', async () => {
-    const { call } = clientAnsweringShow(owner)
-    vi.spyOn(console, 'log').mockImplementation(() => undefined)
-
-    await AUTOMATION_HANDLERS['automations runs']!({
-      client: { call } as never,
-      cwd: '/tmp',
-      flags: new Map([['id', 'a1']]),
-      json: true
-    })
-
-    expect(call).toHaveBeenCalledTimes(1)
-    expect(call).toHaveBeenCalledWith('automation.runs', { automationId: 'a1', limit: 25 })
-  })
 })

@@ -1,6 +1,6 @@
 import type { OrcadOptions } from './orcad-start-contract'
-import { DEFAULT_WS_PORT } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
-import { ORCAD_LOOPBACK_BIND_HOST } from './orcad-bind-address'
+import { DEFAULT_WS_PORT } from '../runtime/rpc/server/runtime-rpc-pairing-types'
+import { ORCAD_LOOPBACK_BIND_HOST } from '../../shared/orcad-bind-address'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -17,6 +17,12 @@ Options:
                            Use an SSH port-forward or a network IP for remote access.
   --pairing-address <addr> Address advertised in pairing offers when different
                            from the bind address (for example, a public hostname).
+  --allow-public           Accept clients from public addresses. Without it only
+                           localhost, LAN and Tailscale addresses connect, unless a
+                           paired device has already connected from a public one.
+  --refuse-public          Refuse public addresses even when older pairings, a
+                           remembered public connection or --pairing-address
+                           would accept them.
   --json                   Print the one-line server readiness JSON to stdout.
   --no-pairing             Do not create a client pairing offer at startup.
   --mobile-pairing         Create a mobile-scoped pairing offer with a QR code.
@@ -54,6 +60,10 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
       i += 1
     } else if (arg === '--json') {
       options.json = true
+    } else if (arg === '--allow-public') {
+      options.allowPublic = true
+    } else if (arg === '--refuse-public') {
+      options.refusePublic = true
     } else if (arg === '--no-pairing') {
       options.noPairing = true
     } else if (arg === '--mobile-pairing') {
@@ -95,9 +105,12 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
     }
   }
   const validationError = getServeOptionValidationError({
+    bind: options.bind,
     noPairing: options.noPairing === true,
     mobilePairing: options.mobilePairing === true,
     grantDesktopControl: options.grantDesktopControl,
+    allowPublic: options.allowPublic,
+    refusePublic: options.refusePublic,
     recipeJson: options.recipeJson === true,
     projectRoot: options.projectRoot
   })

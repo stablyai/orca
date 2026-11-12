@@ -1,5 +1,12 @@
 import { useRef, type ReactNode, type RefObject } from 'react'
-import { TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native'
+import {
+  TextInput,
+  View,
+  type StyleProp,
+  type TextInputProps,
+  type ViewStyle,
+  type TextInputInstance
+} from 'react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useTextInputContentHeight } from '../../platform/text-input-content-height'
@@ -18,7 +25,7 @@ type MessageBoxProps = Omit<
 > & {
   value: string
   onChangeText: (text: string) => void
-  inputRef?: RefObject<TextInput | null>
+  inputRef?: RefObject<TextInputInstance | null>
   /** Shows the round Send button at the end of the action row. */
   onSend?: () => void
   canSend?: boolean
@@ -28,8 +35,6 @@ type MessageBoxProps = Omit<
   leading?: ReactNode
   /** Controls at the end of the action row, before Send. */
   trailing?: ReactNode
-  /** Drawn over the text, which hides while it is set, e.g. dictation's live preview. */
-  inputOverlay?: ReactNode
   monospace?: boolean
   /** One pill-shaped row with its controls beside the text, for short replies. */
   inline?: boolean
@@ -47,7 +52,6 @@ export function MessageBox({
   sendAccessibilityLabel,
   leading,
   trailing,
-  inputOverlay,
   monospace = false,
   inline = false,
   style,
@@ -58,7 +62,7 @@ export function MessageBox({
   ...inputProps
 }: MessageBoxProps): React.JSX.Element {
   useMobileColorScheme()
-  const ownRef = useRef<TextInput>(null)
+  const ownRef = useRef<TextInputInstance>(null)
   const ref = inputRef ?? ownRef
   const contentHeight = useTextInputContentHeight(ref, value)
   const focus = useInputFocus({ onFocus, onBlur })
@@ -75,7 +79,6 @@ export function MessageBox({
         style
       ]}
     >
-      {/* Always wrapped, so showing the overlay never remounts the field under the keyboard. */}
       <View style={inline ? styles.inlineText : undefined}>
         <TextInput
           ref={ref}
@@ -93,15 +96,13 @@ export function MessageBox({
             contentHeight !== undefined && {
               height: Math.min(MESSAGE_MAX_HEIGHT, Math.max(minHeight, contentHeight))
             },
-            !editable && styles.disabled,
-            inputOverlay !== undefined && styles.hiddenText
+            !editable && styles.disabled
           ]}
           {...inputProps}
           // Only a bare box draws a ring, so only it re-renders on focus.
           onFocus={hasActions ? onFocus : focus.onFocus}
           onBlur={hasActions ? onBlur : focus.onBlur}
         />
-        {inputOverlay}
       </View>
       {hasActions ? (
         <View style={[styles.actionRow, inline && styles.inlineActions]}>

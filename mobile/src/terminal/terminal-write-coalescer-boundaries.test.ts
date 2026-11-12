@@ -10,7 +10,7 @@ vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   Text: 'Text',
   View: 'View',
-  StyleSheet: { absoluteFillObject: {}, create: (styles: unknown) => styles }
+  StyleSheet: { absoluteFill: {}, create: (styles: unknown) => styles }
 }))
 vi.mock('lucide-react-native', () => ({ RefreshCw: 'RefreshCw' }))
 

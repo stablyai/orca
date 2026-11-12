@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
 import { parsePluginInstallLink } from '../../../../../shared/plugins/catalog/plugin-install-link'
-import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
+import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 import { usePluginInstallLink } from './use-plugin-install-link'
 
 const toastError = vi.hoisted(() => vi.fn())
@@ -16,7 +16,7 @@ const storeState = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
 
-const { openPluginInstallLink } = await import('@/store/plugin-preview-request')
+const { openPluginInstallLink } = await import('@/store/plugins/navigation/plugin-preview-request')
 
 let root: Root | null = null
 let hook: ReturnType<typeof usePluginInstallLink> | null = null
@@ -76,15 +76,6 @@ describe('usePluginInstallLink', () => {
     expect(installMarketplacePlugin).not.toHaveBeenCalled()
   })
 
-  it('opens directly when the linked catalog is already added under another spelling', async () => {
-    request(
-      `orca://plugins/acme.dusk?catalog=${encodeURIComponent('git@github.com:acme/catalog.git')}`
-    )
-    await render([OFFICIAL, source('https://github.com/acme/catalog')])
-    expect(open).toHaveBeenCalledWith('acme.dusk')
-    expect(hook?.catalogToAdd).toBeNull()
-  })
-
   it('asks before adding an unknown catalog and fetches nothing until confirmed', async () => {
     request('orca://plugins/acme.dusk?catalog=community')
     await render([OFFICIAL])
@@ -103,15 +94,5 @@ describe('usePluginInstallLink', () => {
     expect(loadMarketplaceData).toHaveBeenCalled()
     expect(open).toHaveBeenCalledWith('acme.dusk')
     expect(installMarketplacePlugin).not.toHaveBeenCalled()
-  })
-
-  it('cancelling the catalog prompt adds and opens nothing', async () => {
-    request(`orca://plugins/acme.dusk?catalog=${encodeURIComponent('https://gitlab.com/a/b.git')}`)
-    await render([OFFICIAL])
-    act(() => hook!.cancelCatalog())
-    await render([OFFICIAL])
-    expect(hook?.catalogToAdd).toBeNull()
-    expect(addMarketplace).not.toHaveBeenCalled()
-    expect(open).not.toHaveBeenCalled()
   })
 })

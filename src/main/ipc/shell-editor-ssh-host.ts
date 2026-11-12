@@ -1,14 +1,14 @@
 import { getAppEnvironment } from '../../shared/app-environment'
 import { parseExecutionHostId, toSshExecutionHostId } from '../../shared/execution-host'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
-import { listEnvironments } from '../../shared/runtime-environment-store'
+import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../shared/ssh-types'
-import { fingerprintRuntimeSshTarget } from '../ssh/runtime-ssh-target-fingerprint'
+import { fingerprintRuntimeSshTarget } from '../ssh/runtime-access/runtime-ssh-target-fingerprint'
 
 export type ListRuntimeEnvironments = () => readonly Pick<
   KnownRuntimeEnvironment,

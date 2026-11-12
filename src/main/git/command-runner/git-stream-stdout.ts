@@ -2,15 +2,13 @@ import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../../observability/instrumentation'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
-import { createAbortError } from './abort-error'
-import { killSpawnedCommandTree } from './spawned-command-tree-kill'
+import { createAbortError } from './process-capture/abort-error'
+import { killSpawnedCommandTree } from './process-capture/spawned-command-tree-kill'
 import { pendingWslDriveCheckoutGitRouting } from '../wsl-drive-checkout-git-routing'
-import type { ResolvedCommand } from './wsl-command-resolution'
-import {
-  DEFAULT_GIT_MAX_BUFFER,
-  type GitAdmissionTier,
-  type GitExecOptions
-} from './git-exec-options'
+import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
+import { DEFAULT_GIT_MAX_BUFFER } from './git-exec-options'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitExecOptions } from './git-exec-options'
 import {
   pendingWslDirectGitReadEnvironment,
   directWslGitExitCode,
@@ -18,14 +16,17 @@ import {
   invalidateMissingDirectWslGit,
   resolveGitCommand,
   resolveGitCommandWithoutProbe
-} from './git-command-resolution'
-import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment'
-import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-process-env'
+} from './host-routing/git-command-resolution'
+import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
+import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environment/git-process-env'
 import { gitSpawn } from './git-spawn'
-import { acquireGitAdmission } from './git-subprocess-admission'
-import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
-import { routeLocalGitOptions, runAdmittedWslGit } from './local-git-runtime-route'
-import { gitRunsIn } from './git-runs-in'
+import { acquireGitAdmission } from './admission/git-subprocess-admission'
+import {
+  GitCommandTimeoutError,
+  gitCommandTimeoutMs
+} from '../../../shared/git/commands/git-command-timeout'
+import { routeLocalGitOptions, runAdmittedWslGit } from './host-routing/local-git-runtime-route'
+import { gitRunsIn } from './host-routing/git-runs-in'
 
 /** Result of a streamed git command; `stoppedEarly` is true when onStdout asked to stop before the child exited. */
 export type GitStreamResult = { stoppedEarly: boolean }

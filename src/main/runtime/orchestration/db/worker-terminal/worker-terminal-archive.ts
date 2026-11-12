@@ -5,7 +5,7 @@ import {
   type WorkerTerminalArchiveRow,
   type WorkerTerminalArchiveStatus,
   type WorkerTerminalRetainedReason
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 
@@ -126,6 +126,13 @@ export function getWorkerTerminalArchive(
   return this.db
     .prepare('SELECT * FROM worker_terminal_archives WHERE dispatch_id = ?')
     .get(dispatchId) as WorkerTerminalArchiveRow | undefined
+}
+
+/** Existence only; archive rows hold up to 256 KB of output. */
+export function hasWorkerTerminalArchive(this: OrchestrationDb, dispatchId: string): boolean {
+  return Boolean(
+    this.db.prepare('SELECT 1 FROM worker_terminal_archives WHERE dispatch_id = ?').get(dispatchId)
+  )
 }
 
 export function settleWorkerTerminalRelease(
@@ -284,6 +291,7 @@ export type WorkerTerminalArchiveMethods = {
   storeWorkerTerminalArchiveBeforeStop: typeof storeWorkerTerminalArchiveBeforeStop
   commitWorkerTerminalArchiveForRelease: typeof commitWorkerTerminalArchiveForRelease
   getWorkerTerminalArchive: typeof getWorkerTerminalArchive
+  hasWorkerTerminalArchive: typeof hasWorkerTerminalArchive
   settleWorkerTerminalRelease: typeof settleWorkerTerminalRelease
   markWorkerTerminalReleaseUnknown: typeof markWorkerTerminalReleaseUnknown
   revertWorkerTerminalReleaseToRetained: typeof revertWorkerTerminalReleaseToRetained
@@ -297,6 +305,7 @@ export function attachWorkerTerminalArchive(ctor: { prototype: object }): void {
     storeWorkerTerminalArchiveBeforeStop,
     commitWorkerTerminalArchiveForRelease,
     getWorkerTerminalArchive,
+    hasWorkerTerminalArchive,
     settleWorkerTerminalRelease,
     markWorkerTerminalReleaseUnknown,
     revertWorkerTerminalReleaseToRetained,

@@ -5,10 +5,10 @@ import type {
   MobilePushRegisterInput,
   MobilePushRegisterResult
 } from '../../../shared/mobile-push-contract'
-import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
-import type { DeviceRegistry } from '../device-registry'
+import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
+import type { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import { PushDispatcher } from './push-dispatcher'
 import { PushGatewayClient } from './push-gateway-client'
 import { PushRegisterThrottle } from './push-register-throttle'

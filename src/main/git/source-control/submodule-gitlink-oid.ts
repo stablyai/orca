@@ -1,6 +1,7 @@
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
+import { gitOptionalLocksDisabledEnv } from '../command-runner/git-environment/git-process-env'
 import { literalPathspec } from './git-pathspec'
 
 export async function readGitlinkOidFromTree(

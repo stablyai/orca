@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationImportReceipt,
@@ -44,7 +44,7 @@ export function parseOrcadMigrationManifest(value: unknown): OrcadMigrationManif
   const migrationId = requiredString(value.migrationId, 'migrationId')
   const createdAt = requiredDate(value.createdAt, 'createdAt')
   const source = parseSource(value.source)
-  const payload = parsePayload(value.payload)
+  const payload = parseOrcadMigrationCatalogPayload(value.payload)
   const manifestSha256 = requiredString(value.manifestSha256, 'manifestSha256')
   if (!/^[a-f0-9]{64}$/.test(manifestSha256)) {
     throw new Error('orcad_migration_manifest_digest_invalid')
@@ -102,7 +102,8 @@ export function normalizeOrcadMigrationImportReceipts(
   }, [])
 }
 
-function parsePayload(value: unknown): OrcadMigrationCatalogPayload {
+/** Without the manifest's size bound: commit also checks a payload rebuilt with blob-borne rows. */
+export function parseOrcadMigrationCatalogPayload(value: unknown): OrcadMigrationCatalogPayload {
   if (!isRecord(value)) {
     throw new Error('orcad_migration_manifest_payload_invalid')
   }

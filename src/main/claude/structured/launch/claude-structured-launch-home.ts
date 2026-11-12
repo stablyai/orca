@@ -1,6 +1,6 @@
 import { join } from 'node:path'
-import type { ClaudeProfileRouter } from '../../../claude-accounts/claude-profile-router'
-import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
+import type { ClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-router'
+import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { resolveSessionFilePath } from '../../../native-chat/session-file-resolver'
 import { prepareClaudeLaunchAccount } from '../../claude-launch-account'
 
@@ -16,9 +16,11 @@ export async function resolveClaudeStructuredLaunchHome(
 async function claudeTranscriptExists(input: {
   providerSessionId: string
   claudeConfigDir: string
+  cwd?: string
 }): Promise<boolean> {
   const path = await resolveSessionFilePath('claude', input.providerSessionId, {
-    claudeProjectsDir: join(input.claudeConfigDir, 'projects')
+    claudeProjectsDir: join(input.claudeConfigDir, 'projects'),
+    cwd: input.cwd
   })
   return path !== null
 }
@@ -30,14 +32,16 @@ export async function claudeLaunchResumesTranscript(input: {
   providerSessionId: string
   claudeConfigDir: string
   recordHome: string
+  /** The launch cwd; Claude keeps its transcript in this folder's project bucket. */
+  cwd?: string
   hasTranscript?: typeof claudeTranscriptExists
 }): Promise<boolean> {
-  const { router, providerSessionId, claudeConfigDir } = input
+  const { router, providerSessionId, claudeConfigDir, cwd } = input
   if (!router && input.leafUuid !== null) {
     return true
   }
   const hasTranscript = input.hasTranscript ?? claudeTranscriptExists
-  if (await hasTranscript({ providerSessionId, claudeConfigDir })) {
+  if (await hasTranscript({ providerSessionId, claudeConfigDir, cwd })) {
     return true
   }
   if (input.leafUuid === null) {
@@ -47,7 +51,7 @@ export async function claudeLaunchResumesTranscript(input: {
     ? [input.recordHome, ...router.accountHomes(), router.systemDefaultHome()]
     : []
   for (const home of otherHomes.filter((home) => home !== claudeConfigDir)) {
-    if (await hasTranscript({ providerSessionId, claudeConfigDir: home })) {
+    if (await hasTranscript({ providerSessionId, claudeConfigDir: home, cwd })) {
       throw new AgentSessionPreSpawnError(
         new Error('claude transcript is not in the selected account'),
         { reason: 'historyInOtherAccount' }

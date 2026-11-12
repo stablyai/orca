@@ -1,13 +1,14 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
-import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
-import type { HostedReviewProvider } from '../../../../shared/hosted-review'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import { useAppStore } from '@/store/index'
+import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
+import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-board-status-label'
+import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type {
   WorkspaceCleanupFilterState,
   WorkspaceCleanupSortState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 import {
   countWorkspaceCleanupMeasuredRows,
   type WorkspaceCleanupFacets
@@ -36,7 +37,7 @@ import {
   createWorkspaceCleanupFacetListCache,
   createWorkspaceCleanupReviewInfoCache
 } from './workspace-cleanup-facet-row-caches'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 export type WorkspaceCleanupFacetRows = {
@@ -251,7 +252,7 @@ export function useWorkspaceCleanupFacetRows({
     return {
       workspaceStatuses: sources.workspaceStatuses.map((status) => ({
         id: status.id,
-        label: status.label
+        label: translateWorkspaceBoardStatusLabel(status)
       })),
       hostIds: [...new Set(facets.map((row) => row.hostId))].sort(),
       repos: [...repoLabels].map(([id, label]) => ({ id, label })),

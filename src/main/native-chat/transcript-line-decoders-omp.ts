@@ -7,7 +7,7 @@ import {
   type NativeChatMessage
 } from '../../shared/native-chat/native-chat-types'
 import type { AgentSessionTokenUsage } from '../../shared/agent-session/agent-session-context-usage'
-import { buildImageDataUri } from '../../shared/image-data-uri'
+import { buildImageDataUri } from '../../shared/file-preview/image-data-uri'
 import {
   asRecord,
   extractString,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { parseAntigravityGenerationOutput } from '../../shared/antigravity-generation-stream'
 import {
   generateCommitMessageFromContext,
@@ -35,11 +35,22 @@ describe('Antigravity generation stream', () => {
         params,
         target: { kind: 'local', cwd: 'C:\\folder-workspace' },
         spawnAgent: (input) => {
-          expect(input.args.join(' ').length).toBeLessThan(100)
+          if (input.args.includes('--help')) {
+            const probe = createMockDiscoveryChild()
+            probe.stdin.end.mockImplementation(() =>
+              queueMicrotask(() => {
+                probe.stdout.emit('data', Buffer.from('  --settings <path>\n'))
+                probe.emit('close', 0)
+              })
+            )
+            return probe
+          }
+          expect(input.args.join(' ').length).toBeLessThan(30_000)
           expect(input.args).toContain('--input-format=stream-json')
           return child
         }
       })
+      await vi.waitFor(() => expect(child.stdin.end).toHaveBeenCalled())
       const input = JSON.parse(child.stdin.end.mock.calls[0]?.[0] ?? '')
       expect(input.message.content[0].text).toContain('(diff truncated,')
       expect(input.message.content[0].text.length).toBeGreaterThan(200_000)

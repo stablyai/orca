@@ -82,9 +82,12 @@ export async function refreshStartupWorktrees(
   }
   if (!isCancelled()) {
     // Lineage decorates rows; it must not keep discovery feedback pending.
-    void actions.fetchWorktreeLineage().catch((err: unknown) => {
-      console.warn('Startup worktree lineage refresh failed:', err)
-    })
+    // One lineage list per store: the focused store's full list, every other store's cross-machine links.
+    void actions
+      .fetchWorktreeLineage({ crossStoreHostIds: refreshedHosts })
+      .catch((err: unknown) => {
+        console.warn('Startup worktree lineage refresh failed:', err)
+      })
   }
   return catalogsSucceeded ? results : []
 }

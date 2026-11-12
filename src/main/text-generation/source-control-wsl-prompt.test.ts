@@ -4,7 +4,7 @@ import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Writable } from 'node:stream'
 import { afterEach, expect, it, vi } from 'vitest'
-import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
+import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { prepareWslPrompt } from './source-control-prompt-files'
 import { producePromptRecords } from './source-control-prompt-producer'
 import { runLocalSourceControlPlan } from './source-control-local-process'
@@ -25,10 +25,10 @@ vi.mock('../../shared/windows-transient-lock-removal', async (original) => ({
   ...(await original<typeof Removal>()),
   removeTree: removeTreeMock
 }))
-vi.mock('../windows-process-tree-kill', () => ({
+vi.mock('../pty/process-retirement/windows-process-tree-kill', () => ({
   terminateWindowsProcessTree: vi.fn(async () => true)
 }))
-vi.mock('../wsl-background-distro-gate', () => ({ noteWslDistroLaunched: vi.fn() }))
+vi.mock('../wsl/discovery/wsl-background-distro-gate', () => ({ noteWslDistroLaunched: vi.fn() }))
 
 afterEach(() => {
   vi.useRealTimers()
@@ -527,3 +527,56 @@ it.each(['success', 'nonzero', 'empty', 'storage', 'pipe-close'] as const)(
     }
   }
 )
+
+it('delivers a plain UTF-8 policy module and preserves the stdin task after guest materialization', async () => {
+  const guest = prepareWslPrompt(
+    {
+      binary: process.execPath,
+      args: ['{module}'],
+      label: 'Policy fixture',
+      stdinPayload: 'Name this chat 🌊\nlast line',
+      taskFiles: [
+        { name: 'task-policy.mjs', content: 'export const text = "policy 🌊"\n', argIndex: 0 }
+      ]
+    },
+    'Actual'
+  )
+  const directory = `/tmp/orca-generation-${guest.preparation.args[0]}`
+  const child = spawnProcess({
+    program: '/bin/sh',
+    args: [
+      '-c',
+      guest.preparation.script,
+      'fixture',
+      ...guest.preparation.args,
+      process.execPath,
+      '-e',
+      `const fs = require('node:fs'); const {pathToFileURL}=require('node:url'); import(pathToFileURL(process.argv[1])).then(module => process.stdout.write(JSON.stringify({ text: module.text, task: fs.readFileSync(0,'utf8'), prefix: fs.readFileSync(process.argv[1]).subarray(0,3).toString('hex') })))`,
+      '--',
+      ...guest.plan.args
+    ],
+    stdio: 'pipe'
+  })
+  let stdout = ''
+  child.stdout.on('data', (chunk) => (stdout += chunk.toString()))
+  child.stdin.on('error', () => {})
+  child.stderr.on('data', (chunk) => {
+    if (guest.observe(chunk)) {
+      child.stdin.end([...guest.records()].join(''))
+    }
+  })
+  try {
+    const code = await new Promise<number | null>((resolve, reject) => {
+      child.once('close', resolve)
+      child.once('error', reject)
+    })
+    expect(code).toBe(0)
+    expect(JSON.parse(stdout)).toEqual({
+      text: 'policy 🌊',
+      task: 'Name this chat 🌊\nlast line',
+      prefix: '657870'
+    })
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})

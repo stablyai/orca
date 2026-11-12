@@ -1,9 +1,9 @@
-import type { DispatchContextRow, WorkerDispatchRow } from '../../types'
+import type { DispatchContextRow, WorkerDispatchRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import {
   releaseContextOnlyDispatch,
   type ContextOnlyDispatchReleaseResult
-} from '../../context-only-dispatch-release'
+} from '../../workers/lifecycle/context-only-dispatch-release'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import { refuseStopWhileKeptOpen } from '../worker-terminal/worker-terminal-user-keep'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -40,6 +40,21 @@ export function isStopStrandedByAnotherRuntime(
   runtimeEpoch: string
 ): boolean {
   return worker.state === 'stopping' && worker.runtime_epoch !== runtimeEpoch
+}
+
+/** worker-stop fenced this Dispatch: it starts no helper, and a helper it was starting stops when that start ends. */
+export function isWorkerStopRequested(this: OrchestrationDb, dispatchId: string): boolean {
+  const state =
+    this.getWorkerDispatch(dispatchId)?.state ?? this.getRemoteDispatchAttachment(dispatchId)?.state
+  return state === 'stopping' || state === 'stop_unknown' || state === 'stopped'
+}
+
+/** Every Dispatch this one started as its helper, oldest first. */
+export function listHelperDispatchIds(this: OrchestrationDb, creatorDispatchId: string): string[] {
+  return this.db
+    .prepare('SELECT id FROM dispatch_contexts WHERE creator_dispatch_id = ? ORDER BY rowid')
+    .all(creatorDispatchId)
+    .map((row) => String(row.id))
 }
 
 export function beginWorkerStop(
@@ -276,6 +291,8 @@ export function markWorkerStopUnknown(
 
 export type WorkerDispatchStopMethods = {
   isDispatchProcessCurrent: typeof isDispatchProcessCurrent
+  isWorkerStopRequested: typeof isWorkerStopRequested
+  listHelperDispatchIds: typeof listHelperDispatchIds
   beginWorkerStop: typeof beginWorkerStop
   settleWorkerStop: typeof settleWorkerStop
   reconcileFederatedWorkerStop: typeof reconcileFederatedWorkerStop
@@ -286,6 +303,8 @@ export type WorkerDispatchStopMethods = {
 export function attachWorkerDispatchStop(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     isDispatchProcessCurrent,
+    isWorkerStopRequested,
+    listHelperDispatchIds,
     beginWorkerStop,
     settleWorkerStop,
     reconcileFederatedWorkerStop,

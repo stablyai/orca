@@ -1,26 +1,33 @@
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
-import { isGroupAddress } from '../../../../orchestration/groups'
-import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
-import { AskParams } from '../schemas'
+import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
+import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
+import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
+import { AskParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { rejectFederatedExplicitTarget } from '../routing'
-import { askRemoteRunHome } from './ask-remote'
+import { askRemoteRunHome } from '../../../../orchestration/legacy-remote/ask-remote'
 import {
   mailboxAddressOf,
   runCoordinatorKey
-} from '../../../../orchestration/orchestration-caller-identity'
-import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
+} from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
-import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
+import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
+import { finishedWorkerDispatch, refuseFinishedRemoteWorker } from './finished-worker-mail'
+import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import {
   askedQuestionReceipt,
   waitForQuestionAnswer
-} from '../../../../orchestration/question-answer-delivery'
+} from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 
 export const ORCHESTRATION_ASK_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.ask',
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      targets: { to: 'party', resume: 'message', run: 'run' }
+    },
     permission: 'workspace',
     params: AskParams,
     handler: async (
@@ -68,25 +75,42 @@ export const ORCHESTRATION_ASK_METHODS = [
           workerState: remoteAttachment.state
         })
       }
-      const activeDispatch = db.getActiveDispatchForIdentity(from, paneKey)
-      if (!activeDispatch) {
+      const workingDispatch = db.getActiveDispatchForIdentity(from, paneKey)
+      // A finished worker still asks its coordinator; the question changes nothing about its Task.
+      const askingDispatch =
+        workingDispatch ??
+        finishedWorkerDispatch(
+          db,
+          {
+            address: from,
+            paneKey: paneKey ?? null,
+            orcaSessionId: orchestrationCaller?.orcaSessionId ?? null,
+            processIncarnation: () => runtime.getTerminalProcessIncarnation(from) ?? undefined
+          },
+          { run: undefined, dispatchId: undefined, dispatch: undefined },
+          'question'
+        )
+      if (!askingDispatch) {
+        refuseFinishedRemoteWorker(db, paneKey, undefined)
         throw new OrchestrationError(
           'dispatch_inactive',
           'ask requires an active supervised Dispatch.'
         )
       }
-      assertWorkerCanReport({
-        dispatchId: activeDispatch.id,
-        from,
-        workerState: db.getWorkerDispatch(activeDispatch.id)?.state,
-        processCurrent:
-          !activeDispatch.process_incarnation ||
-          db.isDispatchProcessCurrent({
-            dispatchId: activeDispatch.id,
-            paneKey: paneKey ?? null,
-            processIncarnation: runtime.getTerminalProcessIncarnation(from)
-          })
-      })
+      if (workingDispatch) {
+        assertWorkerCanReport({
+          dispatchId: workingDispatch.id,
+          from,
+          workerState: db.getWorkerDispatch(workingDispatch.id)?.state,
+          processCurrent:
+            !workingDispatch.process_incarnation ||
+            db.isDispatchProcessCurrent({
+              dispatchId: workingDispatch.id,
+              paneKey: paneKey ?? null,
+              processIncarnation: runtime.getTerminalProcessIncarnation(from)
+            })
+        })
+      }
       const options =
         params.options
           ?.split(',')
@@ -94,27 +118,29 @@ export const ORCHESTRATION_ASK_METHODS = [
           .filter(Boolean) ?? []
       let question = params.resume ? db.getQuestion(params.resume) : undefined
       if (params.resume) {
-        if (!question || question.dispatch_id !== activeDispatch.id) {
+        // Its own question from a finished Dispatch stays resumable after a follow-up starts.
+        const askedBy = question && db.getDispatchContextById(question.dispatch_id)
+        if (!question || !askedBy || !isDispatchAssignee(askedBy, from, paneKey)) {
           throw new OrchestrationError(
             'question_not_found',
             `Question ${params.resume} does not belong to this active Dispatch.`
           )
         }
       } else {
-        const run = db.getRun(activeDispatch.run_id)
+        const run = db.getRun(askingDispatch.run_id)
         if (!run || run.legacy === 1) {
           throw new OrchestrationError(
             'run_not_found',
-            `Run ${activeDispatch.run_id} was not found.`
+            `Run ${askingDispatch.run_id} was not found.`
           )
         }
         if (params.run && params.run !== run.id) {
           throw new OrchestrationError(
             'dispatch_run_mismatch',
-            `Dispatch ${activeDispatch.id} belongs to Run ${run.id}, not ${params.run}.`
+            `Dispatch ${askingDispatch.id} belongs to Run ${run.id}, not ${params.run}.`
           )
         }
-        const reportTo = dispatchReportMailbox(db, activeDispatch)
+        const reportTo = dispatchReportMailbox(db, askingDispatch)
         if (
           params.to &&
           params.to !== `run:${run.id}` &&
@@ -124,14 +150,14 @@ export const ORCHESTRATION_ASK_METHODS = [
         ) {
           throw new OrchestrationError(
             'dispatch_run_mismatch',
-            `ask from Dispatch ${activeDispatch.id} must target its owning Run ${run.id}.`
+            `ask from Dispatch ${askingDispatch.id} must target its owning Run ${run.id}.`
           )
         }
         // An explicit Run or coordinator target still reaches the Run; otherwise the asker's creator.
         const to = params.to && params.to !== reportTo ? `run:${run.id}` : reportTo
         const created = db.createQuestion({
           runId: run.id,
-          dispatchId: activeDispatch.id,
+          dispatchId: askingDispatch.id,
           askerHandle: from,
           question: params.question as string,
           options,
@@ -142,7 +168,8 @@ export const ORCHESTRATION_ASK_METHODS = [
       }
 
       const questionId = question.message_id
-      if (!params.resume && params.wait === false) {
+      // A finished worker has no turn for an answer to wake, so it waits for it here.
+      if (!params.resume && params.wait === false && workingDispatch) {
         return askedQuestionReceipt(questionId, recordMutationReceipt)
       }
       return waitForQuestionAnswer({

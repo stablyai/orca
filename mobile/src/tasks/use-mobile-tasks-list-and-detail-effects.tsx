@@ -1,13 +1,16 @@
+import { githubTaskKey } from './github-task-identity'
+import { taskItemIdentity } from './task-draft-rows'
 import { translate } from '../i18n/mobile-i18n'
 import type { ProjectLoadingActionsModel } from './use-mobile-tasks-project-loading-actions'
 import {
-  View,
   clearMobileTaskCopyFeedbackTimer,
   dropFailedGitHubRepoSlugEntries,
   useCallback,
+  useLayoutEffect,
   useEffect
 } from './mobile-tasks-dependencies'
-import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery } from '../../../src/shared/work-items/task-preset-query'
+import { scopeGitHubTaskSearch } from '../../../src/shared/work-items/task-github-search'
 import {
   linearComposerTeamListRead,
   linearTeamStateListRead
@@ -40,34 +43,20 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     provider,
     query,
     refreshTasks,
+    repoListEnsureLoaded,
     selectGitHubProject,
     setAppliedQuery,
     setCreateRepoId,
     setCreateTeamId,
     setCreatingTask,
     setError,
-    setExpandedPrFilePath,
-    setExpandedResolvedCommentGroups,
     setGithubProjectError,
     setGithubRepoSlugCache,
-    setItemAddAssigneesDraft,
-    setItemAddLabelsDraft,
-    setItemBodyDraft,
-    setItemCommentDraft,
-    setItemRemoveAssigneesDraft,
-    setItemRemoveLabelsDraft,
-    setItemReplyDrafts,
-    setItemReviewersDraft,
-    setItemTitleDraft,
-    setLinearCommentDraft,
     setLinearStates,
     setLinearStatesError,
     setLinearStatesLoading,
     setLinearSubIssueTitle,
     setLinearTeams,
-    setPrFileCommentDrafts,
-    setPrFileContents,
-    setPrFileLoadingPath,
     showCreateTask,
     showGitHubProjectPicker,
     taskStateHydrated,
@@ -92,7 +81,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     return () => clearTimeout(timer)
   }, [githubKind, provider, query, taskStateHydrated])
 
-  const setTaskCopyFeedbackRootRef = useCallback((node: View | null): void => {
+  const setTaskCopyFeedbackRootRef = useCallback((node: unknown): void => {
     if (node !== null) {
       return
     }
@@ -148,6 +137,13 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       stale = true
     }
   }, [provider, refreshJiraConnection, taskStateHydrated])
+
+  // Repos load beside the hydration reads, so the first list read waits on one round trip, not two.
+  useEffect(() => {
+    if (tasksSupported) {
+      void repoListEnsureLoaded().catch(() => {})
+    }
+  }, [repoListEnsureLoaded, tasksSupported])
 
   useEffect(() => {
     if (connState !== 'connected' || !taskStateHydrated) {
@@ -218,7 +214,6 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       return
     }
     let stale = false
-    setCreateTeamId(null)
     void linearComposerTeamListRead
       .request(client)
       .then((response) => {
@@ -229,7 +224,9 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
         if (accepted.accepted) {
           const teams = accepted.value
           setLinearTeams(teams)
-          setCreateTeamId((current) => current ?? teams[0]?.id ?? null)
+          setCreateTeamId((current) =>
+            current && teams.some((team) => team.id === current) ? current : (teams[0]?.id ?? null)
+          )
         } else {
           setLinearTeams([])
           setCreateTeamId(null)
@@ -246,18 +243,19 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     }
   }, [client, hostedRepos, provider, showCreateTask, taskStateHydrated, tasksSupported])
 
+  const linearMetadataKey = linearMetadataItem?.key ?? null
+  useEffect(() => {
+    setLinearSubIssueTitle('')
+  }, [linearMetadataKey])
+
   useEffect(() => {
     if (!tasksSupported || !linearMetadataItem || !client) {
       setLinearStates([])
-      setLinearCommentDraft('')
-      setLinearSubIssueTitle('')
       return
     }
     let stale = false
     setLinearStatesLoading(true)
     setLinearStatesError('')
-    setLinearCommentDraft('')
-    setLinearSubIssueTitle('')
     const baseParams = {
       teamId: linearMetadataItem.source.team.id,
       workspaceId: linearMetadataItem.source.workspaceId
@@ -290,27 +288,74 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     }
   }, [client, linearMetadataItem, tasksSupported])
 
+  useMobileTasksItemSelectionEffects(model)
+
+  const detailPayload =
+    model.detailPayload?.provider === 'github' &&
+    (actionItem?.provider !== 'github' ||
+      model.detailPayload.targetKey !== githubTaskKey(actionItem.source))
+      ? null
+      : model.detailPayload
+  return Object.assign(model, { detailPayload, refreshGitHubProject, setTaskCopyFeedbackRootRef })
+}
+
+export type ListAndDetailEffectsModel = ReturnType<typeof useMobileTasksListAndDetailEffects>
+
+export function useMobileTasksItemSelectionEffects(
+  model: Pick<
+    ProjectLoadingActionsModel,
+    | 'actionItem'
+    | 'client'
+    | 'detailPayload'
+    | 'resetPrFiles'
+    | 'setExpandedPrFilePath'
+    | 'setExpandedResolvedCommentGroups'
+    | 'setItemAddAssigneesDraft'
+    | 'setItemAddLabelsDraft'
+    | 'setItemBodyDraft'
+    | 'setItemRemoveAssigneesDraft'
+    | 'setItemRemoveLabelsDraft'
+    | 'setItemReplyDrafts'
+    | 'setItemReviewersDraft'
+    | 'setItemTitleDraft'
+    | 'setPrFileCommentDrafts'
+  >
+) {
+  const {
+    actionItem,
+    client,
+    resetPrFiles,
+    setExpandedPrFilePath,
+    setExpandedResolvedCommentGroups,
+    setItemAddAssigneesDraft,
+    setItemAddLabelsDraft,
+    setItemBodyDraft,
+    setItemRemoveAssigneesDraft,
+    setItemRemoveLabelsDraft,
+    setItemReplyDrafts,
+    setItemReviewersDraft,
+    setItemTitleDraft,
+    setPrFileCommentDrafts
+  } = model
+  const actionIdentity = actionItem && taskItemIdentity(actionItem)
+
+  const fileRevision =
+    model.detailPayload?.provider === 'github'
+      ? [
+          model.detailPayload.targetKey,
+          model.detailPayload.headSha,
+          model.detailPayload.baseSha
+        ].join('\0')
+      : null
+  useLayoutEffect(() => {
+    resetPrFiles()
+  }, [actionIdentity, client, fileRevision, resetPrFiles])
+
+  // Keyed on identity: status edits, refreshes and reconnects hand over a new object for the same item.
+  // The comment box is not reset: it is kept per item in its draft row.
   useEffect(() => {
-    if (!actionItem) {
-      setItemTitleDraft('')
-      setItemBodyDraft('')
-      setItemCommentDraft('')
-      setItemAddLabelsDraft('')
-      setItemRemoveLabelsDraft('')
-      setItemAddAssigneesDraft('')
-      setItemRemoveAssigneesDraft('')
-      setItemReviewersDraft('')
-      setItemReplyDrafts({})
-      setExpandedPrFilePath(null)
-      setPrFileContents({})
-      setPrFileLoadingPath(null)
-      setPrFileCommentDrafts({})
-      setExpandedResolvedCommentGroups(new Set())
-      return
-    }
-    setItemTitleDraft(actionItem.title)
+    setItemTitleDraft(actionItem?.title ?? '')
     setItemBodyDraft('')
-    setItemCommentDraft('')
     setItemAddLabelsDraft('')
     setItemRemoveLabelsDraft('')
     setItemAddAssigneesDraft('')
@@ -318,15 +363,11 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     setItemReviewersDraft('')
     setItemReplyDrafts({})
     setExpandedPrFilePath(null)
-    setPrFileContents({})
-    setPrFileLoadingPath(null)
+    resetPrFiles()
     setPrFileCommentDrafts({})
     setExpandedResolvedCommentGroups(new Set())
-  }, [actionItem])
-  return Object.assign(model, { refreshGitHubProject, setTaskCopyFeedbackRootRef })
+  }, [actionIdentity])
 }
-
-export type ListAndDetailEffectsModel = ReturnType<typeof useMobileTasksListAndDetailEffects>
 
 // A failed read must not read as a team with no states.
 function statesLoadFailed(): string {

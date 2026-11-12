@@ -2,13 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
-  InteractionManager,
   Pressable,
   Text,
-  TextInput,
-  View
+  View,
+  type TextInputInstance
 } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import { isBlockingJiraUrlIntent } from '../../../src/shared/new-workspace/smart-workspace-source-results'
@@ -36,6 +35,7 @@ import { TextField } from './composer-input/TextField'
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
 import { SmartWorkspaceSourceRow } from './SmartWorkspaceSourceRow'
 import { SheetHeader } from './nav-bar/SheetHeader'
+import { runAfterInteractions } from '../platform/after-interactions'
 
 // Delay focus like MobileSearchField: native autoFocus may not raise keyboard during drawer animation.
 const SOURCE_INPUT_FOCUS_DELAY_MS = 120
@@ -76,16 +76,15 @@ export function SmartWorkspaceSourceDrawer({
   const availableModes = useMemo(() => resolveAvailableSmartModes(availability), [availability])
   const [mode, setMode] = useState<SmartNameMode>(() => resolveDefaultSmartMode(availability))
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
-  const inputRef = useRef<TextInput>(null)
-  // Read latest availability without reactive dependency so recreated object reseeds only on open.
-  const availabilityRef = useRef(availability)
-  availabilityRef.current = availability
-
-  useEffect(() => {
+  const inputRef = useRef<TextInputInstance>(null)
+  // Reseed only on open so a recreated availability object cannot reset the picked mode.
+  const [wasVisible, setWasVisible] = useState(visible)
+  if (wasVisible !== visible) {
+    setWasVisible(visible)
     if (visible) {
-      setMode(resolveDefaultSmartMode(availabilityRef.current))
+      setMode(resolveDefaultSmartMode(availability))
     }
-  }, [visible])
+  }
 
   // Focus after opening interactions settle; docked field shares composer.name with form.
   useEffect(() => {
@@ -93,7 +92,7 @@ export function SmartWorkspaceSourceDrawer({
       return
     }
     let timeout: ReturnType<typeof setTimeout> | undefined
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = runAfterInteractions(() => {
       timeout = setTimeout(() => {
         inputRef.current?.focus()
       }, SOURCE_INPUT_FOCUS_DELAY_MS)
@@ -306,7 +305,7 @@ export function SmartWorkspaceSourceDrawer({
                     'Type a workspace name in the field below.'
                   )}
                 </Text>
-              ) : null
+              ) : undefined
             }
             renderItem={({ item }) => (
               <SmartWorkspaceSourceRow row={item} onPress={() => handleSelectRow(item)} />

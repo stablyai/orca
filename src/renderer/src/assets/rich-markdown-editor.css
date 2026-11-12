@@ -825,6 +825,18 @@
   background: color-mix(in srgb, var(--foreground) 1.5%, transparent);
 }
 
+.rich-markdown-editor .selectedCell {
+  position: relative;
+}
+
+.rich-markdown-editor .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: color-mix(in srgb, var(--foreground) 13%, transparent);
+  pointer-events: none;
+}
+
 .rich-markdown-table-controls {
   position: absolute;
   inset: 0;
@@ -1131,7 +1143,7 @@
   color: var(--text-link, #0969da);
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
-  text-underline-offset: 2px;
+  text-underline-offset: 0.25em;
 }
 
 /* Plain clicks place the caret; RichMarkdownEditor exposes link pointers only while Cmd/Ctrl is held. */
@@ -1152,7 +1164,7 @@
   color: var(--text-link, #0969da);
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
-  text-underline-offset: 2px;
+  text-underline-offset: 0.25em;
 }
 
 .dark .rich-markdown-editor .rich-markdown-html-superscript-link {
@@ -1450,7 +1462,7 @@
   color: var(--text-link, #0969da);
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
-  text-underline-offset: 2px;
+  text-underline-offset: 0.25em;
 }
 
 .dark .rich-markdown-editor .rich-markdown-doc-link {
@@ -1477,7 +1489,7 @@
   color: var(--text-link, #0969da);
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
-  text-underline-offset: 2px;
+  text-underline-offset: 0.25em;
 }
 
 .dark .rich-markdown-editor .rich-markdown-doc-link-preview {

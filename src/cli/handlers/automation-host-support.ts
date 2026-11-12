@@ -1,11 +1,11 @@
 import {
   AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
   AUTOMATION_SETUP_CHOICE_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
+} from '../../shared/automations/automation-runtime-capabilities'
 import {
   EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED,
   hasExtraAgentArgs
-} from '../../shared/automation-extra-agent-args'
+} from '../../shared/agent-launch/startup/automation-extra-agent-args'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeClient } from '../runtime-client'
 import { RuntimeClientError } from '../runtime-client'

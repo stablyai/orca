@@ -3,11 +3,12 @@
  * blob staging and commit can fail at named points (the fault-injection pattern of #29826), and
  * terminals that pause on request. The journal is the real one, in a temp directory.
  */
-import type {
-  OrcadMigrationBlobDescriptor,
-  OrcadMigrationBlobUploadState
+
+import {
+  type OrcadMigrationBlobDescriptor,
+  type OrcadMigrationBlobUploadState,
+  ORCAD_MIGRATION_BLOB_KIND_CONTRACTS
 } from '../../../../shared/orcad-migration/orcad-migration-blob-transfer'
-import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
@@ -20,19 +21,22 @@ import { getDefaultPersistedState } from '../../../../shared/constants'
 import { terminalTab } from './wsl-mover-profile-rows'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WslMoveProgressEvent } from '../../../../shared/wsl-move/wsl-move-driver-types'
-import { collectOrcadMigrationSourceDormantState } from '../../migrating-orcad-catalog/orcad-source-dormant-state'
-import { exportWslMoveManifest } from '../../moving-wsl-projects/wsl-move-manifest-export'
-import { runWslMoveDesktopRewritePass } from '../../moving-wsl-projects/wsl-move-desktop-rewrite'
+import { collectOrcadMigrationSourceDormantState } from '../../migrating-orcad-catalog/source/dormancy/orcad-source-dormant-state'
+import {
+  exportWslMoveManifest,
+  type WslMoveManifestExport
+} from '../../moving-wsl-projects/manifest-scope/wsl-move-manifest-export'
+import { runWslMoveDesktopRewritePass } from '../../moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import {
   readWslMoveSleptScrollbackFromHistory,
   wslMoveSleptSpoolRoot
-} from '../../moving-wsl-projects/wsl-move-slept-scrollback'
+} from '../../moving-wsl-projects/terminal-state/wsl-move-slept-scrollback'
 import type {
   WslMoveDriverDeps,
-  WslMoveHost,
-  WslMoveManifestExport
-} from '../../moving-wsl-projects/wsl-move-driver-ports'
-import type { WslMoveGateInputs } from '../../moving-wsl-projects/wsl-move-terminal-gate'
+  WslMoveHost
+} from '../../moving-wsl-projects/execution/wsl-move-driver-ports'
+
+import type { WslMoveGateInputs } from '../../moving-wsl-projects/quiescence/wsl-move-terminal-gate'
 
 export class WslMoveWorldCrash extends Error {}
 
@@ -154,6 +158,10 @@ export function createWslMoveWorld(userDataPath: string): WslMoveWorld {
       },
       stageChunk: async () => {
         throw new Error('unused: the fixture carries no scrollback snapshots')
+      },
+      readCapabilities: async () => host.capabilities,
+      stageBlobChunk: async () => {
+        throw new Error('unused: a WSL move sends blobs through host.blobs')
       }
     },
     commitWithBlobs: async (manifest, expectedBlobs) => {

@@ -1,14 +1,6 @@
-import {
-  Circle,
-  CircleCheck,
-  CircleDot,
-  GitMerge,
-  GitPullRequest,
-  GitPullRequestClosed,
-  GitPullRequestDraft,
-  type LucideIcon
-} from 'lucide-react-native'
+import { Circle, CircleCheck, CircleDot, type LucideIcon } from 'lucide-react-native'
 import { prStateColor } from '../components/WorktreeMetaGlyphs'
+import { prStateIcon } from '../components/pr-state-token'
 import { colors } from '../theme/mobile-theme'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
 
@@ -16,17 +8,7 @@ export type TaskItemStateGlyph = { icon: LucideIcon; color: string }
 
 // The shape says issue or review and its state, coloured as desktop's task page and review icons.
 function reviewGlyph(state: string): TaskItemStateGlyph {
-  const color = prStateColor(state === 'opened' ? 'open' : state)
-  if (state === 'merged') {
-    return { icon: GitMerge, color }
-  }
-  if (state === 'closed') {
-    return { icon: GitPullRequestClosed, color }
-  }
-  if (state === 'draft') {
-    return { icon: GitPullRequestDraft, color }
-  }
-  return { icon: GitPullRequest, color }
+  return { icon: prStateIcon(state), color: prStateColor(state === 'opened' ? 'open' : state) }
 }
 
 function issueGlyph(state: string): TaskItemStateGlyph {

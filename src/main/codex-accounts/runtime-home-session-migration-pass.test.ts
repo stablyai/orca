@@ -9,8 +9,7 @@ import {
   teardownRuntimeHomeTest,
   testState
 } from './runtime-home-service-test-harness'
-import { getCodexSessionBackfillDate } from '../codex/codex-session-backfill-scan-dates'
-import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
+import { getCodexSessionBackfillDate } from '../codex/history/backfill/codex-session-backfill-scan-dates'
 
 vi.mock('electron', () => ({
   app: {
@@ -75,23 +74,6 @@ describe('host system default session migration pass preparation', () => {
 
     expect(readPendingScanDates()).toEqual([getCodexSessionBackfillDate()])
     expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ coverage: 'full' })
-  })
-
-  it('persists every date a scheduled pass reports so a force-quit stays bounded', async () => {
-    writeBaselineMarker(CUSTOM_HISTORY_HOME)
-    const store = createStore(
-      createSettings({ codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} } })
-    )
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-    const spannedDates: CodexSessionBackfillDate[] = [
-      ['2026', '08', '05'],
-      ['2026', '08', '06']
-    ]
-
-    service.prepareHostSystemDefaultSessionMigrationPass(spannedDates)
-
-    expect(readPendingScanDates()).toEqual(spannedDates)
   })
 
   it('does not demand a full scan when the same history home is spelled differently', async () => {

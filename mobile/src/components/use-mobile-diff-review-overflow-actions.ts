@@ -10,7 +10,7 @@ import {
 } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
-import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
+import type { useMobileDiffReviewController } from '../source-control/review/use-mobile-diff-review-controller'
 import type { ActionSheetAction } from './ActionSheetModal'
 
 // The review screen's ⋯ menu: rarer file actions, the notes, and Discard last.

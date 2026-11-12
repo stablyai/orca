@@ -3,6 +3,7 @@ import type { Mock } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
 import type * as GithubApiRepositoryModule from './github-api-repository'
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { WorkItemSearchApi } from './__fixtures__/work-item-search-api'
 
 const {
@@ -15,10 +16,11 @@ const {
   capture: vi.fn<WorkItemSearchApi['capture']>(),
   sourceContext: { host: 'github.com', available: true }
 }))
-vi.mock('../git/command-runner/exec-file-capture', () => ({
+const gitExecFileAsync = vi.hoisted(() => vi.fn())
+vi.mock('../git/command-runner/process-capture/exec-file-capture', () => ({
   execFileCaptureToTermination: capture
 }))
-vi.mock('../git/command-runner/wsl-command-resolution', () => ({
+vi.mock('../git/command-runner/host-routing/wsl-command-resolution', () => ({
   resolveCommand: (binary: string, args: string[], cwd?: string, distro?: string) => ({
     binary,
     args,
@@ -28,9 +30,10 @@ vi.mock('../git/command-runner/wsl-command-resolution', () => ({
   }),
   resolveDefaultWslCli: () => null
 }))
-vi.mock('../git/runner', async () => ({
-  ghExecFileAsync: (await import('../git/command-runner/gh-exec-file')).ghExecFileAsync,
-  gitExecFileAsync: vi.fn()
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
+  gitExecFileAsync
 }))
 vi.mock('./github-api-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof GithubApiRepositoryModule>()

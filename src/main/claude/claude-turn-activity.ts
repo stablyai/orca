@@ -1,5 +1,5 @@
-import { claudeProviderFrameActivity } from '../native-chat/agent-session-wire/provider-frame-activity'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { claudeProviderFrameActivity } from '../native-chat/agent-session-wire/providers/provider-frame-activity'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { claudeProviderFrameKind } from './structured/launch/claude-structured-provider-fallback'
 import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import type { ClaudeOpenTurn } from './claude-open-turn'

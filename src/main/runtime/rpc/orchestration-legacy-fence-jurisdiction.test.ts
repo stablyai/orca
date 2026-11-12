@@ -1,6 +1,5 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
   COORDINATOR_HANDLE,

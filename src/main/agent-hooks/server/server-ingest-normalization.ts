@@ -1,18 +1,29 @@
 import { retainOpenCodeWriterTopology } from './cli-writer-observation'
-import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
-import { checkHookOwnerPresence, restateHookRoot } from '../../../shared/agent-hook-owner-presence'
-import type { HookRootEvidenceReader } from '../../../shared/hook-process-root-evidence'
-import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
-import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
+import {
+  buildSpoolHookBody,
+  type SpoolRecord
+} from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
+import {
+  checkHookOwnerPresence,
+  restateHookRoot
+} from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
+import type { HookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
+import {
+  isAgentHookSource,
+  type AgentHookSource
+} from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   bindOpenCodeTuiSession,
   isOpenCodeSharedServerPost
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
 import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
 import { AgentHookServerTmuxStatus } from './server-tmux-status'
-import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
+import { getClaudeObservedConfigDirs } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
+  protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
   /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
   protected readHookRootEvidence: HookRootEvidenceReader | undefined
 

@@ -1,4 +1,5 @@
-import { gitExecFileAsync, gitExecFileSync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
+import { gitExecFileSync } from './command-runner/git-exec-file-sync'
 
 type GitRepoCommand = { args: string[]; cwd: string }
 export type GitRepoCommands<T> = Generator<GitRepoCommand, T, string>

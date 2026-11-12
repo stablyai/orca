@@ -1,4 +1,4 @@
-import type { ParsedTaskQuery } from '../../../../../shared/task-query'
+import type { ParsedTaskQuery } from '../../../../../shared/work-items/task-query'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { StickyHideEntry } from './task-page-github-work-item-registry-types'

@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CodexAccountIdentity } from './codex-account-identity'
-import { readCodexAuthIdentity } from './codex-auth-identity'
 
 function idTokenWithClaims(claims: Record<string, unknown>): string {
   const payload = Buffer.from(JSON.stringify(claims), 'utf-8').toString('base64url')
@@ -35,23 +34,53 @@ describe('managed-home Codex identity', () => {
       workspaceAccountId: null
     })
   })
-})
 
-describe('readCodexAuthIdentity account-id fallback', () => {
-  it('falls through to the auth claim for providerAccountId when tokens.account_id is blank', async () => {
-    const contents = JSON.stringify({
+  it.each([
+    {
+      auth_mode: 'bedrockApiKey',
+      bedrock_api_key: { api_key: 'bedrock-fixture-key', region: 'us-east-2' }
+    },
+    {
+      auth_mode: 'bedrockAccessKeys',
+      bedrock_access_keys: {
+        access_key_id: 'AKIAFIXTUREONLY',
+        secret_access_key: 'fixture-secret',
+        region: 'us-east-2'
+      }
+    }
+  ])('does not attribute $auth_mode to stale ChatGPT tokens', async (credential) => {
+    const home = homeWithAuthJson({
+      ...credential,
       tokens: {
-        account_id: '   ',
-        id_token: idTokenWithClaims({
-          'https://api.openai.com/auth': { chatgpt_account_id: 'claim-account' }
-        })
+        account_id: 'stale-account',
+        id_token: idTokenWithClaims({ email: 'stale@example.com' })
       }
     })
 
-    expect(readCodexAuthIdentity(contents)).toMatchObject({
-      providerAccountId: 'claim-account',
-      // workspaceAccountId uses the top-level claim, not the provider-account claim.
+    expect(await identity.readFromHome(home, 'account-1')).toEqual({
+      email: null,
+      providerAccountId: null,
+      workspaceLabel: null,
       workspaceAccountId: null
+    })
+
+    writeFileSync(
+      join(home, 'auth.json'),
+      JSON.stringify({
+        ...credential,
+        auth_mode: 'chatgpt',
+        OPENAI_API_KEY: 'sk-exchanged-key',
+        tokens: {
+          account_id: 'current-account',
+          id_token: idTokenWithClaims({ email: 'current@example.com' })
+        }
+      })
+    )
+    expect(await identity.readFromHome(home, 'account-1')).toEqual({
+      email: 'current@example.com',
+      providerAccountId: 'current-account',
+      workspaceLabel: null,
+      workspaceAccountId: 'current-account'
     })
   })
 })

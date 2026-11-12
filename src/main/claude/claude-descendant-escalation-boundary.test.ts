@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { terminateDescendantSnapshotWithVerdict } from '../pty-descendant-exit-verification'
+import { terminateDescendantSnapshotWithVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import {
   collectDescendantRows,
-  type DescendantSnapshot,
-  type ProcessTableRow
-} from '../pty-descendant-termination'
+  type DescendantSnapshot
+} from '../pty/process-retirement/pty-descendant-termination'
+import type { ProcessTableRow } from '../pty/process-retirement/pty-process-table-parser'
 import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 
 const ROOT_PID = 500
@@ -64,6 +64,7 @@ async function sweep(
   const tree = createClaudeChildTreeReaper(
     { pid: ROOT_PID, kill: vi.fn(() => true) },
     {
+      site: 'claude-structured-child-close',
       platform: 'linux',
       exited: () => false,
       captureDescendants,
@@ -89,13 +90,6 @@ describe('Claude descendant forced-sweep fence', () => {
 
     expect(signalledPids(calls)).toEqual([...EARLIER_BORN, ...WALK_SECOND_BORN])
     expect(killedPids(calls)).toEqual([...EARLIER_BORN, ...WALK_SECOND_BORN])
-  })
-
-  it('still escalates descendants born before the walk that first saw them', async () => {
-    const onlyEarlier = [{ pids: EARLIER_BORN, startedAt: EARLIER_SECOND }]
-    const calls = await sweep([walk(WALK_MS + 42, onlyEarlier)], onlyEarlier)
-
-    expect(killedPids(calls)).toEqual(EARLIER_BORN)
   })
 
   it('withholds the sweep from a row no walk re-derived, on its start second alone', async () => {

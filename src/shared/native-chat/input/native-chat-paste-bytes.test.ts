@@ -8,11 +8,6 @@ const BEGIN = '\x1b[200~'
 const END = '\x1b[201~'
 
 describe('buildNativeChatPasteBytes', () => {
-  it('single-line text has no trailing submit (Enter is written separately)', () => {
-    expect(buildNativeChatPasteBytes('hello world')).toBe('hello world')
-    expect(buildNativeChatPasteBytes('hello world')).not.toContain('\r')
-  })
-
   it('multi-line text is bracketed-paste wrapped with NO trailing submit', () => {
     const text = 'line one\r\nline two\nline three'
     expect(buildNativeChatPasteBytes(text)).toBe(`${BEGIN}line one\rline two\rline three${END}`)
@@ -36,13 +31,13 @@ describe('buildNativeChatPasteBytes', () => {
     expect(buildNativeChatPasteBytes('hi\x1b there')).toBe('hi␛ there')
   })
 
-  it('frames single-line text over 1 KiB of UTF-8 so agents keep every read (#13332)', () => {
-    const atBoundary = 'é'.repeat(512)
+  it('frames single-line text over 512 UTF-8 bytes so agents keep every read (#13332, #32071)', () => {
+    const atBoundary = 'é'.repeat(256)
     const overBoundary = `${atBoundary}x`
     expect(buildNativeChatPasteBytes(atBoundary)).toBe(atBoundary)
     expect(buildNativeChatPasteBytes(overBoundary)).toBe(`${BEGIN}${overBoundary}${END}`)
     // Each ESC becomes a 3-byte ␛, so the sent length, not the typed one, decides.
-    expect(buildNativeChatPasteBytes('\x1b'.repeat(400))).toBe(`${BEGIN}${'␛'.repeat(400)}${END}`)
+    expect(buildNativeChatPasteBytes('\x1b'.repeat(200))).toBe(`${BEGIN}${'␛'.repeat(200)}${END}`)
   })
 })
 

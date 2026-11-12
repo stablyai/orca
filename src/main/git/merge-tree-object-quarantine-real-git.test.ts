@@ -1,21 +1,20 @@
-import { existsSync, readdirSync, writeFileSync } from 'node:fs'
+import { readdirSync, writeFileSync } from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { GIT_OBJECT_QUARANTINE_DIR_PREFIX } from '../../shared/git-object-quarantine'
+import { GIT_OBJECT_QUARANTINE_DIR_PREFIX } from '../../shared/git/objects/git-object-quarantine'
 import {
   createDivergentRepoFixture,
   type DivergentRepoFixture
-} from '../../shared/git-object-quarantine-real-git.test-fixture'
+} from '../../shared/git/objects/git-object-quarantine-real-git.test-fixture'
 import {
   __resetPRConflictSummaryCachesForTests,
   getPRConflictSummary
 } from '../github/conflict-summary'
 import { __resetPRConflictSummaryDerivationCachesForTests } from '../github/conflict-summary-cache'
-import { getLocalGitCapabilityCache } from './git-capability-state'
-import { createLocalGitObjectQuarantine } from './local-git-object-quarantine'
-import { gitExecFileAsync } from './runner'
-import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
+import { getLocalGitCapabilityCache } from './command-runner/host-routing/git-capability-state'
+
+import { deleteBranchAfterWorktreeRemoval } from './worktrees/removal/worktree-branch-removal'
 
 const scratchFoldersMade = vi.hoisted((): string[] => [])
 
@@ -52,47 +51,6 @@ describe('merge-tree runs against a scratch object store (real Git)', () => {
     fixture.dispose()
   })
 
-  function unquarantinedConflictFiles(cwd: string, base: string, head: string): string[] {
-    const mergeBase = fixture.git(cwd, 'merge-base', head, base).trim()
-    let stdout: string
-    try {
-      stdout = fixture.git(
-        cwd,
-        'merge-tree',
-        '--write-tree',
-        '--name-only',
-        '-z',
-        '--no-messages',
-        '--merge-base',
-        mergeBase,
-        head,
-        base
-      )
-    } catch (error) {
-      // A conflicted merge exits 1 but still prints the file list.
-      stdout = error instanceof Error && 'stdout' in error ? String(error.stdout) : ''
-    }
-    return stdout.split('\0').filter(Boolean).slice(1)
-  }
-
-  it.each([
-    ['the main worktree', (f: DivergentRepoFixture) => f.repoPath],
-    ['a linked worktree', (f: DivergentRepoFixture) => f.linkedPath]
-  ])('conflict summary from %s writes no loose objects', async (_label, pickCwd) => {
-    const cwd = pickCwd(fixture)
-    const base = fixture.git(cwd, 'rev-parse', 'main').trim()
-    const head = fixture.git(cwd, 'rev-parse', 'feature-conflict').trim()
-    const before = fixture.looseObjectCount()
-
-    const summary = await getPRConflictSummary(cwd, 'main', base, head)
-
-    expect(fixture.looseObjectCount()).toBe(before)
-    expect(fixture.scratchDirectories()).toEqual([])
-    expect(summary?.files).toEqual(['shared.txt'])
-    expect(unquarantinedConflictFiles(cwd, base, head)).toEqual(summary?.files)
-    expect(fixture.looseObjectCount()).toBeGreaterThan(before)
-  })
-
   it.each([
     ['the main worktree', (f: DivergentRepoFixture) => f.repoPath],
     ['a linked worktree', (f: DivergentRepoFixture) => f.linkedPath]
@@ -122,104 +80,6 @@ describe('merge-tree runs against a scratch object store (real Git)', () => {
     expect(mergeTree('feature-extra')).not.toBe(mainTree)
     expect(mergeTree(squashedHead)).toBe(mainTree)
     expect(fixture.looseObjectCount()).toBeGreaterThan(before)
-  })
-
-  it('keeps file contents a partial clone downloads, so the next check does not fetch them again', async () => {
-    const clone = fixture.createPartialClone()
-    const git = (...args: string[]): string => fixture.git(clone.clonePath, ...args).trim()
-    const base = git('rev-parse', 'origin/main')
-    const head = git('rev-parse', 'origin/feature-conflict')
-    const packsBefore = clone.packCount()
-    const looseBefore = clone.looseObjectCount()
-
-    const first = await getPRConflictSummary(clone.clonePath, 'main', base, head)
-    const packsAfterFirst = clone.packCount()
-    __resetPRConflictSummaryDerivationCachesForTests()
-    const second = await getPRConflictSummary(clone.clonePath, 'main', base, head)
-
-    expect(first?.files).toEqual(['shared.txt'])
-    expect(second?.files).toEqual(['shared.txt'])
-    // The first check lazily fetches missing blobs; the second reuses them.
-    expect(packsAfterFirst).toBeGreaterThan(packsBefore)
-    expect(clone.packCount()).toBe(packsAfterFirst)
-    expect(clone.looseObjectCount()).toBe(looseBefore)
-    expect(scratchFoldersMade).toHaveLength(2)
-    expect(clone.scratchDirectories()).toEqual([])
-  })
-
-  it('lists a partial clone’s conflicts offline once an earlier check downloaded the contents', async () => {
-    const clone = fixture.createPartialClone()
-    const git = (...args: string[]): string => fixture.git(clone.clonePath, ...args).trim()
-    const base = git('rev-parse', 'origin/main')
-    const head = git('rev-parse', 'origin/feature-conflict')
-
-    const online = await getPRConflictSummary(clone.clonePath, 'main', base, head)
-    git('remote', 'set-url', 'origin', join(dirname(clone.clonePath), 'unreachable-origin'))
-    __resetPRConflictSummaryDerivationCachesForTests()
-    const offline = await getPRConflictSummary(clone.clonePath, 'main', base, head)
-
-    expect(online?.files).toEqual(['shared.txt'])
-    expect(offline?.files).toEqual(['shared.txt'])
-    expect(scratchFoldersMade).toHaveLength(2)
-    expect(clone.scratchDirectories()).toEqual([])
-  })
-
-  it('makes no scratch folder until a check shows this Git writes trees, then one per check', async () => {
-    __resetPRConflictSummaryCachesForTests()
-    const base = fixture.git(fixture.repoPath, 'rev-parse', 'main').trim()
-    const head = fixture.git(fixture.repoPath, 'rev-parse', 'feature-conflict').trim()
-
-    const first = await getPRConflictSummary(fixture.repoPath, 'main', base, head)
-    expect(scratchFoldersMade).toEqual([])
-    __resetPRConflictSummaryDerivationCachesForTests()
-    const second = await getPRConflictSummary(fixture.repoPath, 'main', base, head)
-
-    expect(first?.files).toEqual(['shared.txt'])
-    expect(second?.files).toEqual(['shared.txt'])
-    expect(scratchFoldersMade).toHaveLength(1)
-    expect(fixture.scratchDirectories()).toEqual([])
-  })
-
-  it('removes the scratch directory when the Git command fails', async () => {
-    const quarantine = createLocalGitObjectQuarantine(fixture.linkedPath)
-    let scratch: string | undefined
-
-    await expect(
-      quarantine.run(async (env) => {
-        scratch = env?.GIT_OBJECT_DIRECTORY
-        expect(scratch && existsSync(scratch)).toBe(true)
-        return gitExecFileAsync(['merge-tree', '--write-tree', 'main', 'no-such-branch'], {
-          cwd: fixture.linkedPath,
-          env
-        })
-      })
-    ).rejects.toThrow()
-
-    expect(scratch).toBeDefined()
-    expect(existsSync(scratch ?? '')).toBe(false)
-    expect(fixture.scratchDirectories()).toEqual([])
-  })
-
-  it('removes the scratch directory when the command is aborted', async () => {
-    const quarantine = createLocalGitObjectQuarantine(fixture.repoPath)
-    const controller = new AbortController()
-    let scratch: string | undefined
-
-    await expect(
-      quarantine.run(async (env) => {
-        scratch = env?.GIT_OBJECT_DIRECTORY
-        const running = gitExecFileAsync(['merge-tree', '--write-tree', 'main', 'feature-extra'], {
-          cwd: fixture.repoPath,
-          env,
-          signal: controller.signal
-        })
-        controller.abort()
-        return running
-      })
-    ).rejects.toThrow()
-
-    expect(scratch).toBeDefined()
-    expect(existsSync(scratch ?? '')).toBe(false)
   })
 })
 

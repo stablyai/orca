@@ -1,0 +1,22 @@
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { Repo } from '../../../../../shared/repo-types'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
+import { lookupReposBySlugFromCache } from '@/lib/workspace/catalog/repo-slug-cache'
+
+type RepoOwnerState = {
+  repos: readonly Repo[]
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+}
+
+/** Route known repo slugs to repo owner; untracked rows use rowSource, the host that loaded them. */
+export function runtimeTargetForProjectRowOwner(
+  state: RepoOwnerState,
+  owner: string,
+  repo: string,
+  host: string | undefined,
+  rowSource: RuntimeClientTarget
+): RuntimeClientTarget {
+  const matchedRepo = lookupReposBySlugFromCache(state.repos, `${owner}/${repo}`, host)[0]
+  return (matchedRepo ? runtimeTargetForRepoOwner(state, matchedRepo.id) : null) ?? rowSource
+}

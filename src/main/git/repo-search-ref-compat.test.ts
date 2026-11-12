@@ -4,12 +4,17 @@ const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
 }))
 
-vi.mock('./runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
+vi.mock('./command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('./command-runner/git-exec-file-sync', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileSync: vi.fn()
 }))
 
-import { clearGitCapabilityStateForTests } from './git-capability-state'
+import { clearGitCapabilityStateForTests } from './command-runner/host-routing/git-capability-state'
 import { searchBaseRefs } from './repo'
 
 describe('searchBaseRefs git compatibility', () => {

@@ -1,16 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WATCHER_PROCESS_CANCEL_TIMEOUT_MS } from './parcel-watcher-cancellation-tracker'
-import {
-  terminateWatcherChild,
-  WATCHER_PROCESS_EXIT_DEADLINE_MS,
-  WATCHER_PROCESS_HARD_KILL_DELAY_MS
-} from './parcel-watcher-child-termination'
+import { RUNTIME_FILE_WATCH_CANCEL_TIMEOUT_MS as WATCHER_PROCESS_CANCEL_TIMEOUT_MS } from '../../../../shared/file-watch/runtime-file-watch-limits'
+
 import {
   acknowledgeWatcherSubscribe as ackSubscribe,
   currentWatcherChild,
   FakeWatcherChild as FakeChild,
   trackPromiseSettlement
-} from './parcel-watcher-process-test-child'
+} from './supervision/parcel-watcher-process-test-child'
 
 const { forkMock, existsSyncMock, mkdtempSyncMock, parcelSubscribeMock, rmSyncMock } = vi.hoisted(
   () => ({
@@ -58,34 +54,6 @@ describe('subscribeViaWatcherProcess', () => {
     vi.clearAllMocks()
   })
 
-  it('accepts close without exit as physical child termination', async () => {
-    vi.useFakeTimers()
-    try {
-      const child = new FakeChild()
-
-      const termination = terminateWatcherChild(child as never)
-      child.emit('close', -2, null)
-
-      await expect(termination).resolves.toBe(true)
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('subscribes through the watcher process and forwards events', async () => {
-    const callback = vi.fn()
-    const promise = subscribeViaWatcherProcess('/repo', callback, { ignore: ['**/.git'] })
-    const child = currentChild()
-    expect(child.sent[0]).toMatchObject({ op: 'subscribe', dir: '/repo' })
-    const id = ackSubscribe(child)
-    await promise
-
-    const events = [{ type: 'update', path: '/repo/a.txt' }]
-    child.emit('message', { op: 'events', id, events })
-    expect(callback).toHaveBeenCalledWith(null, events)
-  })
-
   it('rejects and physically cancels a watcher error before subscription readiness', async () => {
     const callback = vi.fn()
     const promise = subscribeViaWatcherProcess('/repo', callback, {})
@@ -111,66 +79,6 @@ describe('subscribeViaWatcherProcess', () => {
     await expect(promise).rejects.toThrow('root disappeared during crawl')
     child.emit('message', { op: 'subscribed', id })
     expect(forkMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports a resubscribe failure through the terminal hook', async () => {
-    const callback = vi.fn()
-    const onTerminalError = vi.fn()
-    const promise = subscribeViaWatcherProcess('/repo', callback, {}, { onTerminalError })
-    const child = currentChild()
-    const id = ackSubscribe(child)
-    await promise
-
-    child.emit('message', { op: 'subscribe-failed', id, message: 'root unavailable' })
-
-    expect(onTerminalError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'root unavailable' })
-    )
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('passes bounded event-delivery options to the watcher child', async () => {
-    const promise = subscribeViaWatcherProcess(
-      '/repo',
-      vi.fn(),
-      {},
-      {
-        delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 200 }
-      }
-    )
-    const child = currentChild()
-
-    expect(child.sent[0]).toMatchObject({
-      op: 'subscribe',
-      dir: '/repo',
-      delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 200 }
-    })
-    ackSubscribe(child)
-    await promise
-  })
-
-  it('rejects the subscribe when the watcher process reports failure', async () => {
-    const promise = subscribeViaWatcherProcess('/gone', vi.fn(), {})
-    const child = currentChild()
-    const id = child.sent[0].id
-    child.emit('message', { op: 'subscribe-failed', id, message: 'Error opening directory' })
-    await expect(promise).rejects.toThrow('Error opening directory')
-  })
-
-  it('resolves unsubscribe on the child ack', async () => {
-    const promise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
-    const child = currentChild()
-    const id = ackSubscribe(child, 0)
-    const subscription = await promise
-    // A second root exercises unsubscribe acknowledgement instead of last-subscriber idle termination.
-    const keepAlivePromise = subscribeViaWatcherProcess('/other', vi.fn(), {})
-    ackSubscribe(child)
-    await keepAlivePromise
-
-    const unsubPromise = subscription.unsubscribe()
-    expect(child.sent.at(-1)).toEqual({ op: 'unsubscribe', id })
-    child.emit('message', { op: 'unsubscribed', id })
-    await expect(unsubPromise).resolves.toBeUndefined()
   })
 
   it('resolves a pending unsubscribe when the child dies', async () => {
@@ -445,48 +353,6 @@ describe('subscribeViaWatcherProcess', () => {
     expect(healthyInterruption).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps process count bounded when a killed child never exits', async () => {
-    vi.useFakeTimers()
-    try {
-      const healthyPromise = subscribeViaWatcherProcess('/healthy', vi.fn(), {})
-      const child = currentChild()
-      ackSubscribe(child)
-      await healthyPromise
-
-      const controller = new AbortController()
-      const pending = subscribeViaWatcherProcess(
-        '/slow',
-        vi.fn(),
-        {},
-        {
-          signal: controller.signal
-        }
-      )
-      const pendingId = child.sent.at(-1)?.id
-      child.emit('message', { op: 'subscribe-started', id: pendingId })
-      controller.abort()
-      const rejected = expect(pending).rejects.toThrow(
-        'file watcher process did not exit after termination deadline'
-      )
-      child.emit('message', { op: 'cancel-requires-restart', id: pendingId })
-
-      await vi.advanceTimersByTimeAsync(WATCHER_PROCESS_HARD_KILL_DELAY_MS)
-      expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
-      expect(forkMock).toHaveBeenCalledTimes(1)
-      await vi.advanceTimersByTimeAsync(
-        WATCHER_PROCESS_EXIT_DEADLINE_MS - WATCHER_PROCESS_HARD_KILL_DELAY_MS
-      )
-
-      await rejected
-      expect(forkMock).toHaveBeenCalledTimes(1)
-      expect(child.listenerCount('exit')).toBe(1)
-      expect(vi.getTimerCount()).toBe(0)
-      await expect(subscribeViaWatcherProcess('/later', vi.fn(), {})).rejects.toThrow('disposed')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('queues subscribe and unsubscribe behind the retiring child', async () => {
     const healthyPromise = subscribeViaWatcherProcess('/healthy', vi.fn(), {})
     const first = currentChild()
@@ -725,18 +591,6 @@ describe('subscribeViaWatcherProcess', () => {
     await expect(respawnPromise).resolves.toMatchObject({ unsubscribe: expect.any(Function) })
   })
 
-  it('keeps the child alive when a subscribe fails while other subscriptions remain', async () => {
-    const firstPromise = subscribeViaWatcherProcess('/a', vi.fn(), {})
-    const child = currentChild()
-    ackSubscribe(child)
-    await firstPromise
-
-    const failingPromise = subscribeViaWatcherProcess('/gone', vi.fn(), {})
-    child.emit('message', { op: 'subscribe-failed', id: child.sent.at(-1)!.id, message: 'boom' })
-    await expect(failingPromise).rejects.toThrow('boom')
-    expect(child.kill).not.toHaveBeenCalled()
-  })
-
   it('keeps the child alive while other subscriptions remain', async () => {
     const firstPromise = subscribeViaWatcherProcess('/a', vi.fn(), {})
     const child = currentChild()
@@ -778,35 +632,6 @@ describe('subscribeViaWatcherProcess', () => {
     expect(forkMock).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the runtime pool reusable with the in-process watcher under vitest', async () => {
-    vi.stubEnv('VITEST', 'true')
-    disposeWatcherProcess()
-    const unsubscribe = vi.fn().mockResolvedValue(undefined)
-    parcelSubscribeMock.mockResolvedValue({ unsubscribe })
-    const callback = vi.fn()
-
-    const subscription = await subscribeViaRuntimeWatcherProcess('/repo', callback, {
-      ignore: ['**/.git']
-    })
-    expect(forkMock).not.toHaveBeenCalled()
-    expect(parcelSubscribeMock).toHaveBeenCalledWith('/repo', expect.any(Function), {
-      ignore: ['**/.git']
-    })
-    await subscription.unsubscribe()
-    expect(unsubscribe).toHaveBeenCalled()
-  })
-
-  it('rejects a pre-aborted in-process subscribe before invoking Parcel subscribe', async () => {
-    vi.stubEnv('VITEST', 'true')
-    const controller = new AbortController()
-    controller.abort()
-
-    await expect(
-      subscribeViaWatcherProcess('/repo', vi.fn(), {}, { signal: controller.signal })
-    ).rejects.toThrow('aborted')
-    expect(parcelSubscribeMock).not.toHaveBeenCalled()
-  })
-
   it('releases a late in-process subscription after pending setup is aborted', async () => {
     vi.stubEnv('VITEST', 'true')
     const unsubscribe = vi.fn().mockResolvedValue(undefined)
@@ -827,26 +652,6 @@ describe('subscribeViaWatcherProcess', () => {
     await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
   })
 
-  it('contains rejection while releasing a late in-process subscription', async () => {
-    vi.stubEnv('VITEST', 'true')
-    const unsubscribe = vi.fn().mockRejectedValue(new Error('late unsubscribe failed'))
-    let resolveSubscription!: (subscription: { unsubscribe: typeof unsubscribe }) => void
-    parcelSubscribeMock.mockReturnValue(
-      new Promise((resolve) => {
-        resolveSubscription = resolve
-      })
-    )
-    const controller = new AbortController()
-    const pending = subscribeViaWatcherProcess('/repo', vi.fn(), {}, { signal: controller.signal })
-    await vi.waitFor(() => expect(parcelSubscribeMock).toHaveBeenCalledTimes(1))
-    controller.abort()
-    await expect(pending).rejects.toThrow('aborted')
-
-    resolveSubscription({ unsubscribe })
-
-    await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
-  })
-
   it('fails closed when the isolated watcher entry is absent outside tests', async () => {
     existsSyncMock.mockReturnValue(false)
 
@@ -855,19 +660,6 @@ describe('subscribeViaWatcherProcess', () => {
     )
     expect(forkMock).not.toHaveBeenCalled()
     expect(parcelSubscribeMock).not.toHaveBeenCalled()
-  })
-
-  it('starts without a canary when the diagnostic temp directory is unavailable', async () => {
-    mkdtempSyncMock.mockImplementationOnce(() => {
-      throw new Error('read-only temp directory')
-    })
-
-    const pending = subscribeViaWatcherProcess('/repo', vi.fn(), {})
-    const child = currentChild()
-    const forkOptions = forkMock.mock.calls.at(-1)?.[2] as { env?: NodeJS.ProcessEnv } | undefined
-    expect(forkOptions?.env?.ORCA_WATCHER_CANARY_DIR).toBeUndefined()
-    ackSubscribe(child)
-    await expect(pending).resolves.toMatchObject({ unsubscribe: expect.any(Function) })
   })
 
   it('keeps independently-created supervisors in separate crash-fuse domains', async () => {

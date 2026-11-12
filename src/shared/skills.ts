@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import type { AgentType } from './agent-status-types'
-import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
+import type { AgentType } from './agent-status/contracts/agent-status-types'
+import type { ProjectExecutionRuntimeResolution } from './execution-host/project-execution-runtime'
 
 export type SkillProvider = 'codex' | 'claude' | 'agent-skills'
 
@@ -9,6 +9,8 @@ export type SkillSourceKind = 'home' | 'repo' | 'bundled' | 'plugin'
 export type DiscoveredSkill = {
   id: string
   name: string
+  /** Hash-verified bundled identity for an installation under a former name. */
+  bundledName?: string
   description: string | null
   providers: SkillProvider[]
   sourceKind: SkillSourceKind

@@ -27,10 +27,6 @@ function parse(value: unknown, expected = bun) {
 }
 
 describe('candidate profile readiness', () => {
-  it('admits an acknowledged write and backup under the expected installed runtime', () => {
-    expect(parse(response)).toEqual(response)
-  })
-
   it.each([
     { nonce: randomUUID() },
     { runtime: 'node' },

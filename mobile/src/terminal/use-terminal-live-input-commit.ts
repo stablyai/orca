@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { reportedLiveInputComposing } from '../platform/live-input-composing-range'
 import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
@@ -40,9 +40,7 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
   readonly framesLivePaste?: (handle: string) => boolean
   readonly onSendFailure?: (failure: TerminalLiveInputFailure) => void
   readonly connected: boolean
-  readonly liveInputRef: RefObject<TextInput | null>
-  readonly liveInputTerminalHandles: ReadonlySet<string>
-  readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
+  readonly liveInputRef: RefObject<TextInputInstance | null>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void
 }
@@ -55,6 +53,7 @@ type TerminalLiveInputCommitHandlers = {
     input: TerminalLiveAccessoryInput
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
   readonly handleLiveInputChange: (event: TerminalLiveInputChangeEvent) => void
+  readonly handleLiveInputCompositionEnd: (text: string) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
   readonly handleLiveInputSubmit: () => Promise<boolean>
   readonly sendLiveInputClick: (handle: string, bytes: string) => Promise<boolean>
@@ -69,8 +68,6 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   onSendFailure,
   connected,
   liveInputRef,
-  liveInputTerminalHandles,
-  liveInputTerminalHandlesRef,
   sendLiveTerminalInputRef,
   setLiveInputCapture
 }: TerminalLiveInputCommitOptions<TTabType>): TerminalLiveInputCommitHandlers {
@@ -115,7 +112,6 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     activeSessionTabTypeRef,
     framesLivePaste,
     liveInputRef,
-    liveInputTerminalHandlesRef,
     onFieldSessionEnded: recordEndedSession,
     onSendFailure,
     sendLiveTerminalInputRef,
@@ -138,12 +134,11 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     if (
       !activeHandle ||
       pendingHandle !== activeHandle ||
-      (activeSessionTabType != null && activeSessionTabType !== 'terminal') ||
-      !liveInputTerminalHandles.has(activeHandle)
+      (activeSessionTabType != null && activeSessionTabType !== 'terminal')
     ) {
       clearPendingLiveInputCommit()
     }
-  }, [activeHandle, activeSessionTabType, clearPendingLiveInputCommit, liveInputTerminalHandles])
+  }, [activeHandle, activeSessionTabType, clearPendingLiveInputCommit])
 
   const flushPendingLiveInputBeforeExternalSend = useCallback(
     async (handle: string): Promise<boolean> => {
@@ -209,7 +204,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
 
   const handleLiveInputChange = useCallback(
     ({ nativeEvent }: TerminalLiveInputChangeEvent) => {
-      if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
+      if (!activeHandle) {
         clearPendingLiveInputCommit()
         return
       }
@@ -234,9 +229,14 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       applyLiveInputMirror,
       clearPendingLiveInputCommit,
       dropEndedSessionEcho,
-      liveInputTerminalHandles,
       updateLiveInputCapture
     ]
+  )
+
+  // A commit with no trailing input event would otherwise stay held until the next key.
+  const handleLiveInputCompositionEnd = useCallback(
+    (text: string) => handleLiveInputChange({ nativeEvent: { text, isComposing: false } }),
+    [handleLiveInputChange]
   )
 
   const getLiveInputInteractionGeneration = useCallback(
@@ -246,7 +246,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
 
   const handleLiveInputKeyPress = useCallback(
     (event: TerminalLiveInputKeyPressEvent) => {
-      if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
+      if (!activeHandle) {
         return
       }
       advanceLiveInputInteractionGeneration()
@@ -285,7 +285,6 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       clearPendingLiveInputCommit,
       endFieldSessionThenSend,
       liveInputRef,
-      liveInputTerminalHandles,
       queueLiveInputControl
     ]
   )
@@ -299,21 +298,19 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     liveInputComposingRef,
     liveInputRef,
     liveInputTextRef,
-    liveInputTerminalHandles,
     onInteraction: advanceLiveInputInteractionGeneration,
     pendingLiveInputHandleRef,
     queueLiveInputControl,
     sentLiveInputTextRef,
-    setLiveInputCapture: updateLiveInputCapture,
-    waitForPendingLiveInputFlush
+    setLiveInputCapture: updateLiveInputCapture
   })
 
   const handleLiveInputSubmit = useCallback((): Promise<boolean> => {
-    if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
+    if (!activeHandle) {
       return Promise.resolve(false)
     }
     return endFieldSessionThenSend(activeHandle, '\r')
-  }, [activeHandle, endFieldSessionThenSend, liveInputTerminalHandles])
+  }, [activeHandle, endFieldSessionThenSend])
 
   return {
     clearPendingLiveInputCommit,
@@ -321,6 +318,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     getLiveInputInteractionGeneration,
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
+    handleLiveInputCompositionEnd,
     handleLiveInputKeyPress,
     handleLiveInputSubmit,
     sendLiveInputClick

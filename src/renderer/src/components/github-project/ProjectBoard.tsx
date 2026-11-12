@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import ProjectBoardCard from './ProjectBoardCard'
 import { ProjectItemsEmptyState } from './ProjectViewStates'
 import { chipStyle, singleSelectChipColors } from './project-cell-chip-colors'
@@ -37,6 +37,7 @@ export default function ProjectBoard({
   onEditField,
   fallback
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const field = useMemo(() => resolveBoardColumnField(table.selectedView), [table.selectedView])
   const columns = useMemo(
     () => (field ? buildBoardColumns(field, sortRows(table, table.rows)) : []),
@@ -111,7 +112,7 @@ export default function ProjectBoard({
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex-none border-b border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'projectBoard.noColumnField',
             'This board view has no single-select or iteration field to group by, so Orca is listing items instead.'
           )}
@@ -137,7 +138,7 @@ export default function ProjectBoard({
             column.key === EMPTY_PROJECT_GROUP_KEY
               ? {
                   ...column,
-                  label: translate('projectBoard.noField', 'No {{field}}', { field: field.name })
+                  label: t('projectBoard.noField', 'No {{field}}', { field: field.name })
                 }
               : column
           }

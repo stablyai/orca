@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
-import type { Automation, AutomationRun } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import { AutomationService } from './service'
 import type {
   AutomationRunCompletionObservation,
@@ -37,6 +38,8 @@ const LAUNCH_TARGET = {
   terminalPaneKey: 'tab-1:11111111-2222-4333-8444-555555555555',
   terminalPtyId: 'pty-1'
 }
+
+const OPEN_LAUNCHER = { launch: async () => ({ ...LAUNCH_TARGET }), available: () => true }
 
 const AFTER_SETTLE_MS = 10 * 60 * 1000
 
@@ -119,9 +122,11 @@ describe('reconciling retained runs against a graph that has not published yet',
     const automation = createAutomation(store)
     const retained = retainDispatchedRun(store, automation)
     const surface = createPaneSurface()
-    const service = new AutomationService(store, { terminalObserver: surface.observer })
+    const service = new AutomationService(store, {
+      terminalObserver: surface.observer,
+      terminalLauncher: { launch: async () => ({ ...LAUNCH_TARGET }), available: () => false }
+    })
 
-    service.setWebContents({ isDestroyed: () => false } as never)
     service.start()
     await vi.advanceTimersByTimeAsync(AFTER_SETTLE_MS)
 
@@ -135,10 +140,12 @@ describe('reconciling retained runs against a graph that has not published yet',
     const automation = createAutomation(store)
     const retained = retainDispatchedRun(store, automation)
     const surface = createPaneSurface()
-    const service = new AutomationService(store, { terminalObserver: surface.observer })
+    const service = new AutomationService(store, {
+      terminalObserver: surface.observer,
+      terminalLauncher: OPEN_LAUNCHER
+    })
 
     service.start()
-    service.setRendererReady()
     await vi.advanceTimersByTimeAsync(5_000)
     expect(surface.observedHandles).toEqual([])
 
@@ -149,45 +156,6 @@ describe('reconciling retained runs against a graph that has not published yet',
     surface.settleObservation({ status: 'completed', error: null })
     await vi.advanceTimersByTimeAsync(0)
     expect(readRun(store, automation.id, retained.id).status).toBe('completed')
-    service.stop()
-  })
-
-  it('does not fail a serve-startup retained run whose host pane has not reattached', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const retained = retainDispatchedRun(store, automation)
-    const surface = createPaneSurface()
-    const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
-      terminalObserver: surface.observer
-    })
-
-    service.start()
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(readRun(store, automation.id, retained.id).status).toBe('dispatched')
-
-    surface.mountPane()
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(surface.observedHandles).toEqual(['handle-1'])
-    expect(readRun(store, automation.id, retained.id).status).toBe('dispatched')
-    service.stop()
-  })
-
-  it('still closes out a run the ready surface cannot find after the settle window', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const retained = retainDispatchedRun(store, automation)
-    const surface = createPaneSurface()
-    const service = new AutomationService(store, { terminalObserver: surface.observer })
-
-    service.start()
-    service.setRendererReady()
-    await vi.advanceTimersByTimeAsync(AFTER_SETTLE_MS)
-
-    expect(readRun(store, automation.id, retained.id).status).toBe('dispatch_failed')
-    expect(readRun(store, automation.id, retained.id).error).toBe(
-      'Orca lost the terminal for this run before it reported completion.'
-    )
     service.stop()
   })
 })

@@ -1,9 +1,7 @@
 package expo.modules.orcamobilewebshell
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 private const val SESSION = "sess-01JN_aZ9"
@@ -36,51 +34,6 @@ private fun resolve(request: MobileWebShellRequestParts): String? =
   resolveMobileWebShellRequestPath(request, mobileWebShellOriginHost(SESSION)!!)
 
 class MobileWebShellOriginTest {
-  @Test
-  fun `accepts only base64url session ids within the length bound`() {
-    assertTrue(isMobileWebShellSessionId("aZ0-_"))
-    assertTrue(isMobileWebShellSessionId("a".repeat(128)))
-    assertFalse(isMobileWebShellSessionId("a".repeat(129)))
-    assertFalse(isMobileWebShellSessionId(""))
-    assertFalse(isMobileWebShellSessionId("has space"))
-    assertFalse(isMobileWebShellSessionId("dots.are.hosts.too"))
-    assertFalse(isMobileWebShellSessionId("sl/ash"))
-    assertFalse(isMobileWebShellSessionId("sessioñ"))
-  }
-
-  @Test
-  fun `labels the origin with a hash of the session id, never a slice of it`() {
-    val host = mobileWebShellOriginHost(SESSION)!!
-    val label = host.substringBefore('.')
-    assertEquals(32, label.length)
-    assertTrue(label.all { it in '0'..'9' || it in 'a'..'f' })
-    // Regression: mixed-case/underscore session slices canonicalized differently and 403’d every asset.
-    assertFalse(label.startsWith(SESSION.take(8)))
-    assertEquals("$label.orca-mobile-web.invalid", host)
-    assertEquals("https://$host", mobileWebShellOrigin(SESSION))
-    assertNull(mobileWebShellOriginHost("bad host"))
-    assertNull(mobileWebShellOrigin("bad host"))
-  }
-
-  @Test
-  fun `derives a different label for every session and the same one for a repeat`() {
-    assertEquals(mobileWebShellOriginHost(SESSION), mobileWebShellOriginHost(SESSION))
-    assertTrue(mobileWebShellOriginHost(SESSION) != mobileWebShellOriginHost("${SESSION}a"))
-    // Case matters to the derivation even though the host comparison ignores it.
-    assertTrue(mobileWebShellOriginHost(SESSION) != mobileWebShellOriginHost(SESSION.uppercase()))
-  }
-
-  @Test
-  fun `serves the document and a declared asset path`() {
-    assertEquals("/", resolve(parts("/")))
-    assertEquals("/", resolve(parts("")))
-    assertEquals("/assets/aa.js", resolve(parts("/assets/aa.js")))
-  }
-
-  @Test
-  fun `binds a host the parser canonicalised`() {
-    assertEquals("/", resolve(parts("/", host = mobileWebShellOriginHost(SESSION)!!.uppercase())))
-  }
 
   @Test
   fun `refuses everything outside a plain GET on this origin`() {

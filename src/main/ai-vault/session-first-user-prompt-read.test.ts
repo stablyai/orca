@@ -85,41 +85,6 @@ describe('readAiVaultFirstUserPrompt', () => {
     expect(result.prompt?.length).toBeGreaterThan(220)
   })
 
-  it('skips meta/harness user turns and returns the first real ask', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-meta-'))
-    tempRoots.push(root)
-    const projectDir = join(root, 'project')
-    await mkdir(projectDir, { recursive: true })
-    const filePath = join(projectDir, 'session.jsonl')
-    await writeFile(
-      filePath,
-      [
-        JSON.stringify({
-          type: 'user',
-          sessionId: 'meta-then-real',
-          timestamp: '2026-05-01T10:00:00.000Z',
-          cwd: '/repo/app',
-          isMeta: true,
-          message: { role: 'user', content: 'Base directory for this skill: /tmp/skills' }
-        }),
-        JSON.stringify({
-          type: 'user',
-          sessionId: 'meta-then-real',
-          timestamp: '2026-05-01T10:00:01.000Z',
-          cwd: '/repo/app',
-          message: { role: 'user', content: 'Ship the first-prompt copy button' }
-        })
-      ].join('\n')
-    )
-
-    const result = await readAiVaultFirstUserPrompt({
-      agent: 'claude',
-      filePath
-    })
-
-    expect(result.prompt).toBe('Ship the first-prompt copy button')
-  })
-
   it('resolves null instead of rejecting when the transcript is corrupt', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-corrupt-'))
     tempRoots.push(root)

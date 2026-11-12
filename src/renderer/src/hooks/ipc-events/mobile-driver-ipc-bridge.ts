@@ -1,24 +1,21 @@
 import {
   hydrateBrowserDrivers,
   setDriverForBrowserPage
-} from '@/lib/pane-manager/browser-mobile-driver-state'
-import {
-  hydrateBrowserRemoteViewerPages,
-  setRemoteViewersForBrowserPage
-} from '@/lib/pane-manager/browser-remote-viewer-state'
+} from '@/runtime/browser/ownership/browser-mobile-driver-state'
+import { registerBrowserRemoteViewerIpcBridge } from './browser-remote-viewer-ipc-bridge'
 import {
   applyClientHostedBrowserRows,
   hydrateClientHostedBrowserRows
-} from '@/lib/pane-manager/client-hosted-browser-row-state'
+} from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import type { ClientHostedBrowserRowsEvent } from '../../../../shared/client-hosted-browser-rows'
 import { setDriverForPty, hydrateDrivers } from '@/lib/pane-manager/mobile-driver-state'
-import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-overrides'
-import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
-import type {
-  RuntimeBrowserDriverState,
-  RuntimeTerminalDriverState
-} from '../../../../shared/runtime-types'
-import { useAppStore } from '../../store'
+import {
+  setFitOverride,
+  hydrateOverrides
+} from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
+import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import { useAppStore } from '../../store/index'
 
 const MAX_PENDING_MOBILE_STATE_EVENTS = 300
 
@@ -35,11 +32,7 @@ type PendingMobileStateEvent =
   | { kind: 'driver'; event: { ptyId: string; driver: RuntimeTerminalDriverState } }
   | {
       kind: 'browser-driver'
-      event: { browserPageId: string; driver: RuntimeBrowserDriverState }
-    }
-  | {
-      kind: 'browser-remote-viewers'
-      event: { browserPageId: string; hasRemoteViewers: boolean }
+      event: { browserPageId: string; driver: RuntimeTerminalDriverState }
     }
 
 export function registerMobileDriverIpcBridge(
@@ -59,8 +52,6 @@ export function registerMobileDriverIpcBridge(
         setDriverForPty(pending.event.ptyId, pending.event.driver)
       } else if (pending.kind === 'browser-driver') {
         setDriverForBrowserPage(pending.event.browserPageId, pending.event.driver)
-      } else {
-        setRemoteViewersForBrowserPage(pending.event.browserPageId, pending.event.hasRemoteViewers)
       }
     }
     pendingMobileStateEvents.length = 0
@@ -120,21 +111,7 @@ export function registerMobileDriverIpcBridge(
     })
   )
 
-  const unsubscribeBrowserRemoteViewers = window.api.runtime.onBrowserRemoteViewersChanged?.(
-    (event) => {
-      if (isRuntimeEnvironmentActive()) {
-        return
-      }
-      if (!mobileStateHydrated) {
-        enqueue({ kind: 'browser-remote-viewers', event })
-        return
-      }
-      setRemoteViewersForBrowserPage(event.browserPageId, event.hasRemoteViewers)
-    }
-  )
-  if (unsubscribeBrowserRemoteViewers) {
-    unsubs.push(unsubscribeBrowserRemoteViewers)
-  }
+  unsubs.push(registerBrowserRemoteViewerIpcBridge())
 
   // These pages are paired-client renders of this runtime’s own workspaces; remote focus must not drop them or their unguarded hydration.
   let clientHostedRowsHydrated = false
@@ -181,17 +158,15 @@ export function registerMobileDriverIpcBridge(
     void Promise.all([
       window.api.runtime.getTerminalFitOverrides(),
       window.api.runtime.getTerminalDrivers(),
-      window.api.runtime.getBrowserDrivers(),
-      window.api.runtime.getBrowserRemoteViewerPages?.() ?? []
+      window.api.runtime.getBrowserDrivers()
     ])
-      .then(([overrides, drivers, browserDrivers, remoteViewerPages]) => {
+      .then(([overrides, drivers, browserDrivers]) => {
         if (disposed) {
           return
         }
         hydrateOverrides(overrides)
         hydrateDrivers(drivers)
         hydrateBrowserDrivers(browserDrivers)
-        hydrateBrowserRemoteViewerPages(remoteViewerPages)
         mobileStateHydrated = true
         applyPendingMobileStateEvents()
       })

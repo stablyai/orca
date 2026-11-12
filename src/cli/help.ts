@@ -188,7 +188,13 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--agent <id>           Account provider: claude, codex, opencode, or devin (default claude)'
   }
   if (command.startsWith('account ') && flag === 'agent') {
-    return '--agent <id>           Account provider: opencode or devin'
+    return '--agent <id>           Account provider: claude, codex, opencode, devin, or antigravity'
+  }
+  if (command === 'chat rename' && flag === 'session') {
+    return '--session <id>        Chat session id (defaults to the chat this runs in)'
+  }
+  if (command === 'chat rename' && flag === 'name') {
+    return '--name <text>         New name for the chat'
   }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'

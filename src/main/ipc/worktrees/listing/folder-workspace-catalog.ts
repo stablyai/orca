@@ -3,8 +3,8 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree, DetectedWorktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Store } from '../../../persistence/loading-store/store'
-import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-meta-write-normalization'
-import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
+import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   hostWorktreeTargetForRepo,
@@ -20,7 +20,7 @@ import {
   toDetectedWorktree,
   applyMetadataFallbackVisibility
 } from '../../../../shared/worktree/ownership'
-import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
+import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import { getProjectHostSetupMetaUpdates } from './worktree-discovery-metadata'
 import {
   getFolderWorkspaceInstanceIdentity,

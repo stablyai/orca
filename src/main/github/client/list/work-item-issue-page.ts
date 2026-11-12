@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { ParsedTaskQuery } from '../../../../shared/task-query'
+import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { ghExecFileAsync, type LocalGitExecOptions, type OwnerRepo } from '../../gh-utils'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import type { GitHubRepoExecOptions } from '../../github-api-repository'

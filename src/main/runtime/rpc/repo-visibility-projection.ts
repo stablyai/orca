@@ -2,7 +2,7 @@ import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../shared/external-worktree-visibility'
-import { WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
 import type { Repo } from '../../../shared/repo-types'
 import type { RpcContext } from './core'
 

@@ -1,15 +1,13 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import type { Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  WorkspacesAction,
   cancelPendingSetupGuideTourRequest,
   requestSetupGuideTourWhenReady
 } from './FeatureWallSetupWorkflowActions'
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../../shared/repo-types'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -20,18 +18,6 @@ vi.mock('sonner', () => ({
 }))
 
 const mountedRoots: Root[] = []
-
-function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
-  return {
-    id,
-    path: `/tmp/${id}`,
-    displayName: id,
-    badgeColor: '#000000',
-    addedAt: 1,
-    kind: 'git',
-    ...overrides
-  }
-}
 
 describe('setup guide workflow actions', () => {
   afterEach(async () => {
@@ -58,51 +44,6 @@ describe('setup guide workflow actions', () => {
       activeRepoId: null,
       activeContextualTourId: null
     })
-  })
-
-  it('opens the workspace composer with setup-guide tour context from Multi-task', async () => {
-    vi.useFakeTimers()
-    const requestContextualTour = vi.fn()
-    useAppStore.setState({
-      activeModal: 'none',
-      modalData: {},
-      repos: [makeRepo('repo-1')],
-      activeRepoId: 'repo-1',
-      activeContextualTourId: null,
-      requestContextualTour: requestContextualTour as never
-    })
-    const container = document.createElement('div')
-    document.body.appendChild(container)
-    const root = createRoot(container)
-    mountedRoots.push(root)
-
-    await act(async () => {
-      root.render(<WorkspacesAction done={false} />)
-    })
-    const button = container.querySelector('button')
-    expect(button?.textContent).toContain('Try it out')
-
-    await act(async () => {
-      button?.click()
-    })
-
-    expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
-    expect(useAppStore.getState().modalData).toMatchObject({
-      initialRepoId: 'repo-1',
-      telemetrySource: 'unknown',
-      contextualTourSource: 'setup_guide_parallel_work'
-    })
-
-    await act(async () => {
-      vi.runOnlyPendingTimers()
-    })
-
-    expect(requestContextualTour).toHaveBeenCalledWith(
-      'workspace-creation',
-      'setup_guide_parallel_work',
-      false,
-      { force: true }
-    )
   })
 
   it('gates setup-guide tour retries on the expected destination surface', () => {

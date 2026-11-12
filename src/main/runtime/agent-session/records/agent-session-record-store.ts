@@ -1,5 +1,7 @@
+import { agentSessionRecordPredecessorIds } from './agent-session-record-lineage'
+import { clearSuccessor } from './agent-session-sender-identity-revision'
 import * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import { createAgentSessionOwnerProof } from '../../agent-session-owner-proof'
+import { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from '../agent-session-conversation-receipts'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
@@ -66,8 +68,9 @@ import {
   type AgentSessionStoreState
 } from './agent-session-store-state'
 import { AgentSessionRecordTabs } from '../agent-session-tab-table'
-import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
-import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/journal-row-writer'
+import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
+import { readStoredWorkspaceAttention } from '../../../native-chat/agent-session-journal/replay/journal-stored-cursor'
+import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from '../agent-session-operation-receipt'
 import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
@@ -90,7 +93,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   private constructor(
     transactions: AgentSessionStoreTransactions,
-    readonly hostId: string
+    readonly hostId: string,
+    private readonly journalDatabase: JournalHostDatabase
   ) {
     super(transactions)
     this.founding = createAgentSessionFoundingStore(transactions, this.firstRecordListeners)
@@ -110,7 +114,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       args.hostId,
       args.legacySessionTabIds
     )
-    return new AgentSessionRecordStore(transactions, args.hostId)
+    return new AgentSessionRecordStore(transactions, args.hostId, args.journalDatabase)
   }
 
   private get state(): AgentSessionStoreState {
@@ -130,6 +134,15 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
+  workspaceAttentionReads = (location: AgentSessionExecutionLocation) =>
+    readStoredWorkspaceAttention(this.journalDatabase, this.listConversations(), location)
+  senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
+  /** Sessions a committed /clear continued into this one, read through the clear-successor index;
+   *  each candidate is checked on its conversation, so unreadable leases still count. */
+  listClearedFrom = (sessionId: string): string[] =>
+    agentSessionRecordPredecessorIds(this.journalDatabase.db, sessionId).filter(
+      (id) => clearSuccessor(this.getConversation(id)) === sessionId
+    )
   lineageRevision = (): object => this.transactions.lineageRevision()
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
@@ -162,8 +175,20 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   setUserConversationName = (sessionId: string, name: string, write: AgentSessionUserNameWrite) =>
     setAgentSessionRecordUserNameThrough((apply) => this.mutate(sessionId, apply), name, write)
 
-  compareAndSetConversationName: CompareAndSetConversationName = (id, name, expected, context) =>
-    compareAndSetAgentSessionRecordName((apply) => this.mutate(id, apply), name, expected, context)
+  compareAndSetConversationName: CompareAndSetConversationName = (
+    id,
+    name,
+    expected,
+    context,
+    applicable
+  ) =>
+    compareAndSetAgentSessionRecordName(
+      (apply) => this.mutate(id, apply),
+      name,
+      expected,
+      context,
+      applicable
+    )
 
   /** Launch history is metadata and does not contend with the writer lease. */
   pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>

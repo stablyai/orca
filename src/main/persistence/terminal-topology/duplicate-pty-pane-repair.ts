@@ -1,13 +1,13 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   normalizeTerminalLayoutPtyOwnership,
   resolveTerminalLayoutPtyOwnershipTransfers
-} from '../../../shared/terminal-layout-pty-ownership'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-layout/terminal-layout-pty-ownership'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
-import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
+import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { findWorktreeIdForTab } from '../restoring-sessions/pane-identity-migration'
 import { writeRestorable } from './restorable-write'
 import {

@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   leafIdsOf,
   locatePane
@@ -29,9 +29,12 @@ import {
   followRemoteSessionAfterPaneClose,
   followRemoteSessionAfterPaneDetach
 } from './pane-remote-session-follow'
-import { pruneClosedTerminalTabTombstones } from '../../../shared/closed-terminal-tab-tombstones'
+import { pruneClosedTerminalTabTombstones } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { editorViewsOfModel, type PartitionEditorViews } from '../loading-store/layout-editor-views'
+import {
+  editorViewsOfModel,
+  type PartitionEditorViews
+} from '../loading-store/workspace-sessions/layout-editor-views'
 
 export type TerminalPaneAdmission =
   | (CommandOf<'createTerminalTab'> & { tabId: string; leafId: string })
@@ -50,7 +53,10 @@ export type PaneLayoutChange<T> = {
 }
 
 /** Runtime facts unavailable from stored layout. */
-export type LayoutLiveContext = Pick<LayoutContext, 'isBindingLive' | 'retiresBinding'>
+export type LayoutLiveContext = Pick<
+  LayoutContext,
+  'isBindingLive' | 'retiresBinding' | 'visibility'
+>
 
 export function admitPaneToSession(
   hostId: ExecutionHostId,

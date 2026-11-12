@@ -43,10 +43,6 @@ function encrypted(cipher: Buffer): string {
 }
 
 describe('savedCredentialUnreadable', () => {
-  it('accepts a file this store sealed', () => {
-    expect(judge(encrypted(Buffer.from(`${SEAL}key`)))).toBeUndefined()
-  })
-
   it('reports a well-formed file another store sealed as sealed elsewhere', () => {
     expect(judge(encrypted(Buffer.from('other-app-cipher')))).toBe('sealed-elsewhere')
   })

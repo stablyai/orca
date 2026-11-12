@@ -8,6 +8,8 @@ import {
 } from '../../../../../shared/rpc-contract/terminal-viewport-schemas-params'
 import { updateViewportForClient } from './terminal-viewport-update'
 import { TerminalGetAutoRestoreFitParams } from '../../../../../shared/rpc-contract/terminal-viewport-methods-params'
+import { TerminalAckOutput } from '../../../../../shared/rpc-contract/terminal-stream-params'
+import { acknowledgeTerminalStreamOutput } from './terminal-stream-tokens'
 
 export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
   defineMethod({
@@ -126,6 +128,15 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
     params: TerminalSetAutoRestoreFit,
     handler: async (params, { runtime }) => ({
       ms: runtime.setMobileAutoRestoreFitMs(params.ms)
+    })
+  }),
+  defineMethod({
+    name: 'terminal.ackOutput',
+    permission: 'workspace',
+    params: TerminalAckOutput,
+    // Late acks for an ended stream are normal; report them instead of failing the request.
+    handler: async (params, { pairedDeviceId }) => ({
+      credited: acknowledgeTerminalStreamOutput(params.streamToken, pairedDeviceId, params.units)
     })
   })
 ]

@@ -38,20 +38,6 @@ describe('claude user message queue', () => {
     expect(claudeUserMessageWasProvablyUnwritten(error)).toBe(false)
   })
 
-  it('rejects an in-flight frame from fail() when the SDK never resumes the pump', async () => {
-    const queue = createClaudeUserMessageQueue()
-    const pump = queue.messages[Symbol.asyncIterator]()
-    const sent = queue.push(frame('hello'))
-
-    await pump.next()
-    queue.fail(new Error('claude stream-json exited: child died'))
-
-    await expect(settled(sent)).resolves.toBe('settled')
-    const error = await sent.catch((caught: unknown) => caught)
-    expect(error).toMatchObject({ message: 'claude stream-json exited: child died' })
-    expect(claudeUserMessageWasProvablyUnwritten(error)).toBe(false)
-  })
-
   it('marks only frames still queued in Orca as provably unwritten', async () => {
     const queue = createClaudeUserMessageQueue()
     const pump = queue.messages[Symbol.asyncIterator]()

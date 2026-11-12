@@ -1,0 +1,123 @@
+import { describe, expect, it } from 'vitest'
+import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import { getPinnedSectionWorktrees } from '../../../../../../shared/sidebar-list/pinned-section-worktrees'
+import { worktree, repoMap } from './worktree-list-groups-test-fixtures'
+import { buildRows } from './build-rows.test-fixture'
+
+function makeWorktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
+  return {
+    ...worktree,
+    id,
+    instanceId: `${id}-instance`,
+    displayName: id,
+    ...overrides
+  }
+}
+
+function makeLineage(child: Worktree, parent: Worktree): WorktreeLineage {
+  return {
+    worktreeId: child.id,
+    worktreeInstanceId: child.instanceId!,
+    parentWorktreeId: parent.id,
+    parentWorktreeInstanceId: parent.instanceId!,
+    origin: 'cli',
+    capture: { source: 'terminal-context', confidence: 'inferred' },
+    createdAt: 1
+  }
+}
+
+describe('getPinnedSectionWorktrees', () => {
+  const parent = makeWorktree('parent')
+  const child = makeWorktree('child')
+  const grandchild = makeWorktree('grandchild')
+  const sibling = makeWorktree('sibling')
+  const lineageById = {
+    [child.id]: makeLineage(child, parent),
+    [grandchild.id]: makeLineage(grandchild, child)
+  }
+  const worktreeMap = new Map([
+    [parent.id, parent],
+    [child.id, child],
+    [grandchild.id, grandchild],
+    [sibling.id, sibling]
+  ])
+
+  it('does not include an unpinned row with the same id on another host', () => {
+    const pinnedLocal = makeWorktree('shared', { hostId: 'local', isPinned: true })
+    const unpinnedSsh = makeWorktree('shared', {
+      hostId: 'ssh:box',
+      instanceId: 'shared-ssh-instance'
+    })
+
+    expect(
+      getPinnedSectionWorktrees(
+        [pinnedLocal, unpinnedSsh],
+        {},
+        new Map([[pinnedLocal.id, pinnedLocal]])
+      ).map((candidate) => candidate.hostId)
+    ).toEqual(['local'])
+  })
+
+  it('does not collect descendants of a pinned parent that is not itself visible', () => {
+    const pinnedParent = { ...parent, isPinned: true }
+    const map = new Map(worktreeMap)
+    map.set(pinnedParent.id, pinnedParent)
+
+    expect(
+      getPinnedSectionWorktrees([child, sibling], lineageById, map).map((worktree) => worktree.id)
+    ).toEqual([])
+  })
+
+  it('handles a deep pinned lineage without overflowing the renderer stack', () => {
+    const depth = 6_000
+    const worktrees: Worktree[] = []
+    const lineageById: Record<string, WorktreeLineage> = {}
+    for (let index = 0; index < depth; index++) {
+      const current = makeWorktree(`deep-${index}`, { isPinned: index === 0 })
+      worktrees.push(current)
+      const parent = worktrees[index - 1]
+      if (parent) {
+        lineageById[current.id] = makeLineage(current, parent)
+      }
+    }
+
+    expect(
+      getPinnedSectionWorktrees(
+        worktrees,
+        lineageById,
+        new Map(worktrees.map((worktree) => [worktree.id, worktree]))
+      )
+    ).toHaveLength(depth)
+  })
+
+  it('builds rows for a deep expanded pinned lineage without overflowing the renderer stack', () => {
+    const depth = 6_000
+    const worktrees: Worktree[] = []
+    const lineageById: Record<string, WorktreeLineage> = {}
+    for (let index = 0; index < depth; index++) {
+      const current = makeWorktree(`rendered-deep-${index}`, { isPinned: true })
+      worktrees.push(current)
+      const parent = worktrees[index - 1]
+      if (parent) {
+        lineageById[current.id] = makeLineage(current, parent)
+      }
+    }
+
+    const rows = buildRows(
+      'none',
+      worktrees,
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      lineageById,
+      new Map(worktrees.map((worktree) => [worktree.id, worktree])),
+      true
+    )
+
+    expect(rows.filter((row) => row.type === 'item')).toHaveLength(depth)
+  })
+})

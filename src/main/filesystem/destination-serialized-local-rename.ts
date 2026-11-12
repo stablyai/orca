@@ -1,7 +1,7 @@
 import { realpath, rename } from 'node:fs/promises'
 import { dirname, normalize } from 'node:path'
-import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
-import { windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
+import { assertNoClobberRenameDestinationAvailable } from '../../shared/file-write/filesystem-rename-collision'
+import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 
 // Parent-scoped serialization covers Unicode aliases without guessing filesystem collation.
 const pendingRenamesByParent = new Map<string, Promise<void>>()

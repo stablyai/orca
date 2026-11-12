@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react'
 import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { agentStateLabel } from '@/components/AgentStateDot'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -11,9 +11,10 @@ import {
   type DashboardRevealAgentArgs
 } from '../../../../shared/dashboard-snapshot'
 import { AgentTerminalPreview } from './AgentTerminalPreview'
+import { AgentCardLastMessages, hasAgentCardLastMessages } from './AgentCardLastMessages'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 
 /** Routing payload for focusing an agent's pane in the main window. */
 export type AgentRevealArgs = DashboardRevealAgentArgs
@@ -41,6 +42,7 @@ function AgentTerminalFrame({
   onReveal,
   onBrowserForeground
 }: AgentTerminalFrameProps): React.JSX.Element {
+  const t = useTranslate()
   const reveal = (): void => {
     onReveal({
       repoId: card.repoId,
@@ -71,7 +73,7 @@ function AgentTerminalFrame({
           onClick={() => onOpenChange(false)}
         >
           <XIcon className="size-4" />
-          <span className="sr-only">{translate('dashboardPopout.terminal.close', 'Close')}</span>
+          <span className="sr-only">{t('dashboardPopout.terminal.close', 'Close')}</span>
         </Button>
       </div>
       {card.ptyId ? (
@@ -100,14 +102,19 @@ function AgentTerminalFrame({
           onRequestClose={() => onOpenChange(false)}
         />
       ) : (
-        <div className="min-h-0 flex-1 px-2.5 pb-2 text-[11px] text-muted-foreground">
-          {terminalPreviewUnavailableMessage({ hostKind: card.hostKind })}
+        <div className="scrollbar-sleek max-h-[calc(100vh-140px)] min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
+          <div className="text-[11px] text-muted-foreground">
+            {terminalPreviewUnavailableMessage({ hostKind: card.hostKind }, t)}
+          </div>
+          {hasAgentCardLastMessages(card) ? (
+            <AgentCardLastMessages card={card} clamp={false} className="mt-2 gap-1.5" />
+          ) : null}
         </div>
       )}
       <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5">
         <Button type="button" variant="outline" size="xs" className="ml-auto" onClick={reveal}>
           <SquareArrowOutUpRight className="size-3" />
-          {translate('dashboardPopout.terminal.focusWorktree', 'Open worktree')}
+          {t('dashboardPopout.terminal.focusWorktree', 'Open worktree')}
         </Button>
       </div>
     </>

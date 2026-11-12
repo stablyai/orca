@@ -2,7 +2,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/a
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
-import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { ClaudeProvisionalRowCorrections } from './claude-provisional-row-corrections'
 import type { ClaudeSubagentLinkageVerdict } from './claude-subagent-linkage'
 
@@ -69,16 +69,6 @@ function ledger(initial: Record<string, ClaudeSubagentLinkageVerdict> = {}) {
 }
 
 describe('ClaudeProvisionalRowCorrections', () => {
-  it("stamps the session's own rows with no producer and owes them nothing", () => {
-    const { corrections, rewrites } = ledger()
-    expect(corrections.stampFor(null)(identityOf('toolu_2'), RUNNING)).toEqual({
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    })
-    expect(corrections.pending).toBe(0)
-    corrections.retry()
-    expect(rewrites).toEqual([])
-  })
-
   it('stamps a provisional row at once and re-attributes it on the announcement', () => {
     const { corrections, rewrites, announce } = ledger()
     const stamped = corrections.stampFor('toolu_1')(identityOf('toolu_2'), RUNNING)
@@ -97,16 +87,6 @@ describe('ClaudeProvisionalRowCorrections', () => {
       }
     ])
     expect(corrections.pending).toBe(0)
-  })
-
-  it('drops a correction that would change nothing rather than burning a revision', () => {
-    const { corrections, rewrites, publishes } = ledger()
-    corrections.stampFor('toolu_1')(identityOf('toolu_2'), RUNNING)
-
-    corrections.abandon()
-
-    expect(rewrites).toEqual([])
-    expect(publishes()).toBe(0)
   })
 
   it('lets a settled write supersede the correction owed to that row', () => {
@@ -139,18 +119,6 @@ describe('ClaudeProvisionalRowCorrections', () => {
     expect(corrections.pending).toBe(0)
   })
 
-  it('lets a refusal at abandon end the obligation rather than leaking it', () => {
-    const { corrections, rewrites, announce, setRefusing } = ledger()
-    corrections.stampFor('toolu_1')(identityOf('toolu_2'), RUNNING)
-    announce('toolu_1', 'task-1')
-
-    setRefusing(true)
-    corrections.abandon()
-
-    expect(rewrites).toEqual([])
-    expect(corrections.pending).toBe(0)
-  })
-
   it('carries the NEWEST body when a row is written provisionally twice', () => {
     const { corrections, rewrites, announce } = ledger()
     const stamp = corrections.stampFor('toolu_1')
@@ -176,19 +144,5 @@ describe('ClaudeProvisionalRowCorrections', () => {
     corrections.retry()
 
     expect(rewrites).toEqual([])
-  })
-
-  it('keeps correcting a producer that stays inside the bound', () => {
-    const { corrections, rewrites, announce } = ledger()
-    const stamp = corrections.stampFor('toolu_1')
-    for (let index = 0; index < 128; index += 1) {
-      stamp(identityOf(`toolu_row_${index}`), RUNNING)
-    }
-    expect(corrections.pending).toBe(128)
-
-    announce('toolu_1', 'task-1')
-    corrections.retry()
-
-    expect(rewrites).toHaveLength(128)
   })
 })

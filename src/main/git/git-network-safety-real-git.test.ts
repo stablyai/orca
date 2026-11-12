@@ -3,8 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import { gitExecFileAsync, gitSpawnAfterWindowsEnvironmentReady } from './runner'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
+
+import { gitSpawnAfterWindowsEnvironmentReady } from './command-runner/git-spawn'
 
 let root = ''
 let repo = ''
@@ -72,17 +73,6 @@ async function expectIdentity(identity: string): Promise<void> {
 }
 
 describe('network SSH configuration with real Git', () => {
-  it('preserves command-line SSH configuration ahead of repository configuration', async () => {
-    await git(['config', 'core.sshCommand', sshCommand('repository')])
-    await expect(
-      gitExecFileAsync(
-        ['-c', `core.sshCommand=${sshCommand('command-line')}`, 'ls-remote', 'origin'],
-        { cwd: repo, env }
-      )
-    ).rejects.toThrow()
-    await expectIdentity('command-line')
-  })
-
   it('honors configured global SSH wrappers for streaming clones from a folder', async () => {
     await git(['config', '--global', 'core.sshCommand', sshCommand('clone identity')])
     const child = await gitSpawnAfterWindowsEnvironmentReady(

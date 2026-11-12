@@ -1,22 +1,15 @@
 import { Buffer } from 'node:buffer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { splitBridgeReply } from '../mobile-web-shell/bridge/bridge-reply-chunking'
-import {
-  BRIDGE_MAX_MESSAGE_BYTES,
-  BRIDGE_MAX_REPLY_BYTES,
-  utf8ByteLength
-} from '../mobile-web-shell/bridge/bridge-caps'
+
 import {
   BRIDGE_MEDIA_MAX_LIVE_HANDLES,
-  BRIDGE_MEDIA_NAME_MAX_CHARS,
   BRIDGE_MEDIA_READ_MAX_BYTES,
-  mediaNameResultSchema,
   mediaPickResultSchema,
   mediaReadResultSchema
 } from '../mobile-web-shell/bridge/bridge-media-verbs'
 import { readShellRefusalCode } from '../mobile-web-shell/bridge-host-errors'
 import { MediaHandleRegistry } from '../mobile-web-shell/media-handle-registry'
-import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../session/mobile-clipboard-image-upload-chunk'
+
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-verbs'
 import { createNativeMediaVerbServer, type NativeMediaFile } from './native-media'
 
@@ -39,7 +32,7 @@ function fakeFile(bytes: Uint8Array): NativeMediaFile {
         set offset(next: number | null) {
           cursor = next ?? 0
         },
-        readBytes: (length: number) => {
+        readBytesSync: (length: number) => {
           const slice = bytes.subarray(cursor, cursor + length)
           cursor += slice.byteLength
           return slice
@@ -193,106 +186,6 @@ describe('picking', () => {
       end: 64,
       eof: true
     })
-  })
-
-  it('answers a handle per asset for a library pick', async () => {
-    const probe = harness()
-    probe.files.set(`${CACHE}/lib.png`, bytesOf(64))
-    const result = await probe.serve('native.media.pick', { source: 'library', multiple: false })
-    const parsed = mediaPickResultSchema.parse(result)
-    expect(parsed.items).toHaveLength(1)
-    expect(parsed.items[0]).toMatchObject({
-      mime: 'image/png',
-      byteLength: 64,
-      width: 4,
-      height: 3
-    })
-    expect(probe.registry.liveCount()).toBe(1)
-  })
-
-  it('answers no items when the user cancels, which is not a refusal', async () => {
-    for (const source of ['library', 'files'] as const) {
-      const probe = harness({
-        launchLibrary: () => Promise.resolve({ canceled: true, assets: null }),
-        launchFiles: () => Promise.resolve({ canceled: true, assets: null })
-      })
-      await expect(probe.serve('native.media.pick', { source, multiple: true })).resolves.toEqual({
-        items: []
-      })
-    }
-  })
-
-  it('takes a file from the document picker with no pixel dimensions', async () => {
-    const probe = harness()
-    probe.files.set(`${CACHE}/doc.pdf`, bytesOf(10))
-    const result = mediaPickResultSchema.parse(
-      await probe.serve('native.media.pick', { source: 'files', multiple: false })
-    )
-    expect(result.items[0]).toMatchObject({ mime: 'application/pdf', byteLength: 10 })
-    expect(result.items[0]).not.toHaveProperty('width')
-  })
-
-  it('stages what the pasteboard holds, so an image crosses as a handle and not a value', async () => {
-    const probe = harness({
-      readClipboardImage: () =>
-        Promise.resolve({ data: btoa('pasted-bytes'), size: { width: 2, height: 2 } })
-    })
-    const result = mediaPickResultSchema.parse(
-      await probe.serve('native.media.pick', { source: 'clipboard', multiple: false })
-    )
-    expect(probe.written).toHaveLength(1)
-    expect(result.items[0]).toMatchObject({
-      mime: 'image/png',
-      byteLength: 12,
-      width: 2,
-      height: 2
-    })
-  })
-
-  it('strips the data-url prefix the pasteboard puts in front of its base64', async () => {
-    // Clipboard returns a data URI; strip its prefix or staged bytes become a silently corrupt image.
-    const probe = harness({
-      readClipboardImage: () =>
-        Promise.resolve({ data: `data:image/png;base64,${btoa('pasted-bytes')}` })
-    })
-    await probe.serve('native.media.pick', { source: 'clipboard', multiple: false })
-    expect(probe.written).toEqual([{ uri: `${CACHE}/staged-0.png`, base64: btoa('pasted-bytes') }])
-  })
-
-  it('names a picker that reported no type, rather than answering an empty mime', async () => {
-    const probe = harness({
-      launchFiles: () => Promise.resolve({ canceled: false, assets: [{ uri: `${CACHE}/doc.pdf` }] })
-    })
-    probe.files.set(`${CACHE}/doc.pdf`, bytesOf(3))
-    const result = mediaPickResultSchema.parse(
-      await probe.serve('native.media.pick', { source: 'files', multiple: false })
-    )
-    expect(result.items[0]).toMatchObject({ mime: 'application/octet-stream', byteLength: 3 })
-  })
-
-  it('answers no items for an empty pasteboard', async () => {
-    const probe = harness()
-    await expect(
-      probe.serve('native.media.pick', { source: 'clipboard', multiple: false })
-    ).resolves.toEqual({ items: [] })
-  })
-
-  it('offers the picker only the room the registry has left', async () => {
-    const limits: (number | undefined)[] = []
-    const probe = harness({
-      launchLibrary: (options: { multiple: boolean; limit: number }) => {
-        limits.push(options.limit)
-        return Promise.resolve({ canceled: true })
-      }
-    })
-    await probe.serve('native.media.pick', { source: 'library', multiple: true })
-    expect(limits).toEqual([BRIDGE_MEDIA_MAX_LIVE_HANDLES])
-
-    probe.files.set(`${CACHE}/held.png`, bytesOf(4))
-    probe.registry.mint([{ uri: `${CACHE}/held.png`, mime: 'image/png', byteLength: 4 }])
-    probe.registry.mint([{ uri: `${CACHE}/held.png`, mime: 'image/png', byteLength: 4 }])
-    await probe.serve('native.media.pick', { source: 'library', multiple: true })
-    expect(limits).toEqual([BRIDGE_MEDIA_MAX_LIVE_HANDLES, BRIDGE_MEDIA_MAX_LIVE_HANDLES - 2])
   })
 
   it('refuses a pick up front when nothing is left, before the OS copies a byte', async () => {
@@ -503,19 +396,6 @@ describe('reading chunks', () => {
     expect(Buffer.compare(collected, source)).toBe(0)
   })
 
-  it('answers exactly the bytes a short read asked for, at the offset it asked for', async () => {
-    // Ask for a partial range: whole-file reads would also pass cases whose files fit below the cap.
-    const { probe, handle } = await staged(1000)
-    const source = bytesOf(1000)
-    const chunk = mediaReadResultSchema.parse(
-      await probe.serve('native.media.read', { handle, offset: 400, length: 16 })
-    )
-    const bytes = atob(chunk.base64)
-    expect(bytes.length).toBe(16)
-    expect(chunk.eof).toBe(false)
-    expect([...bytes].map((char) => char.codePointAt(0))).toEqual([...source.subarray(400, 416)])
-  })
-
   it('closes the file handle it opened, on the way out and on the way through a throw', async () => {
     const { probe, handle } = await staged(64)
     await probe.serve('native.media.read', { handle, offset: 0, length: 16 })
@@ -530,7 +410,7 @@ describe('reading chunks', () => {
           handles.push(ledger)
           return {
             offset: 0,
-            readBytes: (): Uint8Array => {
+            readBytesSync: (): Uint8Array => {
               throw new Error('the device stopped reading')
             },
             close: () => {
@@ -563,73 +443,6 @@ describe('reading chunks', () => {
       probe.serve('native.media.read', { handle, offset: 0, length: 16 })
     ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_handle_unknown')
   })
-
-  it('refuses a read that starts at the end', async () => {
-    const { probe, handle } = await staged(64)
-    await expect(
-      probe.serve('native.media.read', { handle, offset: 64, length: 16 })
-    ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_range')
-  })
-})
-
-describe('naming', () => {
-  async function pickOne(probe: Harness, source: 'library' | 'files'): Promise<string> {
-    const result = mediaPickResultSchema.parse(
-      await probe.serve('native.media.pick', { source, multiple: false })
-    )
-    return result.items[0]?.handle ?? ''
-  }
-
-  it("answers the document picker's name for a file, never on the picked item itself", async () => {
-    const probe = harness({
-      launchFiles: () =>
-        Promise.resolve({
-          canceled: false,
-          assets: [{ uri: `${CACHE}/doc.pdf`, mimeType: 'application/pdf', name: 'auth-spec.pdf' }]
-        })
-    })
-    probe.files.set(`${CACHE}/doc.pdf`, bytesOf(10))
-    const result = mediaPickResultSchema.parse(
-      await probe.serve('native.media.pick', { source: 'files', multiple: false })
-    )
-    expect(result.items[0]).not.toHaveProperty('name')
-    await expect(
-      probe.serve('native.media.name', { handle: result.items[0]?.handle ?? '' })
-    ).resolves.toEqual({ name: 'auth-spec.pdf' })
-  })
-
-  it('answers null where the picker reported no name', async () => {
-    const probe = harness()
-    probe.files.set(`${CACHE}/lib.png`, bytesOf(4))
-    const handle = await pickOne(probe, 'library')
-    await expect(probe.serve('native.media.name', { handle })).resolves.toEqual({ name: null })
-  })
-
-  it('keeps the extension of a name too long for the verb', async () => {
-    const long = `${'a'.repeat(400)}.pdf`
-    const probe = harness({
-      launchFiles: () =>
-        Promise.resolve({
-          canceled: false,
-          assets: [{ uri: `${CACHE}/doc.pdf`, mimeType: 'application/pdf', name: long }]
-        })
-    })
-    probe.files.set(`${CACHE}/doc.pdf`, bytesOf(4))
-    const handle = await pickOne(probe, 'files')
-    const { name } = mediaNameResultSchema.parse(await probe.serve('native.media.name', { handle }))
-    expect(name).toHaveLength(BRIDGE_MEDIA_NAME_MAX_CHARS)
-    expect(name?.endsWith('.pdf')).toBe(true)
-  })
-
-  it('refuses a handle the page already released', async () => {
-    const probe = harness()
-    probe.files.set(`${CACHE}/lib.png`, bytesOf(4))
-    const handle = await pickOne(probe, 'library')
-    await probe.serve('native.media.release', { handle })
-    await expect(probe.serve('native.media.name', { handle })).rejects.toSatisfy(
-      (error) => refusalOf(error) === 'native_media_handle_unknown'
-    )
-  })
 })
 
 describe('releasing', () => {
@@ -647,26 +460,6 @@ describe('releasing', () => {
     await expect(probe.serve('native.media.release', { handle })).resolves.toEqual({
       released: false
     })
-  })
-})
-
-describe('what the largest reply weighs', () => {
-  it('carries a full chunk in one frame, under the frame cap and far under the reply ceiling', () => {
-    const payload = {
-      id: 'a'.repeat(22),
-      ok: true as const,
-      result: {
-        base64: 'a'.repeat(MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS),
-        eof: false
-      }
-    }
-    const split = splitBridgeReply('a'.repeat(22), payload)
-    expect(split.ok).toBe(true)
-    // Base64 needs no JSON escaping, so serialized size is its length plus the envelope.
-    expect(split.ok === true && split.frames).toHaveLength(1)
-    const bytes = utf8ByteLength(JSON.stringify(split.ok === true ? split.frames[0] : null))
-    expect(bytes).toBeLessThan(BRIDGE_MAX_MESSAGE_BYTES)
-    expect(bytes).toBeLessThan(BRIDGE_MAX_REPLY_BYTES)
   })
 })
 

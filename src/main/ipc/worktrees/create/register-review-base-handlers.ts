@@ -2,12 +2,12 @@ import { ipcMain } from 'electron'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import { gitExecFileAsync } from '../../../git/runner'
+import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import {
   getLocalProjectGhExecOptions,
   getLocalProjectGitExecOptions,
   getWorktreeCreatePrefetchGitOptions
-} from '../../../project-runtime-git-options'
+} from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   SSH_GIT_RECONNECT_MESSAGE,
   SshHostNotServedError

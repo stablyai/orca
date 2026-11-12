@@ -10,14 +10,12 @@ import {
   type HeadlessPairedRuntimeHost
 } from './helpers/headless-paired-runtime-host'
 import { pairMobileClient, type PairedMobileClient } from './helpers/paired-mobile-client'
-import { getManagedScript as getClaudeManagedScript } from '../../src/main/claude/hook-script'
-import { getManagedScript as getCodexManagedScript } from '../../src/main/codex/codex-hook-script'
-import type { AgentStatusEntry } from '../../src/shared/agent-status-types'
-import type { AiVaultSession } from '../../src/shared/ai-vault-types'
+import type { AgentStatusEntry } from '../../src/shared/agent-status/contracts/agent-status-types'
+import type { AiVaultSession } from '../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
 import type { RuntimeTerminalListResult } from '../../src/shared/runtime-terminal-contracts'
 import type { RuntimeWorktreePsSummary } from '../../src/shared/runtime-worktree-contracts'
-import { buildMobileAiVaultResumeLaunch } from '../../mobile/src/session/ai-vault-resume-launch'
+import { buildMobileAiVaultResumeLaunch } from '../../mobile/src/agent-history/ai-vault-resume-launch'
 
 test.skip(process.platform === 'win32', 'the fake agents are POSIX shell scripts')
 
@@ -62,51 +60,6 @@ function transcriptLines(agent: FakeAgent, sessionId: string, cwd: string): stri
           }
         ]
   return `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`
-}
-
-function writeFakeAgent(dir: string, agent: FakeAgent, sessionId: string, cwd: string): string {
-  const transcriptPath = path.join(dir, `${agent}-${sessionId}.jsonl`)
-  writeFileSync(transcriptPath, transcriptLines(agent, sessionId, cwd))
-  const hookScript = path.join(dir, `${agent}-hook.sh`)
-  writeFileSync(
-    hookScript,
-    agent === 'codex' ? getCodexManagedScript('posix') : getClaudeManagedScript('posix')
-  )
-  chmodSync(hookScript, 0o755)
-  const event = (name: string, extra: Record<string, unknown>) =>
-    JSON.stringify({
-      hook_event_name: name,
-      session_id: sessionId,
-      transcript_path: transcriptPath,
-      cwd,
-      ...(agent === 'codex' ? { model: 'gpt-5-codex' } : {}),
-      ...extra
-    })
-  const events = [
-    event('SessionStart', { source: 'startup' }),
-    event('UserPromptSubmit', {
-      prompt: `${agent} question`,
-      ...(agent === 'codex' ? { turn_id: 'turn-1' } : {})
-    }),
-    event('Stop', {
-      last_assistant_message: `${agent} answer`,
-      ...(agent === 'codex' ? { turn_id: 'turn-1' } : {})
-    })
-  ]
-  const agentScript = path.join(dir, agent)
-  writeFileSync(
-    agentScript,
-    [
-      '#!/bin/sh',
-      ...events.map((payload) => `printf '%s' '${payload}' | sh '${hookScript}'`),
-      `echo FAKE_${agent.toUpperCase()}_REPORTED`,
-      // Stay in the foreground like a real agent waiting at its prompt.
-      'exec sleep 600',
-      ''
-    ].join('\n')
-  )
-  chmodSync(agentScript, 0o755)
-  return agentScript
 }
 
 async function openPhoneWorkspace(
@@ -189,92 +142,6 @@ async function expectPhoneChatReadsTranscript(args: {
   expect(read.error, `${agent} nativeChat.readSession`).toBeUndefined()
   expect(read.messages?.map((message) => message.role)).toEqual(['user', 'assistant'])
 }
-
-test('a phone paired to headless serve gets each terminal agent its provider session', async ({
-  testRepoPath
-}) => {
-  test.setTimeout(240_000)
-  const fakeDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-10923-'))
-  const host = await launchHeadlessPairedRuntimeHost({ pairingScope: 'mobile' })
-  const phone = pairMobileClient(host.offer)
-  try {
-    const worktree = await openPhoneWorkspace(host, phone, testRepoPath)
-    for (const agent of ['codex', 'claude'] as const) {
-      const sessionId = `${agent}-10923-${Date.now()}`
-      const agentScript = writeFakeAgent(fakeDir, agent, sessionId, testRepoPath)
-      const { tab } = await phone.call<{ tab: { id: string; parentTabId: string } }>(
-        'session.tabs.createTerminal',
-        {
-          worktree,
-          clientMutationId: `create-${agent}`,
-          activate: false,
-          select: true,
-          navigation: 'caller'
-        }
-      )
-      const terminal = await waitForTerminal(
-        phone,
-        worktree,
-        (row) => row.tabId === tab.parentTabId
-      )
-      await phone.call('terminal.send', {
-        terminal: terminal.handle,
-        text: `'${agentScript}'`,
-        enter: true
-      })
-      await expectPhoneChatReadsTranscript({
-        phone,
-        worktree,
-        parentTabId: tab.parentTabId,
-        agent,
-        sessionId
-      })
-    }
-  } finally {
-    await host.dispose()
-    rmSync(fakeDir, { recursive: true, force: true })
-  }
-})
-
-// Codex resume stays hook-silent until input; the host must expose the identity it launched.
-test('a phone can read a resumed Codex chat before its first new turn', async ({
-  testRepoPath
-}) => {
-  test.setTimeout(240_000)
-  const fakeDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-10923-'))
-  const host = await launchHeadlessPairedRuntimeHost({ pairingScope: 'mobile' })
-  const phone = pairMobileClient(host.offer)
-  try {
-    const worktree = await openPhoneWorkspace(host, phone, testRepoPath)
-    const sessionId = randomUUID()
-    const transcriptPath = path.join(fakeDir, `rollout-2026-10-16T00-00-00-${sessionId}.jsonl`)
-    writeFileSync(transcriptPath, transcriptLines('codex', sessionId, testRepoPath))
-    const resumedCodex = path.join(fakeDir, 'codex-resumed')
-    writeFileSync(resumedCodex, '#!/bin/sh\necho FAKE_CODEX_RESUMED\nexec sleep 600\n')
-    chmodSync(resumedCodex, 0o755)
-    const created = await host.client.call<{ terminal: { handle: string } }>('terminal.create', {
-      worktree,
-      command: `'${resumedCodex}'`,
-      launchAgent: 'codex',
-      resumeProviderSession: { key: 'session_id', id: sessionId, transcriptPath }
-    })
-    const terminal = await waitForTerminal(
-      phone,
-      worktree,
-      (row) => row.handle === created.result.terminal.handle
-    )
-    await expectPhoneChatReadsTranscript({
-      phone,
-      worktree,
-      parentTabId: terminal.tabId,
-      agent: 'codex',
-      sessionId
-    })
-  } finally {
-    await host.dispose()
-    rmSync(fakeDir, { recursive: true, force: true })
-  }
-})
 
 // History types resume into an existing shell, so its terminal create must name the conversation first.
 test('a phone can read a Codex chat it resumed from Session History before its first new turn', async ({

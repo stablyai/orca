@@ -3,13 +3,13 @@
 import { randomUUID } from 'node:crypto'
 import type { OrcadManagedConversionResult } from '../../../shared/orcad-managed-runtime'
 import type { OrcadMigrationSourceCutover } from '../../../shared/orcad-migration/orcad-migration-source-cutover'
-import { recordManagedOrcadMigration } from '../../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { recordManagedOrcadMigration } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
   redactRuntimeEnvironment,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runTargetLifecycle } from '../../ipc/ssh/ssh-target-lifecycle-queue'
 import { environmentMatchesManagedOrcadCutover } from './orcad-managed-migration-status'
 import { requireManagedOrcadInfrastructure } from './orcad-managed-runtime-context'
@@ -17,33 +17,33 @@ import { ensureOrcadManagedTunnel } from './orcad-managed-tunnel'
 import {
   commitOrcadMigrationDestination,
   type OrcadMigrationDestinationCatalog
-} from '../../ssh/orcad-migration-cutover-coordinator'
+} from '../migration/cutover/orcad-migration-cutover-coordinator'
 import {
   findOrcadMigrationSourceCutoverForTarget,
   removeOrcadMigrationJournalsForDestination
-} from '../../ssh/orcad-migration-cutover-journal'
+} from '../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import type { SshTarget } from '../../../shared/ssh-types'
-import type { CensusHostRelayTerminals } from '../../ssh/orcad-migration-terminal-gate'
+import type { CensusHostRelayTerminals } from '../../ssh/migration-source/orcad-migration-terminal-gate'
 import { createManagedOrcadEnvironment } from './orcad-runtime-deployment'
-import { createSshRelayMigrationSource } from '../../ssh/orcad-migration-ssh-relay-source'
+import { createSshRelayMigrationSource } from '../../ssh/migration-source/orcad-migration-ssh-relay-source'
 import {
   leaveBehindClearsOrcadMigrationBlockers,
   onlyLeavableOrcadMigrationBlockers
 } from '../../ssh/targets/ssh-target-orcad-preflight'
-import { ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON } from '../../ssh/orcad-migration-source-fence'
-import type { OrcadMigrationPaneLeasePredicate } from '../../ssh/orcad-migration-bridged-panes'
-import { retainOrcadMigrationSource } from '../../ssh/orcad-migration-source-retention'
+import { ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON } from '../../ssh/migration-source/orcad-migration-source-fence'
+import type { OrcadMigrationPaneLeasePredicate } from '../../ssh/migration-source/orcad-migration-bridged-panes'
+import { retainOrcadMigrationSource } from '../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-source-retention'
 import {
   enableMovedOrcadAutomations,
   type EnableServerAutomation
-} from '../../ssh/orcad-migration-moved-automations'
+} from '../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-moved-automations'
 import {
   linkedOrcadMigrationCutoverPort,
   linkedOrcadMigrationProjects,
-  linkServerHeldRepositories,
-  type OrcadServerRepository
-} from '../../ssh/orcad-migration-repository-link'
-import type { OrcadServerFolderCatalog } from '../../ssh/orcad-server-folder-workspaces'
+  linkServerHeldRepositories
+} from '../migration/linking/orcad-migration-repository-link'
+import type { OrcadServerRepository } from '../migration/linking/orcad-server-repositories'
+import type { OrcadServerFolderCatalog } from '../migration/linking/orcad-server-folder-workspaces'
 
 export type OrcadManagedConversionArgs = {
   sshTargetId: string

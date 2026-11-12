@@ -1,14 +1,14 @@
 import { basename } from 'node:path'
-import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
-import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
-import { getRemoteFileTarget } from './repo-remote-file-target'
+import { parseGitRevListAheadBehindCounts } from '../../shared/git/refs/git-rev-list-output'
+import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './remotes/hosted-remote-url'
+import { getRemoteFileTarget } from './remotes/repo-remote-file-target'
 import {
   DEFAULT_BASE_REF_PROBE_TIMEOUT_MS,
   getDefaultBaseRefAsync,
   gitExecOptions,
   type LocalGitExecOptions
 } from './repo-default-base-ref'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 
 export {
   isGitRepo,
@@ -20,13 +20,8 @@ export {
   getLinkedWorktreeMainRepoRoot,
   normalizeGitRepoRootForInputPath
 } from './repo-detection'
-export {
-  DEFAULT_BASE_REF_PROBES,
-  getBaseRefDefault,
-  resolveDefaultBaseRefViaExec,
-  resolveDefaultBaseRefWithLocalGit
-} from './repo-default-base-ref'
-export type { GitExec } from './repo-default-base-ref'
+export { getBaseRefDefault, resolveDefaultBaseRefWithLocalGit } from './repo-default-base-ref'
+
 export {
   buildSearchBaseRefsArgv,
   mergeBaseRefSearchResultGroups,
@@ -35,9 +30,8 @@ export {
   parseAndFilterSearchRefDetails,
   normalizeRefSearchQuery
 } from './repo-base-ref-search'
-export { getBranchConflictKind } from './repo-branch-conflict'
+export { getBranchConflictKind, getBranchConflictKindStrict } from './repo-branch-conflict'
 export type { BranchConflictKind } from './repo-branch-conflict'
-export { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
 
 export function getRepoName(path: string): string {
   const name = basename(path)

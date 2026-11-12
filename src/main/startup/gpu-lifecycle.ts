@@ -11,12 +11,12 @@ import {
 import {
   handleGpuFallbackRecoveredLaunch,
   promptForGpuFallbackRecoveredLaunch
-} from '../crash-reporting/gpu-fallback-recovered-launch'
-import { promptForGpuFallbackRestart } from '../crash-reporting/gpu-fallback-restart-prompt'
-import { engageGpuFallbackAfterCrashBurst } from '../crash-reporting/gpu-fallback-engagement'
-import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
-import { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-diagnostics'
+} from '../crash-reporting/recovery/gpu-fallback-recovered-launch'
+import { promptForGpuFallbackRestart } from '../crash-reporting/recovery/gpu-fallback-restart-prompt'
+import { engageGpuFallbackAfterCrashBurst } from '../crash-reporting/recovery/gpu-fallback-engagement'
+import { recordCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
+import { GpuCrashDiagnosticsRecorder } from '../crash-reporting/capture/gpu-crash-diagnostics'
 import {
   isInstallDirAclRepairExhausted,
   isInstallDirAclRepairPending,

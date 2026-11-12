@@ -12,7 +12,7 @@ import {
   MAX_ID_LENGTH,
   SessionId
 } from './structured-agent-session-identifiers'
-import { z } from 'zod'
+import * as z from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isStructuredAgentId } from '../agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
@@ -23,7 +23,7 @@ import {
 } from '../agent-session/agent-session-wire'
 import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session/agent-session-thread-goal-wire'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
-import { ResumeSource, ResumeWriterAdmission } from './structured-agent-session-resume-params'
+import { SOURCE_FIELDS, ResumeWriterAdmission } from './structured-agent-session-resume-params'
 
 export {
   SendBlock,
@@ -134,7 +134,7 @@ export const CreateIntentParams = z
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent,
-    resumeFrom: ResumeSource.optional(),
+    ...SOURCE_FIELDS,
     ...CREATE_TAB_FIELDS,
     /** Both fields require `agentSession.create.message.v1` on the executing host. */
     firstMessage: z
@@ -175,8 +175,9 @@ export const CancelParams = z
     if (value.prompt !== undefined && value.scope === 'background-tasks') {
       ctx.addIssue({ code: 'custom', message: 'A prompt cannot use background-task scope' })
     }
-    if (value.turnId === undefined && (value.prompt !== undefined || value.scope !== undefined)) {
-      ctx.addIssue({ code: 'custom', message: 'A prompt or background-task cancel names its turn' })
+    // A card with no running turn names only itself; the host routes it.
+    if (value.turnId === undefined && value.scope !== undefined) {
+      ctx.addIssue({ code: 'custom', message: 'A background-task cancel names its turn' })
     }
   })
 
@@ -271,7 +272,8 @@ export const ModelCatalogParams = z.strictObject({
   worktree: Identifier('Invalid worktree selector').optional(),
   waitForListing: z.boolean().optional(),
   // Read saved data without starting a listing; gate on saved-only capability because older hosts refuse unknown keys.
-  savedOnly: z.boolean().optional()
+  savedOnly: z.boolean().optional(),
+  selectedModel: Identifier('Invalid selected model').optional()
 })
 
 export const ConversationCommandParams = z
@@ -333,7 +335,7 @@ export const HistoryParams = z
   })
   .strict()
 
-export const SubscribeParams = OptionsParams.extend({ cursor: JournalCursor.optional() }).strict()
+export const WorkStateParams = z.object({ sessionId: SessionId }).strict()
 
 // Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
 export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })
@@ -355,7 +357,5 @@ export const RewindParams = z
     expectedEpoch: Identifier('Invalid journal epoch')
   })
   .strict()
-
-export { RespondToQuestionParams } from './structured-agent-session-question-params'
 
 export { MutationEnvelope } from './structured-agent-session-mutation-envelope'

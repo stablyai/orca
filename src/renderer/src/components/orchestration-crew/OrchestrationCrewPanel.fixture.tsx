@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import type {
   OrchestrationCrewRow,
   OrchestrationCrewSnapshot
-} from '../../../../shared/orchestration-crew'
+} from '../../../../shared/orchestration/orchestration-crew'
 import { CrewPanelContent } from './OrchestrationCrewPanel'
 import { NativeChatCrewFrame } from './NativeChatCrewPanel'
 
@@ -337,3 +337,34 @@ export const twoWorkersMinimumPaneExpanded = expanded(twoWorkers, pane, 'h-[50px
 // Narrow splits: the title truncates so the whole collapse button stays inside the card.
 export const twoWorkersNarrowPaneExpanded = expanded(twoWorkers, pane, 'h-80 w-[100px]')
 export const twoWorkersMinimumWidthPaneExpanded = expanded(twoWorkers, pane, 'h-80 w-[50px]')
+
+function longDetails(host: typeof pane, pendingQuestion: boolean) {
+  const text = `A long detail with preserved lines\n${'unbroken'.repeat(128)}`
+  const value = crew(
+    [],
+    [
+      {
+        name: `Worker-${'identifier'.repeat(20)}`,
+        agent: 'codex',
+        status: 'waiting',
+        task: `Review ${'task-path/'.repeat(24)}`,
+        taskState: 'dispatched',
+        ...(pendingQuestion ? { question: text } : { message: text }),
+        minutesAgo: 1
+      }
+    ],
+    []
+  )
+  return defineFixture({
+    ...host(value, 'h-160'),
+    width: 280,
+    interact: async (frame) => {
+      frame.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
+      await new Promise(requestAnimationFrame)
+      frame.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
+    }
+  })
+}
+
+export const terminalQuestionDetails = longDetails(pane, true)
+export const nativeLatestDetails = longDetails(nativeChat, false)

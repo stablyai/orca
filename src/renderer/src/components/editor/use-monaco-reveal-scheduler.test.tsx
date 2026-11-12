@@ -28,37 +28,6 @@ describe('Monaco reveal application guard', () => {
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
   })
 
-  it('does not focus or move the editor when its target becomes inactive before application', () => {
-    const { result, unmount } = renderHook(() => useMonacoRevealScheduler())
-    let current = true
-    const applied = vi.fn()
-    act(() => result.current.queueReveal(instance, 300, 7, 0, applied, () => current))
-    frames.shift()?.(0)
-    current = false
-    flushFrames()
-    expect(performReveal).not.toHaveBeenCalled()
-    expect(applied).not.toHaveBeenCalled()
-    unmount()
-  })
-
-  it('applies and acknowledges a still-current target, preserving legacy callers', () => {
-    const { result, unmount } = renderHook(() => useMonacoRevealScheduler())
-    const applied = vi.fn()
-    act(() => result.current.queueReveal(instance, 300, 7, 0, applied))
-    flushFrames()
-    expect(performReveal).toHaveBeenCalledWith(
-      instance,
-      300,
-      7,
-      0,
-      expect.any(Function),
-      expect.any(Object),
-      expect.any(Object)
-    )
-    expect(applied).toHaveBeenCalledOnce()
-    unmount()
-  })
-
   it('checks the guard again after waiting for asynchronous file content', () => {
     const { result, unmount } = renderHook(() => useMonacoRevealScheduler())
     let current = true

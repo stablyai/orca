@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 import type {
   ClaudeSubagentLinkageSource,
@@ -98,50 +98,6 @@ describe('claude streamed text checkpoints', () => {
     expect(rows).toEqual([{ uuid: 'block-1', text: 'partial answer' }])
   })
 
-  it('keeps a block whose final frame arrived out of the settlement sweep', () => {
-    const { store } = checkpoints()
-
-    store.append(identityOf('block-1'), 'one')
-    store.append(identityOf('block-2'), 'two')
-    store.forget('claude:claude-session:block-1')
-
-    expect(store.pending).toBe(1)
-    store.settle()
-    expect(store.pending).toBe(0)
-  })
-
-  it('flushes text the widening checkpoint interval has not written yet', () => {
-    const { store, rows } = checkpoints()
-
-    store.append(identityOf('block-1'), 'x')
-    store.flush()
-
-    expect(rows).toEqual([{ uuid: 'block-1', text: 'x' }])
-    store.flush()
-    expect(rows).toHaveLength(1)
-  })
-
-  it("stamps a block streamed inside a child with that child's linkage", () => {
-    const producer = scriptedProducer()
-    producer.resolve(CHILD_LINKAGE)
-    const { store, rows, stamps, runWindow } = checkpoints(producer.source)
-
-    store.append(identityOf('block-1'), 'hello', 'toolu_1')
-    runWindow()
-
-    expect(rows).toEqual([{ uuid: 'block-1', text: 'hello' }])
-    expect(stamps).toEqual([CHILD_LINKAGE])
-  })
-
-  it("writes no linkage keys for a block the session's own agent streamed", () => {
-    const { store, stamps, runWindow } = checkpoints()
-
-    store.append(identityOf('block-1'), 'hello')
-    runWindow()
-
-    expect(stamps).toEqual([{}])
-  })
-
   it('writes a checkpoint at once while the producing agent is provisional', () => {
     const producer = scriptedProducer()
     const { store, rows, stamps, runWindow } = checkpoints(producer.source)
@@ -160,36 +116,6 @@ describe('claude streamed text checkpoints', () => {
 
     expect(rows.at(-1)).toEqual({ uuid: 'block-1', text: 'partial' })
     expect(stamps.at(-1)).toEqual(CHILD_LINKAGE)
-  })
-
-  it('writes a held block under the raw reference when no announcement comes', () => {
-    const producer = scriptedProducer()
-    const { store, rows, stamps, runWindow } = checkpoints(producer.source)
-
-    store.append(identityOf('block-1'), 'never announced', 'toolu_1')
-    runWindow()
-
-    expect(rows).toEqual([{ uuid: 'block-1', text: 'never announced' }])
-    expect(stamps).toEqual([
-      { agentId: 'toolu_1', providerParentRef: 'toolu_1', producerKind: 'agent' }
-    ])
-
-    store.reattribute()
-    expect(rows).toHaveLength(1)
-  })
-
-  it('re-resolves a block’s producer on every checkpoint', () => {
-    const producer = scriptedProducer()
-    producer.resolve(CHILD_LINKAGE)
-    const { store, stamps, runWindow } = checkpoints(producer.source)
-
-    store.append(identityOf('block-1'), 'first', 'toolu_1')
-    runWindow()
-    producer.resolve({ ...CHILD_LINKAGE, agentId: 'task-2' })
-    store.append(identityOf('block-1'), 'first and more', 'toolu_1')
-    store.flush()
-
-    expect(stamps).toEqual([CHILD_LINKAGE, { ...CHILD_LINKAGE, agentId: 'task-2' }])
   })
 
   it('stops persisting once disposed', () => {

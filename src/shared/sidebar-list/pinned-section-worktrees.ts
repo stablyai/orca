@@ -2,35 +2,55 @@ import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { getLineagePlacementRows } from '../worktree-occurrence-plan'
-import { getSidebarLineageParentsByIdentity } from './worktree-lineage-projection'
+import {
+  getSidebarLineageParentsByIdentity,
+  type SidebarLineageParentIdentities
+} from './worktree-lineage-projection'
 
 export function getSidebarLineageRowsByIdentity(
   worktrees: readonly Worktree[],
-  worktreeMap: ReadonlyMap<string, Worktree>
+  worktreeMap: ReadonlyMap<string, Worktree>,
+  folderRows: readonly Worktree[] = []
 ): Map<string, Worktree> {
   return new Map(
-    [...worktreeMap.values(), ...worktrees].map((worktree) => [
+    [...worktreeMap.values(), ...worktrees, ...folderRows].map((worktree) => [
       getWorktreeHostIdentity(worktree),
       worktree
     ])
   )
 }
 
+/** Children by parent identity. Folder workspace rows parent only through resolved identities, and a
+ * shown folder is never hidden by the project filter, which names repos. */
 export function getSidebarLineageChildren(
   worktrees: readonly Worktree[],
   lineageById: Readonly<Record<string, WorktreeLineage>>,
   worktreeMap: ReadonlyMap<string, Worktree>,
-  filterRepoIds: readonly string[] = []
+  filterRepoIds: readonly string[] = [],
+  lineageParentIdentities?: SidebarLineageParentIdentities,
+  folderRows: readonly Worktree[] = []
 ): Map<string, Worktree[]> {
-  const rowsByIdentity = getSidebarLineageRowsByIdentity(worktrees, worktreeMap)
+  const rowsByIdentity = getSidebarLineageRowsByIdentity(
+    worktrees,
+    worktreeMap,
+    lineageParentIdentities ? folderRows : []
+  )
+  const folderIdentities = new Set(folderRows.map(getWorktreeHostIdentity))
   const allowedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
-  const parentByIdentity = getSidebarLineageParentsByIdentity(lineageById, rowsByIdentity)
+  const parentByIdentity = getSidebarLineageParentsByIdentity(
+    lineageById,
+    rowsByIdentity,
+    lineageParentIdentities
+  )
   const childrenByParentIdentity = new Map<string, Worktree[]>()
   for (const [childIdentity, child] of rowsByIdentity) {
     const parent = parentByIdentity.get(childIdentity)
     if (
       !parent ||
-      (allowedRepoIds && (!allowedRepoIds.has(child.repoId) || !allowedRepoIds.has(parent.repoId)))
+      (allowedRepoIds &&
+        (!allowedRepoIds.has(child.repoId) ||
+          (!allowedRepoIds.has(parent.repoId) &&
+            !folderIdentities.has(getWorktreeHostIdentity(parent)))))
     ) {
       continue
     }

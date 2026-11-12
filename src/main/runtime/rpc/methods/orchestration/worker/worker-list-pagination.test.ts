@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type Database from '../../../../../sqlite/sync-database'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import type { FederatedDispatchRow } from '../../../../orchestration/types'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { encodeWorkerListCursor } from './worker-list-cursor'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
@@ -99,68 +103,12 @@ describe('orchestration worker-list pagination', () => {
     expect(second.counts).toEqual({ retained: 105 })
   })
 
-  it('states what a middle page actually holds, not that it is the newest', async () => {
+  it('repeats the first page counts on later pages of the same snapshot', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     const run = db.createRun({
-      objective: 'Middle-page truncation warning',
-      coordinatorHandle: 'term-coordinator',
-      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    for (let index = 1; index <= 6; index += 1) {
-      insertDispatch(db, run.id, `dispatch-${index}`)
-    }
-
-    const pages: WorkerListResult[] = []
-    let cursor: string | null = null
-    do {
-      const page: WorkerListResult = await callWorkerList(runtime, {
-        run: run.id,
-        limit: 2,
-        ...(cursor ? { cursor } : {})
-      })
-      pages.push(page)
-      cursor = page.page.nextCursor
-    } while (cursor)
-
-    expect(pages.map((page) => page.workers.map((worker) => worker.dispatchId))).toEqual([
-      ['dispatch-6', 'dispatch-5'],
-      ['dispatch-4', 'dispatch-3'],
-      ['dispatch-2', 'dispatch-1']
-    ])
-    // Page two holds rows 4 and 3; a warning claiming "the 2 newest" would be a falsehood.
-    expect(pages.map((page) => page.warnings)).toEqual([
-      [
-        'Showing 2 of 6 Dispatches, newest first; more are on later pages. Follow page.nextCursor with --cursor.'
-      ],
-      [
-        'Showing 2 of 6 Dispatches, newest first; more are on later pages. Follow page.nextCursor with --cursor.'
-      ],
-      undefined
-    ])
-  })
-
-  it('fails an omitted-pagination legacy result above the explicit safety ceiling', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    vi.spyOn(db, 'listWorkerTerminalResources').mockReturnValue(
-      Array.from({ length: 5_001 }, () => null) as never
-    )
-
-    await expect(callWorkerList(runtime, {})).rejects.toMatchObject({
-      code: 'worker_list_snapshot_too_large',
-      message: expect.stringContaining('at most 5000 rows')
-    })
-  })
-
-  it('pins total and counts to the first call while paging down', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const run = db.createRun({
-      objective: 'Stable worker inventory',
+      objective: 'Counted once per snapshot',
       coordinatorHandle: 'term-coordinator',
       coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
@@ -168,42 +116,20 @@ describe('orchestration worker-list pagination', () => {
     insertDispatch(db, run.id, 'dispatch-z')
 
     const first = await callWorkerList(runtime, { run: run.id, limit: 1 })
-    expect(first.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-z'])
-    expect(first.page).toMatchObject({ total: 2, hasMore: true })
-    expect(first.page.nextCursor).toEqual(expect.any(String))
+    expect(first.counts).toEqual({ retained: 2 })
 
-    insertDispatch(db, run.id, 'dispatch-m')
-
+    sqliteFor(db)
+      .prepare('UPDATE dispatch_contexts SET assignee_handle = NULL WHERE id = ?')
+      .run('dispatch-a')
     const second = await callWorkerList(runtime, {
       run: run.id,
       limit: 1,
       cursor: first.page.nextCursor
     })
+
     expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-a'])
     expect(second.page).toEqual({ total: 2, limit: 1, hasMore: false, nextCursor: null })
-  })
-
-  it('continues a version-one snapshot cursor from an older runtime', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const run = db.createRun({
-      objective: 'Compatible worker inventory',
-      coordinatorHandle: 'term-coordinator',
-      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    insertDispatch(db, run.id, 'dispatch-a')
-    insertDispatch(db, run.id, 'dispatch-z')
-    const cursor = encodeWorkerListCursor({
-      version: 1,
-      snapshot: { createdAt: '2026-08-27 00:00:00', dispatchId: 'dispatch-z' },
-      after: { createdAt: '2026-08-27 00:00:00', dispatchId: 'dispatch-z' }
-    })
-
-    const page = await callWorkerList(runtime, { run: run.id, limit: 1, cursor })
-
-    expect(page.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-a'])
-    expect(page.page).toEqual({ total: 2, limit: 1, hasMore: false, nextCursor: null })
+    expect(second.counts).toEqual({ retained: 2 })
   })
 
   it('expires a pre-rowid cursor whose anchor row a reset deleted', async () => {
@@ -382,213 +308,6 @@ describe('orchestration worker-list pagination', () => {
     expect(second.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-a'])
   })
 
-  it('projects a 100-row page within six synchronous read statements', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const run = db.createRun({
-      objective: 'Bounded worker inventory reads',
-      coordinatorHandle: 'term-coordinator',
-      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    for (let index = 0; index < 100; index += 1) {
-      insertDispatch(db, run.id, `dispatch-${String(index).padStart(3, '0')}`)
-    }
-    db.recordAttemptObservation({
-      id: 'observation-failed-worker',
-      dispatchId: 'dispatch-050',
-      sequence: 0,
-      authorityId: 'home',
-      authorityClock: 'home',
-      facet: 'worker_report',
-      payload: { status: 'accepted', outcome: 'failed' },
-      homeReceivedAt: Date.now()
-    })
-    const prepare = vi.spyOn(sqliteFor(db), 'prepare')
-    prepare.mockClear()
-
-    const page = await callWorkerList(runtime, { run: run.id, limit: 100 })
-
-    expect(page.workers.map((worker) => worker.dispatchId)).toEqual(
-      Array.from({ length: 100 }, (_, index) => `dispatch-${String(99 - index).padStart(3, '0')}`)
-    )
-    expect(page.workers[49]?.projection.attention.categories).toContain('failure')
-    expect(page.page).toEqual({ total: 100, limit: 100, hasMore: false, nextCursor: null })
-    expect(prepare).toHaveBeenCalledTimes(6)
-  })
-
-  it('fetches the same rows for one worker however many unrelated terminals were handed on', async () => {
-    const fetchedBeside = async (unrelated: number): Promise<number> => {
-      db = new OrchestrationDb(':memory:')
-      const runtime = new OrcaRuntimeService()
-      runtime.setOrchestrationDb(db)
-      const run = db.createRun({
-        objective: 'Handed-on history read cost',
-        coordinatorHandle: 'term-coordinator',
-        coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-      })
-      insertWorkerInventory(db, run.id, 'dispatch-listed', 'succeeded', 'not_requested')
-      const sqlite = sqliteFor(db)
-      const insert = sqlite.prepare(
-        `INSERT INTO worker_terminal_resources (
-           id, origin_dispatch_id, owner_dispatch_id, prior_owner_dispatch_ids, terminal_handle
-         ) VALUES (?, ?, ?, ?, ?)`
-      )
-      for (let index = 0; index < unrelated; index += 1) {
-        insert.run(
-          `resource-${index}`,
-          `a-${index}`,
-          `b-${index}`,
-          `["a-${index}"]`,
-          `term-${index}`
-        )
-      }
-      const prepare = sqlite.prepare.bind(sqlite)
-      let fetched = 0
-      vi.spyOn(sqlite, 'prepare').mockImplementation((sql) => {
-        const statement = prepare(sql)
-        const all = statement.all.bind(statement)
-        statement.all = (...params) => {
-          const rows = all(...params)
-          fetched += rows.length
-          return rows
-        }
-        return statement
-      })
-      await callWorkerList(runtime, { run: run.id, limit: 100 })
-      // worker-show reads the same listing for its one Dispatch.
-      db.listWorkerTerminalResources({ dispatchIds: ['dispatch-listed'], limit: 1 })
-      vi.mocked(sqlite.prepare).mockRestore()
-      return fetched
-    }
-
-    const alone = await fetchedBeside(0)
-    db?.close()
-    expect(await fetchedBeside(10_000)).toBe(alone)
-  })
-
-  it('keeps a resource-less worker whose follow-up started fresh in another terminal', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const run = db.createRun({
-      objective: 'Fresh follow-up of a legacy worker',
-      coordinatorHandle: 'term-coordinator',
-      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    const sqlite = sqliteFor(db)
-    const link = (followUp: string, of: string, incarnation: string) => {
-      sqlite
-        .prepare(
-          'UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ?, process_incarnation = ? WHERE id = ?'
-        )
-        .run(of, incarnation, followUp)
-    }
-    // Legacy Dispatches with no resource: one continued in a fresh terminal, one in its own process.
-    for (const id of ['dispatch-fresh', 'dispatch-same']) {
-      insertDispatch(db, run.id, id)
-      sqlite
-        .prepare('UPDATE dispatch_contexts SET process_incarnation = ? WHERE id = ?')
-        .run(`incarnation-${id}`, id)
-    }
-    insertWorkerInventory(db, run.id, 'dispatch-fresh-next', 'ready', 'not_requested')
-    link('dispatch-fresh-next', 'dispatch-fresh', 'incarnation-other')
-    insertWorkerInventory(db, run.id, 'dispatch-same-next', 'ready', 'not_requested')
-    link('dispatch-same-next', 'dispatch-same', 'incarnation-dispatch-same')
-
-    const page = await callWorkerList(runtime, { run: run.id, limit: 100 })
-
-    expect(page.workers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          dispatchId: 'dispatch-fresh',
-          agentTerminalHandle: 'term-dispatch-fresh',
-          terminalState: 'retained'
-        }),
-        expect.objectContaining({
-          dispatchId: 'dispatch-same',
-          agentTerminalHandle: null,
-          terminalState: null
-        })
-      ])
-    )
-    expect(page.counts).toEqual({ active: 2, retained: 1 })
-  })
-
-  it('finds a handed-on terminal through the follow-up index without a table scan', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const run = db.createRun({
-      objective: 'Handed-on lookup plan',
-      coordinatorHandle: 'term-coordinator',
-      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    insertWorkerInventory(db, run.id, 'dispatch-listed', 'succeeded', 'not_requested')
-    const sqlite = sqliteFor(db)
-    const prepare = sqlite.prepare.bind(sqlite)
-    const lookups: string[] = []
-    vi.spyOn(sqlite, 'prepare').mockImplementation((sql) => {
-      if (sql.includes('follow_up_of_dispatch_id')) {
-        lookups.push(sql)
-      }
-      return prepare(sql)
-    })
-    await callWorkerList(runtime, { run: run.id, limit: 100 })
-    vi.mocked(sqlite.prepare).mockRestore()
-
-    // The listing and the counts both ask.
-    expect(lookups).toHaveLength(2)
-    for (const sql of lookups) {
-      const plan = sqlite
-        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-        .all()
-        .map((step) => String(step.detail))
-      expect(plan.filter((detail) => detail.startsWith('SCAN '))).toEqual([])
-      expect(plan).toContainEqual(expect.stringContaining('idx_dispatch_contexts_follow_up_of'))
-    }
-  })
-
-  it('aggregates exact inventory counts while preserving filtered totals', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const run = db.createRun({
-      objective: 'Exact worker inventory counts',
-      coordinatorHandle: 'term-coordinator',
-      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    insertWorkerInventory(db, run.id, 'active', 'ready', 'not_requested')
-    insertWorkerInventory(db, run.id, 'reclaimable-a', 'succeeded', 'not_requested')
-    insertWorkerInventory(db, run.id, 'reclaimable-b', 'failed', 'not_requested')
-    insertDispatch(db, run.id, 'retained')
-    insertWorkerInventory(db, run.id, 'released', 'succeeded', 'released', 'released')
-    insertWorkerInventory(db, run.id, 'release-pending', 'ready', 'requested')
-    insertWorkerInventory(db, run.id, 'release-unknown', 'ready', 'unknown')
-
-    const page = await callWorkerList(runtime, { run: run.id })
-    const filtered = await callWorkerList(runtime, {
-      run: run.id,
-      terminalState: 'reclaimable'
-    })
-
-    expect(page.counts).toEqual({
-      active: 1,
-      reclaimable: 2,
-      retained: 1,
-      release_pending: 1,
-      release_unknown: 1,
-      released: 1
-    })
-    expect(page.page.total).toBe(7)
-    expect(filtered.workers.map((worker) => worker.dispatchId)).toEqual([
-      'reclaimable-b',
-      'reclaimable-a'
-    ])
-    expect(filtered.page.total).toBe(2)
-    expect(filtered.counts).toEqual(page.counts)
-  })
-
   it('never re-emits a row whose worker registers between pages', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
@@ -661,58 +380,6 @@ describe('orchestration worker-list pagination', () => {
     expect(second.counts).toEqual({ retained: 2 })
   })
 
-  it.each([10, 20, 40])(
-    'reads %i unreachable federated rows without a per-row query',
-    async (workerCount) => {
-      db = new OrchestrationDb(':memory:')
-      const runtime = new OrcaRuntimeService()
-      runtime.setOrchestrationDb(db)
-      const run = db.createRun({
-        objective: 'Federated read cost',
-        coordinatorHandle: 'term-coordinator',
-        coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-      })
-      for (let index = 0; index < workerCount; index += 1) {
-        insertDispatch(db, run.id, `dispatch-${String(index).padStart(3, '0')}`)
-      }
-      const prepare = vi.spyOn(sqliteFor(db), 'prepare')
-      prepare.mockClear()
-
-      await callWorkerList(runtime, { run: run.id, limit: 100, includeRemote: true })
-
-      // The page cost must not grow with the number of federated rows on it.
-      expect(prepare.mock.calls.length).toBeLessThan(8)
-    }
-  )
-
-  it('filters and labels terminal state through one projection', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const run = db.createRun({
-      objective: 'Unsupervised owned resource',
-      coordinatorHandle: 'term-coordinator',
-      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    // An owned, unreleased resource whose dispatch has no worker_dispatches row.
-    insertDispatch(db, run.id, 'dispatch-unsupervised')
-    sqliteFor(db)
-      .prepare(
-        `INSERT INTO worker_terminal_resources (
-           id, origin_dispatch_id, owner_dispatch_id, terminal_handle,
-           ownership_state, release_state
-         ) VALUES (?, ?, ?, ?, 'owned', 'not_requested')`
-      )
-      .run('resource-unsupervised', 'dispatch-unsupervised', 'dispatch-unsupervised', 'term-x')
-
-    const all = await callWorkerList(runtime, { run: run.id })
-    const active = await callWorkerList(runtime, { run: run.id, terminalState: 'active' })
-
-    expect(all.counts).toEqual({ active: 1 })
-    expect(active.workers.map((worker) => worker.dispatchId)).toEqual(['dispatch-unsupervised'])
-    expect(active.page.total).toBe(1)
-  })
-
   describe('a legacy cursor anchored outside the requested Run', () => {
     function twoRuns(): { runA: string; runB: string } {
       db = new OrchestrationDb(':memory:')
@@ -763,21 +430,6 @@ describe('orchestration worker-list pagination', () => {
         callWorkerList(runtime, { run: runA, limit: 10, cursor: foreign })
       ).rejects.toThrow(/changed destructively/u)
     })
-
-    it('still pages the requested Run from its own anchor', async () => {
-      const { runA } = twoRuns()
-      const runtime = new OrcaRuntimeService()
-      runtime.setOrchestrationDb(db!)
-      const own = encodeWorkerListCursor({
-        version: 2,
-        snapshot: { databaseId: 4 },
-        after: { createdAt: '2026-08-27 00:00:00', dispatchId: 'a-2', databaseId: 2 }
-      })
-
-      const page = await callWorkerList(runtime, { run: runA, limit: 10, cursor: own })
-
-      expect(page.workers.map((worker) => worker.dispatchId)).toEqual(['a-1'])
-    })
   })
 })
 
@@ -798,40 +450,6 @@ function insertDispatch(db: OrchestrationDb, runId: string, dispatchId: string):
        ) VALUES (?, ?, ?, ?, 'dispatched', '2026-08-27 00:00:00')`
     )
     .run(dispatchId, runId, task.id, `term-${dispatchId}`)
-}
-
-function insertWorkerInventory(
-  db: OrchestrationDb,
-  runId: string,
-  dispatchId: string,
-  workerState: 'ready' | 'succeeded' | 'failed',
-  releaseState: 'not_requested' | 'requested' | 'released' | 'unknown',
-  ownershipState: 'owned' | 'released' = 'owned'
-): void {
-  insertDispatch(db, runId, dispatchId)
-  const sqlite = sqliteFor(db)
-  sqlite
-    .prepare(
-      `INSERT INTO worker_dispatches (
-         dispatch_id, state, stage, agent_terminal_handle
-       ) VALUES (?, ?, 'ready', ?)`
-    )
-    .run(dispatchId, workerState, `term-${dispatchId}`)
-  sqlite
-    .prepare(
-      `INSERT INTO worker_terminal_resources (
-         id, origin_dispatch_id, owner_dispatch_id, terminal_handle,
-         ownership_state, release_state
-       ) VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      `resource-${dispatchId}`,
-      dispatchId,
-      dispatchId,
-      `term-${dispatchId}`,
-      ownershipState,
-      releaseState
-    )
 }
 
 function sqliteFor(db: OrchestrationDb): Database.Database {

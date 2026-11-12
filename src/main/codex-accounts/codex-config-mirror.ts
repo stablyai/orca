@@ -1,16 +1,17 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { createIntegrationStateFileCache } from '../credentials/integration-state-file-cache'
+import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import {
   ensureCodexDaemonSocketGuard,
   syncSystemConfigIntoManagedCodexHome
-} from '../codex/codex-config-mirror'
-import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
+} from '../codex/configuration/settings/codex-config-mirror'
+import { readCodexTopLevelModelProvider } from '../codex/structured/launch/codex-model-provider-config'
 import type { Store } from '../persistence/loading-store/store'
-import { toWindowsWslPath } from '../wsl'
-import { wasWslDistroLastSeenRunningSettled } from '../wsl-background-distro-gate'
-import { WSL_UNC_RUNNING_LEASE_MS } from '../wsl/wsl-unc-access-gate'
+import { wasWslDistroLastSeenRunningSettled } from '../wsl/discovery/wsl-background-distro-gate'
+import { WSL_UNC_RUNNING_LEASE_MS } from '../wsl/filesystem/wsl-unc-access-gate'
 
 export type CanonicalCodexConfig = {
   contents: string
@@ -21,6 +22,31 @@ export type CanonicalCodexConfig = {
 }
 
 export class CodexConfigMirror {
+  private readonly hostModelProvider = createIntegrationStateFileCache({
+    filePath: () => join(homedir(), '.codex', 'config.toml'),
+    readFromDisk: () => {
+      try {
+        return readCodexTopLevelModelProvider(
+          this.readHostConfigContents(join(homedir(), '.codex', 'config.toml'))
+        )
+      } catch (error) {
+        if (!isDefinitiveAbsence(error)) {
+          throw error
+        }
+        return null
+      }
+    }
+  })
+
+  readHostModelProvider(): string | null {
+    try {
+      return this.hostModelProvider.get()
+    } catch {
+      console.warn('[codex-accounts] Failed to read canonical provider config')
+      return null
+    }
+  }
+
   constructor(
     private readonly store: Pick<Store, 'getSettings'>,
     private readonly assertManagedHomePath: (
@@ -147,6 +173,10 @@ export class CodexConfigMirror {
     )
   }
 
+  private readHostConfigContents(configPath: string): string {
+    return readFileSync(configPath, 'utf-8')
+  }
+
   private readHostConfig(): CanonicalCodexConfig | null {
     const sourceHomePath = join(homedir(), '.codex')
     const primaryConfigPath = join(sourceHomePath, 'config.toml')
@@ -154,7 +184,7 @@ export class CodexConfigMirror {
       return null
     }
     try {
-      return { contents: readFileSync(primaryConfigPath, 'utf-8'), sourceHomePath }
+      return { contents: this.readHostConfigContents(primaryConfigPath), sourceHomePath }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read canonical config:', error)
       return null

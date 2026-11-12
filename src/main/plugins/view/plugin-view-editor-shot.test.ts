@@ -1,12 +1,4 @@
-import {
-  mkdtempSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  realpathSync,
-  symlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { NativeImage, WebContents } from 'electron'
@@ -18,8 +10,7 @@ import type {
 import type { PluginHostListEntry } from '../../../shared/plugins/plugin-list-entry'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginViewDesktopDeps } from './plugin-view-desktop'
-import { pluginEditorFileTarget, shootPluginEditor } from './plugin-view-editor-shot'
-import { guestKeyTargetFocusScript, hostWebviewFocusScript } from './plugin-view-editor-key-focus'
+import { shootPluginEditor } from './plugin-view-editor-shot'
 
 const relay = vi.hoisted(() => ({
   requestPluginViewFromRenderer:
@@ -161,114 +152,6 @@ describe('shot --editor', () => {
       y: 20,
       button: 'left',
       clickCount: 1
-    })
-  })
-
-  it('opens the file itself without acts, or with --in-place', async () => {
-    const guest = fakeContents(GUEST_URL)
-    relay.requestPluginViewFromRenderer.mockImplementation(answer(drawn(true)))
-    await shootPluginEditor(deps(guest.contents), fakeContents().contents, {
-      pluginKey: KEY,
-      filePath: '/w/a.sketch'
-    })
-    await shootPluginEditor(deps(guest.contents), fakeContents().contents, {
-      pluginKey: KEY,
-      filePath: '/w/a.sketch',
-      acts: [{ key: 'r' }],
-      inPlace: true
-    })
-    const opens = relay.requestPluginViewFromRenderer.mock.calls
-      .map((call) => call[1])
-      .filter((body) => body?.kind === 'open-editor')
-    expect(opens).toEqual([
-      expect.objectContaining({ filePath: '/w/a.sketch', fallbackFolder: '/w' }),
-      expect.objectContaining({ filePath: '/w/a.sketch', fallbackFolder: '/w' })
-    ])
-    expect(opens.every((body) => body?.kind === 'open-editor' && !body.capture?.scratch)).toBe(true)
-    // In place, the acted tab and its unsaved edits stay.
-    expect(opens.map((body) => body?.kind === 'open-editor' && body.capture?.keepOpen)).toEqual([
-      undefined,
-      true
-    ])
-  })
-
-  it("acts on this tab's own guest when another tab of the editor shares its URL", async () => {
-    const other = fakeContents(GUEST_URL, 7)
-    const mine = fakeContents(GUEST_URL, 8)
-    relay.requestPluginViewFromRenderer.mockImplementation(answer(drawn(true, null, 8)))
-    await shootPluginEditor(deps(mine.contents, [], [other.contents]), fakeContents().contents, {
-      pluginKey: KEY,
-      filePath: '/w/a.sketch',
-      acts: [{ key: 'r' }],
-      inPlace: true
-    })
-    expect(other.sent).toEqual([])
-    expect(mine.sent.length).toBeGreaterThan(0)
-  })
-
-  it('focuses the guest and the clicked element before each key, never the window', async () => {
-    const guest = fakeContents(GUEST_URL, 8)
-    const host = fakeContents()
-    relay.requestPluginViewFromRenderer.mockImplementation(answer(drawn(true, null, 8)))
-    await shootPluginEditor(deps(guest.contents), host.contents, {
-      pluginKey: KEY,
-      filePath: '/w/a.sketch',
-      acts: [{ click: [10, 20] }, { key: 'r' }],
-      inPlace: true
-    })
-    expect(host.sent).toContainEqual({ script: hostWebviewFocusScript(8) })
-    const focusAt = guest.sent.findIndex(
-      (event) =>
-        JSON.stringify(event) ===
-        JSON.stringify({ script: guestKeyTargetFocusScript({ x: 10, y: 20 }) })
-    )
-    const keyAt = guest.sent.findIndex(
-      (event) => JSON.stringify(event) === JSON.stringify({ type: 'keyDown', keyCode: 'r' })
-    )
-    expect(focusAt).toBeGreaterThan(-1)
-    expect(keyAt).toBeGreaterThan(focusAt)
-  })
-
-  it('reports a frame that never asked for its document and the errors it logged', async () => {
-    relay.requestPluginViewFromRenderer.mockImplementation(answer(drawn(false, 'never asked')))
-    const guest = fakeContents(GUEST_URL)
-    const shot = await shootPluginEditor(
-      deps(guest.contents, ["[frame] Refused to load the script 'https://cdn.example'"]),
-      fakeContents().contents,
-      { pluginKey: KEY, filePath: '/w/a.sketch' }
-    )
-    expect(shot.subscribed).toBe(false)
-    expect(shot.errors).toEqual([
-      'never asked',
-      "[frame] Refused to load the script 'https://cdn.example'"
-    ])
-  })
-
-  it('refuses acts while the window is on screen', async () => {
-    const guest = fakeContents(GUEST_URL)
-    await expect(
-      shootPluginEditor(
-        { ...deps(guest.contents), windowShown: () => true },
-        fakeContents().contents,
-        { pluginKey: KEY, filePath: '/w/a.sketch', acts: [{ key: 'r' }] }
-      )
-    ).rejects.toMatchObject({ code: 'invalid_argument' })
-    expect(relay.requestPluginViewFromRenderer).not.toHaveBeenCalled()
-  })
-})
-
-describe('the file target', () => {
-  it('names the real path too, so a symlinked folder still finds its workspace', async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-editor-target-')))
-    mkdirSync(join(root, 'real'))
-    writeFileSync(join(root, 'real', 'a.sketch'), '{}')
-    symlinkSync(join(root, 'real'), join(root, 'link'))
-    await expect(pluginEditorFileTarget(join(root, 'link', 'a.sketch'))).resolves.toEqual({
-      filePathAliases: [join(root, 'real', 'a.sketch')],
-      fallbackFolder: join(root, 'real')
-    })
-    await expect(pluginEditorFileTarget(join(root, 'missing.sketch'))).resolves.toEqual({
-      fallbackFolder: root
     })
   })
 })

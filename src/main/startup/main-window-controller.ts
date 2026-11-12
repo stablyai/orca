@@ -3,9 +3,9 @@ import { createMainWindow, loadMainWindow } from '../window/createMainWindow'
 import {
   recordCrashBreadcrumb,
   recordCoalescedCrashBreadcrumb
-} from '../crash-reporting/crash-breadcrumb-store'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
-import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-gone-classification'
+} from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
+import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-exits/process-gone-classification'
 import { resolveConsent } from '../telemetry/consent'
 import { trackAppOpenedOnce } from '../telemetry/client'
 import { ensureWindowsUserDataAclGrant } from './windows-user-data-acl'
@@ -38,7 +38,7 @@ import {
 } from './synthetic-title-runtime'
 import { requireMainWindowServices } from './main-window-service-readiness'
 import { recordRendererLaunchFailureProbe } from '../window/renderer-launch-failure-probe'
-import { trackBrowserExtensionMainWindow } from '../browser/extensions/browser-extension-window-model'
+import { trackBrowserExtensionMainWindow } from '../browser/extensions/tabs-and-windows/browser-extension-window-model'
 
 import { isResourceWindowVisible } from '../window/resource-view-admission'
 import {
@@ -55,10 +55,6 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     store: state.store,
     runtime: state.runtime,
     stats: state.stats,
-    claudeUsage: state.claudeUsage,
-    codexUsage: state.codexUsage,
-    openCodeUsage: state.openCodeUsage,
-    museUsage: state.museUsage,
     rateLimits: state.rateLimits,
     automations: state.automations,
     codexAccounts: state.codexAccounts,
@@ -235,7 +231,6 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       }
     }
     clearExpectedRendererReload(rendererWebContentsId)
-    state.automations?.setWebContents(null)
     clearMainWindowAgentStatusListeners()
   })
   logStartupMilestone('load-start')

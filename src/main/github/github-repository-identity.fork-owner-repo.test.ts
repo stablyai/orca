@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as GitRunner from '../git/runner'
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
+import type * as GhExecFileModule from '../git/command-runner/hosted-cli/gh-exec-file'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Fork PR reads prefer upstream while origin-only probes retain the checkout identity.
 
@@ -11,9 +12,13 @@ const { gitExecFileAsyncMock, ghExecFileAsyncMock, readLocalGitConfigSignatureMo
   })
 )
 
-vi.mock('../git/runner', async (importOriginal) => ({
-  ...(await importOriginal<typeof GitRunner>()),
-  gitExecFileAsync: gitExecFileAsyncMock,
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/hosted-cli/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GhExecFileModule>()),
   ghExecFileAsync: ghExecFileAsyncMock
 }))
 
@@ -21,10 +26,14 @@ vi.mock('./local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
 
-import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
+import { _resetRemoteNameListingCache } from '../git/remotes/remote-name-listing'
 import { getOwnerRepoForRemote, _resetOwnerRepoCache } from './github-repository-identity'
 import { getOwnerRepo } from './github-owner-repo-selection'
-import { getRepoUpstream } from './client/fetch/repo-slug-upstream'
+import { getRepoUpstream, probeRepoUpstream } from './client/fetch/repo-slug-upstream'
+
+import { acquire, release } from './gh-utils'
+
+afterEach(() => vi.useRealTimers())
 
 const FORK_PATH = '/tmp/fork-checkout'
 const NON_FORK_PATH = '/tmp/plain-checkout'
@@ -38,6 +47,8 @@ const REMOTE_URLS_BY_REPO: Record<string, Record<string, string>> = {
   [NON_FORK_PATH]: {
     origin: 'https://github.com/stablyai/orca.git'
   },
+  '/tmp/gitlab': { origin: 'https://gitlab.com/group/widget.git' },
+  '/tmp/custom': { origin: 'https://code.example.com/group/widget.git' },
   [SSH_FORK_PATH]: {
     origin: 'git@github.com:fsdwen/orca.git',
     upstream: 'git@github.com:stablyai/orca.git'
@@ -70,12 +81,6 @@ beforeEach(() => {
 describe('issue #7331: fork PR owner/repo resolution', () => {
   it('getOwnerRepo prefers the upstream parent on a fork checkout', async () => {
     const prRepo = await getOwnerRepo(FORK_PATH)
-
-    expect(prRepo).toEqual({ owner: 'stablyai', repo: 'orca' })
-  })
-
-  it('getOwnerRepo falls back to origin when there is no upstream remote', async () => {
-    const prRepo = await getOwnerRepo(NON_FORK_PATH)
 
     expect(prRepo).toEqual({ owner: 'stablyai', repo: 'orca' })
   })
@@ -117,4 +122,60 @@ describe('issue #7331: fork PR owner/repo resolution', () => {
     expect(upstream).toEqual({ owner: 'stablyai', repo: 'orca', host: 'github.com' })
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
+})
+
+describe('optional parent evidence', () => {
+  it.each([
+    ['{"isFork":false}', null],
+    [
+      '{"isFork":true,"parent":{"owner":{"login":"acme"},"name":"widget"}}',
+      { owner: 'acme', repo: 'widget', host: 'github.com' }
+    ],
+    ['{"isFork":true,"parent":null}', undefined],
+    ['{}', undefined],
+    ['invalid', undefined]
+  ])('persists only successful fork evidence from %s', async (stdout, expected) => {
+    ghExecFileAsyncMock.mockResolvedValue({ stdout })
+    expect((await probeRepoUpstream(NON_FORK_PATH)).upstream).toEqual(expected)
+  })
+
+  it('bounds global admission and leaves origin avatar evidence usable on failure', async () => {
+    vi.useFakeTimers()
+    for (let slot = 0; slot < 4; slot++) {
+      await acquire()
+    }
+    try {
+      const pending = probeRepoUpstream(NON_FORK_PATH)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(await pending).toEqual({
+        upstream: undefined,
+        origin: { owner: 'stablyai', repo: 'orca', host: 'github.com' }
+      })
+      expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+      let nextStarted = false
+      const next = acquire().then(() => {
+        nextStarted = true
+        release()
+      })
+      await Promise.resolve()
+      expect(nextStarted).toBe(false)
+      release()
+      await next
+      for (let slot = 0; slot < 3; slot++) {
+        release()
+      }
+    } catch (error) {
+      for (let slot = 0; slot < 4; slot++) {
+        release()
+      }
+      throw error
+    }
+  })
+})
+
+it('settles proven missing/other-forge origins but leaves unclassified custom hosts unknown', async () => {
+  expect(await probeRepoUpstream('/tmp/no-origin')).toEqual({ upstream: null, origin: null })
+  expect(await probeRepoUpstream('/tmp/gitlab')).toEqual({ upstream: null, origin: null })
+  ghExecFileAsyncMock.mockRejectedValue(new Error('auth unavailable'))
+  expect(await probeRepoUpstream('/tmp/custom')).toEqual({ upstream: undefined, origin: null })
 })

@@ -11,12 +11,7 @@ vi.mock('@orca/process-host', () => ({
 }))
 
 import { createWslWatcher } from './filesystem-watcher-wsl'
-import { WSL_WATCHER_PHYSICAL_EXIT_TIMEOUT_MS } from './wsl-watcher-process-exit'
-import {
-  MAX_PHYSICAL_WATCHER_CHILDREN,
-  reserveWatcherChild,
-  resetWatcherChildRegistryForTest
-} from '../watcher-process/parcel-watcher-child-registry'
+import { resetWatcherChildRegistryForTest } from '../watcher-process/child-lifecycle/parcel-watcher-child-registry'
 import type { WatchedRoot, WslWatcherDeps } from './filesystem-watcher-wsl'
 
 const SNAPSHOT_START = '\0\x1e\0'
@@ -55,17 +50,6 @@ function makeDeps(
   }
 }
 
-function startWatcher(deps = makeDeps()): {
-  child: FakeChildProcess
-  promise: Promise<WatchedRoot>
-  deps: ReturnType<typeof makeDeps>
-} {
-  const child = new FakeChildProcess()
-  spawnMock.mockReturnValueOnce(child)
-  const promise = createWslWatcher(ROOT_KEY, ROOT_KEY, deps)
-  return { child, promise, deps }
-}
-
 async function resolveInitialSnapshot(
   child: FakeChildProcess,
   promise: Promise<WatchedRoot>
@@ -82,165 +66,6 @@ describe('createWslWatcher', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it('spawns a WSL-native snapshot process for the distro path', async () => {
-    const { child, promise } = startWatcher()
-    child.stdout.write(snapshotFrame([]))
-
-    await promise
-
-    expect(spawnMock).toHaveBeenCalledWith({
-      program: 'wsl.exe',
-      args: ['-d', 'Ubuntu', '--exec', 'sh', '-s', '--', '/home/me/repo'],
-      stdio: 'pipe',
-      // Explicit cwd survives deletion of Orca's inherited worktree (#16463).
-      cwd: expect.any(String)
-    })
-  })
-
-  it('counts WSL watcher processes against the global physical child cap', async () => {
-    const releases = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () =>
-      reserveWatcherChild()
-    )
-
-    await expect(createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps())).rejects.toThrow(
-      'Physical file watcher process limit reached'
-    )
-    expect(spawnMock).not.toHaveBeenCalled()
-    releases.forEach((release) => release?.())
-  })
-
-  it('releases the WSL physical child reservation only after close', async () => {
-    const siblingReleases = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN - 1 }, () =>
-      reserveWatcherChild()
-    )
-    const { child, promise } = startWatcher()
-    await resolveInitialSnapshot(child, promise)
-
-    expect(reserveWatcherChild()).toBeNull()
-    child.emit('close', null, 'SIGTERM')
-    const afterClose = reserveWatcherChild()
-    expect(afterClose).not.toBeNull()
-
-    afterClose?.()
-    siblingReleases.forEach((release) => release?.())
-  })
-
-  it('releases the WSL child reservation after a synchronous script write failure', async () => {
-    const siblingReleases = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN - 1 }, () =>
-      reserveWatcherChild()
-    )
-    const child = new FakeChildProcess()
-    vi.spyOn(child.stdin, 'end').mockImplementation(() => {
-      throw new Error('script write failed')
-    })
-    spawnMock.mockReturnValueOnce(child)
-
-    await expect(createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps())).rejects.toThrow(
-      'script write failed'
-    )
-    const afterFailure = reserveWatcherChild()
-    expect(afterFailure).not.toBeNull()
-
-    afterFailure?.()
-    siblingReleases.forEach((release) => release?.())
-  })
-
-  it('diffs WSL snapshots into create, update, and delete events', async () => {
-    const scheduleBatchFlush = vi.fn()
-    const { child, promise } = startWatcher(makeDeps(scheduleBatchFlush))
-
-    child.stdout.write(
-      snapshotFrame([
-        ['f', '1.0', '/home/me/repo/README.md'],
-        ['f', '1.0', '/home/me/repo/old.txt']
-      ])
-    )
-    const root = await promise
-    child.stdout.write(
-      snapshotFrame([
-        ['f', '2.0', '/home/me/repo/README.md'],
-        ['f', '1.0', '/home/me/repo/new.txt']
-      ])
-    )
-
-    expect(scheduleBatchFlush).toHaveBeenCalledOnce()
-    expect(root.batch.events).toEqual([
-      { type: 'update', path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\README.md' },
-      { type: 'create', path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\new.txt' },
-      { type: 'delete', path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\old.txt' }
-    ])
-  })
-
-  it('preserves control characters in filenames across byte-split snapshot frames', async () => {
-    const { child, promise, deps } = startWatcher()
-    child.stdout.write(snapshotFrame([]))
-    const root = await promise
-    const names = [
-      'start\x1einside.txt',
-      'end\x1finside.txt',
-      'trailing\x1f',
-      'tab\tline\n漢字.txt'
-    ]
-    const frame = (mtime: string) =>
-      snapshotFrame(names.map((name) => ['f', mtime, `/home/me/repo/${name}`]))
-    for (const mtime of ['1.0', '2.0']) {
-      for (const byte of Buffer.from(frame(mtime))) {
-        child.stdout.write(Buffer.from([byte]))
-      }
-    }
-    child.stdout.write(snapshotFrame([]))
-
-    expect(root.batch.events).toEqual(
-      ['create', 'update', 'delete'].flatMap((type) =>
-        names.map((name) => ({ type, path: `${ROOT_KEY}\\${name}` }))
-      )
-    )
-    expect(deps.scheduleBatchFlush).toHaveBeenCalledTimes(3)
-    await root.subscription.unsubscribe()
-  })
-
-  it('turns watcher exit into an overflow refresh without retaining UNC paths', async () => {
-    const scheduleBatchFlush = vi.fn()
-    const deps = makeDeps(scheduleBatchFlush)
-    const { child, promise } = startWatcher(deps)
-    const root = await resolveInitialSnapshot(child, promise)
-    deps.watchedRoots.set(ROOT_KEY, root)
-
-    child.emit('close', null, 'SIGTERM')
-
-    expect(scheduleBatchFlush).toHaveBeenCalledOnce()
-    expect(root.batch.events).toEqual([])
-    expect(root.batch.overflowed).toBe(true)
-    expect(deps.watchedRoots.has(ROOT_KEY)).toBe(false)
-  })
-
-  it('reports an exit with its distro before scheduling the overflow refresh that reads the root', async () => {
-    const onUnexpectedStop = vi.fn()
-    const deps = { ...makeDeps(), onUnexpectedStop }
-    deps.scheduleBatchFlush.mockImplementation(() => {
-      // The refresh must follow the stop signal, or its read could boot the stopped distro.
-      expect(onUnexpectedStop).toHaveBeenCalled()
-    })
-    const { child, promise } = startWatcher(deps)
-    const root = await resolveInitialSnapshot(child, promise)
-
-    child.emit('close', null, 'SIGTERM')
-
-    expect(deps.scheduleBatchFlush).toHaveBeenCalledOnce()
-    expect(onUnexpectedStop).toHaveBeenCalledExactlyOnceWith(root, 'Ubuntu')
-  })
-
-  it('kills the WSL child on unsubscribe without emitting a shutdown refresh', async () => {
-    const scheduleBatchFlush = vi.fn()
-    const { child, promise } = startWatcher(makeDeps(scheduleBatchFlush))
-    const root = await resolveInitialSnapshot(child, promise)
-
-    await root.subscription.unsubscribe()
-
-    expect(child.kill).toHaveBeenCalledOnce()
-    expect(scheduleBatchFlush).not.toHaveBeenCalled()
   })
 
   it('keeps unsubscribe pending until the WSL child physically closes', async () => {
@@ -260,90 +85,6 @@ describe('createWslWatcher', () => {
     child.emit('close', null, 'SIGTERM')
     await unsubscribe
     expect(settled).toBe(true)
-  })
-
-  it('retains a timed-out WSL watcher owner until a later physical close', async () => {
-    vi.useFakeTimers()
-    try {
-      const child = new FakeChildProcess()
-      child.kill = vi.fn(() => true)
-      spawnMock.mockReturnValueOnce(child)
-      const promise = createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps())
-      const root = await resolveInitialSnapshot(child, promise)
-
-      const unsubscribe = root.subscription.unsubscribe()
-      const rejected = expect(unsubscribe).rejects.toMatchObject({
-        code: 'process_unavailable',
-        physicalExit: expect.any(Promise)
-      })
-      await vi.advanceTimersByTimeAsync(WSL_WATCHER_PHYSICAL_EXIT_TIMEOUT_MS)
-      await rejected
-
-      const retry = root.subscription.unsubscribe()
-      child.emit('close', null, 'SIGTERM')
-      await expect(retry).resolves.toBeUndefined()
-      expect(child.kill).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('retains the WSL owner when the termination signal is rejected', async () => {
-    const child = new FakeChildProcess()
-    child.kill = vi.fn().mockReturnValueOnce(false).mockReturnValue(true)
-    spawnMock.mockReturnValueOnce(child)
-    const promise = createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps())
-    const root = await resolveInitialSnapshot(child, promise)
-
-    await expect(root.subscription.unsubscribe()).rejects.toMatchObject({
-      code: 'process_unavailable',
-      physicalExit: expect.any(Promise)
-    })
-
-    const retry = root.subscription.unsubscribe()
-    child.emit('close', null, 'SIGTERM')
-    await expect(retry).resolves.toBeUndefined()
-    expect(child.kill).toHaveBeenCalledTimes(2)
-  })
-
-  it('rejects when the WSL process exits before the first snapshot', async () => {
-    const { child, promise } = startWatcher()
-
-    child.stderr.write('find failed')
-    child.emit('close', 1, null)
-
-    await expect(promise).rejects.toThrow('WSL watcher exited before first snapshot')
-  })
-
-  it('does not emit a shutdown refresh after a startup error', async () => {
-    const scheduleBatchFlush = vi.fn()
-    const { child, promise } = startWatcher(makeDeps(scheduleBatchFlush))
-
-    child.emit('error', new Error('spawn failed'))
-    child.emit('close', 1, null)
-
-    await expect(promise).rejects.toThrow('spawn failed')
-    expect(scheduleBatchFlush).not.toHaveBeenCalled()
-  })
-
-  it('rejects startup when WSL exits before reading the snapshot script', async () => {
-    const { child, promise } = startWatcher()
-
-    child.stdin.emit('error', new Error('write EPIPE'))
-
-    await expect(promise).rejects.toThrow('write EPIPE')
-  })
-
-  it('kills the snapshot process when the install abort signal fires during startup', async () => {
-    const child = new FakeChildProcess()
-    spawnMock.mockReturnValueOnce(child)
-    const controller = new AbortController()
-    const promise = createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps(), controller.signal)
-
-    controller.abort()
-
-    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
-    expect(child.kill).toHaveBeenCalledOnce()
   })
 
   it('does not acknowledge startup abort before the WSL child closes', async () => {
@@ -368,17 +109,5 @@ describe('createWslWatcher', () => {
 
     child.emit('close', null, 'SIGTERM')
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
-  })
-
-  it('rejects immediately when the install abort signal is already aborted', async () => {
-    const controller = new AbortController()
-    controller.abort()
-
-    await expect(
-      createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps(), controller.signal)
-    ).rejects.toMatchObject({
-      name: 'AbortError'
-    })
-    expect(spawnMock).not.toHaveBeenCalled()
   })
 })

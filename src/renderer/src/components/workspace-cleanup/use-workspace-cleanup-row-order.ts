@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import type { WorkspaceCleanupSortState } from '../../../../shared/workspace-cleanup-filter-model'
+import type { WorkspaceCleanupSortState } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 type OrderedRow = { worktreeId: string }
 

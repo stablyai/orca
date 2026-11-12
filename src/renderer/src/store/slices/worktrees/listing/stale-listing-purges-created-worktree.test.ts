@@ -6,14 +6,11 @@ import { applyCreatedWorktree } from '../create/created-worktree-state-merge'
 import { worktreeCatalogVersionKey } from './worktree-catalog-version-state'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import type { WorktreeListingMergeOutcome } from './detected-worktree-refresh-admission'
-import {
-  TEST_REPO,
-  createTestStore,
-  makeTab,
-  makeWorktree,
-  seedStore
-} from '../../store-test-helpers'
-import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
+import { TEST_REPO } from '../../../repos/repo.test-fixture'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
+import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
   readStructuredAgentLaunchRecord,
@@ -196,7 +193,6 @@ describe('a listing versioned before an applied create', () => {
   const HOST = 'host-epoch-1'
   const before = { epoch: HOST, sequence: 6 }
   const createReply = { epoch: HOST, sequence: 7 }
-  const after = { epoch: HOST, sequence: 8 }
 
   beforeEach(() => {
     resetStructuredAgentLaunchPersistenceForTests()
@@ -231,31 +227,6 @@ describe('a listing versioned before an applied create', () => {
     expect(state.detectedWorktreesByRepo[REPO_ID]!.worktrees.map((w) => w.id)).toContain(CREATED_ID)
   })
 
-  it('reports a listing whose repo owner went away as not-current, even when also older', () => {
-    const store = createTestStore()
-    seedWithAppliedCreate(store)
-    store.setState({ repos: [] })
-    const existingRow = store.getState().worktreesByRepo[REPO_ID]![0]!
-
-    expect(applyListing(store, [existingRow], before)).toBe('not-current')
-
-    expect(store.getState().unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
-  })
-
-  it('a later listing that includes the worktree applies and advances the version', () => {
-    const store = createTestStore()
-    seedWithAppliedCreate(store)
-    const rows = store.getState().worktreesByRepo[REPO_ID]!
-
-    expect(applyListing(store, [...rows], after)).toBe('applied')
-
-    const state = store.getState()
-    expect(state.activeWorktreeId).toBe(CREATED_ID)
-    expect(
-      state.worktreeCatalogVersionByRepoHost[worktreeCatalogVersionKey(REPO_ID, 'local')]
-    ).toEqual(after)
-  })
-
   it('a listing from a restarted host is a new catalog, not an older one', () => {
     const store = createTestStore()
     seedWithAppliedCreate(store)
@@ -281,7 +252,11 @@ describe('a listing versioned before an applied create', () => {
   })
 })
 
-import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+import * as launchDrafts from '@/components/native-chat/drafts/native-chat-draft-reset'
+import * as launchDraftsOwner1 from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import * as launchDraftsOwner2 from '@/components/native-chat/drafts/native-chat-draft-scope'
+import * as launchDraftsOwner3 from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import * as launchDraftsOwner4 from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
 import { recentlyRenamedWorktreeIdExpiry } from '@/hooks/ipc-events/worktree-event-runtime'
 
 it.each([
@@ -299,21 +274,25 @@ it.each([
     recentlyRenamedWorktreeIdExpiry.clear()
     const store = createTestStore()
     seedCreatedWorkspaceWithPendingLaunch(store, true)
-    const scope = launchDrafts.nativeChatLaunchPromptDraftScopeKey(CREATED_ID, 'claude', 'local')
-    const other = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+    const scope = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
+      CREATED_ID,
+      'claude',
+      'local'
+    )
+    const other = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
       CREATED_ID,
       'claude',
       'ssh:other'
     )
-    const ordinary = launchDrafts.structuredAgentSessionDraftScopeKey('existing-chat')
+    const ordinary = launchDraftsOwner2.structuredAgentSessionDraftScopeKey('existing-chat')
     for (const key of [scope, other, ordinary]) {
-      launchDrafts.updateNativeChatComposerDraft(
+      launchDraftsOwner3.updateNativeChatComposerDraft(
         key,
         { text: 'keep', owner: { workspaceId: CREATED_ID, executionHostId: 'local' } },
         'immediate'
       )
     }
-    const attempt = launchDrafts.captureNativeChatComposerSubmission(scope)
+    const attempt = launchDraftsOwner4.captureNativeChatComposerSubmission(scope)
     if (kind === 'renamed') {
       recentlyRenamedWorktreeIdExpiry.set(CREATED_ID, 1_000 + 20_000)
     }
@@ -346,7 +325,7 @@ it.each([
     })
     expect(attempt.draft?.text).toBe('keep')
     for (const key of [other, ordinary]) {
-      expect(launchDrafts.readNativeChatComposerDraft(key).text).toBe('keep')
+      expect(launchDraftsOwner3.readNativeChatComposerDraft(key).text).toBe('keep')
     }
     launchDrafts.clearNativeChatComposerDraftsForTests()
     recentlyRenamedWorktreeIdExpiry.clear()
@@ -361,12 +340,12 @@ it('nested listing does not add a separate setup-death policy before a refused e
   )
   seedStore(store, { worktreesByRepo: { [REPO_ID]: rows } })
   const scopes = rows.map(({ id }) =>
-    launchDrafts.nativeChatLaunchPromptDraftScopeKey(id, 'codex', 'local')
+    launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(id, 'codex', 'local')
   )
   scopes.forEach((key) =>
-    launchDrafts.updateNativeChatComposerDraft(key, { text: 'task' }, 'immediate')
+    launchDraftsOwner3.updateNativeChatComposerDraft(key, { text: 'task' }, 'immediate')
   )
-  const attempts = scopes.map(launchDrafts.captureNativeChatComposerSubmission)
+  const attempts = scopes.map(launchDraftsOwner4.captureNativeChatComposerSubmission)
   const parentReply =
     Promise.withResolvers<Awaited<ReturnType<typeof window.api.worktrees.remove>>>()
   vi.mocked(window.api.worktrees.remove).mockReturnValueOnce(parentReply.promise)

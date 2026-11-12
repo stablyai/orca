@@ -8,7 +8,7 @@ import { resolvePaletteFocusRestoreTarget } from '@/components/cmd-j/palette-foc
 import {
   CREATE_WORKTREE_ITEM_ID,
   getNextWorktreePaletteSelection
-} from '@/lib/worktree-palette-create-action'
+} from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 import { useAppStore } from '@/store/index'
 import { CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-task-search'

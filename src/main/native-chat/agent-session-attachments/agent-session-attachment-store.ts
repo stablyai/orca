@@ -1,5 +1,7 @@
 // Per-upload directories preserve original filenames without collisions; atomic commit hides partial bytes.
 
+import { readAttachmentTextChunk } from './agent-session-attachment-text-read'
+import type { AttachmentTextRequest } from '../../../shared/attachment-text/attachment-text-source'
 import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
@@ -7,10 +9,10 @@ import {
   sanitizeAgentSessionAttachmentName,
   type AgentSessionAttachmentUploadCommitResult
 } from '../../../shared/agent-session/agent-session-attachments'
-import type { RuntimeFilePreviewResult } from '../../../shared/runtime-types'
-import { readAuthorizedDocPreviewFile } from '../../../shared/doc-preview-file-access'
+import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
+import { readAuthorizedDocPreviewFile } from '../../../shared/document-preview/doc-preview-file-access'
 import { renameFileWithWindowsRetryAsync } from '../../../shared/windows-retry-file-operations'
-import { IMAGE_FILE_MIME_TYPES } from '../../../shared/image-file-extensions'
+import { IMAGE_FILE_MIME_TYPES } from '../../../shared/file-preview/image-mime-types'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   assertPreviewWithinTransportBudget,
@@ -184,6 +186,10 @@ export class AgentSessionAttachmentStore {
   }
 
   /** Refuse out-of-store paths and previews exceeding the remote reply budget. */
+  readTextChunk(request: AttachmentTextRequest, maxContentBytes?: number) {
+    return readAttachmentTextChunk(this.rootDir, request, maxContentBytes)
+  }
+
   async readPreview(filePath: string, maxContentBytes?: number): Promise<RuntimeFilePreviewResult> {
     if (
       !IMAGE_FILE_MIME_TYPES[extname(filePath).toLowerCase()] ||

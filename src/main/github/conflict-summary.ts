@@ -2,16 +2,16 @@ import type { PRConflictSummary } from '../../shared/github/pull-request-types'
 import {
   isUnsupportedMergeTreeMergeBaseError,
   isUnsupportedMergeTreeWriteTreeError
-} from '../../shared/git-merge-tree-capability'
-import { gitExecFileAsync } from '../git/runner'
+} from '../../shared/git/branches/git-merge-tree-capability'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from '../git/git-runtime-options'
 import { createLocalGitObjectQuarantine } from '../git/local-git-object-quarantine'
 import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
-import { RuntimeRemoteFetchController } from '../runtime/runtime-remote-fetch-controller'
+import { RuntimeRemoteFetchController } from '../runtime/repositories/runtime-remote-fetch-controller'
 import {
   clearGitCapabilityStateForTests,
   withLocalGitCapabilityCacheForExecution
-} from '../git/git-capability-state'
+} from '../git/command-runner/host-routing/git-capability-state'
 import {
   __resetPRConflictSummaryDerivationCachesForTests,
   buildConflictSummaryCacheKey,

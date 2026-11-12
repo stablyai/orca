@@ -5,9 +5,9 @@ import type {
   GitHubRateLimitSnapshot
 } from '../../shared/github/rate-limit-types'
 import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
+import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { acquire, release } from './gh-utils'
-import { ghExecFileAsync } from '../git/runner'
+import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
 import {
   clearGhRateLimitBlock,
   getGhRateLimitBlockedUntilMs,
@@ -23,6 +23,27 @@ const RATE_LIMIT_CACHE_TTL_MS = 30_000
 let cached: GitHubRateLimitSnapshot | null = null
 // Negative-cache failures, including Enterprise hosts with rate limiting disabled.
 let probeFailure: { at: number; error: string } | null = null
+
+// gh slot holders await probes, so probes use their own limiter; probe holders acquire nothing else.
+const probeLimiter = new PrioritySemaphore(2)
+const NATIVE_PROBE_PRIORITY = 0
+const SCOPE_PROBE_PRIORITY = 1
+
+async function runRateLimitProbe(
+  priority: number,
+  options: { host: string; wslDistro?: string }
+): Promise<string> {
+  const releaseProbe = await probeLimiter.acquire(priority)
+  try {
+    const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], {
+      encoding: 'utf-8',
+      ...options
+    })
+    return stdout
+  } finally {
+    releaseProbe()
+  }
+}
 
 type GhRateLimitPayload = {
   resources?: {
@@ -53,6 +74,8 @@ function parseBucket(
 export function _resetRateLimitCache(): void {
   cached = null
   probeFailure = null
+  probeInFlight = null
+  forcedFollowUp = null
   scopeProbeFailureAtMs.clear()
   scopeRefinementInFlight.clear()
 }
@@ -214,27 +237,21 @@ function refineBreakerForScope(scope: string): void {
   }
   const probe = (async () => {
     try {
-      await acquire()
-      try {
-        // Query the tripping runtime/host, independently of the shared native snapshot.
-        const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], {
-          encoding: 'utf-8',
-          host: parts.host,
-          ...(parts.runtime === 'wsl' ? { wslDistro: parts.wslDistro } : {})
-        })
-        const parsed = JSON.parse(stdout) as GhRateLimitPayload
-        scopeProbeFailureAtMs.delete(scope)
-        // Refine only this scope's buckets; never overwrite the native github.com snapshot.
-        for (const bucket of ['core', 'search', 'graphql'] as GhRateLimitBucket[]) {
-          const b = parseBucket(parsed.resources?.[bucket])
-          if (b.limit > 0 && b.remaining <= 0) {
-            recordGhPrimaryRateLimit(bucket, b.resetAt * 1000, scope)
-          } else if (b.limit > 0) {
-            clearGhRateLimitBlock(bucket, scope)
-          }
+      // Query the tripping runtime/host, independently of the shared native snapshot.
+      const stdout = await runRateLimitProbe(SCOPE_PROBE_PRIORITY, {
+        host: parts.host,
+        ...(parts.runtime === 'wsl' ? { wslDistro: parts.wslDistro } : {})
+      })
+      const parsed = JSON.parse(stdout) as GhRateLimitPayload
+      scopeProbeFailureAtMs.delete(scope)
+      // Refine only this scope's buckets; never overwrite the native github.com snapshot.
+      for (const bucket of ['core', 'search', 'graphql'] as GhRateLimitBucket[]) {
+        const b = parseBucket(parsed.resources?.[bucket])
+        if (b.limit > 0 && b.remaining <= 0) {
+          recordGhPrimaryRateLimit(bucket, b.resetAt * 1000, scope)
+        } else if (b.limit > 0) {
+          clearGhRateLimitBlock(bucket, scope)
         }
-      } finally {
-        release()
       }
     } catch {
       // Pasted hosts are user-controlled; bound retained failures across them.
@@ -250,6 +267,20 @@ registerGhRateLimitResetProbe((_bucket, scope) => refineBreakerForScope(scope))
 
 // Share cold probes; TTL caching cannot dedupe calls before the first result.
 let probeInFlight: Promise<GetRateLimitResult> | null = null
+// Forced callers must see quota read after their call, so they share one probe that starts when the running one settles.
+let forcedFollowUp: PromiseWithResolvers<GetRateLimitResult> | null = null
+
+function startProbe(): Promise<GetRateLimitResult> {
+  const probe = fetchRateLimitSnapshot().finally(() => {
+    // Hand off synchronously so no caller can join a follow-up after its probe has started.
+    const next = forcedFollowUp
+    forcedFollowUp = null
+    probeInFlight = null
+    next?.resolve(startProbe())
+  })
+  probeInFlight = probe
+  return probe
+}
 
 export async function getRateLimit(options?: { force?: boolean }): Promise<GetRateLimitResult> {
   if (!options?.force && cached && Date.now() - cached.fetchedAt < RATE_LIMIT_CACHE_TTL_MS) {
@@ -258,28 +289,20 @@ export async function getRateLimit(options?: { force?: boolean }): Promise<GetRa
   if (!options?.force && probeFailure && Date.now() - probeFailure.at < RATE_LIMIT_CACHE_TTL_MS) {
     return { ok: false, error: probeFailure.error }
   }
-  if (!options?.force && probeInFlight) {
+  if (!probeInFlight) {
+    return startProbe()
+  }
+  if (!options?.force) {
     return probeInFlight
   }
-  const probe = fetchRateLimitSnapshot()
-  probeInFlight = probe
-  try {
-    return await probe
-  } finally {
-    if (probeInFlight === probe) {
-      probeInFlight = null
-    }
-  }
+  forcedFollowUp ??= Promise.withResolvers<GetRateLimitResult>()
+  return forcedFollowUp.promise
 }
 
 async function fetchRateLimitSnapshot(): Promise<GetRateLimitResult> {
-  await acquire()
   try {
     // Pin the shared native snapshot against ambient GH_HOST redirection.
-    const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], {
-      encoding: 'utf-8',
-      host: 'github.com'
-    })
+    const stdout = await runRateLimitProbe(NATIVE_PROBE_PRIORITY, { host: 'github.com' })
     const parsed = JSON.parse(stdout) as GhRateLimitPayload
     const snapshot: GitHubRateLimitSnapshot = {
       core: parseBucket(parsed.resources?.core),
@@ -294,7 +317,5 @@ async function fetchRateLimitSnapshot(): Promise<GetRateLimitResult> {
     const message = err instanceof Error ? err.message : String(err)
     probeFailure = { at: Date.now(), error: message }
     return { ok: false, error: message }
-  } finally {
-    release()
   }
 }

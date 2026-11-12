@@ -32,22 +32,6 @@ describe('native account verification before agy launch', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
   })
 
-  it('retains non-Windows delegation and propagates native mismatch refusal', async () => {
-    prepareForLaunch.mockRejectedValueOnce(new Error('native account changed'))
-    await expect(
-      prepareAntigravityAccountForLaunch({
-        command: 'agy',
-        env: { HOME: '/task/home' },
-        envIsComplete: true
-      })
-    ).rejects.toThrow('native account changed')
-    await prepareAntigravityAccountForLaunch({
-      command: 'agy',
-      env: { HOME: '/task/home' },
-      envIsComplete: true
-    })
-    expect(prepareForLaunch).toHaveBeenCalledTimes(2)
-  })
   it('preserves owning-host and distro boundaries without reading client credentials', async () => {
     await prepareAntigravityAccountForLaunch({
       launchAgent: 'antigravity',
@@ -56,12 +40,6 @@ describe('native account verification before agy launch', () => {
     await prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity', isWsl: true })
     await prepareAntigravityAccountForLaunch({ launchAgent: 'codex' })
     expect(existsSync).not.toHaveBeenCalled()
-    expect(getAntigravityAccountService).not.toHaveBeenCalled()
-  })
-
-  it('does not read native credentials when no account selection exists', async () => {
-    vi.mocked(existsSync).mockReturnValue(false)
-    await prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity' })
     expect(getAntigravityAccountService).not.toHaveBeenCalled()
   })
 

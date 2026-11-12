@@ -6,11 +6,11 @@ import {
 import type { AgentTrustPreset } from './agent-trust-presets'
 import { resolveLocalClaudeTrustConfig } from '../../claude/claude-folder-trust-file'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
-import type { AgentWorkspaceTrustSpawnRequest } from '../../../shared/agent-workspace-trust-spawn-request'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import type { AgentWorkspaceTrustSpawnRequest } from '../../../shared/agent-launch/permissions/agent-workspace-trust-spawn-request'
+import { parseWslUncPath, toLinuxPath } from '../../../shared/wsl-paths'
 import { applyWorkspaceTrustOnThisHost, launchedAgentHome } from './execution-host-workspace-trust'
-import { getLocalCodexTrustConfigFiles } from '../../codex/codex-home-paths'
-import { getCachedWslHome } from '../../wsl-home-cache'
+import { getLocalCodexTrustConfigFiles } from '../../codex/configuration/homes/codex-home-paths'
+import { getCachedWslHome } from '../../wsl/discovery/wsl-home-cache'
 
 export type AgentTrustLaunchContext = {
   /** The final spawn env, before the host's own process env. */
@@ -45,6 +45,31 @@ function localHomePaths(workspacePath: string, context: AgentTrustLaunchContext)
     : [homedir(), context.env?.HOME, context.env?.USERPROFILE]
 }
 
+/** Antigravity in a WSL guest reads `~/.gemini` in the distro, keyed by its Linux cwd. */
+async function applyAntigravityWslTrust(
+  workspacePath: string,
+  context: AgentTrustLaunchContext
+): Promise<void> {
+  const uncWorkspace = parseWslUncPath(workspacePath)
+  const distro = uncWorkspace?.distro ?? context.wslDistro
+  // A drive-letter workspace run in the guest starts under /mnt/<drive>.
+  const guestPath = uncWorkspace?.linuxPath ?? toLinuxPath(workspacePath)
+  // The cached home is a UNC path into the guest; an uncached home means no trust write.
+  const guestHome = distro ? getCachedWslHome(distro) : undefined
+  if (!guestHome || !guestPath.startsWith('/')) {
+    return
+  }
+  // Keep the host path as the ownership key so worktree removal finds the entry.
+  await applyWorkspaceTrustOnThisHost('antigravity', workspacePath, () => ({
+    homes: [guestHome],
+    agentHome: guestHome,
+    guestWorkspacePath: guestPath,
+    claudeConfig: () => null,
+    codexConfigFiles: () => [],
+    deadlineMs: SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
+  }))
+}
+
 /** Best-effort trust on the execution host; failure or timeout leaves the agent to ask. */
 export async function applyAgentWorkspaceTrust(
   preset: AgentTrustPreset,
@@ -55,8 +80,11 @@ export async function applyAgentWorkspaceTrust(
     // Forward to the SSH relay so trust is written on the agent’s host.
     return { agentWorkspaceTrust: { workspacePath } }
   }
-  // These writers target local homes, which WSL agents do not read.
+  // The other writers target local homes, which WSL agents do not read.
   if (preset !== 'claude' && isWslLaunch(workspacePath, context)) {
+    if (preset === 'antigravity') {
+      await applyAntigravityWslTrust(workspacePath, context)
+    }
     return {}
   }
   await applyWorkspaceTrustOnThisHost(preset, workspacePath, () => {

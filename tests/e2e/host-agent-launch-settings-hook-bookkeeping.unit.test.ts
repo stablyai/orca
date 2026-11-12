@@ -1,15 +1,15 @@
 // @vitest-environment happy-dom
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   deferred,
   fixture
-} from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
-import { RuntimeClientSettingsController } from '../../src/main/runtime/runtime-client-settings'
-import { HostAgentLaunchSettings } from '../../src/renderer/src/components/settings/HostAgentLaunchSettings'
+} from '../../src/main/persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
+import { RuntimeClientSettingsController } from '../../src/main/runtime/client/settings/runtime-client-settings'
+import { HostAgentLaunchSettings } from '../../src/renderer/src/components/settings/agents/launch/HostAgentLaunchSettings'
 import { TooltipProvider } from '../../src/renderer/src/components/ui/tooltip'
-import { getAgentCatalog } from '../../src/renderer/src/lib/agent-catalog'
+import { getAgentCatalog } from '../../src/renderer/src/lib/agent-catalog/agent-catalog'
 
 const transport = vi.hoisted(() => ({ read: vi.fn(), mutate: vi.fn() }))
 const hooks = vi.hoisted(() => ({ apply: vi.fn(async () => {}) }))
@@ -21,17 +21,20 @@ vi.mock('../../src/main/ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
-vi.mock('../../src/main/agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../src/main/agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: hooks.apply
 }))
-vi.mock('../../src/renderer/src/components/settings/agent-launch-settings-transport', () => ({
-  readHostAgentLaunchSettings: transport.read,
-  mutateHostAgentLaunchSettings: transport.mutate,
-  hostSupportsLaunchChoices: async () => false,
-  hostSupportsOwnChatPermissions: async () => true,
-  hostSupportsAutoPermissions: async () => true,
-  hostSupportsNativeChatPermissions: async () => true
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/agent-launch-settings/agent-launch-settings-transport',
+  () => ({
+    readHostAgentLaunchSettings: transport.read,
+    mutateHostAgentLaunchSettings: transport.mutate,
+    hostSupportsLaunchChoices: async () => false,
+    hostSupportsOwnChatPermissions: async () => true,
+    hostSupportsAutoPermissions: async () => true,
+    hostSupportsNativeChatPermissions: async () => true
+  })
+)
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: () => ({
     detectedIds: ['claude'],
@@ -75,11 +78,7 @@ describe('host form and committed-settings contract', () => {
     )
     await screen.findByDisplayValue('--host-marker')
     const label = getAgentCatalog().find((agent) => agent.id === 'claude')?.label
-    fireEvent.click(
-      within(screen.getByRole('radiogroup', { name: `${label} availability` })).getByRole('radio', {
-        name: 'Disabled'
-      })
-    )
+    fireEvent.click(screen.getByRole('switch', { name: `${label} availability` }))
     try {
       await started.promise
       expect(readState().settings.disabledTuiAgents).toContain('claude')

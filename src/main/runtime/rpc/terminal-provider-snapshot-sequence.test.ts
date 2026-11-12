@@ -1,16 +1,15 @@
-import './unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 const request: RpcRequest = {
   id: 'req-provider-sequence',
