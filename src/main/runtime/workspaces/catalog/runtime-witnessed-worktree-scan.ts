@@ -74,6 +74,7 @@ async function scanRuntimeWorktreesWithMutationWitness(
     metadataPruneExpectation = claim?.expectation
     lineagePrune = claimRuntimeLineagePrune(scan)
   } else {
+    // Only injected scanners land here: production `ok` rows always carry an owner observation.
     metadataPruneExpectation = captureLocalMetadataPruneExpectation(store, repo)
     lineagePrune = { scanGeneration }
   }

@@ -281,7 +281,8 @@ export function isCurrentWorktreeCatalogObservation(
   observation: WorktreeCatalogObservation
 ): boolean {
   const entry = entryByObservation.get(observation)
-  return entry !== undefined && isCurrent(entry, observation)
+  // A newer published success supersedes this one even when nothing invalidated the owner.
+  return entry !== undefined && entry.success === observation && isCurrent(entry, observation)
 }
 
 /** Stops readers from reusing settled rows; joiners of an older flight follow the next one. */

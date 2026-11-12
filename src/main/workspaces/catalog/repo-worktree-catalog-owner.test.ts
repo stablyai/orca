@@ -10,6 +10,7 @@ import {
   _resetWorktreeCatalogOwnerForTests,
   retireObsoleteWorktreeCatalogs,
   invalidateWorktreeCatalogForRepo,
+  isCurrentWorktreeCatalogObservation,
   readWorktreeCatalog
 } from './repo-worktree-catalog-owner'
 import type {
@@ -85,6 +86,17 @@ describe('repo worktree catalog owner', () => {
     const sidebarRead = await readWorktreeCatalog(repo, 'local:default', desktop, plan)
     expect(plan.calls).toBe(2)
     expect(sidebarRead.observation?.outcome).toEqual(rows('/repos/app', '/repos/app-feature'))
+  })
+
+  it('withdraws destructive authority from rows a newer listing replaced', async () => {
+    const plan = scanner([rows('/repos/app', '/repos/app-old'), rows('/repos/app')])
+    const first = await readWorktreeCatalog(repo, 'local:default', desktop, plan)
+    vi.advanceTimersByTime(6_000)
+
+    const second = await readWorktreeCatalog(repo, 'local:default', desktop, plan)
+
+    expect(isCurrentWorktreeCatalogObservation(first.observation!)).toBe(false)
+    expect(isCurrentWorktreeCatalogObservation(second.observation!)).toBe(true)
   })
 
   it('does not let a runtime verification stretch the sidebar past its 5 seconds', async () => {
