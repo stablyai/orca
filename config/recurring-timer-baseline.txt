@@ -51,10 +51,10 @@
 1 src/main/runtime/mobile-cloud-relay/desktop-relay-service.ts
 3 src/main/runtime/mobile-cloud-relay/relay-control-liveness.ts
 1 src/main/runtime/rpc/methods/orchestration/messaging/check-run.ts
-1 src/main/runtime/rpc/mobile-socket-wiring.ts
-1 src/main/runtime/rpc/remote-runtime-server-heartbeat.ts
+1 src/main/runtime/rpc/mobile/mobile-socket-wiring.ts
+1 src/main/runtime/rpc/transports/websocket/remote-runtime-server-heartbeat.ts
 1 src/main/runtime/rpc/server/runtime-metadata-ownership-watch.ts
-1 src/main/runtime/rpc/unix-socket-transport.ts
+1 src/main/runtime/rpc/transports/unix-socket-transport.ts
 1 src/main/runtime/sidebar-inputs/paired-server-rows-producer.ts
 1 src/main/runtime/terminal/input/agent-prompt-permission-hold.ts
 1 src/main/runtime/terminal/output/terminal-derived-agent-facts.ts

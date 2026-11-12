@@ -489,8 +489,8 @@
 3 src/main/runtime/rpc/server/pairing/e2ee-keypair.ts
 3 src/main/runtime/rpc/server/runtime-metadata.ts
 2 src/main/runtime/rpc/server/runtime-rpc-socket-metadata.ts
-5 src/main/runtime/rpc/unix-socket-transport.ts
-3 src/main/runtime/rpc/ws-fallback-port-store.ts
+5 src/main/runtime/rpc/transports/unix-socket-transport.ts
+3 src/main/runtime/rpc/transports/websocket/ws-fallback-port-store.ts
 2 src/main/runtime/terminal/launch/claude-agent-teams-shim-env.ts
 1 src/main/runtime/workspaces/persisted-surfaces/crew-operations.ts
 1 src/main/server/serve-pairing-output.ts
