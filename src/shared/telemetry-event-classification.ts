@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { eventSchemas } from './telemetry-event-registry'
+import { firstLaunchLayoutSchema } from './telemetry-first-launch-schemas'
 import type { cohortSchema } from './telemetry-onboarding-foundation-schemas'
 
 export type EventMap = { [N in keyof typeof eventSchemas]: z.infer<(typeof eventSchemas)[N]> }
@@ -130,6 +131,7 @@ export const commonPropsSchema = z
     install_id: z.string().min(1).max(64),
     session_id: z.string().min(1).max(64),
     orca_channel: z.enum(['stable', 'rc']),
+    first_launch_layout_v1: firstLaunchLayoutSchema.optional(),
     onboarding_language_v1: z.enum(['control', 'treatment']).optional(),
     chat_ui_launch_tip_v1: z
       .enum([

@@ -13,6 +13,9 @@ export type ChatUiLaunchTipCohort =
   | 'treatment-swapped-buttons'
   | 'treatment-center'
 
+/** How a fresh desktop profile starts: in a `~` folder workspace, or on the landing page with Add Project. */
+export type FirstLaunchLayout = 'home-workspace' | 'project-picker'
+
 export type TelemetrySettings = {
   /** New users: true at install. Existing users: null until they resolve the first-launch banner. */
   optedIn: boolean | null
@@ -22,6 +25,10 @@ export type TelemetrySettings = {
   existedBeforeTelemetryRelease: boolean
   /** Frozen 50/50 assignment for fresh installs; absent for profiles predating the experiment. */
   onboardingLanguageCohort?: 'control' | 'treatment'
+  /** Chosen once when a fresh desktop profile is first created; absent for every other profile. */
+  firstLaunchLayout?: FirstLaunchLayout
+  /** Whether the first launch was reported; 'skipped' keeps the profile out of later reports. */
+  firstLaunchLayoutReport?: 'sent' | 'skipped'
   /** Historical 70% control / 30% assignment; never changed by delivery expansions. */
   chatUiLaunchTipCohort?: ChatUiLaunchTipCohort
   /** Frozen corner-card-v3 assignment: 3/7 treatment for old controls, 60% for new enrollees. */

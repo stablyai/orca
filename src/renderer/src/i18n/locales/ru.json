@@ -19759,7 +19759,8 @@
         "actions": {
           "addFirstProject": "Добавить первый проект",
           "continue": "Продолжить",
-          "openingAddProject": "Открытие диалога добавления проекта…"
+          "openingAddProject": "Открытие диалога добавления проекта…",
+          "skipToProjectSetup": "Перейти к настройке проекта"
         }
       },
       "skipConfirmation": {

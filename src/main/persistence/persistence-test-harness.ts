@@ -10,9 +10,8 @@ import type { PersistedState } from '../../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../../shared/constants'
 import type { SshRemotePtyLease } from '../../shared/ssh-types'
 import { hydrateWorktreeMetaAliasProjection } from './loading-store/worktree-metadata/worktree-meta-alias-projection'
-import { Store } from './loading-store/store'
+import { Store, type StoreOptions } from './loading-store/store'
 import { getDataFile, initDataPath } from './loading-store/user-data-path'
-import type { StoreRuntimeOptions } from './loading-store/store-runtime-state'
 import { ProfileStateSqliteAuthority } from './profile-state/profile-state-sqlite-authority'
 import { openProfileStateDatabaseReadOnly } from './profile-state/database/profile-state-database'
 import { profileStateDatabaseFile } from '../../shared/profile-state-storage-paths'
@@ -28,7 +27,7 @@ class UnitTestProfileStateAuthority extends ProfileStateSqliteAuthority {
 
 export function createSqliteTestStore(
   StoreConstructor: typeof Store,
-  options: Omit<StoreRuntimeOptions, 'profileStateAuthority'> = {}
+  options: Omit<StoreOptions, 'profileStateAuthority'> = {}
 ): Store {
   const path = options.dataFile ?? getDataFile()
   const databaseFile = profileStateDatabaseFile(dirname(path))
@@ -81,7 +80,9 @@ export function readPersistedStateJson(path = dataFile(), profileId = 'persisten
   }
 }
 
-export function createStore(options: Pick<StoreRuntimeOptions, 'paneShellPath'> = {}): Store {
+export function createStore(
+  options: Pick<StoreOptions, 'paneShellPath' | 'initializeHomeWorkspace'> = {}
+): Store {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return createSqliteTestStore(Store, { ...options, dataFile: dataFile() })

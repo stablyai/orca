@@ -19175,7 +19175,8 @@
         "actions": {
           "addFirstProject": "İlk projenizi ekleyin",
           "continue": "Devam Et",
-          "openingAddProject": "Proje Ekle açılıyor..."
+          "openingAddProject": "Proje Ekle açılıyor...",
+          "skipToProjectSetup": "Proje kurulumuna geç"
         }
       },
       "skipConfirmation": {

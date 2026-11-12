@@ -18938,7 +18938,8 @@
         "actions": {
           "addFirstProject": "新增第一個專案",
           "continue": "繼續",
-          "openingAddProject": "正在開啟「新增專案」…"
+          "openingAddProject": "正在開啟「新增專案」…",
+          "skipToProjectSetup": "跳至專案設定"
         }
       },
       "skipConfirmation": {

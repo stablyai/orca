@@ -20224,7 +20224,8 @@
         "actions": {
           "addFirstProject": "Add your first project",
           "continue": "Continue",
-          "openingAddProject": "Opening Add Project..."
+          "openingAddProject": "Opening Add Project...",
+          "skipToProjectSetup": "Skip to project setup"
         },
         "agentSurface": {
           "title": "How do you want to work with agents?",

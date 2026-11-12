@@ -18519,7 +18519,8 @@
         "actions": {
           "addFirstProject": "最初のプロジェクトを追加",
           "continue": "続行",
-          "openingAddProject": "[プロジェクトを追加] を開いています…"
+          "openingAddProject": "[プロジェクトを追加] を開いています…",
+          "skipToProjectSetup": "プロジェクトのセットアップにスキップ"
         }
       },
       "skipConfirmation": {

@@ -20180,7 +20180,8 @@
         "actions": {
           "addFirstProject": "添加第一个项目",
           "continue": "继续",
-          "openingAddProject": "正在打开添加项目…"
+          "openingAddProject": "正在打开添加项目…",
+          "skipToProjectSetup": "跳至项目设置"
         }
       },
       "skipConfirmation": {

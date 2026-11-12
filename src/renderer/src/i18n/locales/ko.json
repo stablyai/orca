@@ -18516,7 +18516,8 @@
         "actions": {
           "addFirstProject": "첫 프로젝트 추가",
           "continue": "계속",
-          "openingAddProject": "프로젝트 추가 화면을 여는 중…"
+          "openingAddProject": "프로젝트 추가 화면을 여는 중…",
+          "skipToProjectSetup": "프로젝트 설정으로 건너뛰기"
         }
       },
       "skipConfirmation": {

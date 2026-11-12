@@ -140,7 +140,10 @@ async function continueFromThemeToNotifications(page: Page): Promise<void> {
 
 test.describe('Onboarding flow', () => {
   // Opt out of the fixture’s completed-onboarding seed to exercise first launch.
-  test.use({ dismissOnboarding: false })
+  test.use({
+    dismissOnboarding: false,
+    orcaAppExtraEnv: { ORCA_FIRST_LAUNCH_LAYOUT: 'home-workspace' }
+  })
 
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)

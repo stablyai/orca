@@ -34,7 +34,7 @@ import {
 } from './profile-writing/primary-state-writes'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/recovery/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
-import { createInitialHomeWorkspaceState } from './profile-loading/initial-home-workspace'
+import { createFirstLaunchState } from './profile-loading/first-launch-layout'
 import {
   beginProfileStateMaintenance,
   freezeProfileStateWrites,
@@ -130,7 +130,7 @@ export class Store {
     let initialState = normalized.state
     // Only a missing desktop profile document receives initial data; empty saved profiles stay empty.
     if (options.initializeHomeWorkspace && !profileDocumentExisted) {
-      initialState = createInitialHomeWorkspaceState(initialState)
+      initialState = createFirstLaunchState(initialState)
       this.runtime.loadNeedsSave = true
     }
     this.state = initialState

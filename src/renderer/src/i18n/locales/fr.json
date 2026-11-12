@@ -20726,7 +20726,8 @@
         "actions": {
           "addFirstProject": "Ajoutez votre premier projet",
           "continue": "Continuer",
-          "openingAddProject": "Ouverture d'Ajouter un projet..."
+          "openingAddProject": "Ouverture d'Ajouter un projet...",
+          "skipToProjectSetup": "Passer à la configuration du projet"
         }
       },
       "skipConfirmation": {

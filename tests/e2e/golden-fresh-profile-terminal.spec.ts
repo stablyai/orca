@@ -9,7 +9,11 @@ import {
   waitForActiveTerminalManager
 } from './helpers/terminal'
 
-test.use({ dismissOnboarding: false, seedTestRepo: false })
+test.use({
+  dismissOnboarding: false,
+  seedTestRepo: false,
+  orcaAppExtraEnv: { ORCA_FIRST_LAUNCH_LAYOUT: 'home-workspace' }
+})
 
 async function completeOnboarding(page: Page): Promise<void> {
   const footer = page.locator('[data-onboarding-modal] footer')

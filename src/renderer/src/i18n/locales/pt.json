@@ -20538,7 +20538,8 @@
         "actions": {
           "addFirstProject": "Adicione seu primeiro projeto",
           "continue": "Continuar",
-          "openingAddProject": "Abrindo Adicionar Projeto..."
+          "openingAddProject": "Abrindo Adicionar Projeto...",
+          "skipToProjectSetup": "Pular para a configuração do projeto"
         },
         "agentSurface": {
           "title": "Como você deseja trabalhar com agentes?",
