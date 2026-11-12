@@ -7,7 +7,7 @@ import { orchestrationCallerIdentity } from '../runs/run-scope'
 import {
   readMutationReplayNudge,
   stripMutationReplayNudge
-} from '../../../orchestration-mutation-receipt'
+} from '../../../orchestration/mutations/orchestration-mutation-receipt'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
 import { resolveReplyRecipient } from './recipient-routing'

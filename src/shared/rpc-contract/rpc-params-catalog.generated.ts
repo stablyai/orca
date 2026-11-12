@@ -670,8 +670,7 @@ import {
   SleepWorkspaceParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
-  UnsubscribeParams,
-  WorkStateParams
+  UnsubscribeParams
 } from './structured-agent-session-params'
 import { RespondToQuestionParams } from './structured-agent-session-question-params'
 import {
@@ -731,6 +730,7 @@ import {
   UsageCredentialSessionCookieParams
 } from './usage-credentials-params'
 import { CancelUsageLimitContinueParams } from './usage-limit-continue-params'
+import { WorkspaceCleanupScanParams } from './workspace-cleanup-scan-params'
 import { LayoutReopenHeldPanesParams } from './workspace-layout-held-panes-params'
 import {
   LayoutApplyParams,
@@ -880,7 +880,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.subscribeTurnCompletions': SubscribeTurnCompletionsParams,
   'agentSession.threadGoal': ThreadGoalParams,
   'agentSession.unsubscribe': UnsubscribeParams,
-  'agentSession.workState': WorkStateParams,
   'agentSessionAttachment.read': AttachmentReadParams,
   'agentSessionAttachment.readTextChunk': AttachmentTextReadParams,
   'agentSessionAttachment.uploadAbort': AttachmentUploadIdParams,
@@ -1107,6 +1106,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'folderWorkspace.update': FolderWorkspaceUpdate,
   'git.abortMerge': WorktreeSelectorOfGitParams,
   'git.abortRebase': WorktreeSelectorOfGitParams,
+  'git.atRiskLocalFiles': WorktreeSelectorOfGitParams,
   'git.branchCompare': GitBranchCompare,
   'git.branchDiff': GitBranchDiff,
   'git.bulkDiscard': GitBulkPaths,
@@ -1631,6 +1631,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.download': null,
   'updater.getStatus': null,
   'updater.install': null,
+  'workspaceCleanup.scan': WorkspaceCleanupScanParams,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,
   'workspacePorts.probePage': WorkspacePortProbePageParams,

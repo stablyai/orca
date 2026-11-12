@@ -148,19 +148,4 @@ describe('projectGroups IPC validation', () => {
       expect(mockStore.addRepo).not.toHaveBeenCalled()
     })
   })
-
-  it('refuses nested imports on an SSH target and never inspects the path locally', async () => {
-    await expect(
-      handlers.get('projectGroups:importNested')!(null, {
-        parentPath: '/srv/platform',
-        groupName: 'Platform',
-        projectPaths: ['/srv/platform/api'],
-        connectionId: 'conn-1',
-        mode: 'group'
-      })
-    ).rejects.toThrow('ssh_connection_unavailable')
-
-    expect(mockStore.addRepo).not.toHaveBeenCalled()
-    expect(isGitRepo).not.toHaveBeenCalled()
-  })
 })

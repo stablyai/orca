@@ -134,6 +134,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration worker-show',
       'orchestration worker-read',
       'orchestration worker-stop',
+      'orchestration approve',
       'orchestration deny',
       'orchestration worker-abandon',
       'orchestration worker-release',
@@ -207,7 +208,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'chat',
-    keys: ['chat rename', 'chat list', 'chat read', 'chat send', 'chat wait'],
+    keys: ['chat rename'],
     load: async () => (await import('./handlers/chat.js')).CHAT_HANDLERS
   },
   {

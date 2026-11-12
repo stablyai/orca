@@ -17,12 +17,12 @@ import { isKnownRasterImageMimeType } from '../../shared/file-preview/raster-ima
 import { unwrapClaudePastedContentBlock } from '../../shared/claude-pasted-content'
 import { unwrapClaudeBashInputBlock } from '../../shared/claude-bash-input'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
-import { claudeStopHookFeedbackRow } from '../claude/claude-stop-hook-feedback'
+import { claudeStopHookFeedbackRow } from '../claude/structured/journal/claude-stop-hook-feedback'
 import { structuredAgentSessionStatusBlock } from '../../shared/agent-session/view/structured-agent-session-status-block'
 import {
   claudeMessageWithoutSyntheticText,
   isClaudeInjectedUserMessage
-} from '../claude/claude-internal-message-content'
+} from '../claude/structured/journal/claude-internal-message-content'
 
 const MAX_EDIT_PATCH_HUNKS = 40
 const MAX_EDIT_PATCH_HUNK_LINES = 400

@@ -40,6 +40,8 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       const clicked = observed !== null
       // Only the desktop user's own click may bring a popup forward; agents and late opens wait.
       const showWhenAppActive = observed?.byAgent !== false
+      const activateTab = disposition !== 'background-tab'
+      const agentOpened = observed?.byAgent !== false && this.isAgentUsingGuest(guest.id)
       const ownerContext = this.resolvePopupOwnerContext(guest.id)
       const browserTabId = ownerContext?.browserTabId ?? null
       const externalUrl = normalizeExternalBrowserUrl(url)
@@ -64,11 +66,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           return { action: 'deny' }
         }
         if (
-          this.openLinkInOrcaTab(
-            ownerContext.browserTabId,
-            newTabUrl,
-            disposition !== 'background-tab'
-          )
+          this.openLinkInOrcaTab(ownerContext.browserTabId, newTabUrl, activateTab, agentOpened)
         ) {
           this.forwardOrQueuePopupEvent(guest.id, {
             origin: safeOrigin(newTabUrl),
@@ -93,7 +91,8 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           tabUrl && !(options.nativeWindow?.webContents ?? options.webContents)?.opener
             ? this.openPopupAsBrowserTab(guest, tabUrl, options, {
                 clicked,
-                activate: disposition !== 'background-tab'
+                activate: activateTab,
+                agentOpened
               })
             : null
         if (isNativeBrowserPopupRequest({ disposition, features, frameName })) {
@@ -168,13 +167,13 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     opener: Electron.WebContents,
     url: string,
     options: PopupChildWindowOptions,
-    tab: { clicked: boolean; activate: boolean }
+    tab: { clicked: boolean; activate: boolean; agentOpened: boolean }
   ): Electron.WebContents {
     const owner = this.resolvePopupOwnerContext(opener.id)
     const opened =
       owner !== null &&
       (tab.clicked || this.tryConsumePageInitiatedTab(owner.rootGuestWebContentsId)) &&
-      this.openLinkInOrcaTab(owner.browserTabId, url, tab.activate)
+      this.openLinkInOrcaTab(owner.browserTabId, url, tab.activate, tab.agentOpened)
     this.forwardOrQueuePopupEvent(opener.id, {
       origin: safeOrigin(url),
       action: opened ? 'opened-in-orca' : 'blocked'

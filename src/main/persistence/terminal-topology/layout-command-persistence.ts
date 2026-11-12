@@ -1,4 +1,4 @@
-import type { LayoutClientVisibility } from '../../../shared/workspace-layout/workspace-layout-client-visibility'
+import type { LayoutClientVisibility } from '../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
   CommandOf,

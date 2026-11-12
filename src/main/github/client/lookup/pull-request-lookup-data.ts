@@ -89,6 +89,8 @@ export const PR_BRANCH_LIST_JSON_FIELDS =
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   userRefresh?: boolean
+  /** CI watches need provider status, without local conflict or stack enrichment. */
+  includeDerivedData?: boolean
   acceptMergedFallbackPR?: boolean
   // Supply the actual worktree head without probing a different main-repo checkout.
   currentHeadOid?: string | null
