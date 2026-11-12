@@ -42,13 +42,14 @@ function readText(path: string): string | null {
 export const secrets = {
   devJwk: () => readSecretJson<{ private: JsonWebKey & { kid?: string }; public: JsonWebKey }>('dev-jwk.json'),
   operatorToken: () => readSecretJson<{ OPERATOR_TOKEN: string }>('operator-dev.json')?.OPERATOR_TOKEN ?? null,
-  /** Sandbox-scoped token if present, else the authed Vercel CLI's token (read-only use + cleanup). */
-  vercelToken: () =>
-    readSecretJson<{ bearerToken: string }>('tok.json')?.bearerToken ??
-    (() => {
-      const path = join(process.env.HOME ?? '', 'Library/Application Support/com.vercel.cli/auth.json')
-      return existsSync(path) ? ((JSON.parse(readFileSync(path, 'utf8')) as { token?: string }).token ?? null) : null
-    })(),
+  /**
+   * Vercel token from tok.json only: the team-scoped `token`, else `bearerToken`. Null when neither is
+   * present so callers fail with a missing-secret error. Never falls back to a personal Vercel CLI login.
+   */
+  vercelToken: () => {
+    const tok = readSecretJson<{ token?: string; bearerToken?: string }>('tok.json')
+    return tok?.token || tok?.bearerToken || null
+  },
   /** Shared AI Gateway key (W6; ~$5 free credit, no anthropic/* models). One tiny task per check. */
   aiGatewayKey: () => {
     const path = join(SECRETS_DIR, 'ai-gateway.key')

@@ -23,7 +23,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
     params: TerminalMultiplex,
     handler: async (
       _params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal, clientId },
+      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal, clientId, caller },
       emit
     ) => {
       if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
@@ -39,6 +39,8 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         runtime,
         connectionId,
         viewerDeviceId: clientId,
+        // The transport-attested person, for git as the sender (never the client-supplied id).
+        typingDeviceId: caller?.kind === 'paired-device' ? caller.deviceId : undefined,
         sendBinary,
         registerBinaryStreamHandler,
         signal,

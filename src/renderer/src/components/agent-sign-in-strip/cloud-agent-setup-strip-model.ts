@@ -13,7 +13,6 @@ function base(agent: string, t: Translate): CloudStripModel {
   return {
     status: 'setup',
     title,
-    compactTitle: t('agentSignInStrip.notSetUpCompact', '{{agent}} not set up', { agent }),
     detail: t('agentSignInStrip.notSetUpDetail', 'Set up once. Every cloud workspace uses it.'),
     description: null,
     primary: {
@@ -74,7 +73,6 @@ export function cloudAgentSetupStripModel(args: {
       ...need,
       status: 'done',
       title,
-      compactTitle: t('agentSignInStrip.setUpDoneCompact', '{{agent}} is set up', { agent }),
       detail: t('agentSignInStrip.setUpDoneDetail', 'Every cloud workspace uses it from now on.'),
       primary: {
         label: t('agentSignInStrip.startAgent', 'Start {{agent}}', { agent }),
@@ -100,10 +98,7 @@ export function cloudAgentSetupStripModel(args: {
         status: setup.code === 'rejected' ? 'warning' : 'busy',
         // A refusal leads at every width; nothing is loading then, so the warning icon (design-squad).
         ...(setup.code === 'rejected'
-          ? {
-              title: t('agentSignInStrip.setupCodeRejectedTitle', 'Code didn’t work'),
-              compactTitle: t('agentSignInStrip.setupCodeRejectedTitle', 'Code didn’t work')
-            }
+          ? { title: t('agentSignInStrip.setupCodeRejectedTitle', 'Code didn’t work') }
           : {}),
         // A refused code stays the detail until the next paste or "Open again".
         detail:

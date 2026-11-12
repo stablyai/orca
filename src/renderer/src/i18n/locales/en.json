@@ -7454,7 +7454,12 @@
             "failure": {
               "archive": {
                 "waiver": "Delete Anyway"
-              }
+              },
+              "tryAgain": "Try again",
+              "cloudInUse": "Other workspaces still run in this sandbox, so nothing was deleted. Delete them first.",
+              "cloudNoDestroy": "The delete didn't go through, so nothing was deleted.",
+              "cloudUnchecked": "Orca couldn't check the sandbox, so nothing was deleted.",
+              "cloudTitle": "Couldn't delete {{name}}"
             }
           }
         },
@@ -24764,7 +24769,8 @@
       "remove": "Remove",
       "removeTitle": "Remove managed account?",
       "removeDescription": "Stop agents using this profile first. Removal deletes its saved credentials and conversation data. Your system login stays unchanged.",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "useCli": "Use from the command line"
     },
     "hostSignIn": {
       "copied": "Copied",
@@ -28224,7 +28230,6 @@
     "cancelSignIn": "Cancel sign-in",
     "copyAndOpen": "Copy code and open",
     "cancelledToast": "The agent didn’t start. The shell is still open.",
-    "expiredCompact": "{{agent}} sign-in expired",
     "runningExpiredDetail": "Renew to keep working. Your conversation is kept.",
     "runningExpiredAnnounce": "Your {{agent}} sign-in expired. Renew to keep working. Your conversation is kept.",
     "restartAgent": "Restart {{agent}}",
@@ -28243,11 +28248,9 @@
     "restartFailedIn": "Couldn’t restart {{agent}} in {{workspace}}.",
     "openWorkspace": "Open workspace",
     "notSetUp": "{{agent}} isn’t set up for Orca Cloud",
-    "notSetUpCompact": "{{agent}} not set up",
     "notSetUpDetail": "Set up once. Every cloud workspace uses it.",
     "setUpOnce": "Set up once",
     "setUpDone": "{{agent}} is set up for Orca Cloud",
-    "setUpDoneCompact": "{{agent}} is set up",
     "setUpDoneDetail": "Every cloud workspace uses it from now on.",
     "startAgent": "Start {{agent}}",
     "start": "Start",

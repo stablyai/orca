@@ -138,19 +138,13 @@ export function CloudAgentSignInStrip({
   model,
   prompt,
   width: initialWidth = 'wide',
-  actions,
-  wrap = false
+  actions
 }: {
   model: CloudStripModel
   prompt: string | null
   /** The first render's class; after that the strip follows its own live width. */
   width?: CloudStripWidth
   actions: CloudStripActions
-  /**
-   * A warning that must be read whole (GIT-SETUP): title and detail wrap (up to 3 lines each) and the
-   * strip grows; actions stay top-right. Pane strips keep the fixed 56 px height.
-   */
-  wrap?: boolean
 }): React.JSX.Element {
   const sectionRef = useRef<HTMLElement | null>(null)
   // The strip had focus and its focused control went away with a state change ("Set up once" becomes
@@ -164,18 +158,13 @@ export function CloudAgentSignInStrip({
   })
   const width = useLiveStripWidth(sectionRef, initialWidth)
   const compact = width === 'compact'
-  // The detail leaves the line when there's no room for it beside the title: below 360 px, and on the
-  // paste step under ~560 px (its input takes the space). It stays the region's description and the
-  // title's tooltip.
-  // SETUP-PASTE: the code field needs the room; a refusal always stays readable (design-squad).
+  // Text never truncates in these strips (design-squad): title and detail wrap (up to 3 lines each)
+  // and the strip grows from 56 px; actions stay top-right.
   const setupCode = model.paste?.setupCode ? model.paste : null
   // Narrow (<560 px) with the code field: stack, never truncate (design-squad): text wraps on row 1,
   // [Paste code ……] [Finish setup] [Open again] fill row 2.
   const stacked = setupCode !== null && (width === 'tiny' || compact)
-  const wraps = wrap || stacked
-  const quietDetail =
-    !wraps && !setupCode?.refusal && (compact || (model.paste !== null && width === 'tiny'))
-  const lineFit = wraps ? 'line-clamp-3 break-words' : 'truncate'
+  const lineFit = 'line-clamp-3 break-words'
   const t = useTranslate()
   const titleId = React.useId()
   const detailId = React.useId()
@@ -211,31 +200,18 @@ export function CloudAgentSignInStrip({
         'grid gap-2.5 border-b px-3 text-foreground outline-none',
         BANNER_TONE[stripSeverity(model.status)].surface,
         BANNER_TONE[stripSeverity(model.status)].border,
-        wraps ? 'min-h-14 items-start py-2.5 [&>svg]:mt-0.5' : 'h-14 items-center',
+        'min-h-14 items-start py-2.5 [&>svg]:mt-0.5',
         setupCode ? 'grid-cols-[16px_minmax(0,1fr)_auto]' : GRID[width]
       )}
     >
       <StatusSlot status={model.status} />
       <div data-strip-text className="flex min-w-0 flex-col">
+        <span id={titleId} className={cn(lineFit, 'text-[13px] leading-5 font-medium')}>
+          {model.title}
+        </span>
         <Tooltip>
           <TooltipTrigger asChild>
-            <span id={titleId} className={cn(lineFit, 'text-[13px] leading-5 font-medium')}>
-              {compact ? (model.compactTitle ?? model.title) : model.title}
-            </span>
-          </TooltipTrigger>
-          {quietDetail && model.detail ? <TooltipContent>{model.detail}</TooltipContent> : null}
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              id={detailId}
-              className={cn(
-                lineFit,
-                'text-xs leading-4',
-                BANNER_BODY_TEXT,
-                quietDetail && 'sr-only'
-              )}
-            >
+            <span id={detailId} className={cn(lineFit, 'text-xs leading-4', BANNER_BODY_TEXT)}>
               {model.detail}
               {model.description ? <span className="sr-only">. {model.description}</span> : null}
             </span>
@@ -264,10 +240,7 @@ export function CloudAgentSignInStrip({
           <span />
         )
       ) : null}
-      <div
-        data-strip-actions
-        className={cn('flex h-8 min-w-0 items-center justify-end gap-1.5', wraps && '-my-0.5')}
-      >
+      <div data-strip-actions className="-my-0.5 flex h-8 min-w-0 items-center justify-end gap-1.5">
         {model.code ? (
           <code className="shrink-0 select-all rounded bg-muted px-1.5 font-mono text-xs tracking-wider">
             {model.code}

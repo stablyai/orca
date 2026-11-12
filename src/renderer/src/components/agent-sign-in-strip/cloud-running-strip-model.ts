@@ -14,7 +14,6 @@ export function cloudRunningStripModel(strip: CloudRunningStrip, t: Translate): 
       ...base,
       status: 'warning',
       title: t('agentSignInStrip.expired', 'Your {{agent}} sign-in expired', { agent }),
-      compactTitle: t('agentSignInStrip.expiredCompact', '{{agent}} sign-in expired', { agent }),
       detail: t(
         'agentSignInStrip.runningExpiredDetail',
         'Renew to keep working. Your conversation is kept.'
@@ -32,7 +31,6 @@ export function cloudRunningStripModel(strip: CloudRunningStrip, t: Translate): 
     ...base,
     status: 'done',
     title: t('agentSignInStrip.renewed', '{{agent}} sign-in renewed', { agent }),
-    compactTitle: t('agentSignInStrip.renewed', '{{agent}} sign-in renewed', { agent }),
     detail: strip.resumable
       ? t('agentSignInStrip.renewedResume', 'Restart {{agent}} to pick up where you left off.', {
           agent
@@ -65,7 +63,6 @@ export function cloudRestartAttemptModel(
       ...base,
       status: 'busy',
       title,
-      compactTitle: title,
       // Neutral while it runs: a recorded session may turn out to have no conversation (RA-11e).
       detail: attempt.resumable
         ? ''
@@ -81,7 +78,6 @@ export function cloudRestartAttemptModel(
     ...base,
     status: 'error',
     title,
-    compactTitle: title,
     // Never "Try again." twice: the body names the reason when one is known, else stays empty.
     detail:
       attempt.failure === 'hostUnresponsive'
@@ -118,7 +114,6 @@ export function cloudRestartFreshModel(
     description: null,
     status: 'done',
     title,
-    compactTitle: title,
     detail,
     primary: null,
     noClose: true,

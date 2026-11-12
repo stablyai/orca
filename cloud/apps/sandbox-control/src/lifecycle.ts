@@ -62,6 +62,15 @@ import { SANDBOX_VCPUS } from './machine-size'
 import { isRegionalFailure } from './regions'
 
 export const LEASE_MS = 30 * 60_000
+/**
+ * RESUME-STUCK: a `resuming` row this old has no live wake behind it. An inline wake lives as long
+ * as its request (the desktop's boot timeout is 180 s) plus ctx.waitUntil's 30 s past a disconnect;
+ * same bar as the wake long-poll's WAKE_STALE_MS, so a healthy slow boot is never taken over.
+ */
+export const RESUME_STALE_MS = 4 * 60_000
+/** How long a resume waits on a wake someone else started before answering 409. */
+const RESUME_JOIN_MS = 30_000
+const RESUME_POLL_MS = 500
 const PROVIDER_SESSION_CAP_MS = 24 * 60 * 60_000
 /** Orca stops 10 min early so it, not the provider, ends the session (drain first). */
 export const SESSION_DEADLINE_MS = PROVIDER_SESSION_CAP_MS - 10 * 60_000
@@ -88,6 +97,8 @@ export type LifecycleDeps = {
     accountProviders?: Record<'claude' | 'codex', boolean>
   }
   now: () => number
+  /** Waits between polls of a wake already in flight (tests advance a fake clock). */
+  sleep?: (ms: number) => Promise<void>
   /** A member's GitHub identity (user token) for git-as-sender; absent = app identity only. */
   memberIdentity?: (row: SandboxRow, userId: string) => Promise<MemberGitIdentity | null>
   /** Orphan/retention policy for the cron; defaults in retention.ts. */
@@ -944,6 +955,13 @@ export async function suspendSandbox(deps: LifecycleDeps, row: SandboxRow): Prom
 }
 
 export async function resumeSandbox(deps: LifecycleDeps, row: SandboxRow): Promise<Ready> {
+  if (row.status === 'resuming') {
+    const settled = await joinOrAdoptResume(deps, row)
+    if ('connection' in settled) {
+      return settled
+    }
+    row = settled
+  }
   if (row.status === 'running') {
     const state = await deps.provider.getSandbox(row.provider_name, { resume: false })
     if (state?.session.status === 'running') {
@@ -959,6 +977,33 @@ export async function resumeSandbox(deps: LifecycleDeps, row: SandboxRow): Promi
   await requireStart(deps, row.account_id, row.user_id, row.machine_size)
   const resuming = await claim(deps, row, { status: 'resuming' })
   return wake(deps, resuming)
+}
+
+/**
+ * RESUME-STUCK: a wake is already in flight (a second open, or one whose client quit mid-wake). Wait
+ * for it; once it is stale its Worker is gone, so adopt what the provider says: a running session
+ * gets the full boot, otherwise the row goes back to `suspended` and this resume starts a fresh one.
+ */
+async function joinOrAdoptResume(deps: LifecycleDeps, row: SandboxRow): Promise<Ready | SandboxRow> {
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+  const deadline = deps.now() + RESUME_JOIN_MS
+  let current = row
+  while (current.status === 'resuming' && deps.now() - current.updated_at < RESUME_STALE_MS && deps.now() < deadline) {
+    await sleep(RESUME_POLL_MS)
+    current = (await getSandbox(deps.db, row.id)) ?? current
+  }
+  if (current.status !== 'resuming') {
+    return current
+  }
+  if (deps.now() - current.updated_at < RESUME_STALE_MS) {
+    throw new LifecycleError('conflict', 'sandbox_resuming')
+  }
+  console.log(JSON.stringify({ event: 'resume_adopted_stale', sandboxId: row.id, staleMs: deps.now() - current.updated_at }))
+  const state = await deps.provider.getSandbox(current.provider_name, { resume: false })
+  if (state?.session.status === 'running') {
+    return bootLiveSession(deps, current, state)
+  }
+  return markProviderStopped(deps, current)
 }
 
 /**
