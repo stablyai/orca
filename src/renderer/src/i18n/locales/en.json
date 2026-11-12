@@ -21201,7 +21201,26 @@
           "totalPerYear": "{{total}} per year",
           "openProfile": "Open {{value0}}’s profile",
           "viewProfile": "View profile",
-          "seatsOnPlanBilling": "Seats and invoices are in"
+          "seatsOnPlanBilling": "Seats and invoices are in",
+          "delete": {
+            "confirmTitle": "Delete {{value0}}?",
+            "confirmBody": "Everyone loses access to the team. Pending invites are cancelled. Its settings and team cloud secrets are deleted. Billing history is kept. This can’t be undone.",
+            "typeToConfirm": "Type {{value0}} to confirm",
+            "cta": "Delete team",
+            "title": "Delete {{value0}}",
+            "cardBody": "Removes the team for everyone. This can’t be undone.",
+            "blockedPlan": "Your team still has a plan. Cancel it in billing first, then delete the team.",
+            "blockedWorkspaces_one": "{{count}} cloud workspace still exists. Delete it first.",
+            "blockedWorkspaces_other": "{{count}} cloud workspaces still exist. Delete them first.",
+            "showWorkspaces": "Show cloud workspaces",
+            "mismatch": "The team name doesn’t match.",
+            "unavailable": "Couldn’t check the team right now, so nothing was deleted. Try again.",
+            "rateLimited": "Too many attempts. Wait a minute, then try again.",
+            "forbidden": "Only owners can delete the team.",
+            "failed": "Couldn’t delete the team. Try again.",
+            "deletedToast2": "{{value0}} was deleted"
+          },
+          "leaveLastOwnerOrDelete": "You’re the only owner. Make someone else an owner first, or delete the team."
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -23892,7 +23911,6 @@
       },
       "cloudOnly": {
         "needsRepository": "Orca Cloud needs a GitHub repository.",
-        "chooseRepository": "Choose repository",
         "addRepository": "Add a GitHub repository",
         "moreAccess": "Give Orca Cloud access to more repositories…",
         "startFailed": "Couldn’t start the cloud workspace. Nothing was created, and you weren’t charged.",
@@ -23904,7 +23922,9 @@
         "badge": "Cloud only. Orca Cloud clones it, so no copy on this computer is needed.",
         "rowPrivate": "{{repo}}, private, cloud only",
         "rowPublic": "{{repo}}, cloud only",
-        "privateLabel": "Private"
+        "privateLabel": "Private",
+        "menuGroup": "Orca Cloud",
+        "addRepositoryMenu": "Add a GitHub repository…"
       },
       "agentLabel": "Agent"
     },
@@ -28985,7 +29005,14 @@
     "header": "Setting up Orca Cloud",
     "headerFor": "Setting up Orca Cloud for {{name}}",
     "resumeDraft": "Open draft",
-    "cancelSignIn": "Cancel"
+    "cancelSignIn": "Cancel",
+    "capability": {
+      "tryAgain": "Try again",
+      "contact": "Contact us",
+      "title": "Orca Cloud isn’t turned on for your team yet",
+      "lead": "Your team has a plan, but Orca Cloud isn’t turned on for it yet. Try again in a few minutes, or contact us and we’ll turn it on.",
+      "leadNoContact": "Your team has a plan, but Orca Cloud isn’t turned on for it yet. Try again in a few minutes."
+    }
   },
   "orcaCloudSignInSheet": {
     "title": "Agents in Orca Cloud",
@@ -29023,7 +29050,8 @@
       "project": "{{kind}}, this project",
       "agent": "Claude subagent",
       "outputStyle": "Claude output style",
-      "memory": "{{agent}} memory"
+      "memory": "{{agent}} memory",
+      "settings": "Claude settings"
     },
     "summary": {
       "none": "None found in Claude or Codex on this computer",
@@ -29057,7 +29085,11 @@
       "localRefs_one": "Imports 1 file from elsewhere on this computer; it isn’t copied",
       "localRefs_other": "Imports {{count}} files from elsewhere on this computer; those aren’t copied",
       "memoryOff": "Your personal instructions stay on this computer until you turn this on",
-      "hostOutdated": "This workspace was created before this could sync. A new workspace gets it."
+      "hostOutdated": "This workspace was created before this could sync. A new workspace gets it.",
+      "settingsLocalRefs_one": "Permissions, model and output style only. 1 rule mentions a path on this computer and stays here. Changes made in a workspace stay there.",
+      "settingsLocalRefs_other": "Permissions, model and output style only. {{count}} rules mention paths on this computer and stay here. Changes made in a workspace stay there.",
+      "settingsScope": "Permissions, model and output style only. Env, hooks and helper commands never sync. Changes made in a workspace stay there.",
+      "settingsOff": "Permissions and model settings stay on this computer until you turn this on"
     },
     "state": {
       "synced": "Synced",
@@ -29213,8 +29245,8 @@
     "billingBlock": {
       "plan": {
         "title": "Choose a plan",
-        "body": "Your team needs a plan to start cloud workspaces.",
-        "ask": "Ask an owner or admin to choose a plan."
+        "ask": "Ask an owner or admin to choose a plan.",
+        "body2": "Your team’s plan has ended."
       },
       "hours": {
         "title": "Out of sandbox hours",

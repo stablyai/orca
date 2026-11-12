@@ -2,6 +2,8 @@
 // rows from billing, the GitHub repository check and the agent accounts (useCloudStartSteps), the
 // one-trip setup session (#255) with its deep-link return (#257), B2's team switch, and the
 // tracker's error parsing (#260). Only the UI moved: from a card in the dialog to this page.
+import { usePlanCatalog } from '@/components/billing/plans/use-plan-catalog'
+import { cloudContactUrl } from './cloud-contact-url'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { claimOrcaCloudTrial } from '@/components/billing/claim-trial'
@@ -44,8 +46,11 @@ function useLiveAvailability(
   repoId: string,
   initial: OrcaCloudAvailability,
   enabled: boolean
-): OrcaCloudAvailability {
+): { availability: OrcaCloudAvailability; reread: () => void } {
   const [availability, setAvailability] = useState(initial)
+  // Bumped by "Try again": re-reads at once instead of on the next poll.
+  const [generation, setGeneration] = useState(0)
+  const reread = useCallback(() => setGeneration((value) => value + 1), [])
   useEffect(() => {
     if (!enabled) {
       return
@@ -70,8 +75,8 @@ function useLiveAvailability(
       stop()
       window.removeEventListener('focus', read)
     }
-  }, [enabled, repoId])
-  return availability
+  }, [enabled, repoId, generation])
+  return { availability, reread }
 }
 
 export type CloudSetupFlow = CloudSetupPageModel & {
@@ -94,6 +99,8 @@ export type CloudSetupFlow = CloudSetupPageModel & {
   fixBilling: () => void
   installGitHub: () => void
   checkAgain: () => void
+  /** Where "Contact us" goes when Orca Cloud isn't turned on for the team; null hides it. */
+  contactUrl: string | null
   copyLink: (() => void) | null
   reopenBrowser: () => void
 }
@@ -105,7 +112,11 @@ export function useCloudSetupFlow(
 ): CloudSetupFlow {
   const fetched = useOrcaCloudRunTargetAccess(!accessOverride)
   const access = accessOverride ?? fetched
-  const availability = useLiveAvailability(request.repoId, request.availability, !accessOverride)
+  const { availability, reread: rereadAvailability } = useLiveAvailability(
+    request.repoId,
+    request.availability,
+    !accessOverride
+  )
   const [sessionId, setSessionId] = useState<string | null>(null)
   // The step that was current when the browser opened. A setup session covers every step it was
   // opened for, so it waits on all of them; a single hop (GitHub install, billing) only on its own.
@@ -256,7 +267,14 @@ export function useCloudSetupFlow(
     void openInstall()
   }, [markInBrowser, openInstall])
 
-  const checkAgain = useCallback(() => void prefetchOrcaCloudBilling(true), [])
+  const checkAgain = useCallback(() => {
+    void prefetchOrcaCloudBilling(true)
+    // CAP-GATE: Orca Cloud may have been turned on for the team since; the page moves on by itself.
+    rereadAvailability()
+  }, [rereadAvailability])
+  // "Contact us" (CAP-GATE): billing catalog's contact target, never a hard-coded address.
+  const catalog = usePlanCatalog(model.action === 'capability-off')
+  const contactUrl = cloudContactUrl(catalog.result)
 
   return {
     ...model,
@@ -274,6 +292,7 @@ export function useCloudSetupFlow(
     fixBilling,
     installGitHub,
     checkAgain,
+    contactUrl,
     copyLink:
       sessionId && canCopyCloudSetupLink(sessionId)
         ? () => void copyCloudSetupLink(sessionId)

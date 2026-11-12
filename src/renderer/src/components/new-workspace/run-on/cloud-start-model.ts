@@ -47,6 +47,11 @@ export type CloudSetupNeed =
   | 'trial'
   /** The team's trial hours are used up: a plan is next (T2). */
   | 'trial-used-up'
+  /**
+   * CAP-GATE: the team has a plan or trial, but Orca Cloud isn't turned on for it (auth's `sandbox`
+   * capability). Buying can't fix it (checkout says already_subscribed): wait or contact us.
+   */
+  | 'capability'
 export type CloudSetupStep = {
   id: CloudSetupStepId
   state: CloudSetupStepState
@@ -111,7 +116,10 @@ function derivePlanStep(
     return { id: 'plan', state: 'pending', need: 'trial' }
   }
   if (availability === 'needs-capability' && access.state !== 'no-plan') {
-    return { id: 'plan', state: 'needed', need: 'plan', canFix: true }
+    // Never "Choose a Team plan" here: the team has one, and checkout refuses (CAP-GATE-DESKTOP).
+    return access.state === 'loading'
+      ? { id: 'plan', state: 'loading' }
+      : { id: 'plan', state: 'needed', need: 'capability' }
   }
   switch (access.state) {
     case 'loading':

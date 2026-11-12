@@ -33,6 +33,7 @@ function flow(rows: CloudSetupStep[], teamSwitch = false): CloudSetupFlow {
     fixBilling: noop,
     installGitHub: noop,
     checkAgain: noop,
+    contactUrl: null,
     copyLink: null,
     reopenBrowser: noop
   }
@@ -90,6 +91,24 @@ export const trialPlan = defineFixture({
       ],
       'codex',
       'Codex'
+    )
+})
+
+/** CAP-GATE-DESKTOP: the team has a plan, but Orca Cloud isn't turned on for it yet. */
+export const capabilityOff = defineFixture({
+  width: 1000,
+  render: () =>
+    page(
+      [
+        { id: 'account', state: 'done' },
+        { id: 'plan', state: 'needed', need: 'capability' },
+        { id: 'github', state: 'needed', need: 'github', canFix: true },
+        { id: 'agent', state: 'optional' }
+      ],
+      'claude',
+      'Claude',
+      false,
+      { contactUrl: 'https://onorca.dev/contact-sales' }
     )
 })
 

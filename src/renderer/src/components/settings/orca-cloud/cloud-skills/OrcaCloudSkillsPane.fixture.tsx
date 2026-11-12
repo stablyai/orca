@@ -257,6 +257,7 @@ const KIND_ROWS: AgentConfigSyncRow[] = [
   row('claude-agent', 'reviewer'),
   row('claude-agent', 'migrations', { scope: 'project' }),
   row('claude-output-style', 'terse', { outcome: 'unchanged' }),
+  row('claude-settings', 'settings', { localRefs: 1 }),
   row('claude-memory', 'CLAUDE', { localRefs: 2 }),
   row('codex-memory', 'AGENTS', { state: 'skipped', outcome: undefined, skipReason: 'turned-off' }),
   row('claude-skill', 'deploy-preview'),

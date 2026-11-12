@@ -45,8 +45,8 @@ import {
 import { SeatSyncSchema, reconcileSeats, syncSeats } from './seats'
 import { MembershipUnavailableError, authMembershipSource, type MembershipSource } from './membership'
 import { TeamPlansRequestSchema, authOrgMemberCheck, teamPlans, type OrgMemberCheck } from './team-plans'
-import { graceExpiredAccounts } from './store'
-import { CheckoutRequestSchema, createCheckout, createPortal } from './checkout'
+import { currentSubscription, graceExpiredAccounts } from './store'
+import { CheckoutRequestSchema, createCheckout, createPortal, OPEN_STATUSES } from './checkout'
 import { checkStart, computeEntitlement, entitlementsMode } from './entitlements'
 import { CatalogUnavailableError, loadCatalog, policyFor } from './catalog'
 import { backfillGrants } from './entitlements-backfill'
@@ -87,6 +87,9 @@ import { billingTrialPort, type TrialPort } from './cloud-setup-trial'
 import { grantTrial, isTeamAccount, recordTrialGithub, trialOffer, type TrialInput } from './trial'
 import type { BillingCaller } from './auth'
 
+// Orca Cloud auth (MEMBERSHIP_SYNC_TOKEN), deleting a team:
+//   GET /v1/internal/accounts/:accountId/subscription -> {status, open}
+const TEAM_SUBSCRIPTION_PATH = /^\/v1\/internal\/accounts\/(org:[A-Za-z0-9_.:-]{1,150})\/subscription$/
 const MAX_JSON_BYTES = 16 * 1024
 
 const StartCheckSchema = z
@@ -306,6 +309,17 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
   const membership = deps.membership ?? authMembershipSource(env)
   const route = `${request.method} ${url.pathname}`
   try {
+    const subscriptionMatch = TEAM_SUBSCRIPTION_PATH.exec(url.pathname)
+    if (subscriptionMatch && request.method === 'GET') {
+      // Auth, before deleting a team: a team with an open subscription can't be deleted, or Stripe
+      // would keep charging an account nobody can reach.
+      if (!(await authenticateMembershipSync(env, request))) {
+        return json({ error: 'unauthorized' }, 401)
+      }
+      const subscription = await currentSubscription(env.BILLING_DB, subscriptionMatch[1]!)
+      const status = subscription?.status ?? null
+      return json({ status, open: status !== null && OPEN_STATUSES.has(status) })
+    }
     if (url.pathname.startsWith('/v1/cloud-setup/') || url.pathname.startsWith('/v1/internal/cloud-setup/')) {
       const handled = await handleCloudSetup(request, env, url, now, {
         stripe,

@@ -16,6 +16,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { getSelectedNewWorkspaceProjectOptionId } from '@/lib/workspace/creation/new-workspace-project-options'
 import { resolveComposerAddProjectDefaultHostId } from './composer-add-project-default-host'
+import { cloudAddProjectExtraItems } from './ProjectComboboxCloudAddProjectEntry'
 import type {
   EphemeralVmRecipeOption,
   NeedsProjectHostOption,
@@ -112,8 +113,6 @@ export function NewWorkspaceComposerProjectSection({
       ? cloudStart?.cloudOnly
       : undefined
   const t = useTranslate()
-  // RR-c1: "Choose repository" opens the Project picker at its GitHub repositories.
-  const [repoPickerSignal, setRepoPickerSignal] = React.useState(0)
   // RR-c1: each stopped Create moves focus to Project (quietly), where the error is.
   const needsRepo = cloudStart?.needsGitHubRepo ?? null
   const addProjectLabel = t('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')
@@ -165,6 +164,9 @@ export function NewWorkspaceComposerProjectSection({
                   defaultHostId={defaultAddProjectHostId}
                   onOpenEntryRequest={onAddProjectEntryRequest}
                   onOpenRemoteHostDialog={handleOpenRemoteHostDialog}
+                  // PROJ-MENU: the button beside "Project" gets the same "Orca Cloud" group as the
+                  // list's Add project row while Run on is Orca Cloud.
+                  extraItems={cloudAddProjectExtraItems(cloudOnly?.moreAccess)}
                 >
                   <Button
                     type="button"
@@ -231,7 +233,6 @@ export function NewWorkspaceComposerProjectSection({
               describedBy={
                 !projectError && needsRepo ? ORCA_CLOUD_NEEDS_REPO_ID : projectDescriptionId
               }
-              openSignal={repoPickerSignal}
               focusSignal={needsRepo?.attempt ?? 0}
             />
             {projectError ? (
@@ -241,7 +242,6 @@ export function NewWorkspaceComposerProjectSection({
             ) : needsRepo ? (
               <OrcaCloudNeedsRepoLine
                 hasRepos={needsRepo.hasRepos}
-                onChooseRepository={() => setRepoPickerSignal((signal) => signal + 1)}
                 onAddRepository={onAddProject}
               />
             ) : projectOptions.length === 0 ? (

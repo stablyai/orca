@@ -24,7 +24,9 @@ export const AgentConfigItemKind = z.enum([
   /** ~/.claude/CLAUDE.md: Claude's user memory (name `CLAUDE`). Off until the user turns it on. */
   'claude-memory',
   /** ~/.codex/AGENTS.md: Codex's global instructions (name `AGENTS`). Off until turned on. */
-  'codex-memory'
+  'codex-memory',
+  /** Allowlisted keys of ~/.claude/settings.json, merged key by key (name `settings`). Opt-in. */
+  'claude-settings'
 ])
 export type AgentConfigItemKind = z.infer<typeof AgentConfigItemKind>
 
@@ -37,7 +39,8 @@ export const AGENT_CONFIG_FILE_KINDS: ReadonlySet<AgentConfigItemKind> = new Set
   'claude-agent',
   'claude-output-style',
   'claude-memory',
-  'codex-memory'
+  'codex-memory',
+  'claude-settings'
 ])
 /** What the first sync protocol knew. A host that answers `invalid_argument` to the `kinds` field
  * only gets these; the newer kinds wait for a workspace on a newer image. */
@@ -48,11 +51,52 @@ export const AGENT_CONFIG_LEGACY_KINDS: ReadonlySet<AgentConfigItemKind> = new S
   'codex-skill',
   'codex-prompt'
 ])
+/** Kinds each sync protocol generation knows, newest first. The desktop steps down one at a time
+ * while a sandbox answers `invalid_argument`, so it never sends a kind the sandbox can't parse. */
+export const AGENT_CONFIG_KIND_GENERATIONS: readonly (readonly AgentConfigItemKind[])[] = [
+  AgentConfigItemKind.options,
+  // Subagents, output styles and memory (SK1 part 1).
+  AgentConfigItemKind.options.filter((kind) => kind !== 'claude-settings'),
+  // The original five: sent without `kinds`.
+  [...AGENT_CONFIG_LEGACY_KINDS]
+]
+
 /** Personal instructions: they reach a sandbox (which teammates may share) only when turned on. */
 export const AGENT_CONFIG_OPT_IN_KINDS: ReadonlySet<AgentConfigItemKind> = new Set([
   'claude-memory',
-  'codex-memory'
+  'codex-memory',
+  'claude-settings'
 ])
+export const AGENT_CONFIG_SETTINGS_NAME = 'settings'
+
+/** The only settings.json keys that sync. Never: env, hooks, statusLine, apiKeyHelper,
+ * awsAuthRefresh, awsCredentialExport, forceLoginMethod, otelHeadersHelper, or anything else. */
+export const CLAUDE_SETTINGS_SCALAR_KEYS = [
+  'model',
+  'outputStyle',
+  'includeCoAuthoredBy',
+  'cleanupPeriodDays'
+] as const
+export const CLAUDE_SETTINGS_PERMISSION_LISTS = ['allow', 'ask', 'deny'] as const
+
+/** What the desktop sends for settings: only allowlisted keys, already filtered. */
+export const ClaudeSettingsPayload = z
+  .object({
+    model: z.string().max(200).optional(),
+    outputStyle: z.string().max(100).optional(),
+    includeCoAuthoredBy: z.boolean().optional(),
+    cleanupPeriodDays: z.number().int().min(0).max(3650).optional(),
+    permissions: z
+      .object({
+        allow: z.array(z.string().min(1).max(500)).max(500).optional(),
+        ask: z.array(z.string().min(1).max(500)).max(500).optional(),
+        deny: z.array(z.string().min(1).max(500)).max(500).optional()
+      })
+      .strict()
+      .optional()
+  })
+  .strict()
+export type ClaudeSettingsPayload = z.infer<typeof ClaudeSettingsPayload>
 /** The one name a memory item has: its file is `<name>.md` in the agent's config folder. */
 export const AGENT_CONFIG_MEMORY_NAME: Partial<Record<AgentConfigItemKind, string>> = {
   'claude-memory': 'CLAUDE',

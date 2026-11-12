@@ -40,6 +40,7 @@ function counterpartKind(item: LocalAgentConfigItem): AgentConfigItemKind | null
     case 'claude-output-style':
     case 'claude-memory':
     case 'codex-memory':
+    case 'claude-settings':
       return null
   }
 }
@@ -54,7 +55,8 @@ const NATIVE_FOR: Record<AgentConfigItemKind, AgentConfigItemKind[]> = {
   'claude-agent': ['claude-agent'],
   'claude-output-style': ['claude-output-style'],
   'claude-memory': ['claude-memory'],
-  'codex-memory': ['codex-memory']
+  'codex-memory': ['codex-memory'],
+  'claude-settings': ['claude-settings']
 }
 
 function rowOf(item: LocalAgentConfigItem, key: string, included: boolean): AgentConfigSyncRow {

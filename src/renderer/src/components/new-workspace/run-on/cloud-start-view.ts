@@ -21,7 +21,7 @@ export type CloudStartView = {
 
 /**
  * RR-c1: Orca Cloud on a plain folder, with no GitHub repository picked yet: Create waits.
- * `hasRepos` (the "Choose repository" link) whenever the Project picker can offer one: a GitHub
+ * `hasRepos` (no link; the Project picker is the way forward) whenever it can offer one: a GitHub
  * repository with no clone here, or a GitHub-backed project already added (design-squad).
  */
 export function orcaCloudNeedsGitHubRepo(args: {

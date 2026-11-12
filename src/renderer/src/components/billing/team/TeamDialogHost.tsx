@@ -14,6 +14,8 @@ import { createTeamFailureCopy, mutationFailureCopy } from './team-copy'
 import { clearTeamPageArrival, closeTeamPage, useTeamPageState } from './team-page-store'
 import { useOrgRoster } from './use-org-roster'
 import { useTeamActions } from './use-team-actions'
+import { useTeamDelete } from './use-team-delete'
+import { TeamDeleteSection } from './TeamDeleteSection'
 import { openTeammateProfile } from '../../teammates/teammate-profile-store'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 
@@ -162,70 +164,97 @@ export function TeamPageBody({
 
   const org =
     orgId && arrival?.kind !== 'create' ? { orgId, name: cloud?.activeOrgName ?? orgId } : null
+  // Settings › Team only, owners only (TEAM-DELETE).
+  const teamDelete = useTeamDelete({
+    orgId: org?.orgId ?? null,
+    teamName: org?.name ?? '',
+    enabled:
+      Boolean(inline) &&
+      org !== null &&
+      rosterResult?.status === 'ok' &&
+      rosterResult.roster.viewerRole === 'owner',
+    onManageBilling: openPortal,
+    onDeleted: async () => {
+      await refreshAuth()
+    }
+  })
 
   return (
-    <TeamPageView
-      org={org}
-      viewerUserId={cloud?.userId ?? null}
-      roster={rosterResult}
-      billing={billing.result}
-      arrival={arrival}
-      rowStates={actions.rowStates}
-      refreshing={userRefreshing && (roster.loading || billing.loading)}
-      billingBusy={billingBusy}
-      now={now}
-      create={{
-        organizations: (authStatus?.organizations ?? []).filter(
-          (candidate) => candidate.orgId !== orgId
-        ),
-        creating,
-        error: createError,
-        unavailable: createUnavailable,
-        switchingOrgId
-      }}
-      onCreateTeam={createTeam}
-      onSwitchOrg={switchOrg}
-      onRefresh={() => {
-        setUserRefreshing(true)
-        quietRefresh()
-        window.setTimeout(() => setUserRefreshing(false), 600)
-      }}
-      onInvite={actions.invite}
-      onChangeRole={(member, role) => actions.changeRole(member, role)}
-      onMakeOwner={actions.makeOwner}
-      onRemove={actions.remove}
-      onResend={actions.resend}
-      onRevoke={(email) => {
-        const role =
-          rosterResult?.status === 'ok'
-            ? (rosterResult.roster.pendingInvites.find((invite) => invite.email === email)?.role ??
-              'member')
-            : 'member'
-        actions.revoke(email, role)
-      }}
-      onLeave={leave}
-      onSeePlans={() => {
-        closeTeamPage()
-        openPlansPage('team')
-      }}
-      onManageBilling={openPortal}
-      onCreateWorkspace={() => {
-        closeTeamPage()
-        // The plan is for Orca Cloud, so the composer opens on it rather than this computer.
-        openModal('new-workspace-composer', {
-          initialEphemeralVmRecipeId: ORCA_CLOUD_RECIPE_ID,
-          telemetrySource: 'unknown'
-        })
-      }}
-      onOpenProfile={(userId) => {
-        // One dialog at a time: the profile replaces the Team page (as in Conductor 0.91).
-        closeTeamPage()
-        openTeammateProfile(userId)
-      }}
-      onDismissArrival={clearTeamPageArrival}
-      onContactSales={(url) => void window.api.shell.openUrl(url)}
-      inline={inline}
-    />
+    <>
+      <TeamPageView
+        org={org}
+        viewerUserId={cloud?.userId ?? null}
+        roster={rosterResult}
+        billing={billing.result}
+        arrival={arrival}
+        rowStates={actions.rowStates}
+        refreshing={userRefreshing && (roster.loading || billing.loading)}
+        billingBusy={billingBusy}
+        now={now}
+        create={{
+          organizations: (authStatus?.organizations ?? []).filter(
+            (candidate) => candidate.orgId !== orgId
+          ),
+          creating,
+          error: createError,
+          unavailable: createUnavailable,
+          switchingOrgId
+        }}
+        onCreateTeam={createTeam}
+        onSwitchOrg={switchOrg}
+        onRefresh={() => {
+          setUserRefreshing(true)
+          quietRefresh()
+          window.setTimeout(() => setUserRefreshing(false), 600)
+        }}
+        onInvite={actions.invite}
+        onChangeRole={(member, role) => actions.changeRole(member, role)}
+        onMakeOwner={actions.makeOwner}
+        onRemove={actions.remove}
+        onResend={actions.resend}
+        onRevoke={(email) => {
+          const role =
+            rosterResult?.status === 'ok'
+              ? (rosterResult.roster.pendingInvites.find((invite) => invite.email === email)
+                  ?.role ?? 'member')
+              : 'member'
+          actions.revoke(email, role)
+        }}
+        onLeave={leave}
+        onSeePlans={() => {
+          closeTeamPage()
+          openPlansPage('team')
+        }}
+        onManageBilling={openPortal}
+        onCreateWorkspace={() => {
+          closeTeamPage()
+          // The plan is for Orca Cloud, so the composer opens on it rather than this computer.
+          openModal('new-workspace-composer', {
+            initialEphemeralVmRecipeId: ORCA_CLOUD_RECIPE_ID,
+            telemetrySource: 'unknown'
+          })
+        }}
+        onOpenProfile={(userId) => {
+          // One dialog at a time: the profile replaces the Team page (as in Conductor 0.91).
+          closeTeamPage()
+          openTeammateProfile(userId)
+        }}
+        onDismissArrival={clearTeamPageArrival}
+        onContactSales={(url) => void window.api.shell.openUrl(url)}
+        inline={inline}
+        dangerZone={
+          org && teamDelete.check ? (
+            <TeamDeleteSection
+              teamName={org.name}
+              check={teamDelete.check}
+              onDelete={teamDelete.open}
+              onBlockerAction={teamDelete.onBlockerAction}
+            />
+          ) : null
+        }
+      />
+      {teamDelete.dialog}
+    </>
   )
 }
 

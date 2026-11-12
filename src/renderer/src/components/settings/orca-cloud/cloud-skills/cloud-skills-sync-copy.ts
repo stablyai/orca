@@ -7,7 +7,12 @@ import {
   type AgentConfigSyncRow,
   type AgentConfigSyncStatus
 } from '../../../../../../shared/agent-config-sync/agent-config-sync-contract'
-import { AGENT_LABEL, cloudSkillsDisplayName, cloudSkillsKindLabel } from './cloud-skills-labels'
+import {
+  AGENT_LABEL,
+  cloudSkillsDisplayName,
+  cloudSkillsKindLabel,
+  cloudSkillsSettingsNote
+} from './cloud-skills-labels'
 
 export { AGENT_LABEL, cloudSkillsDisplayName, cloudSkillsKindLabel } from './cloud-skills-labels'
 
@@ -95,6 +100,9 @@ export function cloudSkillsRowNote(
       }
     )
   }
+  if (row.kind === 'claude-settings' && row.state !== 'skipped') {
+    return cloudSkillsSettingsNote(row, t)
+  }
   if (row.state !== 'skipped' && row.localRefs) {
     return t(
       'cloudSkillsSync.row.localRefs',
@@ -115,12 +123,17 @@ export function cloudSkillsRowNote(
   const key = row.outcome ?? row.skipReason
   switch (key) {
     case 'turned-off':
-      return AGENT_CONFIG_OPT_IN_KINDS.has(row.kind)
+      return row.kind === 'claude-settings'
         ? t(
-            'cloudSkillsSync.row.memoryOff',
-            'Your personal instructions stay on this computer until you turn this on'
+            'cloudSkillsSync.row.settingsOff',
+            'Permissions and model settings stay on this computer until you turn this on'
           )
-        : t('cloudSkillsSync.row.turnedOff', 'Turned off')
+        : AGENT_CONFIG_OPT_IN_KINDS.has(row.kind)
+          ? t(
+              'cloudSkillsSync.row.memoryOff',
+              'Your personal instructions stay on this computer until you turn this on'
+            )
+          : t('cloudSkillsSync.row.turnedOff', 'Turned off')
     case 'host-outdated':
       return t(
         'cloudSkillsSync.row.hostOutdated',
