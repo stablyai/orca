@@ -132,7 +132,9 @@ export async function performAttach(
   // All starts validate agent storage identity; unsupported records remain readable.
   const supported = (record: AgentSessionRecord | null) =>
     record === null
-      ? input.agents.definition(params.agent) !== null &&
+      ? (!params.advisoryPolicy ||
+          input.adapter.supportsAdvisoryPolicy?.(params.location, params.agent) === true) &&
+        input.agents.definition(params.agent) !== null &&
         adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)
       : hostCanStartRecord(input, record)
   // Ensure/recovery bypass create intent, so recheck before effects.

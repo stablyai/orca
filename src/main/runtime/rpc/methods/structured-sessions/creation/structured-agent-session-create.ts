@@ -1,4 +1,5 @@
 import type { StructuredSessionSurface } from '../../../../agent-session/structured-agent-session-close'
+import type { AgentSessionAdvisoryPolicy } from '../../../../../../shared/agent-session/agent-session-advisory-policy'
 import { structuredAgentSessionTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { seededPermissionMode } from '../../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
@@ -10,7 +11,10 @@ import {
   agentSessionRefusalError,
   AgentSessionRefusalError
 } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import {
+  computeAgentSessionPayloadFingerprint,
+  agentSessionFingerprintConflict
+} from '../../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationEnvelope,
@@ -22,9 +26,10 @@ import {
 } from '../../../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
-import type {
-  StructuredAgentSessionResumeSource,
-  StructuredAgentSessionFirstMessage
+import {
+  structuredAgentSessionCreateIntentFingerprint,
+  type StructuredAgentSessionResumeSource,
+  type StructuredAgentSessionFirstMessage
 } from '../../../../../../shared/agent-session/structured-agent-session-create'
 import '../../../../../native-chat/agent-session-wire/options/structured-agent-session-options-read'
 import { structuredAgentSessionOptionOverridesRefusal } from '../../../../../native-chat/agent-session-wire/options/structured-agent-session-option-intent'
@@ -52,32 +57,7 @@ export type PreparedStructuredAgentSessionCreate = {
 }
 
 /** New creates keep the immutable client intent in the ledger; legacy creates keep attach identity. */
-export function structuredAgentSessionCreateIntentFingerprint(params: {
-  envelope: AgentSessionMutationEnvelope
-  worktree: string
-  agent: string
-  forkFrom?: { sessionId: string; throughItemId: string }
-  resumeFrom?: StructuredAgentSessionResumeSource
-  tabId?: string
-  firstMessage?: StructuredAgentSessionFirstMessage
-  optionsMode?: 'replace-model-selection'
-  options?: Readonly<Record<string, string>>
-}): string {
-  return computeAgentSessionPayloadFingerprint({
-    method: 'agentSession.create',
-    sessionId: params.envelope.sessionId,
-    fields: {
-      worktree: params.worktree,
-      agent: params.agent,
-      resumeFrom: params.resumeFrom,
-      forkFrom: params.forkFrom,
-      tabId: params.tabId,
-      firstMessage: params.firstMessage,
-      optionsMode: params.optionsMode,
-      options: params.options
-    }
-  })
-}
+export { structuredAgentSessionCreateIntentFingerprint }
 
 /** Run throwing pre-commit work inside resolveUncommittedStructuredCreate so clients receive a no-effects refusal. */
 export async function prepareStructuredAgentSessionCreateForWorktree(args: {
@@ -94,12 +74,27 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  advisoryPolicy?: AgentSessionAdvisoryPolicy
   /** Use the caller-reserved tab id at publication; absent, derive the legacy id. Keep it outside launch fingerprints. */
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   atRest?: boolean
 }): Promise<PreparedStructuredAgentSessionCreate> {
   const fork = args.forkFrom
+  if (args.advisoryPolicy && (fork || args.resumeFrom)) {
+    throw agentSessionRefusalError('agent_session_operation_invalid', {
+      reason: 'requestMalformed'
+    })
+  }
+  if (args.advisoryPolicy) {
+    const conflict = agentSessionFingerprintConflict(
+      args.envelope,
+      structuredAgentSessionCreateIntentFingerprint(args)
+    )
+    if (conflict) {
+      throw new AgentSessionRefusalError(conflict)
+    }
+  }
   if (fork && (args.resumeFrom || args.options || args.optionsMode || args.atRest !== true)) {
     throw agentSessionRefusalError('agent_session_operation_invalid', {
       reason: 'requestMalformed'
@@ -141,9 +136,10 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     args.options === undefined &&
     priorOperation?.fingerprint === attachFingerprint
   const atRest =
-    args.atRest !== undefined &&
-    (priorOperation?.fingerprint === args.envelope.payloadFingerprint ||
-      (args.atRest === true && !legacyReplay))
+    args.advisoryPolicy !== undefined ||
+    (args.atRest !== undefined &&
+      (priorOperation?.fingerprint === args.envelope.payloadFingerprint ||
+        (args.atRest === true && !legacyReplay)))
   const hostFingerprint = atRest ? args.envelope.payloadFingerprint : attachFingerprint
   if (atRest && args.options) {
     const refusal = structuredAgentSessionOptionOverridesRefusal(
@@ -170,6 +166,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
+      ...(args.advisoryPolicy ? { advisoryPolicy: args.advisoryPolicy } : {}),
       ...(picked ? { options: picked } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
@@ -294,6 +291,7 @@ export async function createStructuredAgentSessionForWorktree(args: {
   activate: boolean
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  advisoryPolicy?: AgentSessionAdvisoryPolicy
   tabId?: string
   /** Create without starting the agent; its first message starts it. */
   atRest?: true

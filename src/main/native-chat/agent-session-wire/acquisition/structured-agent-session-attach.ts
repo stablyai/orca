@@ -59,6 +59,7 @@ export type AgentSessionAttachParams = {
     historyOrigin?: NativeCopyOrigin
   }
   options?: Readonly<Record<string, string>>
+  advisoryPolicy?: AgentSessionRecord['advisoryPolicy']
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string
   launchArgs?: string[]
@@ -96,6 +97,7 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     providerHandle: params.providerHandle,
     // Adoption changes identity; transcript location is transient and excluded.
     adoptedProviderHandle: params.adopt?.providerHandle,
+    advisoryPolicy: params.advisoryPolicy,
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
 }
@@ -212,6 +214,7 @@ export function reserveRequestFor(input: {
     location: params.location,
     provider: params.provider,
     accountHome: params.accountHome,
+    ...(params.advisoryPolicy ? { advisoryPolicy: params.advisoryPolicy } : {}),
     ...(params.options ? { options: params.options, models: input.models } : {}),
     ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId
       ? { surfaceTabId: params.surfaceTabId }

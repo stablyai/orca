@@ -5,6 +5,7 @@ import type {
   StructuredAgentSessionResumeSource
 } from '../structured-agent-session-create'
 import type { StructuredAgentId } from './agent-session-provider-handle'
+import type { AgentSessionAdvisoryPolicy } from '../agent-session-advisory-policy'
 
 function canonicalize(value: unknown): string {
   if (value === null || typeof value !== 'object') {
@@ -54,6 +55,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  advisoryPolicy?: AgentSessionAdvisoryPolicy
 }): string {
   return structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.create',
@@ -68,7 +70,8 @@ export function structuredAgentSessionCreateFingerprint(input: {
       tabId: input.tabId,
       firstMessage: input.firstMessage,
       optionsMode: input.optionsMode,
-      options: input.options
+      options: input.options,
+      advisoryPolicy: input.advisoryPolicy
     }
   })
 }

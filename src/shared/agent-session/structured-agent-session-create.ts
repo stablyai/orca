@@ -1,4 +1,5 @@
 import type { StructuredAgentId } from './lifecycle/agent-session-provider-handle'
+import type { AgentSessionAdvisoryPolicy } from './agent-session-advisory-policy'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
 import type { z } from 'zod'
 import type { SendBody } from '../rpc-contract/structured-agent-session-message-params'
@@ -30,6 +31,7 @@ export type StructuredAgentSessionCreateParams = {
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  advisoryPolicy?: AgentSessionAdvisoryPolicy
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY`. */
   tabPlacement?: { groupId?: string; afterTabId?: string }
 }
@@ -65,6 +67,7 @@ export function structuredAgentSessionCreateParams(args: {
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  advisoryPolicy?: AgentSessionAdvisoryPolicy
   /** A display hint, outside the fingerprint: a retry may name a place that moved. */
   tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
   randomUuid: () => string
@@ -72,6 +75,9 @@ export function structuredAgentSessionCreateParams(args: {
 }): StructuredAgentSessionCreateParams {
   if (args.forkFrom && (args.resumeFrom || args.options || args.optionsMode)) {
     throw new Error('A fork inherits its source options and cannot also resume a conversation.')
+  }
+  if (args.advisoryPolicy && (args.forkFrom || args.resumeFrom)) {
+    throw new Error('An advisor requires a fresh conversation.')
   }
   const fields = {
     worktree: args.worktree,
@@ -81,7 +87,8 @@ export function structuredAgentSessionCreateParams(args: {
     ...(args.tabId ? { tabId: args.tabId } : {}),
     ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
     ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
-    ...(args.options ? { options: args.options } : {})
+    ...(args.options ? { options: args.options } : {}),
+    ...(args.advisoryPolicy ? { advisoryPolicy: args.advisoryPolicy } : {})
   }
   return {
     envelope: {
@@ -96,4 +103,13 @@ export function structuredAgentSessionCreateParams(args: {
     ...fields,
     ...(args.tabPlacement ? { tabPlacement: args.tabPlacement } : {})
   }
+}
+
+export function structuredAgentSessionCreateIntentFingerprint(
+  params: StructuredAgentSessionCreateParams
+): string {
+  return structuredAgentSessionCreateFingerprint({
+    ...params,
+    sessionId: params.envelope.sessionId
+  })
 }

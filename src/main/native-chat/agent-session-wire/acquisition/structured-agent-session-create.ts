@@ -31,8 +31,8 @@ import {
   pinnedAgentSessionLaunchEnv
 } from './structured-agent-session-launch-env'
 import {
-  adapterSupportsCreateIfDeclared,
-  hostCanStartRecord
+  hostCanStartRecord,
+  structuredAgentSessionCreateRefusal
 } from '../providers/structured-agent-session-provider-support'
 import { performSend } from '../operations/structured-agent-session-turns'
 import { observedReceipt } from '../operations/structured-agent-session-operation-settlement'
@@ -79,30 +79,9 @@ async function foundConversation(
   const { store } = deps
   const sessionId = params.envelope.sessionId
   const prior = store.getRecord(sessionId)
-  if (params.envelope.expectedRuntimeFence !== null || params.agent !== params.provider) {
-    return {
-      ok: false,
-      refusal: refuse(
-        'agent_session_operation_invalid',
-        { reason: 'requestMalformed' },
-        'The create request is malformed.'
-      )
-    }
-  }
-  if (
-    prior
-      ? !hostCanStartRecord(deps, prior)
-      : !deps.agents.definition(params.agent) ||
-        !adapterSupportsCreateIfDeclared(deps.adapter, params.location, params.agent)
-  ) {
-    return {
-      ok: false,
-      refusal: refuse(
-        'structured_agent_session_unsupported',
-        { reason: 'hostUnsupported' },
-        'This execution host cannot create the requested chat.'
-      )
-    }
+  const refusal = structuredAgentSessionCreateRefusal(deps, params, prior)
+  if (refusal) {
+    return { ok: false, refusal }
   }
   const launchDirectory =
     !prior && isFloatingWorkspaceId(params.location.workspaceId)
