@@ -97,6 +97,7 @@ export const orcaProfilesApi = {
     return () => ipcRenderer.removeListener(ORCA_CLOUD_SETUP_RETURN_CHANNEL, listener)
   },
   billingStatus: () => ipcRenderer.invoke('orcaProfiles:billingStatus'),
+  billingPlans: () => ipcRenderer.invoke('orcaProfiles:billingPlans'),
   billingOpenCheckout: (args) => ipcRenderer.invoke('orcaProfiles:billingOpenCheckout', args),
   billingOpenPortal: () => ipcRenderer.invoke('orcaProfiles:billingOpenPortal'),
   billingTeamPlans: (args) => ipcRenderer.invoke('orcaProfiles:billingTeamPlans', args),

@@ -49,6 +49,29 @@ export const overageOffNoOffers = defineFixture({
   )
 })
 
+// Today's dev billing (before #507): offers carry every number but no alert levels.
+export const olderServiceNoAlertLevels = defineFixture({
+  width: 680,
+  render: () => {
+    const { warnAtPercent: _levels, ...team } = sampleTeam.offers!.team
+    return (
+      <PlanBillingView
+        {...handlers}
+        teamName="Orca Staging Eval Team"
+        usage={usage}
+        result={{
+          status: 'ok',
+          entitlement: {
+            ...sampleTeam,
+            overage: { ...sampleTeam.overage, optedIn: true, active: true, spendCapCents: 4000 },
+            offers: { ...sampleTeam.offers!, team }
+          }
+        }}
+      />
+    )
+  }
+})
+
 export const noPlan = defineFixture({
   width: 680,
   render: () => (

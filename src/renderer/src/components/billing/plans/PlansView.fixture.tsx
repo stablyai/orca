@@ -4,10 +4,12 @@ import { sampleTeam, sampleTrial, sampleTrialUsedUp } from '../plan-billing-fixt
 import { Dialog } from '@/components/ui/dialog'
 import { PlansDialogContent } from './PlansDialogContent'
 import type { PlansViewProps } from './PlansView'
+import { monthlyOnlyCatalogResult, sampleCatalogResult } from './plan-catalog-fixtures'
 
 const HOUR = 3600
 
 const handlers = {
+  catalog: sampleCatalogResult,
   busy: false,
   notice: null,
   seats: 4,
@@ -135,4 +137,37 @@ export const trialStrip = defineFixture({
 export const trialUsedUpStrip = defineFixture({
   width,
   render: () => <Page result={{ status: 'ok', entitlement: sampleTrialUsedUp }} />
+})
+
+/** Billing's catalog is still on its way (the entitlement already came back). */
+export const catalogLoading = defineFixture({
+  width,
+  render: () => <Page result={{ status: 'ok', entitlement: noPlan }} catalog={null} />
+})
+
+/** No catalog and no offers to fall back on: an error with Retry, never a guessed price. */
+export const catalogFailed = defineFixture({
+  width,
+  render: () => (
+    <Page
+      result={{ status: 'ok', entitlement: { ...noPlan, offers: null } }}
+      catalog={{ status: 'failed', error: 'plan_catalog_503' }}
+    />
+  )
+})
+
+/** Stripe has only a monthly price on sale: no interval toggle, monthly only. */
+export const onlyMonthlyPrice = defineFixture({
+  width,
+  render: () => (
+    <Page result={{ status: 'ok', entitlement: noPlan }} catalog={monthlyOnlyCatalogResult} />
+  )
+})
+
+/** A billing service from before GET /v1/plans (404): its entitlement offers stand in. */
+export const olderServiceOffers = defineFixture({
+  width,
+  render: () => (
+    <Page result={{ status: 'ok', entitlement: noPlan }} catalog={{ status: 'unsupported' }} />
+  )
 })

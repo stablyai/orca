@@ -8,7 +8,8 @@ import type {
   OrcaBillingOpenResult
 } from '../../../../../shared/orca-billing'
 
-export type CheckoutOrder = { interval: OrcaBillingInterval; seats: number }
+/** `planId`: billing's catalog plan; billing resolves the Stripe price for it. */
+export type CheckoutOrder = { planId: string; interval: OrcaBillingInterval; seats: number }
 
 export type CheckoutPhase =
   | { kind: 'idle' }
