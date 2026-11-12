@@ -4,7 +4,6 @@ import { act, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { WslHostConnectionState } from '../../../../shared/wsl-host-types'
 import type { FileContent } from './editor-panel-content-types'
 
 const host = vi.hoisted((): { state: string | undefined } => ({ state: undefined }))
@@ -25,7 +24,7 @@ vi.mock('@/store/retained-views/app-state-view', () => ({
     })
 }))
 
-import { useEditorPanelFileLoadRetry, wslHostRetryConnection } from './useEditorPanelFileLoadRetry'
+import { useEditorPanelFileLoadRetry } from './useEditorPanelFileLoadRetry'
 
 const FILE: OpenFile = {
   id: 'file-1',
@@ -90,26 +89,5 @@ describe('useEditorPanelFileLoadRetry on a WSL host', () => {
       FILE.worktreeId,
       FILE.relativePath
     )
-  })
-})
-
-describe('wslHostRetryConnection', () => {
-  it.each<[WslHostConnectionState, boolean, string | null]>([
-    ['connecting', true, null],
-    ['reconnecting', true, null],
-    ['ready', false, 'wsl:env-1'],
-    ['distro-stopped', false, null],
-    ['failed', false, null]
-  ])('%s', (state, connecting, connectedEpoch) => {
-    expect(wslHostRetryConnection('env-1', state)).toEqual({
-      targetId: 'wsl:env-1',
-      connecting,
-      connectedEpoch
-    })
-  })
-
-  it('is null for a host that is not a WSL host', () => {
-    expect(wslHostRetryConnection(null, undefined)).toBeNull()
-    expect(wslHostRetryConnection('ssh-env', undefined)).toBeNull()
   })
 })
