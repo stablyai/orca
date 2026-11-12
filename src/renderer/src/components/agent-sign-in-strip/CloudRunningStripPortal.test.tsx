@@ -19,7 +19,8 @@ const stub = vi.hoisted(() => {
       launchedAt: number | null
     } | null
     startedFresh: boolean
-  } = { strip: null, attempt: null, startedFresh: false }
+    tabHeld: boolean
+  } = { strip: null, attempt: null, startedFresh: false, tabHeld: false }
   return state
 })
 
@@ -52,7 +53,7 @@ vi.mock('@/lib/orca-cloud/orca-cloud-agent-accounts-store', () => ({
 }))
 vi.mock('@/lib/orca-cloud/cloud-running-agent-signout', () => ({
   clearCloudRunningSignout: () => undefined,
-  cloudRunningStrip: () => stub.strip,
+  cloudRunningStrip: (args: { held: boolean }) => (args.held ? null : stub.strip),
   useCloudRunningAccountReads: () => undefined,
   useCloudRunningSignoutVersion: () => 0,
   useWorkspaceUsesAccount: () => true
@@ -67,7 +68,11 @@ vi.mock('@/lib/orca-cloud/cloud-agent-restart-attempt', () => ({
 vi.mock('@/lib/orca-cloud/cloud-agent-restart-pane-watch', () => ({
   watchCloudAgentRestartPane: () => undefined
 }))
-vi.mock('@/lib/orca-cloud/cloud-agent-launch-hold', () => ({ useCloudAgentHold: () => null }))
+vi.mock('@/lib/orca-cloud/cloud-agent-launch-hold', () => ({
+  cloudTabHoldKey: (tabId: string) => `tab:${tabId}`,
+  useCloudAgentHold: (key: string) =>
+    stub.tabHeld && key === 'tab:tab-1' ? { agent: 'claude', reason: 'accountExpired' } : null
+}))
 vi.mock('@/lib/agent-sign-in/agent-sign-in-gate-store', () => ({ useAgentSignInGate: () => null }))
 
 const { CloudRunningStripPortal } = await import('./CloudRunningStripPortal')
@@ -97,6 +102,7 @@ beforeEach(() => {
   stub.strip = null
   stub.attempt = null
   stub.startedFresh = false
+  stub.tabHeld = false
 })
 afterEach(() => {
   cleanup()
@@ -172,5 +178,14 @@ describe('CloudRunningStripPortal in the chat view (CHAT-BANNERS)', () => {
     expect(
       within(chatColumn()).getAllByText(/Started a new conversation\./).length
     ).toBeGreaterThan(0)
+  })
+})
+
+describe('DUP-EXPIRED-STRIP', () => {
+  it('a launch held on the whole tab shows only its own strip, never this one beside it', () => {
+    stub.strip = { phase: 'expired', agent: 'claude' }
+    stub.tabHeld = true
+    const container = mount()
+    expect(container.textContent).toBe('')
   })
 })

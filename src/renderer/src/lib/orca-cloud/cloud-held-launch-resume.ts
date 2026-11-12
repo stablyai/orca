@@ -6,7 +6,26 @@
 // person's explicit Start, even once its account covers the agent or is renewed.
 import { useAppStore } from '@/store'
 import { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
-import { cloudTabHoldKey, readCloudAgentHold } from './cloud-agent-launch-hold'
+import {
+  cloudTabHoldKey,
+  holdCloudAgentLaunch,
+  joinCloudAgentHold,
+  readCloudAgentHold
+} from './cloud-agent-launch-hold'
+import {
+  forgetHeldStructuredLaunch,
+  readHeldStructuredLaunches,
+  type HeldStructuredLaunchRecord
+} from './cloud-structured-held-launch-memory'
+import {
+  markStructuredHoldResumed,
+  structuredCloudHoldKey,
+  takeStructuredHoldJoined
+} from './cloud-structured-launch-hold'
+import {
+  cancelStructuredAgentLaunch,
+  retryStructuredAgentSessionLaunch
+} from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { isOrcaCloudEnvironmentId } from './orca-cloud-environment-id'
 import {
   forgetHeldCloudLaunch,
@@ -24,8 +43,8 @@ export const HELD_LAUNCH_RESTORE_WAIT_MS = 120_000
 
 const resuming = new Set<string>()
 
-function waitForTab(record: HeldCloudLaunchRecord, waitMs: number): Promise<boolean> {
-  if (isTabOpen(record.worktreeId, record.tabId)) {
+function waitFor(ready: () => boolean, waitMs: number): Promise<boolean> {
+  if (ready()) {
     return Promise.resolve(true)
   }
   return new Promise((resolve) => {
@@ -35,12 +54,60 @@ function waitForTab(record: HeldCloudLaunchRecord, waitMs: number): Promise<bool
       resolve(found)
     }
     const unsubscribe = useAppStore.subscribe(() => {
-      if (isTabOpen(record.worktreeId, record.tabId)) {
+      if (ready()) {
         finish(true)
       }
     })
     const timer = setTimeout(() => finish(false), waitMs)
   })
+}
+
+function waitForTab(record: HeldCloudLaunchRecord, waitMs: number): Promise<boolean> {
+  return waitFor(() => isTabOpen(record.worktreeId, record.tabId), waitMs)
+}
+
+function structuredChatOpen(sessionId: string): boolean {
+  return Object.values(useAppStore.getState().unifiedTabsByWorktree ?? {}).some((tabs) =>
+    tabs?.some((tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId)
+  )
+}
+
+const resumingChats = new Set<string>()
+
+/**
+ * V3-01b: put a held structured chat's hold back as soon as its tab is in the store, before (and
+ * whatever becomes of) its launch's retry, so the strip and hint show at once. The retry joins this
+ * hold; if none did by the time the person starts it, Start retries the launch (Cancel abandons it).
+ */
+async function resumeChat(record: HeldStructuredLaunchRecord, waitMs: number): Promise<void> {
+  if (!(await waitFor(() => structuredChatOpen(record.sessionId), waitMs))) {
+    console.info(
+      `[orca-cloud] held chat dropped: ${record.sessionId} did not come back after restart`
+    )
+    forgetHeldStructuredLaunch(record.sessionId)
+    return
+  }
+  const paneKey = structuredCloudHoldKey(record.sessionId)
+  // The launch's own retry already holds (or is deciding to): it owns Start and Cancel.
+  if (joinCloudAgentHold(paneKey)) {
+    return
+  }
+  markStructuredHoldResumed(record.sessionId)
+  const outcome = await holdCloudAgentLaunch({
+    paneKey,
+    agent: record.agent,
+    prompt: null,
+    restored: true
+  })
+  forgetHeldStructuredLaunch(record.sessionId)
+  if (takeStructuredHoldJoined(record.sessionId)) {
+    return
+  }
+  if (outcome === 'proceed') {
+    retryStructuredAgentSessionLaunch(record.worktreeId, record.sessionId)
+  } else {
+    cancelStructuredAgentLaunch(record.worktreeId, record.sessionId)
+  }
 }
 
 async function resumeOne(
@@ -97,6 +164,13 @@ export function resumeHeldCloudLaunches(
     const timer = setTimeout(unsubscribe, waitMs)
     return
   }
+  for (const record of readHeldStructuredLaunches(environmentId)) {
+    if (resumingChats.has(record.sessionId)) {
+      continue
+    }
+    resumingChats.add(record.sessionId)
+    void resumeChat(record, waitMs).finally(() => resumingChats.delete(record.sessionId))
+  }
   for (const record of readHeldCloudLaunches(environmentId)) {
     if (resuming.has(record.tabId) || readCloudAgentHold(cloudTabHoldKey(record.tabId))) {
       continue
@@ -108,4 +182,5 @@ export function resumeHeldCloudLaunches(
 
 export function resetHeldCloudLaunchResumeForTest(): void {
   resuming.clear()
+  resumingChats.clear()
 }

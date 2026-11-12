@@ -211,6 +211,24 @@ describe('after a restart', () => {
     expect(create).not.toHaveBeenCalled()
   })
 
+  it('an unread restored hold takes the read once it lands: "isn\'t set up", never "couldn\'t check"', async () => {
+    mocks.load = 'loading'
+    remember()
+    setTabs([TAB])
+    const create = vi.fn(async () => created('host-agent'))
+    resumeHeldCloudLaunches(ENV, { create, waitMs: 5_000 })
+    await flush()
+    await flush()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.awaiting).toBe('unread')
+    mocks.load = 'ready'
+    for (const listener of mocks.listeners) {
+      listener()
+    }
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.reason).toBe('notSetUp')
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.awaiting).toBeUndefined()
+    expect(create).not.toHaveBeenCalled()
+  })
+
   it('restored and expired: a Renew turns it awaitingStart and starts nothing', async () => {
     mocks.coverage = 'expired'
     remember()
