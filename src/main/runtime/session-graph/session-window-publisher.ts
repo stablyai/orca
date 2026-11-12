@@ -44,12 +44,27 @@ export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWit
     const replica = rendererStatusReplica(this)
     replica.beginEpoch(rendererGeneration)
     const members = new Map<string, RendererStatusMember>()
+    const unchanged = new Set(graph.unchangedMobileSessionWorktrees ?? [])
     const rawBindings = new Map(
       graph.leaves.map((leaf) => [makePaneKey(leaf.tabId, leaf.leafId), leaf.ptyId])
     )
     for (const snapshot of graph.mobileSessionTabs ?? []) {
+      const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(snapshot.worktree)
+      if (
+        !accepted ||
+        accepted.publicationEpoch !== snapshot.publicationEpoch ||
+        accepted.rendererVersion !== snapshot.snapshotVersion
+      ) {
+        if (accepted) {
+          unchanged.add(snapshot.worktree)
+        }
+        continue
+      }
+      const storedIds = new Set(
+        this.mobileSessionTabsByWorktree.get(snapshot.worktree)?.tabs.map((tab) => tab.id)
+      )
       for (const tab of snapshot.tabs) {
-        if (tab.type !== 'terminal') {
+        if (tab.type !== 'terminal' || !storedIds.has(tab.id)) {
           continue
         }
         const paneKey = makePaneKey(tab.parentTabId, tab.leafId)
@@ -62,10 +77,7 @@ export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWit
         })
       }
     }
-    for (const worktreeId of replica.reconcileGraph(
-      members,
-      new Set(graph.unchangedMobileSessionWorktrees ?? [])
-    )) {
+    for (const worktreeId of replica.reconcileGraph(members, unchanged)) {
       if (!changedMobileWorktrees.has(worktreeId)) {
         const stored = this.mobileSessionTabsByWorktree.get(worktreeId)
         if (stored) {
