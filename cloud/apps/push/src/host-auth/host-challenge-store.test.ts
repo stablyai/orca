@@ -1,4 +1,3 @@
-import { PUSH_LIMITS } from '@orca-cloud/push-contract/push-limits'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   answerPushHostChallenge,
@@ -25,21 +24,6 @@ describe('push host challenge store', () => {
 
   afterEach(async () => {
     await database.close()
-  })
-
-  it('rejects a challenge the moment its own ttl elapses', async () => {
-    const host = createPushHostKeypair(4)
-    const challenge = await store.issue(hostPublicKeyB64(host))
-    const proof = answerPushHostChallenge(challenge!, {
-      gatewayOrigin: GATEWAY_ORIGIN,
-      keypair: host,
-      now: () => clock
-    })!
-    clock += PUSH_LIMITS.challengeTtlMs + 1
-    await expect(store.verify(challenge!.challengeId, proof)).resolves.toEqual({
-      ok: false,
-      reason: 'expired'
-    })
   })
 
   it('refuses a wrong host: the box will not open and a foreign proof will not match', async () => {

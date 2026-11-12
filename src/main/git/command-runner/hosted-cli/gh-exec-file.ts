@@ -8,8 +8,8 @@ import {
   isGhRateLimitProbe,
   notifyGhPrimaryRateLimit,
   type GhRateLimitBucket
-} from '../../gh-rate-limit-breaker'
-import { extractExecError, parseRetryAfterMs } from '../../exec-error'
+} from './gh-rate-limit-breaker'
+import { extractExecError, parseRetryAfterMs } from '../process-capture/exec-error'
 import { resolveCommand, type ResolvedCommand } from '../host-routing/wsl-command-resolution'
 import { resolveDefaultWslCliFallback } from './default-wsl-cli-fallback'
 import {

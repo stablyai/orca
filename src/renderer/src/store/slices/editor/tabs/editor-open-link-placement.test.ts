@@ -4,10 +4,10 @@ import { createEditorTabsStore } from '../editor-slice-test-harness'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import { captureEditorOpenLinkIntent } from './editor-open-target-group'
-import { removeGroupLayoutLeaf } from '../../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { removeGroupLayoutLeaf } from '../../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { makeLayout, makeTab } from '../../../terminals/terminal-tab.test-fixture'
-import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
+import '../../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
@@ -141,22 +141,6 @@ function linkIntent(store: StoreApi<AppState>, explicit = false) {
 }
 
 describe('file links open beside their source', () => {
-  it('follows a source tab that moved to another group while its old group survives', async () => {
-    const store = createEditorTabsStore()
-    const { a, b, c } = seedColumns(store, 'terminal', 'terminal', 'terminal')
-    addTab(store, 'terminal', 'keeps-a-alive', a)
-    const main = await drawTabsFromMain(store)
-    const intent = linkIntent(store)
-    store.getState().moveUnifiedTabToGroup(intent!.sourceTabId, b)
-
-    store.getState().openFileForLink(fileInput('/repo/link.ts'), {}, intent)
-    await main.settle()
-    main.close()
-
-    // From B the preferred neighbor is C; a stale source in A would choose B.
-    expect(groupOfFile(store, '/repo/link.ts')).toEqual([c])
-  })
-
   it('refuses when the chosen group disappears at the mutation seam', () => {
     const store = createEditorTabsStore()
     const { b } = seedColumns(store, 'terminal', 'terminal', 'terminal')

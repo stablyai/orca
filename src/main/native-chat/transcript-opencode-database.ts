@@ -2,7 +2,7 @@ import { homedir } from 'node:os'
 import { wslGatedAccess } from './wsl-transcript-fs-access'
 import { join } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { getAiVaultWslScanHomeDirs } from '../ai-vault/cached-session-list'
+import { getAiVaultWslScanHomeDirs } from '../ai-vault/discovery/ai-vault-scan-roots'
 import { prepareOpenCodeWslReaders } from '../ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
 import {
   configureOpenCodeWslReaders,

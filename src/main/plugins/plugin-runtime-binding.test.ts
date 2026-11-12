@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createPluginAgentStatusForwarder, pluginRuntimeDelegate } from './plugin-runtime-binding'
+import {
+  createPluginAgentStatusForwarder,
+  pluginRuntimeDelegate,
+  readPluginWorkspaceChange
+} from './plugin-runtime-binding'
 
 import { PluginPanelBridge } from './panels/plugin-panel-bridge'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
@@ -77,5 +81,22 @@ describe('agent.status.changed for plugins', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(source.listTerminals).toHaveBeenCalledTimes(3)
     expect(panels[1]).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('workspace.changed for plugins', () => {
+  it('carries the same workspace id workspace.readContext answers', async () => {
+    const source = {
+      ...runtime([]),
+      resolveActiveWorktreeContext: async () => ({
+        worktreeId: 'repo::/w',
+        identityKey: 'wt2:local:i1',
+        path: '/w',
+        branch: 'refs/heads/main',
+        displayName: 'w'
+      })
+    }
+    const { change } = await readPluginWorkspaceChange(pluginRuntimeDelegate(source, () => []))
+    expect(change.context).toMatchObject({ workspaceId: 'identity:wt2:local:i1', branch: 'main' })
   })
 })

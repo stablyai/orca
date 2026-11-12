@@ -55,6 +55,21 @@ describe('pluginUpdateAccessGrowth', () => {
     expect(pluginUpdateAccessGrowth(after, after).capabilities).toEqual([])
   })
 
+  it('counts a host API 1.8 capability an update adds, so the person approves it', () => {
+    const before = declarative({})
+    const after = declarative({})
+    before.capabilities = [{ kind: 'workspace:read' }]
+    after.capabilities = [
+      { kind: 'workspace:read' },
+      { kind: 'workspace:create' },
+      { kind: 'automation:write' }
+    ]
+    expect(pluginUpdateAccessGrowth(before, after).capabilities).toEqual([
+      'workspace:create',
+      'automation:write'
+    ])
+  })
+
   it('counts recipes only when a recipe can run something the installed version could not', () => {
     const before = declarative({ vmRecipes: [{ path: 'recipes/ubuntu.json' }] })
     const after = declarative({ vmRecipes: [{ path: 'recipes/ubuntu-lts.json' }] })

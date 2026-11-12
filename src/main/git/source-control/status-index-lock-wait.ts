@@ -2,7 +2,7 @@ import { access, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import { BoundedMap } from '../../../shared/bounded-map'
 import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 import { resolveGitDir } from './resolve-git-dir'
 
 const INDEX_LOCK_POLL_MS = 50

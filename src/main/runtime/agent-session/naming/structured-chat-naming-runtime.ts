@@ -1,4 +1,4 @@
-import { ClaudeControlRequestTimeoutError } from '../../../claude/claude-agent-sdk-control-requests'
+import { ClaudeControlRequestTimeoutError } from '../../../claude/sdk-transport/claude-agent-sdk-control-requests'
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   resolveSourceControlActionRecipe,

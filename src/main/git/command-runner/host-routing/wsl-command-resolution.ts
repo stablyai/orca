@@ -10,11 +10,11 @@ import {
 } from '../../../../shared/wsl-login-shell-command'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../../shared/git/commands/git-output-locale'
-import type { WslGitReadEnvironment } from '../../wsl-git-read-environment'
+import type { WslGitReadEnvironment } from './wsl-git-read-environment'
 import {
   createWslProcessGroupTermination,
   type WslProcessGroupTermination
-} from '../../wsl-process-group-termination'
+} from '../process-capture/wsl-process-group-termination'
 import { translateArgForWsl, translateArgsForWsl } from './wsl-path-translation'
 import { resolveWslInteropSpawnCwd } from '../../../wsl/execution/wsl-interop-spawn-directory'
 import { noteWslDistroLaunched } from '../../../wsl/discovery/wsl-background-distro-gate'

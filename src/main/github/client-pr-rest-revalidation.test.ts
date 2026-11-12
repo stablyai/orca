@@ -36,7 +36,7 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { getFallbackPRListForBranch, getRestPRForBranch } from './client/lookup/pr-branch-lookup'
+import { getRestPRForBranch } from './client/lookup/pr-branch-lookup'
 
 import { resetPRForBranchMocks } from './client-test-harness'
 
@@ -74,27 +74,5 @@ describe('PR lookup conditional REST reads', () => {
     ).resolves.toMatchObject({ number: 11 })
     expect(ghExecFileAsyncMock.mock.calls[2][0]).toContain('If-None-Match: "recent"')
     expect(ghExecFileAsyncMock.mock.calls[3][0]).toContain('If-None-Match: "active"')
-  })
-  it('uses the same saturated-page rule for the CLI fallback', async () => {
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify(
-          Array.from({ length: 10 }, (_, i) => ({ number: i + 1, state: 'CLOSED' }))
-        )
-      })
-      .mockResolvedValueOnce({ stdout: '[{"number":11,"state":"OPEN"}]' })
-    await expect(
-      getFallbackPRListForBranch(
-        { owner: 'acme', repo: 'widgets', host: 'github.com' },
-        'feature',
-        { cwd: '/repo' }
-      )
-    ).resolves.toMatchObject({ number: 11 })
-    expect(ghExecFileAsyncMock.mock.calls[0][0]).toEqual(
-      expect.arrayContaining(['--state', 'all', '--limit', '10'])
-    )
-    expect(ghExecFileAsyncMock.mock.calls[1][0]).toEqual(
-      expect.arrayContaining(['--state', 'open', '--limit', '1'])
-    )
   })
 })

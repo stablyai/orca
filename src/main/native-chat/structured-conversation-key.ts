@@ -9,7 +9,7 @@ import {
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { structuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
-import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
+import { sessionIdFromFileName } from '../ai-vault/parsing/session-scanner-accumulator'
 
 /** One conversation wherever it is named: the agents sharing its ids, its id (null: a targetless
  *  resume that may pick any of the family's), and its account home (null: the namer can't tell). */

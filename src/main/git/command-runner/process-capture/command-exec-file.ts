@@ -1,6 +1,6 @@
 import { isWindowsBatchScript } from '../../../../shared/windows-batch-spawn'
 import { resolveWindowsCommand } from '../../../windows/windows-command-paths'
-import { isMissingCommandBinaryError } from '../../exec-error'
+import { isMissingCommandBinaryError } from './exec-error'
 import { resolveCommand, type ResolvedCommand } from '../host-routing/wsl-command-resolution'
 import { execFileCapture } from './exec-file-capture'
 import { spawnCommandCapture, type CommandExecOptions } from './spawn-command-capture'

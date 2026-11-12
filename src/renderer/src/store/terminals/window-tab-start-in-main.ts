@@ -3,7 +3,7 @@ import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { isSupportedWindowsShellOverride } from '../../../../shared/windows-terminal-shell'
 import type { AppState } from '../types'

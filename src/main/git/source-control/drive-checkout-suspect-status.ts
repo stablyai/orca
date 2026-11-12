@@ -14,11 +14,11 @@ import { usesHostGitForWslLinkedWorktree } from '../command-runner/host-routing/
 import {
   withWslWindowsCheckoutGitConfig,
   wslWindowsCheckoutKey
-} from '../wsl-windows-checkout-git-config'
+} from '../command-runner/host-routing/wsl-windows-checkout-git-config'
 import { DriveCheckoutSuspectPaths } from './drive-checkout-suspect-paths'
 import { bulkPathspecCommands } from './git-pathspec'
 import type { GetStatusOptions } from './get-status-options'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 
 // Why: the later `-c` overrides the injected `core.checkStat=minimal` for just these paths.
 const TARGETED_STATUS_ARGS = [

@@ -1,4 +1,5 @@
 import { createContext, useMemo } from 'react'
+import type { NativeChatFind } from '../../viewport/find/use-native-chat-find'
 
 /** What an opened run's own window needs from the chat around it; standalone runs get the defaults. */
 export type NativeChatToolRunWindowFacts = {
@@ -15,9 +16,14 @@ export const NativeChatToolRunWindowContext = createContext<NativeChatToolRunWin
 
 export function NativeChatToolRunWindowProvider({
   isVisible,
-  findActive,
+  find,
   children
-}: NativeChatToolRunWindowFacts & { children: React.ReactNode }): React.JSX.Element {
+}: {
+  isVisible: boolean
+  find: Pick<NativeChatFind, 'isOpen' | 'query'>
+  children: React.ReactNode
+}): React.JSX.Element {
+  const findActive = find.isOpen && find.query !== ''
   const facts = useMemo(() => ({ isVisible, findActive }), [findActive, isVisible])
   return (
     <NativeChatToolRunWindowContext.Provider value={facts}>

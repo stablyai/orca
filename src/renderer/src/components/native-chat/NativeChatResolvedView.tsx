@@ -349,10 +349,7 @@ export function NativeChatResolvedView({
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
-          <NativeChatToolRunWindowProvider
-            isVisible={isVisible}
-            findActive={find.isOpen && find.query !== ''}
-          >
+          <NativeChatToolRunWindowProvider isVisible={isVisible} find={find}>
             <NativeChatMessageList
               ref={messageListRef}
               session={sessionWithPending}

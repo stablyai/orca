@@ -47,6 +47,10 @@ export function PluginRemoveDialog({
             {t(
               'auto.components.settings.PluginRemoveDialog.description',
               'Its data is removed too.'
+            )}{' '}
+            {t(
+              'auto.components.settings.PluginRemoveDialog.pausesAutomations',
+              'Automations it created are paused, and stay paused if you install it again.'
             )}
           </DialogDescription>
         </DialogHeader>

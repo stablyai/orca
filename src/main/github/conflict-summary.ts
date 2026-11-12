@@ -4,9 +4,12 @@ import {
   isUnsupportedMergeTreeWriteTreeError
 } from '../../shared/git/branches/git-merge-tree-capability'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
-import { gitOptionsForWorktree, type GitRuntimeOptions } from '../git/git-runtime-options'
-import { createLocalGitObjectQuarantine } from '../git/local-git-object-quarantine'
-import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
+import {
+  gitOptionsForWorktree,
+  type GitRuntimeOptions
+} from '../git/command-runner/git-runtime-options'
+import { createLocalGitObjectQuarantine } from '../git/objects/local-git-object-quarantine'
+import { _resetCanonicalRepoKeyCacheForTests } from '../git/repositories/canonical-repo-key'
 import { RuntimeRemoteFetchController } from '../runtime/repositories/runtime-remote-fetch-controller'
 import {
   clearGitCapabilityStateForTests,

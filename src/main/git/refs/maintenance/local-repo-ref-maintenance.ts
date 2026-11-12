@@ -154,7 +154,7 @@ export type LocalRepoRefMaintenanceTargetArgs = {
   readonly wslDistro?: string
 }
 
-/** Restart the quiet period after a write; check the kill switch before arming timers. */
+/** Retain an idle opportunity after a write; check the kill switch before arming timers. */
 export function armLocalRepoRefMaintenance(args: LocalRepoRefMaintenanceTargetArgs): void {
   if (isDisabled()) {
     return

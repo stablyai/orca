@@ -1,12 +1,24 @@
 import type { z } from 'zod'
-import { shortPluginBranchName } from '../../../../shared/plugins/events/plugin-events'
+import {
+  shortPluginBranchName,
+  workspaceChangedPayloadSchema
+} from '../../../../shared/plugins/events/plugin-events'
+import type { PluginEventName } from '../../../../shared/plugins/manifest/plugin-manifest'
 import {
   PLUGIN_TERMINAL_ID_MAX_LENGTH,
   PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
   PLUGIN_WORKSPACE_TERMINAL_LIMIT,
   type pluginWorkspaceContextSchema
 } from '../../../../shared/plugins/workers/plugin-host-api'
-import { PLUGIN_AGENT_LIST_LIMIT } from '../../../../shared/plugins/workers/plugin-host-api-panel-methods'
+import {
+  PLUGIN_AGENT_LIST_LIMIT,
+  pluginAgentSessionIdSchema
+} from '../../../../shared/plugins/workers/plugin-host-api-panel-methods'
+import {
+  PLUGIN_HOST_ID_MAX_LENGTH,
+  pluginWorkspaceId
+} from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 /** One terminal of a workspace, as main's runtime lists it. */
@@ -27,11 +39,23 @@ export type PluginAgentStatusRow = {
   agentType?: string
   stateStartedAt: number
   providerSessionOnly?: boolean
+  /** The SSH connection the pane runs on; null or absent on this machine. */
+  connectionId?: string | null
+  /** The agent's own session, which a resume names. */
+  providerSession?: { id: string; transcriptPath?: string }
 }
 
 export type PluginWorkspaceContext = z.output<typeof pluginWorkspaceContextSchema>
 
-type Context = { worktreeId: string; branch: string; displayName: string }
+type Context = { worktreeId: string; identityKey?: string; branch: string; displayName: string }
+
+/** The session id a plugin may see: what `agent.resume` accepts, else none. */
+export function pluginAgentSessionId(
+  session: { id: string } | null | undefined
+): string | undefined {
+  const id = session?.id
+  return id && pluginAgentSessionIdSchema.safeParse(id).success ? id : undefined
+}
 
 /** A pane's own name wins over the title its program sets. */
 export function pluginTerminalTitle(terminal: {
@@ -42,7 +66,39 @@ export function pluginTerminalTitle(terminal: {
   return title ? title.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH) : undefined
 }
 
-/** Worktree ids embed provider paths: only these public fields reach plugins. */
+/** The id `workspace.list` gives, or undefined when it exceeds the public bound. */
+export function pluginListedWorkspaceId(row: {
+  id: string
+  identityKey?: string | null
+}): string | undefined {
+  const id = pluginWorkspaceId(row)
+  return id.length <= PLUGIN_HOST_ID_MAX_LENGTH ? id : undefined
+}
+
+/**
+ * What a frame (panel, editor) may see of a context: no raw workspace id, which embeds the
+ * workspace's path. Only the path-free forms (`identity:`, `folder:`) reach frames.
+ */
+export function pluginFrameWorkspaceContext(
+  context: PluginWorkspaceContext
+): PluginWorkspaceContext {
+  const id = context?.workspaceId
+  if (!context || !id || id.startsWith('identity:') || parseWorkspaceKey(id)?.type === 'folder') {
+    return context
+  }
+  const { workspaceId: _rawId, ...pathFree } = context
+  return pathFree
+}
+
+/** An event payload as frames get it: `workspace.changed` without a raw workspace id. */
+export function pluginFrameEventPayload(event: PluginEventName, payload: unknown): unknown {
+  const changed = event === 'workspace.changed' && workspaceChangedPayloadSchema.safeParse(payload)
+  return changed && changed.success
+    ? { context: pluginFrameWorkspaceContext(changed.data.context) }
+    : payload
+}
+
+/** Only these public fields reach plugins; the id is the one `workspace.list` gives. */
 export function projectPluginWorkspaceContext(
   context: Context | null,
   terminals: readonly PluginWorkspaceTerminal[]
@@ -50,7 +106,12 @@ export function projectPluginWorkspaceContext(
   if (!context) {
     return null
   }
+  const workspaceId = pluginListedWorkspaceId({
+    id: context.worktreeId,
+    identityKey: context.identityKey
+  })
   return {
+    ...(workspaceId ? { workspaceId } : {}),
     branch: shortPluginBranchName(context.branch).slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
     displayName: context.displayName.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
     terminals: terminals
@@ -88,7 +149,8 @@ export function projectPluginWorkspaceAgents(
         title: terminal?.title ?? null,
         agent: row.agentType?.slice(0, 128) ?? null,
         state: row.state,
-        stateStartedAt: row.stateStartedAt
+        stateStartedAt: row.stateStartedAt,
+        sessionId: pluginAgentSessionId(row.providerSession) ?? null
       }
     })
 }

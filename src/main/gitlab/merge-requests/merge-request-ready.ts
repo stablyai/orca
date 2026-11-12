@@ -1,4 +1,4 @@
-import { extractExecError } from '../../git/exec-error'
+import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
 import { parseGlabApiResponse } from '../requests/glab-api-response'
 import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 
