@@ -61,10 +61,16 @@ export function snapshotLocalBranchMetadata(path: string, git: LocalGitExecOptio
       readFile(join(identity.gitDir, 'HEAD'), 'utf8').catch(() => '')
     ])
     const currentRef = /^ref: (refs\/heads\/[^\r\n]+)/.exec(head)?.[1]
-    const current = currentRef?.slice('refs/heads/'.length) ?? null
+    const current =
+      currentRef &&
+      worktrees.some(
+        (worktree) => worktree.branch === currentRef && /[1-9a-f]/i.test(worktree.head)
+      )
+        ? currentRef.slice('refs/heads/'.length)
+        : null
     const worktreePaths = new Map<string, string>()
     for (const worktree of worktrees) {
-      if (worktree.branch.startsWith('refs/heads/') && !worktree.prunable) {
+      if (worktree.branch.startsWith('refs/heads/')) {
         worktreePaths.set(worktree.branch.slice('refs/heads/'.length), worktree.path)
       }
     }
