@@ -96,7 +96,7 @@ export async function launchWindowsSemanticFixture(): Promise<WindowsSemanticFix
     )
   }
   const close = async (): Promise<void> => {
-    for (const owned of [pid, holder.pid]) {
+    for (const owned of [pid, holder.pid].filter((value) => value !== undefined)) {
       try {
         await execFileAsync('taskkill.exe', ['/PID', String(owned), '/T', '/F'])
       } catch {
