@@ -6008,6 +6008,7 @@
           "cancel": "Cancel",
           "syncNow": "Sync now",
           "disconnect": "Disconnect",
+          "disconnectIncomplete": "Orca could not delete the saved connection or reach tokn to revoke it, so it comes back after a restart. Revoke this computer from your tokn account to stop its uploads.",
           "connect": "Connect tokn",
           "statusConnected": "Connected",
           "statusNotConnected": "Not connected",

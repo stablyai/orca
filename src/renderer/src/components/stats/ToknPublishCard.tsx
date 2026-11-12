@@ -74,7 +74,7 @@ export function ToknPublishCard(): React.JSX.Element {
   const setClaudeUsageEnabled = useAppStore((state) => state.setClaudeUsageEnabled)
   const setCodexUsageEnabled = useAppStore((state) => state.setCodexUsageEnabled)
   const [status, setStatus] = useState<ToknSyncStatus | null>(null)
-  const [connectError, setConnectError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const applyStatus = useCallback(
@@ -112,7 +112,7 @@ export function ToknPublishCard(): React.JSX.Element {
     )
 
   const handleConnect = async (): Promise<void> => {
-    setConnectError(null)
+    setActionError(null)
     // Sign-in waits on the browser, so show the waiting state straight away.
     setStatus((current) => (current ? { ...current, connecting: true } : current))
     const result = await window.api.tokn.connect()
@@ -121,20 +121,38 @@ export function ToknPublishCard(): React.JSX.Element {
       return
     }
     if (result.outcome === 'timed-out') {
-      setConnectError(
+      setActionError(
         t(
           'auto.components.stats.ToknPublishCard.connectTimedOut',
           'Sign-in timed out. Connect again to retry.'
         )
       )
     } else if (result.outcome === 'failed') {
-      setConnectError(
+      setActionError(
         t(
           'auto.components.stats.ToknPublishCard.connectFailed',
           'Could not connect to tokn: {{error}}',
           { error: result.error ?? '' }
         )
       )
+    }
+  }
+
+  const handleDisconnect = async (): Promise<void> => {
+    setActionError(null)
+    try {
+      await runAction(() => window.api.tokn.disconnect())
+    } catch {
+      // Orca stopped uploading, but the saved connection and its live token come back on restart.
+      await refreshStatus()
+      if (mountedRef.current) {
+        setActionError(
+          t(
+            'auto.components.stats.ToknPublishCard.disconnectIncomplete',
+            'Orca could not delete the saved connection or reach tokn to revoke it, so it comes back after a restart. Revoke this computer from your tokn account to stop its uploads.'
+          )
+        )
+      }
     }
   }
 
@@ -182,12 +200,7 @@ export function ToknPublishCard(): React.JSX.Element {
         {syncing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
         {t('auto.components.stats.ToknPublishCard.syncNow', 'Sync now')}
       </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={busy}
-        onClick={() => void runAction(() => window.api.tokn.disconnect())}
-      >
+      <Button variant="ghost" size="sm" disabled={busy} onClick={() => void handleDisconnect()}>
         <Unlink className="size-4" />
         {t('auto.components.stats.ToknPublishCard.disconnect', 'Disconnect')}
       </Button>
@@ -249,9 +262,9 @@ export function ToknPublishCard(): React.JSX.Element {
             {syncErrorCopy(status.lastSyncError, status.lastSyncErrorDetail, t)}
           </p>
         ) : null}
-        {connectError ? (
+        {actionError ? (
           <p className="text-xs text-destructive" role="alert">
-            {connectError}
+            {actionError}
           </p>
         ) : null}
         {trackingOff ? (

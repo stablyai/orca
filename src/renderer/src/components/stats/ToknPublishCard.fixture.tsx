@@ -79,19 +79,34 @@ export const connectedWithError = defineFixture({
   render: () => <ToknPublishCard />
 })
 
-async function openPreview(frame: HTMLElement): Promise<void> {
-  const trigger = [...frame.querySelectorAll('button')].find((button) =>
-    button.textContent?.includes('Preview upload')
-  )
-  trigger?.click()
-  await new Promise((resolve) => setTimeout(resolve, 100))
+function clickButton(label: string): (frame: HTMLElement) => Promise<void> {
+  return async (frame) => {
+    const button = [...frame.querySelectorAll('button')].find((candidate) =>
+      candidate.textContent?.includes(label)
+    )
+    button?.click()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
 }
 
 export const previewOpen = defineFixture({
   width: 640,
   setup: stubTokn(CONNECTED),
   render: () => <ToknPublishCard />,
-  interact: openPreview
+  interact: clickButton('Preview upload')
+})
+
+export const disconnectIncomplete = defineFixture({
+  width: 640,
+  setup: () => {
+    stubTokn(CONNECTED)()
+    window.api.tokn.disconnect = async () => {
+      window.api.tokn.getStatus = async () => DISCONNECTED
+      throw new Error('tokn_disconnect_incomplete')
+    }
+  },
+  render: () => <ToknPublishCard />,
+  interact: clickButton('Disconnect')
 })
 
 export const previewFailed = defineFixture({
@@ -103,5 +118,5 @@ export const previewFailed = defineFixture({
     }
   },
   render: () => <ToknPublishCard />,
-  interact: openPreview
+  interact: clickButton('Preview upload')
 })

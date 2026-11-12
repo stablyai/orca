@@ -80,6 +80,24 @@ export async function loadToknAccountRecord(origin: string): Promise<ToknAccount
   }
 }
 
+/** A connection that has not synced yet. */
+export function newToknAccountRecord(
+  origin: string,
+  handle: string,
+  profileUrl: string | null
+): ToknAccountRecord {
+  return {
+    origin,
+    handle,
+    profileUrl,
+    lastSyncAt: null,
+    lastSyncError: null,
+    lastSyncErrorDetail: null,
+    lastSyncAccepted: null,
+    lastSyncRejected: null
+  }
+}
+
 export function saveToknAccountRecord(record: ToknAccountRecord): void {
   writeSecureJsonFile(accountRecordPath(), record)
 }

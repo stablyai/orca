@@ -8,6 +8,7 @@ import { beginLoopbackPkceFlow } from '../oauth-loopback/loopback-pkce-flow'
 import {
   clearToknAccount,
   loadToknAccountRecord,
+  newToknAccountRecord,
   readToknAccessToken,
   saveToknAccount,
   saveToknAccountRecord,
@@ -115,49 +116,39 @@ export class ToknSyncService {
       if (abort.signal.aborted) {
         // Superseded after the browser answered; do not leave the new token live on tokn.
         void revokeToknToken(origin, grant.accessToken).catch(() => {})
+        this.releaseConnect(abort)
         return { outcome: 'cancelled', status: await this.getStatus() }
       }
       const previousToken = this.record ? readToknAccessToken() : null
-      const record: ToknAccountRecord = {
-        origin,
-        handle: grant.handle,
-        profileUrl: grant.profileUrl,
-        lastSyncAt: null,
-        lastSyncError: null,
-        lastSyncErrorDetail: null,
-        lastSyncAccepted: null,
-        lastSyncRejected: null
-      }
+      const record = newToknAccountRecord(origin, grant.handle, grant.profileUrl)
       // An upload still carrying the replaced account's token must not land after this one takes over.
       this.syncAbort?.abort()
       try {
         await saveToknAccount(grant.accessToken, record)
       } catch (error) {
         // Never leave one account's token beside another's record; sign out of both instead.
-        this.record = null
-        await clearToknAccount().catch(() => {})
-        for (const token of [grant.accessToken, previousToken]) {
-          if (token) {
-            void revokeToknToken(origin, token).catch(() => {})
-          }
-        }
+        await this.discardAccounts(origin, [grant.accessToken, previousToken])
         throw error
+      }
+      if (abort.signal.aborted || this.connectAbort !== abort) {
+        // Cancelled, disconnected or superseded during the save, which already replaced the old account.
+        await this.discardAccounts(origin, [grant.accessToken, previousToken])
+        this.releaseConnect(abort)
+        return { outcome: 'cancelled', status: await this.getStatus() }
       }
       this.record = record
       this.signedOutRemotely = false
       if (previousToken && previousToken !== grant.accessToken) {
         void revokeToknToken(origin, previousToken).catch(() => {})
       }
-      this.connectAbort = null
+      this.releaseConnect(abort)
       // A sync still running for the replaced account cannot upload for this one.
       void Promise.resolve(this.syncPromise).then(() => this.syncNow())
       return { outcome: 'connected', status: await this.getStatus() }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       const outcome = authOutcome(message)
-      if (this.connectAbort === abort) {
-        this.connectAbort = null
-      }
+      this.releaseConnect(abort)
       return {
         outcome,
         ...(outcome === 'failed' ? { error: message } : {}),
@@ -184,13 +175,18 @@ export class ToknSyncService {
     await clearToknAccount().catch((error) => {
       console.warn('[tokn] Could not delete the saved connection', error)
     })
-    if (token) {
-      await revokeToknToken(origin, token).catch((error) => {
-        console.warn(
-          '[tokn] Could not revoke the token on tokn; revoke it from your account',
-          error
-        )
-      })
+    const revoked =
+      !token ||
+      (await revokeToknToken(origin, token).then(
+        () => true,
+        (error) => {
+          console.warn('[tokn] Could not revoke the token on tokn', error)
+          return false
+        }
+      ))
+    if (!revoked && (await loadToknAccountRecord(origin))) {
+      // The next launch would load this connection with a live token; only the user can stop that now.
+      throw new Error('tokn_disconnect_incomplete')
     }
     return this.getStatus()
   }
@@ -215,6 +211,24 @@ export class ToknSyncService {
         })
     }
     return this.syncPromise.then(() => this.getStatus())
+  }
+
+  /** Signs out of both accounts: by now the save has removed the previous one's record. */
+  private async discardAccounts(origin: string, tokens: readonly (string | null)[]): Promise<void> {
+    this.record = null
+    await clearToknAccount().catch(() => {})
+    for (const token of tokens) {
+      if (token) {
+        void revokeToknToken(origin, token).catch(() => {})
+      }
+    }
+  }
+
+  /** A newer connect() owns the field once it has replaced this attempt's controller. */
+  private releaseConnect(abort: AbortController): void {
+    if (this.connectAbort === abort) {
+      this.connectAbort = null
+    }
   }
 
   private schedule(delayMs: number): void {
