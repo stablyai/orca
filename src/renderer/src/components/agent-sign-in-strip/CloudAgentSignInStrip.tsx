@@ -130,13 +130,19 @@ export function CloudAgentSignInStrip({
   model,
   prompt,
   width: initialWidth = 'wide',
-  actions
+  actions,
+  wrap = false
 }: {
   model: CloudStripModel
   prompt: string | null
   /** The first render's class; after that the strip follows its own live width. */
   width?: CloudStripWidth
   actions: CloudStripActions
+  /**
+   * A warning that must be read whole (GIT-SETUP): title and detail wrap (up to 3 lines each) and the
+   * strip grows; actions stay top-right. Pane strips keep the fixed 56 px height.
+   */
+  wrap?: boolean
 }): React.JSX.Element {
   const sectionRef = useRef<HTMLElement | null>(null)
   const width = useLiveStripWidth(sectionRef, initialWidth)
@@ -144,7 +150,8 @@ export function CloudAgentSignInStrip({
   // The detail leaves the line when there's no room for it beside the title: below 360 px, and on the
   // paste step under ~560 px (its input takes the space). It stays the region's description and the
   // title's tooltip.
-  const quietDetail = compact || (model.paste !== null && width === 'tiny')
+  const quietDetail = !wrap && (compact || (model.paste !== null && width === 'tiny'))
+  const lineFit = wrap ? 'line-clamp-3 break-words' : 'truncate'
   const t = useTranslate()
   const titleId = React.useId()
   const detailId = React.useId()
@@ -166,7 +173,8 @@ export function CloudAgentSignInStrip({
         }
       }}
       className={cn(
-        'grid h-14 items-center gap-2.5 border-b border-border bg-card px-3 text-foreground outline-none',
+        'grid gap-2.5 border-b border-border bg-card px-3 text-foreground outline-none',
+        wrap ? 'min-h-14 items-start py-2.5 [&>svg]:mt-0.5' : 'h-14 items-center',
         GRID[width]
       )}
     >
@@ -174,7 +182,7 @@ export function CloudAgentSignInStrip({
       <div data-strip-text className="flex min-w-0 flex-col">
         <Tooltip>
           <TooltipTrigger asChild>
-            <span id={titleId} className="truncate text-[13px] leading-5 font-medium">
+            <span id={titleId} className={cn(lineFit, 'text-[13px] leading-5 font-medium')}>
               {compact ? (model.compactTitle ?? model.title) : model.title}
             </span>
           </TooltipTrigger>
@@ -185,7 +193,8 @@ export function CloudAgentSignInStrip({
             <span
               id={detailId}
               className={cn(
-                'truncate text-xs leading-4 text-muted-foreground',
+                lineFit,
+                'text-xs leading-4 text-muted-foreground',
                 quietDetail && 'sr-only'
               )}
             >
@@ -217,7 +226,10 @@ export function CloudAgentSignInStrip({
           <span />
         )
       ) : null}
-      <div data-strip-actions className="flex h-8 min-w-0 items-center justify-end gap-1.5">
+      <div
+        data-strip-actions
+        className={cn('flex h-8 min-w-0 items-center justify-end gap-1.5', wrap && '-my-0.5')}
+      >
         {model.code ? (
           <code className="shrink-0 select-all rounded bg-muted px-1.5 font-mono text-xs tracking-wider">
             {model.code}
