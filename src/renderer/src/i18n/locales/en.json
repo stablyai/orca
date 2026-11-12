@@ -23892,7 +23892,6 @@
       },
       "cloudOnly": {
         "needsRepository": "Orca Cloud needs a GitHub repository.",
-        "chooseRepository": "Choose repository",
         "addRepository": "Add a GitHub repository",
         "moreAccess": "Give Orca Cloud access to more repositories…",
         "startFailed": "Couldn’t start the cloud workspace. Nothing was created, and you weren’t charged.",
