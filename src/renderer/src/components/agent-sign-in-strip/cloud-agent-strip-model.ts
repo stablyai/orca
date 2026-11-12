@@ -121,7 +121,7 @@ export function cloudAgentStripModel(args: {
     return {
       status: 'warning',
       title: t('agentSignInStrip.expired', 'Your {{agent}} sign-in expired', { agent }),
-      detail: t('agentSignInStrip.expiredDetail', 'Sign in once to fix every workspace'),
+      detail: t('agentSignInStrip.expiredDetail', 'Sign in once to fix every workspace.'),
       description: null,
       primary: { label: t('agentSignInStrip.renew', 'Renew'), action: { kind: 'renew' } },
       code: null,

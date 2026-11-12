@@ -9,7 +9,7 @@ describe('cloudAgentStripModel', () => {
     const model = cloudAgentStripModel({ ...base, reason: 'accountExpired', view: null })
     expect(model).toMatchObject({
       title: 'Your Claude sign-in expired',
-      detail: 'Sign in once to fix every workspace',
+      detail: 'Sign in once to fix every workspace.',
       primary: { label: 'Renew', action: { kind: 'renew' } }
     })
   })
