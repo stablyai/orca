@@ -191,3 +191,12 @@ export function managedRuntimeInstallView(
     settledView(snapshot.state, agent, t)
   )
 }
+
+/** Whether Orca's copy still needs the user: missing, outdated, damaged, failed, or installing. */
+export function managedRuntimeInstallPending(snapshot: ManagedRuntimeInstallSnapshot): boolean {
+  if (snapshot.kind !== 'known' || snapshot.state.source === 'external') {
+    return false
+  }
+  const view = managedRuntimeInstallView(snapshot, '')
+  return view.action !== null || view.error !== null
+}
