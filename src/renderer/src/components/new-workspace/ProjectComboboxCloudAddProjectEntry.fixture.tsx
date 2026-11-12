@@ -9,11 +9,11 @@ const { addProjectMenu } = withCloudAddProjectEntry(
   noop
 )
 
-/** PROJ-MENU part 2: the Add project menu with "From GitHub (Orca Cloud)…" as its last entry. */
+/** PROJ-MENU part 2: the Add project menu with an "Orca Cloud" group with "Add a GitHub repository…". */
 export const addProjectMenuWithCloud = defineFixture({
   width: 520,
   render: () => (
-    <div className="h-[260px] bg-background p-4">
+    <div className="h-[320px] bg-background p-4">
       <AddProjectMenu
         open
         side="bottom"

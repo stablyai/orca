@@ -24,7 +24,8 @@ describe('withCloudAddProjectEntry (PROJ-MENU part 2)', () => {
         <DropdownMenuContent>{result.addProjectMenu?.extraItems?.(closeMenus)}</DropdownMenuContent>
       </DropdownMenu>
     )
-    fireEvent.click(screen.getByRole('menuitem', { name: 'From GitHub (Orca Cloud)…' }))
+    expect(screen.getByText('Orca Cloud')).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add a GitHub repository…' }))
     expect(closeMenus).toHaveBeenCalledOnce()
     expect(more).toHaveBeenCalledOnce()
     expect(closeMenus.mock.invocationCallOrder[0]).toBeLessThan(more.mock.invocationCallOrder[0])

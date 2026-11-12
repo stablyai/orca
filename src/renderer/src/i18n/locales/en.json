@@ -23900,7 +23900,8 @@
         "rowPrivate": "{{repo}}, private, cloud only",
         "rowPublic": "{{repo}}, cloud only",
         "privateLabel": "Private",
-        "fromGitHub": "From GitHub (Orca Cloud)…"
+        "menuGroup": "Orca Cloud",
+        "addRepositoryMenu": "Add a GitHub repository…"
       },
       "agentLabel": "Agent"
     },
