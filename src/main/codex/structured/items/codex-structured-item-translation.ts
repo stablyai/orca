@@ -23,8 +23,21 @@ import { codexItemRunState } from './codex-item-run-state'
 import { readRecord, readString, readTextContent } from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 import { journalReasoningBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
+import { codexRealtimeDelegationInput } from './codex-realtime-delegation-text'
 
 export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
+  const blocks = codexMessageContentBlocks(item)
+  const only = blocks.length === 1 ? blocks[0] : undefined
+  // Live hand-offs never become user rows (those come from Orca's sends); restored ones read as the
+  // request the voice model handed over, not as XML.
+  const handedOff =
+    item.type === 'userMessage' && only?.type === 'text'
+      ? codexRealtimeDelegationInput(only.text)
+      : null
+  return handedOff === null ? blocks : [{ type: 'text', text: handedOff }]
+}
+
+function codexMessageContentBlocks(item: CodexThreadItem): NativeChatBlock[] {
   const text =
     item.type === 'agentMessage'
       ? (readString(item, 'text') ?? readTextContent(item, 'content'))

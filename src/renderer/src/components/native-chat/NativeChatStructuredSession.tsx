@@ -41,6 +41,7 @@ import { useNativeChatFileLinkContext } from '@/components/native-chat/links/act
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from '@/components/native-chat/links/actions/use-native-chat-file-link-existence'
 import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
 import { useStructuredAgentSession } from '@/components/native-chat/session/structured/use-structured-agent-session'
+import { NativeChatCodexVoiceStripSlot } from '@/components/native-chat/voice/NativeChatCodexVoiceProvider'
 import { useNativeChatImageRuntimeContext } from '@/components/native-chat/media/images/native-chat-image-runtime-context'
 import { useStructuredNativeChatPaneCommands } from '@/components/native-chat/pane/actions/use-structured-native-chat-pane-commands'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
@@ -361,6 +362,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             target={props.target}
             isVisible={props.isVisible}
           />
+          <NativeChatCodexVoiceStripSlot awaitingApproval={prompt !== null} />
           {prompt || subagentOpen ? null : (
             <NativeChatStructuredComposerTabStrips
               tabId={props.tabId}

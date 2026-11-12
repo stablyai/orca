@@ -1,3 +1,4 @@
+import { appendCodexVoiceTranscript } from './codex-structured-journal-voice-transcripts'
 import { createCodexProviderActivityReader } from '../../../native-chat/agent-session-wire/providers/provider-frame-activity'
 import { recordCodexContextUsage } from './codex-context-usage'
 import { CODEX_TOKEN_USAGE_METHOD } from '../background-work/codex-subagent-activity'
@@ -254,6 +255,15 @@ function createCodexTranslation(
         if (routed) {
           return publishActivity(event, routed)
         }
+      }
+      if (event.method === 'thread/realtime/item/completed') {
+        const row = appendCodexVoiceTranscript(
+          deps.sink,
+          attributionFor,
+          event.threadId,
+          event.params
+        )
+        return publishActivity(event, row)
       }
       if (isCodexProviderRetryFrame(event)) {
         // Persist each retry as evidence and publish activity for the idle sweep.

@@ -1,6 +1,7 @@
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { CodexAppServerConnectionHandlers } from '../../app-server/codex-app-server-connection-types'
 import type { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
+import type { CodexRealtimeVoice } from '../realtime/codex-realtime-voice'
 import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import type { CodexStructuredNotificationRetry } from '../session-lifecycle/codex-structured-notification-retry'
 import { CODEX_RECEIPT_TIMED_METHODS } from '../session-lifecycle/codex-structured-session-state'
@@ -23,8 +24,13 @@ export function codexAcquisitionNotificationHandler(input: {
     retainedBytes?: number
   ) => void
   now: () => number
+  /** Voice signaling, routed on receipt so journal admission and retries never delay or repeat it. */
+  observeRealtime: CodexRealtimeVoice['observe'] | undefined
 }): NonNullable<CodexAppServerConnectionHandlers['onNotification']> {
   return (method, params) => {
+    if (method.startsWith('thread/realtime/')) {
+      input.observeRealtime?.(input.sessionId, input.acquisition.connection, method, params)
+    }
     const observedAt = CODEX_RECEIPT_TIMED_METHODS.has(method) ? input.now() : undefined
     const dispatchSequenceAtReceipt =
       method === 'turn/started' ? input.dispatchEchoes.latestSequence() : undefined

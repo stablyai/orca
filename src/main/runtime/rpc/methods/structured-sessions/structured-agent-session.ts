@@ -34,6 +34,7 @@ import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from './subscriptions/structu
 import { structuredAgentSessionSubscriptionBase as subscriptionBaseFor } from './subscriptions/structured-agent-session-subscription-id'
 import { STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS } from './subscriptions/structured-agent-session-turn-completion-stream'
 import { STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS } from './conversation/structured-agent-session-thread-goal'
+import { STRUCTURED_AGENT_SESSION_VOICE_METHODS } from './conversation/structured-agent-session-voice'
 import { STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS } from './history/structured-agent-session-conversation-outline'
 import { STRUCTURED_AGENT_SESSION_ITEM_METHODS } from './history/structured-agent-session-item'
 import { STRUCTURED_AGENT_SESSION_SEND_RECORDED_METHODS } from './history/structured-agent-session-send-recorded'
@@ -217,6 +218,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
   ...STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS,
   ...STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS,
+  ...STRUCTURED_AGENT_SESSION_VOICE_METHODS,
   ...STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS,
   ...STRUCTURED_AGENT_SESSION_ITEM_METHODS,
   ...STRUCTURED_AGENT_SESSION_SEND_RECORDED_METHODS,
