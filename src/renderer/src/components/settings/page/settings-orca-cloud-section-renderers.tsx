@@ -1,5 +1,4 @@
 import {
-  OrcaCloudBillingPane,
   OrcaCloudEnvironmentsPane,
   OrcaCloudLocalCommandsSettingsPane,
   OrcaCloudMcpPane,
@@ -25,7 +24,6 @@ export function renderOrcaCloudSettingsSections(
   }
   // Titles and descriptions come from the nav metadata so the pane and the sidebar never disagree.
   const sections = [
-    { id: 'cloud-billing', pane: <OrcaCloudBillingPane /> },
     { id: 'cloud-team', pane: <OrcaCloudTeamPane /> },
     { id: 'cloud-secrets', pane: <OrcaCloudSecretsPane /> },
     { id: 'cloud-skills', pane: <OrcaCloudSkillsSyncPane /> },
