@@ -252,9 +252,9 @@
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
 1 src/main/foreign-sqlite-readers/readers/cursor-profile.ts
 1 src/main/foreign-sqlite-readers/readers/opencode-binder-sessions.ts
-1 src/main/git/huge-folder-ignore.ts
-5 src/main/git/repo-detection.ts
-13 src/main/git/repo-git-marker-scan.ts
+1 src/main/git/source-control/huge-folder-ignore.ts
+5 src/main/git/repositories/discovery/repo-detection.ts
+13 src/main/git/repositories/discovery/repo-git-marker-scan.ts
 3 src/main/git/worktrees/catalog/worktree-git-path.ts
 1 src/main/github/client/check/check-job-log-cache-retention-child.mjs
 3 src/main/grok/grok-hook-backup-cleanup.ts

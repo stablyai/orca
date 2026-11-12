@@ -5,7 +5,7 @@ import {
   recordLineEndingSample,
   resetWslWindowsCheckoutGitConfigForTests,
   wslWindowsCheckoutKey
-} from '../../wsl-windows-checkout-git-config'
+} from './wsl-windows-checkout-git-config'
 import { resetWslLinkedWorktreeGitRoutingForTests } from './wsl-linked-worktree-git-routing'
 
 const originalPlatform = process.platform

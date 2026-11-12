@@ -7,7 +7,7 @@ import { isSafeGitRefName } from '../../shared/git/status/git-status-upstream-re
 import type { GitUpstreamStatus } from '../../shared/git/status/git-status-types'
 import { gitExecFileAsync } from '../github/gh-utils'
 import { isShowRefNoMatchError } from '../../shared/git/refs/git-show-ref-no-match'
-import { probeExactRefsViaForEachRef } from '../git/exact-ref-probe'
+import { probeExactRefsViaForEachRef } from '../git/refs/resolution/exact-ref-probe'
 import { gitOptionalLocksDisabledEnv } from '../git/command-runner/git-environment/git-process-env'
 import {
   parsePorcelainV1Records,

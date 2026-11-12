@@ -1,7 +1,7 @@
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import { pickPreferredGitRemote } from '../../shared/preferred-git-remote'
-import { getDefaultRemote } from '../git/repo'
+import { getDefaultRemote } from '../git/remotes/repo-remote-queries'
 import { getGitHubApiRepositoryForRemote } from './github-api-repository'
 
 type GitExec = (args: string[]) => Promise<{ stdout: string; stderr: string }>
