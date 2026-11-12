@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { projectRepoResultVisibilityForClient } from '../../repo-visibility-projection'
+import { projectRepoResultVisibilityForClient } from '../../workspace-client-views/repo-visibility-projection'
 import {
   ProjectHostSetupClone,
   ProjectHostSetupCreate,

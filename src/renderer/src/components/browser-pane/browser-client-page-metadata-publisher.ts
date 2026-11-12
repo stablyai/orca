@@ -57,7 +57,8 @@ export function createBrowserClientPageMetadataPublisher(options: {
         browserPageId: options.browserPageId,
         pageHostGeneration: options.placement.pageHostGeneration,
         revision: options.nextRevision(),
-        ...snapshot
+        ...snapshot,
+        title: snapshot.title.slice(0, 4096)
       })
     } catch (error) {
       request = Promise.reject(error)

@@ -1,8 +1,9 @@
 import { performance } from 'node:perf_hooks'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { parseJsonObject, timestampMs } from '../../../ai-vault/session-scanner-values'
-import { asRecord } from '../../../ai-vault/session-scanner-record-value'
+import { parseJsonObject } from '../../../ai-vault/parsing/session-json-object'
+import { timestampMs } from '../../../ai-vault/parsing/session-record-time'
+import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 
 import Database from '../../../sqlite/sync-database'
 import { decodeOmpTranscriptLine } from '../../transcript-line-decoders-omp'

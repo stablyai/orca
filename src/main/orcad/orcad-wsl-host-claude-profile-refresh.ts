@@ -7,10 +7,10 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { posix } from 'node:path'
 import type { HostAccountLaunchEnv } from '../../shared/agent-launch/startup/host-account-launch-env'
-import { claudeProfileMarkerPath } from '../claude-accounts/claude-profile-paths'
-import type { ClaudeProfileSetupReport } from '../claude-accounts/claude-profile-setup'
-import { wslClaudeProfile } from '../claude-accounts/claude-profile-wsl-paths'
-import { provisionWslClaudeAccountProfile } from '../claude-accounts/claude-profile-wsl-provision'
+import { claudeProfileMarkerPath } from '../claude-accounts/profiles/claude-profile-paths'
+import type { ClaudeProfileSetupReport } from '../claude-accounts/profiles/setup/claude-profile-setup'
+import { wslClaudeProfile } from '../claude-accounts/profiles/wsl/claude-profile-wsl-paths'
+import { provisionWslClaudeAccountProfile } from '../claude-accounts/profiles/wsl/claude-profile-wsl-provision'
 
 /** The desktop router's cap: a slow refresh delays a launch this long, then runs alongside it. */
 const REFRESH_WAIT_MS = 5_000

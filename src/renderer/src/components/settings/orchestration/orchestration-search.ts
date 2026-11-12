@@ -11,6 +11,11 @@ import {
   getWorkerAutoReleaseSearchKeywords,
   getWorkerAutoReleaseTitle
 } from './worker-auto-release-copy'
+import {
+  getCoordinatorApprovalsDescription,
+  getCoordinatorApprovalsSearchKeywords,
+  getCoordinatorApprovalsTitle
+} from './coordinator-approvals-copy'
 
 type OrchestrationPaneSearchOptions = {
   includeLocalRuntimeSettings?: boolean
@@ -18,10 +23,12 @@ type OrchestrationPaneSearchOptions = {
 
 const NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID = 'nested-worker-depth'
 const WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID = 'worker-auto-release'
+const COORDINATOR_APPROVALS_SEARCH_ENTRY_ID = 'coordinator-approvals'
 const LOCAL_RUNTIME_SEARCH_ENTRY_IDS: ReadonlySet<string | undefined> = new Set([
   'worker-roles',
   NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID,
-  WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID
+  WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID,
+  COORDINATOR_APPROVALS_SEARCH_ENTRY_ID
 ])
 
 const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
@@ -124,6 +131,12 @@ const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
     title: getWorkerAutoReleaseTitle(),
     description: getWorkerAutoReleaseDescription(),
     keywords: getWorkerAutoReleaseSearchKeywords()
+  },
+  {
+    id: COORDINATOR_APPROVALS_SEARCH_ENTRY_ID,
+    title: getCoordinatorApprovalsTitle(),
+    description: getCoordinatorApprovalsDescription(),
+    keywords: getCoordinatorApprovalsSearchKeywords()
   }
 ])
 

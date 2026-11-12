@@ -298,7 +298,8 @@ export async function startLocalWorker(args: {
       dispatchId: started.dispatch.id,
       workerAddress: terminalHandle,
       task: task.spec,
-      agent: agent ?? null
+      agent: agent ?? null,
+      followUp: args.followUp && { of: args.followUp.of, reopened: Boolean(placed?.reopened) }
     })
   }
   return result

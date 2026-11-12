@@ -17,11 +17,10 @@ function fireExit(handle: string, cause: TerminalExitCause = OPERATOR_CLOSE_EXIT
       failActiveDispatchOnExit: (
         handle: string,
         paneKey: string | null,
-        exitCode: number,
         cause: TerminalExitCause
       ) => void
     }
-  ).failActiveDispatchOnExit(handle, h.workerPaneKey, 0, cause)
+  ).failActiveDispatchOnExit(handle, h.workerPaneKey, cause)
 }
 
 describe('a worker whose process exits while its own stop is in flight', () => {

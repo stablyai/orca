@@ -17,6 +17,7 @@ import {
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control/listing/source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal/replay/terminal-scrollback-policy'
 import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from './orchestration/workers/nested-worker-depth'
+import { getDefaultWorkspaceCleanupRules } from './workspace-cleanup/workspace-cleanup-policy'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -35,6 +36,7 @@ export function buildDefaultSettings(args: {
   return {
     workspaceDir: args.workspaceDir,
     worktreeVisibilityDefaults: { external: 'hide' },
+    workspaceCleanupPolicy: getDefaultWorkspaceCleanupRules(),
     nestWorkspaces: true,
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
@@ -181,6 +183,7 @@ export function buildDefaultSettings(args: {
     nestedWorkerMaxDepthDefaultedToFour: true,
     orchestrationWorkerRoles: {},
     orchestrationWorkerAutoReleaseEnabled: true,
+    orchestrationCoordinatorApprovalsEnabled: false,
     showArtifactsButton: false,
     showSkillsButton: false,
     showMobileButton: true,

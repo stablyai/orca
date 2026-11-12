@@ -13,12 +13,16 @@ import {
   createAccumulator,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent, addSessionText } from '../../session-scanner-messages'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractMessageText, normalizeTitleText } from '../../session-scanner-text-normalization'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
-import { tokenTotal } from '../../session-scanner-token-values'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent, addSessionText } from '../../parsing/session-scanner-messages'
+import { asRecord } from '../../parsing/session-record-fields'
+import {
+  extractMessageText,
+  normalizeTitleText
+} from '../../parsing/session-scanner-text-normalization'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { tokenTotal } from '../../parsing/session-scanner-token-values'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId

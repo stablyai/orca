@@ -1,7 +1,10 @@
 import { createInterface } from 'node:readline'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
-import { accumulatorSessionIdentity, updateTimeline } from '../../session-scanner-accumulator'
+import {
+  accumulatorSessionIdentity,
+  updateTimeline
+} from '../../parsing/session-scanner-accumulator'
 import {
   cloneClaudeSessionParseState,
   consumeClaudeSessionRecord,
@@ -9,8 +12,9 @@ import {
   finalizeClaudeSessionParseState,
   type ClaudeSessionParseState
 } from '../claude/session-scanner-primary-parsers'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
 import {
   remoteSessionContentLines,
   type RemoteSessionContent

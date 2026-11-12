@@ -28,7 +28,8 @@ export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): vo
     rows.length === 0 ||
     !db.db
       .prepare(
-        'SELECT 1 FROM dispatch_contexts WHERE creator_dispatch_id = ? AND run_id = ? LIMIT 1'
+        // Unary + keeps the stat-less planner on the creator index; the Run index ties with it.
+        'SELECT 1 FROM dispatch_contexts WHERE creator_dispatch_id = ? AND +run_id = ? LIMIT 1'
       )
       .get(dispatchId, runId)
   ) {
@@ -82,7 +83,7 @@ export function handBackReplayTargets(db: OrchestrationDb, dispatchId: string) {
        JOIN messages AS m ON m.to_handle = 'run:' || d.run_id
        WHERE d.id = ? AND m.read = 0 AND m.delivery_contract = 'current_delivery'
          AND EXISTS (SELECT 1 FROM dispatch_contexts AS h
-           WHERE h.creator_dispatch_id = d.id AND h.run_id = d.run_id)
+           WHERE h.creator_dispatch_id = d.id AND +h.run_id = d.run_id)
          AND (m.type IN ('worker_done', 'escalation', 'status') OR (m.type = 'question'
            AND m.id IN (SELECT message_id FROM question_threads
              WHERE run_id = d.run_id AND status = 'pending')))`

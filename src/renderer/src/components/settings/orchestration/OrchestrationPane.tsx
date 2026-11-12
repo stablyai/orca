@@ -30,6 +30,7 @@ import {
 } from './nested-worker-depth-copy'
 import { WorkerRoleSettings } from '../WorkerRoleSettings'
 import { OrchestrationWorkerAutoReleaseSetting } from './OrchestrationWorkerAutoReleaseSetting'
+import { OrchestrationCoordinatorApprovalsSetting } from './OrchestrationCoordinatorApprovalsSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 const EXAMPLE_ICONS = {
@@ -166,6 +167,12 @@ export function OrchestrationPane({
         ) : null}
         {showLocalRuntimeSettings ? (
           <OrchestrationWorkerAutoReleaseSetting
+            settings={settings}
+            updateSettings={updateSettings}
+          />
+        ) : null}
+        {showLocalRuntimeSettings ? (
+          <OrchestrationCoordinatorApprovalsSetting
             settings={settings}
             updateSettings={updateSettings}
           />

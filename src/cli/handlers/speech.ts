@@ -1,5 +1,5 @@
 import type { CommandHandler, HandlerContext } from '../dispatch'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 import { OPENAI_SPEECH_KEY_MAX_LENGTH } from '../../shared/rpc-contract/speech-params'
 

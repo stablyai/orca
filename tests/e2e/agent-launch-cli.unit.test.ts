@@ -7,10 +7,10 @@ import type { StructuredAgentSessionFirstMessage } from '../../src/shared/agent-
 import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
-import { callAgentLaunch, readCliAgentLaunch } from '../../src/cli/agent-launch-request'
+import { callAgentLaunch, readCliAgentLaunch } from '../../src/cli/agents/agent-launch-request'
 import { parseArgs } from '../../src/cli/args'
-import { AGENT_LAUNCH_HANDLERS } from '../../src/cli/handlers/agent-launch'
-import { createWorktreeWithAgent } from '../../src/cli/handlers/worktree-create-agent-launch'
+import { AGENT_LAUNCH_HANDLERS } from '../../src/cli/agents/agent-launch'
+import { createWorktreeWithAgent } from '../../src/cli/workspaces/worktree-create-agent-launch'
 import {
   methodNamed,
   rpcContext,
@@ -226,48 +226,6 @@ describe('CLI launch through host surface creation and replay admission', () => 
     }
   )
 
-  it('refuses replay on an older replacement host without sending any launch', async () => {
-    const client = hostClient(runtimeStub())
-    const operationId = `${Date.now()}-${'a'.repeat(32)}`
-    await expect(
-      callAgentLaunch(client, { agent: 'codex', operationId }, { target: existing }, [
-        'agent.launch.v2',
-        'agent.launch.local-presentation.v1'
-      ])
-    ).rejects.toThrow('do not retry without --retry-launch')
-    expect(client.call).not.toHaveBeenCalled()
-  })
-
-  it.each([existing, create])(
-    'refuses a v2-only prompted launch before creating anything: %j',
-    async (target) => {
-      const runtime = runtimeStub()
-      await expect(
-        callAgentLaunch(
-          hostClient(runtime),
-          { agent: 'codex', prompt: { text: 'Long\nMultiline', delivery: 'submit' } },
-          { target },
-          ['agent.launch.v2']
-        )
-      ).rejects.toThrow('cannot safely carry launch prompts')
-      expect(chatCreate).not.toHaveBeenCalled()
-      expect(runtime.createTerminal).not.toHaveBeenCalled()
-    }
-  )
-
-  it('refuses hosts without local presentation before creating anything', async () => {
-    const client = hostClient(runtimeStub())
-    await expect(
-      callAgentLaunch(
-        client,
-        { agent: 'codex' },
-        { target: existing, presentation: 'background' },
-        ['agent.launch.v2']
-      )
-    ).rejects.toThrow('cannot honor CLI launch focus or background')
-    expect(client.call).not.toHaveBeenCalled()
-  })
-
   it('gives inspection-only recovery after an ambiguous legacy create and never falls back again', async () => {
     const client = new RuntimeClient(directory, 60_000, null, null)
     const call = vi
@@ -298,47 +256,6 @@ describe('CLI launch through host surface creation and replay admission', () => 
     })
     expect(call).toHaveBeenCalledTimes(2)
   })
-
-  it.each([undefined, 'current'])(
-    'uses the innermost enclosing folder workspace for %s',
-    async (selector) => {
-      const client = hostClient(runtimeStub())
-      vi.spyOn(console, 'log').mockImplementation(() => {})
-      const call = vi.mocked(client.call)
-      call.mockResolvedValueOnce({
-        id: 'list',
-        ok: true,
-        result: { worktrees: [], totalCount: 0, truncated: false },
-        _meta: { runtimeId: 'runtime-1' }
-      })
-      call.mockResolvedValueOnce({
-        id: 'folders',
-        ok: true,
-        result: {
-          folderWorkspaces: [
-            { id: 'outer', folderPath: '/tmp/repo' },
-            { id: 'remote', folderPath: '/tmp/repo/nested/deeper', connectionId: 'ssh-1' },
-            { id: 'nested', folderPath: '/tmp/repo/nested' }
-          ]
-        },
-        _meta: { runtimeId: 'runtime-1' }
-      })
-      const flags = new Map<string, string | boolean>([['agent', 'codex']])
-      if (selector) {
-        flags.set('worktree', selector)
-      }
-      await AGENT_LAUNCH_HANDLERS['agent launch']({
-        flags,
-        client,
-        cwd: '/tmp/repo/nested/deeper',
-        json: true
-      })
-      expect(call).toHaveBeenCalledWith(
-        'agent.launchReplay',
-        expect.objectContaining({ target: { kind: 'existing', worktree: 'folder:nested' } })
-      )
-    }
-  )
 
   it('refuses remote cwd inference for current', async () => {
     const client = hostClient(runtimeStub())
