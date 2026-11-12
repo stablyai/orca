@@ -186,6 +186,72 @@ describe('orchestration federation control mail', () => {
     expect(homeDb.listPendingFederationRelay(dispatchId, 'to_worker')).toHaveLength(0)
   })
 
+  it('delivers a reply to a remote send --type question and the mail after it', async () => {
+    vi.spyOn(homeRuntime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
+    const sent = await workerDispatcher.dispatch({
+      id: 'send-question',
+      authToken: workerToken,
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'send-question-request',
+      method: 'orchestration.send',
+      params: {
+        from: 'term_worker',
+        subject: 'Q',
+        body: 'Which branch?',
+        type: 'question'
+      }
+    })
+    expect(sent).toMatchObject({ ok: true })
+    const questionId = (sent as { result: { relay: { messageId: string } } }).result.relay.messageId
+    expect(workerDb.getRemoteQuestion(questionId)?.status).toBe('pending')
+
+    await syncFederationBarrier(homeRuntime, homeDb)
+    expect(homeDb.getQuestion(questionId)?.message_id).toBe(questionId)
+
+    const replied = await homeDispatcher.dispatch({
+      id: 'reply-question',
+      authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'reply-question-request',
+      method: 'orchestration.reply',
+      params: { from: 'term_coord', id: questionId, body: 'Use main.' }
+    })
+    expect(replied).toMatchObject({ ok: true })
+
+    await syncFederationBarrier(homeRuntime, homeDb)
+    expect(workerDb.getRemoteQuestion(questionId)?.status).toBe('answered')
+    expect(workerDb.getUnreadMessages(`dispatch:${dispatchId}`)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ body: 'Use main.', subject: 'Re: Question' })
+      ])
+    )
+
+    const later = await homeDispatcher.dispatch({
+      id: 'send-later',
+      authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'send-later-request',
+      method: 'orchestration.send',
+      params: {
+        from: 'term_coord',
+        to: `dispatch:${dispatchId}`,
+        subject: 'next',
+        body: 'Follow up.',
+        type: 'status'
+      }
+    })
+    expect(later).toMatchObject({ ok: true })
+    await syncFederationBarrier(homeRuntime, homeDb)
+
+    expect(homeDb.listPendingFederationRelay(dispatchId, 'to_worker')).toHaveLength(0)
+    expect(workerDb.getUnreadMessages(`dispatch:${dispatchId}`)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ body: 'Use main.' }),
+        expect.objectContaining({ body: 'Follow up.', subject: 'next' })
+      ])
+    )
+  })
+
   it('wakes a remote worker waiter when control mail imports', async () => {
     const waiting = workerDispatcher.dispatch(checkRequest('wait-for-control', true))
     await Promise.resolve()
