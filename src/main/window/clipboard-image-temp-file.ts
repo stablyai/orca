@@ -41,7 +41,7 @@ export async function saveClipboardImageBufferAsTempFile(
     throw new SshHostNotServedError(args.connectionId)
   }
 
-  // Composer drafts must restore pastes after restart; terminal/editor/phone pastes use OS temp.
+  // Terminal Chat drafts and transcripts keep their pastes; ordinary clipboard uploads use OS temp.
   let folder = getAppEnvironment().getPath('temp')
   if (args?.forNativeChatDraft === true) {
     folder = nativeChatPasteFolder()

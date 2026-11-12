@@ -88,7 +88,8 @@ async function saveClipboardImageBufferForTarget(
       app.getPath('userData'),
       runtimeEnvironmentId,
       buffer,
-      args?.connectionId ?? null
+      args?.connectionId ?? null,
+      args?.forNativeChatDraft
     )
   }
   // Local structured-chat sends claim store-owned pastes; only unclaimed images are swept. Other composers keep the paste folder.

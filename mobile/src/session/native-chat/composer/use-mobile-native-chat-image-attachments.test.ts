@@ -104,6 +104,36 @@ describe('useMobileNativeChatImageAttachments', () => {
     })
   }
 
+  it.each([
+    {
+      structuredNativeChat: false,
+      start: { expectedBase64Length: 4, connectionId: null, forNativeChatDraft: true },
+      save: { contentBase64: 'AAAA', connectionId: null, forNativeChatDraft: true }
+    },
+    {
+      structuredNativeChat: true,
+      start: { expectedBase64Length: 4, connectionId: null },
+      save: { contentBase64: 'AAAA', connectionId: null }
+    }
+  ])('retains images only for terminal Chat ($structuredNativeChat)', async (scenario) => {
+    const client = makeClient([methodNotFound('start'), ok('save', '/images/a.png')])
+    const args = baseArgs({
+      client: client as unknown as RpcClient,
+      structuredNativeChat: scenario.structuredNativeChat
+    })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.png' }])
+    mount(args)
+    await act(async () => {
+      await hook!.attachImage('library')
+    })
+    expect(client.calls).toEqual([
+      { method: 'clipboard.startImageUpload', params: scenario.start },
+      { method: 'clipboard.saveImageAsTempFile', params: scenario.save }
+    ])
+    expect(hook!.attachments).toHaveLength(1)
+    expect(args.baseSend).not.toHaveBeenCalled()
+  })
+
   it('keeps isAttaching true when a cancelled pick overlaps a genuine in-flight upload', async () => {
     // Hold a real upload after its counter increment; a concurrent cancelled pick must not decrement work it never started.
     let releaseConnection: ((id: string | null) => void) | null = null

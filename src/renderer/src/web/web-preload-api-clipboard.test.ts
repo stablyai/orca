@@ -170,82 +170,144 @@ describe('web UI preload API', () => {
     expect(readAsDataURL).toHaveBeenCalledWith(fitted)
   })
 
-  it('saves browser clipboard images through bounded upload chunks', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          if (method === 'clipboard.startImageUpload') {
+  it.each([
+    { flag: undefined, destination: {} },
+    { flag: true, destination: { forNativeChatDraft: true } }
+  ])(
+    'saves browser clipboard images through bounded upload chunks ($flag)',
+    async ({ flag, destination }) => {
+      const runtimeCalls: { method: string; params: unknown }[] = []
+      vi.doMock('./web-runtime-client', () => ({
+        WebRuntimeClient: class {
+          call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+            runtimeCalls.push({ method, params })
+            if (method === 'clipboard.startImageUpload') {
+              return Promise.resolve({
+                id: `call-${runtimeCalls.length}`,
+                ok: true,
+                result: { uploadId: 'upload-1' },
+                _meta: { runtimeId: 'runtime-1' }
+              })
+            }
+            if (method === 'clipboard.appendImageUploadChunk') {
+              return Promise.resolve({
+                id: `call-${runtimeCalls.length}`,
+                ok: true,
+                result: { receivedBase64Length: runtimeCalls.length },
+                _meta: { runtimeId: 'runtime-1' }
+              })
+            }
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
               ok: true,
-              result: { uploadId: 'upload-1' },
+              result: 'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png',
               _meta: { runtimeId: 'runtime-1' }
             })
           }
-          if (method === 'clipboard.appendImageUploadChunk') {
+
+          close(): void {}
+        }
+      }))
+
+      const globals = installBrowserGlobals('Linux')
+      writeStoredRuntimeEnvironment(globals.storage)
+      const { installWebPreloadApi } = await import('./web-preload-api')
+      const { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } =
+        await import('./preload-api/web-clipboard-api')
+      const contentBase64 = `${'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)}AAAA`
+      installClipboardImageBase64(contentBase64)
+      installWebPreloadApi()
+
+      await expect(
+        globals.window.api.ui.saveClipboardImageAsTempFile({
+          connectionId: 'ssh-1',
+          forNativeChatDraft: flag
+        })
+      ).resolves.toBe('C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png')
+      expect(runtimeCalls).toEqual([
+        {
+          method: 'clipboard.startImageUpload',
+          params: {
+            expectedBase64Length: contentBase64.length,
+            connectionId: 'ssh-1',
+            ...destination
+          }
+        },
+        {
+          method: 'clipboard.appendImageUploadChunk',
+          params: {
+            uploadId: 'upload-1',
+            offset: 0,
+            contentBase64: 'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)
+          }
+        },
+        {
+          method: 'clipboard.appendImageUploadChunk',
+          params: {
+            uploadId: 'upload-1',
+            offset: CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
+            contentBase64: 'AAAA'
+          }
+        },
+        {
+          method: 'clipboard.commitImageUpload',
+          params: { uploadId: 'upload-1' }
+        }
+      ])
+    }
+  )
+
+  it.each([
+    { flag: undefined, destination: {} },
+    { flag: true, destination: { forNativeChatDraft: true } }
+  ])(
+    'preserves the image destination on the old-server fallback ($flag)',
+    async ({ flag, destination }) => {
+      const runtimeCalls: { method: string; params: unknown }[] = []
+      vi.doMock('./web-runtime-client', () => ({
+        WebRuntimeClient: class {
+          call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+            runtimeCalls.push({ method, params })
+            if (method === 'clipboard.startImageUpload') {
+              return Promise.resolve({
+                id: 'start',
+                ok: false,
+                error: { code: 'method_not_found', message: 'Unknown method' },
+                _meta: { runtimeId: 'runtime-1' }
+              })
+            }
             return Promise.resolve({
-              id: `call-${runtimeCalls.length}`,
+              id: 'save',
               ok: true,
-              result: { receivedBase64Length: runtimeCalls.length },
+              result: '/runtime/paste.png',
               _meta: { runtimeId: 'runtime-1' }
             })
           }
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: 'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png',
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
 
-        close(): void {}
-      }
-    }))
+          close(): void {}
+        }
+      }))
+      const globals = installBrowserGlobals('Linux')
+      writeStoredRuntimeEnvironment(globals.storage)
+      installClipboardImageBase64('AAAA')
+      const { installWebPreloadApi } = await import('./web-preload-api')
+      installWebPreloadApi()
 
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    const { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } =
-      await import('./preload-api/web-clipboard-api')
-    const contentBase64 = `${'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)}AAAA`
-    installClipboardImageBase64(contentBase64)
-    installWebPreloadApi()
-
-    await expect(
-      globals.window.api.ui.saveClipboardImageAsTempFile({ connectionId: 'ssh-1' })
-    ).resolves.toBe('C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png')
-    expect(runtimeCalls).toEqual([
-      {
-        method: 'clipboard.startImageUpload',
-        params: {
-          expectedBase64Length: contentBase64.length,
-          connectionId: 'ssh-1'
+      await expect(
+        globals.window.api.ui.saveClipboardImageAsTempFile({ forNativeChatDraft: flag })
+      ).resolves.toBe('/runtime/paste.png')
+      expect(runtimeCalls).toEqual([
+        {
+          method: 'clipboard.startImageUpload',
+          params: { expectedBase64Length: 4, connectionId: null, ...destination }
+        },
+        {
+          method: 'clipboard.saveImageAsTempFile',
+          params: { contentBase64: 'AAAA', connectionId: null, ...destination }
         }
-      },
-      {
-        method: 'clipboard.appendImageUploadChunk',
-        params: {
-          uploadId: 'upload-1',
-          offset: 0,
-          contentBase64: 'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)
-        }
-      },
-      {
-        method: 'clipboard.appendImageUploadChunk',
-        params: {
-          uploadId: 'upload-1',
-          offset: CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
-          contentBase64: 'AAAA'
-        }
-      },
-      {
-        method: 'clipboard.commitImageUpload',
-        params: { uploadId: 'upload-1' }
-      }
-    ])
-  })
+      ])
+    }
+  )
 
   it('rejects oversized clipboard image source blobs before FileReader or upload work', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []

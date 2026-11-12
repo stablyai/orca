@@ -73,7 +73,7 @@ export async function prepareMobileClipboardImageBase64(
 export async function saveMobileClipboardImageAsTempFile(
   client: MobileClipboardImageRpcSender,
   imageData: string,
-  args?: { connectionId?: string | null; fileName?: string }
+  args?: { connectionId?: string | null; fileName?: string; forNativeChatDraft?: boolean }
 ): Promise<string> {
   const contentBase64 = normalizeMobileClipboardImageBase64(imageData)
   const connectionId = args?.connectionId ?? null
@@ -83,7 +83,8 @@ export async function saveMobileClipboardImageAsTempFile(
         client,
         contentBase64,
         connectionId,
-        args?.fileName
+        args?.fileName,
+        args?.forNativeChatDraft
       )
     } catch (error) {
       if (
@@ -92,7 +93,7 @@ export async function saveMobileClipboardImageAsTempFile(
       ) {
         throw error
       }
-      // Why: upload replay can create only temp state; terminal input is sent after this returns.
+      // Upload replay cannot send terminal input; the caller sends only after this returns.
     }
   }
 }
@@ -101,13 +102,15 @@ async function uploadMobileClipboardImageTransaction(
   client: MobileClipboardImageRpcSender,
   contentBase64: string,
   connectionId: string | null,
-  fileName?: string
+  fileName?: string,
+  forNativeChatDraft?: boolean
 ): Promise<string> {
   const startResponse = await clipboardImageUploadStart.request(client, {
     expectedBase64Length: contentBase64.length,
     connectionId,
     // Image uploads keep the exact request shape older hosts and recordings expect.
-    ...(fileName ? { fileName } : {})
+    ...(fileName ? { fileName } : {}),
+    ...(forNativeChatDraft ? { forNativeChatDraft: true } : {})
   })
 
   // Read method_not_found before interpretation to allow a small image’s legacy single-frame fallback.
@@ -117,7 +120,11 @@ async function uploadMobileClipboardImageTransaction(
       contentBase64.length <= MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
     ) {
       return clipboardImageSaveAsTempFile.interpret(
-        await clipboardImageSaveAsTempFile.request(client, { contentBase64, connectionId })
+        await clipboardImageSaveAsTempFile.request(client, {
+          contentBase64,
+          connectionId,
+          ...(forNativeChatDraft ? { forNativeChatDraft: true } : {})
+        })
       )
     }
     throw new Error(startResponse.error.message)
