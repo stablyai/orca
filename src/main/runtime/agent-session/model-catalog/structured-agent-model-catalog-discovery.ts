@@ -1,7 +1,10 @@
 // Use session launch resolvers, including missing-program env refresh, for probes so catalogs match the binary/account sessions actually use.
 
 import { createAcpModelCatalogProbe } from '../../../acp/discovery/acp-model-catalog-probe'
-import { acpListingNeedsChatFolder } from '../../../acp/discovery/acp-model-discovery-policy'
+import {
+  acpAgentModelDiscoveries,
+  acpListingNeedsChatFolder
+} from '../../../acp/discovery/acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import {
   createClaudeModelCatalogProbe,
@@ -73,18 +76,22 @@ export function claudeModelCatalogDiscovery(
   }
 }
 
+/** Build model-catalog discovery for `spec`, falling back to `hostBackend` discovery when managed discovery is unavailable. */
 export function acpModelCatalogDiscovery(
   spec: AcpLaunchSpec,
   { deps, environment }: StructuredAgentModelCatalogContext
 ): AgentModelCatalogDiscovery {
-  const discovery = spec.modelDiscovery
-  if (discovery.kind === 'unavailable') {
-    return { kind: 'unavailable', reason: discovery.reason }
+  if (
+    spec.modelDiscovery.kind === 'unavailable' &&
+    (!spec.hostBackend || spec.hostBackend.spec.modelDiscovery.kind === 'unavailable')
+  ) {
+    return { kind: 'unavailable', reason: spec.modelDiscovery.reason }
   }
+  const supported = acpAgentModelDiscoveries(spec).filter((entry) => entry.kind !== 'unavailable')
   return {
     kind: 'probe',
-    listingNamesConfiguredModel: discovery.listingNamesConfiguredModel,
-    ...(acpListingNeedsChatFolder(discovery) ? { listsInChatFolder: true as const } : {}),
+    listingNamesConfiguredModel: supported.every((entry) => entry.listingNamesConfiguredModel),
+    ...(supported.some(acpListingNeedsChatFolder) ? { listsInChatFolder: true } : {}),
     probe: createAcpModelCatalogProbe(spec, {
       resolveEnvironment: environment.resolveBaseEnvironment,
       refreshEnvironmentAfterMiss: environment.refreshAfterMissingProgram,

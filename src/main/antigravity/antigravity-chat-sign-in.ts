@@ -12,6 +12,7 @@ import {
 } from '../acp/process/acp-agent-connection'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import { acpPrivateTempConnect } from '../acp/launch/acp-private-temp'
+import { resolveAcpSessionStartMeta } from '../acp/launch/acp-session-meta'
 import type { ConnectAcpAgent } from '../acp/process/acp-structured-connection'
 import {
   resolveAcpLaunchInvocation,
@@ -213,21 +214,22 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       const method = resolveAntigravityChatAuthConfig(launch.antigravityChatAuth).method
       const initialized = await connection.initialize()
       closed()
-      if (
-        initialized.authMethods &&
-        !initialized.authMethods.some((entry) => entry.id === method)
-      ) {
+      if (initialized.authMethods?.every((entry) => entry.id !== method)) {
         throw new AntigravitySignInSentence(spec.authMethodUnavailableMessage)
       }
       await connection.authenticate(method)
       publish(current, { phase: 'verifying' })
       // Authentication alone does not prove a chat can start.
-      const started = await connection.start({ cwd, mcpServers: [] }).catch((error: unknown) => {
-        const plain = error instanceof AcpAgentError && error.code === -32603
-        throw plain && antigravitySignInFailure(error) === SIGN_IN_FAILED
-          ? new AntigravitySignInSentence(SESSION_FAILED)
-          : error
-      })
+      const sessionMeta = await resolveAcpSessionStartMeta(spec, { cwd, env: launch.env })
+      closed()
+      const started = await connection
+        .start({ cwd, mcpServers: [], ...sessionMeta })
+        .catch((error: unknown) => {
+          const plain = error instanceof AcpAgentError && error.code === -32603
+          throw plain && antigravitySignInFailure(error) === SIGN_IN_FAILED
+            ? new AntigravitySignInSentence(SESSION_FAILED)
+            : error
+        })
       owned.sessionId = started.sessionId
       current.pending = undefined
       publishModels(accountHome, started, !connection.exited)
@@ -319,7 +321,9 @@ export function readAntigravityChatSignInStatus(
     return { revision, auth: value.auth, flow: null }
   }
   const { owner: starter, ...state } = value.flow
-  const { phase, error } = state
-  const flow = starter === owner ? state : { flowId: null, phase, ...(error ? { error } : {}) }
+  const flow =
+    starter === owner
+      ? state
+      : { flowId: null, phase: state.phase, ...(state.error ? { error: state.error } : {}) }
   return { revision, auth: value.auth, flow }
 }

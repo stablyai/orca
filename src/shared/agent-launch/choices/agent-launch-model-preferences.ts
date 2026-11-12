@@ -8,6 +8,7 @@ import {
 } from '../../agent-session/options/agent-session-option-catalog'
 import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/agent-session-option-launch'
 import type { TuiAgent } from '../catalog/tui-agent'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 
 export const OPENCODE_MODEL_VERSION_REFUSAL =
   'OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice.'
@@ -60,22 +61,11 @@ export function checkAgentLaunchModelPreferences(args: {
     )
   }
 
-  if (args.effort) {
-    const model = findCatalogModel(catalog, args.model)
-    const option =
-      findCatalogOption(model, 'effort') ??
-      (!model
-        ? catalog.unknownModelOptions?.find((candidate) => candidate.id === 'effort')
-        : undefined)
-    if (
-      option?.kind.type !== 'select' ||
-      !option.kind.choices.some((choice) => choice.value === args.effort)
-    ) {
-      return refuse(
-        'invalid_argument',
-        `Agent ${args.agent} model ${args.model} does not support effort ${args.effort}.`
-      )
-    }
+  if (args.effort && !launchCatalogOffersEffort(args.agent, args.model, args.effort)) {
+    return refuse(
+      'invalid_argument',
+      `Agent ${args.agent} model ${args.model} does not support effort ${args.effort}.`
+    )
   }
 
   const requested: AgentLaunchPreferences = {
@@ -93,6 +83,32 @@ export function checkAgentLaunchModelPreferences(args: {
     )
   }
   return { preferences: requested }
+}
+
+function launchCatalogEffortOption(agent: AgentType, modelId: string) {
+  const catalog = getAgentSessionOptionLaunchCatalog(agent)
+  if (!catalog) {
+    return undefined
+  }
+  const model = findCatalogModel(catalog, modelId)
+  return (
+    findCatalogOption(model, 'effort') ??
+    (!model
+      ? catalog.unknownModelOptions?.find((candidate) => candidate.id === 'effort')
+      : undefined)
+  )
+}
+
+/** Whether the agent's launch catalog can apply this effort to this model. */
+export function launchCatalogOffersEffort(
+  agent: TuiAgent,
+  modelId: string,
+  effort: string
+): boolean {
+  const option = launchCatalogEffortOption(agent, modelId)
+  return (
+    option?.kind.type === 'select' && option.kind.choices.some((choice) => choice.value === effort)
+  )
 }
 
 function refuse(

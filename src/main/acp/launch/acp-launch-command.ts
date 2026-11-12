@@ -85,8 +85,25 @@ export async function selectAcpHostAccountHome(
   ]
   Object.assign(env, backend.spec.env)
   const homePath = env.HOME ?? env.USERPROFILE ?? homedir()
-  const { command } = resolveAcpLaunchCommand(backend.spec, env, { homePath, dataDirectory: null })
-  return isAbsolute(command)
-    ? backend.select({ command, env, envToDelete, homePath, stateDirectory, settings })
+  let resolved: StructuredAgentCommand
+  try {
+    resolved = resolveAcpLaunchCommand(backend.spec, env, {
+      commandSettings: settings,
+      homePath,
+      dataDirectory: null
+    })
+  } catch {
+    return null
+  }
+  return isAbsolute(resolved.command)
+    ? backend.select({
+        command: resolved.command,
+        prefixArgs: resolved.prefixArgs,
+        env,
+        envToDelete,
+        homePath,
+        stateDirectory,
+        settings
+      })
     : null
 }

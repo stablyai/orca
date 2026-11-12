@@ -896,7 +896,7 @@
       "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
       "sameAsChoice": "Wie {{agent}} · {{choice}}",
       "modelListFallback": "Integrierte Liste. Orca konnte von diesem Host keine Modellliste abrufen.",
-      "chatUnavailableOnWindows": "{{value0}} Chat ist unter Windows noch nicht verfügbar, daher öffnet sich {{value0}} auf diesem Host in einem Terminal. Chats auf einem macOS- oder Linux-Host funktionieren weiterhin.",
+      "chatUnavailableOnWindows": "Unter Windows läuft {{value0}} Chat über agy. Installiere oder aktualisiere agy und melde dich mit einem privaten Google-Konto an; ist Chat auf ein Google-Cloud-Konto eingestellt, wähle in den Einstellungen „Persönlich“. Bis dahin öffnet sich {{value0}} in einem Terminal.",
       "undetectedCommandHint": "Wenn die {{agent}}-CLI außerhalb von PATH installiert ist, gib den vollständigen Pfad zu ihrer ausführbaren Datei auf diesem Host ein."
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -4340,7 +4340,7 @@
             "startChat": "Chat mit {{value0}} starten",
             "cliTag": "(CLI)",
             "agentsLoading": "Agenten werden geladen",
-            "chatNotOnWindows": "Unter Windows noch kein Chat"
+            "chatNotOnWindows": "agy-Einrichtung prüfen"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Tab wechseln",
@@ -20248,7 +20248,7 @@
         "turnWorking": "Der Agent dieses Chats arbeitet. Wechsle den Branch, wenn sein Zug beendet ist.",
         "worktree": "Worktree"
       },
-      "explicitChatWindows": "Der Chat dieses Agenten ist unter Windows noch nicht verfügbar. Öffne ihn stattdessen in einem Terminal.",
+      "explicitChatWindows": "Unter Windows läuft dieser Chat über agy. Installiere oder aktualisiere agy und melde dich mit einem privaten Google-Konto an; ist Chat auf ein Google-Cloud-Konto eingestellt, wähle in den Einstellungen „Persönlich“. Versuche es dann erneut oder öffne ihn stattdessen in einem Terminal.",
       "fork": {
         "action": "Ab dieser Antwort abzweigen",
         "pending": "Chat wird abgezweigt…",

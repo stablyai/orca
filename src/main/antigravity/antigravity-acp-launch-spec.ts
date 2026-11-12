@@ -20,7 +20,14 @@ import {
 } from './antigravity-chat-account'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
+import { resolveAntigravitySessionMeta } from './antigravity-chat-user-rules'
 import { readAntigravitySignInLine } from './antigravity-sign-in-url'
+import { isAgySignedOutOutput } from './agy-signed-out-output'
+import {
+  ANTIGRAVITY_MODEL_LISTING_ARGS,
+  parseAntigravityModelCatalogListing
+} from './antigravity-model-catalog-listing'
+import { createAntigravityPromptTurnTracker } from './antigravity-prompt-turn-tracker'
 import {
   AGY_SKIP_PERMISSIONS_FLAG,
   ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION,
@@ -72,14 +79,24 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   transcriptImport: null,
   sessionHistory: ANTIGRAVITY_SESSION_HISTORY,
   privateTempDirectory: true,
+  // The Windows 1.4.5 server otherwise writes its workflow tool into every chat workspace.
+  sessionMeta: ({ cwd, env }) =>
+    resolveAntigravitySessionMeta({
+      cwd,
+      env,
+      disableRunWorkflow: process.platform === 'win32'
+    }),
   // `session/load` replays the whole conversation, which the chat already holds.
   resumePreference: 'resume',
   launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
-// An inherited Gemini API key switches agy to key auth, which its models reject (401).
-function scrubAgyHostApiKeys(env: Record<string, string>): string[] {
-  const removed = ['GEMINI_API_KEY', 'GOOGLE_API_KEY']
+/** Remove inherited Gemini API keys so host `agy` stays on OAuth instead of failing with 401. */
+function scrubAgyHostApiKeys(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[] {
+  const removed = [...new Set([...Object.keys(env), ...Object.keys(inherited)])].filter((key) => {
+    const normalized = process.platform === 'win32' ? key.toUpperCase() : key
+    return normalized === 'GEMINI_API_KEY' || normalized === 'GOOGLE_API_KEY'
+  })
   for (const key of removed) {
     delete env[key]
   }
@@ -90,6 +107,7 @@ function scrubAgyHostApiKeys(env: Record<string, string>): string[] {
 const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   ...ANTIGRAVITY_MANAGED_LAUNCH_SPEC,
   command: 'agy',
+  ignoreAgentCommandSetting: undefined,
   args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
   env: {},
   scrubEnvironment: scrubAgyHostApiKeys,
@@ -109,18 +127,33 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
     }
   },
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
-  installDirectories: ({ homePath }) => [join(homePath, '.local', 'bin')],
+  installDirectories: ({ env, homePath }) => [
+    ...(process.platform === 'win32'
+      ? [join(env.LOCALAPPDATA ?? join(homePath, 'AppData', 'Local'), 'agy', 'bin')]
+      : []),
+    join(homePath, '.local', 'bin')
+  ],
   managedRuntime: undefined,
+  modelDiscovery: {
+    kind: 'command',
+    args: ANTIGRAVITY_MODEL_LISTING_ARGS,
+    parse: parseAntigravityModelCatalogListing,
+    listingNamesConfiguredModel: false,
+    isNotSignedInOutput: isAgySignedOutOutput
+  },
+  privateTempDirectory: undefined,
+  sessionMeta: ({ cwd, env }) => resolveAntigravitySessionMeta({ cwd, env }),
   // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
   permissionModeConfig: {
     values: { ask: 'default', 'accept-edits': 'accept-edits', 'full-access': 'default' },
     fullAccessAtLaunch: true
   },
-  keepsEverySession: true
+  keepsEverySession: true,
+  turnTracker: (env, now, recoverableTaskIds) =>
+    createAntigravityPromptTurnTracker(env, { now, recoverableTaskIds })
 }
 
-// The host's agy ignores Orca's account type, so any other saved choice, a malformed one, or one
-// still being saved keeps new chats on Orca's runtime, whose sign-in honors it.
+/** Return true only when Orca's saved Antigravity account choice is published and personal OAuth. */
 function savedChatAuthIsPersonal(value: unknown): boolean {
   try {
     assertAntigravityChatAuthPublished(value)
@@ -140,7 +173,15 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
     pins: isAntigravityHostAccountHome,
     // Someone signed in to Orca's own Chat keeps it; the host's agy needs a sign-in that serves
     // sessions, not an API-key provider whose key the host launch drops.
-    select: async ({ command, env, envToDelete, homePath, stateDirectory, settings }) =>
+    select: async ({
+      command,
+      prefixArgs,
+      env,
+      envToDelete,
+      homePath,
+      stateDirectory,
+      settings
+    }) =>
       savedChatAuthIsPersonal(settings.antigravityChatAuth) &&
       antigravityChatSignIn.get().value.auth !== 'signedIn' &&
       !(await hasManagedAntigravityChatSignIn(
@@ -148,7 +189,7 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
       )) &&
       !(await agyUsesApiKey(homePath)) &&
       (await hasAgyCredential(homePath)) &&
-      (await antigravityHostAcpReady(command, env, envToDelete))
+      (await antigravityHostAcpReady(command, env, envToDelete, prefixArgs))
         ? antigravityHostAccountHome(homePath)
         : null
   }

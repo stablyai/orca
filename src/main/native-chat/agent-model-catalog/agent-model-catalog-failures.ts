@@ -49,10 +49,14 @@ export class AgentModelCatalogFailures {
     return false
   }
 
-  expireAgent(agent: string): void {
-    for (const [fingerprint, failure] of this.failures) {
+  expireAgent(agent: string, fingerprint?: string): void {
+    if (fingerprint !== undefined) {
+      this.expire(fingerprint)
+      return
+    }
+    for (const [key, failure] of this.failures) {
       if (failure.agent === agent) {
-        this.expire(fingerprint)
+        this.expire(key)
       }
     }
   }

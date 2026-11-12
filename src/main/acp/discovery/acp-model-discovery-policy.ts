@@ -18,6 +18,8 @@ export type AcpModelDiscovery =
       args: readonly string[]
       parse(stdout: string): AgentSessionModelOption[]
       listingNamesConfiguredModel: boolean
+      /** Whether command output proves the account is signed out. */
+      isNotSignedInOutput?(output: string): boolean
       /** Unsupported releases use session discovery when enabled, otherwise live-chat catalogs. */
       supportsVersion?(version: string): boolean
       otherReleasesListInSession?: true
@@ -37,6 +39,16 @@ export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean
     discovery.kind === 'session' ||
     (discovery.kind === 'command' && discovery.otherReleasesListInSession === true)
   )
+}
+
+/** Discovery modes across an agent's base backend and optional host backend. */
+export function acpAgentModelDiscoveries(spec: {
+  modelDiscovery: AcpModelDiscovery
+  hostBackend?: { spec: { modelDiscovery: AcpModelDiscovery } }
+}): AcpModelDiscovery[] {
+  return spec.hostBackend
+    ? [spec.modelDiscovery, spec.hostBackend.spec.modelDiscovery]
+    : [spec.modelDiscovery]
 }
 
 export type AcpModelListing = Exclude<AcpModelDiscovery, { kind: 'unavailable' }>

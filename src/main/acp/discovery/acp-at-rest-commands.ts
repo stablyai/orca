@@ -120,6 +120,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               signal
             )
             check()
+            const activeSpec = invocation.spec
             const launch = {
               ...invocation,
               cwd,
@@ -135,22 +136,22 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
             }
             // A version reader owns work too; retain admission until it drains after cancellation.
             const version = await checkAcpLaunchVersion(
-              spec,
+              activeSpec,
               launch,
-              acpListingDependsOnRelease(spec.modelDiscovery),
+              acpListingDependsOnRelease(activeSpec.modelDiscovery),
               deps.probeVersion
             )
             check()
             if (version.status === 'tooOld') {
               throw new Error('ACP command discovery unavailable')
             }
-            const listing = acpModelListingForRelease(spec.modelDiscovery, version.version)
+            const listing = acpModelListingForRelease(activeSpec.modelDiscovery, version.version)
             // Releases that list without a session (OpenCode 1.x) report commands only in chats.
             if (listing?.kind !== 'session') {
               answer({ commands: undefined, fromAgent: false })
               return
             }
-            const location = spec.visualsSkill
+            const location = activeSpec.visualsSkill
               ? await awaitAcpDiscovery(
                   (deps.resolveVisualsSkill ?? resolveNativeChatVisualsSkillLocation)(),
                   signal
@@ -158,9 +159,9 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               : null
             check()
             const skill =
-              location && spec.visualsSkill
+              location && activeSpec.visualsSkill
                 ? await awaitAcpDiscovery(
-                    spec.visualsSkill({
+                    activeSpec.visualsSkill({
                       skill: location,
                       version: version.version,
                       env: launch.env
@@ -172,7 +173,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
             let folderArgs: string[] = []
             if (listing.sessionFolderArgs) {
               folder = await acpRunFolder(
-                join(deps.dataDirectory, 'acp-command-sessions', spec.agent),
+                join(deps.dataDirectory, 'acp-command-sessions', activeSpec.agent),
                 deps.logger
               )
               folderArgs = listing.sessionFolderArgs(folder.path)
@@ -183,7 +184,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               env: { ...launch.env, ...skill?.env },
               args: [
                 ...invocation.prefixArgs,
-                ...spec.args({ fullAccess: false, pluginDir: skill?.pluginDir ?? null }),
+                ...activeSpec.args({ fullAccess: false, pluginDir: skill?.pluginDir ?? null }),
                 ...folderArgs
               ]
             })
@@ -192,8 +193,8 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
             const discovery = runAcpSessionDiscovery(connection, signal, (checkSession) =>
               readAcpSessionCommands({
                 connection,
-                dialect: spec.dialect,
-                onInitialize: (initialized) => observeAcpForkSupport(spec.agent, initialized),
+                dialect: activeSpec.dialect,
+                onInitialize: (initialized) => observeAcpForkSupport(activeSpec.agent, initialized),
                 cwd,
                 signal,
                 check: () => {

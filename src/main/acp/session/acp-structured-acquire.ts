@@ -19,7 +19,10 @@ import type { AcpSessionEvent } from '../protocol/acp-session-events'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import { AcpStructuredLane } from '../journal/acp-structured-lane'
-import { acpLaneChildWorkDelivery } from '../journal/acp-lane-child-work-delivery'
+import {
+  acpLaneChildWorkDelivery,
+  acpTurnTrackerOption
+} from '../journal/acp-lane-child-work-delivery'
 import { NO_ACP_CHILD_STOPS } from '../turns/acp-structured-child-stop'
 import { prepareAcpStructuredLaunch } from '../launch/acp-structured-launch-preparation'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
@@ -35,6 +38,7 @@ import { createStructuredAgentSessionLogger } from '../../native-chat/agent-sess
 
 const MAX_EARLY_FRAMES = 2_048
 
+/** Spawn, handshake, and wire an ACP structured agent session before publishing its acquisition. */
 export async function acquireAcpStructuredSession(input: {
   acquire: StructuredAgentSessionAcquireInput
   deps: AcpStructuredSessionAdapterDeps
@@ -107,6 +111,7 @@ export async function acquireAcpStructuredSession(input: {
       clientInfo: { name: 'orca', version: '1' },
       clientCapabilities: spec.dialect.clientCapabilities,
       retryBusyPrompts: spec.agent === 'omp',
+      ...acpTurnTrackerOption(spec, launch.env, now, events),
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
       onPermission: (request, context) => {
         if (!isAcpReadySession(session) || !session.turns?.acceptsRequests) {

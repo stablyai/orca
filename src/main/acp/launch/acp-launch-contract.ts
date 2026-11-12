@@ -11,8 +11,10 @@ import type {
   StructuredAgentSessionHistory,
   StructuredAgentTranscriptImport
 } from '../../native-chat/structured-agent-cli-conversations'
+import type { StructuredAgentCommandSettings } from '../../native-chat/structured-agent-command-resolution'
 
 import type { AcpSignInWatch } from '../process/acp-agent-connection'
+import type { AcpPromptTurnTracker } from '../protocol/acp-session-runtime-options'
 import type { AcpLaunchGate } from './acp-launch-gate'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AcpModelDiscovery } from '../discovery/acp-model-discovery-policy'
@@ -71,9 +73,23 @@ export type AcpLaunchSpec = {
   privateTempDirectory?: true
   /** Prefer session/resume even when loading is supported. */
   resumePreference?: 'resume'
+  /** Metadata to include in session start requests (session/new, session/load, session/resume). */
+  sessionMeta?(input: {
+    cwd: string
+    env: Readonly<Record<string, string>>
+  }):
+    | Promise<Readonly<Record<string, unknown>> | undefined>
+    | Readonly<Record<string, unknown>>
+    | undefined
   launchGate?: AcpLaunchGate
   /** Writes sessions it cannot delete into the user's own history, so it runs no naming tasks. */
   keepsEverySession?: true
+  /** Optional prompt-turn tracker for out-of-band transcript wakeups. */
+  turnTracker?(
+    env: Readonly<Record<string, string>>,
+    now: () => number,
+    recoverableTaskIds?: () => ReadonlySet<string> | null
+  ): AcpPromptTurnTracker
   /** A program on the host preferred for new chats; chats whose account home it pins keep it. */
   hostBackend?: AcpHostBackend
 }
@@ -84,6 +100,7 @@ export type AcpHostBackend = {
   /** The account home pinning a new chat to `spec`, or null when the host should not run it. */
   select(input: {
     command: string
+    prefixArgs: readonly string[]
     env: Record<string, string>
     envToDelete: string[]
     homePath: string
@@ -94,4 +111,5 @@ export type AcpHostBackend = {
   }): Promise<AgentSessionAccountHome | null>
 }
 
-export type AcpHostBackendSettings = Partial<Pick<GlobalSettings, 'antigravityChatAuth'>>
+export type AcpHostBackendSettings = StructuredAgentCommandSettings &
+  Partial<Pick<GlobalSettings, 'antigravityChatAuth'>>

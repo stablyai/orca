@@ -27,7 +27,7 @@ import {
 
 const chatSignInHost = (runtime: OrcaRuntimeService) => ({
   launchSources: (signal: AbortSignal) =>
-    structuredAgentHostLaunchSources('antigravity', runtime, signal),
+    structuredAgentHostLaunchSources('antigravity', runtime, signal, 'identity'),
   stopLiveChats: () => stopStructuredAgentChats('antigravity', 'Antigravity')
 })
 

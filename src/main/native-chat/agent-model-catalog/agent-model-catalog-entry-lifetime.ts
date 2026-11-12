@@ -91,16 +91,21 @@ export function retireAgentModelCatalogObservations(
   dueEntries: Set<string>,
   retiredObservations: Set<string>,
   partialAttempts: Map<string, { agent: string; at: number }>,
-  agent: string
+  agent: string,
+  fingerprint?: string
 ): void {
   for (const entry of entries.values()) {
-    if (entry.agent === agent) {
+    if (entry.agent === agent && (fingerprint === undefined || entry.fingerprint === fingerprint)) {
       dueEntries.add(entry.fingerprint)
       retiredObservations.add(entry.fingerprint)
     }
   }
+  const prefix = fingerprint === undefined ? '' : `${JSON.stringify([fingerprint]).slice(0, -1)},`
   for (const [key, attempt] of partialAttempts) {
-    if (attempt.agent === agent) {
+    if (
+      attempt.agent === agent &&
+      (fingerprint === undefined || key === fingerprint || key.startsWith(prefix))
+    ) {
       partialAttempts.delete(key)
     }
   }
