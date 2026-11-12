@@ -169,7 +169,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     [setSelectedItemId]
   )
   // Late cmdk callbacks can restore stale cursors; commit the new list head when deferred query changes.
-  // The empty query clears instead: its recent tabs arrive after mount, and '' follows the default row.
+  // The empty query clears instead: a re-run mount effect (StrictMode) would commit the head before recent tabs load.
   useLayoutEffect(() => {
     if (!deferredQuery) {
       setSelectedItemId('')
