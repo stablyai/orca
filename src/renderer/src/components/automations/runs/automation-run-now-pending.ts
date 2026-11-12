@@ -9,6 +9,9 @@ export function isAutomationRunNowListed(
   pending: AutomationRunNowPending,
   runs: readonly Pick<AutomationRun, 'id' | 'trigger' | 'createdAt'>[]
 ): boolean {
+  if (pending.acknowledgedAt === null) {
+    return false
+  }
   return runs.some((run) =>
     pending.runId
       ? run.id === pending.runId

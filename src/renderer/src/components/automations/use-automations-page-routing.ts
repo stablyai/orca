@@ -55,15 +55,21 @@ export function useAutomationsPageRouting(
       setRunNowPending(null)
       return
     }
+    if (runNowPending.acknowledgedAt === null) {
+      return
+    }
     const timer = setTimeout(
       () => setRunNowPending(null),
-      Math.max(0, runNowPending.requestedAt + RUN_NOW_PENDING_MAX_MS - Date.now())
+      Math.max(0, runNowPending.acknowledgedAt + RUN_NOW_PENDING_MAX_MS - Date.now())
     )
     return () => clearTimeout(timer)
   }, [runNowListed, runNowPending, setRunNowPending])
 
   const selectedHostId = automationRowHostId(selectedRow)
-  const isResolving = Boolean(store.pendingAutomationRunNavigation) || isLoading
+  const isResolving =
+    Boolean(store.pendingAutomationRunNavigation) ||
+    isLoading ||
+    (local.selectedExternalKey !== null && list.scopedExternal.loading)
   const location: AutomationsPageLocation | null = isResolving
     ? null
     : pageView === 'runs'

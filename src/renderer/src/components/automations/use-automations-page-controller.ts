@@ -97,7 +97,8 @@ export function useAutomationsPageController() {
     setSelectedAutomationRunPageId,
     setRunPageOrigin,
     setRunNotFound,
-    selectExternalKey
+    selectExternalKey,
+    setListSearchQuery
   } = local
   const { selectAutomationRow } = list
   const navigation = useMemo(
@@ -111,13 +112,15 @@ export function useAutomationsPageController() {
           setSelectedAutomationRunPageId,
           setRunPageOrigin,
           setRunNotFound,
-          selectExternalKey
+          selectExternalKey,
+          setListSearchQuery
         },
         selectAutomationRow
       }),
     [
       selectAutomationRow,
       selectExternalKey,
+      setListSearchQuery,
       setActivePaneTab,
       setIsDetailOpen,
       setPageView,

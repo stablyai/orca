@@ -24,6 +24,7 @@ type NavigationLocal = Pick<
   | 'setRunPageOrigin'
   | 'setRunNotFound'
   | 'selectExternalKey'
+  | 'setListSearchQuery'
 >
 
 /** Every page change goes through here, so the crumbs, Escape and Back agree on the state. */
@@ -43,7 +44,8 @@ export function createAutomationsPageNavigation({
     setSelectedAutomationRunPageId,
     setRunPageOrigin,
     setRunNotFound,
-    selectExternalKey
+    selectExternalKey,
+    setListSearchQuery
   } = local
   const leaveRun = (): void => {
     store.setPendingAutomationRunNavigation(null)
@@ -86,6 +88,7 @@ export function createAutomationsPageNavigation({
   }
   /** Apply a back/forward history entry. Automation pages resolve through the deep-link path. */
   const goToLocation = (location: AutomationsPageLocation): void => {
+    setListSearchQuery('')
     switch (location.page) {
       case 'list':
         showList()

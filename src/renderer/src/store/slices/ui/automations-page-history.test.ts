@@ -33,6 +33,19 @@ describe('automations page history', () => {
     expect(next.worktreeNavHistoryIndex).toBe(1)
   })
 
+  it('preserves Forward entries when replay replaces a legacy sentinel', () => {
+    const next = appendAutomationsPageEntry(
+      { worktreeNavHistory: ['skills', 'automations', 'artifacts'], worktreeNavHistoryIndex: 1 },
+      { page: 'list' }
+    )
+    expect(next.worktreeNavHistory).toEqual([
+      'skills',
+      { kind: 'automations-page', location: { page: 'list' } },
+      'artifacts'
+    ])
+    expect(next.worktreeNavHistoryIndex).toBe(1)
+  })
+
   it('appends each sub-page so Back steps run → detail → list → previous view', () => {
     let s: { worktreeNavHistory: WorktreeNavHistoryEntry[]; worktreeNavHistoryIndex: number } = {
       worktreeNavHistory: ['skills', 'automations'],

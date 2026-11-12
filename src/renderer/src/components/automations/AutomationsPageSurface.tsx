@@ -249,7 +249,14 @@ export function AutomationsPageSurface({
         />
       )
     }
-    if (pageView === 'run' || (isLoading && !hasListItems)) {
+    if (
+      pageView === 'run' ||
+      (isLoading && !hasListItems) ||
+      (isDetailOpen &&
+        local.selectedExternalKey !== null &&
+        list.scopedExternal.loading &&
+        !selectedExternal)
+    ) {
       return (
         <AutomationsPageFrame nav={tabs('automations')} bodyScroll="content">
           <AutomationsPageSkeleton />

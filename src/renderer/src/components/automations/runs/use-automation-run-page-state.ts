@@ -81,12 +81,15 @@ export function useAutomationRunPageState({
     visibleRows,
     externalAutomationEntries,
     hostCatalog,
-    selectAutomationRow
+    selectAutomationRow,
+    scopedExternal
   } = list
   const { selectedRuns, selectedRunsReady, selectedRunsNotice, selectedAutomationRunPage } = setup
 
   useEffect(() => {
     if (
+      isLoading ||
+      scopedExternal.loading ||
       !isDetailOpen ||
       pendingAutomationRunNavigation ||
       (pageView === 'run' && selectedAutomationRunPage)
@@ -106,6 +109,8 @@ export function useAutomationRunPageState({
     setSelectedAutomationRunPageId(null)
     setActivePaneTab('overview')
   }, [
+    isLoading,
+    scopedExternal.loading,
     isDetailOpen,
     pageView,
     selectedAutomationRunPage,
@@ -124,7 +129,7 @@ export function useAutomationRunPageState({
       return
     }
     const pending = pendingAutomationRunNavigation
-    if (pending.runId && pageView !== 'run') {
+    if (pending.runId) {
       // Why: a deep link (workspace card, notification) undoes to its automation, not the Runs list.
       setRunPageOrigin(pending.origin ?? 'automation')
       setPageView('run')

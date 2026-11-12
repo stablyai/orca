@@ -18,7 +18,7 @@ export function appendAutomationsPageEntry(
   if (s.worktreeNavHistory[s.worktreeNavHistoryIndex] !== 'automations') {
     return appendHistoryEntry(s, entry)
   }
-  const next = s.worktreeNavHistory.slice(0, s.worktreeNavHistoryIndex + 1)
+  const next = s.worktreeNavHistory.slice()
   next[s.worktreeNavHistoryIndex] = entry
   return { worktreeNavHistory: next, worktreeNavHistoryIndex: s.worktreeNavHistoryIndex }
 }

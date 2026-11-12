@@ -68,7 +68,7 @@ export function useAutomationsPageEscape({
       if (pageView === 'run') {
         if (runNotFound) {
           if (runNotFound.kind === 'run' && isDetailOpen) {
-            navigation.showSelectedAutomation()
+            navigation.returnFromRun(runPageOrigin)
           } else {
             navigation.showList()
           }

@@ -19,6 +19,7 @@ export type AutomationRunNotFound = {
 export type AutomationRunNowPending = {
   rowKey: string
   requestedAt: number
+  acknowledgedAt: number | null
   /** The run the host returned, when it returned one. */
   runId: string | null
 }

@@ -19054,7 +19054,9 @@
         },
         "recentRuns": {
           "title": "Recent runs",
-          "allRuns": "All {{count}} runs"
+          "allRuns": "All {{count}} runs",
+          "allRuns_one": "All {{count}} run",
+          "allRuns_other": "All {{count}} runs"
         },
         "runIdentity": {
           "triggerManual": "Run now",
@@ -19069,6 +19071,11 @@
         },
         "runTable": {
           "result": "Result"
+        },
+        "listGroups": {
+          "attention": "Needs attention",
+          "active": "Active",
+          "paused": "Paused"
         }
       },
       "agent": {

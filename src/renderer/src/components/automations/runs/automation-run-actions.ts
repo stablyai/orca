@@ -81,7 +81,12 @@ export function createAutomationRunActions({
     }
     // Why: the detail's Run now stays busy until the run it started is listed, so a
     // second click can't queue a duplicate; a scheduled run in progress never blocks it.
-    setRunNowPending({ rowKey: row.key, requestedAt: Date.now(), runId: null })
+    setRunNowPending({
+      rowKey: row.key,
+      requestedAt: Date.now(),
+      acknowledgedAt: null,
+      runId: null
+    })
     let result: Awaited<ReturnType<typeof dispatchAutomationRunNow>>
     try {
       result = await dispatchAutomationRunNow(
@@ -100,7 +105,9 @@ export function createAutomationRunActions({
     }
     const startedRunId = result.value?.id ?? null
     setRunNowPending((current) =>
-      current?.rowKey === row.key ? { ...current, runId: startedRunId } : current
+      current?.rowKey === row.key
+        ? { ...current, runId: startedRunId, acknowledgedAt: Date.now() }
+        : current
     )
     useAppStore.getState().recordFeatureInteraction('automation-run')
     invalidateRowHost(row.key, 'run')

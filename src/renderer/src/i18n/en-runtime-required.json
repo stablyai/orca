@@ -194,6 +194,15 @@
           "partialFailureOfHosts_one": "{{failed}} of {{count}} host could not be loaded",
           "partialFailureOfHosts_other": "{{failed}} of {{count}} hosts could not be loaded"
         },
+        "listGroups": {
+          "active": "Active",
+          "attention": "Needs attention",
+          "paused": "Paused"
+        },
+        "recentRuns": {
+          "allRuns_one": "All {{count}} run",
+          "allRuns_other": "All {{count}} runs"
+        },
         "runHistory": {
           "occurrencesCount_one": "{{count}} time",
           "occurrencesCount_other": "{{count}} times",
