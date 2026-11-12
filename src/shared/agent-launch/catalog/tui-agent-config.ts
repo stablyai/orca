@@ -49,11 +49,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: runs the same Claude binary, so Ctrl+Enter must match `claude`.
     ctrlEnterEncoding: 'csi-u'
   },
-  codebuddy: {
-    detectCmd: 'codebuddy',
-    detectCmdAliases: ['cbc'],
-    promptInjectionMode: 'argv'
-  },
+  codebuddy: { detectCmd: 'codebuddy', detectCmdAliases: ['cbc'], promptInjectionMode: 'argv' },
   openclaude: {
     detectCmd: 'openclaude',
     promptInjectionMode: 'argv',
@@ -68,12 +64,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadyTimeoutMs: 20_000,
     submitRetryDelayMs: 1200
   },
-  genie: {
-    detectCmd: 'genie',
-    promptInjectionMode: 'argv',
-    // Why: the separator keeps subcommand-shaped text in Genie's positional prompt slot.
-    argvPromptSeparator: '--'
-  },
+  // `--` keeps subcommand-shaped text in Genie's positional prompt slot.
+  genie: { detectCmd: 'genie', promptInjectionMode: 'argv', argvPromptSeparator: '--' },
   autohand: { detectCmd: 'autohand', promptInjectionMode: 'stdin-after-start' },
   ante: {
     detectCmd: 'ante',
