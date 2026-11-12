@@ -4,6 +4,7 @@ import type { MainToHangWatchdogWorkerMessage } from './hang-watchdog-worker-pro
 const state = vi.hoisted(() => ({
   clock: 0,
   delayedWrite: false,
+  rejectRunner: false,
   commands: new Array<string>(),
   terminations: new Array<() => void>(),
   records: new Array<unknown>()
@@ -27,6 +28,9 @@ vi.mock('node:inspector', () => ({
 vi.mock('@orca/process-host', () => ({
   runProcess: async (options: { onChildTerminated: () => void }) => {
     state.terminations.push(options.onChildTerminated)
+    if (state.rejectRunner) {
+      throw new Error('runner rejected after possible acquisition')
+    }
     return { stdout: '', stderr: '', code: null, timedOut: true }
   }
 }))
@@ -48,6 +52,7 @@ import { runWatchdog } from './main-thread-hang-watchdog-entry'
 beforeEach(() => {
   state.clock = 0
   state.delayedWrite = false
+  state.rejectRunner = false
   state.commands = []
   state.terminations = []
   state.records = []
@@ -102,34 +107,49 @@ it('does not start a profiler after baseline publication has exhausted the detec
   })
   owner.send({ type: 'shutdown' })
 })
-it('admits a later incident after a late native termination receipt releases the physical owner', async () => {
-  const owner = watchdog()
-  await vi.advanceTimersByTimeAsync(125)
-  await vi.dynamicImportSettled()
-  owner.send({ type: 'heartbeat' })
-  await vi.dynamicImportSettled()
-  expect(state.records.at(-1)).toMatchObject({
-    observations: [
-      expect.objectContaining({ native: expect.objectContaining({ cleanup: 'unverified' }) })
-    ]
-  })
-  state.terminations.shift()?.()
-  await vi.dynamicImportSettled()
-  expect(state.records.at(-1)).toMatchObject({
-    observations: [
-      expect.objectContaining({ native: expect.objectContaining({ cleanup: 'terminated' }) })
-    ]
-  })
-  await vi.advanceTimersByTimeAsync(125)
-  await vi.dynamicImportSettled()
-  expect(state.records.at(-1)).toMatchObject({
-    observations: [
-      expect.anything(),
-      expect.objectContaining({
-        mainJs: expect.objectContaining({ state: 'collecting' }),
-        native: expect.objectContaining({ state: 'completed', cleanup: 'unverified' })
-      })
-    ]
-  })
-  owner.send({ type: 'shutdown' })
-})
+it.each([false, true])(
+  'retains possible native ownership until a late termination receipt (runner rejects: %s)',
+  async (rejectRunner) => {
+    state.rejectRunner = rejectRunner
+    const owner = watchdog()
+    await vi.advanceTimersByTimeAsync(125)
+    await vi.dynamicImportSettled()
+    owner.send({ type: 'heartbeat' })
+    await vi.dynamicImportSettled()
+    expect(state.records.at(-1)).toMatchObject({
+      observations: [
+        expect.objectContaining({ native: expect.objectContaining({ cleanup: 'unverified' }) })
+      ]
+    })
+    await vi.advanceTimersByTimeAsync(125)
+    await vi.dynamicImportSettled()
+    expect(state.records.at(-1)).toMatchObject({
+      observations: [expect.anything(), expect.not.objectContaining({ mainJs: expect.anything() })]
+    })
+    owner.send({ type: 'heartbeat' })
+    state.terminations.shift()?.()
+    await vi.dynamicImportSettled()
+    expect(state.records.at(-1)).toMatchObject({
+      observations: [
+        expect.objectContaining({ native: expect.objectContaining({ cleanup: 'terminated' }) }),
+        expect.anything()
+      ]
+    })
+    await vi.advanceTimersByTimeAsync(125)
+    await vi.dynamicImportSettled()
+    expect(state.records.at(-1)).toMatchObject({
+      observations: [
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({
+          mainJs: expect.objectContaining({ state: 'collecting' }),
+          native: expect.objectContaining({
+            state: rejectRunner ? 'failed' : 'completed',
+            cleanup: 'unverified'
+          })
+        })
+      ]
+    })
+    owner.send({ type: 'shutdown' })
+  }
+)

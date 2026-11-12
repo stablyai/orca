@@ -1,3 +1,4 @@
+import type { runProcess as runNativeProcess } from '@orca/process-host'
 import {
   emptyHangStacks,
   hangLabel,
@@ -118,11 +119,6 @@ export function captureNativeHang(options: {
   publish: (capture: NativeHangCapture) => void
 }): { stop: () => void; done: Promise<void> } {
   const abort = new AbortController()
-  let terminated = false
-  let release: () => void = () => {}
-  const termination = new Promise<void>((resolve) => {
-    release = resolve
-  })
   const baseline: NativeHangCapture = {
     ...emptyHangStacks(),
     state: 'collecting',
@@ -140,8 +136,19 @@ export function captureNativeHang(options: {
     options.publish(capture)
   }
   const done = (async (): Promise<void> => {
+    let runProcess: typeof runNativeProcess
     try {
-      const { runProcess } = await import('@orca/process-host')
+      runProcess = (await import('@orca/process-host')).runProcess
+    } catch {
+      publish({ ...baseline, state: 'failed', completedAt: Date.now(), cleanup: 'unverified' })
+      return
+    }
+    let terminated = false
+    let release: () => void = () => {}
+    const termination = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    try {
       const result = await runProcess({
         program: '/usr/bin/sample',
         args: [String(options.pid), '1', '10', '-file', '/dev/stdout'],
