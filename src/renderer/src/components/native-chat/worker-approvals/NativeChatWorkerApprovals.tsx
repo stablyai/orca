@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -75,55 +75,52 @@ export function NativeChatWorkerApprovalStack({
     new Map()
   )
   const now = useSecondClock(isVisible && open.some(({ approval }) => approval.expiresAt))
-  const answer = useCallback(
-    (entry: NativeChatWorkerApproval, decision: WorkerApprovalDecision) => {
-      const { approvalId, worker } = entry.approval
-      setSubmitting((current) => new Map(current).set(approvalId, decision))
-      const name = entry.worker.label
-      callRuntimeRpc(target, 'orchestration.approvalAnswer', {
-        dispatch: worker.dispatchId,
-        prompt: approvalId,
-        decision,
-        ...(decision === 'deny' ? { reason: OWNER_DENY_REASON } : {})
-      })
-        // A landed answer needs no toast: the host's list turns the card into its receipt.
-        .catch((error: unknown) => {
-          // Not applied: the host's list decides. A prompt that closed meanwhile (its worker ended,
-          // or it was answered elsewhere) turns into its receipt from that; one still open stays answerable.
-          const code = error instanceof RuntimeRpcCallError ? error.code : null
-          if (code === 'dispatch_inactive' || code === 'approval_not_open') {
-            toast.info(
-              code === 'dispatch_inactive'
-                ? t(
-                    'components.native-chat.approval.answerWorkerEnded',
-                    '{{name}} has ended, so this prompt is closed',
-                    { name }
-                  )
-                : t(
-                    'components.native-chat.approval.answerNotApplied',
-                    '{{name}}: the answer did not reach this prompt',
-                    { name }
-                  )
-            )
-            return
-          }
-          toast.error(
-            t('components.native-chat.approval.answerFailed', '{{name}}: {{detail}}', {
-              name,
-              detail: error instanceof Error ? error.message : String(error)
-            })
+  const answer = (entry: NativeChatWorkerApproval, decision: WorkerApprovalDecision): void => {
+    const { approvalId, worker } = entry.approval
+    setSubmitting((current) => new Map(current).set(approvalId, decision))
+    const name = entry.worker.label
+    callRuntimeRpc(target, 'orchestration.approvalAnswer', {
+      dispatch: worker.dispatchId,
+      prompt: approvalId,
+      decision,
+      ...(decision === 'deny' ? { reason: OWNER_DENY_REASON } : {})
+    })
+      // A landed answer needs no toast: the host's list turns the card into its receipt.
+      .catch((error: unknown) => {
+        // Not applied: the host's list decides. A prompt that closed meanwhile (its worker ended,
+        // or it was answered elsewhere) turns into its receipt from that; one still open stays answerable.
+        const code = error instanceof RuntimeRpcCallError ? error.code : null
+        if (code === 'dispatch_inactive' || code === 'approval_not_open') {
+          toast.info(
+            code === 'dispatch_inactive'
+              ? t(
+                  'components.native-chat.approval.answerWorkerEnded',
+                  '{{name}} has ended, so this prompt is closed',
+                  { name }
+                )
+              : t(
+                  'components.native-chat.approval.answerNotApplied',
+                  '{{name}}: the answer did not reach this prompt',
+                  { name }
+                )
           )
-        })
-        .finally(() =>
-          setSubmitting((current) => {
-            const next = new Map(current)
-            next.delete(approvalId)
-            return next
+          return
+        }
+        toast.error(
+          t('components.native-chat.approval.answerFailed', '{{name}}: {{detail}}', {
+            name,
+            detail: error instanceof Error ? error.message : String(error)
           })
         )
-    },
-    [t, target]
-  )
+      })
+      .finally(() =>
+        setSubmitting((current) => {
+          const next = new Map(current)
+          next.delete(approvalId)
+          return next
+        })
+      )
+  }
   if (approvals.length === 0) {
     return null
   }
