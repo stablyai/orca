@@ -14,6 +14,12 @@
       "unsupportedLaunch": "OpenCode cannot apply this model choice to this launch. Start a fresh local terminal with supported launch arguments, or omit the model choice."
     }
   },
+  "tabAgentSearchHint": {
+    "dismiss": "Dismiss agent search hint",
+    "title": "Find and launch agents here",
+    "description": "Type a model name in the search box above.",
+    "tryModel": "Try “{{model}}”"
+  },
   "csv": {
     "detectingDelimiter": "Detecting delimiter…",
     "indexProgress": "Indexing CSV… {{percent}}%",

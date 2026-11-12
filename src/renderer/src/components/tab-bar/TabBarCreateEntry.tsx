@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Input } from '@/components/ui/input'
+import { TabEntrySearchField } from './TabEntrySearchField'
+import { createTabAgentSearchHintSession } from './tab-agent-search-hint-session'
 import { useRuntimeFileListForWorktree } from '../quick-open-file-list'
 import {
   createTabEntryAllowAbsolutePathsSelector,
@@ -65,6 +66,7 @@ function TabBarCreateEntrySession({
   worktreeId
 }: TabBarCreateEntryProps): React.JSX.Element {
   const t = useTranslate()
+  const [hintSession] = useState(createTabAgentSearchHintSession)
   const [query, setQuery] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -75,12 +77,19 @@ function TabBarCreateEntrySession({
   const setupSubmenu = useEntrySetupSubmenu()
   const inputRef = useRef<HTMLInputElement>(null)
   const submissionIdRef = useRef(0)
-  useEffect(
-    () => () => {
+  const updateQuery = (nextQuery: string) => {
+    setQuery(nextQuery)
+    onQueryChange?.(nextQuery)
+    setPinnedOptionId(null)
+    setError(null)
+    setSwitchError(null)
+    setSelectionGuidance(null)
+  }
+  useEffect(() => {
+    return () => {
       submissionIdRef.current += 1
-    },
-    []
-  )
+    }
+  }, [])
   const fileList = useRuntimeFileListForWorktree({ enabled: menuOpen, worktreeId })
   const rawQueryOversized = isQuickOpenQueryTooLarge(query)
   const forcedSearch = parseForcedSearchQuery(query)
@@ -241,6 +250,7 @@ function TabBarCreateEntrySession({
       if (tabAgentLaunchOptionDisabled(selectedOption.option)) {
         return false
       }
+      hintSession.trackAction('agent_selected')
       const accepted = onLaunchAgentOption
         ? onLaunchAgentOption(selectedOption.option)
         : onLaunchAgent?.(selectedOption.option.agent)
@@ -316,40 +326,28 @@ function TabBarCreateEntrySession({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="tab-entry-omnibox relative -mx-1 flex items-center px-3 text-xs text-foreground">
-        <Input
-          ref={inputRef}
-          value={query}
-          onChange={(event) => {
-            const nextQuery = event.target.value
-            // Publish query changes in the typing event instead of waiting for a post-commit effect.
-            setQuery(nextQuery)
-            onQueryChange?.(nextQuery)
-            setPinnedOptionId(null)
-            setError(null)
-            setSwitchError(null)
-            setSelectionGuidance(null)
-          }}
-          // Keep pending input focus with readOnly; disabling it breaks arrow/Escape navigation.
-          disabled={disabled}
-          readOnly={pending}
-          aria-busy={pending || undefined}
-          role="combobox"
-          aria-expanded={!error && activeOptions.length > 0}
-          aria-controls={!error && activeOptions.length > 0 ? RESULT_LISTBOX_ID : undefined}
-          aria-autocomplete="list"
-          aria-activedescendant={
-            activeSelectedIndex !== null && !error
-              ? resultOptionDomId(activeSelectedIndex)
-              : undefined
-          }
-          aria-label={getTabEntryOmniboxPlaceholder(t)}
-          aria-invalid={error ? true : undefined}
-          aria-errormessage={error ? 'tab-create-entry-error' : undefined}
-          placeholder={getTabEntryOmniboxPlaceholder(t)}
-          className="h-9 rounded-none border-0 bg-transparent px-0 text-xs font-normal text-foreground shadow-none placeholder:font-normal placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0 aria-invalid:border-0 aria-invalid:ring-0 md:text-xs dark:bg-transparent"
-        />
-      </div>
+      <TabEntrySearchField
+        agentPickerEntries={agentPickerEntries}
+        hintSession={hintSession}
+        eligibleForHint={menuOpen && !disabled}
+        inputRef={inputRef}
+        value={query}
+        onQueryChange={updateQuery}
+        disabled={disabled}
+        readOnly={pending}
+        aria-busy={pending || undefined}
+        role="combobox"
+        aria-expanded={!error && activeOptions.length > 0}
+        aria-controls={!error && activeOptions.length > 0 ? RESULT_LISTBOX_ID : undefined}
+        aria-autocomplete="list"
+        aria-activedescendant={
+          activeSelectedIndex !== null && !error
+            ? resultOptionDomId(activeSelectedIndex)
+            : undefined
+        }
+        aria-invalid={error ? true : undefined}
+        aria-errormessage={error ? 'tab-create-entry-error' : undefined}
+      />
       {/* Keep a mounted live region above usable rows so stale-target failures announce without removing other choices. */}
       <div role="status">
         {error ? (

@@ -4,10 +4,12 @@ import { BrowserWindow, ipcMain } from 'electron'
 import { consumeConsentMutationToken } from '../telemetry/burst-cap'
 import {
   hasTrackedAgentDashboardActiveToday,
+  isTelemetryEnabled,
   persistBannerAcknowledgeWithoutEmitting,
   setOptIn,
   track
 } from '../telemetry/client'
+import { claimTabAgentSearchHint } from '../telemetry/tab-agent-search-hint-claim'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classifier'
 import { resolveConsent, type ConsentState } from '../telemetry/consent'
@@ -20,6 +22,7 @@ import type { EventProps } from '../../shared/telemetry-event-classification'
 let storeRef: Store | null = null
 
 const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
+  'tab_agent_search_hint_exposure',
   'agent_dashboard_enabled',
   'agent_token_usage',
   'app_starred_orca',
@@ -62,6 +65,13 @@ function deriveOptInVia(store: Store, incomingOptedIn: boolean): OptInVia {
 
 export function registerTelemetryHandlers(store: Store): void {
   storeRef = store
+
+  ipcMain.handle('telemetry:claimTabAgentSearchHint', (_event, previouslyExposed: unknown) => {
+    if (typeof previouslyExposed !== 'boolean' || !isTelemetryEnabled()) {
+      return null
+    }
+    return claimTabAgentSearchHint(store, previouslyExposed)
+  })
 
   ipcMain.handle('telemetry:track', (event, name: unknown, props: unknown): boolean => {
     if (typeof name !== 'string') {

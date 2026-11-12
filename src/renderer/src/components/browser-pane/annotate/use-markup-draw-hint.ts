@@ -1,5 +1,4 @@
-import { useCallback, useRef, useSyncExternalStore } from 'react'
-import { useAppStore } from '@/store'
+import { useOncePerInstallHint } from '@/hooks/use-once-per-install-hint'
 
 // Offer Draw once per install independently of capped tours; keep it open until dismissal or ineligibility, with no timeout.
 const MARKUP_DRAW_HINT_SEEN_KEY = 'orca.browser.markup-draw-hint-seen'
@@ -20,33 +19,5 @@ function claimFirstView(): boolean {
 export type MarkupDrawHint = { hintOpen: boolean; dismissHint: () => void }
 
 export function useMarkupDrawHint(eligible: boolean): MarkupDrawHint {
-  const persistedUIReady = useAppStore((state) => state.persistedUIReady)
-  const hintOpenRef = useRef(false)
-  const notifyRef = useRef<() => void>(() => {})
-  const subscribe = useCallback(
-    (notify: () => void): (() => void) => {
-      notifyRef.current = notify
-      const nextOpen = persistedUIReady && eligible && (hintOpenRef.current || claimFirstView())
-      if (hintOpenRef.current !== nextOpen) {
-        hintOpenRef.current = nextOpen
-        notify()
-      }
-      return () => {
-        if (notifyRef.current === notify) {
-          notifyRef.current = () => {}
-        }
-      }
-    },
-    [eligible, persistedUIReady]
-  )
-  const getSnapshot = useCallback(
-    () => hintOpenRef.current && persistedUIReady && eligible,
-    [eligible, persistedUIReady]
-  )
-  const hintOpen = useSyncExternalStore(subscribe, getSnapshot, () => false)
-  const dismissHint = useCallback(() => {
-    hintOpenRef.current = false
-    notifyRef.current()
-  }, [])
-  return { hintOpen, dismissHint }
+  return useOncePerInstallHint(eligible, claimFirstView)
 }

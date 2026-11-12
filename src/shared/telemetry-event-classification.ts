@@ -130,6 +130,7 @@ export const commonPropsSchema = z
     install_id: z.string().min(1).max(64),
     session_id: z.string().min(1).max(64),
     orca_channel: z.enum(['stable', 'rc']),
+    tab_agent_search_hint_v1: z.enum(['control', 'treatment']).optional(),
     onboarding_language_v1: z.enum(['control', 'treatment']).optional(),
     chat_ui_launch_tip_v1: z
       .enum([
