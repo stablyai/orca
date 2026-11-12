@@ -38,6 +38,8 @@ export const PAIRED_DESKTOP_METHODS = [
   'runtime.clientEvents.unsubscribe',
   'diagnostics.memory',
   'stats.summary',
+  // Each paired desktop reports its own token usage; the phone sums and lists them per device.
+  'usage.summary',
   'ui.get',
   'ui.recordFeatureInteraction',
   'ui.set',
