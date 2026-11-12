@@ -530,7 +530,6 @@
 3 test-no-wall-clock:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/artifacts/ArtifactCollection.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/browser-pane/assemble-chrome/browser-workspace-pane.adoption-chrome.test.tsx
-3 test-no-wall-clock:src/renderer/src/components/native-chat/conversation/turns/NativeChatResolvedView.turn-status.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/native-chat/tools/tasks/NativeChatStructuredSessionStatus.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-list/listing/WorktreeList.lineage-agent-expansion-coupling.test.tsx
