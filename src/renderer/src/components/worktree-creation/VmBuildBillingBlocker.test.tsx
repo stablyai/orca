@@ -12,6 +12,9 @@ import { VmBuildBillingBlocker, type BillingBlockKind } from './VmBuildBillingBl
 const setOverage =
   vi.fn<(args: { enabled: boolean; spendCapCents?: number }) => Promise<OrcaBillingOverageResult>>()
 const billingStatus = vi.fn<() => Promise<OrcaBillingStatusResult>>()
+vi.mock('../billing/plans/plans-page-store', () => ({ openPlansPage: vi.fn() }))
+vi.mock('@/lib/orca-cloud-after-checkout', () => ({ requestOrcaCloudAfterCheckout: vi.fn() }))
+
 const openPortal = vi.fn(() => Promise.resolve({ status: 'opened' as const }))
 
 beforeEach(() => {
@@ -39,25 +42,23 @@ function renderBlocker(
 ): {
   onContinue: ReturnType<typeof vi.fn>
   onBackToDraft: ReturnType<typeof vi.fn>
-  onComparePlans: ReturnType<typeof vi.fn>
 } {
   const onContinue = vi.fn()
   const onBackToDraft = vi.fn()
-  const onComparePlans = vi.fn()
   render(
     <VmBuildBillingBlocker
       kind={kind}
+      creationId="c1"
       canManageBilling={canManageBilling}
       entitlement={{
         ...sampleTeam,
         overage: { ...sampleTeam.overage, spendCapCents: capCents }
       }}
       onContinue={onContinue}
-      onComparePlans={onComparePlans}
       onBackToDraft={onBackToDraft}
     />
   )
-  return { onContinue, onBackToDraft, onComparePlans }
+  return { onContinue, onBackToDraft }
 }
 
 describe('billing blocker on the creating sheet (JA-21)', () => {
@@ -127,11 +128,14 @@ describe('billing blocker on the creating sheet (JA-21)', () => {
     expect(onContinue).not.toHaveBeenCalled()
   })
 
-  it('no plan: Compare plans is the way forward', () => {
-    const { onComparePlans } = renderBlocker('plan')
+  it('no plan: Compare plans opens Plans and continues this create once paid', async () => {
+    const { openPlansPage } = await import('../billing/plans/plans-page-store')
+    const { requestOrcaCloudAfterCheckout } = await import('@/lib/orca-cloud-after-checkout')
+    renderBlocker('plan')
     expect(screen.getByRole('heading', { name: 'Choose a plan' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Compare plans' }))
-    expect(onComparePlans).toHaveBeenCalledOnce()
+    expect(requestOrcaCloudAfterCheckout).toHaveBeenCalledWith({ kind: 'retry', creationId: 'c1' })
+    expect(openPlansPage).toHaveBeenCalledWith('sandbox')
   })
 
   it.each([

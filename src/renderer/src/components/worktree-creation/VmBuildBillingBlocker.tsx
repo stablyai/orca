@@ -8,6 +8,8 @@ import type {
   OrcaBillingOverageResult
 } from '../../../../shared/orca-billing'
 import { overageFailureCopy } from '../billing/plan-billing-copy'
+import { openPlansPage } from '../billing/plans/plans-page-store'
+import { requestOrcaCloudAfterCheckout } from '@/lib/orca-cloud-after-checkout'
 import { formatCents } from '../billing/plans/plans-pricing'
 
 /** The four ways billing can refuse a create (JA-21 progressive billing). */
@@ -256,18 +258,19 @@ export function VmBuildBillingBlockerView({
  */
 export function VmBuildBillingBlocker({
   kind,
+  creationId,
   canManageBilling,
   entitlement,
   onContinue,
-  onComparePlans,
   onBackToDraft
 }: {
   kind: BillingBlockKind
+  /** The blocked create: a paid checkout from Compare plans continues it. */
+  creationId: string
   canManageBilling: boolean
   entitlement: OrcaBillingEntitlement | null
   /** Starts the create again from "Checking your plan…". */
   onContinue: () => void
-  onComparePlans: () => void
   onBackToDraft: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -335,7 +338,11 @@ export function VmBuildBillingBlocker({
       suggestedCapDollars={suggestedCapDollars}
       onTurnOnOverage={() => void saveOverage(BLOCKER_OVERAGE_CAP_CENTS)}
       onRaiseCap={(dollars) => void saveOverage(dollars * 100)}
-      onComparePlans={onComparePlans}
+      onComparePlans={() => {
+        // Once paid, the plans page closes and continues this create.
+        requestOrcaCloudAfterCheckout({ kind: 'retry', creationId })
+        openPlansPage('sandbox')
+      }}
       onUpdatePayment={() => {
         setPhase({ kind: 'browser', checking: false, stillBlocked: false })
         void window.api.orcaProfiles.billingOpenPortal().catch(() => {})

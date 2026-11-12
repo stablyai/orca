@@ -27,6 +27,7 @@ import { OrcaCloudQueuedPrompt } from '@/components/orca-cloud/OrcaCloudQueuedPr
 import {
   classifyVmBuildFailure,
   isAccountGate,
+  billingBlockKind,
   isBillingFailure,
   nothingStarted,
   type VmBuildFailure
@@ -157,7 +158,7 @@ export function VmBuildSheet({
   const billing = useOrcaBillingStatus(isBillingFailure(failure))
   // JA-21: on Orca Cloud a billing refusal is a blocker card in place of the steps, under the
   // sheet's own title; nothing was created and the draft is kept.
-  const billingBlock = cloud && failure && isBillingFailure(failure) ? failure.kind : null
+  const billingBlock = cloud ? billingBlockKind(failure) : null
   // Unknown roles get the owner's copy; only a known member is told to ask someone else.
   const canManageBilling =
     billing.result?.status !== 'ok' || billing.result.entitlement.canManageBilling
@@ -264,20 +265,13 @@ export function VmBuildSheet({
           </div>
         )}
 
-        {billingBlock === 'plan' ||
-        billingBlock === 'hoursUsed' ||
-        billingBlock === 'spendCap' ||
-        billingBlock === 'payment' ? (
+        {billingBlock ? (
           <VmBuildBillingBlocker
             kind={billingBlock}
+            creationId={creationId}
             canManageBilling={canManageBilling}
             entitlement={billing.result?.status === 'ok' ? billing.result.entitlement : null}
             onContinue={onRetry}
-            onComparePlans={() => {
-              // Once paid, the plans page closes and continues this create.
-              requestOrcaCloudAfterCheckout({ kind: 'retry', creationId })
-              openPlansPage('sandbox')
-            }}
             onBackToDraft={() => onReturnToComposer({ local: false })}
           />
         ) : (
