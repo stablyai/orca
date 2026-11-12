@@ -114,12 +114,12 @@ export function createProjectGroupMutationActions(
               ))
         const folders =
           supported && ownerHostId && target.kind === 'environment'
-            ? (
+            ? selectFolderWorkspaces(
                 await callRuntimeRpc<{ folderWorkspaces: FolderWorkspace[] }>(
                   target,
                   'folderWorkspace.list'
                 )
-              ).folderWorkspaces.map((row) =>
+              ).map((row) =>
                 adoptFromEndpoint(target, {
                   kind: 'folderWorkspace',
                   row,

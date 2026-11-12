@@ -1,3 +1,4 @@
+import { selectFolderWorkspaces } from '../workspaces/catalog/workspace-record-fields'
 import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { confirmInspectedArchiveHook } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
@@ -103,7 +104,7 @@ export function createFolderWorkspaceDeleteAction(
         return false
       }
       set((s) => ({
-        folderWorkspaces: s.folderWorkspaces.filter(
+        folderWorkspaces: selectFolderWorkspaces(s).filter(
           (workspace) =>
             workspace.id !== folderWorkspaceId ||
             getFolderWorkspaceHostId(workspace, s.projectGroups) !== ownerHostId
@@ -116,7 +117,7 @@ export function createFolderWorkspaceDeleteAction(
         (owner, scope) =>
           owner.workspaceId === workspaceKey && launchDraftSource(scope)?.origin === origin
       )
-      if (!get().folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
+      if (!selectFolderWorkspaces(get()).some((workspace) => workspace.id === folderWorkspaceId)) {
         // Folder/worktree browser registry keys coincide; retire Chromium guests before renderer cleanup.
         await Promise.resolve(get().shutdownWorktreeBrowsers(workspaceKey))
         // Why here too: a server-hosted folder's local pages use this desktop's profile, which the server can't reach.
@@ -157,7 +158,7 @@ export function createFolderWorkspaceDeleteAction(
           worktreeId: workspaceKey,
           executionHostId: ownerHostId,
           worktreeName:
-            state.folderWorkspaces.find(
+            selectFolderWorkspaces(state).find(
               (workspace) =>
                 workspace.id === folderWorkspaceId &&
                 getFolderWorkspaceHostId(workspace, state.projectGroups) === ownerHostId

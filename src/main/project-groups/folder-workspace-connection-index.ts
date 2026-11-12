@@ -1,3 +1,4 @@
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
@@ -38,10 +39,11 @@ export function createFolderWorkspaceConnectionResolver(
     children.set(group.parentGroupId, siblings)
   }
   for (const repo of repos) {
+    const connectionId = getRepoRoutingConnectionId(repo)
     const summary: Connections = {
       count: 1,
-      local: !repo.connectionId,
-      first: repo.connectionId || undefined,
+      local: !connectionId,
+      first: connectionId ?? undefined,
       multiple: false
     }
     if (repo.projectGroupId) {
