@@ -41,7 +41,7 @@ export function CloudSkillsSyncSkeleton(): React.JSX.Element {
       aria-busy
     >
       <span className="font-medium text-foreground">
-        {t('cloudSkillsSync.title', 'Skills & commands')}
+        {t('cloudAgentConfig.title', 'Skills, agents & memory')}
       </span>
       <span className="sr-only">
         {t('cloudSkillsSync.loading', 'Loading skills and commands…')}
@@ -51,7 +51,7 @@ export function CloudSkillsSyncSkeleton(): React.JSX.Element {
   )
 }
 
-/** "Skills & commands: N synced" for one Orca Cloud workspace, with a per-item opt-out. */
+/** "Skills, agents & memory: N synced" for one Orca Cloud workspace, with a per-item opt-out. */
 export function CloudSkillsSyncPanel({
   status,
   excluded,
@@ -81,7 +81,7 @@ export function CloudSkillsSyncPanel({
   const title = (
     <>
       <span className="font-medium text-foreground">
-        {t('cloudSkillsSync.title', 'Skills & commands')}
+        {t('cloudAgentConfig.title', 'Skills, agents & memory')}
       </span>
       <span className="truncate text-muted-foreground">
         {summary}

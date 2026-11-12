@@ -72,8 +72,8 @@ export function CloudSkillsSyncSettingsView({
       <SwitchRow
         title={t('cloudSkillsSync.autoSync', 'Sync when a workspace starts or wakes')}
         description={t(
-          'cloudSkillsSync.autoSyncHint',
-          'Copies your Claude and Codex skills and slash commands into each cloud workspace. Anything that looks like a key stays on this computer, and nothing made in the sandbox is overwritten.'
+          'cloudAgentConfig.autoSyncHint',
+          'Copies your Claude and Codex skills, commands, subagents, output styles and memory you’ve turned on into each cloud workspace. Anything that looks like a key stays on this computer, and nothing made in the sandbox is overwritten.'
         )}
         checked={preferences.autoSync}
         onChange={(autoSync) => onChange({ autoSync })}
@@ -203,7 +203,7 @@ export function OrcaCloudSkillsWorkspacesView({
   )
 }
 
-/** Settings › Orca Cloud › Skills & commands. */
+/** Settings › Orca Cloud › Skills, agents & memory. */
 export function OrcaCloudSkillsPane(): React.JSX.Element {
   const t = useTranslate()
   const preferences = useCloudAgentConfigSyncPreferences()

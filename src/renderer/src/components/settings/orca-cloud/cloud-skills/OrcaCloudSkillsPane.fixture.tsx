@@ -104,8 +104,8 @@ function page(
     <div className="bg-background px-8 py-6">
       <SettingsSection
         id="cloud-skills"
-        title="Skills & commands"
-        description="Skills and slash commands from Claude and Codex on this computer, synced to your cloud workspaces."
+        title="Skills, agents & memory"
+        description="Skills, slash commands, subagents, output styles and memory from Claude and Codex on this computer, synced to your cloud workspaces."
         forceVisible
         bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
       >

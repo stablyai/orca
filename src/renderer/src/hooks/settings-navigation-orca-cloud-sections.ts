@@ -74,10 +74,10 @@ export function buildOrcaCloudSettingsSections(
     },
     {
       id: 'cloud-skills',
-      title: t('cloudSkillsSync.title', 'Skills & commands'),
+      title: t('cloudAgentConfig.title', 'Skills, agents & memory'),
       description: t(
-        'settings.orcaCloud.skills.description',
-        'Skills and slash commands from Claude and Codex on this computer, synced to your cloud workspaces.'
+        'settings.orcaCloud.agentConfig.description',
+        'Skills, slash commands, subagents, output styles and memory from Claude and Codex on this computer, synced to your cloud workspaces.'
       ),
       icon: BookOpenText,
       searchEntries: getOrcaCloudSkillsSearchEntries(),
