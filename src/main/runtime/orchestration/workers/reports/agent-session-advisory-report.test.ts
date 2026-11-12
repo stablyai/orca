@@ -204,6 +204,42 @@ it('discards a readback whose private advisory policy changed during the read', 
   ).toEqual({ kind: 'unknown', reason: 'identity_changed' })
 })
 
+it.each(['before', 'during'])(
+  'rejects settings after reassignment %s the provider read',
+  async (when) => {
+    vi.spyOn(rig.host, 'hasSession').mockReturnValue(true)
+    const reassign = () => {
+      db.settleWorkerReport({ taskId, dispatchId, outcome: 'succeeded', result: 'Earlier report' })
+      const identity = structuredWorkerIdentities.getBySessionId(HOST_TEST_SESSION)!
+      const next = db.createTask({ runId: db.getTask(taskId)!.run_id, spec: 'Successor work' })
+      createRootDispatch(
+        db,
+        next.id,
+        identity.handle,
+        identity.paneKey,
+        undefined,
+        identity.processIncarnation
+      )
+    }
+    vi.spyOn(rig.host, 'readOptions').mockImplementation(async () => {
+      if (when === 'during') {
+        reassign()
+      }
+      return { models: [], current: { model: 'successor-model' } }
+    })
+    if (when === 'before') {
+      reassign()
+    }
+    expect(
+      await readStructuredWorkerSettings(
+        { ensureStructuredAgentSessionHost: async () => {} },
+        db,
+        dispatchId
+      )
+    ).toEqual({ kind: 'unknown', reason: 'identity_changed' })
+  }
+)
+
 it('settles only the captured advisory Dispatch and delivers its host-bound report', async () => {
   await publisher()({ status: 'inconclusive' })
   expect(db.getTask(taskId)?.status).toBe('completed')

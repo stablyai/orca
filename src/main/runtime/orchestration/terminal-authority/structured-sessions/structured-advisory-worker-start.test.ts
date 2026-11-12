@@ -21,6 +21,7 @@ it.each(['unsupported', 'git-workspace', 'nonempty-folder', 'admitted'])(
   'enforces %s consultation admission before actor launch',
   async (reason) => {
     await openChat(COORDINATOR)
+    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
     const { taskId } = await coordinatorRunAndTask()
     const path = join(root, 'advisor')
     await mkdir(path)
@@ -65,7 +66,7 @@ it.each(['unsupported', 'git-workspace', 'nonempty-folder', 'admitted'])(
             schema: 1,
             dataScope: 'published',
             sourcePin: 'a'.repeat(40),
-            deadlineAt: Date.now() + 30_000,
+            deadlineAt: 1_800_000_030_000,
             maxModelCalls: 4,
             artifacts: [
               {

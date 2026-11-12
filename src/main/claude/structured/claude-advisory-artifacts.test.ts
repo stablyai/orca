@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import * as sdk from '@anthropic-ai/claude-agent-sdk'
@@ -6,6 +6,9 @@ import { createClaudeAdvisoryArtifactServer } from './claude-advisory-artifacts'
 
 const HELLO_HASH = '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
 const closers: (() => Promise<void>)[] = []
+
+beforeEach(() => vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000))
+afterEach(() => vi.restoreAllMocks())
 
 afterEach(async () => {
   for (const close of closers.splice(0).toReversed()) {

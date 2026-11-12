@@ -1,19 +1,22 @@
-import { expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import * as sdk from '@anthropic-ai/claude-agent-sdk'
 import { createClaudeAdvisoryControls } from './claude-advisory-controls'
 
+afterEach(() => vi.restoreAllMocks())
+
 it.each([false, true])(
   'revokes snapshot access and stops the owned connection after a report (ambiguous=%s)',
   async (ambiguous) => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
     const published: unknown[] = []
     const controls = createClaudeAdvisoryControls(
       {
         schema: 1,
         dataScope: 'published',
         sourcePin: 'a'.repeat(40),
-        deadlineAt: Date.now() + 30_000,
+        deadlineAt: 1_800_000_030_000,
         maxModelCalls: 4,
         artifacts: [
           {

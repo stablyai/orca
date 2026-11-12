@@ -18,12 +18,13 @@ const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.
 const SESSION_ID = '5348c19f-6a54-4c2e-9c68-9c2b1a3d4e5f'
 const HOLD_OPEN = { delayMs: 10_000 }
 
-function advisoryPolicy(deadlineAt = Date.now() + 30_000) {
+function advisoryPolicy(remainingMs = 30_000) {
   return {
     schema: 1 as const,
     dataScope: 'published' as const,
     sourcePin: 'a'.repeat(40),
-    deadlineAt,
+    // ast-grep-ignore: test-no-wall-clock -- Real child retirement uses the host clock; freezing Date would invalidate its exit deadlines.
+    deadlineAt: Date.now() + remainingMs,
     maxModelCalls: 4,
     artifacts: [
       {
@@ -148,7 +149,7 @@ describe('Claude stream-json connection', () => {
   it('refuses an expired advisory snapshot without spawning a child', async () => {
     const scenario = scriptScenario([HOLD_OPEN])
     await expect(
-      open({ ...launchFor(scenario), advisoryPolicy: advisoryPolicy(Date.now() - 1) })
+      open({ ...launchFor(scenario), advisoryPolicy: advisoryPolicy(-1) })
     ).rejects.toThrow('Invalid advisory deadline.')
     expect(spawned).toEqual([])
   })
@@ -257,7 +258,7 @@ describe('Claude stream-json connection', () => {
     })
     const fault = vi.fn()
     const connection = await open(
-      { ...launchFor(scenario), advisoryPolicy: advisoryPolicy(Date.now() + 1_500) },
+      { ...launchFor(scenario), advisoryPolicy: advisoryPolicy(1_500) },
       { onFault: fault }
     )
     await connection.initializationResult()

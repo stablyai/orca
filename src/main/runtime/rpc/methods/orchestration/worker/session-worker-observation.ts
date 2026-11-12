@@ -99,6 +99,8 @@ export async function readStructuredWorkerSettings(
   if (!identity) {
     return { kind: 'unknown', reason: 'terminal_worker' }
   }
+  const ownsDispatch = () =>
+    db.findActiveDispatchForAssignee(identity.handle, identity.paneKey)?.id === dispatchId
   try {
     await runtime.ensureStructuredAgentSessionHost()
     const host = getStructuredAgentSessionHost()
@@ -114,6 +116,9 @@ export async function readStructuredWorkerSettings(
     if (!before || observeStructuredSession(sessionId).status !== 'live') {
       return { kind: 'unknown', reason: 'not_live' }
     }
+    if (!ownsDispatch()) {
+      return { kind: 'unknown', reason: 'identity_changed' }
+    }
     const policy = host.deps.store.getRecord(sessionId)?.advisoryPolicy
     const policyFingerprint = policy && agentSessionAdvisoryPolicyFingerprint(policy)
     const options = await host.readOptions(sessionId, { readsWithoutModel: true })
@@ -125,6 +130,7 @@ export async function readStructuredWorkerSettings(
     const currentHold = holdStructuredWorker(identity, db)
     if (
       currentHold.kind !== 'held' ||
+      !ownsDispatch() ||
       currentHold.running.sessionId !== sessionId ||
       after?.currentFence !== before.currentFence ||
       (currentPolicy && agentSessionAdvisoryPolicyFingerprint(currentPolicy)) !==
