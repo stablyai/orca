@@ -125,7 +125,8 @@ async function setup(options: { publicRepos?: string[] } = {}) {
       GITHUB_STATE_SECRET: STATE_SECRET,
       GITHUB_WEBHOOK_SECRET: HOOK_SECRET,
       CONTROL_PLANE_TOKEN,
-      CLOUD_SETUP_ORIGIN: 'https://auth.test'
+      CLOUD_SETUP_ORIGIN: 'https://auth.test',
+      SECRETS_KEK: Buffer.alloc(32, 7).toString('base64')
     },
     {
       github: minter,
@@ -226,6 +227,8 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
     expect(callback.location).toBe(`https://auth.test/cloud/setup/next?session=${SESSION}&from=github`)
     expect(notices).toEqual([{ sessionId: SESSION, accountId: 'user:sam', repo: REPO, state: 'pending' }])
     expect((await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(REPO)}`, { as: 'sam' })).body.access).toBe('requested')
+    // The request was OAuth-proven, so sam's GitHub identity is connected for commits too.
+    expect((await h.call('GET', '/v1/github/user', { as: 'sam' })).body).toEqual({ connected: true, login: 'sam-gh', githubUserId: 2 })
     // Nobody else's request: bob still sees missing.
     expect((await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(REPO)}`, { as: 'bob' })).body.access).toBe('missing')
 
@@ -367,8 +370,34 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
     expect(await isInstallationBound(h.env.SANDBOX_DB, 900, 'org:acme-team')).toBe(true)
     const row = h.raw.prepare('SELECT method, bound_by_github_user_id FROM github_installations WHERE installation_id = 900').get()
     expect(row).toEqual({ method: 'idp', bound_by_github_user_id: 3 })
+    // No OAuth code, no user token: the IdP fast path connects no commit identity.
+    expect(github.calls.filter((c) => c.includes('/login/oauth/access_token'))).toEqual([])
+    expect(h.raw.prepare('SELECT COUNT(*) AS n FROM github_user_tokens').get()).toEqual({ n: 0 })
     // The state is single-use.
     const replay = await browser(`https://sandbox.test/v1/github/setup?installation_id=900&setup_action=install&state=${encodeURIComponent(stateOf(adminUrl))}`)
     expect(replay.text).toContain('already used')
+  })
+  it('install redirect with an OAuth code (request-auth-on-install) binds via OAuth and stores the identity, even with an N5 identity', async () => {
+    const { h, github, browser } = await setup()
+    const base = `/v1/internal/github/install-url?accountId=org:acme-team&userId=u1&repo=${encodeURIComponent(REPO)}&session=${SESSION}`
+    // The state carries the N5 GitHub identity (`g`), which alone would take the IdP fast path.
+    const url = (await h.call('GET', `${base}&githubUserId=3&githubLogin=admin-gh`, { bearer: CONTROL_PLANE_TOKEN })).body.url
+    github.installations.push({ id: 900, account: ACME, repos: ['acme/web'] })
+    // GitHub's install redirect with OAuth-during-install enabled: code + installation_id + setup_action + our state.
+    const bound = await browser(
+      `https://sandbox.test/v1/github/setup?code=code_admin&installation_id=900&setup_action=install&state=${encodeURIComponent(stateOf(url))}`
+    )
+    expect(bound.location).toBe(`https://auth.test/cloud/setup/next?session=${SESSION}&from=github`)
+    expect(github.calls.filter((c) => c.includes('/login/oauth/access_token'))).toHaveLength(1)
+    // The code path ran, not the IdP path: no App-credential installer check, and the bind is 'oauth'.
+    expect(github.calls.filter((c) => c === 'GET /app/installations/900' || c.startsWith('GET /orgs/acme/memberships/'))).toEqual([])
+    expect(h.raw.prepare('SELECT account_id, method, bound_by_user_id, bound_by_github_user_id AS gh FROM github_installations').all()).toEqual([
+      { account_id: 'org:acme-team', method: 'oauth', bound_by_user_id: 'u1', gh: 3 }
+    ])
+    expect(h.raw.prepare('SELECT account_id, user_id, github_user_id, github_login FROM github_user_tokens').all()).toEqual([
+      { account_id: 'org:acme-team', user_id: 'u1', github_user_id: 3, github_login: 'admin-gh' }
+    ])
+    const asU1 = await h.call('GET', '/v1/github/user', { bearer: await h.token('u1', 'acme-team') })
+    expect(asU1.body).toEqual({ connected: true, login: 'admin-gh', githubUserId: 3 })
   })
 })

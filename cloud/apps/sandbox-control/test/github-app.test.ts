@@ -14,10 +14,13 @@ const OPERATOR = 'o'.repeat(40)
 type Call = { method: string; path: string; body: unknown; auth: string | null }
 
 /** Fake api.github.com + github.com OAuth: alice-gh (id 1) owns installation 77 on her personal account. */
-function fakeGitHub(options: { now: () => number; users?: Record<string, { id: number; login: string; installations: unknown[]; memberships?: Record<string, unknown> }> }) {
+function fakeGitHub(options: {
+  now: () => number
+  users?: Record<string, { id: number; login: string; name?: string; installations: unknown[]; memberships?: Record<string, unknown> }>
+}) {
   const calls: Call[] = []
   const users = options.users ?? {
-    code_alice: { id: 1, login: 'alice-gh', installations: [{ id: 77, account: { id: 1, login: 'alice-gh', type: 'User' } }] },
+    code_alice: { id: 1, login: 'alice-gh', name: 'Alice A', installations: [{ id: 77, account: { id: 1, login: 'alice-gh', type: 'User' } }] },
     code_mallory: { id: 666, login: 'mallory-gh', installations: [] }
   }
   const tokens = new Map<string, keyof typeof users>()
@@ -33,11 +36,12 @@ function fakeGitHub(options: { now: () => number; users?: Record<string, { id: n
       }
       const token = `gho_${body.code}`
       tokens.set(token, body.code)
-      return Response.json({ access_token: token })
+      // GitHub App user tokens expire: 8 h access, ~6 months refresh.
+      return Response.json({ access_token: token, refresh_token: `ghr_${body.code}`, expires_in: 28_800, refresh_token_expires_in: 15_811_200 })
     }
     const userToken = auth?.startsWith('Bearer gho_') ? users[tokens.get(auth.slice(7)) ?? ''] : undefined
     if (url.pathname === '/user') {
-      return userToken ? Response.json({ id: userToken.id, login: userToken.login }) : new Response(null, { status: 401 })
+      return userToken ? Response.json({ id: userToken.id, login: userToken.login, name: userToken.name ?? null }) : new Response(null, { status: 401 })
     }
     if (url.pathname === '/user/installations') {
       return Response.json({ total_count: userToken!.installations.length, installations: userToken!.installations })
@@ -67,7 +71,9 @@ async function appKey() {
   return exportPKCS8(privateKey)
 }
 
-async function harnessWithApp() {
+const KEK = Buffer.alloc(32, 7).toString('base64')
+
+async function harnessWithApp(env: Record<string, string> = {}) {
   let clock = () => 0
   const github = fakeGitHub({ now: () => clock() })
   const pem = await appKey()
@@ -87,7 +93,8 @@ async function harnessWithApp() {
       GITHUB_APP_CLIENT_SECRET: 'client-secret',
       GITHUB_STATE_SECRET: STATE_SECRET,
       OPERATOR_TOKEN: OPERATOR,
-      EGRESS_PROXY_URL: 'https://sandbox.test/v1/egress/proxy'
+      EGRESS_PROXY_URL: 'https://sandbox.test/v1/egress/proxy',
+      ...env
     },
     { github: minter, githubFetch: github.fetch }
   )
@@ -361,5 +368,54 @@ describe('GitHub App installation tokens', () => {
     await h.reconcile()
     expect(box!.policy.allow['github.com']![0]).toMatchObject({ transform: [{ headers: { authorization: gitBasicAuthorization(`ghs_${expiresAt}`) } }] })
     expect(expiresAt).not.toBe(first)
+  })
+
+  describe('binding through OAuth also connects the binder’s GitHub identity', () => {
+    const tokenExchanges = (github: ReturnType<typeof fakeGitHub>) => github.calls.filter((c) => c.path === '/login/oauth/access_token')
+    const userTokenRows = (h: Awaited<ReturnType<typeof createHarness>>) =>
+      h.raw.prepare('SELECT account_id, github_user_id, github_login, github_name, ciphertext, access_expires_at, refresh_expires_at FROM github_user_tokens').all() as {
+        account_id: string
+        github_user_id: number
+        github_login: string
+        github_name: string | null
+        ciphertext: string
+        access_expires_at: number | null
+        refresh_expires_at: number | null
+      }[]
+
+    it('stores the user token for the binder, exchanging the code exactly once', async () => {
+      const { h, github } = await harnessWithApp({ SECRETS_KEK: KEK })
+      expect((await h.call('GET', '/v1/github/user', { as: 'alice' })).body).toEqual({ connected: false })
+      const { callback } = await connect(h, 'alice', 'code_alice')
+      expect(callback.text).toContain('Connected GitHub <b>alice-gh</b>')
+      expect(tokenExchanges(github)).toHaveLength(1)
+      const rows = userTokenRows(h)
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatchObject({ account_id: 'user:alice', github_user_id: 1, github_login: 'alice-gh', github_name: 'Alice A' })
+      expect(rows[0]!.access_expires_at).toBe(h.now() + 28_800_000)
+      expect(rows[0]!.refresh_expires_at).toBe(h.now() + 15_811_200_000)
+      // Sealed, never stored in the clear.
+      expect(rows[0]!.ciphertext).not.toContain('gho_code_alice')
+      expect(rows[0]!.ciphertext).not.toContain('ghr_code_alice')
+      expect((await h.call('GET', '/v1/github/user', { as: 'alice' })).body).toEqual({ connected: true, login: 'alice-gh', githubUserId: 1 })
+      expect((await h.call('GET', '/v1/github/user', { as: 'bob' })).body).toEqual({ connected: false })
+    })
+
+    it('stores nothing when no installation was allowed', async () => {
+      const { h, github } = await harnessWithApp({ SECRETS_KEK: KEK })
+      const { callback } = await connect(h, 'mallory', 'code_mallory', 77)
+      expect(callback.text).toContain('Nothing was connected')
+      expect(tokenExchanges(github)).toHaveLength(1)
+      expect(userTokenRows(h)).toEqual([])
+      expect((await h.call('GET', '/v1/github/user', { as: 'mallory' })).body).toEqual({ connected: false })
+    })
+
+    it('without a keyring the bind still succeeds and no identity is stored', async () => {
+      const { h, minter } = await harnessWithApp()
+      const { callback } = await connect(h, 'alice', 'code_alice')
+      expect(callback.text).toContain('Connected GitHub <b>alice-gh</b>')
+      expect(await minter.tokenForRepo(REPO, 'user:alice')).not.toBeNull()
+      expect(userTokenRows(h)).toEqual([])
+    })
   })
 })
