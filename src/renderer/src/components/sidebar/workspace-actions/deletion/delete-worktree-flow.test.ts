@@ -266,10 +266,21 @@ describe('Delete from Home of a workspace this desktop runs (REG-8)', () => {
     const identities = readWorktreeDeleteIdentities(data.worktreeDeleteIdentities)
     expect(identities).toEqual([{ id: 'wt-cloud', instanceId: 'inst-2', hostId: cloudHost }])
     // What the dialog's Delete does: resolve the confirmed targets against the current list.
-    const targets = resolveWorktreeBatchDeleteTargets(identities, (id, hostId) => {
-      const row = mocks.state.worktreeMap.get(id)
-      return row && (!hostId || row.hostId === hostId) ? row : undefined
-    })
+    const { makeWorktree } =
+      await import('../../worktree-list/listing/worktree-list-lineage-card-test-fixtures')
+    const row = {
+      ...makeWorktree({
+        id: 'wt-cloud',
+        displayName: 'ik-actions',
+        branch: 'ik-actions',
+        sortOrder: 0,
+        instanceId: 'inst-2'
+      }),
+      hostId: cloudHost
+    }
+    const targets = resolveWorktreeBatchDeleteTargets(identities, (id, hostId) =>
+      id === row.id && hostId === row.hostId ? row : undefined
+    )
     expect(targets?.map((t) => t.id)).toEqual(['wt-cloud'])
     expect(toast.error).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
