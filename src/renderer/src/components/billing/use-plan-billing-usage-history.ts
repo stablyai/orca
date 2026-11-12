@@ -4,7 +4,7 @@ import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-w
 import { useTranslate } from '@/i18n/use-translate'
 import { cloudWorkspaceTitle } from '../cloud-workspaces/open-cloud-workspace'
 import { useOrgRoster } from './team/use-org-roster'
-import type { UsageNames } from './plan-billing-usage-history'
+import { usageWorkspaceNames, type UsageNames } from './plan-billing-usage-history'
 
 export type PlanBillingUsageState =
   | { status: 'loading' }
@@ -131,10 +131,13 @@ export function usePlanBillingUsageHistory(
       }
     }
   }
-  const titles = new Map<string, string>()
-  for (const workspace of workspaces ?? []) {
-    titles.set(workspace.id, cloudWorkspaceTitle(workspace, t))
-  }
+  const titles = usageWorkspaceNames(
+    (workspaces ?? []).map((workspace) => ({
+      id: workspace.id,
+      title: cloudWorkspaceTitle(workspace, t),
+      number: workspace.number
+    }))
+  )
   return {
     state: {
       status: 'ok',
