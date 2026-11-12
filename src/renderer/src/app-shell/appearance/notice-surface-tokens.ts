@@ -8,34 +8,46 @@ import {
   type Rgba
 } from '../../../../shared/color/rgba-contrast'
 
-// Keep in sync with the notice tokens in main.css.
-export const NOTICE_LIFT_TOKEN = '--notice-lift'
-export const NOTICE_SECONDARY_MIX_TOKEN = '--notice-secondary-mix'
+export const NOTICE_SURFACE_TOKEN = '--notice-surface'
+export const NOTICE_SECONDARY_TOKEN = '--notice-secondary'
 export const NOTICE_MUTED_FOREGROUND_TOKEN = '--notice-muted-foreground'
 export const NOTICE_SECONDARY_EDGE_TOKEN = '--notice-secondary-edge'
-export const NOTICE_LIFT = { light: 0, dark: 7 } as const
-export const NOTICE_SECONDARY_MIX = { light: 6, dark: 10 } as const
+// Keep in sync with the built-in notice mixes in main.css.
+const NOTICE_LIFT = { light: 0, dark: 7 } as const
+const NOTICE_SECONDARY_MIX = { light: 6, dark: 10 } as const
 
-/** The 8-bit color that is actually painted, so a pass can't round below the floor. */
+const BLACK: Rgba = [0, 0, 0, 1]
 const painted = (color: Rgba): Rgba => hexToRgb(rgbaToHex(color))
+const step = (color: Rgba, by: number): Rgba => [
+  Math.min(255, Math.max(0, color[0] + by)),
+  Math.min(255, Math.max(0, color[1] + by)),
+  Math.min(255, Math.max(0, color[2] + by)),
+  1
+]
 
-const readable = (surface: Rgba, text: Rgba): boolean =>
-  contrastRatio(painted(surface), painted(text)) >= MIN_TEXT_CONTRAST
+/** 4.5:1 even with each color one 8-bit step toward the other, so a theme color that paints a
+ *  channel off (fractional CSS colors round their own way) can't sink below the floor. */
+function readable(a: Rgba, b: Rgba): boolean {
+  const [lighter, darker] = contrastRatio(a, BLACK) >= contrastRatio(b, BLACK) ? [a, b] : [b, a]
+  return contrastRatio(step(lighter, -1), step(darker, 1)) >= MIN_TEXT_CONTRAST
+}
 
-/** The deepest mix of `tint` into `surface`, from `deepest` down to 0, that keeps `text` readable. */
-function deepestReadableMix(tint: Rgba, surface: Rgba, text: Rgba, deepest: number): number {
+/** `tint` mixed into `base` at the deepest percent, from `deepest` down, that keeps `text` readable. */
+function deepestReadableMix(tint: Rgba, base: Rgba, text: Rgba, deepest: number): Rgba {
   for (let percent = deepest; percent > 0; percent--) {
-    if (readable(mix(tint, surface, percent), text)) {
-      return percent
+    const candidate = painted(mix(tint, base, percent))
+    if (readable(candidate, text)) {
+      return candidate
     }
   }
-  return 0
+  return painted(base)
 }
 
 /**
  * Toasts and corner cards lift the popover toward the foreground and paint popover and muted
- * text on it. A theme's popover pair is only checked unlifted, so lift and secondary mix shrink
- * until popover text stays 4.5:1, and muted text moves toward popover text until it does too.
+ * text on it, but a theme's popover pair is only checked unlifted. So the lift and secondary
+ * fill shrink until popover text stays readable, and muted text moves toward popover text until
+ * it does too. Emitted as final hex colors: CSS paints exactly the colors measured here.
  */
 export function noticeSurfaceTokensFor(
   colors: { foreground: Rgba; popover: Rgba; popoverForeground: Rgba; mutedForeground: Rgba },
@@ -45,27 +57,22 @@ export function noticeSurfaceTokensFor(
   if ([foreground, popover, popoverForeground, mutedForeground].some((color) => color[3] < 1)) {
     return {}
   }
-  const lift = deepestReadableMix(foreground, popover, popoverForeground, NOTICE_LIFT[base])
-  const surface = mix(foreground, popover, lift)
-  const secondaryMix = deepestReadableMix(
-    foreground,
-    surface,
-    popoverForeground,
-    NOTICE_SECONDARY_MIX[base]
-  )
-  let towardText = 0
-  while (
-    towardText < 100 &&
-    !readable(surface, mix(popoverForeground, mutedForeground, towardText))
-  ) {
-    towardText++
+  const text = painted(popoverForeground)
+  const surface = deepestReadableMix(foreground, popover, text, NOTICE_LIFT[base])
+  const secondary = deepestReadableMix(foreground, surface, text, NOTICE_SECONDARY_MIX[base])
+  let muted = painted(mutedForeground)
+  for (let towardText = 1; towardText <= 100 && !readable(surface, muted); towardText++) {
+    muted = painted(mix(popoverForeground, mutedForeground, towardText))
   }
+  const surfaceHex = rgbaToHex(surface)
+  const secondaryHex = rgbaToHex(secondary)
   return {
-    [NOTICE_LIFT_TOKEN]: `${lift}%`,
-    [NOTICE_SECONDARY_MIX_TOKEN]: `${secondaryMix}%`,
+    [NOTICE_SURFACE_TOKEN]: surfaceHex,
+    [NOTICE_SECONDARY_TOKEN]: secondaryHex,
     // Why: with no fill left, secondary buttons need an edge to still read as buttons.
-    [NOTICE_SECONDARY_EDGE_TOKEN]: secondaryMix === 0 ? 'var(--notice-border)' : 'transparent',
-    [NOTICE_MUTED_FOREGROUND_TOKEN]: rgbaToHex(mix(popoverForeground, mutedForeground, towardText))
+    [NOTICE_SECONDARY_EDGE_TOKEN]:
+      secondaryHex === surfaceHex ? 'var(--notice-border)' : 'transparent',
+    [NOTICE_MUTED_FOREGROUND_TOKEN]: rgbaToHex(muted)
   }
 }
 

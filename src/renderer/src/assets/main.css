@@ -552,26 +552,20 @@
 }
 
 /* One lifted surface for toasts and corner notification cards; the default card/popover blends into the app.
-   Plugin themes override the lift, secondary mix and muted text (notice-surface-tokens.ts) to keep text readable. */
+   App themes replace the surface, secondary and muted colors with readable hex (notice-surface-tokens.ts). */
 :root {
-  --notice-secondary-mix: 6%;
   --notice-muted-foreground: var(--muted-foreground);
   --notice-secondary-edge: transparent;
   --notice-surface: var(--popover);
   --notice-border: color-mix(in srgb, var(--foreground) 14%, transparent);
-  --notice-secondary: color-mix(
-    in srgb,
-    var(--foreground) var(--notice-secondary-mix),
-    var(--notice-surface)
-  );
+  --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
   --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
 }
 
 .dark {
-  --notice-lift: 7%;
-  --notice-secondary-mix: 10%;
-  --notice-surface: color-mix(in srgb, var(--foreground) var(--notice-lift), var(--popover));
+  --notice-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
   --notice-border: color-mix(in srgb, var(--foreground) 15%, transparent);
+  --notice-secondary: color-mix(in srgb, var(--foreground) 10%, var(--notice-surface));
   --notice-shadow:
     0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
     inset 0 1px 0 rgb(255 255 255 / 0.06);
