@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 import { resolveGitCommonDir, resolveGitDir } from './resolve-git-dir'
 
 /** Stamp HEAD, index, routing metadata and working-file inputs without Git; null forbids caching. */

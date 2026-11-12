@@ -10,7 +10,7 @@ import {
   getRepoDefaultBranchName,
   shouldHideNonOpenReviewOnDefaultBranch
 } from '../../source-control/repo-default-branch'
-import { extractExecError } from '../../git/exec-error'
+import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
 import { classifyGlabError } from '../requests/glab-error-classification'
 import type { MRInfo } from '../../../shared/gitlab-types'
 import { derivePipelineStatus, mapMRInfo } from '../requests/gitlab-response-mapping'

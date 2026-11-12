@@ -15,8 +15,8 @@ import {
   getRepoRoutingConnectionId
 } from '../../../shared/execution-host'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
-import { getRepoName } from '../../git/repo'
-import { isGitRepoAsync } from '../../git/repo-detection'
+import { getRepoName } from '../../git/repositories/repository-name'
+import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'
 import { scanNestedRepos } from '../../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,

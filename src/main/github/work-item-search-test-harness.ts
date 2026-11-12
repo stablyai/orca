@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { afterEach, beforeEach, vi, type Mock } from 'vitest'
+
 import { randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
 import type * as GithubApiRepositoryModule from './github-api-repository'
@@ -53,7 +53,10 @@ vi.mock('./github-api-repository', async (importOriginal) => {
 })
 
 import { _resetRateLimitCache } from './rate-limit'
-import { clearGhRateLimitBlock, ghRateLimitScopeKey } from '../git/gh-rate-limit-breaker'
+import {
+  clearGhRateLimitBlock,
+  ghRateLimitScopeKey
+} from '../git/command-runner/hosted-cli/gh-rate-limit-breaker'
 export let api: WorkItemSearchApi
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })

@@ -3,7 +3,7 @@ import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe
 import { startGitSpan } from '../../observability/instrumentation'
 import { createAbortError } from './process-capture/abort-error'
 import { resolveGitCommand } from './host-routing/git-command-resolution'
-import { pendingWslDriveCheckoutGitRouting } from '../wsl-drive-checkout-git-routing'
+import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import { untranslatedGitOutputEnv } from './git-environment/git-process-env'
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'

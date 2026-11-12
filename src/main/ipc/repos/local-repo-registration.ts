@@ -5,9 +5,9 @@ import { normalizeRuntimePathForComparison } from '../../../shared/cross-platfor
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import {
   inspectGitRepoForRegistrationAsync,
-  getGitRepoRootAsync,
-  getRepoName
-} from '../../git/repo'
+  getGitRepoRootAsync
+} from '../../git/repositories/discovery/repo-detection'
+import { getRepoName } from '../../git/repositories/repository-name'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'

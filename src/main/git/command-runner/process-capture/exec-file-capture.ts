@@ -3,7 +3,7 @@ import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-pr
 import { endSubprocessStdin } from '../../../../shared/subprocess-stdin-write'
 import { runProcess } from '@orca/process-host'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
-import type { WslProcessGroupTermination } from '../../wsl-process-group-termination'
+import type { WslProcessGroupTermination } from './wsl-process-group-termination'
 import { createAbortError } from './abort-error'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
