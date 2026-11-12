@@ -39,11 +39,9 @@ export async function addWorktreeWithCopyOnWriteCheckout(
   refreshLocalBaseRef: boolean,
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
-  const [method, canRunHooks] = await Promise.all([
-    resolveCopyOnWriteCheckout(repoPath, worktreePath, options),
-    supportsHookRun(repoPath, options)
-  ])
-  if (!method || !canRunHooks) {
+  const method = await resolveCopyOnWriteCheckout(repoPath, worktreePath, options)
+  // Probe only when cloning applies, so hosts that never clone (Windows, WSL) spawn nothing extra.
+  if (!method || !(await supportsHookRun(repoPath, options))) {
     return addWorktree(
       repoPath,
       worktreePath,
