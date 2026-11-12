@@ -11,7 +11,10 @@ import {
 import { AgentModelCatalogListingStoppedError } from '../../native-chat/agent-model-catalog/agent-model-catalog-failures'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
-import { createAcpAgentConnection } from '../process/acp-agent-connection'
+import {
+  createAcpAgentConnection,
+  type AcpAgentConnectionOptions
+} from '../process/acp-agent-connection'
 import { acpRunFolder } from '../launch/acp-private-temp'
 import {
   acpListingDependsOnRelease,
@@ -33,10 +36,19 @@ import { AcpAgentError, AcpAgentExitedError } from '../transport/acp-errors'
 import { AgentModelCatalogUnavailableError } from '../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 
+import { resolveNativeChatVisualsSkillLocation } from '../../native-chat/native-chat-visuals-skill-location'
+import {
+  readOmpNativeChatOptions,
+  withOmpServiceTiers,
+  type OmpNativeChatOptions
+} from '../../omp/omp-native-chat-options'
 export type AcpModelCatalogProbeDeps = AcpLaunchInvocationDeps & {
   probeVersion?: AgentCliVersionReader
   connect?: (launch: ProviderProcessLaunch) => AcpModelCatalogConnection
-  connectSession?: (launch: ProviderProcessLaunch) => AcpModelCatalogSessionConnection
+  connectSession?: (
+    launch: ProviderProcessLaunch,
+    options?: AcpAgentConnectionOptions
+  ) => AcpModelCatalogSessionConnection
   runListing?: typeof runAgentModelCatalogListing
 }
 
@@ -83,9 +95,13 @@ export function createAcpModelCatalogProbe(
     if (listing === null) {
       throw new Error(`${spec.agent} at ${command} lists its models only through its chats`)
     }
+    const pluginDir =
+      spec.agent === 'omp'
+        ? ((await resolveNativeChatVisualsSkillLocation())?.pluginDir ?? null)
+        : null
     const launch = {
       command,
-      args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDir: null })],
+      args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDir })],
       cwd,
       env,
       envToDelete
@@ -120,15 +136,24 @@ export function createAcpModelCatalogProbe(
         const folder = folderArgs
           ? await acpRunFolder(join(deps.dataDirectory, 'acp-listing-sessions', spec.agent))
           : null
+        let tierReport: OmpNativeChatOptions | undefined
         try {
           assertStructuredAgentResolutionCurrent(operation)
           const args = [
             ...prefixArgs,
-            ...spec.args({ fullAccess: false, pluginDir: null, model }),
+            ...spec.args({ fullAccess: false, pluginDir, model }),
             ...(folderArgs && folder ? folderArgs(folder.path) : [])
           ]
-          return await runAgentModelCatalogSession(
-            () => (deps.connectSession ?? createAcpAgentConnection)({ ...launch, args }),
+          const result = await runAgentModelCatalogSession(
+            () =>
+              (deps.connectSession ?? createAcpAgentConnection)(
+                { ...launch, args },
+                {
+                  onExtensionNotification: (method, params) => {
+                    tierReport = readOmpNativeChatOptions(method, params) ?? tierReport
+                  }
+                }
+              ),
             (connection, ready) =>
               readSessionModels(
                 spec,
@@ -142,6 +167,7 @@ export function createAcpModelCatalogProbe(
               ),
             run
           )
+          return { ...result, models: withOmpServiceTiers(result.models, tierReport) }
         } finally {
           await folder?.remove()
         }

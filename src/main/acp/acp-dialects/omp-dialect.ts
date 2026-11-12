@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AgentSessionGenerationUsageSchema } from '../../../shared/agent-session/agent-session-generation-usage'
 import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpAgentError } from '../transport/acp-errors'
 import type { AcpCompactionReply, AcpDialect, AcpModelCommandReply } from './acp-dialect'
@@ -131,10 +132,21 @@ function errorDetails(error: AcpAgentError): string | undefined {
 
 export const OMP_ACP_DIALECT: AcpDialect = {
   // OMP resolves any thinking level against the selected model (model-controls.ts setThinkingLevel).
+  serviceTierCommand: (value) => `/orca-service-tier ${value}`,
+  withheldCommands: ['orca-service-tier'],
   clampsUnlistedEffort: true,
   // OMP offers its `ask` tool and extension dialogs only to clients that answer forms.
   clientCapabilities: { elicitation: { form: {} } },
   normalizeToolUpdate,
+  notification: (method, params) => {
+    if (method !== '_orca/omp/generation') {
+      return undefined
+    }
+    const result = AgentSessionGenerationUsageSchema.safeParse(params)
+    return result.success
+      ? { disposition: 'map', generationUsage: result.data }
+      : { disposition: 'ignore' }
+  },
   compactionReply,
   modelCommand: {
     // #setModelById (acp-agent.ts) takes listed provider/id values only.

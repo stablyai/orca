@@ -23,6 +23,7 @@ import type {
   StructuredAgentSessionRevisionOptions
 } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionRevisionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-journal-views'
+import type { AgentSessionGenerationUsage } from '../../../shared/agent-session/agent-session-generation-usage'
 
 export type AgentJournalTurnRowTarget = { identity: AgentJournalItemIdentity } | { newest: true }
 
@@ -31,6 +32,7 @@ export type AgentJournalTurnRowWrite = {
   lifecycle?: AgentJournalTurnItem
   /** Replace only the supplied context parts. */
   contextUsage?: AgentSessionContextUsage
+  generationUsage?: AgentSessionGenerationUsage
   /** Supply a window only when no journal row holds one. */
   windowIfNoneHeld?: AgentSessionContextWindow
   /** Never overwrite ended turns. */
@@ -82,13 +84,17 @@ function reviseTurnBody(
   current: AgentJournalTurnItem | null,
   write: AgentJournalTurnRowWrite
 ): AgentJournalTurnItem | null {
-  const { lifecycle, contextUsage } = write
+  const { lifecycle, contextUsage, generationUsage } = write
   const base =
     lifecycle && current ? { ...withoutLifecycle(current), ...lifecycle } : (lifecycle ?? current)
-  if (!base || !contextUsage) {
-    return base
+  if (!base) {
+    return null
   }
-  return { ...base, contextUsage: { ...current?.contextUsage, ...contextUsage } }
+  return {
+    ...base,
+    ...(contextUsage ? { contextUsage: { ...current?.contextUsage, ...contextUsage } } : {}),
+    ...(generationUsage ? { generationUsage } : {})
+  }
 }
 
 function withoutLifecycle(turn: AgentJournalTurnItem) {

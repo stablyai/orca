@@ -1,3 +1,4 @@
+import type { AgentSessionGenerationUsage } from '../../../shared/agent-session/agent-session-generation-usage'
 import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
@@ -81,6 +82,7 @@ export type AcpDialectNotification =
       failureDetail?: string
       failure?: Pick<AcpTurnEnding, 'stopReason' | 'failureDetail' | 'usageLimit'>
       usage?: AgentSessionContextUsage
+      generationUsage?: AgentSessionGenerationUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
       child?: AcpChildSessionReport
@@ -158,6 +160,7 @@ export type AcpDialect = {
   }
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
+  serviceTierCommand?: (value: string) => string
   /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */
   clientCapabilities?: Pick<ClientCapabilities, 'elicitation' | '_meta'>
   /** Claimed permission requests are never auto-approved. */

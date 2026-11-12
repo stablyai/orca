@@ -49,6 +49,12 @@ pnpm dev:fresh [--keep] [--seed-from[=<profile dir>]]   # temporary profile, rem
 - Before a cross-architecture build (including `pnpm build:mac`, which builds x64 and arm64), run `pnpm install:release`.
 - On Linux, `pnpm build`, `pnpm build:native`, and packaging need a running Docker daemon for the clipboard helper. For native Wayland development, run `pnpm build:native` before `pnpm dev`. See the [clipboard build guide](../native/wayland-clipboard/README.md#building-and-testing).
 
+## OMP native chat
+
+OMP loads the bundled `resources/native-chat-visuals/omp-native-chat.mjs` extension for ACP chats and model discovery. Fast uses OMP's per-provider-family `priority` service tier and the shared chat speed toggle. OMP's own model classifiers gate the choice; unknown or unsupported models offer no Fast control. Saved choices are applied before the opening request, and idle-session changes are confirmed by the running agent.
+
+The settled turn bar shows `tok/s` from the completed agent run's summed assistant-message `usage.output` counters divided by its summed measured `duration` values in seconds. This model-request average includes time to first token and excludes tool execution between requests. The journal retains the measurements across reconnects; streaming, older history, missing counters/durations, and spans below 100 ms show no rate. Text length supplies no token estimate.
+
 ## Troubleshooting
 
 - Slow main-process rebuilds: set `ORCA_DEV_MAIN_SOURCEMAPS=0` before `pnpm dev` when you don't need main-process source maps.

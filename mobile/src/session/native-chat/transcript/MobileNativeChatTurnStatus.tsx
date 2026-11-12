@@ -25,12 +25,14 @@ export function MobileNativeChatTurnStatus({
   startedAt,
   workedSeconds,
   verdict,
+  tokensPerSecond,
   expanded = false,
   onToggleExpanded
 }: {
   startedAt: number | null
   workedSeconds?: number | null
   verdict?: AgentTurnOutcome
+  tokensPerSecond?: number | null
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
@@ -38,7 +40,9 @@ export function MobileNativeChatTurnStatus({
   const t = useMobileTranslation()
   const settled = workedSeconds != null
   const elapsedSeconds = useElapsedSeconds(startedAt, !settled)
-  const label = formatMobileNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict }, t)
+  const rate = tokensPerSecond == null ? '' : ` · ${tokensPerSecond.toFixed(1)} tok/s`
+  const label =
+    formatMobileNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict }, t) + rate
 
   if (settled && onToggleExpanded) {
     return (
@@ -48,7 +52,7 @@ export function MobileNativeChatTurnStatus({
         hitSlop={6}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityLabel={nativeChatTurnStatusCopy(t).toggleDetails}
+        accessibilityLabel={`${nativeChatTurnStatusCopy(t).toggleDetails}: ${label}`}
       >
         <Text style={styles.label}>{label}</Text>
         <View style={expanded ? styles.caretOpen : undefined}>

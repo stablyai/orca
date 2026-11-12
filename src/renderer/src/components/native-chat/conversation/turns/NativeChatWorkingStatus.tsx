@@ -46,12 +46,14 @@ export function NativeChatWorkingStatus({
   startedAt,
   workedSeconds,
   verdict,
+  tokensPerSecond,
   expanded = false,
   onToggleExpanded
 }: {
   startedAt: number | null
   workedSeconds?: number | null
   verdict?: AgentTurnOutcome
+  tokensPerSecond?: number | null
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
@@ -63,7 +65,8 @@ export function NativeChatWorkingStatus({
     elapsedSeconds,
     verdict
   })
-  const label = turnStatusLabel(key, duration, t)
+  const rate = tokensPerSecond == null ? '' : ` · ${tokensPerSecond.toFixed(1)} tok/s`
+  const label = turnStatusLabel(key, duration, t) + rate
   // `tabular-nums`: the live clock reflows its own label every second otherwise.
   const className =
     'flex min-h-8 items-center gap-1 border-b border-border text-sm text-chat-foreground-faint tabular-nums'
@@ -86,10 +89,10 @@ export function NativeChatWorkingStatus({
           className,
           'w-full text-left hover:text-chat-foreground-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
         )}
-        aria-label={t(
+        aria-label={`${t(
           'components.native-chat.status.toggleDetails',
           NATIVE_CHAT_TURN_STATUS_COPY.toggleDetails
-        )}
+        )}: ${label}`}
         aria-expanded={expanded}
         onClick={onToggleExpanded}
       >

@@ -103,6 +103,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       startedAt={status.startedAt}
       workedSeconds={status.workedSeconds}
       verdict={status.verdict}
+      tokensPerSecond={status.tokensPerSecond}
       expanded={expanded === true}
       onToggleExpanded={
         slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined

@@ -276,14 +276,17 @@ export function decideSessionEnd(
 
 export function decideContextUsage(
   input: ProviderTimelineDecisionInput,
-  event: Extract<ProviderTimelineDecidedEvent, { type: 'context.usage' }>
+  event: Extract<ProviderTimelineDecidedEvent, { type: 'context.usage' | 'generation.usage' }>
 ): ProviderTimelineDecision {
   const { state } = input
   const named = event.join?.turn
   const turn: ProviderTimelineTurnRef | null =
     named === undefined ? (state.open ?? state.latest) : input.context.rows.turn(providerKey(named))
   const target = turn ? { identity: turn.identity } : ({ newest: true } as const)
-  const write = { contextUsage: event.usage }
+  const write =
+    event.type === 'context.usage'
+      ? { contextUsage: event.usage }
+      : { generationUsage: event.usage }
   const usage: ProviderTimelineItemWrite = {
     reservedBytes: agentJournalTurnRowReservedBytes(target, write),
     lifecycle: true,

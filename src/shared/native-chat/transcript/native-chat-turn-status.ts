@@ -142,6 +142,7 @@ export type NativeChatTurnStatus = {
   workedSeconds: number | null
   /** How a settled turn ended, when the host recorded it. */
   verdict?: AgentTurnOutcome
+  tokensPerSecond?: number | null
 }
 
 export type NativeChatTurnTimingByTurn = Readonly<Record<string, NativeChatTurnTiming>>
@@ -224,6 +225,7 @@ export type NativeChatSettledTurn = {
   startedAt: number
   workedSeconds: number
   verdict?: AgentTurnOutcome
+  tokensPerSecond?: number | null
 }
 
 /** Host duration or explicit null (running/unobserved end) overrides local timing; absent entries permit local fallback. */
@@ -264,7 +266,8 @@ export function selectNativeChatTurnStatuses(
       startedAt: settled.startedAt,
       thinking: false,
       workedSeconds: settled.workedSeconds,
-      ...(settled.verdict ? { verdict: settled.verdict } : {})
+      ...(settled.verdict ? { verdict: settled.verdict } : {}),
+      ...(settled.tokensPerSecond != null ? { tokensPerSecond: settled.tokensPerSecond } : {})
     }
   }
   const activeTiming = timingByTurn[activeTurnKey]

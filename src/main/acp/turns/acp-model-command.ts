@@ -122,6 +122,9 @@ function acpModelFallback(session: AcpModelCommandSession, bound: AcpOptionWrite
     release = null
   }
   return {
+    hold: (): void => {
+      release ??= session.turns.holdSteer()
+    },
     command: session.spec.dialect.modelCommand
       ? async (value: string): Promise<void> => {
           release ??= session.turns.holdSteer()
@@ -141,7 +144,7 @@ function acpModelFallback(session: AcpModelCommandSession, bound: AcpOptionWrite
   }
 }
 
-/** True when the event is the hidden model command's output, which the chat must not show. */
+/** True when the event is a hidden option command's output, which the chat must not show. */
 export function absorbsAcpModelCommandOutput(
   options: AcpStructuredOptions,
   event: AcpSessionEvent
