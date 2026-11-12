@@ -56,12 +56,25 @@ const agentsListResult = z.object({
     )
     .max(PLUGIN_AGENT_LIST_LIMIT)
 })
+const settingsOpenParams = z.strictObject({}).optional()
+const settingsOpenResult = z.object({ opened: z.literal(true) })
 
 const eventsSubscribeParams = z.strictObject({ event: z.enum(PLUGIN_EVENT_NAMES) })
 const eventsSubscribeResult = z.object({ ok: z.literal(true) })
 
 /** Panels and their own worker; spread into PLUGIN_HOST_API. */
 export const PLUGIN_PANEL_BRIDGE_API = {
+  'settings.open': spec({
+    summary:
+      "Opens this plugin's declared settings page in Orca settings; requires a desktop window.",
+    since: 10,
+    scope: 'plugin-private',
+    capability: 'settings:own',
+    mutation: true,
+    surfaces: ALL_SURFACES,
+    params: settingsOpenParams,
+    result: settingsOpenResult
+  }),
   'plugin.request': spec({
     summary:
       "Asks the plugin's own worker to run the handler it registered with `orca.panels.handle(name)`, starting the worker if needed; resolves with what the handler returned. `unknown_method` when no handler has that name.",

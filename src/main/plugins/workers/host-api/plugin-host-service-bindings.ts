@@ -61,6 +61,7 @@ export function bindPluginHostServices(input: {
   desktop?: PluginDesktopFrameServices | null
   panels?: PluginPanelBridgeServices | null
   renderer?: PluginHostRendererActions | null
+  hasSettingsPage?: boolean
   /** The calling plugin's `contributes.settings`: defaults and value checks. */
   declaredSettings?: readonly PluginSettingContribution[]
   statusBar?: PluginStatusBarState | null
@@ -73,6 +74,7 @@ export function bindPluginHostServices(input: {
   const declared = new Map((input.declaredSettings ?? []).map((setting) => [setting.key, setting]))
   const { delegate, pluginsDataDir } = input
   return {
+    hasSettingsPage: input.hasSettingsPage === true,
     appearance: input.appearance ?? null,
     editorTypography: input.editorTypography ?? null,
     desktop: input.desktop ?? null,

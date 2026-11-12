@@ -61,6 +61,7 @@ A sidebar panel. Requires the `sandboxed-ui` execution profile or higher.
 - `icon` (one of activity, bar-chart-3, bell, blocks, book, bot, bug, calendar, cloud, code, database, file-text, flag, folder, gauge, globe, hammer, layers, lightbulb, package, plug, puzzle, rocket, star, terminal, wrench, zap, add, remove, delete, edit, refresh, search, settings, check, close, info, warning, error, open-external, copy, download, upload, play, pause, stop, more, expand, collapse, next, filter, branch, file, agent, link, since 1.4.160): Icon shown in the right-sidebar activity bar. Defaults to `plug`.
 - `entry` (string, required, since 1.4.160): What the panel runs: an HTML page for `ui: "html"`, a `.js`/`.mjs` module for `ui: "components"`. Either may instead be a `.ts`/`.tsx`/`.mts`/`.jsx` file, which Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`; an `html` panel then gets a generated page around it). It is trusted code: install panels you trust.
 - `ui` ("html" | "components", since 1.4.246): How the panel draws its UI. `html` (default) shows `entry` as a web page in an isolated frame; `components` runs `entry` as a hidden module and Orca draws the component tree it returns with its own controls.
+- `location` ("sidebar" | "settings", since 1.4.255): Where Orca shows this panel. Defaults to `sidebar`. A `settings` panel appears under Settings > Integrations, must use `ui: "components"`, and is limited to one per plugin. It uses the plugin's existing worker, settings and storage.
 
 ## CommandContribution
 

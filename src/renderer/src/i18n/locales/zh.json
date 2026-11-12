@@ -23872,5 +23872,17 @@
       "notGitRepository": "不是有效的 Git 仓库",
       "importFailed": "无法导入仓库"
     }
+  },
+  "pluginIntegrations": {
+    "title": "插件集成",
+    "description": "管理已安装插件提供的连接。",
+    "enableFirst": "在“插件”中启用此插件后配置连接。",
+    "configureNamed": "配置 {{name}}",
+    "configure": "配置",
+    "manage": "管理插件",
+    "back": "全部集成",
+    "advanced": "高级设置",
+    "unavailableTitle": "插件集成不可用",
+    "unavailable": "插件已移除、禁用或加载失败。可在“插件”中管理后返回此处。"
   }
 }

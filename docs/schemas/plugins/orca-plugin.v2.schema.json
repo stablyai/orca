@@ -599,6 +599,18 @@
             "html",
             "components"
           ]
+        },
+        "location": {
+          "description": "Where Orca shows this panel. Defaults to `sidebar`. A `settings` panel appears under Settings > Integrations, must use `ui: \"components\"`, and is limited to one per plugin. It uses the plugin's existing worker, settings and storage.",
+          "x-orca-since": "1.4.255",
+          "examples": [
+            "settings"
+          ],
+          "type": "string",
+          "enum": [
+            "sidebar",
+            "settings"
+          ]
         }
       },
       "required": [

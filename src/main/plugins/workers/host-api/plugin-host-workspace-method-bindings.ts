@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { availableWorkspaceAgents } from './plugin-host-available-agents'
 import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-api'
 import { PLUGIN_TERMINAL_READ_MAX_LINES } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
@@ -31,17 +32,14 @@ const terminalReadAnswer = z.object({
   })
 })
 const agentLaunchAnswer = z.object({
-  outcome: z.object({ kind: z.enum(['structured', 'terminal']), handle: z.string() })
+  outcome: z.object({ kind: z.enum(['structured', 'terminal']), handle: z.string() }),
+  prompt: z.object({ outcome: z.string() }).optional()
 })
 
-function failureDetail(error: unknown): string {
-  if (error instanceof PluginHostCallError) {
-    return error.detail ?? error.message
-  }
-  return error instanceof Error ? error.message : String(error)
-}
-
 export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
+  'agents.available': bind(api['agents.available'], async ({ workspaceId }, { services }) =>
+    availableWorkspaceAgents(services, workspaceId)
+  ),
   'workspace.list': bind(api['workspace.list'], async (params, { services }) =>
     listPluginWorkspaces(
       rpc(services),
@@ -130,14 +128,46 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
   }),
   'agent.launch': bind(api['agent.launch'], async (params, ctx) => {
     const worktree = workspaceSelector(params.workspaceId)
-    const answer = await effect(ctx, 'agent.launch', {
-      target: { kind: 'existing', worktree },
-      agent: params.agent,
-      // A terminal, so `terminal.read` and `terminal.sendText` reach the agent the call returns.
-      surface: 'terminal',
-      // A mod works beside the person: never take their focus.
-      presentation: 'background',
-      launchSource: 'plugin'
+    const answer = await new Promise<unknown>((resolve, reject) => {
+      let publishedHandle: string | undefined
+      const launched = effect(
+        ctx,
+        'agent.launch',
+        {
+          target: { kind: 'existing', worktree },
+          agent: params.agent,
+          // A terminal, so `terminal.read` and `terminal.sendText` reach the returned handle.
+          surface: 'terminal',
+          presentation: 'background',
+          launchSource: 'plugin',
+          ...(params.prompt ? { prompt: { text: params.prompt, delivery: 'submit' } } : {})
+        },
+        {
+          // Host calls return before the minute-long readiness wait; the fresh launch owns delivery.
+          onAgentLaunchSurfacePublished: (surface) => {
+            publishedHandle = agentLaunchAnswer.parse(surface).outcome.handle
+            resolve(surface)
+          }
+        }
+      )
+      void launched.then(
+        (result) => {
+          resolve(result)
+          const completed = agentLaunchAnswer.safeParse(result)
+          const disposal = completed.success ? completed.data.prompt?.outcome : undefined
+          if (disposal === 'not-delivered' || disposal === 'unconfirmed') {
+            ctx.scope.log?.(`agent.launch: prompt delivery was ${disposal} for ${publishedHandle}`)
+          }
+        },
+        (error: unknown) => {
+          reject(error)
+          if (publishedHandle) {
+            ctx.scope.log?.(
+              `agent.launch: the prompt did not reach ${publishedHandle}: ${error instanceof Error ? error.message : String(error)}`
+            )
+          }
+        }
+      )
     })
     const terminalId = agentLaunchAnswer.parse(answer).outcome.handle
     // A plugin that lost approval, or a worker that cancelled, while the call ran gains no close
@@ -145,21 +175,6 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
     ctx.scope.assertActive()
     if (!ctx.scope.signal?.aborted) {
       recordPluginOpenedTerminal(ctx.pluginId, terminalId)
-    }
-    if (params.prompt) {
-      // Delivery waits for the agent's composer (up to a minute), longer than a host call may take.
-      void effect(ctx, 'agent.launch', {
-        target: { kind: 'existing', worktree },
-        agent: params.agent,
-        reuseTerminal: { handle: terminalId },
-        prompt: { text: params.prompt, delivery: 'submit' },
-        presentation: 'background',
-        launchSource: 'plugin'
-      }).catch((error: unknown) => {
-        ctx.scope.log?.(
-          `agent.launch: the prompt did not reach ${terminalId}: ${failureDetail(error)}`
-        )
-      })
     }
     return { terminalId }
   }),

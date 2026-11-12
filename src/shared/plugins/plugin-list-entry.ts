@@ -11,6 +11,8 @@ export type PluginHostPanel = {
   title: string
   /** Lucide icon name declared in the plugin manifest. */
   icon?: string
+  /** Absent on older hosts: sidebar. Settings panels are not sidebar tabs. */
+  location?: 'sidebar' | 'settings'
   tabKey: `plugin:${string}`
 }
 
@@ -111,6 +113,8 @@ export type PluginHostListEntry = {
    *  hosts. */
   hooks?: string[]
   hasWorker: boolean
+  /** Whether the plugin declares settings editable by the person. Absent on older hosts. */
+  hasSettings?: boolean
   vmRecipes?: {
     id: string
     name: string

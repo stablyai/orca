@@ -10,6 +10,7 @@ import type { PluginSettingContribution } from '../../../../../shared/plugins/co
 import type { PluginJsonValue } from '../../../../../shared/plugins/workers/plugin-host-api'
 import { DetailSection } from './PluginDetailSections'
 import { usePluginDeclaredSettings } from '../state/use-plugin-declared-settings'
+import { SettingsGroup } from '../../settings/section-layout/SettingsGroup'
 
 type SettingControlProps = {
   id: string
@@ -115,7 +116,10 @@ function SettingRow({
   const changed = value !== undefined && value !== (setting.default ?? undefined)
   const stacked = setting.multiline === true
   return (
-    <div className="border-t border-border px-3.5 py-2.5 text-sm first:border-t-0">
+    <div
+      data-settings-row=""
+      className="border-t border-border px-3.5 py-2.5 text-sm first:border-t-0"
+    >
       <div
         data-stacked={stacked}
         className="flex items-center gap-3 data-[stacked=true]:flex-col data-[stacked=true]:items-stretch"
@@ -143,28 +147,33 @@ function SettingRow({
 /** `contributes.settings`, edited here by the person; the plugin reads them with `settings.get`. */
 export function PluginSettingsSection({
   pluginKey,
-  revision
+  revision,
+  presentation
 }: {
   pluginKey: string
   /** Re-reads when the installed plugin changes. */
   revision: string
+  presentation?: 'settings'
 }): React.JSX.Element | null {
   const t = useTranslate()
   const { snapshot, errors, write } = usePluginDeclaredSettings(pluginKey, revision)
   if (!snapshot || snapshot.settings.length === 0) {
     return null
   }
-  return (
+  const rows = snapshot.settings.map((setting) => (
+    <SettingRow
+      key={setting.key}
+      setting={setting}
+      value={snapshot.values[setting.key]}
+      error={errors[setting.key]}
+      onWrite={(value) => write(setting.key, value)}
+    />
+  ))
+  return presentation === 'settings' ? (
+    <SettingsGroup>{rows}</SettingsGroup>
+  ) : (
     <DetailSection title={t('auto.components.settings.PluginSettingsSection.title', 'Settings')}>
-      {snapshot.settings.map((setting) => (
-        <SettingRow
-          key={setting.key}
-          setting={setting}
-          value={snapshot.values[setting.key]}
-          error={errors[setting.key]}
-          onWrite={(value) => write(setting.key, value)}
-        />
-      ))}
+      {rows}
     </DetailSection>
   )
 }

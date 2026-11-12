@@ -90,6 +90,9 @@ export function resolvePluginServiceHostCallPolicy(input: {
           panels: input.panels,
           renderer: getPluginHostRendererActions(),
           declaredSettings: plugin?.manifest.contributes.settings,
+          hasSettingsPage: plugin?.manifest.contributes.panels.some(
+            (panel) => panel.location === 'settings'
+          ),
           statusBar: input.sinks.statusBar,
           appearance: input.sinks.appearance,
           editorTypography: input.sinks.editorTypography,

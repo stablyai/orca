@@ -199,6 +199,13 @@ const agentLaunchResult = z.object({
   terminalId
 })
 
+const agentsAvailableParams = z.strictObject({ workspaceId })
+const agentsAvailableResult = z.object({
+  agents: z
+    .array(z.object({ id: z.string().min(1).max(64), label: z.string().min(1).max(128) }))
+    .max(64)
+})
+
 /** A `/`-separated path inside the workspace: not absolute, no `..`, no drive letter. */
 export function isPluginWorkspaceRelativePath(path: string): boolean {
   const segments = path.split(/[\\/]/)
@@ -228,6 +235,17 @@ const commandsRunParams = z.strictObject({
 const commandsRunResult = z.object({ ran: z.literal(true) })
 
 export const PLUGIN_WORKSPACE_ACTIONS_API = {
+  'agents.available': spec({
+    summary:
+      'Lists installed and enabled agents available on the exact workspace host, without exposing launch commands or environment.',
+    since: 10,
+    scope: 'any-workspace',
+    capability: 'agent:read',
+    mutation: false,
+    surfaces: WORKER_ONLY,
+    params: agentsAvailableParams,
+    result: agentsAvailableResult
+  }),
   'workspace.list': spec({
     summary:
       "Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status. `hostId` is the host a row records (`local`, `ssh:…`, `runtime:…`), or null when it records none, as for a project-group folder on this machine.",

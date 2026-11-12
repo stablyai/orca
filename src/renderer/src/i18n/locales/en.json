@@ -25455,5 +25455,17 @@
       "read": "Usage could not be loaded. Try Refresh again.",
       "retry": "Refresh"
     }
+  },
+  "pluginIntegrations": {
+    "title": "Plugin integrations",
+    "description": "Manage connections provided by your installed plugins.",
+    "enableFirst": "Enable this plugin in Plugins to configure its connection.",
+    "configureNamed": "Configure {{name}}",
+    "configure": "Configure",
+    "manage": "Manage plugin",
+    "back": "All integrations",
+    "advanced": "Advanced settings",
+    "unavailableTitle": "Plugin integration unavailable",
+    "unavailable": "This plugin was removed, disabled, or could not be loaded. Manage it in Plugins, then return to Integrations."
   }
 }

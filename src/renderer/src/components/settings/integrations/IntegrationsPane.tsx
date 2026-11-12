@@ -13,6 +13,8 @@ import { IntegrationCardPresentationProvider } from '../../integrations/presenta
 import { useIntegrationProviderStatusRefresh } from '../../../hooks/use-integration-provider-status-refresh'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useTranslate } from '@/i18n/use-translate'
+import { PluginIntegrationsGroup, PluginIntegrationSettings } from './PluginIntegrations'
+import { usePluginIntegrationNavigation } from './plugin-integration-navigation'
 
 // Flat presentation turns each provider into one row: -mx-4 cancels its inset, and inner rules are dropped so only rows divide.
 function ProviderRow({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -25,7 +27,11 @@ function ProviderRow({ children }: { children: React.ReactNode }): React.JSX.Ele
 
 export function IntegrationsPane(): React.JSX.Element {
   const t = useTranslate()
+  const pluginKey = usePluginIntegrationNavigation((state) => state.pluginKey)
   useIntegrationProviderStatusRefresh()
+  if (pluginKey) {
+    return <PluginIntegrationSettings pluginKey={pluginKey} />
+  }
 
   return (
     <IntegrationCardPresentationProvider value="setup-guide">
@@ -68,6 +74,7 @@ export function IntegrationsPane(): React.JSX.Element {
             <JiraIntegrationCard />
           </ProviderRow>
         </SettingsGroup>
+        <PluginIntegrationsGroup />
       </div>
     </IntegrationCardPresentationProvider>
   )

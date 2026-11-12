@@ -14,6 +14,7 @@ import {
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { RpcContext } from '../../core'
+import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../../shared/startup-cwd-fallback'
 import { structuredCallerFor } from '../structured-sessions/creation/structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from '../structured-sessions/creation/structured-agent-session-create'
@@ -35,9 +36,16 @@ import {
   type AgentLaunchView
 } from './agent-launch-tab-publication'
 
+export type HostLaunchContext = RpcContext & {
+  agentLaunchPolicy?: {
+    onSurfacePublished?: (surface: AgentLaunchResult) => void
+    beforeEffect?: () => void
+  }
+}
+
 /** Replay-safe launches keep the nested attach in the same stable caller namespace as the launch. */
 export function agentLaunchSurfaceFactory(
-  context: RpcContext,
+  context: HostLaunchContext,
   attachOperationId?: string,
   operationCallerKey?: string,
   // True when the launch shows its surface to the paired caller itself rather than to everyone.
@@ -48,6 +56,7 @@ export function agentLaunchSurfaceFactory(
 ): AgentLaunchSurfaceFactory {
   const movesHostWindow = agentLaunchMovesHostWindow(context)
   const { early: earlyTab, presentation } = view
+  const beforeEffect = context.agentLaunchPolicy?.beforeEffect
   return {
     createStructuredSession: async ({
       worktreeId,
@@ -212,7 +221,12 @@ export function agentLaunchSurfaceFactory(
         return runtime.deliverStartupFollowup(
           handle,
           { agent, prompt: prompt.text },
-          { agentLaunch: true, terminalCreation, ...(signal ? { signal } : {}) }
+          {
+            agentLaunch: true,
+            terminalCreation,
+            beforeWrite: beforeEffect,
+            ...(signal ? { signal } : {})
+          }
         )
       }
       return deliverTerminalAgentLaunchPrompt({
@@ -222,6 +236,7 @@ export function agentLaunchSurfaceFactory(
         freshLaunch,
         terminalCreation,
         text: prompt.text,
+        beforeWrite: beforeEffect,
         ...(signal ? { signal } : {})
       })
     }

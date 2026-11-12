@@ -53,6 +53,7 @@ export function pasteWorktreeStartupDraftWhenReady(
 
 export type StartupFollowupPromptOptions = {
   signal?: AbortSignal
+  beforeWrite?: () => void
   agentLaunch?: boolean
   terminalCreation?: TerminalReadinessCreation
 }
@@ -78,6 +79,7 @@ export async function deliverStartupFollowupPrompt(
       }
       // WSL and SSH-to-Windows cannot prove a lone shell either: keep their typed follow-up; agent.launch refused there.
       if (!options.agentLaunch && runtime.launchedAgentHostProvesShellAlone?.(ptyId) !== true) {
+        options.beforeWrite?.()
         host.write(ptyId, `${prompt}\r`, 'launch')
         return true
       }
@@ -89,6 +91,7 @@ export async function deliverStartupFollowupPrompt(
       freshLaunch: true,
       terminalCreation: options.terminalCreation,
       text: prompt,
+      beforeWrite: options.beforeWrite,
       unprovableHost: 'write-if-shell-provable',
       ...(signal ? { signal } : {})
     })

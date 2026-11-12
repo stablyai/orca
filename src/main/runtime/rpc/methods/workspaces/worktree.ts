@@ -139,6 +139,8 @@ export const WORKTREE_METHODS = [
           })
         // Reserve provenance before create for recovery, but release failed reservations so retry is safe.
         try {
+          context.beforeEffect?.()
+          context.signal?.throwIfAborted()
           const result = await createWorktreeWithStartupAgent(
             runtime,
             buildManagedWorktreeCreateArgs(

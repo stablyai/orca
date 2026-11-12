@@ -38,6 +38,7 @@ import { captureChrome } from './plugin-view-chrome-capture'
 import { pickWorkspaceToShow } from './plugin-view-workspace-pick'
 import {
   openFolderWorkspace,
+  openPluginSettings,
   openWorkspaceFile,
   runBuiltInAction
 } from './plugin-view-host-actions'
@@ -90,12 +91,19 @@ async function openPanel(
   const tabKey = pluginPanelTabKey(pluginKey, panelId)
   const known = usePluginPanelsStore
     .getState()
-    .plugins.some(
-      (plugin) =>
-        plugin.pluginKey === pluginKey && plugin.panels.some((panel) => panel.tabKey === tabKey)
-    )
+    .plugins.find((plugin) => plugin.pluginKey === pluginKey)
+    ?.panels.find((panel) => panel.tabKey === tabKey)
   if (!known) {
     return fail(requestId, 'panel_unavailable', `This window does not list ${tabKey} yet.`)
+  }
+  if (known.location === 'settings') {
+    return capture
+      ? fail(
+          requestId,
+          'action_unavailable',
+          'Capture this settings page as part of the Settings window.'
+        )
+      : openPluginSettings({ kind: 'open-plugin-settings', requestId, pluginKey })
   }
   if (capture?.ifShown) {
     // Never open or switch: the person may have moved on to another tab.
@@ -240,6 +248,8 @@ export async function handlePluginViewRequest(
         return runBuiltInAction(request)
       case 'open-folder-workspace':
         return openFolderWorkspace(request)
+      case 'open-plugin-settings':
+        return await openPluginSettings(request)
       case 'end-capture': {
         endPluginShotReplay()
         usePluginViewCaptureStore.getState().end(request.captureId)

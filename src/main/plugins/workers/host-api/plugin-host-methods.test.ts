@@ -46,6 +46,41 @@ describe('executePluginHostCall mutation auditing', () => {
   })
 })
 
+describe('settings.open own-plugin scope', () => {
+  it('opens only the calling plugin page and refuses foreign or undeclared targets', async () => {
+    const services = createServices(vi.fn())
+    let openedPlugin = ''
+    services.hasSettingsPage = true
+    services.renderer = {
+      openFile: async () => {},
+      runAction: async () => {},
+      openFolderWorkspace: async () => {},
+      openPluginSettings: async (pluginKey) => {
+        openedPlugin = pluginKey
+      }
+    }
+    const open = (params: unknown) =>
+      executePluginHostCall({
+        pluginId: 'samples.demo',
+        method: 'settings.open',
+        params,
+        surface: 'worker',
+        grantedCapabilities: ['settings:own'],
+        services,
+        audit: { record: vi.fn().mockResolvedValue(undefined) }
+      })
+    expect(await open({})).toEqual({ ok: true, value: { opened: true } })
+    expect(openedPlugin).toBe('samples.demo')
+    expect(await open({ pluginKey: 'other.plugin' })).toMatchObject({
+      ok: false,
+      code: 'invalid_params'
+    })
+    services.hasSettingsPage = false
+    expect(await open({})).toMatchObject({ ok: false, code: 'unavailable' })
+    expect(openedPlugin).toBe('samples.demo')
+  })
+})
+
 describe('workspace.readContext host reachability', () => {
   it('keeps the active remote context when its host cannot list terminals', async () => {
     const services = createServices(vi.fn())

@@ -11,6 +11,8 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
+import { openPluginIntegrationSettings } from '@/components/settings/integrations/plugin-integration-navigation'
 
 /** A plugin worker's `editor.open` and `commands.run`, run in this window. */
 
@@ -82,6 +84,19 @@ export function openFolderWorkspace(
   }
   state.setActiveFolderWorkspace(folderWorkspaceId)
   return { requestId, ok: true }
+}
+
+export async function openPluginSettings(
+  request: Extract<PluginViewRequest, { kind: 'open-plugin-settings' }>
+): Promise<PluginViewReply> {
+  await usePluginPanelsStore.getState().fetchPlugins()
+  return openPluginIntegrationSettings(request.pluginKey)
+    ? { requestId: request.requestId, ok: true }
+    : fail(
+        request.requestId,
+        'action_unavailable',
+        'This plugin has no available integration settings page.'
+      )
 }
 
 // Rule: the raw built-in handler, never a wrapper that runs a plugin's replacement first, or a

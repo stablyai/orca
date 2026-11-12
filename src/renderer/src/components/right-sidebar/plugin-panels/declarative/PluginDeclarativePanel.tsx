@@ -33,6 +33,8 @@ type PluginDeclarativePanelProps = {
   onUnresponsive: () => void
   /** Dev folder: saves swap the guest under this panel, keeping its last tree and memory atoms. */
   hotReload?: boolean
+  /** Settings panels are shown independently of the right sidebar. */
+  active?: boolean
 }
 
 function subscribeDocumentVisibility(onChange: () => void): () => void {
@@ -54,7 +56,8 @@ export function PluginDeclarativePanel({
   frameKey,
   sessionToken,
   onUnresponsive,
-  hotReload = false
+  hotReload = false,
+  active
 }: PluginDeclarativePanelProps): React.JSX.Element {
   const frameRef = useRef<PluginFrameElement | null>(null)
   const sendToGuest = useCallback((event: string, payload: unknown) => {
@@ -68,7 +71,7 @@ export function PluginDeclarativePanel({
   const state = usePluginDeclarativeState({
     panelId,
     sessionToken,
-    visible: sidebarOpen && windowVisible,
+    visible: (active ?? sidebarOpen) && windowVisible,
     sendToGuest,
     hotReload
   })

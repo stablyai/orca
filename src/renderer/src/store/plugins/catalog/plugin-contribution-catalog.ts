@@ -227,15 +227,39 @@ export function collectActivePluginPanels(
   return plugins
     .filter(isLivePlugin)
     .flatMap((plugin) =>
-      plugin.panels.map((panel) => fromPlugin(plugin, panel, installedPluginDisplayNames(plugins)))
+      plugin.panels
+        .filter((panel) => panel.location !== 'settings')
+        .map((panel) => fromPlugin(plugin, panel, installedPluginDisplayNames(plugins)))
     )
+}
+
+export function collectPluginSettingsPanels(
+  plugins: readonly PluginHostListEntry[]
+): ActivePluginPanel[] {
+  return plugins.flatMap((plugin) =>
+    plugin.panels
+      .filter((panel) => panel.location === 'settings')
+      .map((panel) => fromPlugin(plugin, panel, installedPluginDisplayNames(plugins)))
+  )
+}
+
+function collectActivePluginSettingsPanels(
+  plugins: readonly PluginHostListEntry[]
+): ActivePluginPanel[] {
+  return collectPluginSettingsPanels(
+    plugins.filter((plugin) => isLivePlugin(plugin) && !plugin.needsReconsent)
+  )
 }
 
 /** Installed keys normalize persisted routes: remove uninstalled panels, retain merely disabled ones. */
 export function collectInstalledPluginTabKeys(
   plugins: readonly PluginHostListEntry[]
 ): Set<string> {
-  return new Set(plugins.flatMap((plugin) => plugin.panels.map((panel) => panel.tabKey)))
+  return new Set(
+    plugins.flatMap((plugin) =>
+      plugin.panels.filter((panel) => panel.location !== 'settings').map((panel) => panel.tabKey)
+    )
+  )
 }
 
 export function collectActivePluginCommands(
@@ -263,8 +287,10 @@ export function collectEditablePluginCommands(
 }
 
 /** Panel contributions of enabled plugins, loading the list on first use. */
-export function usePluginPanels(): ActivePluginPanel[] {
-  return usePluginListDerived(collectActivePluginPanels)
+export function usePluginPanels(location: 'sidebar' | 'settings' = 'sidebar'): ActivePluginPanel[] {
+  return usePluginListDerived(
+    location === 'settings' ? collectActivePluginSettingsPanels : collectActivePluginPanels
+  )
 }
 
 /** Commands of enabled plugins, sharing the authoritative plugin-list refresh. */

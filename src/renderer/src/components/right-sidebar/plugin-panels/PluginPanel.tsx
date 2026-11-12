@@ -23,6 +23,7 @@ import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 type PluginPanelProps = {
   tabKey: string
+  location?: 'sidebar' | 'settings'
 }
 
 function PluginPanelMessage({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -33,9 +34,9 @@ function PluginPanelMessage({ children }: { children: React.ReactNode }): React.
   )
 }
 
-function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
+function PluginPanel({ tabKey, location = 'sidebar' }: PluginPanelProps): React.JSX.Element {
   const t = useTranslate()
-  const panels = usePluginPanels()
+  const panels = usePluginPanels(location)
   const setPanelHealth = usePluginPanelsStore((state) => state.setPanelHealth)
   const panel = isPluginPanelTabKey(tabKey)
     ? (panels.find((entry) => entry.tabKey === tabKey) ?? null)
@@ -127,6 +128,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
         key={guest.dev ? `${tabKey}:dev` : panelFrameKey}
         tabKey={tabKey}
         hotReload={guest.dev === true}
+        active={location === 'settings' ? true : undefined}
         panelId={panel.id}
         title={panel.title}
         guest={guest}

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { RpcDispatcher, type DispatcherOptions } from '../runtime/rpc/dispatcher'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PluginRuntimeRpc } from './workers/host-api/plugin-host-runtime-call'
+import { agentLaunchMethod } from '../runtime/rpc/methods/agent-launch/agent-launch'
 
 /** An error the runtime answered, with its code (`selector_not_found`, ...); `cause` is what the
  *  handler threw, for callers that tell refusals apart by class. */
@@ -25,11 +26,33 @@ export function pluginRuntimeRpc(
 ): PluginRuntimeRpc {
   let dispatcher: RpcDispatcher | null = null
   return async (method, params, options = {}) => {
-    dispatcher ??= new RpcDispatcher({ runtime, methods })
-    // The dispatcher maps a throw to an error answer; keep the original so its code reaches the plugin.
+    // Keep the caller's refusal intact even when a handler rechecks it after an await.
     let refusal: unknown = null
     let thrown: unknown
-    const response = await dispatcher.dispatch(
+    const beforeEffect = (): void => {
+      try {
+        options.signal?.throwIfAborted()
+        options.beforeEffect?.()
+      } catch (error) {
+        refusal = error
+        throw error
+      }
+    }
+    const callDispatcher =
+      method === 'agent.launch' && (options.onAgentLaunchSurfacePublished || options.beforeEffect)
+        ? new RpcDispatcher({
+            runtime,
+            methods: methods.map((entry) =>
+              entry.name === 'agent.launch'
+                ? agentLaunchMethod({
+                    onSurfacePublished: options.onAgentLaunchSurfacePublished,
+                    beforeEffect
+                  })
+                : entry
+            )
+          })
+        : (dispatcher ??= new RpcDispatcher({ runtime, methods }))
+    const response = await callDispatcher.dispatch(
       { id: randomUUID(), authToken: 'plugin-host', method, params },
       {
         // Why the CLI's identity: a mod's action is automation, as an agent's `orca` call is.
@@ -38,15 +61,7 @@ export function pluginRuntimeRpc(
           ? { plugin: { ...options.plugin, assertActive: () => options.beforeEffect?.() } }
           : {}),
         ...(options.signal ? { signal: options.signal } : {}),
-        beforeInvoke: () => {
-          try {
-            options.signal?.throwIfAborted()
-            options.beforeEffect?.()
-          } catch (error) {
-            refusal = error
-            throw error
-          }
-        },
+        beforeInvoke: beforeEffect,
         onHandlerError: (error) => {
           thrown = error
         }

@@ -113,6 +113,8 @@ export type RpcContext = {
   runtime: OrcaRuntimeService
   // Release long-poll handlers immediately when the client disconnects.
   signal?: AbortSignal
+  // Trusted in-process callers revalidate approval after waits, immediately before effects.
+  beforeEffect?: () => void
   // Cleanup is socket-scoped so sibling sockets sharing a device token survive.
   connectionId?: string
   // An unsubscribe cannot retire a registration created after its dispatch began.
