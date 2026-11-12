@@ -1,3 +1,4 @@
+import { snapshotLocalBranchMetadata } from '../../refs/snapshot/branch-ref-snapshot'
 import type { RuntimeGitLocalBranches } from '../../../../shared/runtime-worktree-contracts'
 import type { BranchSwitchCreation } from '../../../../shared/git/branch-switch-target'
 
@@ -7,7 +8,6 @@ import {
 } from '../../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { gitEnvWithoutYesNoPrompt } from '../../command-runner/git-environment/git-no-prompt-env'
-import { gitResultPathTranslator } from '../../command-runner/host-routing/wsl-path-translation'
 import { parseCheckoutSkippedPaths } from './checkout-skipped-paths'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 
@@ -42,62 +42,33 @@ export async function checkoutBranch(
   return { skippedPaths: parseCheckoutSkippedPaths(stderr) }
 }
 
-/** for-each-ref avoids localized branch decoration; return the current branch first. */
+/** Current checkout state stays request-specific while the shared branch population is reused. */
 export async function listLocalBranches(
   worktreePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<RuntimeGitLocalBranches> {
-  const execution = gitOptionsForWorktree(worktreePath, options)
-  let extended = true
-  const result = await gitExecFileAsync(
-    [
-      'for-each-ref',
-      '--format=%(HEAD)%09%(refname:lstrip=2)%09%(committerdate:unix)%09%(worktreepath)',
-      'refs/heads/'
-    ],
-    execution
-  ).catch((error) => {
-    if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
-      throw error
+  options.signal?.throwIfAborted()
+  const {
+    refs,
+    current,
+    worktreePaths: occupied
+  } = await snapshotLocalBranchMetadata(worktreePath, options)
+  options.signal?.throwIfAborted()
+  const branches = refs.map((ref) => ref.label)
+  if (current) {
+    const index = branches.indexOf(current)
+    if (index !== -1) {
+      branches.splice(index, 1)
     }
-    extended = false
-    return gitExecFileAsync(
-      ['for-each-ref', '--format=%(HEAD)%09%(refname:lstrip=2)', 'refs/heads/'],
-      execution
-    )
-  })
-  const toHostPath = await gitResultPathTranslator(result, worktreePath, options)
-  let current: string | null = null
-  const branches: string[] = []
+    branches.unshift(current)
+  }
   const committedAt: Record<string, number> = Object.create(null)
   const worktreePaths: Record<string, string> = Object.create(null)
-  for (const line of result.stdout.split('\n')) {
-    if (line.length === 0) {
-      continue
-    }
-    const [marker, name, timestamp, occupiedPath] = line.split('\t')
-    if (!name) {
-      continue
-    }
-    if (marker === '*') {
-      current = name
-    }
-    branches.push(name)
-    if (timestamp && Number.isFinite(Number(timestamp))) {
-      committedAt[name] = Number(timestamp) * 1000
-    }
-    if (occupiedPath) {
-      worktreePaths[name] = toHostPath(occupiedPath)
-    }
+  for (const ref of refs) {
+    committedAt[ref.label] = ref.committedAt
   }
-  branches.sort((a, b) => {
-    if (a === current) {
-      return -1
-    }
-    if (b === current) {
-      return 1
-    }
-    return 0
-  })
-  return { current, branches, ...(extended ? { committedAt, worktreePaths } : {}) }
+  for (const [name, path] of occupied) {
+    worktreePaths[name] = path
+  }
+  return { current, branches, committedAt, worktreePaths }
 }

@@ -56,7 +56,10 @@ export function validateComputerTarget(
   validateWindowTarget(value, ctx)
 }
 
-export const ComputerObserveTarget = ComputerObserveTargetBase.superRefine(validateComputerTarget)
+export const ComputerObserveTarget = ComputerObserveTargetBase.extend({
+  // Reads one element's subtree. Older runtimes strip it, and their result has no rootElementIndex.
+  rootElementIndex: OptionalNonNegativeInt
+}).superRefine(validateComputerTarget)
 
 export const ListApps = z.object({}).strict()
 
@@ -191,7 +194,8 @@ export const TypeText = ComputerObserveTargetBase.extend({
 }).superRefine(validateComputerTarget)
 
 export const PressKey = ComputerObserveTargetBase.extend({
-  key: requiredString('Missing key')
+  key: requiredString('Missing key'),
+  allowSystemShortcut: OptionalBoolean
 }).superRefine((value, ctx) => {
   validateComputerTarget(value, ctx)
   const message = computerUsePressKeyValidationMessage(value.key)
@@ -201,7 +205,8 @@ export const PressKey = ComputerObserveTargetBase.extend({
 })
 
 export const Hotkey = ComputerObserveTargetBase.extend({
-  key: requiredString('Missing key')
+  key: requiredString('Missing key'),
+  allowSystemShortcut: OptionalBoolean
 }).superRefine((value, ctx) => {
   validateComputerTarget(value, ctx)
   const message = computerUseHotkeyValidationMessage(value.key)

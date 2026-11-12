@@ -5,7 +5,7 @@ import type { OrcaRuntimeWithGetTerminalInteractiveWait as GetTerminalInteractiv
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { hasHostAuthoritativeTerminalMembership } from '../../persistence/terminal-topology/terminal-topology-membership'
+import { hasHostAuthoritativeTerminalMembership } from '../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedLeaf

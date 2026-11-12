@@ -38,6 +38,12 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     remoteLoginCommand: ['copilot', 'login', '--device-code'],
     installCommand: 'curl -fsSL https://gh.io/copilot-install | bash'
   },
+  // `kimi login` is already a device-code login.
+  {
+    agent: 'kimi',
+    loginCommand: ['kimi', 'login'],
+    installCommand: 'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash'
+  },
   // An `agy` login does not sign its chats in: they keep their own sign-in.
   { agent: 'antigravity', loginCommand: [] }
 ] as const

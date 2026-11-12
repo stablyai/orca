@@ -54,6 +54,8 @@ on:
       - 'tests/e2e/computer-linux.e2e.ts'
       - 'tests/e2e/computer-windows.e2e.ts'
       - 'tests/e2e/computer-windows-store.e2e.ts'
+      - 'tests/e2e/computer-windows-background.e2e.ts'
+      - 'tests/e2e/helpers/windows-semantic-controls-fixture.*'
       - 'tests/e2e/helpers/computer-cli-driver.ts'
       - 'tests/e2e/helpers/computer-driver.ts'
       - 'tests/e2e/vitest.config.ts'
@@ -151,4 +153,4 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm run build:electron-vite:parallel
-      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts tests/e2e/computer-windows-store.e2e.ts
+      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts tests/e2e/computer-windows-store.e2e.ts tests/e2e/computer-windows-background.e2e.ts

@@ -34,6 +34,7 @@ import { classifyGitCommand } from '../../../shared/git/commands/git-command-cla
 import { readCapturedGitString } from './process-capture/captured-git-output'
 import { runUnlessGitCwdKnownMissing } from './host-routing/missing-git-spawn-cwd'
 import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
+import { trackGitRefMutation } from './git-ref-mutation-state'
 import { routeLocalGitOptions, runAdmittedWslGit } from './host-routing/local-git-runtime-route'
 import { gitRunsIn } from './host-routing/git-runs-in'
 
@@ -202,6 +203,7 @@ export function gitExecFileAsync(
 ): Promise<GitTextResult> {
   const options = routeLocalGitOptions(callerOptions)
   const releaseMutation = trackGitWorktreeMutation(args, options)
+  const releaseRefMutation = trackGitRefMutation(args)
   const terminationState: { current: Promise<void> | null } = { current: null }
   const command = resolveGitFetchHeadCommand(args, options.cwd)
   // Missing folders start no child and must not record a git.exec span.
@@ -221,8 +223,10 @@ export function gitExecFileAsync(
     // A timed-out caller can settle before its child exits.
     if (terminationState.current) {
       void terminationState.current.then(releaseMutation)
+      void terminationState.current.then(releaseRefMutation)
     } else {
       releaseMutation()
+      releaseRefMutation()
     }
   })
 }

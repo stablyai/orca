@@ -13,7 +13,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   readdir: mocks.readdir
 }))
 
-import * as transcriptFs from '../../native-chat/wsl-transcript-fs-access'
+import * as transcriptFs from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
 import {
   registerTranscriptConsumer,
@@ -22,10 +22,10 @@ import {
 import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cache-store'
 import {
   resetWslTranscriptFsGateForTests,
-  WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS
-} from '../../native-chat/wsl-transcript-fs-gate'
-import { WslTranscriptFsError } from '../../native-chat/wsl-transcript-fs-error'
+} from '../../native-chat/transcript-filesystem/wsl-transcript-fs-gate'
+import { WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-route-quarantine'
+import { WslTranscriptFsError } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 
 type ReadResult = { bytesRead: number; buffer: Buffer }
 

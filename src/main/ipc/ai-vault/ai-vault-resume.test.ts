@@ -8,7 +8,7 @@ import { prepareAiVaultSessionResume } from './ai-vault-resume'
 
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn() } }))
 const wakeMock = vi.hoisted(() => vi.fn(async (_distro: string | null) => {}))
-vi.mock('../../native-chat/native-chat-open-wake', () => ({
+vi.mock('../../native-chat/transcript-discovery/native-chat-open-wake', () => ({
   wakeNativeChatTranscriptDistro: wakeMock
 }))
 afterEach(() => setStructuredAgentSessionHost(null))

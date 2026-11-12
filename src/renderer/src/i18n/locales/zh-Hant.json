@@ -377,7 +377,8 @@
       "remove": "移除…",
       "empty": "此設定檔未啟用任何擴充功能",
       "visitWebStore": "前往 Chrome Web Store",
-      "manage": "管理擴充功能"
+      "manage": "管理擴充功能",
+      "openWebStoreFailed": "無法開啟 Chrome Web Store。"
     },
     "history": {
       "clear": "清除瀏覽記錄",
@@ -3949,6 +3950,8 @@
             "15dd899676": "新增至 {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "終端機問題",
+            "errorTitle": "終端機錯誤",
             "e4aa243f8c": "重新啟動守護行程",
             "retry": "重試",
             "retrying": "正在重試...",
@@ -16975,6 +16978,14 @@
                     "logins": {
                       "title": "保持登入狀態",
                       "body": "將現有的登入資訊匯入 Orca，即可直接保持登入狀態。"
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 擴充功能",
+                        "body": "從 Chrome Web Store 安裝擴充功能，並將其釘選在網址列旁。",
+                        "action": "開啟 Chrome Web Store",
+                        "secondaryAction": "知道了"
+                      }
                     }
                   },
                   "tasks": {

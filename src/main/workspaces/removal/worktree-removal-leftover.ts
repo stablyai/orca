@@ -14,6 +14,7 @@ import type { WorktreeRemovalRecord } from './worktree-removal-records'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
 import { failedWorktreeRemovals, worktreeCheckoutExists } from './worktree-removal-table'
+import { waitForWorktreeRemovalAcceptance } from './worktree-removal-settlement'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canSafelyRemoveOrphanedWorktreeDirectory
@@ -90,5 +91,9 @@ export async function retryFailedRemovalUnlessRegistered(
   if (failed && !usesNativeWindowsRemoval(worktreePath, localOptions)) {
     await assertUnregisteredCheckoutGone(failed.worktreePath, registeredWorktrees)
   }
-  return retry() !== undefined
+  if (retry() === undefined) {
+    return false
+  }
+  await waitForWorktreeRemovalAcceptance(worktreeId)
+  return true
 }

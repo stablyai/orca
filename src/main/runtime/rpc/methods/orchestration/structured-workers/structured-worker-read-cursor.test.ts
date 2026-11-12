@@ -7,7 +7,7 @@ import { agentSessionConversationView } from '../../../../../../shared/agent-ses
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { boundStructuredJournalTail } from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
-import { projectSavedChatContextItems } from '../../../../../native-chat/agent-session-saved-prompt-text'
+import { projectSavedChatContextItems } from '../../../../../native-chat/conversation-context/agent-session-saved-prompt-text'
 import { formatWorkerTranscriptMessage } from '../../../../../../shared/worker-transcript-text'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
