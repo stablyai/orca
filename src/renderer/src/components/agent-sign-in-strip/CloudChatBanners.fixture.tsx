@@ -86,7 +86,16 @@ function BannerContent({ banner, width }: { banner: Banner; width: number }): Re
   )
 }
 
-function ChatColumn({ banner, width }: { banner: Banner; width: number }): React.JSX.Element {
+function ChatColumn({
+  banner,
+  width,
+  structured = false
+}: {
+  banner: Banner
+  width: number
+  /** PR-B: a structured chat renders its strip in place (CloudStructuredChatBanners), no portal. */
+  structured?: boolean
+}): React.JSX.Element {
   const paneKey = `fixture-chat-${banner.kind}-${width}`
   const container = React.useMemo(() => document.createElement('div'), [])
   const pane: Pick<ManagedPane, 'container'> = { container }
@@ -115,10 +124,18 @@ function ChatColumn({ banner, width }: { banner: Banner; width: number }): React
             </div>
           </div>
         </div>
-        <CloudChatBannerSlot paneKey={paneKey} />
-        <CloudPaneBannerPortal pane={pane} paneKey={paneKey} portalKey="fixture" stripLayer>
-          <BannerContent banner={banner} width={width} />
-        </CloudPaneBannerPortal>
+        {structured ? (
+          <div data-cloud-chat-banners="" className="shrink-0">
+            <BannerContent banner={banner} width={width} />
+          </div>
+        ) : (
+          <>
+            <CloudChatBannerSlot paneKey={paneKey} />
+            <CloudPaneBannerPortal pane={pane} paneKey={paneKey} portalKey="fixture" stripLayer>
+              <BannerContent banner={banner} width={width} />
+            </CloudPaneBannerPortal>
+          </>
+        )}
         {/* The transcript starts below the banner. */}
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 py-3 text-sm">
           {held(banner) ? null : (
@@ -150,8 +167,11 @@ function held(banner: Banner): boolean {
   return banner.kind === 'setUp' || banner.kind === 'expired'
 }
 
-const fixture = (banner: Banner, width = 760) =>
-  defineFixture({ width: width + 40, render: () => <ChatColumn banner={banner} width={width} /> })
+const fixture = (banner: Banner, width = 760, structured = false) =>
+  defineFixture({
+    width: width + 40,
+    render: () => <ChatColumn banner={banner} width={width} structured={structured} />
+  })
 const NARROW = 420
 
 export const notSetUp = fixture({ kind: 'setUp', setup: { phase: 'idle' } })
@@ -210,3 +230,24 @@ export const startedFresh = fixture({ kind: 'fresh' })
 /** RA-WAKE in the chat: Restart Claude only (no Rerun). */
 export const wokeRestart = fixture({ kind: 'woke' })
 export const wokeRestartNarrow = fixture({ kind: 'woke' }, NARROW)
+
+/** PR-B: a structured agent-session chat on Orca Cloud, held before its session is created. */
+export const structuredNotSetUp = fixture({ kind: 'setUp', setup: { phase: 'idle' } }, 760, true)
+export const structuredNotSetUpNarrow = fixture(
+  { kind: 'setUp', setup: { phase: 'idle' } },
+  NARROW,
+  true
+)
+export const structuredPasteCode = fixture({ kind: 'setUp', setup: browserCode }, 760, true)
+export const structuredPasteCodeNarrow = fixture(
+  { kind: 'setUp', setup: browserCode },
+  NARROW,
+  true
+)
+export const structuredCodeRejected = fixture(
+  { kind: 'setUp', setup: { ...browserCode, code: 'rejected' } },
+  760,
+  true
+)
+export const structuredExpired = fixture({ kind: 'expired' }, 760, true)
+export const structuredExpiredNarrow = fixture({ kind: 'expired' }, NARROW, true)

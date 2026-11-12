@@ -14,10 +14,12 @@ import {
 export function useWorktreeCloudAgentHold(worktreeId: string): CloudAgentHold | null {
   const holds = useCloudAgentHolds()
   const tabIds = useAppStore((state) => state.tabsByWorktree[worktreeId])
-  if (holds.length === 0 || !tabIds?.length) {
+  // A structured chat's hold is keyed by its own tab (CHAT-BANNERS).
+  const chatTabs = useAppStore((state) => state.unifiedTabsByWorktree[worktreeId])
+  if (holds.length === 0 || (!tabIds?.length && !chatTabs?.length)) {
     return null
   }
-  const ids = new Set(tabIds.map((tab) => tab.id))
+  const ids = new Set([...(tabIds ?? []), ...(chatTabs ?? [])].map((tab) => tab.id))
   return holds.find((hold) => ids.has(cloudAgentHoldTabId(hold.paneKey))) ?? null
 }
 
