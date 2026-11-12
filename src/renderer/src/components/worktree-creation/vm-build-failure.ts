@@ -153,6 +153,16 @@ export function isBillingFailure(failure: VmBuildFailure | null): boolean {
   )
 }
 
+/** JA-21: the billing refusals the creating sheet shows as a blocker card, by kind. */
+export function billingBlockKind(
+  failure: VmBuildFailure | null
+): 'plan' | 'hoursUsed' | 'spendCap' | 'payment' | null {
+  const kind = failure?.kind
+  return kind === 'plan' || kind === 'hoursUsed' || kind === 'spendCap' || kind === 'payment'
+    ? kind
+    : null
+}
+
 /**
  * The raw error a user-authored recipe printed, for the card's Details disclosure. Orca Cloud never
  * shows it. A recipe's terse exit message gets the build log's first error line after it.

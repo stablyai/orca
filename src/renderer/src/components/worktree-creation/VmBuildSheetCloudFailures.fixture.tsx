@@ -1,5 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { recordBillingStatus } from '../billing/billing-summary-store'
+import { sampleTeam } from '../billing/plan-billing-fixtures'
 import {
   CLOUD_FAILED_LOG,
   CLOUD_LOG,
@@ -15,8 +16,17 @@ import {
 // Orca Cloud refusals and failures, one card each.
 
 function stubBillingRole(canManageBilling: boolean, plan: Record<string, unknown> = {}): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the card reads only the role and the running caps.
-  const result = { status: 'ok', entitlement: { canManageBilling, offers: null, ...plan } } as never
+  // A team with overage on at a $25 cap (so the spend-cap blocker suggests $50); no plan numbers
+  // unless the fixture gives them (ENTITLEMENTS-C).
+  const entitlement = {
+    ...sampleTeam,
+    canManageBilling,
+    offers: null,
+    overage: { ...sampleTeam.overage, optedIn: true, spendCapCents: 2500 },
+    ...plan
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture plans override only entitlement fields the sheet reads.
+  const result = { status: 'ok', entitlement } as never
   window.api.orcaProfiles.billingStatus = () => Promise.resolve(result)
   // The caps come from the last billing read the app made.
   recordBillingStatus(result)
@@ -209,14 +219,17 @@ export const cloudPaymentDue = cloudFailure(
 
 export const cloudNetwork = cloudFailure(undefined, 'fetch failed', CLOUD_LOG)
 
-// An owner without a plan gets See plans and Try again; More holds "Create on this computer
-// instead", which every billing card offers.
-export const cloudPlanRequiredMore = defineFixture({
-  ...cloudPlanRequired,
+// JA-21: an owner fixing payment in the browser; the card waits with Check again.
+export const cloudPaymentFinishInBrowser = defineFixture({
+  ...cloudPaymentDue,
+  setup: () => {
+    cloudPaymentDue.setup?.()
+    window.api.orcaProfiles.billingOpenPortal = () => Promise.resolve({ status: 'opened' })
+  },
   interact: async (frameElement) => {
     Array.from(frameElement.querySelectorAll('button'))
-      .find((button) => button.textContent?.trim() === 'More')
-      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
-    await new Promise((resolve) => setTimeout(resolve, 300))
+      .find((button) => button.textContent?.trim() === 'Update payment method')
+      ?.click()
+    await new Promise((resolve) => setTimeout(resolve, 200))
   }
 })

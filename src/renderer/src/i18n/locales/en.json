@@ -28592,5 +28592,35 @@
     "overLimit": "The mirror is limited to {{size}}. Larger files and anything past the limit aren’t copied.",
     "tooLarge": "Files over {{size}} aren’t copied.",
     "removal": "The copy on this computer is removed too."
+  },
+  "worktreeCreation": {
+    "billingBlock": {
+      "plan": {
+        "title": "Choose a plan",
+        "body": "Your team needs a plan to start cloud workspaces.",
+        "ask": "Ask an owner or admin to choose a plan."
+      },
+      "hours": {
+        "title": "Out of sandbox hours",
+        "body": "Your team has used all of this month’s sandbox hours.",
+        "ask": "Ask an owner or admin to add hours."
+      },
+      "cap": {
+        "title": "Spend cap reached",
+        "body": "Overage is on, and this month’s spend cap is used.",
+        "ask": "Ask an owner or admin to raise the spend cap."
+      },
+      "payment": {
+        "title": "Payment failed",
+        "body": "New sandboxes can’t start.",
+        "ask": "Ask an owner or admin to update the payment method."
+      },
+      "browserStill": "Not updated yet. Finish in your browser, then check again.",
+      "browser": "Finish in your browser.",
+      "checkAgain": "Check again",
+      "raiseCapAndContinue": "Raise spend cap and continue",
+      "backToDraft": "Back to draft",
+      "saveFailed": "Couldn’t save that. Try again, or change it in Plan & billing."
+    }
   }
 }

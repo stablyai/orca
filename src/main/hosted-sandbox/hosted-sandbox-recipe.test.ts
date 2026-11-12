@@ -87,6 +87,23 @@ describe('Orca Cloud built-in recipe steps', () => {
     expect(result.failure?.errorCode).toBe('cloudPlanRequired')
   })
 
+  it.each([
+    'no_subscription',
+    'included_hours_exhausted',
+    'overage_cap_reached',
+    'payment_past_due'
+  ] as const)(
+    'JA-21: a %s refusal creates no sandbox, so a blocked create uses no hours',
+    async (reason) => {
+      const { plane, step } = setup()
+      plane.denyNextStart(reason)
+      const result = await step({ mode: 'create', repoPath, context })
+      expect(result.failure?.errorCode).toBe('cloudPlanRequired')
+      expect(result.stderr).toContain(`Orca Cloud: ${reason}`)
+      expect(plane.sandboxes.size).toBe(0)
+    }
+  )
+
   it('tells the user to free a slot, not to buy a plan, when the member is at their cap', async () => {
     const { plane, step } = setup()
     plane.denyNextStart('member_concurrency_limit')

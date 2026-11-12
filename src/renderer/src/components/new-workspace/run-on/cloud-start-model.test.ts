@@ -58,41 +58,48 @@ describe('setup rows and the setup page', () => {
     expect(page(steps)).toBe('sign-in')
   })
 
-  it('owner without a plan chooses one in the browser; lapsed renews there', () => {
-    const noPlan = deriveCloudSetupSteps({
-      availability: 'needs-capability',
-      access: { state: 'no-plan', lapsed: false, canManageBilling: true }
-    })
-    expect(page(noPlan)).toBe('choose-plan')
-    const lapsed = deriveCloudSetupSteps({
-      availability: 'offered',
-      access: { state: 'no-plan', lapsed: true, canManageBilling: true }
-    })
-    expect(page(lapsed)).toBe('choose-plan')
-    expect(lapsed.find((s) => s.id === 'plan')?.need).toBe('renew-plan')
-  })
-
-  it('a member who cannot fix billing is told to ask an owner, with no agent row', () => {
-    const steps = deriveCloudSetupSteps({
-      availability: 'needs-capability',
-      access: { state: 'no-plan', lapsed: false, canManageBilling: false }
-    })
-    expect(steps.some((s) => s.id === 'agent')).toBe(false)
-    expect(page(steps)).toBe('ask-owner')
-    const outOfHours = deriveCloudSetupSteps({
-      availability: 'offered',
-      access: { state: 'out-of-hours', cause: 'hours', canManageBilling: false }
-    })
-    expect(page(outOfHours)).toBe('ask-owner')
-  })
-
-  it('an owner out of hours fixes it in billing', () => {
-    const steps = deriveCloudSetupSteps({
-      availability: 'offered',
-      access: { state: 'out-of-hours', cause: 'hours', canManageBilling: true }
-    })
-    expect(page(steps)).toBe('fix-billing')
-  })
+  it.each([
+    [
+      'owner, no plan',
+      'needs-capability',
+      { state: 'no-plan', lapsed: false, canManageBilling: true }
+    ],
+    ['owner, plan ended', 'offered', { state: 'no-plan', lapsed: true, canManageBilling: true }],
+    [
+      'member, no plan',
+      'needs-capability',
+      { state: 'no-plan', lapsed: false, canManageBilling: false }
+    ],
+    [
+      'owner, trial used up',
+      'offered',
+      { state: 'no-plan', lapsed: false, canManageBilling: true, trialUsedUp: true }
+    ],
+    [
+      'member, trial used up',
+      'offered',
+      { state: 'no-plan', lapsed: false, canManageBilling: false, trialUsedUp: true }
+    ],
+    [
+      'owner out of hours',
+      'offered',
+      { state: 'out-of-hours', cause: 'hours', canManageBilling: true }
+    ],
+    [
+      'member out of hours',
+      'offered',
+      { state: 'out-of-hours', cause: 'hours', canManageBilling: false }
+    ],
+    ['member, payment failed', 'offered', { state: 'payment-issue', canManageBilling: false }]
+  ] as const)(
+    'JA-21 progressive billing: %s is not a setup step; Create goes on and the sheet shows any blocker',
+    (_name, availability, access) => {
+      const steps = deriveCloudSetupSteps({ availability, access })
+      expect(steps.find((s) => s.id === 'plan')?.state).toBe('done')
+      expect(steps.some((s) => s.id === 'agent')).toBe(true)
+      expect(cloudSetupRequired(steps)).toBe(false)
+    }
+  )
 
   it('a missing GitHub grant alone is the GitHub step', () => {
     expect(
@@ -108,27 +115,22 @@ describe('setup rows and the setup page', () => {
   it('a team that can still get its trial claims it in the app (B1)', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'offered',
-      access: { state: 'no-plan', lapsed: false, canManageBilling: false, trialOfferSeconds: 7200 }
+      access: {
+        state: 'no-plan',
+        lapsed: false,
+        canManageBilling: false,
+        trialOfferSeconds: 7200
+      }
     })
     const plan = steps.find((s) => s.id === 'plan')
-    expect(plan).toMatchObject({ need: 'trial', trialSeconds: 7200, canFix: true })
+    expect(plan).toMatchObject({
+      need: 'trial',
+      trialSeconds: 7200,
+      canFix: true
+    })
     // Members aren't blocked from the trial: the agent row stays.
     expect(steps.some((s) => s.id === 'agent')).toBe(true)
     expect(page(steps)).toBe('start-trial')
-  })
-
-  it('trial used up: owner chooses a plan; member asks an owner (T2, C1)', () => {
-    const owner = deriveCloudSetupSteps({
-      availability: 'offered',
-      access: { state: 'no-plan', lapsed: false, canManageBilling: true, trialUsedUp: true }
-    })
-    expect(owner.find((s) => s.id === 'plan')?.need).toBe('trial-used-up')
-    expect(page(owner)).toBe('choose-plan')
-    const member = deriveCloudSetupSteps({
-      availability: 'offered',
-      access: { state: 'no-plan', lapsed: false, canManageBilling: false, trialUsedUp: true }
-    })
-    expect(page(member)).toBe('ask-owner')
   })
 
   it('signed out: the trial row is included and GitHub is checked up front (A1)', () => {
@@ -147,7 +149,12 @@ describe('setup rows and the setup page', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'offered',
       access: { state: 'entitled', remainingSeconds: 3600 },
-      github: { id: 'github', state: 'pending', need: 'github', blocksStart: true }
+      github: {
+        id: 'github',
+        state: 'pending',
+        need: 'github',
+        blocksStart: true
+      }
     })
     expect(cloudSetupRequired(steps)).toBe(true)
     expect(page(steps)).toBe('github-waiting')
@@ -157,7 +164,12 @@ describe('setup rows and the setup page', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'needs-sign-in',
       access: { state: 'signed-out' },
-      github: { id: 'github', state: 'failed', need: 'github', blocksStart: true }
+      github: {
+        id: 'github',
+        state: 'failed',
+        need: 'github',
+        blocksStart: true
+      }
     })
     expect(steps.map((s) => s.id)).toEqual(['github'])
     expect(page(steps)).toBe('needs-repository')
@@ -170,7 +182,10 @@ describe('setup rows and the setup page', () => {
       github: { id: 'github', state: 'loading' }
     })
     expect(page(github)).toBe('checking')
-    const billing = deriveCloudSetupSteps({ availability: 'offered', access: { state: 'loading' } })
+    const billing = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'loading' }
+    })
     expect(page(billing)).toBe('checking')
   })
 

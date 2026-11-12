@@ -16,7 +16,9 @@ vi.mock('@/components/ui/popover', () => ({
   PopoverAnchor: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
 }))
-vi.mock('@/components/billing/plans/plans-page-store', () => ({ openPlansPage: vi.fn() }))
+vi.mock('@/components/billing/plans/plans-page-store', () => ({
+  openPlansPage: vi.fn()
+}))
 
 const hosts: ProjectHostSetupOption[] = [
   {
@@ -90,11 +92,13 @@ function cloudRow(): HTMLElement | null {
   )
 }
 
-const outOfHours: OrcaCloudRunTargetAccess = {
-  state: 'out-of-hours',
-  cause: 'hours',
-  canManageBilling: true
-}
+const blocked: [string, OrcaCloudRunTargetAccess][] = [
+  ['owner out of hours', { state: 'out-of-hours', cause: 'hours', canManageBilling: true }],
+  ['member out of hours', { state: 'out-of-hours', cause: 'hours', canManageBilling: false }],
+  ['member at the spend cap', { state: 'out-of-hours', cause: 'cap', canManageBilling: false }],
+  ['member, payment failed', { state: 'payment-issue', canManageBilling: false }],
+  ['member, plan ended', { state: 'no-plan', lapsed: true, canManageBilling: false }]
+]
 
 beforeEach(() => {
   resetOrcaCloudBillingCache()
@@ -110,42 +114,30 @@ afterEach(() => {
     root.unmount()
   })
   container.remove()
-  localStorage.removeItem('orca:dev:runOnPreflight')
 })
 
-describe('Run on preflight (JA-21, flagged)', () => {
-  it('flag off: nothing changes, the composer picks Orca Cloud and setup comes after Start', () => {
-    const onSelectOrcaCloud = vi.fn()
-    renderComposer(outOfHours, onSelectOrcaCloud)
-    expect(cloudRow()?.getAttribute('aria-disabled')).toBeNull()
-    expect(container.textContent).not.toContain('Turn on overage')
-    press('ArrowDown')
-    press('Enter')
-    expect(onSelectOrcaCloud).toHaveBeenCalledOnce()
-  })
-
-  it('flag on: a billing wall disables the row with its reason and one fix, and Enter runs the fix', () => {
-    localStorage.setItem('orca:dev:runOnPreflight', '1')
-    const onSelectOrcaCloud = vi.fn()
-    renderComposer(outOfHours, onSelectOrcaCloud)
-    expect(cloudRow()?.getAttribute('aria-disabled')).toBe('true')
-    expect(cloudRow()?.textContent).toContain('Out of sandbox hours')
-    expect(cloudRow()?.textContent).toContain('Turn on overage')
-    press('ArrowDown')
-    press('Enter')
-    expect(onSelectOrcaCloud).not.toHaveBeenCalled()
-    expect(openSettingsTarget).toHaveBeenCalledWith(
-      expect.objectContaining({ pane: 'cloud-billing' })
-    )
-  })
-
-  it('flag on: a plan not started yet is setup, not a wall, so it stays pickable', () => {
-    localStorage.setItem('orca:dev:runOnPreflight', '1')
-    const onSelectOrcaCloud = vi.fn()
-    renderComposer({ state: 'no-plan', lapsed: false, canManageBilling: true }, onSelectOrcaCloud)
-    expect(cloudRow()?.getAttribute('aria-disabled')).toBeNull()
-    press('ArrowDown')
-    press('Enter')
-    expect(onSelectOrcaCloud).toHaveBeenCalledOnce()
-  })
+describe('progressive billing in Run on (JA-21, Neil)', () => {
+  it.each(blocked)(
+    '%s: Orca Cloud stays pickable with no billing words, and Enter picks it',
+    (_name, access) => {
+      const onSelectOrcaCloud = vi.fn()
+      renderComposer(access, onSelectOrcaCloud)
+      expect(cloudRow()?.getAttribute('aria-disabled')).toBeNull()
+      const text = cloudRow()?.textContent ?? ''
+      for (const word of [
+        'sandbox hours',
+        'overage',
+        'spend cap',
+        'Payment',
+        'plan ended',
+        'Ask an owner'
+      ]) {
+        expect(text).not.toContain(word)
+      }
+      press('ArrowDown')
+      press('Enter')
+      expect(onSelectOrcaCloud).toHaveBeenCalledOnce()
+      expect(openSettingsTarget).not.toHaveBeenCalled()
+    }
+  )
 })

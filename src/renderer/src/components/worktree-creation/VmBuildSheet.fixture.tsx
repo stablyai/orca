@@ -179,6 +179,13 @@ export const cloudStagePlan = frame(
   T0 + 12_000
 )
 
+// JA-21: after an inline billing fix the create continues from "Checking your plan…" at once.
+export const cloudContinuingAfterFix = frame(
+  entry({ provisioningLog: '[orca-cloud] checking-entitlement' }, CLOUD_RECIPE),
+  null,
+  T0 + 400
+)
+
 export const cloudStageStarting = frame(
   entry({ provisioningLog: CLOUD_LOG }, CLOUD_RECIPE),
   null,

@@ -216,6 +216,34 @@ describe('provisionStageLabel (N-01)', () => {
   })
 })
 
+describe('Checking your plan… (JA-21)', () => {
+  const t: Translate = (_key, fallback) => fallback
+
+  it('says so at once until the server takes the create, then goes quiet as before', () => {
+    expect(provisionStageLabel({ phase: 'provisioning-vm', provisioningLog: '' }, 0, t)).toBe(
+      'Checking your plan…'
+    )
+    expect(
+      provisionStageLabel(
+        { phase: 'provisioning-vm', provisioningLog: '[orca-cloud] checking-entitlement\n' },
+        200,
+        t
+      )
+    ).toBe('Checking your plan…')
+    expect(
+      provisionStageLabel(
+        {
+          phase: 'provisioning-vm',
+          provisioningLog: '[orca-cloud] checking-entitlement\n[orca-cloud] provisioning\n'
+        },
+        200,
+        t
+      )
+    ).toBeNull()
+    expect(provisionStageLabel({ phase: 'preparing', provisioningLog: '' }, 200, t)).toBeNull()
+  })
+})
+
 describe('humanizeOrcaCloudLogLine', () => {
   const t: Translate = (_key, fallback) => fallback
 

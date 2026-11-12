@@ -31,7 +31,6 @@ import {
   orcaCloudNeedsGitHubRepo,
   type CloudStartView
 } from './cloud-start-view'
-import { orcaCloudWallNotice, useRunOnPreflightEnabled } from '@/lib/orca-cloud/run-on-preflight'
 
 export type { CloudStartView } from './cloud-start-view'
 
@@ -86,12 +85,7 @@ export function useCloudStartComposer({
   const cloudSelected = selectedRecipeId === ORCA_CLOUD_RECIPE_ID
   const fetched = useOrcaCloudRunTargetAccess(segment === 'enabled' && !accessOverride)
   const access = accessOverride ?? fetched
-  const preflight = useRunOnPreflightEnabled()
   const githubProjectCount = useAppStore((s) => s.repos.filter(isGitHubBackedProject).length)
-  const wall = useMemo(
-    () => (cloudSelected && preflight ? orcaCloudWallNotice(access) : null),
-    [access, cloudSelected, preflight]
-  )
   const cloudOnly = useCloudOnlyRepo({
     repoId,
     cloudSelected,
@@ -108,7 +102,9 @@ export function useCloudStartComposer({
     githubOverride: cloudOnly.githubStep
   })
   const { steps, held: switchTeam } = useSwitchTeamSteps(rowSteps, cloudSelected)
-  const setupNeeded = cloudSetupRequired(steps, { teamSwitch: switchTeam !== null })
+  const setupNeeded = cloudSetupRequired(steps, {
+    teamSwitch: switchTeam !== null
+  })
   // An agent with no Orca Cloud account is still created with the workspace: its launch holds on
   // the pane's "Set up once" strip and never reaches the agent's own /login (PC-3b, #385). In the
   // workspace the strip asks; away, the sidebar row's mark does (N-03: no toast follows the user).
@@ -207,7 +203,6 @@ export function useCloudStartComposer({
             onUserPick: markTouched,
             cloudOnly,
             folderProject: cloudOnly.folderProject,
-            wall,
             needsGitHubRepo: orcaCloudNeedsGitHubRepo({
               cloudSelected,
               folderProject: cloudOnly.folderProject,
@@ -216,7 +211,7 @@ export function useCloudStartComposer({
               githubProjectCount
             })
           },
-    [cloudOnly, cloudSelected, githubProjectCount, markTouched, onSelectOrcaCloud, segment, wall]
+    [cloudOnly, cloudSelected, githubProjectCount, markTouched, onSelectOrcaCloud, segment]
   )
   if (!view || !cloudSelected) {
     return { view, onPrimary: null, recordCreated }

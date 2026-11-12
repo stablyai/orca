@@ -133,21 +133,12 @@ function derivePlanStep(
           trialSeconds: access.trialOfferSeconds
         }
       }
-      return {
-        id: 'plan',
-        state: 'needed',
-        need: access.trialUsedUp ? 'trial-used-up' : access.lapsed ? 'renew-plan' : 'plan',
-        canFix: access.canManageBilling
-      }
+      // JA-21 (Neil): billing is progressive. A plan, hours, cap or payment problem isn't a setup
+      // step; Create goes ahead and the creating sheet shows the blocker with its fix.
+      return { id: 'plan', state: 'done' }
     case 'out-of-hours':
-      return {
-        id: 'plan',
-        state: 'needed',
-        need: access.cause === 'cap' ? 'spend-cap' : 'hours',
-        canFix: access.canManageBilling
-      }
     case 'payment-issue':
-      return { id: 'plan', state: 'needed', need: 'payment', canFix: access.canManageBilling }
+      return { id: 'plan', state: 'done' }
   }
 }
 
