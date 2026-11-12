@@ -596,6 +596,7 @@ final class Provider {
                 "actions": [
                     "click": true,
                     "typeText": true,
+                    "typeTextElement": true,
                     "pressKey": true,
                     "hotkey": true,
                     "pasteText": true,
@@ -1047,6 +1048,9 @@ final class Provider {
     private func typeText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
         let text = try requiredString(params, "text")
+        if let elementIndex = try optionalInteger(params, "elementIndex") {
+            return try typeTextIntoElement(try element(snapshot, elementIndex), text: text)
+        }
         let focused = focusedRecord(snapshot)?.element
         if let focused, let verification = try TextInput.replaceSelection(focused, with: text) {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
@@ -1058,6 +1062,22 @@ final class Provider {
             actionName: "typeText",
             verification: insertion?.verification() ?? unverifiedAction(reason: "synthetic_input")
         )
+    }
+
+    private func typeTextIntoElement(_ record: ElementRecord, text: String) throws -> [String: Any] {
+        // Why: typing at focus instead would put the text in whatever field has focus, not the requested one.
+        if BackgroundInputTransport.isChromiumNode(record.element) {
+            throw ProviderError.coded("value_not_settable", "element \(record.index) is web content, which ignores accessibility text insertion; click it, then run type-text without --element-index")
+        }
+        guard isSettable(record.element, kAXValueAttribute as String),
+              rawStringAttribute(record.element, kAXValueAttribute as String) != nil
+        else {
+            throw ProviderError.coded("value_not_settable", "element \(record.index) text is not settable; click it, then run type-text without --element-index")
+        }
+        guard let verification = try TextInput.replaceSelection(record.element, with: text, property: "elementText") else {
+            throw ProviderError.coded("accessibility_error", "text insertion into element \(record.index) did not confirm; run get-app-state to check the field before retrying")
+        }
+        return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
     }
 
     private func pressKey(params: [String: JSONValue]) throws -> [String: Any] {
@@ -3263,7 +3283,7 @@ private enum Input {
 }
 
 private enum TextInput {
-    static func replaceSelection(_ element: AXUIElement, with text: String) throws -> [String: Any]? {
+    static func replaceSelection(_ element: AXUIElement, with text: String, property: String = "focusedText") throws -> [String: Any]? {
         // Why: Chromium applies AX value writes without the input events pages listen to; a contenteditable gets none, so editors like Discord's never see the text.
         guard !BackgroundInputTransport.isChromiumNode(element),
               isSettable(element, kAXValueAttribute as String),
@@ -3297,7 +3317,7 @@ private enum TextInput {
         guard readback == next else {
             return unverifiedAction(reason: "accessibility_action_unasserted")
         }
-        return verifiedAction(property: "focusedText")
+        return verifiedAction(property: property)
     }
 
     /// Text sent as keys or a paste: what the focused field should read once it lands.
