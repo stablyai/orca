@@ -56,6 +56,7 @@ type RepositoryUpdates = Partial<
 > & {
   projectGroupOrder?: number | null
   sourceControlAi?: Repo['sourceControlAi'] | null
+  workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
