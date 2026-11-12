@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
-import { formatRepoList } from '../workspace-format'
+import { formatRepoList } from './repo-format'
 import { REPO_HANDLERS } from './repo'
 
 afterEach(() => {

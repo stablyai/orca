@@ -9,7 +9,7 @@ import '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useAppStore } from '@/store'
-import { pickerRepos } from '../../../../shared/hidden-projects'
+import { composerPickerRepos } from './composer-picker-repos'
 
 export function buildComposerCardProps(state: ComposerModel) {
   const attachmentTarget = resolveComposerAttachmentTarget(state)
@@ -147,7 +147,7 @@ export function buildComposerCardProps(state: ComposerModel) {
   const cardProps: ComposerCardSourceProps & ComposerCardActionProps = {
     eligibleRepos: isProjectGroupTarget
       ? folderSourceRepos
-      : [...pickerRepos(eligibleRepos, repoId)],
+      : composerPickerRepos(eligibleRepos, repoId),
     selectedRepo: isProjectGroupTarget
       ? (folderSourceRepos.find((repo) => repo.id === repoId) ?? null)
       : (selectedRepo ?? null),

@@ -111,6 +111,14 @@ export function hiddenProjectRowFacts(hidden: HiddenProjects): {
 
 /** A picker's list: hidden projects drop out, except the one already chosen, so an explicit target still shows. */
 export function pickerRepos<R extends Pick<Repo, 'id' | 'hiddenAt'>>(
+  repos: R[],
+  chosenRepoId?: string | null
+): R[]
+export function pickerRepos<R extends Pick<Repo, 'id' | 'hiddenAt'>>(
+  repos: readonly R[],
+  chosenRepoId?: string | null
+): readonly R[]
+export function pickerRepos<R extends Pick<Repo, 'id' | 'hiddenAt'>>(
   repos: readonly R[],
   chosenRepoId?: string | null
 ): readonly R[] {

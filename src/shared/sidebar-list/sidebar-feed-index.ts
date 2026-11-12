@@ -1,7 +1,9 @@
 import {
   getSshTargetIdForExecutionHost,
+  getWorktreeExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
+  parseExecutionHostId,
+  type ExecutionHostId
 } from '../execution-host'
 import { buildExecutionHostRegistry } from '../execution-host/execution-host-registry'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
@@ -142,6 +144,16 @@ function repoOfWorktree(
 }
 
 /** Each row's own host's registration, for lists whose repoMap keeps one registration per id. */
+/** A feed workspace's host: its own stamp, else its registration's, else the focused host. */
+export function feedWorktreeHostId(
+  index: Pick<SidebarFeedIndex, 'repoOf'>,
+  worktree: Worktree,
+  defaultHostId: ExecutionHostId
+): ExecutionHostId | null {
+  const repo = index.repoOf(worktree)
+  return repo ? getWorktreeExecutionHostId(worktree, repo, defaultHostId) : null
+}
+
 export function createHostScopedRepoOf(
   repos: readonly Repo[],
   repoMap: ReadonlyMap<string, Repo>

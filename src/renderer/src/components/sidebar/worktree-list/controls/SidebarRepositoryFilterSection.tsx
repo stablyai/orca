@@ -40,19 +40,25 @@ type SidebarRepositoryFilterSectionProps = {
   // Agents inject their own persisted filter; workspace navigation supplies the defaults.
   filterRepoIds?: readonly string[]
   setFilterRepoIds?: (ids: string[]) => void
+  /** Lists hidden projects too, for views (Agents) that still show their work. */
+  includeHidden?: boolean
 }
 
 const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilterSection({
   preserveWorkspaceBoardOpen = false,
   filterRepoIds: filterRepoIdsProp,
-  setFilterRepoIds: setFilterRepoIdsProp
+  setFilterRepoIds: setFilterRepoIdsProp,
+  includeHidden = false
 }: SidebarRepositoryFilterSectionProps) {
   const t = useTranslate()
   useUiLanguageRevision()
   const workspaceFilterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setWorkspaceFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const allRepos = useAppStore((s) => s.repos)
-  const repos = useMemo(() => withoutHiddenRepos(allRepos), [allRepos])
+  const repos = useMemo(
+    () => (includeHidden ? allRepos : withoutHiddenRepos(allRepos)),
+    [allRepos, includeHidden]
+  )
   const filterRepoIds = filterRepoIdsProp ?? workspaceFilterRepoIds
   const setFilterRepoIds = setFilterRepoIdsProp ?? setWorkspaceFilterRepoIds
 

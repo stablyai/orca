@@ -39,7 +39,11 @@ import {
 import { withRepoSectionDisplayLabels } from '../../../src/shared/project-section-order'
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
 import { translate } from '../i18n/mobile-i18n'
-import { indexHiddenProjects, isRepoHidden } from '../../../src/shared/hidden-projects'
+import {
+  indexHiddenProjects,
+  isRepoHidden,
+  withoutHiddenFilterRepoIds
+} from '../../../src/shared/hidden-projects'
 import { filterWorktrees } from './workspace-row-filtering'
 
 export type { FilterState, Section, SectionRepo, Worktree } from './workspace-list-types'
@@ -126,18 +130,14 @@ export function buildMobileWorkspacePlan(
     'in-progress': translate('worktree.workspaceListSections.inProgress', 'In progress'),
     closed: translate('worktree.workspaceListSections.closed', 'Closed')
   }
-  const filtered = filterWorktrees(
-    worktrees,
-    filters,
-    search,
-    repoHostIdByRepoId,
-    indexHiddenProjects(projectCatalog.repos, LOCAL_EXECUTION_HOST_ID)
-  )
+  const hiddenProjects = indexHiddenProjects(projectCatalog.repos, LOCAL_EXECUTION_HOST_ID)
+  const filtered = filterWorktrees(worktrees, filters, search, repoHostIdByRepoId, hiddenProjects)
+  const listedFilterIds = withoutHiddenFilterRepoIds(filters.filterRepoIds, hiddenProjects)
   const sorted = sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees))
   const childrenByParentIdentity = getMobileWorkspaceLineageChildren(
     worktrees,
     lineageStores,
-    filters.filterRepoIds
+    listedFilterIds
   )
   const repoMap = buildSectionRepoMap(projectCatalog.repos, worktrees)
   const projectIndex = buildProjectGroupingIndex(projectCatalog.grouping ?? undefined)
@@ -169,7 +169,7 @@ export function buildMobileWorkspacePlan(
             (repo) =>
               !representedRepoIds.has(repo.id) &&
               !isRepoHidden(repo) &&
-              (filters.filterRepoIds.length === 0 || filters.filterRepoIds.includes(repo.id)) &&
+              (listedFilterIds.length === 0 || listedFilterIds.includes(repo.id)) &&
               (!query || repo.displayName.toLowerCase().includes(query))
           )
           .map((repo) => repo.id)

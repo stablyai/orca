@@ -27,7 +27,8 @@ import {
   rowKeyMatchesRenderRow
 } from './render-row-lookup'
 import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
-import { isWorktreeInHiddenProject } from '@/lib/workspace/activation/worktree-activation-sidebar-filters'
+import { useAppStore } from '@/store'
+import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
 
 export const MAX_REVEAL_RETRIES = 8
 
@@ -121,6 +122,7 @@ export function resolvePendingSidebarReveal(args: {
 // A hidden project's rows never render, so waiting for one would hold the request until unhide.
 function isRevealTargetInHiddenProject(
   worktrees: readonly Worktree[],
+  defaultHostId: ExecutionHostId,
   request: PendingSidebarWorktreeReveal
 ): boolean {
   const target = worktrees.find(
@@ -128,13 +130,20 @@ function isRevealTargetInHiddenProject(
       worktree.id === request.worktreeId &&
       (!request.executionHostId || !worktree.hostId || worktree.hostId === request.executionHostId)
   )
-  return target !== undefined && isWorktreeInHiddenProject(target)
+  // The sidebar's own default host, so the reveal and the rows agree on unstamped rows.
+  return (
+    target !== undefined &&
+    indexHiddenProjects(useAppStore.getState().repos, defaultHostId).isRowHidden({
+      repoId: target.repoId,
+      hostId: target.hostId ?? request.executionHostId
+    })
+  )
 }
 
 export function resolvePendingWorktreeRevealTarget(
   args: Pick<
     PendingSidebarRevealArgs,
-    'renderRows' | 'worktrees' | 'folderWorkspaces' | 'pinnedDisplayPolicy'
+    'renderRows' | 'worktrees' | 'folderWorkspaces' | 'pinnedDisplayPolicy' | 'defaultHostId'
   >,
   request: PendingSidebarWorktreeReveal
 ) {
@@ -164,7 +173,7 @@ export function resolvePendingWorktreeRevealTarget(
             args.worktrees,
             selectFolderWorkspaces(args),
             request.executionHostId
-          ) && !isRevealTargetInHiddenProject(args.worktrees, request)
+          ) && !isRevealTargetInHiddenProject(args.worktrees, args.defaultHostId, request)
       })
   return { targetIndex, outcome }
 }

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { CircleX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -14,7 +14,8 @@ export function SidebarWorktreeListEmptyState({
 }): React.JSX.Element {
   const t = useTranslate()
   const discoveryCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
-  const everyProjectHidden = useAppStore((s) => s.repos.length > 0 && s.repos.every(isRepoHidden))
+  const repos = useAppStore((s) => s.repos)
+  const everyProjectHidden = useMemo(() => repos.length > 0 && repos.every(isRepoHidden), [repos])
   return (
     <div
       data-worktree-sidebar-container

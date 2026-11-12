@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import type { Repo } from '../../../../../shared/repo-types'
 import { setProjectHidden } from './set-project-hidden'
 
 const { toastSuccess, toastInfo, toastError } = vi.hoisted(() => ({
@@ -13,16 +15,38 @@ vi.mock('sonner', () => ({
 }))
 
 const initialState = useAppStore.getState()
-const local = { ...TEST_REPO, id: 'r' }
-const onBox = { ...TEST_REPO, id: 'r', connectionId: 'box' }
+const local: Repo = { ...TEST_REPO, id: 'r' }
+const onBox: Repo = { ...TEST_REPO, id: 'r', connectionId: 'box' }
+let clock = 1000
+
+// Writes land in the store, as a host that echoes hiddenAt would.
+const updateRepo = vi.fn(
+  async (id: string, updates: { hiddenAt?: number | null }, options?: { hostId?: string }) => {
+    useAppStore.setState((state) => ({
+      repos: state.repos.map((repo) => {
+        if (repo.id !== id || getRepoExecutionHostId(repo) !== options?.hostId) {
+          return repo
+        }
+        const { hiddenAt: _previous, ...rest } = repo
+        return typeof updates.hiddenAt === 'number' ? { ...rest, hiddenAt: updates.hiddenAt } : rest
+      })
+    }))
+    return true
+  }
+)
+
+beforeEach(() => {
+  vi.spyOn(Date, 'now').mockImplementation(() => (clock += 1))
+})
 
 afterEach(() => {
   useAppStore.setState(initialState, true)
   vi.clearAllMocks()
+  vi.restoreAllMocks()
 })
 
-function undo(): void {
-  const options: unknown = toastSuccess.mock.calls[0]?.[1]
+function undo(toastIndex = 0): void {
+  const options: unknown = toastSuccess.mock.calls[toastIndex]?.[1]
   if (
     typeof options !== 'object' ||
     options === null ||
@@ -39,28 +63,38 @@ function undo(): void {
 
 describe('setProjectHidden', () => {
   it('hides every host copy a header shows in one action, and one Undo shows them all', async () => {
-    const updateRepo = vi.fn(async () => true)
     useAppStore.setState({ repos: [local, onBox], updateRepo })
 
     await setProjectHidden([local, onBox], true, 'r')
 
-    expect(updateRepo.mock.calls).toEqual([
-      ['r', { hiddenAt: expect.any(Number) }, { hostId: 'local' }],
-      ['r', { hiddenAt: expect.any(Number) }, { hostId: 'ssh:box' }]
+    expect(updateRepo.mock.calls.map(([, updates, options]) => [updates, options])).toEqual([
+      [{ hiddenAt: expect.any(Number) }, { hostId: 'local' }],
+      [{ hiddenAt: expect.any(Number) }, { hostId: 'ssh:box' }]
     ])
     expect(toastSuccess).toHaveBeenCalledOnce()
 
-    updateRepo.mockClear()
     undo()
-    await vi.waitFor(() => expect(updateRepo).toHaveBeenCalledTimes(2))
-    expect(updateRepo.mock.calls).toEqual([
-      ['r', { hiddenAt: null }, { hostId: 'local' }],
-      ['r', { hiddenAt: null }, { hostId: 'ssh:box' }]
-    ])
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().repos.every((repo) => repo.hiddenAt === undefined)).toBe(true)
+    )
+  })
+
+  it('leaves a newer hide in place when an older toast’s Undo is clicked', async () => {
+    useAppStore.setState({ repos: [local], updateRepo })
+    await setProjectHidden([local], true, 'r')
+    await setProjectHidden([local], false, 'r')
+    await setProjectHidden([local], true, 'r')
+    const newerHiddenAt = useAppStore.getState().repos[0]?.hiddenAt
+    updateRepo.mockClear()
+
+    undo(0)
+    await Promise.resolve()
+
+    expect(updateRepo).not.toHaveBeenCalled()
+    expect(useAppStore.getState().repos[0]?.hiddenAt).toBe(newerHiddenAt)
   })
 
   it('answers Undo neutrally when the project was removed meanwhile', async () => {
-    const updateRepo = vi.fn(async () => true)
     useAppStore.setState({ repos: [local], updateRepo })
     await setProjectHidden([local], true, 'r')
 

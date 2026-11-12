@@ -10,6 +10,7 @@ import {
   isEphemeralVmRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { isRepoHidden } from '../../../../../shared/hidden-projects'
 
 type RuntimeEnvironmentSource = Pick<PublicKnownRuntimeEnvironment, 'id' | 'source'>
 
@@ -50,4 +51,18 @@ export function resolveComposerActiveRepoId(
       !isPerWorkspaceRuntimeRepo(repo, runtimeEnvironments)
   )
   return sibling?.id ?? activeRepoId
+}
+
+/** The active workspace seeds the default, unless its project is loaded and every copy is hidden; while repos load, it still seeds. */
+export function resolveComposerSeedRepoId(
+  repos: readonly Repo[],
+  eligibleRepos: readonly Repo[],
+  activeRepoId: string | null | undefined,
+  runtimeEnvironments: readonly RuntimeEnvironmentSource[]
+): string | null {
+  const activeRows = repos.filter((repo) => repo.id === activeRepoId)
+  if (activeRows.length > 0 && activeRows.every(isRepoHidden)) {
+    return null
+  }
+  return resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId, runtimeEnvironments)
 }
