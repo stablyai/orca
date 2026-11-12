@@ -9,6 +9,7 @@ import {
   type AutomationLastRunTone
 } from '../listing/automation-list-last-run'
 import { formatAutomationCost, formatAutomationTokens } from '../runs/automation-usage-model'
+import { RUN_START_DRIFT_LABEL_MS } from '../runs/automation-run-identity-label'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 function HealthCell({
@@ -55,7 +56,9 @@ function HealthCell({
         <span className="truncate tabular-nums">{value}</span>
       </div>
       {detail ? (
-        <div className="mt-0.5 truncate text-xs text-muted-foreground tabular-nums">{detail}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground tabular-nums" title={detail}>
+          {detail}
+        </div>
       ) : null}
     </>
   )
@@ -95,6 +98,17 @@ export function AutomationDetailHealth({
   const lastRun = getLocalAutomationLastRunSnapshot(automation, latestRun, t)
   const lastRunRelative = formatAutomationRelativeTime(lastRun.at, now, t, intlLocale)
   const lastRunAbsolute = lastRun.at ? formatAutomationDateTime(lastRun.at, t, intlLocale) : null
+  // Why: run pages and lists name a run by its scheduled slot; a late start says it started then.
+  const startedOffSchedule =
+    latestRun !== undefined &&
+    lastRun.at !== null &&
+    Math.abs(lastRun.at - latestRun.scheduledFor) >= RUN_START_DRIFT_LABEL_MS
+  const lastRunWhen =
+    lastRunAbsolute && startedOffSchedule
+      ? t('auto.components.automations.runIdentity.startedAt', 'Started {{time}}', {
+          time: lastRunAbsolute
+        })
+      : lastRunAbsolute
   const lastRunValue =
     lastRun.tone === 'never'
       ? t('auto.components.automations.AutomationDetail.notRunYet', 'Not run yet')
@@ -102,9 +116,9 @@ export function AutomationDetailHealth({
   const lastRunDetail =
     lastRun.tone === 'never'
       ? null
-      : lastRun.statusLabel && lastRunRelative && lastRunAbsolute
-        ? `${lastRunRelative} · ${lastRunAbsolute}`
-        : lastRunAbsolute
+      : lastRun.statusLabel && lastRunRelative && lastRunWhen
+        ? `${lastRunRelative} · ${lastRunWhen}`
+        : lastRunWhen
 
   const nextRunRelative = automation.enabled
     ? formatAutomationRelativeTime(automation.nextRunAt, now, t, intlLocale)
@@ -138,7 +152,7 @@ export function AutomationDetailHealth({
 
   return (
     <div className="@container overflow-hidden rounded-lg border border-border/60">
-      <div className="grid grid-cols-1 gap-px bg-border/60 @lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-px bg-border/60 @[30rem]:grid-cols-3">
         <HealthCell
           label={t('auto.components.automations.AutomationDetail.a7c312430d', 'Last run')}
           value={lastRunValue}

@@ -18598,8 +18598,7 @@
           "86a248187e": "Spend",
           "149c0b49c7": "Workspace",
           "8faaa00726": "Run",
-          "53fc5f07ab": "Run history",
-          "a00e38d1a3": "n/a",
+          "a00e38d1a3": "—",
           "historyUnavailable": "Run history is unavailable from this host. This does not mean the automation failed or has no runs."
         },
         "AutomationSchedulePicker": {
@@ -18684,7 +18683,6 @@
           "rowActions": "Automation actions",
           "tableLastRun": "Last run",
           "ownerChanged": "This automation changed hosts. Refresh and try again.",
-          "runError": "Error:",
           "setupSkippedChanged": "Setup didn't run: this run's branch has different orca.yaml setup commands than the ones approved when the automation was saved. Save the automation again to review the current commands.",
           "deleteAutomationDescription": "Delete <name/> and its run history. Workspaces created by previous runs are not deleted.",
           "deleteExternalAutomationDescription": "Delete <name/> from <provider/> on <host/>.",
@@ -19019,7 +19017,7 @@
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "n/a"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH host",
@@ -19049,8 +19047,8 @@
           "automationTitle": "This automation no longer exists",
           "runDescription": "It was deleted or dropped from the retained run history.",
           "automationDescription": "It was deleted, or its host no longer lists it.",
-          "openAutomation": "Open {{name}}",
-          "goToAutomations": "Go to Automations"
+          "goToAutomations": "Go to Automations",
+          "openThisAutomation": "Open automation"
         },
         "recentRuns": {
           "title": "Recent runs",
@@ -19067,7 +19065,10 @@
           "signIn": "Sign in to {{host}}",
           "output": "Output",
           "details": "Details",
-          "runNumber": "Run #{{number}}"
+          "runNumber": "Run #{{number}}",
+          "runFailed": "Run failed.",
+          "scheduledAt": "Scheduled {{time}}",
+          "startedAt": "Started {{time}}"
         },
         "runTable": {
           "result": "Result"
@@ -24871,6 +24872,16 @@
         "settingUp": "The project is still being set up on the selected automation host.",
         "error": "Project setup failed on the selected automation host.",
         "unsupported": "The selected automation host does not support this project."
+      },
+      "blocked": {
+        "trustWorkspace": "The agent is waiting for you to trust this folder.",
+        "trustWorkspaceNamed": "{{agent}} is waiting for you to trust this folder.",
+        "update": "The agent is waiting for you to answer an update prompt.",
+        "folder": "The agent is asking which folder to work in.",
+        "model": "The agent is asking you to choose a model.",
+        "approval": "The agent is waiting for you to approve an action.",
+        "signIn": "The agent is waiting for you to sign in.",
+        "prompt": "The agent stopped at a prompt that needs your answer."
       }
     },
     "extraAgentArgs": {

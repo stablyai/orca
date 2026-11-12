@@ -30,3 +30,16 @@ export function isAutomationRunNowPending(
 ): boolean {
   return pending !== null && pending.rowKey === rowKey && !isAutomationRunNowListed(pending, runs)
 }
+
+/**
+ * Apply an answer (failure, acknowledgement, timeout) to the busy state only if it still
+ * belongs to the request that got it. A later click, here or on another automation,
+ * replaced the slot, and its own answer settles it.
+ */
+export function settleAutomationRunNowPending(
+  current: AutomationRunNowPending | null,
+  requestId: string,
+  update: (pending: AutomationRunNowPending) => AutomationRunNowPending | null
+): AutomationRunNowPending | null {
+  return current?.requestId === requestId ? update(current) : current
+}

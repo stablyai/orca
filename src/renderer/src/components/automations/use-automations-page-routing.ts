@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
-import type { AutomationsPageLocation } from './automation-page-state'
+import type { AutomationRunNotFound, AutomationsPageLocation } from './automation-page-state'
 import { automationRowHostId } from './automations-page-navigation'
 import {
   isAutomationRunNowListed,
-  isAutomationRunNowPending
+  isAutomationRunNowPending,
+  settleAutomationRunNowPending
 } from './runs/automation-run-now-pending'
 import type { AutomationsPageController } from './use-automations-page-controller'
 import {
@@ -20,6 +21,21 @@ const RUN_NOW_DISPATCH_MAX_MS = 60_000
 // JSON string quoting is valid CSS string quoting for the ids and keys used here.
 function attributeSelector(name: string, value: string): string {
   return `[${name}=${JSON.stringify(value)}]`
+}
+
+/** A missing destination is still where the user went; replaying it shows not-found again. */
+export function automationsPageNotFoundLocation(
+  notFound: AutomationRunNotFound
+): AutomationsPageLocation {
+  return notFound.runId
+    ? {
+        page: 'run',
+        automationId: notFound.automationId,
+        runId: notFound.runId,
+        hostId: notFound.hostId,
+        origin: notFound.origin ?? 'automation'
+      }
+    : { page: 'detail', automationId: notFound.automationId, hostId: notFound.hostId }
 }
 
 /** Page identity for back/forward history and focus, plus the Run now busy state. */
@@ -56,8 +72,11 @@ export function useAutomationsPageRouting(
     if (!runNowPending) {
       return
     }
+    const { requestId } = runNowPending
+    const clearThisRequest = (): void =>
+      setRunNowPending((current) => settleAutomationRunNowPending(current, requestId, () => null))
     if (runNowListed) {
-      setRunNowPending(null)
+      clearThisRequest()
       return
     }
     // Why: a dispatch that never answers must not lock the button either; the dispatcher's
@@ -66,7 +85,7 @@ export function useAutomationsPageRouting(
       runNowPending.acknowledgedAt === null
         ? runNowPending.requestedAt + RUN_NOW_DISPATCH_MAX_MS
         : runNowPending.acknowledgedAt + RUN_NOW_PENDING_MAX_MS
-    const timer = setTimeout(() => setRunNowPending(null), Math.max(0, deadline - Date.now()))
+    const timer = setTimeout(clearThisRequest, Math.max(0, deadline - Date.now()))
     return () => clearTimeout(timer)
   }, [runNowListed, runNowPending, setRunNowPending])
 
@@ -77,29 +96,31 @@ export function useAutomationsPageRouting(
     (local.selectedExternalKey !== null && list.scopedExternal.loading)
   const location: AutomationsPageLocation | null = isResolving
     ? null
-    : pageView === 'runs'
-      ? { page: 'runs' }
-      : pageView === 'run'
-        ? selected && selectedAutomationRunPage && !runNotFound
-          ? {
-              page: 'run',
-              automationId: selected.id,
-              runId: selectedAutomationRunPage.id,
-              hostId: selectedHostId,
-              origin: runPageOrigin
-            }
-          : null
-        : isDetailOpen && selectedExternal
-          ? { page: 'external', externalKey: selectedExternal.key }
-          : isDetailOpen && selected
+    : runNotFound
+      ? automationsPageNotFoundLocation(runNotFound)
+      : pageView === 'runs'
+        ? { page: 'runs' }
+        : pageView === 'run'
+          ? selected && selectedAutomationRunPage
             ? {
-                page: activePaneTab === 'runs' ? 'automationRuns' : 'detail',
+                page: 'run',
                 automationId: selected.id,
-                hostId: selectedHostId
+                runId: selectedAutomationRunPage.id,
+                hostId: selectedHostId,
+                origin: runPageOrigin
               }
-            : isDetailOpen
-              ? null
-              : { page: 'list' }
+            : null
+          : isDetailOpen && selectedExternal
+            ? { page: 'external', externalKey: selectedExternal.key }
+            : isDetailOpen && selected
+              ? {
+                  page: activePaneTab === 'runs' ? 'automationRuns' : 'detail',
+                  automationId: selected.id,
+                  hostId: selectedHostId
+                }
+              : isDetailOpen
+                ? null
+                : { page: 'list' }
   useAutomationsPageHistory({ location, navigation })
 
   const focusTarget: AutomationsPageFocusTarget | null = runNotFound
@@ -111,7 +132,8 @@ export function useAutomationsPageRouting(
             key: `run:${location.runId}`,
             page: 'run',
             parents: ['detail', 'automationRuns', 'runs'],
-            returnSelector: attributeSelector('data-automation-run-id', location.runId)
+            returnSelector: attributeSelector('data-automation-run-id', location.runId),
+            returnRunId: location.runId
           }
         : location.page === 'detail' || location.page === 'automationRuns'
           ? {

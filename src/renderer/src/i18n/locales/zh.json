@@ -17268,8 +17268,7 @@
           "86a248187e": "花费",
           "149c0b49c7": "工作区",
           "8faaa00726": "执行",
-          "53fc5f07ab": "运行历史",
-          "a00e38d1a3": "不适用",
+          "a00e38d1a3": "—",
           "historyUnavailable": "无法从此主机获取运行历史，这并不表示自动化运行失败或从未运行"
         },
         "AutomationSchedulePicker": {
@@ -17354,7 +17353,6 @@
           "rowActions": "自动化操作",
           "tableLastRun": "最后一次运行",
           "ownerChanged": "此自动化已切换主机，请刷新后重试",
-          "runError": "错误：",
           "deleteAutomationDescription": "删除 <name/> 及其运行历史。不会删除之前运行创建的工作区",
           "deleteExternalAutomationDescription": "从 <host/> 上的 <provider/> 中删除 <name/>",
           "runUsageSummaryTokens_other": "预估 {{cost}} · {{tokens}} token"
@@ -17654,7 +17652,7 @@
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} token · {{cost}}",
-          "costUnavailable": "暂无数据"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH 主机",

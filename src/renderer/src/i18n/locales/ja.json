@@ -16980,8 +16980,7 @@
           "86a248187e": "費用",
           "149c0b49c7": "ワークスペース",
           "8faaa00726": "実行",
-          "53fc5f07ab": "実行履歴",
-          "a00e38d1a3": "該当なし",
+          "a00e38d1a3": "—",
           "historyUnavailable": "このホストからは実行履歴を利用できません。これは、自動化が失敗したり、実行されなかったりすることを意味するものではありません。"
         },
         "AutomationSchedulePicker": {
@@ -17066,7 +17065,6 @@
           "rowActions": "自動化の操作",
           "tableLastRun": "最後の実行",
           "ownerChanged": "この自動化によりホストが変更されました。更新して再試行してください。",
-          "runError": "エラー:",
           "deleteAutomationDescription": "<name/> とその実行履歴を削除します。過去の実行で作成されたワークスペースは削除されません。",
           "deleteExternalAutomationDescription": "<host/> 上の <provider/> から <name/> を削除します。",
           "runUsageSummaryTokens_other": "推定 {{cost}} · {{tokens}} トークン"
@@ -17366,7 +17364,7 @@
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} トークン · {{cost}}",
-          "costUnavailable": "不明"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH ホスト",

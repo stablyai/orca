@@ -14,6 +14,7 @@ import {
   AutomationRunTableHeaderCells,
   AutomationRunWorkspaceCell
 } from './AutomationRunTableCells'
+import { useRevealAutomationRun } from './use-reveal-automation-run'
 
 const RUN_ROW_HEIGHT_PX = 59
 const RUN_ROW_OVERSCAN = 10
@@ -51,6 +52,10 @@ export function AutomationRunsTable({
     initialRect: RUNS_VIEWPORT_INITIAL_RECT,
     getItemKey: (index) => entries[index]?.key ?? index
   })
+  useRevealAutomationRun(
+    (runId) => entries.findIndex((entry) => entry.run.id === runId),
+    (index) => virtualizer.scrollToIndex(index, { align: 'center' })
+  )
 
   return (
     <div className="flex min-h-[15rem] flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-card">

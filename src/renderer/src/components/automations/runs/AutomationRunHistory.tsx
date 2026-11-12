@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { cn } from '@/lib/class-names'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
@@ -14,6 +14,7 @@ import {
 } from './AutomationRunTableCells'
 import { automationRunOccurrenceLabel, isAutomationRunFolded } from './automation-run-occurrences'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
+import { useRevealAutomationRun } from './use-reveal-automation-run'
 import { AutomationOwnerConflictNotice } from '../hosts/AutomationOwnerConflictNotice'
 import type { AutomationActionNotice } from '../hosts/automation-row-action-dispatch'
 import type { AutomationHostRecoveryAction } from '../hosts/automation-host-status-descriptors'
@@ -46,6 +47,19 @@ type AutomationRunHistoryProps = {
   onOpenRun: (run: AutomationRun) => void
 }
 
+/** "16 runs · 12 completed": the summary under an automation's Runs title. */
+export function formatAutomationRunCountSummary(
+  runs: readonly Pick<AutomationRun, 'status'>[],
+  t: ReturnType<typeof useTranslate>
+): string {
+  const completed = runs.filter((run) => run.status === 'completed').length
+  return t(
+    'auto.components.automations.runHistory.runCountSummary',
+    '{{count}} runs · {{completed}} completed',
+    { count: runs.length, completed, defaultValue_one: '{{count}} run · {{completed}} completed' }
+  )
+}
+
 export function AutomationRunHistory({
   runs,
   automationId,
@@ -69,14 +83,6 @@ export function AutomationRunHistory({
     automationId,
     runId: null
   }))
-  const runCountLabel = useMemo(() => {
-    const completed = runs.filter((run) => run.status === 'completed').length
-    return t(
-      'auto.components.automations.runHistory.runCountSummary',
-      '{{count}} runs · {{completed}} completed',
-      { count: runs.length, completed, defaultValue_one: '{{count}} run · {{completed}} completed' }
-    )
-  }, [runs, t])
 
   const selectedRunId =
     selectedRunState.automationId === automationId ? selectedRunState.runId : null
@@ -110,6 +116,11 @@ export function AutomationRunHistory({
     // Inset top-aligned rows below the sticky header.
     scrollPaddingStart: scrollMargin
   })
+
+  useRevealAutomationRun(
+    (runId) => runs.findIndex((run) => run.id === runId),
+    (index) => virtualizer.scrollToIndex(index, { align: 'center' })
+  )
 
   // Track the rows’ header offset across zoom/font changes.
   useLayoutEffect(() => {
@@ -216,13 +227,6 @@ export function AutomationRunHistory({
       ref={containerRef}
       className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border/50 bg-muted/20 shadow-sm"
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
-        <div className="text-sm font-medium">
-          {t('auto.components.automations.AutomationRunHistory.53fc5f07ab', 'Run history')}
-        </div>
-        {/* A failed read knows no counts; "0 runs" would answer a question nobody asked the host. */}
-        {notice ? null : <div className="text-xs text-muted-foreground">{runCountLabel}</div>}
-      </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div ref={scrollRef} className="scrollbar-sleek min-h-0 flex-1 overflow-auto">
           <div

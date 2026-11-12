@@ -17391,8 +17391,7 @@
           "86a248187e": "Gastar",
           "149c0b49c7": "Espacio de trabajo",
           "8faaa00726": "Correr",
-          "53fc5f07ab": "Historial de ejecución",
-          "a00e38d1a3": "n / A",
+          "a00e38d1a3": "—",
           "historyUnavailable": "El historial de ejecuciones no está disponible desde este host. Esto no significa que la automatización haya fallado ni que no tenga ejecuciones."
         },
         "AutomationSchedulePicker": {
@@ -17477,7 +17476,6 @@
           "rowActions": "Acciones de automatización",
           "tableLastRun": "Última ejecución",
           "ownerChanged": "Esta automatización cambió de host. Actualiza e inténtalo de nuevo.",
-          "runError": "Error:",
           "deleteAutomationDescription": "Eliminar <name/> y su historial de ejecuciones. No se eliminarán los espacios de trabajo creados por ejecuciones anteriores.",
           "deleteExternalAutomationDescription": "Eliminar <name/> de <provider/> en <host/>.",
           "runUsageSummaryTokens_one": "{{cost}} aprox. · {{tokens}} token",
@@ -17791,7 +17789,7 @@
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "n/d"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "Host SSH",

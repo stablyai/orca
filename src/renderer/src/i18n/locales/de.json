@@ -17659,8 +17659,7 @@
           "86a248187e": "Ausgaben",
           "149c0b49c7": "Arbeitsbereich",
           "8faaa00726": "Ausführung",
-          "53fc5f07ab": "Ausführungsverlauf",
-          "a00e38d1a3": "Nicht verfügbar",
+          "a00e38d1a3": "—",
           "historyUnavailable": "Der Ausführungsverlauf ist von diesem Host aus nicht verfügbar. Dies bedeutet nicht, dass die Automatisierung fehlgeschlagen ist oder keine Ausführungen hat."
         },
         "AutomationSchedulePicker": {
@@ -17745,7 +17744,6 @@
           "rowActions": "Automatisierungsaktionen",
           "tableLastRun": "Letzte Ausführung",
           "ownerChanged": "Der Host dieser Automatisierung hat sich geändert. Aktualisieren und erneut versuchen.",
-          "runError": "Fehler:",
           "deleteAutomationDescription": "<name/> und den Ausführungsverlauf löschen. Arbeitsbereiche aus früheren Ausführungen werden nicht gelöscht.",
           "deleteExternalAutomationDescription": "<name/> aus <provider/> auf <host/> löschen.",
           "runUsageSummaryTokens_one": "ca. {{cost}} · {{tokens}} Token",
@@ -18077,7 +18075,7 @@
         "usage": {
           "tokensAndCost_one": "{{tokens}} Token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} Tokens · {{cost}}",
-          "costUnavailable": "k. A."
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH-Host",

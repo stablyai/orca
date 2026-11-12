@@ -1,14 +1,10 @@
 import React from 'react'
-import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { AutomationRunStatus } from '../../../../../shared/automations/history/automation-run'
-import {
-  formatAutomationDateTime,
-  getAutomationRunStatusLabel,
-  getAutomationRunStatusVariant
-} from '../automation-page-parts'
+import { formatAutomationDateTime } from '../automation-page-parts'
 import { formatAutomationCost } from './automation-usage-model'
+import { AutomationRunStatusLabel } from './AutomationRunStatusDot'
 import { formatAutomationRunLabel } from './automation-run-identity-label'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 
@@ -71,12 +67,9 @@ export function AutomationRunResultCell({
 }: {
   status: AutomationRunStatus
 }): React.JSX.Element {
-  const t = useTranslate()
   return (
     <div className="flex min-w-0 justify-start">
-      <Badge variant={getAutomationRunStatusVariant(status)}>
-        {getAutomationRunStatusLabel(status, t)}
-      </Badge>
+      <AutomationRunStatusLabel status={status} />
     </div>
   )
 }

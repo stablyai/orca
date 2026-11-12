@@ -16977,8 +16977,7 @@
           "86a248187e": "경비",
           "149c0b49c7": "워크스페이스",
           "8faaa00726": "실행",
-          "53fc5f07ab": "실행 기록",
-          "a00e38d1a3": "해당 없음",
+          "a00e38d1a3": "—",
           "historyUnavailable": "이 호스트에서는 실행 기록을 사용할 수 없습니다. 이는 자동화가 실패했거나 실행이 없음을 의미하지 않습니다."
         },
         "AutomationSchedulePicker": {
@@ -17063,7 +17062,6 @@
           "rowActions": "자동화 작업",
           "tableLastRun": "마지막 실행",
           "ownerChanged": "이 자동화로 인해 호스트가 변경되었습니다. 새로고침하고 다시 시도하세요.",
-          "runError": "오류:",
           "deleteAutomationDescription": "<name/> 및 실행 기록을 삭제합니다. 이전 실행에서 생성된 워크스페이스는 삭제되지 않습니다.",
           "deleteExternalAutomationDescription": "<host/>의 <provider/>에서 <name/>을(를) 삭제합니다.",
           "runUsageSummaryTokens_other": "예상 {{cost}} · {{tokens}} 토큰"
@@ -17363,7 +17361,7 @@
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} 토큰 · {{cost}}",
-          "costUnavailable": "알 수 없음"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH 호스트",

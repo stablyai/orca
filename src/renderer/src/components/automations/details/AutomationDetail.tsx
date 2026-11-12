@@ -20,6 +20,7 @@ import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
 import { automationRunErrorText } from '../runs/automation-run-error-copy'
+import { getAgentLabel } from '../authoring/automation-draft-model'
 import { AutomationDetailHealth } from './AutomationDetailHealth'
 import { AutomationRecentRunsRail } from './AutomationRecentRunsRail'
 import { AutomationsPageTitle } from '../AutomationsPageFrame'
@@ -159,7 +160,9 @@ export function AutomationDetail({
   const needsMigration = Boolean(hostEntry?.servedBy)
   const latestRun = indexLatestAutomationRuns(runs).get(automation.id)
   const latestRunError =
-    latestRun?.status === 'dispatch_failed' ? automationRunErrorText(latestRun) : null
+    latestRun?.status === 'dispatch_failed'
+      ? automationRunErrorText(latestRun, getAgentLabel(automation.agentId))
+      : null
 
   const scheduleLabel = formatUiAutomationSchedule(automation.rrule, t, intlLocale)
   const statusLabel = !automation.enabled

@@ -101,12 +101,77 @@ function isAutomationRunFailureCode(code: unknown): code is AutomationRunFailure
   return typeof code === 'string' && Object.hasOwn(COPY, code)
 }
 
+// Main records a blocked agent as "Automation agent is blocked: <reason>." with no code.
+const BLOCKED_AGENT_ERROR = /^Automation agent is blocked: ([a-z0-9-]+)\.?$/
+
+// Why: the reason is an internal detector id; people need to know what the agent is waiting for.
+function blockedAgentText(reason: string, agentLabel: string | undefined): string {
+  const kind = reason.replace(/^(agent|codex)-/, '')
+  switch (kind) {
+    case 'trust-workspace':
+      return agentLabel
+        ? translate(
+            'automations.runFailures.blocked.trustWorkspaceNamed',
+            '{{agent}} is waiting for you to trust this folder.',
+            { agent: agentLabel }
+          )
+        : translate(
+            'automations.runFailures.blocked.trustWorkspace',
+            'The agent is waiting for you to trust this folder.'
+          )
+    case 'update-prompt':
+      return translate(
+        'automations.runFailures.blocked.update',
+        'The agent is waiting for you to answer an update prompt.'
+      )
+    case 'cwd-prompt':
+      return translate(
+        'automations.runFailures.blocked.folder',
+        'The agent is asking which folder to work in.'
+      )
+    case 'model-migration-prompt':
+      return translate(
+        'automations.runFailures.blocked.model',
+        'The agent is asking you to choose a model.'
+      )
+    case 'hooks-review-prompt':
+      return translate('automations.runFailures.hooksReviewBlocked', EN.hooksReviewBlocked)
+    case 'approval-prompt':
+      return translate(
+        'automations.runFailures.blocked.approval',
+        'The agent is waiting for you to approve an action.'
+      )
+    case 'sign-in-prompt':
+      return translate(
+        'automations.runFailures.blocked.signIn',
+        'The agent is waiting for you to sign in.'
+      )
+    default:
+      return translate(
+        'automations.runFailures.blocked.prompt',
+        'The agent stopped at a prompt that needs your answer.'
+      )
+  }
+}
+
 /** Old records and older hosts omit the code; newer hosts may send unknown codes. Both show `error`. */
 export function automationRunErrorText(
-  run: Pick<AutomationRun, 'error' | 'errorCode' | 'errorParams'>
+  run: Pick<AutomationRun, 'error' | 'errorCode' | 'errorParams'>,
+  /** Names the agent in prompts it is waiting on, e.g. "Claude". */
+  agentLabel?: string
 ): string | null {
-  if (run.error === null || !isAutomationRunFailureCode(run.errorCode)) {
-    return run.error
+  if (run.error === null) {
+    return null
+  }
+  if (!isAutomationRunFailureCode(run.errorCode)) {
+    const blocked = BLOCKED_AGENT_ERROR.exec(run.error)
+    return blocked ? blockedAgentText(blocked[1], agentLabel) : run.error
   }
   return COPY[run.errorCode](run.errorParams) ?? run.error
+}
+
+/** A run stopped at an agent trust prompt; opening its workspace is how to answer it. */
+export function isAutomationRunTrustBlocked(run: Pick<AutomationRun, 'error'>): boolean {
+  const blocked = run.error ? BLOCKED_AGENT_ERROR.exec(run.error) : null
+  return blocked?.[1].endsWith('-trust-workspace') ?? false
 }

@@ -11,7 +11,8 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
     // Why: the page owns its sub-page state; it applies this request and clears it.
     useAppStore.setState({
       activeView: 'automations',
-      automationsPageLocationRequest: entry.location
+      automationsPageLocationRequest: entry.location,
+      automationsPageFocusTitleOnOpen: true
     })
     return
   }

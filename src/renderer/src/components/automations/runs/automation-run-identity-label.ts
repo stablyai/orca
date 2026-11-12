@@ -61,3 +61,6 @@ export function getAutomationRunStepKey(event: {
   }
   return step
 }
+
+/** Runs normally start within seconds of their slot; past this, start and slot are labeled. */
+export const RUN_START_DRIFT_LABEL_MS = 60_000

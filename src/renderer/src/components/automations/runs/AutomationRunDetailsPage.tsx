@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react'
 import { ChevronDown, ChevronUp, ExternalLink, KeyRound, RefreshCw } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
@@ -11,7 +10,7 @@ import type { Automation } from '../../../../../shared/automations/automation-de
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import { getAgentLabel } from '../authoring/automation-draft-model'
 import { getAutomationRunContent } from './automation-run-content'
-import { automationRunErrorText } from './automation-run-error-copy'
+import { automationRunErrorText, isAutomationRunTrustBlocked } from './automation-run-error-copy'
 import type { AutomationRunViewState } from './automation-run-view-state'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import { useFullAutomationRun } from './use-full-automation-run'
@@ -22,12 +21,13 @@ import {
   AUTOMATION_EDITOR_SECTION_LABEL_CLASS,
   AutomationRunErrorNotice,
   AutomationRunSetupSkippedNotice,
-  formatAutomationDateTimeWithRelative,
-  getAutomationRunStatusLabel,
-  getAutomationRunStatusVariant
+  formatAutomationDateTime,
+  formatAutomationDateTimeWithRelative
 } from '../automation-page-parts'
+import { AutomationRunStatusLabel } from './AutomationRunStatusDot'
 import { formatAutomationCost, formatAutomationTokens } from './automation-usage-model'
 import {
+  RUN_START_DRIFT_LABEL_MS,
   formatAutomationRunLabel,
   getAutomationRunNeighbors,
   getAutomationRunStepKey
@@ -101,8 +101,17 @@ export function AutomationRunDetailsPage({
   const intlLocale = useIntlLocale()
   const full = useFullAutomationRun(listedRun, history)
   const run = full.run
-  const content = getAutomationRunContent(run, t)
-  const errorText = automationRunErrorText(run)
+  const failed = run.status === 'dispatch_failed'
+  // A trust prompt is answered in the workspace, so the banner carries that one action.
+  const openFromBanner = failed && isAutomationRunTrustBlocked(run) && Boolean(viewState?.canOpen)
+  // Why: the detail's Last run shows when a run started; when that differs from its slot, say both.
+  const startedAt = run.dispatchedAt ?? run.startedAt ?? null
+  const startedLate =
+    startedAt !== null && Math.abs(startedAt - run.scheduledFor) >= RUN_START_DRIFT_LABEL_MS
+  const agentLabel = automation ? getAgentLabel(automation.agentId) : undefined
+  const errorText = automationRunErrorText(run, agentLabel)
+  // Why: a failed run's reason has its own banner; Output shows only what the agent printed.
+  const content = getAutomationRunContent(failed ? { ...run, error: null } : run, t)
   // Without the automation, the run can't be checked against its approval.
   const setupReview = automation
     ? pendingAutomationSetupReview(automation, {
@@ -161,7 +170,7 @@ export function AutomationRunDetailsPage({
       value:
         usageKnown && run.usage
           ? formatAutomationTokens(run.usage.totalTokens, intlLocale)
-          : t('auto.components.automations.AutomationRunHistory.a00e38d1a3', 'n/a'),
+          : t('auto.components.automations.AutomationRunHistory.a00e38d1a3', '—'),
       muted: !usageKnown
     },
     {
@@ -186,9 +195,7 @@ export function AutomationRunDetailsPage({
             <AutomationsPageTitle>
               {formatAutomationRunLabel(run, t, intlLocale)}
             </AutomationsPageTitle>
-            <Badge variant={getAutomationRunStatusVariant(run.status)} className="shrink-0">
-              {getAutomationRunStatusLabel(run.status, t)}
-            </Badge>
+            <AutomationRunStatusLabel status={run.status} pill />
             <span className="flex-1" />
             {(['newer', 'older'] as const).map((step) => {
               const target = step === 'newer' ? newer : older
@@ -218,9 +225,30 @@ export function AutomationRunDetailsPage({
             })}
           </div>
           <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-            <span>
-              {formatAutomationDateTimeWithRelative(run.scheduledFor, relativeNow, t, intlLocale)}
-            </span>
+            {startedLate ? (
+              <>
+                <span>
+                  {t('auto.components.automations.runIdentity.scheduledAt', 'Scheduled {{time}}', {
+                    time: formatAutomationDateTime(run.scheduledFor, t, intlLocale)
+                  })}
+                </span>
+                <span aria-hidden="true">·</span>
+                <span>
+                  {t('auto.components.automations.runIdentity.startedAt', 'Started {{time}}', {
+                    time: formatAutomationDateTimeWithRelative(
+                      startedAt,
+                      relativeNow,
+                      t,
+                      intlLocale
+                    )
+                  })}
+                </span>
+              </>
+            ) : (
+              <span>
+                {formatAutomationDateTimeWithRelative(run.scheduledFor, relativeNow, t, intlLocale)}
+              </span>
+            )}
             {automation ? (
               <>
                 <span aria-hidden="true">·</span>
@@ -269,21 +297,28 @@ export function AutomationRunDetailsPage({
               </Button>
             ) : null}
           </div>
-        ) : run.status === 'dispatch_failed' && errorText && content !== errorText ? (
-          // Why: saved terminal output otherwise hides why the run failed.
+        ) : failed && errorText ? (
           <AutomationRunErrorNotice
-            label={t('auto.components.automations.AutomationsPage.runError', 'Error:')}
+            label={t('auto.components.automations.runIdentity.runFailed', 'Run failed.')}
             error={errorText}
+            action={
+              openFromBanner ? (
+                <Button type="button" variant="outline" size="xs" onClick={onOpenWorkspace}>
+                  <ExternalLink className="size-3.5" />
+                  {t('auto.components.automations.runViewState.openWorkspace', 'Open workspace')}
+                </Button>
+              ) : null
+            }
           />
         ) : null}
 
-        {viewState?.canOpen || (canRerun && automation) ? (
+        {(viewState?.canOpen && !openFromBanner) || (canRerun && automation) ? (
           <div className="flex flex-wrap items-center gap-2">
             {/* Why: a disabled button with nothing to open reads as broken; Details says the workspace is gone. */}
-            {viewState?.canOpen ? (
+            {viewState?.canOpen && !openFromBanner ? (
               <Button type="button" size="sm" onClick={onOpenWorkspace}>
                 <ExternalLink className="size-3.5" />
-                {viewState.actionLabel}
+                {t('auto.components.automations.runViewState.openWorkspace', 'Open workspace')}
               </Button>
             ) : null}
             {canRerun && automation ? (

@@ -9,7 +9,7 @@ import type { AutomationRun } from '../../../../../shared/automations/history/au
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { AutomationDetail } from './AutomationDetail'
 import { AutomationDetailActions } from './AutomationDetailActions'
-import { AutomationRunHistory } from '../runs/AutomationRunHistory'
+import { AutomationRunHistory, formatAutomationRunCountSummary } from '../runs/AutomationRunHistory'
 import { ExternalAutomationManagers } from '../external/ExternalAutomationManagers'
 import type { ExternalAutomationListEntry } from '../external/external-automation-list-entries'
 import type { ExternalAutomationScope } from '../external/external-automation-scope-client'
@@ -124,9 +124,12 @@ export function AutomationsDetailPane({
           <AutomationsPageTitle>
             {t('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}
           </AutomationsPageTitle>
-          <p className="truncate text-sm text-muted-foreground" title={selected.name}>
-            {selected.name}
-          </p>
+          {/* A failed read knows no counts; "0 runs" would answer a question nobody asked the host. */}
+          {selectedRunsNotice ? null : (
+            <p className="text-sm text-muted-foreground">
+              {formatAutomationRunCountSummary(selectedRuns, t)}
+            </p>
+          )}
         </div>
         <AutomationRunHistory
           runs={selectedRuns}

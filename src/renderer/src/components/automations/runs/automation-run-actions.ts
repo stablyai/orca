@@ -3,12 +3,15 @@ import { toast } from 'sonner'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
+import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import { getAutomationTargetAvailability } from '../hosts/automation-target-availability'
 import { runAutomationNowForTarget } from '../hosts/automation-host-client'
 import { dispatchAutomationRunNow } from '../hosts/automation-row-action-dispatch'
 import { waitForAutomationRerunPendingVisibility } from './automation-run-view-state'
 import type { AutomationListRow } from '../listing/automation-list-row-identity'
 import type { AutomationsPageActionContext } from '../automations-page-action-context'
+import type { AutomationRunNowPending } from '../automation-page-state'
+import { settleAutomationRunNowPending } from './automation-run-now-pending'
 
 /** Run-now/rerun handlers keyed by the selected row's captured host. */
 export function createAutomationRunActions({
@@ -81,7 +84,13 @@ export function createAutomationRunActions({
     }
     // Why: the detail's Run now stays busy until the run it started is listed, so a
     // second click can't queue a duplicate; a scheduled run in progress never blocks it.
+    const requestId = createNonSecureContextUuid()
+    const settle = (
+      update: (current: AutomationRunNowPending) => AutomationRunNowPending | null
+    ): void =>
+      setRunNowPending((current) => settleAutomationRunNowPending(current, requestId, update))
     setRunNowPending({
+      requestId,
       rowKey: row.key,
       requestedAt: Date.now(),
       acknowledgedAt: null,
@@ -95,20 +104,16 @@ export function createAutomationRunActions({
         () => runAutomationNowForTarget(row.automation, rowHostTarget)
       )
     } catch (error) {
-      setRunNowPending(null)
+      settle(() => null)
       throw error
     }
     reportOwnerAction(row.key, result.ok ? null : result.notice)
     if (!result.ok) {
-      setRunNowPending(null)
+      settle(() => null)
       return
     }
     const startedRunId = result.value?.id ?? null
-    setRunNowPending((current) =>
-      current?.rowKey === row.key
-        ? { ...current, runId: startedRunId, acknowledgedAt: Date.now() }
-        : current
-    )
+    settle((current) => ({ ...current, runId: startedRunId, acknowledgedAt: Date.now() }))
     useAppStore.getState().recordFeatureInteraction('automation-run')
     invalidateRowHost(row.key, 'run')
     await pageRefresh.hydratePersistedUIState()
