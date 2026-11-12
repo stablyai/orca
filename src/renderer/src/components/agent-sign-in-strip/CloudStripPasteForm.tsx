@@ -30,7 +30,7 @@ export function CloudStripPasteForm({
   const [code, setCode] = useState('')
   const inputRef = useRef<HTMLInputElement | null>(null)
   const setupCode = paste.setupCode
-  const busy = paste.submitting
+  const busy = paste.submitting || paste.disabled === true
   // A refused code: the field is already empty; keep the person's place in it.
   useEffect(() => {
     if (paste.refusal) {
@@ -79,11 +79,7 @@ export function CloudStripPasteForm({
           }
         }}
         variant="code"
-        className={cn(
-          'h-7 min-w-0',
-          setupCode && !fill && 'w-40',
-          fill && 'flex-1'
-        )}
+        className={cn('h-7 min-w-0', setupCode && !fill && 'w-40', fill && 'flex-1')}
       />
       <Button
         type="submit"

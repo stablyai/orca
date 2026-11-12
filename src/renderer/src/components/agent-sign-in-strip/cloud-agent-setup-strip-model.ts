@@ -30,7 +30,9 @@ function base(agent: string, t: Translate): CloudStripModel {
 export function setupCodePaste(
   agent: HostAgentSignInAgent,
   code: 'checking' | 'rejected' | undefined,
-  t: Translate
+  t: Translate,
+  /** The CLI hasn't shown the fresh link yet: the field shows, disabled. */
+  options: { waiting?: boolean } = {}
 ): NonNullable<CloudStripModel['paste']> {
   const name = HOST_AGENT_SIGN_IN_AGENT_NAME[agent]
   return {
@@ -45,6 +47,7 @@ export function setupCodePaste(
     secretLabel: t('agentSignInStrip.setupCodeLabel', 'Code from {{agent}}’s sign-in page', {
       agent: name
     }),
+    ...(options.waiting ? { disabled: true } : {}),
     setupCode: {
       placeholder: t('agentSignInStrip.setupCodePlaceholder', 'Paste code'),
       submitLabel:
@@ -117,13 +120,20 @@ export function cloudAgentSetupStripModel(args: {
                 )
               : t('agentSignInStrip.finishInBrowser', 'Finish in your browser'),
         // Claude's page shows a code to bring back: [Paste code] [Finish setup] [Open again].
-        paste: setup.acceptsCode ? setupCodePaste(args.agent, setup.code, t) : null,
-        primary: setup.canReopen
-          ? {
-              label: t('agentSignInStrip.openAgain', 'Open again'),
-              action: { kind: 'reopenSetup' }
-            }
-          : null,
+        // After a refusal the CLI takes a moment to show a fresh link: the field and "Open again" stay
+        // in place, disabled, so nothing actionable disappears (design-squad).
+        paste:
+          setup.acceptsCode || setup.code === 'rejected'
+            ? setupCodePaste(args.agent, setup.code, t, { waiting: !setup.acceptsCode })
+            : null,
+        primary:
+          setup.canReopen || setup.code === 'rejected'
+            ? {
+                label: t('agentSignInStrip.openAgain', 'Open again'),
+                action: { kind: 'reopenSetup' },
+                ...(setup.canReopen ? {} : { busy: true })
+              }
+            : null,
         announcement: t(
           'agentSignInStrip.waitingAnnounce',
           'Waiting for you to approve in your browser.'

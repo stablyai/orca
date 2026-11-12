@@ -237,3 +237,8 @@ export const notSetUpBrowserCodeRejectedNarrow = fixture({
   },
   width: 420
 })
+/** The moment after a refusal, before the fresh link: field and "Open again" stay, disabled. */
+export const notSetUpBrowserCodeGapNarrow = fixture({
+  setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: false, code: 'rejected' } },
+  width: 420
+})

@@ -235,6 +235,24 @@ describe('service: the code from the strip, Settings or the chat UI', () => {
     expect(service.setups().claude).toMatchObject({ phase: 'browser', canReopen: false })
   })
 
+  it('Cancel ends the attempt: the CLI is killed and setup goes back to idle, even mid-paste', async () => {
+    const { service, children, broadcasts } = setup()
+    service.start('claude')
+    await tick()
+    children[0]!.emit(`${AUTHORIZE}\n${PROMPT}`)
+    service.submitClaudeCode(CODE)
+    await service.cancel('claude')
+    await tick()
+    expect(children[0]!.kill).toHaveBeenCalled()
+    expect(service.setups().claude).toEqual({ phase: 'idle' })
+    expect(broadcasts.at(-1)?.claude).toEqual({ phase: 'idle' })
+    // Nothing the dead run says afterwards brings the paste state back.
+    children[0]!.emit(`${AUTHORIZE}\n${PROMPT}`)
+    children[0]!.exit()
+    await tick()
+    expect(service.setups().claude).toEqual({ phase: 'idle' })
+  })
+
   it('the 10-minute timeout also ends as expired, not a silent spin', async () => {
     vi.useFakeTimers()
     try {

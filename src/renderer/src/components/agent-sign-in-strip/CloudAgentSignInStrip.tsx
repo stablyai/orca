@@ -147,6 +147,15 @@ export function CloudAgentSignInStrip({
   wrap?: boolean
 }): React.JSX.Element {
   const sectionRef = useRef<HTMLElement | null>(null)
+  // The strip had focus and its focused control went away with a state change ("Set up once" becomes
+  // the paste step): focus stays on the strip, so Escape still cancels (it only listens inside).
+  const focusInside = useRef(false)
+  useLayoutEffect(() => {
+    const section = sectionRef.current
+    if (focusInside.current && section && document.activeElement === document.body) {
+      section.focus({ preventScroll: true })
+    }
+  })
   const width = useLiveStripWidth(sectionRef, initialWidth)
   const compact = width === 'compact'
   // The detail leaves the line when there's no room for it beside the title: below 360 px, and on the
@@ -174,6 +183,15 @@ export function CloudAgentSignInStrip({
       aria-labelledby={titleId}
       aria-describedby={detailId}
       tabIndex={-1}
+      onFocus={() => {
+        focusInside.current = true
+      }}
+      onBlur={(event) => {
+        // A control removed under focus blurs with no next target: the strip keeps the focus.
+        if (event.relatedTarget !== null && !event.currentTarget.contains(event.relatedTarget)) {
+          focusInside.current = false
+        }
+      }}
       data-cloud-sign-in-strip
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
@@ -321,7 +339,10 @@ export function CloudAgentSignInStrip({
       </div>
       {stacked && setupCode ? (
         // Row 2, under the text: [Paste code ……] [Finish setup] then "Open again" as a quiet button.
-        <div data-strip-code-row className="col-span-2 col-start-2 flex min-w-0 flex-wrap items-center gap-1.5">
+        <div
+          data-strip-code-row
+          className="col-span-2 col-start-2 flex min-w-0 flex-wrap items-center gap-1.5"
+        >
           <div className="min-w-0 flex-1 basis-56">
             <CloudStripPasteForm
               fill
@@ -335,7 +356,12 @@ export function CloudAgentSignInStrip({
               type="button"
               variant="ghost"
               size="xs"
-              onClick={() => (model.primary ? actions.primary(model.primary.action) : undefined)}
+              aria-disabled={model.primary.busy || undefined}
+              onClick={() =>
+                model.primary && !model.primary.busy
+                  ? actions.primary(model.primary.action)
+                  : undefined
+              }
             >
               {model.primary.label}
             </Button>
