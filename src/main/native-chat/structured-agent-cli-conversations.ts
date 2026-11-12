@@ -7,7 +7,7 @@ import {
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
+import { sessionIdFromFileName } from '../ai-vault/parsing/session-scanner-accumulator'
 
 export type StructuredAgentTranscriptImportSettings = {
   codexManagedAccounts?: readonly { managedHomePath: string }[]

@@ -16,12 +16,14 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent } from '../../session-scanner-messages'
-import { arrayValue, extractString, parseJsonObject } from '../../session-scanner-values'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractContentText } from '../../session-scanner-text-normalization'
-import { tokenTotal } from '../../session-scanner-token-values'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
+import { arrayValue } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractContentText } from '../../parsing/session-scanner-text-normalization'
+import { tokenTotal } from '../../parsing/session-scanner-token-values'
 
 export async function parseGeminiSessionFile(
   file: FileWithMtime,

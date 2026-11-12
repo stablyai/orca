@@ -1,4 +1,4 @@
-import { waitForAiVaultScan } from '../ai-vault-scan-cancellation'
+import { waitForAiVaultScan } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { rovoSessionCwd, rovoRoleFromKind } from './session-scanner-rovo-metadata'
 export { rovoSessionCwd, rovoRoleFromKind } from './session-scanner-rovo-metadata'
 import { foldOmpTranscriptTitle, type OmpTranscriptTitle } from './omp/session-scanner-omp-title'
@@ -30,18 +30,19 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../session-scanner-accumulator'
-import { addSessionContent } from '../session-scanner-messages'
+} from '../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../parsing/session-scanner-messages'
+import { arrayValue } from '../parsing/session-record-fields'
+import { extractString } from '../../../shared/trimmed-string'
+import { firstString } from '../parsing/session-record-fields'
+import { parseJsonObject } from '../parsing/session-json-object'
+import { readJsonObjectIfExists } from '../discovery/session-json-file'
+import { asRecord } from '../parsing/session-record-fields'
 import {
-  arrayValue,
-  extractString,
-  firstString,
-  parseJsonObject,
-  readJsonObjectIfExists
-} from '../session-scanner-values'
-import { asRecord } from '../session-scanner-record-value'
-import { extractContentText, extractMessageText } from '../session-scanner-text-normalization'
-import { tokenTotal } from '../session-scanner-token-values'
+  extractContentText,
+  extractMessageText
+} from '../parsing/session-scanner-text-normalization'
+import { tokenTotal } from '../parsing/session-scanner-token-values'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId

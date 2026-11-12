@@ -2,7 +2,7 @@ import { dirname, join } from 'node:path'
 import { wslGatedLstat } from '../../../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { recordSessionScanIssue, scanIssueTextFromError } from '../../session-scan-issues'
+import { recordSessionScanIssue, scanIssueTextFromError } from '../../parsing/session-scan-issues'
 import type { FileWithMtime, SessionFileDiscovery } from '../../session-scanner-types'
 
 function transcriptDirectory(file: FileWithMtime): string {

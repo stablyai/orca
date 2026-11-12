@@ -408,7 +408,6 @@
 2 test-no-wall-clock:src/main/ai-vault/scanners/cursor/session-scanner-cursor-chat-meta.test.ts
 1 test-no-wall-clock:src/main/ai-vault/scanners/devin/session-scanner-devin-db.test.ts
 2 test-no-wall-clock:src/main/ai-vault/scanners/grok/session-scanner-grok-parser.test.ts
-1 test-no-wall-clock:src/main/ai-vault/scanners/kimi/session-scanner-kimi-parser.test.ts
 1 test-no-wall-clock:src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process.test.ts
 2 test-no-wall-clock:src/main/ai-vault/scanners/opencode/session-scanner-opencode-parser.test.ts
 2 test-no-wall-clock:src/main/antigravity/posix-hook-invocation.test.ts
