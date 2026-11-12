@@ -303,11 +303,11 @@ describe('explicit branch reuse with real Git', () => {
 })
 
 describe('cleanup ownership before candidate fallbacks', () => {
-  it.each(['pending branch', 'failed branch reuse', 'failed path'])(
+  it.each(['pending branch', 'failed branch reuse', 'failed path', 'empty branch override'])(
     'explains %s before suffixing or missing-branch guidance',
     async (scenario) => {
       const f = await fixture()
-      const path = join(f.workspaceRoot, 'reserved')
+      const path = join(scenario === 'empty branch override' ? f.root : f.workspaceRoot, 'reserved')
       const failed = scenario !== 'pending branch'
       const records = failed ? failedWorktreeRemovals : pendingWorktreeRemovals
       const record = {
@@ -331,8 +331,16 @@ describe('cleanup ownership before candidate fallbacks', () => {
       try {
         await expect(
           f.candidate({
-            name: scenario === 'failed path' ? 'reserved' : 'free-name',
-            branchNameOverride: scenario === 'failed path' ? undefined : 'reserved',
+            name:
+              scenario === 'failed path' || scenario === 'empty branch override'
+                ? 'reserved'
+                : 'free-name',
+            branchNameOverride:
+              scenario === 'failed path'
+                ? undefined
+                : scenario === 'empty branch override'
+                  ? ''
+                  : 'reserved',
             branchIntent: scenario === 'failed branch reuse' ? 'open-existing-v2' : 'create-new'
           })
         ).rejects.toThrow(failed ? 'Retry deleting it before reusing' : 'Cleanup is pending')

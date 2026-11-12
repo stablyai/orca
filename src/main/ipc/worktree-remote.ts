@@ -1234,7 +1234,7 @@ async function performLocalWorktreeCreate(
               workspaceRoot
             ),
       branch:
-        args.branchNameOverride ??
+        args.branchNameOverride ||
         (await resolveCreateBranchName(
           repo.path,
           undefined,

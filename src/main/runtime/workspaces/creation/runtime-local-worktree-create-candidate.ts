@@ -112,7 +112,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
               args.workspaceRoot
             ),
       branch:
-        args.request.branchNameOverride ??
+        args.request.branchNameOverride ||
         (await resolveCreateBranchName(
           args.repo.path,
           undefined,
