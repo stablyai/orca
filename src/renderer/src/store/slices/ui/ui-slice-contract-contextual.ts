@@ -55,6 +55,7 @@ export type UISliceContextual = {
     | 'diagram-viewer'
     | 'agent-session-history'
     | 'chat-account-usage'
+    | 'chat-hooks'
     | 'node-dist-mirror'
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void

@@ -255,6 +255,11 @@ export async function readStructuredAgentSessionOptions(
           ? (live?.forkSupport ?? readAcpForkSupport(agent))
           : 'unsupported',
     ...(supportsSessionAccountUsage(record) ? { accountUsage: true as const } : {}),
+    ...(record &&
+    supportsSessionAccountUsage(record) &&
+    agents.registration(record.provider)?.adapter.reviewHooks
+      ? { hookTrust: true as const }
+      : {}),
     ...(live?.effortFixed
       ? {
           models: options.models.map(({ effortsKnown: _unknown, ...row }) => ({

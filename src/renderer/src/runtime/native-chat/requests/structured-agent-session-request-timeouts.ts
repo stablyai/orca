@@ -7,6 +7,7 @@ export const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, num
   // Waiting model catalogs can take Claude’s 60s listing plus 15s account switch and 5s login environment.
   ['agentSession.modelCatalog', 90_000],
   ['agentSession.sleepWorkspace', 120_000],
+  ['agentSession.hooks', 45_000],
   // All bounded-concurrency provider starts and dispatch settlements precede the reply.
   ['agentSession.restartContinue', 600_000]
 ])

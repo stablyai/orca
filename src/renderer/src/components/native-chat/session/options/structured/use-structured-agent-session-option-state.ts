@@ -98,6 +98,7 @@ export function useStructuredAgentSessionOptionState(args: {
             commands: acceptedSupport.result.conversationCommands ?? [],
             compactInstructions: acceptedSupport.result.compactInstructions === true,
             accountUsage: acceptedSupport.result.accountUsage,
+            hookTrust: acceptedSupport.result.hookTrust,
             threadGoal: acceptedSupport.result.threadGoal,
             reportedThreadGoal: acceptedSupport.result.reportedThreadGoal,
             contextUsage: acceptedSupport.result.contextUsage,
@@ -248,6 +249,7 @@ export function useStructuredAgentSessionOptionState(args: {
     takesSendOptions,
     conversationSupport: support,
     sessionSupport: {
+      hookTrust: support?.hookTrust,
       acceptsImages: support?.acceptsImages,
       canSwitchAccount: support?.canSwitchAccount
     },
