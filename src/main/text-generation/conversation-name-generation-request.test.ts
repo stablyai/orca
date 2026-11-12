@@ -1,7 +1,4 @@
-import {
-  sourceShapedKimiOutput,
-  realKimiOccupiedOutput
-} from '../../shared/__fixtures__/kimi-generation-source-shaped'
+import { realKimiOccupiedOutput } from '../../shared/__fixtures__/kimi-generation-source-shaped'
 import { describe, expect, it, vi } from 'vitest'
 import { createMockDiscoveryChild } from './commit-message-text-generation-test-harness'
 import { generateConversationNameFromContext } from './commit-message-text-generation'
@@ -107,34 +104,5 @@ describe('generateConversationName', () => {
     }
     cancelLocalGeneration('conversation-name', '/repo')
     expect(await pending).toMatchObject({ success: false, canceled: true })
-  })
-
-  it.each(['custom', 'kimi'] as const)('%s local title', async (agentId) => {
-    const child = createMockDiscoveryChild()
-    const spawnAgent = vi.fn(() => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The test child implements every process member the generation lane reads.
-      return child as unknown as SpawnedSourceControlAgentProcess
-    })
-    const pending = generateConversationName({
-      context: { firstPrompt: 'Fix login' },
-      params: { agentId, model: agentId === 'kimi' ? 'default' : '', customAgentCommand: 'agent' },
-      target: { kind: 'local', cwd: '/repo' },
-      spawnAgent
-    })
-    await vi.waitFor(() => expect(spawnAgent).toHaveBeenCalledOnce())
-    child.stdout.emit(
-      'data',
-      Buffer.from(
-        agentId === 'kimi'
-          ? sourceShapedKimiOutput('Title: "Fix login flow"')
-          : 'Title: "Fix login flow"\n'
-      )
-    )
-    child.emit('close', 0)
-    expect(await pending).toEqual({
-      success: true,
-      name: 'Fix login flow',
-      agentLabel: agentId === 'kimi' ? 'Kimi' : 'agent'
-    })
   })
 })

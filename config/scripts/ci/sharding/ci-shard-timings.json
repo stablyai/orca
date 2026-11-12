@@ -6285,7 +6285,6 @@
       "src/shared/claude-background-task-status.test.ts": 315,
       "src/shared/claude-model-list-probe.test.ts": 55,
       "src/shared/claude-shell-function.test.ts": 220,
-      "src/shared/cli-runtime-pairing-inputs.test.ts": 64,
       "src/shared/cloud-service-url.test.ts": 37,
       "src/shared/coalescing-keyed-runner.test.ts": 119,
       "src/shared/codebuddy-agent.test.ts": 301,
