@@ -1,4 +1,6 @@
 import { translate } from '@/i18n/i18n'
+import { useCloudChatHoldHint } from '../../agent-sign-in-strip/use-cloud-chat-hold-hint'
+import { structuredCloudHoldKey } from '@/lib/orca-cloud/cloud-structured-launch-hold'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   managedRuntimeInstallCard,
@@ -46,10 +48,13 @@ export function useNativeChatInstallSlot(
     layout,
     hostProgram
   )
+  // CHAT-BANNERS: an Orca Cloud launch held on the chat's strip has no agent to send to yet.
+  const cloudHoldHint = useCloudChatHoldHint(structuredCloudHoldKey(props.sessionId), '')
   const unavailableHint =
-    slot.kind === 'install'
+    cloudHoldHint ??
+    (slot.kind === 'install'
       ? managedRuntimeInstallCard(slot.state, agentLabel, slot.layout, undefined, t).title
-      : undefined
+      : undefined)
   return {
     slot,
     sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
