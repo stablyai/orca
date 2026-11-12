@@ -69,13 +69,10 @@ export async function checkRunPendingMail(args: {
     revalidateConsumer()
     return {
       result: {
-        ...acknowledgeSelectedMessages(
-          db,
-          address,
-          params.ackIds,
-          recordMutationReceipt,
-          residual && ownsResidual() ? `dispatch:${residual.id}` : undefined
-        ),
+        ...acknowledgeSelectedMessages(db, address, params.ackIds, {
+          recordReceipt: recordMutationReceipt,
+          residualMailbox: residual && ownsResidual() ? `dispatch:${residual.id}` : undefined
+        }),
         runId: run.id
       }
     }

@@ -182,7 +182,10 @@ export async function checkWorkerMailbox(args: {
   if (params.ackIds) {
     return {
       ...mailboxIdentity,
-      ...acknowledgeSelectedMessages(db, address, params.ackIds, args.recordMutationReceipt)
+      ...acknowledgeSelectedMessages(db, address, params.ackIds, {
+        recordReceipt: args.recordMutationReceipt,
+        dispatchConsumer: { generation: workerMailbox.generation, readCurrentGeneration }
+      })
     }
   }
   let acknowledged

@@ -6,20 +6,31 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
 import { exposeMessages } from './mailbox-message-receipt'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
+import { dispatchFenced } from './dispatch-mailbox-fence'
 
 export function acknowledgeSelectedMessages(
   db: OrchestrationDb,
   mailbox: string,
   ids: string[],
-  recordReceipt?: (receipt: unknown) => void,
-  residualMailbox?: string
+  options?: {
+    recordReceipt?: (receipt: unknown) => void
+    residualMailbox?: string
+    dispatchConsumer?: { generation: number; readCurrentGeneration: () => number | undefined }
+  }
 ) {
   return runLifecycleWriteTransaction(db.db, 'selective_message_ack', () => {
+    const consumer = options?.dispatchConsumer
+    if (consumer && consumer.readCurrentGeneration() !== consumer.generation) {
+      throw dispatchFenced()
+    }
     const selectedIds = [...new Set(ids)]
     const rows = getMessagesByIds(db, selectedIds)
     const messages = selectedIds.map((id) => {
       const message = rows.get(id)
-      if (!message || (message.to_handle !== mailbox && message.to_handle !== residualMailbox)) {
+      if (
+        !message ||
+        (message.to_handle !== mailbox && message.to_handle !== options?.residualMailbox)
+      ) {
         throw new OrchestrationError(
           'invalid_argument',
           'Every --ack-ids ID must exist and be addressed to the current mailbox. No messages were acknowledged.',
@@ -66,7 +77,7 @@ export function acknowledgeSelectedMessages(
       markedIds,
       alreadyReadIds: messages.filter((message) => message.read === 1).map((message) => message.id)
     }
-    recordReceipt?.(result)
+    options?.recordReceipt?.(result)
     return result
   })
 }

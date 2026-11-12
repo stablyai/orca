@@ -28,7 +28,9 @@ export async function checkDirectMailbox(args: {
     throw staleDelivery(db, params.ack)
   }
   if (params.ackIds) {
-    return acknowledgeSelectedMessages(db, handle, params.ackIds, args.recordMutationReceipt)
+    return acknowledgeSelectedMessages(db, handle, params.ackIds, {
+      recordReceipt: args.recordMutationReceipt
+    })
   }
   // Honor legacy unread:false callers for compatibility (design doc §5).
   const showAll = params.all === true || (params.unread === false && params.peek !== true)

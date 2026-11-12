@@ -116,6 +116,32 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     expect(live.messages.map((message) => message.subject)).toEqual(['do the work'])
   })
 
+  it('leaves selected mail unread when the Dispatch consumer is replaced on the same pane', async () => {
+    const dispatchId = attachedDispatchWithMail()
+    const message = db.getUnreadMessages(`dispatch:${dispatchId}`)[0]!
+    const identity = db.getActiveDispatchForIdentity.bind(db)
+    let resolved = 0
+    vi.spyOn(db, 'getActiveDispatchForIdentity').mockImplementation((handle, paneKey) => {
+      resolved += 1
+      if (resolved === 2) {
+        remintOnSamePane(dispatchId)
+      }
+      return identity(handle, paneKey)
+    })
+    const acknowledge = () =>
+      h.call(
+        'orchestration.ackMessages',
+        { terminal: 'term_worker', terminalPaneKey: PANE_A, ackIds: [message.id] },
+        ctx
+      )
+
+    await expect(acknowledge()).rejects.toMatchObject({ code: 'consumer_fenced' })
+    expect(db.getMessageById(message.id)?.read).toBe(0)
+
+    vi.mocked(db.getActiveDispatchForIdentity).mockRestore()
+    await expect(acknowledge()).resolves.toMatchObject({ markedIds: [message.id] })
+  })
+
   it('fences a blocked --peek whose generation moved while it waited', async () => {
     const dispatchId = attachedDispatchWithMail()
     vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
