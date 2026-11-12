@@ -34,7 +34,6 @@ export type PRRefreshRegistrationCheck = (candidate: GitHubPRRefreshCandidate) =
 export class PRRefreshQueueDrainer {
   private draining = false
   private timer: ReturnType<typeof setTimeout> | null = null
-  // Why: queued work can outlive its project; re-check on every removal path before Git runs.
   private registrationCheck: PRRefreshRegistrationCheck | null = null
   readonly watchJobs: PRWatchJobRunner
 
@@ -53,9 +52,7 @@ export class PRRefreshQueueDrainer {
   }
 
   schedule(delay = 0): void {
-    if (this.timer) {
-      clearTimeout(this.timer)
-    }
+    clearTimeout(this.timer ?? undefined)
     this.timer = setTimeout(() => {
       this.timer = null
       // The drain serves every queued repo; a scheduling call inside a WSL user act must not lend it that act.
