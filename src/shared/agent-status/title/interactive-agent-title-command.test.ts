@@ -63,7 +63,8 @@ describe('titleCommandLaunchesInteractiveTui', () => {
     'claude "mcp serve"',
     'claude -- mcp',
     'claude attach 1a2b',
-    'claude agents'
+    'claude agents',
+    'claude import codex'
   ])('accepts the session launch %j whose words only resemble a subcommand', (title) => {
     expect(titleCommandLaunchesInteractiveTui(title, 'claude')).toBe(true)
   })
