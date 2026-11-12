@@ -4393,7 +4393,6 @@
       "src/renderer/src/components/browser-pane/navigate/browser-page-download-activity.test.ts": 44,
       "src/renderer/src/components/browser-pane/navigate/browser-webview-load-failure.test.ts": 243,
       "src/renderer/src/components/browser-pane/navigate/chromium-error-page-poll-visibility.test.ts": 1956,
-      "src/renderer/src/components/browser-pane/navigate/use-browser-page-reload-actions.test.tsx": 2177,
       "src/renderer/src/components/browser-pane/restored-client-hosted-recovery-window.test.tsx": 6205,
       "src/renderer/src/components/browser-pane/stream-remote/remote-browser-page-input-model.test.ts": 45,
       "src/renderer/src/components/browser-pane/stream-remote/remote-browser-page-pane.address-bar.test.tsx": 2987,

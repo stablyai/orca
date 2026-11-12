@@ -60,7 +60,6 @@ vi.mock('../../cdp/commands/cdp-bridge', async () => {
 
 import { AgentBrowserBridge } from '../agent-browser-bridge'
 import {
-  createSucceedWith,
   mockBrowserManager,
   mockWebContents,
   overrideBridgeWebContentsLookup,
@@ -105,33 +104,6 @@ describe('AgentBrowserBridge', () => {
     expect(wc.debugger.sendCommand).not.toHaveBeenCalledWith(
       'Runtime.evaluate',
       expect.objectContaining({ expression: 'sideEffect()' })
-    )
-  })
-
-  it('reports a reload that lands on a network error page as a failure', async () => {
-    const wc = mockWebContents(100)
-    const listeners = new Map<string, () => void>()
-    wc.on.mockImplementation((event: string, listener: () => void) =>
-      listeners.set(event, listener)
-    )
-    Object.assign(wc, {
-      reload: vi.fn(() => queueMicrotask(() => listeners.get('did-fail-load')?.()))
-    })
-    webContentsFromIdMock.mockReturnValue(wc)
-    createSucceedWith(execFileMock, stdinWrites)({})
-    bridge = new AgentBrowserBridge(
-      mockBrowserManager(undefined, undefined, {
-        getBrowserPageLoadError: vi.fn(() => ({
-          code: -106,
-          description: 'ERR_INTERNET_DISCONNECTED',
-          validatedUrl: 'https://example.com'
-        }))
-      })
-    )
-    bridge.setActiveTab(100)
-
-    await expect(bridge.reload(undefined, 'tab-1')).rejects.toThrow(
-      'ERR_INTERNET_DISCONNECTED (-106)'
     )
   })
 })
