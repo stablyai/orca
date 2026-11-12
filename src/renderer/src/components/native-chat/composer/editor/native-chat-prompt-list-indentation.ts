@@ -4,8 +4,28 @@ import { closeHistory } from '@tiptap/pm/history'
 import { Plugin } from '@tiptap/pm/state'
 
 const LIST_ITEM = /^([ \t]*)(?:[-*•]|\d{1,9}[.)])[ \t]+/
+const LIST_INDENT_STEP = 4
 // Code stays literal even inside a Markdown '+' list that these shortcuts do not edit.
 const FENCE_LIST_ITEM = /^[ \t]*(?:[-+*•]|\d{1,9}[.)])[ \t]+/
+
+type ListItemPrefix = {
+  indent: number
+  contentColumn: number
+  hasTab: boolean
+}
+
+function matchListItemPrefix(line: string): ListItemPrefix | null {
+  const match = LIST_ITEM.exec(line)
+  if (!match) {
+    return null
+  }
+  const [prefix, whitespace] = match
+  return {
+    indent: whitespace.length,
+    contentColumn: prefix.length,
+    hasTab: prefix.includes('\t')
+  }
+}
 
 function positionLeafText(node: ProseMirrorNode): string {
   // Chips occupy one document position; their serialized tokens would shift the calculated line start.
@@ -36,7 +56,7 @@ function isInsideCodeFence(lines: readonly string[]): boolean {
   return fence !== ''
 }
 
-function previousListItem(lines: readonly string[], indent: number): RegExpExecArray | null {
+function previousListItem(lines: readonly string[], maxIndent: number): ListItemPrefix | null {
   let continuationIndent = Infinity
   for (let index = lines.length - 1; index >= 0; index--) {
     if (lines[index].trim() === '') {
@@ -45,8 +65,8 @@ function previousListItem(lines: readonly string[], indent: number): RegExpExecA
     if (matchCodeFence(lines[index])) {
       return null
     }
-    const match = LIST_ITEM.exec(lines[index])
-    if (!match) {
+    const item = matchListItemPrefix(lines[index])
+    if (!item) {
       const leading = /^ +/.exec(lines[index])
       if (leading) {
         continuationIndent = Math.min(continuationIndent, leading[0].length)
@@ -54,11 +74,11 @@ function previousListItem(lines: readonly string[], indent: number): RegExpExecA
       }
       return null
     }
-    if (match[0].includes('\t') || match[0].length > continuationIndent) {
+    if (item.hasTab || item.contentColumn > continuationIndent) {
       return null
     }
-    if (match[1].length <= indent) {
-      return match
+    if (item.indent <= maxIndent) {
+      return item
     }
     continuationIndent = Infinity
   }
@@ -119,15 +139,15 @@ export const NativeChatListIndentation = Extension.create({
               positionLeafText
             )
             const line = before.slice(before.lastIndexOf('\n') + 1) + after.split('\n')[0]
-            const item = LIST_ITEM.exec(line)
-            if (!item || item[0].includes('\t')) {
+            const item = matchListItemPrefix(line)
+            if (!item || item.hasTab) {
               return false
             }
             const previousLines = doc.textBetween(0, lineStart, '\n', positionLeafText).split('\n')
             if (isInsideCodeFence(previousLines)) {
               return false
             }
-            const indent = item[1].length
+            const { indent } = item
             const previous = previousListItem(previousLines, event.shiftKey ? indent - 1 : indent)
             // Keep indentation separate from text typed immediately before or after it in undo history.
             const tr = closeHistory(state.tr)
@@ -135,13 +155,16 @@ export const NativeChatListIndentation = Extension.create({
               if (indent === 0) {
                 return false
               }
-              const target = previous?.[1].length ?? Math.max(0, indent - 4)
+              const target = previous?.indent ?? Math.max(0, indent - LIST_INDENT_STEP)
               tr.delete(lineStart + target, lineStart + indent)
             } else {
-              if (!previous || previous[1].length !== indent) {
+              if (!previous || previous.indent !== indent) {
                 return false
               }
-              tr.insertText(' '.repeat(Math.max(4, previous[0].length - indent)), lineStart)
+              tr.insertText(
+                ' '.repeat(Math.max(LIST_INDENT_STEP, previous.contentColumn - indent)),
+                lineStart
+              )
             }
             if (/[-*]/.test(line[indent])) {
               const marker = tr.mapping.map(lineStart + indent)
