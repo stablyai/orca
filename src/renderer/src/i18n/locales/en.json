@@ -23904,7 +23904,9 @@
         "badge": "Cloud only. Orca Cloud clones it, so no copy on this computer is needed.",
         "rowPrivate": "{{repo}}, private, cloud only",
         "rowPublic": "{{repo}}, cloud only",
-        "privateLabel": "Private"
+        "privateLabel": "Private",
+        "menuGroup": "Orca Cloud",
+        "addRepositoryMenu": "Add a GitHub repository…"
       },
       "agentLabel": "Agent"
     },

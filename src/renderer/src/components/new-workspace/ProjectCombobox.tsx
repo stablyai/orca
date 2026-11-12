@@ -15,6 +15,7 @@ import {
   ProjectComboboxAddProjectOption,
   type ProjectComboboxAddProjectMenu
 } from './ProjectComboboxAddProjectOption'
+import { withCloudAddProjectEntry } from './ProjectComboboxCloudAddProjectEntry'
 import {
   handleProjectComboboxKeyDown,
   PROJECT_COMBOBOX_ADD_PROJECT_KEY
@@ -53,7 +54,7 @@ export default function ProjectCombobox({
   cloudRepos = null,
   cloudRepoValue = null,
   onCloudRepoSelected,
-  onMoreCloudAccess,
+  onMoreCloudAccess: onMoreCloudAccessProp,
   onShowMoreCloudRepos = null,
   openSignal = 0,
   focusSignal = 0
@@ -66,6 +67,9 @@ export default function ProjectCombobox({
   const contentRef = useRef<HTMLDivElement>(null)
   const recentIds = useRecentProjectIds()
   const hasAddProjectRow = Boolean(onAddProject || addProjectMenu)
+  // PROJ-MENU: with the Add project menu, "give Orca Cloud access" lives there, not in the list.
+  const { addProjectMenu: addProjectMenuWithCloud, listMoreAccess: onMoreCloudAccess } =
+    withCloudAddProjectEntry(addProjectMenu, onMoreCloudAccessProp)
   // Derive keys from the displayed sections: folder grouping changes raw rank order, so keyboard selection must follow what users see.
   const deriveRowKeys = useCallback(
     (query: string): string[] => [
@@ -404,7 +408,7 @@ export default function ProjectCombobox({
               armed={armedKey === ADD_PROJECT_KEY}
               cascadeOpen={cascadeOpen}
               cascadeAutoFocus={cascadeAutoFocus}
-              addProjectMenu={addProjectMenu}
+              addProjectMenu={addProjectMenuWithCloud}
               onAddProject={onAddProject}
               onArm={() => arm(ADD_PROJECT_KEY)}
               onCommitPlain={() => commit(ADD_PROJECT_KEY)}
