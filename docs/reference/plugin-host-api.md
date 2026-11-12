@@ -42,6 +42,7 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`agent.launch`](#agentlaunch) | `agent:launch` | worker | yes | 1.3 | Starts an agent's CLI in a new terminal of a workspace, in the background, and returns as soon as it starts; a `prompt` is sent once the agent is ready. |
 | [`editor.open`](#editoropen) | `workspace:write` | worker | yes | 1.3 | Opens a file of a workspace in an editor tab of Orca's window; desktop app only. `workspace.open` shows the workspace. |
 | [`commands.run`](#commandsrun) | `workspace:write` | worker | yes | 1.3 | Runs one of Orca's built-in actions in its window, never a plugin's replacement of it; desktop app only. |
+| [`project.setHidden`](#projectsethidden) | `workspace:write` | worker | yes | 1.9 | Hides a project from Orca's sidebar, or shows it again, as Hide Project in its menu does. View-only: its workspaces, terminals, agents and automations keep running, `workspace.list` still lists its workspaces, `project.list` marks it `hidden`, and Orca's Hidden projects list can show it again. It changes one host's copy of the project; on a paired Orca server it hides the project for everyone connected. |
 | [`terminal.list`](#terminallist) | `workspace:read` | worker | no | 1.7 | Lists a workspace's terminals, at most 50; `workspace.readContext` lists the focused one's. |
 | [`terminal.focus`](#terminalfocus) | `workspace:write` | worker | yes | 1.7 | Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only. `focused` is false when a newer focus request won or the window did not move to it. |
 | [`terminal.close`](#terminalclose) | `terminal:send` | worker | yes | 1.7 | Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`. A plugin keeps its terminals until it is disabled or removed. |
@@ -235,7 +236,7 @@ Lists every workspace, Git worktrees and folders, on every host Orca reaches; `i
 Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`. `hostId` is always named: `local`, `ssh:…` or `runtime:…`.
 
 ```ts
-(params?: {}) => { projects: { id: string; name: string; kind: "git" | "folder"; hostId: string | null; path: string }[]; truncated: boolean }
+(params?: {}) => { projects: { id: string; name: string; kind: "git" | "folder"; hostId: string | null; path: string; hidden?: boolean }[]; truncated: boolean }
 ```
 
 ### `workspace.open`
@@ -292,6 +293,14 @@ Runs one of Orca's built-in actions in its window, never a plugin's replacement 
 
 ```ts
 (params: { action: "worktree.history.back" | "worktree.history.forward" | "sidebar.left.toggle" | "sidebar.sleepingWorkspaces.toggle" | "floatingWorkspace.maximize" | "tab.rename" | "workspace.rename" | "workspace.openBoard" | "view.tasks" | "sidebar.right.toggle" | "sidebar.explorer.toggle" | "sidebar.search.toggle" | "sidebar.sourceControl.toggle" | "sidebar.checks.toggle" | "sidebar.ports.toggle" }) => { ran: true }
+```
+
+### `project.setHidden`
+
+Hides a project from Orca's sidebar, or shows it again, as Hide Project in its menu does. View-only: its workspaces, terminals, agents and automations keep running, `workspace.list` still lists its workspaces, `project.list` marks it `hidden`, and Orca's Hidden projects list can show it again. It changes one host's copy of the project; on a paired Orca server it hides the project for everyone connected.
+
+```ts
+(params: { projectId: string; hostId?: string; hidden: boolean }) => { hostId: string; hidden: boolean }
 ```
 
 ### `terminal.list`

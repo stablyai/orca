@@ -169,7 +169,7 @@ declare module 'orca/host' {
     /** Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`. `hostId` is always named: `local`, `ssh:…` or `runtime:…`. Since host API 1.7. */
     "project.list": {
       params: Record<string, never> | undefined
-      result: { projects: { id: string; name: string; kind: "git" | "folder"; hostId: string | null; path: string }[]; truncated: boolean }
+      result: { projects: { id: string; name: string; kind: "git" | "folder"; hostId: string | null; path: string; hidden?: boolean }[]; truncated: boolean }
       surfaces: "worker"
     }
     /** Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app. Since host API 1.3. */
@@ -212,6 +212,12 @@ declare module 'orca/host' {
     "commands.run": {
       params: { action: "worktree.history.back" | "worktree.history.forward" | "sidebar.left.toggle" | "sidebar.sleepingWorkspaces.toggle" | "floatingWorkspace.maximize" | "tab.rename" | "workspace.rename" | "workspace.openBoard" | "view.tasks" | "sidebar.right.toggle" | "sidebar.explorer.toggle" | "sidebar.search.toggle" | "sidebar.sourceControl.toggle" | "sidebar.checks.toggle" | "sidebar.ports.toggle" }
       result: { ran: true }
+      surfaces: "worker"
+    }
+    /** Hides a project from Orca's sidebar, or shows it again, as Hide Project in its menu does. View-only: its workspaces, terminals, agents and automations keep running, `workspace.list` still lists its workspaces, `project.list` marks it `hidden`, and Orca's Hidden projects list can show it again. It changes one host's copy of the project; on a paired Orca server it hides the project for everyone connected. Since host API 1.9. */
+    "project.setHidden": {
+      params: { projectId: string; hostId?: string; hidden: boolean }
+      result: { hostId: string; hidden: boolean }
       surfaces: "worker"
     }
     /** Lists a workspace's terminals, at most 50; `workspace.readContext` lists the focused one's. Since host API 1.7. */

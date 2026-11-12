@@ -79,7 +79,7 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'workspace:read':
     'Read your projects and workspaces (names, branches, paths and agent status) and the terminals in them, and get notified when they change',
   'workspace:write':
-    'Open and rename your workspaces, focus their terminals, open their files in Orca, and run its built-in commands',
+    'Open and rename your workspaces, hide projects from the sidebar or show them again, focus their terminals, open their files in Orca, and run its built-in commands',
   'agent:read': 'Get notified when agent status changes',
   'agent:launch': 'Start and resume agents in your workspaces, local and SSH',
   'terminal:send':
