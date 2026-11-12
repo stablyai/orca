@@ -176,8 +176,7 @@ export async function openWorkspaceBrowserTab(
       availability,
       route,
       request.workspaceId,
-      expectedSshConnectionId,
-      request.allowClientBrowserFallback
+      expectedSshConnectionId
     )
   ) {
     throw openFailure(presentation.error, 'asserted SSH connection cannot provide this browser')
