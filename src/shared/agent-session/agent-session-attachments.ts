@@ -134,19 +134,29 @@ export type AgentSessionAttachmentClipboardTarget = Omit<
 >
 
 /** Extensions a pasted image's name can carry; the host picks one from the image's bytes. */
-const AGENT_SESSION_PASTED_IMAGE_EXTENSIONS = ['png', 'jpg', 'gif', 'webp'] as const
+const AGENT_SESSION_PASTED_IMAGE_EXTENSIONS = [
+  'png',
+  'jpg',
+  'gif',
+  'webp',
+  'heic',
+  'heif',
+  'avif',
+  'tiff',
+  'bmp'
+] as const
 type AgentSessionPastedImageExtension = (typeof AGENT_SESSION_PASTED_IMAGE_EXTENSIONS)[number]
 
 /** Matches the `.png`, `.jpg`… suffix of a pasted image's name. */
 export const AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE = `\\.(?:${AGENT_SESSION_PASTED_IMAGE_EXTENSIONS.join('|')})`
 
-/** `orca-paste-…<ext>`, the name every pasted image gets, so it reads as "Pasted image". */
+/** `orca-paste-…<ext>`, the name every pasted image gets, so it reads as "Pasted image"; null leaves unidentified bytes unnamed. */
 export function agentSessionPastedImageName(
   now: number,
   unique: string,
-  extension: AgentSessionPastedImageExtension = 'png'
+  extension: AgentSessionPastedImageExtension | null = 'png'
 ): string {
-  return `orca-paste-${now}-${unique}.${extension}`
+  return extension ? `orca-paste-${now}-${unique}.${extension}` : `orca-paste-${now}-${unique}`
 }
 
 /** `orca-paste-…txt`, the name a long text paste saved as a file gets, so it reads as "Pasted text". */
