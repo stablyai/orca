@@ -44,6 +44,8 @@ export type NewWorkspaceComposerCardProps = {
   onComposerNodeChange?: (node: HTMLDivElement | null) => void
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
+  agentPrompt: string
+  onAgentPromptChange: (value: string) => void
   agentSurfaceRows?: AgentComboboxSurfaceRows
   agentPickerDraft?: AgentPickerDraft
   agentSetupDisabled?: boolean

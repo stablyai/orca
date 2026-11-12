@@ -4,6 +4,7 @@ import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-works
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import type { AgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
+import type { NativeChatLaunchPromptDelivery } from '@/lib/agent-session/launch/prompt/native-chat-launch-prompt-delivery'
 import { planLaunchAgentStartupPrompt } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import '@/diagnostics/telemetry/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
@@ -151,7 +152,7 @@ export async function submitFolderWorkspaceCreate({
     quickAgent && linkedWorkItem && !typedPrompt
       ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note)
       : null
-  const promptDelivery = launchDraftPrompt
+  const promptDelivery: NativeChatLaunchPromptDelivery = launchDraftPrompt
     ? 'draft'
     : typedPrompt
       ? 'submit-after-ready'
