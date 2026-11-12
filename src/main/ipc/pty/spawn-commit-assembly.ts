@@ -10,7 +10,7 @@ import type { PtyRegistrationClaim } from '../../runtime/terminal/records/runtim
 import { markNativeWindowsConptyPty } from '../../runtime/terminal/output/terminal-model-query-authority'
 import type { IPtyProvider, PtySpawnResult } from '../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../codex/configuration/homes/codex-pane-account-registry-types'
-import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
+import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
 import type { PtySpawnTiming } from './pty-spawn-timing'
 import type { CodexHomePtySpawnedLifecycleArgs } from './host-env/types'
 import {

@@ -21,7 +21,7 @@ import {
   setAntigravityNativeCredentialChangeListener
 } from '../../antigravity/native-account-host'
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
-import { normalizeCodexRuntimeSelection } from '../../codex-accounts/runtime-selection'
+import { normalizeCodexRuntimeSelection } from '../../codex-accounts/account-management/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 
