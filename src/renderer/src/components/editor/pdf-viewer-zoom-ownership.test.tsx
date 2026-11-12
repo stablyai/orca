@@ -28,7 +28,12 @@ vi.mock('./pdf-viewer-session', () => ({
   createPdfViewerSession: () => {
     const viewer = { currentScale: 1, currentScaleValue: 'page-width' }
     viewers.push(viewer)
-    return { viewer, eventBus: null, findController: null, dispose: () => {} }
+    const linkHistory = {
+      navigate: () => {},
+      getState: () => ({ canGoBack: false, canGoForward: false }),
+      subscribe: () => () => {}
+    }
+    return { viewer, eventBus: null, findController: null, linkHistory, dispose: () => {} }
   }
 }))
 

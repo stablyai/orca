@@ -112,6 +112,8 @@ const STATIC_TITLE_COPY = {
   'editor.previousChange': () => translate('keybindings.title.324e886c0f', 'Go to previous change'),
   'editor.nextChange': () => translate('keybindings.title.7055c70bdb', 'Go to next change'),
   'editor.addReviewNote': () => translate('keybindings.title.9cb1023d40', 'Add review note'),
+  'editor.pdfBack': () => translate('keybindings.title.editorPdfBack', 'Go back in PDF'),
+  'editor.pdfForward': () => translate('keybindings.title.editorPdfForward', 'Go forward in PDF'),
   'sourceControl.sendReviewNotes': () =>
     translate('keybindings.title.e9da9f872a', 'Send review notes to agent'),
   'fileExplorer.undo': () => translate('keybindings.title.fileExplorerUndo', 'Undo file operation'),
