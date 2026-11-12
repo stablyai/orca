@@ -1,9 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import BrowserSettingsScreen from './browser-settings-screen'
 import { PickerModal } from '../components/PickerModal'
 import {
+  loadBrowserDrawing,
   loadTerminalLinkOpenMode,
   saveTerminalLinkOpenMode,
   type MobileTerminalLinkOpenMode
@@ -28,13 +29,30 @@ vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
 vi.mock('expo-router', () => ({ useRouter: () => ({ back() {} }) }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', ChevronRight: 'Icon', Globe: 'Icon' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronLeft: 'Icon',
+  ChevronRight: 'Icon',
+  Globe: 'Icon',
+  Network: 'Icon'
+}))
 vi.mock('../components/PickerModal', () => ({ PickerModal: () => null }))
 vi.mock('../storage/preferences', () => ({
+  DEFAULT_TERMINAL_LINK_OPEN_MODE: 'orca-browser',
+  DEFAULT_BROWSER_DRAWING: 'host',
   loadTerminalLinkOpenMode: vi.fn(),
-  saveTerminalLinkOpenMode: vi.fn()
+  saveTerminalLinkOpenMode: vi.fn(),
+  loadBrowserDrawing: vi.fn(),
+  saveBrowserDrawing: vi.fn()
 }))
+
+function linkPicker() {
+  return renderer.root.findAllByType(PickerModal)[0]!
+}
 let renderer: ReactTestRenderer
+
+beforeEach(() => {
+  vi.mocked(loadBrowserDrawing).mockResolvedValue('host')
+})
 
 afterEach(() => {
   act(() => renderer?.unmount())
@@ -55,12 +73,12 @@ describe('browser settings persistence', () => {
       renderer = create(createElement(BrowserSettingsScreen))
     })
     await act(async () => {
-      renderer.root.findByType(PickerModal).props.onSelect('phone-browser')
+      linkPicker().props.onSelect('phone-browser')
     })
     await act(async () => {
       resolveLoad('orca-browser')
     })
-    expect(renderer.root.findByType(PickerModal).props.selected).toBe('phone-browser')
+    expect(linkPicker().props.selected).toBe('phone-browser')
     expect(JSON.stringify(renderer.toJSON())).toContain('Phone browser')
   })
 
@@ -71,9 +89,9 @@ describe('browser settings persistence', () => {
       renderer = create(createElement(BrowserSettingsScreen))
     })
     await act(async () => {
-      renderer.root.findByType(PickerModal).props.onSelect('phone-browser')
+      linkPicker().props.onSelect('phone-browser')
     })
-    expect(renderer.root.findByType(PickerModal).props.selected).toBe('orca-browser')
+    expect(linkPicker().props.selected).toBe('orca-browser')
     expect(JSON.stringify(renderer.toJSON())).toContain('Could not save browser preferences')
   })
 
@@ -90,10 +108,10 @@ describe('browser settings persistence', () => {
       renderer = create(createElement(BrowserSettingsScreen))
     })
     await act(async () => {
-      renderer.root.findByType(PickerModal).props.onSelect('orca-browser')
+      linkPicker().props.onSelect('orca-browser')
     })
     await act(async () => resolveLoad('phone-browser'))
-    expect(renderer.root.findByType(PickerModal).props.selected).toBe('phone-browser')
+    expect(linkPicker().props.selected).toBe('phone-browser')
     expect(JSON.stringify(renderer.toJSON())).toContain('Could not save browser preferences')
   })
 })

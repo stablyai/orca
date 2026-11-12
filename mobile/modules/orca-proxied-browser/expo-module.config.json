@@ -1,0 +1,6 @@
+{
+  "platforms": ["ios"],
+  "ios": {
+    "modules": ["OrcaProxiedBrowserModule"]
+  }
+}

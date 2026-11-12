@@ -57,7 +57,9 @@ export const BRIDGE_NATIVE_REFUSAL_CODES = [
   // The workspace's host predates mobile file downloads (files.stat/readChunk).
   'native_pdf_host_outdated',
   // The user refused Orca adding to their photo library; only Settings can undo that.
-  'native_image_permission_denied'
+  'native_image_permission_denied',
+  // This phone, app build or connection cannot draw the tab itself; the page keeps streaming it.
+  'native_browser_unsupported'
 ] as const
 
 export type BridgeNativeRefusalCode = (typeof BRIDGE_NATIVE_REFUSAL_CODES)[number]

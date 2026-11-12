@@ -166,6 +166,10 @@ export class DirectRpcClient implements RpcClient {
 
   getLastInboundAt = (): number | null => this.liveness.getLastInboundAt() || null
 
+  get browserTunnel() {
+    return this.socketFactory.browserTunnel
+  }
+
   onStateChange = (listener: (state: ConnectionState) => void): (() => void) =>
     this.connectionState.addListener(listener)
 
@@ -216,10 +220,7 @@ export class DirectRpcClient implements RpcClient {
     this.reconnect.cancel()
     const session = this.socketSession
     session?.clearTimers()
-    if (this.livenessSession) {
-      this.liveness.stop(this.livenessSession)
-      this.livenessSession = null
-    }
+    this.stopLiveness()
     session?.close()
     this.socketSession = null
     session?.clearKey()

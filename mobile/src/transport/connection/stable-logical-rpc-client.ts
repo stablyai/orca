@@ -12,6 +12,7 @@ import type { RelayHostReachability } from '../relay/relay-host-reachability'
 import { isRpcDeliveryUnknown } from '../rpc/rpc-delivery-ambiguity'
 import { LogicalClientCutoverError } from './logical-client-cutover-error'
 import { LogicalClientSuspendedError } from './logical-client-suspended-error'
+import { ActiveSessionBrowserTunnel } from '../rpc/browser-tunnel-frame-channel'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
@@ -163,6 +164,7 @@ export function createStableLogicalRpcClient(
         activeSession.probeLivenessNow?.()
       }
     },
+    browserTunnel: new ActiveSessionBrowserTunnel(() => activeSession),
     close() {
       if (closed) {
         return

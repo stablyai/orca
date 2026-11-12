@@ -2806,7 +2806,7 @@
       "loadFailed": "ブラウザ設定を読み込めませんでした。再試行してください。",
       "openTerminalLinks": "ターミナルのリンクを開く",
       "phoneBrowser": "スマートフォンのブラウザ",
-      "phoneBrowserDescription": "このスマートフォンの Safari、Chrome などのブラウザで開きます。",
+      "phoneBrowserDescription": "このスマートフォンのシステムブラウザで開きます。",
       "saveFailed": "ブラウザ設定を保存できませんでした。再試行してください。",
       "title": "ブラウザ"
     },

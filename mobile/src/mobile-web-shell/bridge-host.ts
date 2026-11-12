@@ -13,6 +13,7 @@ import {
   type BridgeClientMessage
 } from './bridge/bridge-envelope'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
+import { BRIDGE_IMPLICIT_NATIVE_VERBS } from './bridge/bridge-native-verbs'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
 import { createBridgeHostReplySender } from './bridge-host-reply-sender'
 import { createBridgeHostFrames } from './bridge-host-frames'
@@ -29,7 +30,11 @@ export type { BridgeHost, BridgeHostDiagnostic, BridgeHostOptions } from './brid
 // Bind the host structurally to one RPC client; the protocol lets pages name no other host. Native origin checks reject expired sessions, and init caps are enforced here.
 export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const { client, buildId, sessionId, pageRoutes, host } = options
-  const granted: readonly string[] = [...BRIDGE_SHELL_GRANTS, ...options.routeGrants]
+  const granted: readonly string[] = [
+    ...BRIDGE_SHELL_GRANTS,
+    ...options.routeGrants,
+    ...BRIDGE_IMPLICIT_NATIVE_VERBS
+  ]
   // Validate manifest pairs like the route: a pair refused by the page would invalidate the entire init.
   const parsedRouteGrants =
     options.pageRouteGrants === undefined

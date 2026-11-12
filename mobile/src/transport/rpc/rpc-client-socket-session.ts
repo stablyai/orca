@@ -4,7 +4,11 @@ import type { PairedE2EEFramingPolicy } from '../../../../src/shared/remote-runt
 import { createDirectSocketFraming, type DirectSocketFraming } from './direct-socket-framing'
 import { isRpcResponse } from './rpc-response-shape'
 import { AUTH_REJECTED } from './rpc-client-authentication-retry'
-import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
+import {
+  isStaleRpcSocketEvent,
+  logRpcSocketClose,
+  reportUnreadyRpcSend
+} from './rpc-socket-close-evidence'
 import {
   describeSocketEvent,
   redactSocketEndpoint
@@ -75,23 +79,27 @@ export class RpcClientSocketSession {
         return false
       }
     }
-    console.log('[net] sendEncrypted FAILED — channel not ready', {
-      hasWs: this.options.getCurrentSocket() !== null,
-      readyState: this.socket.readyState,
-      hasKey: this.framing !== null,
-      state: this.options.getState()
-    })
-    if (
-      this.options.getState() === 'connected' &&
-      this.options.getCurrentSocket() === this.socket &&
-      this.socket.readyState !== WebSocket.OPEN
-    ) {
-      console.log('[net] sendEncrypted detected ws desync — forcing reconnect', {
-        readyState: this.socket.readyState
-      })
+    const current = this.options.getCurrentSocket()
+    const unready = { current, hasKey: this.framing !== null, state: this.options.getState() }
+    if (reportUnreadyRpcSend(this.socket, unready)) {
       this.options.onForcedClose(this)
     }
     return false
+  }
+
+  // Tunnel frames are lossless but replayable: the tunnel restarts on a new socket, so a failed write just ends it.
+  sendBinary(bytes: Uint8Array): boolean {
+    if (this.socket.readyState !== WebSocket.OPEN || !this.framing || !this.authenticated) {
+      return false
+    }
+    try {
+      return this.framing.sendBinary(bytes)
+    } catch {
+      if (this.options.getCurrentSocket() === this.socket) {
+        this.options.onForcedClose(this)
+      }
+      return false
+    }
   }
 
   close(): void {

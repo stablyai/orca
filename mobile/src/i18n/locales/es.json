@@ -2883,7 +2883,7 @@
       "loadFailed": "No se pudieron cargar las preferencias del navegador. Vuelve a intentarlo.",
       "openTerminalLinks": "Abrir enlaces de la terminal",
       "phoneBrowser": "Navegador del teléfono",
-      "phoneBrowserDescription": "Abrir en Safari, Chrome u otro navegador de este teléfono.",
+      "phoneBrowserDescription": "Abrir en el navegador del sistema de este teléfono.",
       "saveFailed": "No se pudieron guardar las preferencias del navegador. Vuelve a intentarlo.",
       "title": "Navegador"
     },

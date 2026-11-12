@@ -6,7 +6,7 @@ import {
 } from '../terminal/session/mobile-terminal-pane-layout'
 import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
-import { MobileBrowserPane } from '../browser/MobileBrowserPane'
+import { MobileBrowserSurface } from '../browser/MobileBrowserSurface'
 import { TerminalPaneView } from '../terminal/session/TerminalPaneView'
 import { MountedTerminalPanes } from '../terminal/session/mounted-terminal-lru'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
@@ -121,7 +121,6 @@ export function MobileSessionActiveContent({
   const openUrlInOrca = useOpenUrlInOrca(controller)
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
-  const nativeChatHostOutage = mobileSessionNativeChatHostOutage(controller, hostTitle, t)
   const nativeChatImageSource = useMemo(
     () => (client ? { client, worktreeId } : undefined),
     [client, worktreeId]
@@ -227,8 +226,9 @@ export function MobileSessionActiveContent({
     ) : activeBrowserTab ? (
       <View style={styles.browserFrame}>
         {/* Why: pane owns imperative frame refs; don't render a stale frame while the old stream effect cleans up. */}
-        <MobileBrowserPane
+        <MobileBrowserSurface
           key={activeBrowserTab.browserPageId ?? activeBrowserTab.id}
+          hostId={hostId}
           client={client}
           worktreeId={worktreeId}
           tab={activeBrowserTab}
@@ -371,7 +371,7 @@ export function MobileSessionActiveContent({
                 // A workspace routed to another server stops with that server, whose name the phone lacks.
                 hostName={executionHost === undefined && hostProfile ? hostTitle : null}
                 onOpenUrlInOrca={openUrlInOrca}
-                hostOutage={nativeChatHostOutage}
+                hostOutage={mobileSessionNativeChatHostOutage(controller, hostTitle, t)}
                 onRunInTerminal={(command) =>
                   void controller.handleCreateTerminal(undefined, {
                     startupCommand: command,

@@ -24,6 +24,7 @@ import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useNativePdfViewer } from '../platform/native-pdf-view'
 import { useNativeImageActions } from '../platform/native-image-actions'
+import { useNativeLocalBrowser } from '../platform/native-local-browser'
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './device-store-verb-server'
 import { BRIDGE_STORE_VERB } from './bridge/bridge-store-verb'
@@ -145,6 +146,7 @@ export function MobileWebShellScreen({
   const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
   const servePdfView = useNativePdfViewer(hostId, readySessionId)
   const serveImageAction = useNativeImageActions(readySessionId)
+  const localBrowser = useNativeLocalBrowser(hostId, readySessionId)
   // Read the shell's storage for this host.
   const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
     verb === 'native.storage.read'
@@ -155,7 +157,11 @@ export function MobileWebShellScreen({
           ? serveImageAction(params)
           : verb === BRIDGE_STORE_VERB
             ? serveDeviceStoreVerb(processDeviceStore(), hostId, params)
-            : serveDeviceVerb(verb, params)
+            : verb === 'native.browser.local'
+              ? localBrowser.serve(params)
+              : verb === 'native.browser.view'
+                ? localBrowser.serveView(params)
+                : serveDeviceVerb(verb, params)
   // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.
   const openUrlForPage = (url: string) => {
     void Linking.openURL(url).catch((error: unknown) => {
@@ -345,7 +351,10 @@ export function MobileWebShellScreen({
         ref={bridge.viewRef}
         // Overlays cannot cover the screen beneath; hide their opaque WebView until first paint.
         style={[styles.shellView, overlay && pageFrame !== 'painted' && styles.unpaintedOverlay]}
-        onLayout={pageFold.onShellLayout}
+        onLayout={(event) => {
+          pageFold.onShellLayout(event)
+          localBrowser.onPageLayout(event)
+        }}
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
         bridgeEnabled={bridge.bridgeEnabled}
@@ -377,6 +386,7 @@ export function MobileWebShellScreen({
           }
         }}
       />
+      {localBrowser.overlay}
       {overlay ? null : (
         <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
       )}

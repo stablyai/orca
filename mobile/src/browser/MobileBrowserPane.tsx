@@ -31,6 +31,7 @@ import {
   browserReload
 } from './page-interaction/mobile-browser-command-operations'
 import { resolveMobileBrowserAddressSync } from './pane-view/mobile-browser-address-sync'
+import type { MobileBrowserStreamedDrawing } from './MobileBrowserDrawingButtons'
 import { MobileBrowserPaneView } from './pane-view/MobileBrowserPaneView'
 import { useMobileBrowserInteractions } from './page-interaction/use-mobile-browser-interactions'
 import { useMobileBrowserStream } from './screencast/use-mobile-browser-stream'
@@ -44,6 +45,8 @@ type MobileBrowserPaneProps = {
   keyboardLift: number
   bottomInset: number
   onToast: (message: string, durationMs?: number) => void
+  // Offered when this phone can draw the page itself instead of streaming it.
+  drawing?: MobileBrowserStreamedDrawing
 }
 
 type PanGesture = {
@@ -62,11 +65,12 @@ export function MobileBrowserPane({
   screencastSupported,
   keyboardLift,
   bottomInset,
-  onToast
+  onToast,
+  drawing
 }: MobileBrowserPaneProps) {
   useMobileTranslation()
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
-    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
+    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId)
   )
   const cacheKey = makeBrowserFrameCacheKey(worktreeId, tab.browserPageId, browserViewMode)
   const cachedInitialFrame = peekCachedBrowserFrame(cacheKey)
@@ -175,8 +179,8 @@ export function MobileBrowserPane({
   }, [resetBrowserZoomState, tab.browserPageId, tab.url])
 
   useEffect(() => {
-    setBrowserViewMode(getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url))
-  }, [tab.browserPageId, tab.url, worktreeId])
+    setBrowserViewMode(getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId))
+  }, [tab.browserPageId, worktreeId])
 
   const binaryScreencastGranted = useBrowserBinaryScreencastGrant()
 
@@ -315,6 +319,7 @@ export function MobileBrowserPane({
       keyboardValue={keyboardValue}
       layoutRef={layoutRef}
       navigateToAddress={navigateToAddress}
+      drawing={drawing}
       panResponder={panResponder}
       pointerModifiers={pointerModifiers}
       reloadPage={reloadPage}

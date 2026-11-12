@@ -2806,7 +2806,7 @@
       "loadFailed": "브라우저 설정을 불러오지 못했습니다. 다시 시도하세요.",
       "openTerminalLinks": "터미널 링크 열기",
       "phoneBrowser": "휴대폰 브라우저",
-      "phoneBrowserDescription": "이 휴대폰의 Safari, Chrome 또는 다른 브라우저에서 엽니다.",
+      "phoneBrowserDescription": "이 휴대폰의 시스템 브라우저에서 엽니다.",
       "saveFailed": "브라우저 설정을 저장하지 못했습니다. 다시 시도하세요.",
       "title": "브라우저"
     },

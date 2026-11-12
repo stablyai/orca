@@ -2806,7 +2806,7 @@
       "loadFailed": "無法載入瀏覽器偏好設定，請再試一次。",
       "openTerminalLinks": "開啟終端機連結",
       "phoneBrowser": "手機瀏覽器",
-      "phoneBrowserDescription": "在此手機上的 Safari、Chrome 或其他瀏覽器中開啟。",
+      "phoneBrowserDescription": "在此手機的系統瀏覽器中開啟。",
       "saveFailed": "無法儲存瀏覽器偏好設定，請再試一次。",
       "title": "瀏覽器"
     },
