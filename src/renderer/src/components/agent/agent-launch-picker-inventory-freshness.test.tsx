@@ -396,6 +396,7 @@ it('discovers an unstamped folder and follows group and repo ownership while ope
     configurable: true,
     value: { git: { discoverTerminalModels: read } }
   })
+  const initialProps: { cwd: string | undefined } = { cwd: undefined }
   const hook = renderHook(
     ({ cwd }: { cwd: string | undefined }) => {
       const key = useAgentPickerTerminalDiscoveryKey('local', { worktreeId: 'folder:f1' }, cwd)
@@ -416,7 +417,7 @@ it('discovers an unstamped folder and follows group and repo ownership while ope
         true
       )
     },
-    { initialProps: { cwd: undefined } }
+    { initialProps }
   )
   await waitFor(() =>
     expect(hook.result.current[0].terminalCatalog).toMatchObject({
