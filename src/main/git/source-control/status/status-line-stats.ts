@@ -23,16 +23,14 @@ import { readWorktreePathsDiffStamp } from '../input-stamps/worktree-diff-stamp'
 const NUMSTAT_FALLBACK_CHUNK_PATHS = 32
 const MAX_NUMSTAT_FALLBACK_PATHS = 512
 
-function numstatArgs(
-  cached: boolean,
-  detectRenames: boolean,
-  paths?: readonly string[]
-): string[] {
+function numstatArgs(cached: boolean, detectRenames: boolean, paths?: readonly string[]): string[] {
   return [
     '-c',
     'core.quotePath=false',
     '-c',
     'diff.autoRefreshIndex=false',
+    // A file name with glob characters must match itself, not a locked sibling.
+    '--literal-pathspecs',
     'diff',
     '-z',
     ...(cached ? ['--cached'] : []),
@@ -71,6 +69,8 @@ function pathsForLineStatsArea(
   return [...paths]
 }
 
+type NumstatRead = { stats: Map<string, GitLineStats>; complete: boolean }
+
 /** One locked file fails its chunk; retry that chunk per path so only the unreadable row stays uncounted. */
 async function runNumstatFallback(
   worktreePath: string,
@@ -78,12 +78,13 @@ async function runNumstatFallback(
   detectRenames: boolean,
   paths: readonly string[],
   options: GitRuntimeOptions
-): Promise<Map<string, GitLineStats> | null> {
+): Promise<NumstatRead | null> {
   if (paths.length > MAX_NUMSTAT_FALLBACK_PATHS) {
     return null
   }
   const stats = new Map<string, GitLineStats>()
   let readAny = false
+  let failed = false
   const read = async (subset: readonly string[]): Promise<void> => {
     const part = await readNumstat(
       worktreePath,
@@ -110,11 +111,12 @@ async function runNumstatFallback(
           if (options.signal?.aborted) {
             throw singleError
           }
+          failed = true
         }
       }
     }
   }
-  return readAny ? stats : null
+  return readAny ? { stats, complete: !failed } : null
 }
 
 async function runNumstat(
@@ -123,9 +125,12 @@ async function runNumstat(
   detectRenames: boolean,
   options: GitRuntimeOptions = {},
   fallbackPaths: readonly string[] = []
-): Promise<Map<string, GitLineStats> | null> {
+): Promise<NumstatRead | null> {
   try {
-    return await readNumstat(worktreePath, numstatArgs(cached, detectRenames), options)
+    return {
+      stats: await readNumstat(worktreePath, numstatArgs(cached, detectRenames), options),
+      complete: true
+    }
   } catch (error) {
     // Propagate cancellation; ordinary numstat failures may degrade to uncounted rows.
     if (options.signal?.aborted) {
@@ -183,7 +188,7 @@ async function readNumstatThroughSettledCache(
   entries: readonly GitStatusEntry[],
   configRead: Promise<StampedGitConfig | null>,
   options: GitRuntimeOptions
-): Promise<Map<string, GitLineStats> | null> {
+): Promise<NumstatRead | null> {
   const readGeneration = settledNumstatCache.beginRead()
   const stampPaths = numstatStampPaths(entries, cached)
   const fallbackPaths = pathsForLineStatsArea(entries, cached ? 'staged' : 'unstaged')
@@ -199,16 +204,18 @@ async function readNumstatThroughSettledCache(
   const readKey = JSON.stringify([worktreePath, cached, detectRenames])
   const reused = settledNumstatCache.get(readKey, stamp)
   if (reused) {
-    return reused
+    // Only complete passes are stored, so a hit is always a complete read.
+    return { stats: reused, complete: true }
   }
-  const stats = await runNumstat(worktreePath, cached, detectRenames, options, fallbackPaths)
-  if (stats) {
-    settledNumstatCache.set(readKey, stamp, stats, readGeneration)
+  const read = await runNumstat(worktreePath, cached, detectRenames, options, fallbackPaths)
+  // An incomplete pass must not be cached: the next poll has to reread the failed paths.
+  if (read?.complete) {
+    settledNumstatCache.set(readKey, stamp, read.stats, readGeneration)
   }
-  return stats
+  return read
 }
 
-/** Returns false when a numstat pass failed, so callers skip caching it. */
+/** Returns false when a numstat pass failed or left any path unread, so callers skip caching incomplete counts. */
 export async function attachLineStats(
   worktreePath: string,
   entries: GitStatusEntry[],
@@ -220,13 +227,14 @@ export async function attachLineStats(
   const { hasStaged, hasUnstaged, hasStagedRenames, hasUnstagedRenames, untrackedPaths } =
     collectGitStatusLineStatInputs(entries)
   const emptyStats = new Map<string, GitLineStats>()
+  const emptyRead: NumstatRead = { stats: emptyStats, complete: true }
   // One config read serves both passes.
   const configRead =
     (hasStaged || hasUnstaged) && isNumstatReuseEnabled()
       ? readStampedGitConfig(worktreePath, options)
       : Promise.resolve(null)
   // Approximates status's rename policy: -M only for areas where status reported a rename.
-  const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
+  const [stagedRead, unstagedRead, untrackedStats] = await Promise.all([
     hasStaged
       ? readNumstatThroughSettledCache(
           worktreePath,
@@ -236,7 +244,7 @@ export async function attachLineStats(
           configRead,
           options
         )
-      : Promise.resolve(emptyStats),
+      : Promise.resolve(emptyRead),
     hasUnstaged
       ? readNumstatThroughSettledCache(
           worktreePath,
@@ -246,7 +254,7 @@ export async function attachLineStats(
           configRead,
           options
         )
-      : Promise.resolve(emptyStats),
+      : Promise.resolve(emptyRead),
     // Node reads need host paths even when Git runs in WSL.
     collectUntrackedAdditions(
       resolveWorktreeFilesystemPath(worktreePath, options),
@@ -254,16 +262,19 @@ export async function attachLineStats(
       options.signal
     )
   ])
+  const stagedStats = stagedRead?.stats ?? emptyStats
+  const unstagedStats = unstagedRead?.stats ?? emptyStats
   for (const entry of entries) {
     const area = entry.area
     applyLineStats(
       entry,
       area === 'staged'
-        ? (stagedStats ?? emptyStats).get(entry.path)
+        ? stagedStats.get(entry.path)
         : area === 'unstaged'
-          ? (unstagedStats ?? emptyStats).get(entry.path)
+          ? unstagedStats.get(entry.path)
           : untrackedStats.get(entry.path)
     )
   }
-  return stagedStats !== null && unstagedStats !== null
+  // A partial pass keeps its readable rows but reports incomplete, so no snapshot pins the missing ones.
+  return stagedRead?.complete === true && unstagedRead?.complete === true
 }
