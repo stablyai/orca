@@ -150,10 +150,7 @@ export function verifyDesktopAction(
     return action
   }
   const actual = refreshedElementValue(snapshot, targetElement, elementIndex)
-  if (actual === expected) {
-    return { ...action, verification: { state: 'verified', property: 'value' } }
-  }
-  if (actual === undefined || actual === REDACTED_SECURE_VALUE) {
+  if (actual === undefined || readbackCannotDecide(actual, expected)) {
     return {
       ...action,
       verification: {
@@ -162,14 +159,26 @@ export function verifyDesktopAction(
       }
     }
   }
+  if (actual === expected) {
+    return { ...action, verification: { state: 'verified', property: 'value' } }
+  }
   return {
     ...action,
     verification: { state: 'unverified', reason: 'value_mismatch', actualPreview: actual }
   }
 }
 
-// Why: runtime.ps1 and runtime.py render secure fields as this, so it cannot disprove a write.
-const REDACTED_SECURE_VALUE = '[redacted]'
+// Why: runtime.ps1 and runtime.py show secure fields as "[redacted]" and cut values past 500
+// characters to 500 plus "...", so such a read-back can neither prove nor disprove the write.
+const PROVIDER_VALUE_TEXT_LIMIT = 500
+
+function readbackCannotDecide(actual: string, expected: string): boolean {
+  return (
+    actual === '[redacted]' ||
+    (expected.length > PROVIDER_VALUE_TEXT_LIMIT &&
+      actual === `${expected.slice(0, PROVIDER_VALUE_TEXT_LIMIT)}...`)
+  )
+}
 
 function refreshedElementValue(
   snapshot: BridgeSnapshot | undefined,

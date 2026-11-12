@@ -52,10 +52,13 @@ describe('DesktopScriptProviderClient actions', () => {
     expect(result.action?.verification).toEqual({ state: 'verified', property: 'value' })
   })
 
-  it('does not report a redacted secure-field read-back as a failed set-value', async () => {
+  it.each([
+    ['a redacted secure field', 'hunter2', '[redacted]'],
+    ['a value cut at the provider text limit', 'x'.repeat(600), `${'x'.repeat(500)}...`]
+  ])('does not report %s as a failed set-value', async (_case, value, readback) => {
     mockBridgeResponse({ ok: true, snapshot: sampleBridgeSnapshot('Login', 'initial') })
     mockBridgeResponse({ ok: true, capabilities: sampleCapabilities() })
-    mockBridgeResponse({ ok: true, snapshot: sampleBridgeSnapshot('Login', '[redacted]') })
+    mockBridgeResponse({ ok: true, snapshot: sampleBridgeSnapshot('Login', readback) })
 
     const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
 
@@ -63,7 +66,7 @@ describe('DesktopScriptProviderClient actions', () => {
     const result = await client.action('setValue', {
       app: 'Login',
       elementIndex: 0,
-      value: 'hunter2',
+      value,
       noScreenshot: true
     })
 
