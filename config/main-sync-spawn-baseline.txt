@@ -24,8 +24,7 @@
 1 src/main/emulator/serve-sim-runtime-materializer.ts
 3 src/main/filesystem/atomic-file-publication.ts
 1 src/main/git/command-runner/git-exec-file-sync.ts
-1 src/main/git/repo-detection-command.ts
-1 src/main/git/runner.ts
+1 src/main/git/repositories/discovery/repo-detection-command.ts
 1 src/main/ipc/worktree-logic.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
 1 src/main/opencode/status-hooks/legacy-plugin-acl-retry.ts

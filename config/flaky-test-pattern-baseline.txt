@@ -8,7 +8,7 @@
 1 test-no-in-test-import-actual:src/main/claude/claude-agent-sdk-process-spawn.test.ts
 5 test-no-in-test-import-actual:src/main/daemon/endpoint/publication/testing/daemon-endpoint-publish.test.ts
 1 test-no-in-test-import-actual:src/main/daemon/history/storage/testing/terminal-history-permissions.test.ts
-1 test-no-in-test-import-actual:src/main/git/command-runner/spawned-command-tree-kill.test.ts
+1 test-no-in-test-import-actual:src/main/git/command-runner/process-capture/spawned-command-tree-kill.test.ts
 1 test-no-in-test-import-actual:src/main/ipc/filesystem/filesystem-content-search-cancellation.test.ts
 1 test-no-in-test-import-actual:src/main/linear/accounts/linear-account-client.test.ts
 1 test-no-in-test-import-actual:src/main/linear/issues/linear-description-images.test.ts
@@ -185,10 +185,8 @@
 1 test-no-real-time-wait:src/main/daemon/shell-readiness/testing/terminal-shell-recovery-barrier.test.ts
 1 test-no-real-time-wait:src/main/daemon/terminal-host/testing/terminal-host.test.ts
 3 test-no-real-time-wait:src/main/daemon/transport/client/testing/client.test.ts
-1 test-no-real-time-wait:src/main/git/refs/maintenance/local-repo-ref-maintenance.test.ts
 4 test-no-real-time-wait:src/main/git/refs/maintenance/repo-ref-maintenance-real-git.test.ts
 1 test-no-real-time-wait:src/main/git/worktrees/removal/remove-worktree-branch-cleanup.test.ts
-1 test-no-real-time-wait:src/main/git/worktrees/removal/worktree-prune-guard.test.ts
 1 test-no-real-time-wait:src/main/grok/grok-hook-stdin-no-eof.test.ts
 4 test-no-real-time-wait:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
 1 test-no-real-time-wait:src/main/ipc/worktrees/creation/worktree-base-directory-poller-marker-fanout.test.ts
@@ -468,14 +466,12 @@
 2 test-no-wall-clock:src/main/daemon/transport/framing/testing/daemon-stream-binary-negotiation.test.ts
 2 test-no-wall-clock:src/main/external-conversations/external-conversation-cancel-settlement.test.ts
 3 test-no-wall-clock:src/main/external-conversations/external-conversation-cancel.test.ts
-2 test-no-wall-clock:src/main/git/command-runner/git-command-resolution-windows-checkout.test.ts
-1 test-no-wall-clock:src/main/git/gh-rate-limit-breaker.test.ts
+2 test-no-wall-clock:src/main/git/command-runner/host-routing/git-command-resolution-windows-checkout.test.ts
 1 test-no-wall-clock:src/main/git/refs/maintenance/pack-refs-lock-ownership.test.ts
 2 test-no-wall-clock:src/main/git/refs/maintenance/repo-ref-maintenance-real-git.test.ts
-2 test-no-wall-clock:src/main/git/runner-gh-account-binding.test.ts
+2 test-no-wall-clock:src/main/git/command-runner/hosted-cli/runner-gh-account-binding.test.ts
 1 test-no-wall-clock:src/main/git/source-control/blob-absence-real-git.test.ts
 2 test-no-wall-clock:src/main/git/worktrees/catalog/worktree-created-description-real-git.test.ts
-1 test-no-wall-clock:src/main/git/wsl-windows-checkout-git-probe.test.ts
 3 test-no-wall-clock:src/main/github/pr-refresh-coordinator-active-visible-priority.test.ts
 8 test-no-wall-clock:src/main/github/pr-refresh-coordinator-alias-coalescing.test.ts
 5 test-no-wall-clock:src/main/github/pr-refresh-coordinator-completion-order.test.ts
@@ -487,7 +483,7 @@
 2 test-no-wall-clock:src/main/grok/grok-hook-stdin-no-eof.test.ts
 3 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
 1 test-no-wall-clock:src/main/ipc/terminal-render-desync-evidence.test.ts
-5 test-no-wall-clock:src/main/ipc/worktrees-orphan-directory-cleanup.test.ts
+2 test-no-wall-clock:src/main/ipc/worktrees-orphan-directory-cleanup.test.ts
 2 test-no-wall-clock:src/main/ipc/worktrees/git/worktree-git-status-attribution-real-git.test.ts
 2 test-no-wall-clock:src/main/macos-permissions/macos-tcc-log-stream-orphans.test.ts
 4 test-no-wall-clock:src/main/managed-server/activation/orcad-exited-own-fence-mutation-race.test.ts
@@ -797,7 +793,6 @@
 1 test-timeout-needs-reason:tests/e2e/paired-desktop-server-layout-frames.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-desktop-server-layout-intents.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-desktop-server-layout-writes.spec.ts
-1 test-timeout-needs-reason:tests/e2e/paired-external-worktree-discovery.spec.ts
 2 test-timeout-needs-reason:tests/e2e/paired-host-usage-credentials.spec.ts
 7 test-timeout-needs-reason:tests/e2e/paired-instant-browser-tab.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-mobile-desktop-mirror-files-git-review.spec.ts

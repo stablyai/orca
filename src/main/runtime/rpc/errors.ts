@@ -1,4 +1,4 @@
-import { BranchSwitchCollisionError } from '../../git/branch-switch-target'
+import { BranchSwitchCollisionError } from '../../git/worktrees/checkout/branch-switch-target'
 import { SparsePresetValidationError } from '../../../shared/worktree/sparse-preset-failure'
 import {
   RECIPE_VM_REFUSAL_CODES,
