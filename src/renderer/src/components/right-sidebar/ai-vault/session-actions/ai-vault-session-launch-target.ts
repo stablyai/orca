@@ -5,21 +5,19 @@ import {
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/agent-session/resume/history/ai-vault-resume-target'
 import { translate } from '@/i18n/i18n'
-import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { findAiVaultHistoryWorktree } from '@/lib/agent-session/resume/history/ai-vault-history-worktrees'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   isKnownAiVaultResumeWorkspaceTarget,
   type AiVaultSessionResumeTargetState
 } from './ai-vault-session-resume'
-import {
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function resolveAiVaultTargetWorkspacePath(
   state: AiVaultSessionResumeTargetState,
-  workspaceId: string
+  workspaceId: string,
+  executionHostId?: AiVaultSession['executionHostId'] | null
 ): string | null {
   const scope = parseWorkspaceKey(workspaceId)
   if (scope?.type === 'folder') {
@@ -29,7 +27,7 @@ export function resolveAiVaultTargetWorkspacePath(
     )
   }
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
-  return findFirstIndexedWorktree(selectWorktreesByRepo(state), worktreeId)?.path ?? null
+  return findAiVaultHistoryWorktree(state, worktreeId, executionHostId)?.path ?? null
 }
 
 export type AiVaultSessionLaunchTarget =
@@ -38,27 +36,42 @@ export type AiVaultSessionLaunchTarget =
       status: 'unsupported'
       targetStatus: ReturnType<typeof getAiVaultResumeWorkspaceTargetStatus>
     }
-  | { status: 'ready'; worktreeId: string }
+  | {
+      status: 'ready'
+      worktreeId: string
+      executionHostId: AiVaultSession['executionHostId'] | null
+    }
 
 export function resolveAiVaultSessionLaunchTarget(args: {
   sessionFilePath: string | null
   sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
   activeWorktreeId: string | null
   targetWorktreeId?: string
+  sessionWorktreeId?: string | null
   targetState: AiVaultSessionResumeTargetState
 }): AiVaultSessionLaunchTarget {
   const targetWorktreeId = args.targetWorktreeId ?? args.activeWorktreeId
   if (
     !targetWorktreeId ||
-    !isKnownAiVaultResumeWorkspaceTarget(args.targetState, targetWorktreeId)
+    !isKnownAiVaultResumeWorkspaceTarget(
+      args.targetState,
+      targetWorktreeId,
+      args.sessionExecutionHostId,
+      args.sessionWorktreeId
+    )
   ) {
     return { status: 'missing' }
   }
 
-  const targetStatus = getAiVaultResumeWorkspaceTargetStatus(args.targetState, targetWorktreeId)
+  const targetStatus = getAiVaultResumeWorkspaceTargetStatus(
+    args.targetState,
+    targetWorktreeId,
+    args.sessionExecutionHostId
+  )
   const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(
     args.targetState,
-    targetWorktreeId
+    targetWorktreeId,
+    args.sessionExecutionHostId
   )
   if (
     !canResumeAiVaultSessionOnTarget({
@@ -66,13 +79,17 @@ export function resolveAiVaultSessionLaunchTarget(args: {
       sessionExecutionHostId: args.sessionExecutionHostId,
       targetStatus,
       targetExecutionHostId,
-      targetWslDistro: getAiVaultResumeWorkspaceWslDistro(args.targetState, targetWorktreeId)
+      targetWslDistro: getAiVaultResumeWorkspaceWslDistro(
+        args.targetState,
+        targetWorktreeId,
+        args.sessionExecutionHostId
+      )
     })
   ) {
     return { status: 'unsupported', targetStatus }
   }
 
-  return { status: 'ready', worktreeId: targetWorktreeId }
+  return { status: 'ready', worktreeId: targetWorktreeId, executionHostId: targetExecutionHostId }
 }
 
 export function aiVaultResumeUnsupportedMessage(

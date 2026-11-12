@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
@@ -9,7 +9,8 @@ import { dedupePaletteWorktrees } from '@/lib/workspace/search/palette-repo-reso
 import {
   readHiddenVmCheckouts,
   subscribeHiddenVmCheckouts,
-  withoutHiddenVmWorktreesByRepo
+  withoutHiddenVmWorktreesByRepo,
+  withoutHiddenVmWorktrees
 } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import {
   selectPaletteIndexStatusSnapshot,
@@ -18,11 +19,16 @@ import {
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
 import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 import {
-  selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { createExistingContentWorktreeSelector } from '@/lib/workspace/tabs/existing-content-worktree-selector'
+import {
+  createPaletteImportedProjectSelector,
+  EMPTY_IMPORTED_PROJECT_REPO_IDS
+} from './worktree-jump-imported-projects'
+import { EMPTY_SORTED_WORKTREES } from './worktree-jump-palette-model'
 
 export function useWorktreeJumpPaletteStoreState({
   visible,
@@ -32,6 +38,7 @@ export function useWorktreeJumpPaletteStoreState({
   lingering: boolean
 }) {
   useTranslation()
+  const paletteStatusInputsActive = visible || lingering
   // Freeze age labels for one palette session; live status dots own their clock separately.
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- visibility intentionally starts a new session clock.
   const paletteNowMs = useMemo(() => Date.now(), [visible])
@@ -72,11 +79,21 @@ export function useWorktreeJumpPaletteStoreState({
   )
   const projects = useAppStore((state) => state.projects)
   const projectHostSetups = useAppStore((state) => state.projectHostSetups)
-  const detectedWorktreesByRepo = useAppStore((state) => selectDetectedWorktreesByRepo(state))
+  const [selectContentWorktrees] = useState(createExistingContentWorktreeSelector)
+  const contentRows = useAppStore((state) =>
+    paletteStatusInputsActive ? selectContentWorktrees(state) : EMPTY_SORTED_WORKTREES
+  )
+  const contentWorkspaces = useMemo(
+    () => withoutHiddenVmWorktrees(contentRows, hiddenVmCheckouts),
+    [contentRows, hiddenVmCheckouts]
+  )
+  const [selectImportedProjects] = useState(createPaletteImportedProjectSelector)
+  const importedProjectRepoIds = useAppStore((state) =>
+    paletteStatusInputsActive ? selectImportedProjects(state) : EMPTY_IMPORTED_PROJECT_REPO_IDS
+  )
   const pendingWorktreeCreations = useAppStore((state) => state.pendingWorktreeCreations)
   const pluginCommands = usePluginCommands()
   const pluginNewFiles = usePluginNewFiles()
-  const paletteStatusInputsActive = visible || lingering
   const { ptyIdsByTabId, terminalLayoutsByTabId, tabsByWorktree } = useAppStore(
     useShallow((state) => selectPaletteStatusInputs(state, paletteStatusInputsActive))
   )
@@ -167,11 +184,12 @@ export function useWorktreeJumpPaletteStoreState({
     worktreesByRepo,
     pendingVmRepoIds: hiddenVmCheckouts.repoIds,
     workspaces,
+    contentWorkspaces,
     repos,
     projectGroups,
     projects,
     projectHostSetups,
-    detectedWorktreesByRepo,
+    importedProjectRepoIds,
     pendingWorktreeCreations,
     pluginCommands,
     pluginNewFiles,

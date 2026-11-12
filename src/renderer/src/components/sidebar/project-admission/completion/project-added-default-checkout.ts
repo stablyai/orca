@@ -17,8 +17,19 @@ import {
 
 type DefaultCheckoutHandoffReason = EventProps<'add_repo_default_checkout_handoff'>['reason']
 
-export function getProjectDefaultCheckout(worktrees: readonly Worktree[]): Worktree | null {
-  return worktrees.find((worktree) => worktree.isMainWorktree) ?? null
+export function getProjectDefaultCheckout(
+  worktrees: readonly Worktree[],
+  selectedPath?: string
+): Worktree | null {
+  const checkouts = worktrees.filter((worktree) => !worktree.isBare)
+  return (
+    checkouts.find((worktree) => worktree.isMainWorktree) ??
+    (selectedPath
+      ? checkouts.find((worktree) => relativePathInsideRoot(worktree.path, selectedPath) !== null)
+      : undefined) ??
+    checkouts[0] ??
+    null
+  )
 }
 
 function getProjectWorktreesForHost<T extends Worktree>(
@@ -61,12 +72,16 @@ function getDetectedProjectDefaultCheckout(
   if (detected?.authoritative !== true) {
     return null
   }
-  const worktrees = getProjectWorktreesForHost(detected.worktrees, executionHostId)
+  const worktrees = getProjectWorktreesForHost(detected.worktrees, executionHostId).filter(
+    (worktree) => !worktree.isBare
+  )
   // Adding a project never reveals discovered worktrees: a picked linked worktree opens itself.
   return (
     worktrees.find((worktree) => worktree.isMainWorktree && worktree.visible) ??
     worktrees.find((worktree) => worktree.selectedCheckout) ??
     worktrees.find((worktree) => worktree.isMainWorktree) ??
+    worktrees.find((worktree) => worktree.visible) ??
+    worktrees[0] ??
     null
   )
 }
@@ -147,7 +162,8 @@ export async function openProjectDefaultCheckout({
     getProjectWorktreesForHost(
       selectWorktreesByRepo(useAppStore.getState())[repoId] ?? [],
       executionHostId
-    )
+    ),
+    selectedPath
   )
   let reason: DefaultCheckoutHandoffReason = 'loaded_default_checkout'
   if (!defaultCheckout) {

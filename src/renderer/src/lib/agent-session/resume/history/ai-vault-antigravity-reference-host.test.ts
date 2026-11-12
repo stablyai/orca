@@ -3,7 +3,12 @@ import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { resolveAiVaultSessionLaunchTarget } from '@/components/right-sidebar/ai-vault/session-actions/ai-vault-session-launch-target'
 import type { buildAiVaultResumeStartupForWorktree } from './ai-vault-resume-command'
-import { getAiVaultResumeWorkspaceWslDistro } from './ai-vault-resume-shell'
+import {
+  getAiVaultResumeWorkspaceWslDistro,
+  resolveAiVaultResumeStartupShell
+} from './ai-vault-resume-shell'
+import { getAiVaultResumePlatform } from './ai-vault-resume-platform'
+import { toDetectedWorktree } from '../../../../../../shared/worktree/ownership'
 
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
@@ -63,6 +68,59 @@ function stateFor(host: ExecutionHostId, distro?: string): State {
 }
 
 describe('Antigravity transcript reference ownership', () => {
+  it('keeps a saved bare original in its actual WSL namespace without offering it as a new target', () => {
+    const state = stateFor('local', 'Debian')
+    const original = state.worktreesByRepo.repo[0]
+    state.repos[0].path = 'C:/project'
+    state.projects[0].localWindowsRuntimePreference = undefined
+    state.detectedWorktreesByRepo = {
+      repo: {
+        repoId: 'repo',
+        source: 'git',
+        authoritative: true,
+        worktrees: [
+          toDetectedWorktree({
+            repo: state.repos[0],
+            worktree: { ...original, isBare: true },
+            settings: createGlobalSettingsFixture(),
+            knownOrcaLayouts: []
+          })
+        ]
+      }
+    }
+    state.worktreesByRepo = {}
+    const target = {
+      sessionFilePath: debianFile,
+      sessionExecutionHostId: 'local',
+      activeWorktreeId: original.id,
+      targetState: state
+    } satisfies Parameters<typeof resolveAiVaultSessionLaunchTarget>[0]
+    expect(resolveAiVaultSessionLaunchTarget(target).status).toBe('missing')
+    expect(
+      resolveAiVaultSessionLaunchTarget({
+        ...target,
+        sessionWorktreeId: original.id
+      })
+    ).toEqual({ status: 'ready', worktreeId: original.id, executionHostId: 'local' })
+    expect(getAiVaultResumeWorkspaceWslDistro(state, original.id, 'local')).toBe('Debian')
+    expect(getAiVaultResumePlatform(state, original.id, 'local')).toBe('linux')
+    expect(
+      resolveAiVaultResumeStartupShell({
+        state,
+        worktreeId: original.id,
+        executionHostId: 'local',
+        platform: 'win32'
+      })
+    ).toBe('posix')
+    expect(
+      resolveAiVaultSessionLaunchTarget({
+        ...target,
+        sessionWorktreeId: original.id,
+        sessionFilePath: windowsFile
+      }).status
+    ).toBe('unsupported')
+  })
+
   it('applies the same confinement to folder workspaces', () => {
     const state = stateFor('local')
     state.activeRepoId = null

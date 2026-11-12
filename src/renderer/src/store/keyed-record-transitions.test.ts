@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   markFullResync,
+  recordArrayChanges,
   recordDraft,
   replaceMapEntries,
   replaceRecordEntries,
@@ -14,6 +15,34 @@ const a2 = { id: 'a2' }
 const b1 = { id: 'b1' }
 
 describe('keyed record transitions', () => {
+  it('composes replaced array positions without collapsing duplicate row IDs, and resyncs unknown writes', () => {
+    const duplicate = { id: 'duplicate', value: 1 }
+    const start = [duplicate, duplicate, { id: 'other', value: 0 }]
+    const first = [start[0], { id: 'duplicate', value: 2 }, start[2]]
+    recordArrayChanges(start, first, [1])
+    const second = [first[0], first[1], { id: 'other', value: 3 }]
+    recordArrayChanges(first, second, [2])
+    expect(readRecordChanges(second, start)).toEqual({
+      kind: 'addressed',
+      keys: new Set(['1', '2']),
+      added: [],
+      deleted: new Set()
+    })
+    expect(second[0]).toBe(duplicate)
+    expect(readRecordChanges(second.slice(), start)).toEqual({
+      kind: 'full-resync',
+      reason: 'unknown'
+    })
+    const removed = [second[0], second[1]]
+    recordArrayChanges(second, removed, [2])
+    expect(readRecordChanges(removed, second)).toEqual({
+      kind: 'addressed',
+      keys: new Set(['2']),
+      added: [],
+      deleted: new Set(['2'])
+    })
+  })
+
   it('names the replaced buckets and the tabs that changed in them', () => {
     const start = { a: [a1, a2], b: [b1] }
     const renamed = { id: 'a2', label: 'renamed' }

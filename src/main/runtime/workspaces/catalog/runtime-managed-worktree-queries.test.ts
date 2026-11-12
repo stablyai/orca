@@ -1,3 +1,4 @@
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -121,6 +122,37 @@ describe('RuntimeManagedWorktreeQueries.listDetected', () => {
 })
 
 describe('RuntimeManagedWorktreeQueries.list host scope', () => {
+  it('offers only checkouts when settings are unavailable', async () => {
+    const owner = folderRepo({ kind: 'git', path: '/project/.bare' })
+    const gitRows: GitWorktreeInfo[] = [
+      { path: '/project/.bare', head: '', branch: '', isBare: true, isMainWorktree: true },
+      { path: '/project/main', head: 'abc', branch: 'main', isBare: false, isMainWorktree: false }
+    ]
+    const rows: ResolvedWorktree[] = gitRows.map((git) => ({
+      ...mergeWorktree(owner.id, git, undefined),
+      hostId: 'local',
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null,
+      git
+    }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: list only reads this store surface.
+    const store = {
+      getRepos: () => [owner],
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      getSettings: () => settings
+    } as unknown as RuntimeStore
+    const catalog = queries(store, { getStore: () => null, listResolved: async () => rows })
+    const result = await catalog.list(undefined, 10)
+    expect(result.worktrees.map((row) => row.path)).toEqual(['/project/main'])
+    expect(result.worktrees[0]?.isMainWorktree).toBe(false)
+    const ownerLookup = createRepoRowExecutionHostLookup([owner])
+    expect(
+      rows.map((row) => catalog.isVisible(row, undefined, true, undefined, ownerLookup))
+    ).toEqual([false, true])
+  })
+
   it.each([false, true])(
     'preserves host twins, expandable coverage and per-host visibility (reversed=%s)',
     async (reversed) => {

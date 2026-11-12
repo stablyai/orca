@@ -37,17 +37,21 @@ export function notifyAiVaultSessionPreparationFailure(
   toast.error(describeAiVaultResumeFailure(described, agent))
 }
 
+export function notifyAiVaultSessionNeedsWorkspace(): void {
+  toast.error(
+    translate(
+      'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
+      'Open a workspace before resuming a session.'
+    )
+  )
+}
+
 export function resolveAiVaultSessionLaunchTargetOrNotify(
   args: Parameters<typeof resolveAiVaultSessionLaunchTarget>[0]
 ): Extract<ReturnType<typeof resolveAiVaultSessionLaunchTarget>, { status: 'ready' }> | null {
   const target = resolveAiVaultSessionLaunchTarget(args)
   if (target.status === 'missing') {
-    toast.error(
-      translate(
-        'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
-        'Open a workspace before resuming a session.'
-      )
-    )
+    notifyAiVaultSessionNeedsWorkspace()
     return null
   }
   if (target.status === 'unsupported') {

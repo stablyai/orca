@@ -292,6 +292,7 @@ export function createTerminalTabCreationActions(
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         recordCreatedTerminalTabInLayoutOwner(get(), terminalTabCreateCommand(get(), tab), {
           tab,
+          executionHostId: options?.executionFacts?.hostId,
           store: { getState: get, setState: (patch) => set(patch), subscribe }
         })
       }

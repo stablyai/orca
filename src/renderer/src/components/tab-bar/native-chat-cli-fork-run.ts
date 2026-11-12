@@ -228,7 +228,12 @@ export async function runNativeChatCliFork(args: {
     }
     stop()
     const terminalTabId = await launchAiVaultSessionAndReveal(
-      { agent: target.agent, worktreeId: subject.workspaceId, ...startup },
+      {
+        agent: target.agent,
+        worktreeId: subject.workspaceId,
+        workspaceExecutionHostId: host?.id,
+        ...startup
+      },
       describeAiVaultCliForkFailure
     )
     if (terminalTabId) {

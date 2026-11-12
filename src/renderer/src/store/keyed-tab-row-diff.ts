@@ -1,5 +1,6 @@
+import type { Keyed } from './keyed-record-transitions'
+
 type KeyedSnapshot = Readonly<Record<string, unknown>>
-type Keyed = KeyedSnapshot | ReadonlyMap<string, unknown>
 type Row = { id: string }
 export type TabRowChange<T extends Row> = {
   before: T | undefined

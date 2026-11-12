@@ -3,7 +3,7 @@ import {
   composeWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { AppState } from '../../../types'
+type WorktreeRows = Record<string, readonly Worktree[]>
 
 type WorktreeSnapshot = {
   allWorktrees: Worktree[]
@@ -13,9 +13,9 @@ type WorktreeSnapshot = {
 
 // Why: Zustand reruns selectors on every write, so identity projections need
 // cross-render caching without pinning replaced store snapshots in memory.
-const worktreeSnapshotCache = new WeakMap<AppState['worktreesByRepo'], WorktreeSnapshot>()
+const worktreeSnapshotCache = new WeakMap<WorktreeRows, WorktreeSnapshot>()
 
-function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
+function getWorktreeSnapshot(worktreesByRepo: WorktreeRows): WorktreeSnapshot {
   const cachedSnapshot = worktreeSnapshotCache.get(worktreesByRepo)
   if (cachedSnapshot) {
     return cachedSnapshot
@@ -51,35 +51,33 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
   return snapshot
 }
 
-export function getIndexedAllWorktrees(worktreesByRepo: AppState['worktreesByRepo']): Worktree[] {
+export function getIndexedAllWorktrees(worktreesByRepo: WorktreeRows): Worktree[] {
   return getWorktreeSnapshot(worktreesByRepo).allWorktrees
 }
 
 /** Legacy bare-ID view cannot prove ownership amid collisions; destructive paths need explicit WorktreeRemovalTarget hosts and getIndexedWorktreesById. */
-export function getIndexedWorktreeMap(
-  worktreesByRepo: AppState['worktreesByRepo']
-): Map<string, Worktree> {
+export function getIndexedWorktreeMap(worktreesByRepo: WorktreeRows): Map<string, Worktree> {
   return getWorktreeSnapshot(worktreesByRepo).worktreeMap
 }
 
 /** Every host's row for one id, in `worktreesByRepo` order. */
 export function getIndexedWorktreesById(
-  worktreesByRepo: AppState['worktreesByRepo'],
+  worktreesByRepo: WorktreeRows,
   worktreeId: string
 ): Worktree[] {
   return getWorktreeSnapshot(worktreesByRepo).worktreesById.get(worktreeId) ?? []
 }
 
 export function getIndexedWorktreeById(
-  worktreesByRepo: AppState['worktreesByRepo'],
+  worktreesByRepo: WorktreeRows,
   worktreeId: string
 ): Worktree | undefined {
   return getWorktreeSnapshot(worktreesByRepo).worktreeMap.get(worktreeId)
 }
 
-const hasAnyWorktreesCache = new WeakMap<AppState['worktreesByRepo'], boolean>()
+const hasAnyWorktreesCache = new WeakMap<WorktreeRows, boolean>()
 
-export function getCachedHasAnyWorktrees(worktreesByRepo: AppState['worktreesByRepo']): boolean {
+export function getCachedHasAnyWorktrees(worktreesByRepo: WorktreeRows): boolean {
   const cached = hasAnyWorktreesCache.get(worktreesByRepo)
   if (cached !== undefined) {
     return cached

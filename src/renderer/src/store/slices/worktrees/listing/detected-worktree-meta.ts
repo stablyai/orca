@@ -1,3 +1,4 @@
+import { recordArrayChanges, recordDraft } from '../../../keyed-record-transitions'
 import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { AppState } from '../../../types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
@@ -47,17 +48,15 @@ export function applyDetectedWorktreeUpdates(
 ): AppState['detectedWorktreesByRepo'] {
   // Why: mirrors applyWorktreeUpdates — detected rows feed the same palette.
   const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
-  let changed = false
-  const nextByRepo: AppState['detectedWorktreesByRepo'] = {}
+  const nextByRepo = recordDraft(detectedWorktreesByRepo)
 
   for (const [repoId, result] of Object.entries(detectedWorktreesByRepo)) {
-    let repoChanged = false
-    const nextWorktrees = result.worktrees.map((worktree) => {
+    const positions: number[] = []
+    const nextWorktrees = result.worktrees.map((worktree, position) => {
       if (worktree.id !== worktreeId || !worktreeRowMatchesMetaHost(worktree, executionHostId)) {
         return worktree
       }
-      repoChanged = true
-      changed = true
+      positions.push(position)
       const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, updates) }
       if (updates.displayNameIsPinned !== undefined) {
         next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
@@ -68,10 +67,13 @@ export function applyDetectedWorktreeUpdates(
       }
       return next
     })
-    nextByRepo[repoId] = repoChanged ? { ...result, worktrees: nextWorktrees } : result
+    if (positions.length) {
+      recordArrayChanges(result.worktrees, nextWorktrees, positions)
+      nextByRepo.set(repoId, { ...result, worktrees: nextWorktrees })
+    }
   }
 
-  return changed ? nextByRepo : detectedWorktreesByRepo
+  return nextByRepo.finish()
 }
 
 export function folderWorkspaceMatchesHost(

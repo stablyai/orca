@@ -354,6 +354,58 @@ describe('buildSidebarFeedRows nests a server’s workspace under its folder wor
   })
 })
 
+it('keeps bare storage out of local and paired rows, including parent synthesis', () => {
+  const repos = [repo('r'), repo('r', { executionHostId: 'runtime:a' })]
+  const bareId = 'r::/r/.bare'
+  const local = buildWorkspaceRows({
+    worktrees: [
+      worktree(bareId, {
+        hostId: 'local',
+        isBare: true,
+        isMainWorktree: true,
+        instanceId: 'bare'
+      }),
+      worktree('r::/r/main', { hostId: 'local', instanceId: 'main' })
+    ],
+    folderWorkspaces: [],
+    repos,
+    lineageById: {
+      'r::/r/main': {
+        worktreeId: 'r::/r/main',
+        worktreeInstanceId: 'main',
+        parentWorktreeId: bareId,
+        parentWorktreeInstanceId: 'bare',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 0
+      }
+    }
+  })
+  const paired = [
+    { worktreeId: bareId, isBare: true, isMainWorktree: true, worktreeInstanceId: 'bare' },
+    {
+      worktreeId: 'r::/r/main',
+      worktreeInstanceId: 'main',
+      lineageWorktreeInstanceId: 'main',
+      parentWorktreeId: bareId,
+      parentWorktreeInstanceId: 'bare'
+    }
+  ].flatMap((row) => normalizePairedServerRow('runtime:a', { repoId: 'r', ...row }) ?? [])
+  const built = buildSidebarFeedRows(
+    domains({
+      workspaces: local,
+      pairedServerHosts: new Map([['runtime:a', { freshness: 'live', host: null }]]),
+      pairedServerRows: new Map(paired.map((row) => [row.key, row]))
+    }),
+    catalog(repos),
+    view()
+  )
+  expect(outline(built.sectionRows).toSorted()).toEqual([
+    'local|r::/r/main@0',
+    'runtime:a|r::/r/main@0'
+  ])
+})
+
 it('preserves a renamed paired host and marks the default local label', () => {
   const hosts = buildFeedHostOptions(
     domains({

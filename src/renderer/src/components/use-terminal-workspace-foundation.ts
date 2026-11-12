@@ -1,11 +1,10 @@
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { MountedTerminalWorktrees } from './terminal/split-group-mount'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../store/index'
-import { useWorktreeMap } from '../store/slices/worktrees/listing/use-worktree-catalog'
+import { getIndexedWorktreeMap } from '../store/slices/worktrees/listing/worktree-catalog-index'
+import { createExistingContentSurfaceSelector } from '@/lib/workspace/tabs/existing-workspace-content'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
-import type { WorktreeTabBucketProjection } from '@/lib/workspace/tabs/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
 import {
   parseWslMovedSurfacesKey,
@@ -15,14 +14,13 @@ import { useReusedArrayIdentity } from './sidebar/worktree-list/listing/use-reus
 import { usePairedRuntimeParkingEnvironmentIds } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { createTerminalWorktreeTopologyProjection } from './terminal-pane/parking/retention/terminal-hidden-worktree-retention'
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
-import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function useTerminalWorkspaceFoundation() {
-  const terminalTopologyProjectionRef = useRef<WorktreeTabBucketProjection<
-    TerminalTab,
-    TerminalTab
-  > | null>(null)
-  terminalTopologyProjectionRef.current ??= createTerminalWorktreeTopologyProjection()
+  const [terminalTopologyProjection] = useState(createTerminalWorktreeTopologyProjection)
   const mountedWorktreeIdsRef = useRef<Set<string>>(new MountedTerminalWorktrees())
   const browserGuestWorktreeRecencyRef = useRef<string[]>([])
   const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
@@ -30,7 +28,9 @@ export function useTerminalWorkspaceFoundation() {
   const measuringTerminalWorktreeIdsRef = useRef(new Set<string>())
   const terminalWorktreeParkCooldownUntilRef = useRef(new Map<string, number>())
   const terminalWorktreeParkingTimersRef = useRef(new Map<string, number>())
-  const worktreesById = useWorktreeMap()
+  const [selectContentSurfaces] = useState(createExistingContentSurfaceSelector)
+  const contentSurfaces = useAppStore(selectContentSurfaces)
+  const worktreesById = useAppStore((state) => getIndexedWorktreeMap(selectWorktreesByRepo(state)))
   const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const renderedActiveWorktreeId = activeWorktreeId
@@ -46,8 +46,14 @@ export function useTerminalWorkspaceFoundation() {
   const activeFolderSurfaceId = activeFolderSurfaceHostId ? renderedActiveWorktreeId : null
   const wslMovedSurfacesKey = useAppStore(selectWslMovedSurfacesKey)
   const workspaceSurfaces = useMemo(() => {
+    const surfaceRows = new Map<string, { path: string }>(worktreesById)
+    for (const surface of contentSurfaces) {
+      if (!surfaceRows.has(surface.id)) {
+        surfaceRows.set(surface.id, surface)
+      }
+    }
     const surfaces = projectWorkspaceSurfaces({
-      worktreesById,
+      worktreesById: surfaceRows,
       folderWorkspaces,
       activeWorkspaceId: activeFolderSurfaceId,
       activeWorkspaceResolvedHostId: activeFolderSurfaceHostId
@@ -57,6 +63,7 @@ export function useTerminalWorkspaceFoundation() {
     return moved.length > 0 ? [...surfaces, ...moved] : surfaces
   }, [
     worktreesById,
+    contentSurfaces,
     folderWorkspaces,
     activeFolderSurfaceId,
     activeFolderSurfaceHostId,
@@ -73,7 +80,7 @@ export function useTerminalWorkspaceFoundation() {
   const activeView = useAppStore((state) => state.activeView)
   // Root subscriptions track mount/parking transitions; LiveTerminalTabBar alone consumes title-only updates.
   const tabsByWorktree = useAppStore((state) =>
-    terminalTopologyProjectionRef.current!.project(state.tabsByWorktree)
+    terminalTopologyProjection.project(state.tabsByWorktree)
   )
   const pendingStartupByTabId = useAppStore((state) => state.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore(

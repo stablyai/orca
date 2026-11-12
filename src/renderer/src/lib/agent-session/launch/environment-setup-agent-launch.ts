@@ -31,7 +31,7 @@ function pickEnvironmentSetupWorktree(repoId: string): Worktree | null {
   const state = useAppStore.getState()
   const candidates = state
     .allWorktrees()
-    .filter((entry) => entry.repoId === repoId && !entry.isArchived)
+    .filter((entry) => entry.repoId === repoId && !entry.isArchived && !entry.isBare)
   return (
     candidates.find((entry) => entry.id === state.activeWorktreeId) ??
     candidates.find((entry) => entry.isMainWorktree) ??

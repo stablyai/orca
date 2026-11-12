@@ -1,4 +1,8 @@
 import {
+  selectWorktreesByRepo,
+  selectDetectedWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toSshExecutionHostId,
@@ -8,9 +12,10 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
-  findIndexedProjectGroupOwner
+  findIndexedProjectGroupOwner,
+  findIndexedWorktrees,
+  findIndexedDetectedWorktrees
 } from './worktree-runtime-owner-index'
-import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { resolveQualifiedWorktreeExecutionOwner } from './qualified-worktree-execution-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
@@ -70,7 +75,12 @@ export function getResolvedExecutionHostIdForWorktree(
       : undefined
   return (
     resolveQualifiedWorktreeExecutionOwner(
-      selectWorktreesByRepo(state),
+      {
+        [worktreeId]: [
+          ...findIndexedWorktrees(selectWorktreesByRepo(state), worktreeId),
+          ...findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), worktreeId)
+        ]
+      },
       state.repos,
       worktreeId,
       preferredHostId

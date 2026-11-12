@@ -5,7 +5,10 @@ import {
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
 } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
+import type { Repo } from '../../../../../../shared/repo-types'
+import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
+import { getDefaultSettings } from '../../../../../../shared/constants'
+import { toDetectedWorktree } from '../../../../../../shared/worktree/ownership'
 
 const mocks = vi.hoisted(() => ({
   owner: vi.fn<() => string | null>(() => 'local'),
@@ -100,6 +103,53 @@ it.each(['local', 'runtime:server-1'] as const)(
 )
 
 describe('resuming a conversation from history in a chat', () => {
+  it('uses the saved bare original path for adoption while keeping linked-cwd and recording-host controls', () => {
+    const repo: Repo = { ...makeRepo(), path: '/srv/orca', executionHostId: 'local' }
+    const settings = getDefaultSettings('/tmp')
+    const original = toDetectedWorktree({
+      repo,
+      worktree: makeWorktree(PAIRED_WORKSPACE, 'original', {
+        path: repo.path,
+        hostId: 'local',
+        isBare: true
+      }),
+      settings,
+      knownOrcaLayouts: []
+    })
+    const args = {
+      session: {
+        ...codexSession,
+        agent: 'claude',
+        cwd: '/physical/orca',
+        cwdAliases: ['/srv/orca']
+      },
+      resumeState: { blocked: false, worktreeId: PAIRED_WORKSPACE, usesSessionWorktree: true },
+      activeWorkspaceId: PAIRED_WORKSPACE,
+      targetState: {
+        folderWorkspaces: [],
+        projectGroups: [],
+        repos: [repo],
+        worktreesByRepo: {},
+        detectedWorktreesByRepo: {
+          'repo-1': { repoId: 'repo-1', source: 'git', authoritative: true, worktrees: [original] }
+        }
+      },
+      settings: { agentDefaultSurface: 'chat' }
+    } satisfies Parameters<typeof resolveAiVaultSessionResumeInChatForWorkspace>[0]
+    mocks.owner.mockReturnValue('local')
+    expect(resolveAiVaultSessionResumeInChatForWorkspace(args).available).toBe(false)
+    mocks.localCapabilities.mockReturnValue([
+      STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+      STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
+    ])
+    expect(resolveAiVaultSessionResumeInChatForWorkspace(args)).toEqual({
+      available: true,
+      workspaceId: PAIRED_WORKSPACE
+    })
+    mocks.owner.mockReturnValue('runtime:server-1')
+    expect(resolveAiVaultSessionResumeInChatForWorkspace(args).available).toBe(false)
+  })
+
   // A paired server cannot read a client-local transcript, matching terminal resume restrictions.
   it("is not offered in a paired server's workspace for a conversation recorded here", () => {
     mocks.owner.mockReturnValue('runtime:server-1')

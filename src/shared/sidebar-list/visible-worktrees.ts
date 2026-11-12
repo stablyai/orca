@@ -46,7 +46,7 @@ export function selectVisibleSidebarWorktrees({
   // Keep valid nonarchived ancestors despite ordinary filters so children retain their hierarchy.
   const selectedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
 
-  let all = filterWorkspaceRows(rows, filters, facts)
+  let all = filterWorkspaceRows(rows, filters, facts).filter((worktree) => !worktree.isBare)
 
   if (forcedVisibleWorktreeIds && forcedVisibleWorktreeIds.length > 0) {
     const includedIds = new Set(all.map((worktree) => worktree.id))
@@ -54,7 +54,7 @@ export function selectVisibleSidebarWorktrees({
       const worktree = includedIds.has(worktreeId)
         ? undefined
         : [...ancestorByIdentity.values()].find((candidate) => candidate.id === worktreeId)
-      if (worktree) {
+      if (worktree && !worktree.isBare) {
         includedIds.add(worktreeId)
         all.push(worktree)
       }
@@ -107,7 +107,7 @@ function addVisibleLineageAncestors(
   const visiting = new Set<string>()
   const addWithAncestors = (worktree: Worktree): void => {
     const identity = getWorktreeHostIdentity(worktree)
-    if (included.has(identity) || visiting.has(identity)) {
+    if (worktree.isBare || included.has(identity) || visiting.has(identity)) {
       return
     }
     visiting.add(identity)

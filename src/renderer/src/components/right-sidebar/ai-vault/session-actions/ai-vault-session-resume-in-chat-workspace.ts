@@ -40,7 +40,11 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
     ? args.resumeState.worktreeId
     : (args.resumeState.worktreeId ?? args.activeWorkspaceId)
   const targetWorkspacePath = targetWorkspaceId
-    ? resolveAiVaultTargetWorkspacePath(args.targetState, targetWorkspaceId)
+    ? resolveAiVaultTargetWorkspacePath(
+        args.targetState,
+        targetWorkspaceId,
+        args.session.executionHostId
+      )
     : null
   const state = useAppStore.getState()
   // Like terminal resume, native resume requires the recording host, which also owns capability checks.

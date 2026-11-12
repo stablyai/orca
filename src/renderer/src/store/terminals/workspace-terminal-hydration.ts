@@ -77,9 +77,11 @@ export function createWorkspaceTerminalHydrationActions(
           session.activeRepoId &&
           knownRepoIds.has(session.activeRepoId)
             ? (runtimeSessionPlaceholders.worktreesByRepo[session.activeRepoId]?.find(
-                (worktree) => worktree.isMainWorktree
+                (worktree) => worktree.isMainWorktree && !worktree.isBare
               )?.id ??
-              runtimeSessionPlaceholders.worktreesByRepo[session.activeRepoId]?.[0]?.id ??
+              runtimeSessionPlaceholders.worktreesByRepo[session.activeRepoId]?.find(
+                (worktree) => !worktree.isBare
+              )?.id ??
               null)
             : null
         const activeWorktreeId = (() => {

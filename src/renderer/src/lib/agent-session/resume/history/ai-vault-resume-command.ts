@@ -114,11 +114,16 @@ function buildAiVaultResumeForWorktree(
 export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVaultResumeHostShell {
   return resolveAiVaultResumeHostShell({
     session: args.session,
-    workspacePlatform: getAiVaultResumePlatform(args.state, args.worktreeId),
+    workspacePlatform: getAiVaultResumePlatform(
+      args.state,
+      args.worktreeId,
+      args.session.executionHostId
+    ),
     localLiveShell: (platform) =>
       resolveAiVaultResumeStartupShell({
         state: args.state,
         worktreeId: args.worktreeId,
+        executionHostId: args.session.executionHostId,
         platform
       })
   })

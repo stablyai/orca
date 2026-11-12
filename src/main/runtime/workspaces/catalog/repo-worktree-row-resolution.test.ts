@@ -1,3 +1,6 @@
+import { getHiddenImportableExternalWorktrees } from '../../../../shared/external-worktree-inbox'
+import { buildValidWorktreeIdsForSessionHydration } from '../../../../shared/worktree/degraded-repo-worktree-validity'
+import { applyMetadataFallbackVisibility } from '../../../../shared/worktree/ownership'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { Repo } from '../../../../shared/repo-types'
@@ -233,4 +236,38 @@ describe('folder-to-Git checkout identity', () => {
       expect(Object.keys(deps.metaById)).toEqual([oldId])
     }
   )
+})
+
+it('retains bare storage for saved layouts without exposing a checkout or an import', () => {
+  const owner = repo('bare', '/project/.bare')
+  const deps = createDeps([owner])
+  Object.assign(deps.store, { getProjectHostSetups: () => [] })
+  const worktrees = buildDetectedGitWorktrees(deps.store, owner, [
+    { ...gitWorktree('/project/.bare'), isBare: true, isMainWorktree: true, branch: '' },
+    { ...gitWorktree('/project/a-stale'), prunable: true },
+    gitWorktree('/project/main')
+  ])
+  expect(
+    worktrees.map(({ id, visible, selectedCheckout, isMainWorktree }) => ({
+      id,
+      visible,
+      selectedCheckout,
+      isMainWorktree
+    }))
+  ).toEqual([
+    { id: 'bare::/project/.bare', visible: false, selectedCheckout: false, isMainWorktree: true },
+    { id: 'bare::/project/main', visible: true, selectedCheckout: false, isMainWorktree: false }
+  ])
+  expect(applyMetadataFallbackVisibility(worktrees[0]).visible).toBe(false)
+  const detected = { repoId: 'bare', authoritative: true, source: 'git' as const, worktrees }
+  expect(getHiddenImportableExternalWorktrees(detected)).toEqual([])
+  const valid = buildValidWorktreeIdsForSessionHydration(
+    {
+      repos: [owner],
+      worktreesByRepo: { bare: worktrees.filter((row) => row.visible) },
+      detectedWorktreesByRepo: { bare: detected }
+    },
+    ['bare::/project/.bare', 'bare::/project/gone']
+  )
+  expect([...valid].sort()).toEqual(['bare::/project/.bare', 'bare::/project/main'])
 })

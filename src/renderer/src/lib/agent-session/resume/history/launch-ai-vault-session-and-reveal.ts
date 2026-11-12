@@ -27,8 +27,13 @@ export async function launchAiVaultSessionAndReveal(
       return null
     }
   }
-  if (useAppStore.getState().activeWorktreeId !== args.worktreeId) {
-    activateAiVaultResumeWorkspace(args.worktreeId)
+  const state = useAppStore.getState()
+  if (
+    state.activeWorktreeId !== args.worktreeId ||
+    (args.workspaceExecutionHostId &&
+      state.activeWorkspaceExecutionHostId !== args.workspaceExecutionHostId)
+  ) {
+    activateAiVaultResumeWorkspace(args.worktreeId, args.workspaceExecutionHostId)
   }
   notifyAiVaultSessionQueued(args.agent)
   return launch.tabId

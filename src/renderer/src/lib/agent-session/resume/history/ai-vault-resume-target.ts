@@ -5,37 +5,40 @@ import {
   type AiVaultResumeTargetStatus
 } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-target'
 import type { AppState } from '@/store/types'
-import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import {
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '@/store/workspaces/catalog/workspace-record-fields'
+import { findAiVaultHistoryWorktree } from './ai-vault-history-worktrees'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type AiVaultResumeWorkspaceState = Pick<
   AppState,
   'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
->
+> &
+  Partial<Pick<AppState, 'detectedWorktreesByRepo'>>
 
 export function getAiVaultResumeWorkspaceExecutionHostId(
   state: AiVaultResumeWorkspaceState,
-  workspaceId: string | null
+  workspaceId: string | null,
+  executionHostId?: ExecutionHostId | null
 ): ExecutionHostId | null {
-  return getWorkspaceExecutionHostId(resumeWorkspaceCatalog(state), workspaceId)
+  return getWorkspaceExecutionHostId(resumeWorkspaceCatalog(state, executionHostId), workspaceId)
 }
 
 export function getAiVaultResumeWorkspaceTargetStatus(
   state: AiVaultResumeWorkspaceState,
-  workspaceId: string | null
+  workspaceId: string | null,
+  executionHostId?: ExecutionHostId | null
 ): AiVaultResumeTargetStatus {
-  return getWorkspaceTargetStatus(resumeWorkspaceCatalog(state), workspaceId)
+  return getWorkspaceTargetStatus(resumeWorkspaceCatalog(state, executionHostId), workspaceId)
 }
 
-function resumeWorkspaceCatalog(state: AiVaultResumeWorkspaceState) {
+function resumeWorkspaceCatalog(
+  state: AiVaultResumeWorkspaceState,
+  executionHostId?: ExecutionHostId | null
+) {
   return {
     folderWorkspaces: selectFolderWorkspaces(state),
     projectGroups: state.projectGroups,
     repos: state.repos,
     findWorktree: (worktreeId: string) =>
-      getIndexedWorktreeMap(selectWorktreesByRepo(state) ?? {}).get(worktreeId)
+      findAiVaultHistoryWorktree(state, worktreeId, executionHostId)
   }
 }

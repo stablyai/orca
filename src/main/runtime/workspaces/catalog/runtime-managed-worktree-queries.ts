@@ -76,7 +76,7 @@ export class RuntimeManagedWorktreeQueries {
         return false
       }
       if (routing.kind !== 'resolved' || !routing.repo) {
-        return !scopedRepo
+        return !worktree.isBare && !scopedRepo
       }
       if (
         scopedRepo &&
@@ -232,7 +232,7 @@ export class RuntimeManagedWorktreeQueries {
           undefined,
           repoLookup.rowsFor(repo.id).length
         ).visible
-      : true
+      : !worktree.isBare
   }
 
   buildVisibilityMatchers(
@@ -263,7 +263,7 @@ export class RuntimeManagedWorktreeQueries {
         ...worktree,
         ownership: 'unknown-legacy' as const,
         selectedCheckout: false,
-        visible: true
+        visible: !worktree.isBare
       }
     }
     const visibilityDefaults = this.visibilityDefaults(defaultsSupported, settings)

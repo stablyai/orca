@@ -85,7 +85,9 @@ export function getSimulatorTabForWorktree(
   }
   const target = activeWorktree ?? (worktrees.length === 1 ? worktrees[0] : null)
   if (!target) {
-    return null
+    return !activeExecutionHostId
+      ? (simulatorTabs.find((tab) => !tab.executionHostId) ?? null)
+      : null
   }
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(worktrees)
   return (

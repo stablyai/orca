@@ -10,19 +10,25 @@ import {
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
-import { dedupePaletteWorktrees } from '../search/palette-repo-resolution'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
-import {
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { getExistingContentWorktrees } from '../tabs/existing-workspace-content'
 
 export function getPaletteOwnershipWorktreeIds(
-  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
+  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'> &
+    Partial<
+      Pick<
+        AppState,
+        | 'detectedWorktreesByRepo'
+        | 'tabsByWorktree'
+        | 'unifiedTabsByWorktree'
+        | 'browserTabsByWorktree'
+      >
+    >
 ): Pick<Worktree, 'id'>[] {
   return [
-    ...dedupePaletteWorktrees(Object.values(selectWorktreesByRepo(state)).flat()),
+    ...getExistingContentWorktrees(state).filter((row) => !row.id.startsWith('folder:')),
     ...(selectFolderWorkspaces(state) ?? []).map((workspace) => ({
       id: folderWorkspaceKey(workspace.id)
     }))
@@ -57,11 +63,11 @@ export function getActiveExecutionHostIdForWorktree(
   if (state.activeWorktreeId !== worktreeId) {
     return undefined
   }
-  // Why: most activations pass no host; a bare 'local' there stamped SSH worktrees' tabs as local.
+  // Missing host evidence stays unresolved; a local default would falsely stamp remote twins' content.
   return (
     state.activeWorkspaceExecutionHostId ??
     getResolvedExecutionHostIdForWorktree(state, worktreeId) ??
-    LOCAL_EXECUTION_HOST_ID
+    undefined
   )
 }
 

@@ -32,6 +32,7 @@ export function useWorktreeJumpPaletteWorktrees({
   agentStatusByPaneKey,
   tabsByWorktree,
   workspaces,
+  contentWorkspaces,
   filterPredicate,
   hideDefaultBranchWorkspace,
   hideAutomationGeneratedWorkspaces,
@@ -184,6 +185,14 @@ export function useWorktreeJumpPaletteWorktrees({
     migrationUnsupportedByPtyId,
     terminalLayoutsByTabId
   ])
+  const openTabWorkspaces = useMemo(() => {
+    if (!paletteStatusInputsActive) {
+      return EMPTY_SORTED_WORKTREES
+    }
+    return filterPredicate
+      ? contentWorkspaces.filter(filterPredicate.matchesWorktree)
+      : contentWorkspaces
+  }, [paletteStatusInputsActive, contentWorkspaces, filterPredicate])
   const sortedWorktrees = useMemo(
     () =>
       hasQuery
@@ -271,6 +280,7 @@ export function useWorktreeJumpPaletteWorktrees({
     switchableWorktreesForRows,
     searchScopeWorktrees,
     browserSortedWorktrees,
+    openTabWorkspaces,
     worktreeMap,
     resolveWorktree,
     paletteWorktreeIndex,

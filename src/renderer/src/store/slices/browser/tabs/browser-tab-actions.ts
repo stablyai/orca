@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '../../../keyed-record-transitions'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 import {
@@ -99,10 +100,9 @@ export function createBrowserTabActions(
         set((s) => {
           options?.validateLinkPlacement?.(s)
           return {
-            browserTabsByWorktree: {
-              ...s.browserTabsByWorktree,
-              [worktreeId]: [...(s.browserTabsByWorktree[worktreeId] ?? []), browserTab]
-            },
+            browserTabsByWorktree: replaceRecordEntries(s.browserTabsByWorktree, [
+              [worktreeId, [...(s.browserTabsByWorktree[worktreeId] ?? []), browserTab]]
+            ]),
             browserPagesByWorkspace: {
               ...s.browserPagesByWorkspace,
               [workspaceId]: [page]
