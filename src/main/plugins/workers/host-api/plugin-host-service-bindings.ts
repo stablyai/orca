@@ -2,7 +2,7 @@ import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../../shared/plugins/work
 import type { PluginHostServices, PluginDesktopFrameServices } from './plugin-host-method-bindings'
 import type { PluginPanelBridgeServices } from './plugin-host-panel-method-bindings'
 import type { PluginStatusBarState } from '../../status-bar/plugin-status-bar-state'
-import type { PluginRuntimeRpc } from './plugin-host-workspace-method-bindings'
+import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import type { PluginHostRendererActions } from '../../view/plugin-host-renderer-actions'
 import {
   pluginSettingValueIssue,
@@ -19,6 +19,7 @@ import type { PluginEditorTypographySource } from '../../appearance/plugin-edito
 export type PluginRuntimeDelegate = {
   resolveActiveWorktreeContext(): Promise<{
     worktreeId: string
+    identityKey?: string
     path: string
     branch: string
     displayName: string
@@ -84,9 +85,11 @@ export function bindPluginHostServices(input: {
       if (!context) {
         return null
       }
-      // Retain path-bearing worktree IDs for host membership checks; public projections exclude them.
+      // Retain path-bearing worktree IDs for host membership checks; public projections expose
+      // the identity form instead when there is one.
       return {
         worktreeId: context.worktreeId,
+        ...(context.identityKey ? { identityKey: context.identityKey } : {}),
         branch: context.branch,
         displayName: context.displayName
       }
