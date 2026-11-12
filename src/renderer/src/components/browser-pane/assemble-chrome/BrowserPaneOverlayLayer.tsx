@@ -100,7 +100,8 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   return (
     <div
       style={style}
-      className="relative flex min-h-0 flex-1 flex-col"
+      // Clip to the group: a squeezed toolbar would otherwise cover the split divider beside it.
+      className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
       data-browser-overlay-tab-id={browserTab.id}
       onPointerDown={handleFocus}
       onFocusCapture={handleFocus}
