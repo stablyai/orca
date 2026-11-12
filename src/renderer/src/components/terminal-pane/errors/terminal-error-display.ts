@@ -40,6 +40,8 @@ const PANE_OWNER_CHANGED_MARKER = 'terminal_pane_owner_changed'
 
 // The host still runs this terminal but could not read its history yet; the same ID can retry.
 const TERMINAL_HISTORY_UNAVAILABLE_MARKER = 'terminal_history_unavailable'
+// The same refusal before a fresh start: no process exists, so nothing is still running.
+const TERMINAL_HISTORY_BEFORE_START_MARKER = 'terminal_history_unavailable_before_start'
 
 // Keep the English transport literal as a wire marker; localize it here with the surrounding banner.
 const REMOTE_TERMINAL_CLOSED_MARKER = 'Remote terminal was closed.'
@@ -131,6 +133,14 @@ export function isPaneOwnerRecoveryError(error: string): boolean {
   )
 }
 
+/** Marks a fresh start's refusal so its banner does not claim a running terminal. */
+export function markTerminalHistoryUnavailableBeforeStart(error: string): string {
+  return error.replace(
+    /terminal_history_unavailable(?!_before_start)/g,
+    () => TERMINAL_HISTORY_BEFORE_START_MARKER
+  )
+}
+
 export function isTerminalHistoryUnavailableError(error: string): boolean {
   const lines = error.split('\n').filter((line) => line.length > 0)
   return (
@@ -188,6 +198,12 @@ export function humanizeTerminalError(
         )
     humanized = humanized.replaceAll(PANE_OWNER_UNVERIFIED_MARKER, () => explanation)
   }
+  humanized = humanized.replaceAll(TERMINAL_HISTORY_BEFORE_START_MARKER, () =>
+    t(
+      'auto.components.terminal.pane.TerminalErrorToast.historyUnavailableBeforeStart',
+      "Orca couldn't prepare this terminal's history on its host, so the terminal didn't start. Click Retry to try again."
+    )
+  )
   humanized = humanized.replaceAll(TERMINAL_HISTORY_UNAVAILABLE_MARKER, () =>
     t(
       'auto.components.terminal.pane.TerminalErrorToast.historyUnavailable',

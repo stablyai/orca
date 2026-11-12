@@ -42,7 +42,9 @@ export class DaemonPtyHostHistoryBindings {
 
   constructor(
     readonly enabled: boolean,
-    private readonly isLive: (sessionId: string) => boolean
+    private readonly isLive: (sessionId: string) => boolean,
+    // A late exit must not close a claim a same-ID successor's start already holds.
+    private readonly claims: () => Pick<HistoryManager, 'releaseUnheld'> | null
   ) {}
 
   bind(sessionId: string, binding: HostHistoryBinding): void {
@@ -78,7 +80,10 @@ export class DaemonPtyHostHistoryBindings {
     const binding = this.bindings.get(sessionId)
     if (binding && (incarnationId === undefined || binding.incarnationId === incarnationId)) {
       this.bindings.delete(sessionId)
-      binding.admission?.release()
+      if (binding.admission) {
+        // Every binding claim comes from this store's holds.
+        this.claims()?.releaseUnheld(sessionId, binding.admission)
+      }
     }
   }
 
@@ -93,7 +98,10 @@ export class DaemonPtyHostHistoryBindings {
     }
   }
 
-  /** Before a host-owned create: main predecessors are closed and their issued work settles. */
+  /**
+   * Before a create: predecessors are closed and their issued work settles. A legacy install
+   * still unsettled after the wait leaves history suspended; a host create refuses instead.
+   */
   async handOff(
     store: HistoryManager | null,
     historyRecovery: HistoryRecoveryContext,
@@ -101,11 +109,14 @@ export class DaemonPtyHostHistoryBindings {
     attachOnly: boolean
   ): Promise<void> {
     const admission = historyRecovery.admission
-    if (!this.enabled || !admission) {
+    if (!admission) {
       return
     }
-    const deadline = Date.now() + HOST_HISTORY_HANDOFF_WAIT_MS
-    if (!(await awaitDaemonWorkWithinCallerDeadline(admission.ready, deadline))) {
+    const ready = await awaitHistoryAdmissionReady(admission)
+    if (!this.enabled) {
+      return
+    }
+    if (!ready) {
       throw new TerminalHistoryUnavailableError()
     }
     const freeze = historyRecovery.freeze
@@ -127,6 +138,19 @@ export class DaemonPtyHostHistoryBindings {
       ? { owner: 'host', incarnationId: binding?.incarnationId }
       : undefined
   }
+}
+
+export function newHistoryRecoveryContext(
+  admission: HistoryWriterAdmission | undefined
+): HistoryRecoveryContext {
+  return { admission, freeze: null, unreadableSessionId: null, identityChanged: false }
+}
+
+export function awaitHistoryAdmissionReady(admission: HistoryWriterAdmission): Promise<boolean> {
+  return awaitDaemonWorkWithinCallerDeadline(
+    admission.ready,
+    Date.now() + HOST_HISTORY_HANDOFF_WAIT_MS
+  )
 }
 
 /** Sleep's verified capture: committed to the cut, after which the daemon never ends it cleanly. */

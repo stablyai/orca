@@ -1,12 +1,12 @@
 import type { PendingOutputRecord } from '../../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../../protocol/terminal-snapshot'
 import type { TerminalOwner } from '../../../../shared/terminal/pty/lifecycle/terminal-owner'
-import type { TerminalSessionJournal } from './terminal-session-journal'
+import type { TerminalSessionJournalReads } from './terminal-session-journal-reads'
 
 export type TerminalSessionJournalHost = {
   acquireReplay(priority: number): Promise<() => void>
-  charge(journal: TerminalSessionJournal, bytes: number): void
-  settled(journal: TerminalSessionJournal): void
+  charge(journal: TerminalSessionJournalReads, bytes: number): void
+  settled(journal: TerminalSessionJournalReads): void
   log(event: string, details: Record<string, unknown>): void
 }
 

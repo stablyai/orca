@@ -103,7 +103,9 @@ function subscribePhone(runtime: OrcaRuntimeService, handle: string) {
   const snapshot = () => {
     const start = decoded().find((frame) => frame.opcode === TerminalStreamOpcode.SnapshotStart)
     const meta = start
-      ? decodeTerminalStreamJson<{ cols: number; rows: number }>(start.payload)
+      ? decodeTerminalStreamJson<{ cols: number; rows: number; unavailable?: string }>(
+          start.payload
+        )
       : null
     if (!meta) {
       return null
@@ -112,7 +114,7 @@ function subscribePhone(runtime: OrcaRuntimeService, handle: string) {
       .filter((frame) => frame.opcode === TerminalStreamOpcode.SnapshotChunk)
       .map((frame) => decodeTerminalStreamText(frame.payload))
       .join('')
-    return { cols: meta.cols, rows: meta.rows, data }
+    return { cols: meta.cols, rows: meta.rows, unavailable: meta.unavailable, data }
   }
   const close = async () => {
     runtime.cleanupSubscription(`${handle}:phone-1`)
@@ -180,5 +182,41 @@ describe('phone subscribe to an idle PTY whose hidden pane sits at desktop size'
       ...EXPECTED_PHONE_ROWS,
       '$ repainted'
     ])
+  })
+})
+
+// CJ10: a renderer that mounted late used to publish its own rows over an unavailable host image.
+describe('phone subscribe to a host-owned PTY whose daemon image is unavailable', () => {
+  it('reports the image unavailable instead of publishing late renderer rows', async () => {
+    let mounted = false
+    const runtime = new OrcaRuntimeService()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => ({ ...DESKTOP }),
+      resize: () => true,
+      hasRendererSerializer: () => mounted,
+      getRendererSerializerGeneration: () => 1,
+      waitForRendererSerializer: async () => {
+        mounted = true
+        return true
+      },
+      serializeBuffer: async () =>
+        mounted ? { data: 'RENDERER_ONLY_ROW\r\n$ prompt', ...DESKTOP } : null,
+      serializeProviderBuffer: async () => null,
+      getTerminalHistoryAuthority: () => ({ owner: 'host', incarnationId: 'incarnation-1' })
+    })
+    vi.spyOn(runtime, 'requestRendererTerminalTabMount').mockReturnValue(true)
+    const record = internals(runtime).recordPtyWorktree(PTY_ID, WORKTREE_ID, { connected: true })
+    const handle = internals(runtime).issuePtyHandle(record)
+
+    const subscription = subscribePhone(runtime, handle)
+    await vi.waitFor(() => expect(subscription.snapshot()).not.toBeNull())
+    const snapshot = subscription.snapshot()
+    await subscription.close()
+
+    expect(snapshot?.data).not.toContain('RENDERER_ONLY_ROW')
+    expect(snapshot?.unavailable).toBe('no-serializable-buffer')
   })
 })

@@ -53,16 +53,23 @@ export function installPtySnapshotIpcHandlers(deps: {
         const runtimeSeqBeforeSnapshot = runtime.getPtyOutputSequence(args.id)
         const provider = tryGetProviderForPty(args.id)
         // A host-owned binding answers its own history; main's model never substitutes for it.
+        const authority = provider?.getTerminalHistoryAuthority?.(args.id)
         const providerSnapshotRequired =
-          providerSnapshotRequiredPtys.has(args.id) ||
-          provider?.getTerminalHistoryAuthority?.(args.id)?.owner === 'host'
+          providerSnapshotRequiredPtys.has(args.id) || authority?.owner === 'host'
         const providerSnapshot = providerSnapshotRequired
           ? await provider?.getBufferSnapshot?.(args.id, {
               scrollbackRows
             })
           : null
-        // Main's retained tail cannot replace full history after a data gap.
-        if (providerSnapshotRequired && !providerSnapshot) {
+        // Main's retained tail cannot replace full history after a data gap, and a binding
+        // replaced during the read must not receive the earlier incarnation's image.
+        if (
+          providerSnapshotRequired &&
+          (!providerSnapshot ||
+            tryGetProviderForPty(args.id) !== provider ||
+            provider?.getTerminalHistoryAuthority?.(args.id)?.incarnationId !==
+              authority?.incarnationId)
+        ) {
           return null
         }
         const snapshot =

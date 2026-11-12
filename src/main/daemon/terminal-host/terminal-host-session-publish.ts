@@ -55,16 +55,30 @@ export async function spawnAndPublishSession(
     rows: size.rows,
     ...(opts.spawnAdmission ? { deadlineAt: opts.spawnAdmission.deadlineAt } : {})
   })
-  deps.assertCreateAllowed()
+  // A start that never produced a process restores the ID's prior clean-ended truth.
+  const rollbackHold = (): void => {
+    if (historyHold) {
+      deps.historyJournals?.rollbackHold(historyHold)
+    }
+  }
+  try {
+    deps.assertCreateAllowed()
+  } catch (error) {
+    rollbackHold()
+    throw error
+  }
   const lower = Promise.withResolvers<PtyCreationDisposition>()
   opts.creationWork?.join(lower.promise)
   let lowerReported = false
   let physical: ReturnType<typeof observeReturnedTerminalProcess>
   let subprocess: SubprocessHandle
+  // Only a start proven never to have forked may undo its hold.
+  let noFork = false
   try {
     subprocess = await deps.spawnSubprocess({
       onCreationDisposition: (disposition) => {
         lowerReported = true
+        noFork = disposition.kind === 'no-fork'
         lower.resolve(disposition)
       },
       sessionId: opts.sessionId,
@@ -100,6 +114,9 @@ export async function spawnAndPublishSession(
   } catch (error) {
     if (!lowerReported) {
       lower.resolve({ kind: 'unknown' })
+    }
+    if (noFork) {
+      rollbackHold()
     }
     throw error
   }

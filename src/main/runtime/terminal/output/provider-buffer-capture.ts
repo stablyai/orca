@@ -26,6 +26,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
   protected abstract readVisibleTerminalState(
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null>
+  protected abstract readHostCurrentFrame(
+    ptyId: string
+  ): Promise<RuntimeVisibleTerminalState | null>
   protected abstract readRendererVisibleSnapshotLines(
     ptyId: string
   ): Promise<RuntimeTerminalProjection>
@@ -204,7 +207,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     if (historical) {
       projection = await this.readProviderTerminalTailLines(ptyId, opts.limit, providerSnapshot)
     } else if (blank || knownAlternateScreen || conpty || this.headlessTerminals.has(ptyId)) {
-      const frame = await this.readVisibleTerminalState(ptyId)
+      const frame = await this.readHostCurrentFrame(ptyId)
       if (blank || knownAlternateScreen || frame?.isAlternateScreen) {
         projection = frame
       } else if (conpty) {

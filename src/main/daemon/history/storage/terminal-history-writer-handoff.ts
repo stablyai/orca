@@ -1,12 +1,16 @@
+import type { TerminalHistoryWriterAdmissions } from './terminal-history-writer-admissions'
+
 /** A disposable process-local admission to mutate one history ID; once closed it never reopens. */
 export type HistoryWriterAdmission = {
   /** Settles when every predecessor's already-issued file work has actually settled. */
   readonly ready: Promise<void>
+  /** Synchronous `ready`, for installs that cannot await under their caller's lock. */
+  isReady: () => boolean
   current: () => boolean
   release: () => void
 }
 
-type WriterClaim = HistoryWriterAdmission & { owner: object }
+type WriterClaim = HistoryWriterAdmission & { owner: TerminalHistoryWriterAdmissions }
 
 /** Reuse waits for actual predecessor work; abandoning a caller cannot cancel filesystem writes. */
 export class TerminalHistoryWriterHandoff {
@@ -26,18 +30,18 @@ export class TerminalHistoryWriterHandoff {
    */
   admitWriter(
     id: string,
-    owner: object,
+    owner: TerminalHistoryWriterAdmissions,
     retire: () => Promise<void> | undefined,
     opts: { ifUnclaimed: true }
   ): HistoryWriterAdmission | undefined
   admitWriter(
     id: string,
-    owner: object,
+    owner: TerminalHistoryWriterAdmissions,
     retire: () => Promise<void> | undefined
   ): HistoryWriterAdmission
   admitWriter(
     id: string,
-    owner: object,
+    owner: TerminalHistoryWriterAdmissions,
     retire: () => Promise<void> | undefined,
     opts: { ifUnclaimed?: true } = {}
   ): HistoryWriterAdmission | undefined {
@@ -54,9 +58,14 @@ export class TerminalHistoryWriterHandoff {
     try {
       previous?.release()
       let open = true
+      const predecessors = [...(this.pending.get(id) ?? [])]
+      let ready = predecessors.length === 0
       const claim: WriterClaim = {
         owner,
-        ready: Promise.allSettled(this.pending.get(id) ?? []).then(() => {}),
+        ready: Promise.allSettled(predecessors).then(() => {
+          ready = true
+        }),
+        isReady: () => ready,
         current: () => open && this.claims.get(id) === claim,
         release: () => {
           if (!open) {

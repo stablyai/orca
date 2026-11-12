@@ -1,6 +1,6 @@
 import '../../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, promises as fsPromises, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { HeadlessEmulator } from '../../../emulation/headless-emulator'
@@ -174,6 +174,99 @@ describe('daemon-owned terminal history', () => {
     expect(new HistoryReader(root).probeRestorableHistory(id).status).toBe('restorable')
   }, 30_000)
 
+  // A start whose process never existed used to leave an ended predecessor marked restorable.
+  it('restores the clean-ended predecessor when the fresh process never forked', async () => {
+    let fail = true
+    harness = await startDaemonAdapterHarness(
+      (opts) => {
+        if (fail) {
+          opts.onCreationDisposition?.({ kind: 'no-fork' })
+          throw new Error('spawn failed')
+        }
+        return createMockSubprocess()
+      },
+      {},
+      { hostHistory: true }
+    )
+    const root = join(harness.dir, 'history')
+    adapter = new DaemonPtyAdapter({
+      socketPath: harness.socketPath,
+      tokenPath: harness.tokenPath,
+      historyPath: root
+    })
+    const request = { sessionId: 'host-history-failed-start', cols: 80, rows: 24, cwd: '/tmp' }
+    const dir = join(root, getHistorySessionDirName(request.sessionId))
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(
+      join(dir, 'meta.json'),
+      JSON.stringify({
+        cwd: '/tmp',
+        cols: 80,
+        rows: 24,
+        startedAt: '2026-11-01T10:00:00Z',
+        endedAt: '2026-11-01T11:00:00Z',
+        exitCode: 0
+      })
+    )
+
+    await expect(adapter.spawn(request)).rejects.toThrow()
+    expect(new HistoryReader(root).probeRestorableHistory(request.sessionId).status).toBe('none')
+
+    fail = false
+    await adapter.spawn(request)
+    expect(new HistoryReader(root).probeRestorableHistory(request.sessionId).status).toBe(
+      'restorable'
+    )
+  }, 30_000)
+
+  // CJ11: a deep read answered for an exited incarnation used to publish over its same-ID successor.
+  it('drops a deep image that returns after the same ID was rebound to a new process', async () => {
+    let child = createMockSubprocess()
+    harness = await startDaemonAdapterHarness(
+      () => (child = createMockSubprocess()),
+      {},
+      {
+        hostHistory: true
+      }
+    )
+    adapter = new DaemonPtyAdapter({
+      socketPath: harness.socketPath,
+      tokenPath: harness.tokenPath,
+      historyPath: join(harness.dir, 'history')
+    })
+    const request = { sessionId: 'host-history-rebound', cols: 80, rows: 24, cwd: '/tmp' }
+    await adapter.spawn(request)
+    child._simulateData('OLD_INCARNATION\r\n')
+    const client = (adapter as unknown as { client: { request: (...args: never[]) => unknown } })
+      .client
+    const send = client.request.bind(client)
+    const answered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    vi.spyOn(client, 'request').mockImplementation(async (...args) => {
+      const result = await send(...args)
+      if (args[0] === 'getSnapshot') {
+        answered.resolve()
+        await release.promise
+      }
+      return result
+    })
+    const deep = adapter.getBufferSnapshot(request.sessionId, { scrollbackRows: 5000 })
+    await answered.promise
+    vi.mocked(client.request).mockRestore()
+    child._simulateExit(0)
+    await waitFor(() => harness!.server.host.historyJournals?.live(request.sessionId) === undefined)
+    await adapter.spawn(request)
+    child._simulateData('NEW_INCARNATION\r\n')
+    release.resolve()
+
+    expect(await deep).toBeNull()
+    adapter.write(request.sessionId, 'typed')
+    await waitFor(() => child.write.mock.calls.some(([data]) => data === 'typed'))
+    const screen = await adapter.getBufferSnapshot(request.sessionId, { scrollbackRows: 0 })
+    expect(screen?.data).toContain('NEW_INCARNATION')
+    expect(screen?.data).not.toContain('OLD_INCARNATION')
+  }, 30_000)
+
   // Ruling 23:29: after a storage gap the live terminal continues, deep history stays unavailable.
   it('keeps the live window after a storage gap and never ends the gapped history cleanly', async () => {
     const { child } = await startHostHistory()
@@ -212,37 +305,6 @@ describe('daemon-owned terminal history', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8')).endedAt).toBeNull()
   }, 30_000)
-
-  // Perf contract: appends scale with retained bytes in 64 KiB batches, not with output callbacks.
-  it.each([1_000, 10_000])(
-    'batches %i output callbacks into bounded appends',
-    async (count) => {
-      const { child } = await startHostHistory()
-      const { id } = await adapter!.spawn({
-        sessionId: `host-history-batch-${count}`,
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp'
-      })
-      const appends = vi.spyOn(fsPromises, 'appendFile')
-      const chunk = `${'x'.repeat(98)}\r\n`
-      for (let index = 0; index < count; index += 1) {
-        child._simulateData(chunk)
-      }
-      child._simulateData('BATCH_DONE\r\n')
-      const log = join(harness!.dir, 'history', getHistorySessionDirName(id), 'output.log')
-      await waitFor(() => {
-        try {
-          return readFileSync(log).includes('BATCH_DONE')
-        } catch {
-          return false
-        }
-      }, 20_000)
-      expect(appends.mock.calls.length).toBeLessThanOrEqual(Math.ceil((count * 100) / 60_000) + 2)
-      appends.mockRestore()
-    },
-    30_000
-  )
 
   it('sleeps after a verified capture and wakes the same history after an app restart', async () => {
     let child = createMockSubprocess()

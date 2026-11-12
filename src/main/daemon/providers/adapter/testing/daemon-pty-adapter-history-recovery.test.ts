@@ -681,6 +681,56 @@ describe('DaemonPtyAdapter history recovery', () => {
     }
   })
 
+  // CJ8: a retired adapter's late inventory used to mint a claim and detach the successor's writer.
+  it('keeps the successor writing when a retired adapter finishes reconciliation late', async () => {
+    const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
+    const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
+    adapterClass.CHECKPOINT_INTERVAL_MS = 100
+    try {
+      const worktreeId = 'repo-a::/wt/late-reconcile'
+      const { id: sessionId } = await adapter.spawn({ cols: 80, rows: 24, worktreeId })
+      const live = lastSubprocess
+      const dir = join(historyDir, getHistorySessionDirName(sessionId))
+      const options = {
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      }
+      const retired = new DaemonPtyAdapter(options)
+      const client = (retired as unknown as { client: { request: (...args: never[]) => unknown } })
+        .client
+      const request = client.request.bind(client)
+      const listing = Promise.withResolvers<void>()
+      const listed = Promise.withResolvers<void>()
+      vi.spyOn(client, 'request').mockImplementation(async (...args) => {
+        const result = await request(...args)
+        if (args[0] === 'listSessions') {
+          listed.resolve()
+          await listing.promise
+        }
+        return result
+      })
+      const late = retired.reconcileOnStartup(new Set([worktreeId])).catch(() => null)
+      await listed.promise
+      retired.dispose()
+
+      historyAdapter = new DaemonPtyAdapter(options)
+      await historyAdapter.reconcileOnStartup(new Set([worktreeId]))
+      listing.resolve()
+      await late
+      live._simulateData('SUCCESSOR_AFTER_LATE\r\n')
+
+      const checkpoint = join(dir, 'checkpoint.json')
+      const marked = () => readFileSync(checkpoint, 'utf8').includes('SUCCESSOR_AFTER_LATE')
+      await waitFor(() => existsSync(checkpoint) && marked(), 5000)
+      const other = await historyAdapter.spawn({ cols: 80, rows: 24, worktreeId })
+      expect(historyAdapter.getHistoryManager()!.hasWriter(other.id)).toBe(true)
+    } finally {
+      adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
+    }
+  })
+
   it('serializes explicit shutdown behind an in-progress history-aware spawn', async () => {
     const sessionId = 'spawn-shutdown-race'
     const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))

@@ -1,5 +1,6 @@
 import { applyTerminalLaunchResult } from '../startup/terminal-launch-result-policy'
 import { armPaneOwnerRetry, isRetryablePaneRefusal } from '../host-ownership/pane-owner-recovery'
+import { markTerminalHistoryUnavailableBeforeStart } from '../../errors/terminal-error-display'
 import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store/index'
@@ -85,7 +86,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     const outputCallbacks = session.captureTransportOutputCallbacks(
       (message: string) => {
         ownerRefused ||= isRetryablePaneRefusal(message)
-        session.reportError(message)
+        session.reportError(markTerminalHistoryUnavailableBeforeStart(message))
       },
       toProcessExitStartup(coldRestoreOverride ?? effectiveStartup),
       coldRestoreOverride ?? effectiveStartup

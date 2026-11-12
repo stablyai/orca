@@ -28,7 +28,10 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
         incarnationId,
         opts.scrollbackRows
       )
-      return snapshot ? this.toProviderBufferSnapshot(snapshot) : null
+      // A same-ID successor bound during the read must never receive the old incarnation's image.
+      return snapshot && this.hostHistory.get(id)?.incarnationId === incarnationId
+        ? this.toProviderBufferSnapshot(snapshot)
+        : null
     }
     try {
       const scrollbackRows = normalizeDesktopTerminalSnapshotRows(opts.scrollbackRows)

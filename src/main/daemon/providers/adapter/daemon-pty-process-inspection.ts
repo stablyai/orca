@@ -18,6 +18,7 @@ import {
   clientOnlyUnverifiableInspection
 } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { remainingDaemonRequestTimeoutMs } from '../../launch/daemon-request-deadline'
+import { awaitHistoryAdmissionReady } from './daemon-pty-host-history'
 
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
   // Detached daemon PTYs can host agents; cleanup must not treat every foreground process as an idle shell.
@@ -171,24 +172,46 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       return
     }
     // Captured before the inventory, lock and replay awaits that precede any writer install.
-    const admission = needsAdoption ? this.historyManager?.admit(sessionId) : undefined
-    const result = await this.client.request<ListSessionsResult>(
-      'listSessions',
-      undefined,
-      remainingDaemonRequestTimeoutMs(deadlineMs)
-    )
-    const session = result.sessions.find((entry) => entry.sessionId === sessionId && entry.isAlive)
-    if (session && needsAdoption) {
-      await this.adoptLiveSession(session, { activeOnlyIfReconciled: true }, admission)
-    } else if (session?.wslDistro && session.paneKey) {
-      this.wslPaneKeysBySessionId.set(sessionId, session.paneKey)
+    const admission = needsAdoption ? this.historyManager?.hold(sessionId) : undefined
+    try {
+      const result = await this.client.request<ListSessionsResult>(
+        'listSessions',
+        undefined,
+        remainingDaemonRequestTimeoutMs(deadlineMs)
+      )
+      const session = result.sessions.find(
+        (entry) => entry.sessionId === sessionId && entry.isAlive
+      )
+      if (session && needsAdoption) {
+        await this.adoptLiveSession(session, { activeOnlyIfReconciled: true }, admission)
+      } else if (session?.wslDistro && session.paneKey) {
+        this.wslPaneKeysBySessionId.set(sessionId, session.paneKey)
+      }
+    } finally {
+      this.historyManager?.drop(sessionId, admission)
     }
   }
 
   private async adoptLiveSession(
     session: SessionInfo,
     opts: { activeOnlyIfReconciled?: boolean } = {},
-    admission = this.historyManager?.admit(session.sessionId)
+    captured?: HistoryWriterAdmission
+  ): Promise<void> {
+    // A retired manager's hold is permanently closed, so a late inventory cannot reacquire the ID.
+    const admission = captured ?? this.historyManager?.hold(session.sessionId)
+    try {
+      await this.adoptLiveSessionWith(session, opts, admission)
+    } finally {
+      if (!captured) {
+        this.historyManager?.drop(session.sessionId, admission)
+      }
+    }
+  }
+
+  private async adoptLiveSessionWith(
+    session: SessionInfo,
+    opts: { activeOnlyIfReconciled?: boolean },
+    admission: HistoryWriterAdmission | undefined
   ): Promise<void> {
     // Include background sessions in the final disconnect checkpoint.
     if (!opts.activeOnlyIfReconciled) {
@@ -220,6 +243,8 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       return
     }
     await this.withHistorySpawnLock(session.sessionId, async () => {
+      // An install still unfenced after the bounded wait leaves this session's history suspended.
+      await awaitHistoryAdmissionReady(admission)
       if (historyManager.hasWriter(session.sessionId)) {
         return
       }

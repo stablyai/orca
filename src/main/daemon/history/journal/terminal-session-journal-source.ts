@@ -14,7 +14,10 @@ import { TERMINAL_HISTORY_LOG_MAX_BYTES } from '../storage/terminal-history-file
 import { readTerminalHistoryCheckpoint } from '../restoration/terminal-history-checkpoint-reader'
 import { replayTerminalHistory } from '../restoration/terminal-history-replay'
 import { TerminalHistorySessionWriter } from '../storage/terminal-history-session-writer'
-import { clearReplayableTerminalHistorySessionFiles } from '../storage/terminal-history-session-files'
+import {
+  clearLegacyTerminalHistoryScrollback,
+  clearReplayableTerminalHistorySessionFiles
+} from '../storage/terminal-history-session-files'
 import {
   newTerminalHistoryMeta,
   writeTerminalHistoryMeta
@@ -67,6 +70,10 @@ export async function replayTerminalJournalSource(
     windowsPty: historyReplayWindowsPty(DAEMON_HISTORY_RESIZE_MODEL)
   })
   try {
+    // The checkpoint's cwd is the baseline; a later OSC 7 in the replayed records still wins.
+    if (checkpoint?.cwd) {
+      emulator.setCwd(checkpoint.cwd)
+    }
     const replayed = await replayTerminalHistory(
       emulator,
       checkpoint,
@@ -101,4 +108,43 @@ export function openTerminalJournalOrigin(
     )
   )
   return new TerminalHistorySessionWriter(dir, true)
+}
+
+/**
+ * A seeded origin replaces predecessor recovery through the existing staged checkpoint, so a crash
+ * or failed write before its rename leaves the predecessor files as the sole recovery.
+ */
+export async function publishTerminalJournalSeedOrigin(
+  dir: string,
+  origin: { cwd: string; cols: number; rows: number; wslDistro: string | undefined },
+  seed: readonly PendingOutputRecord[]
+): Promise<TerminalHistorySessionWriter> {
+  const snapshot = await replayTerminalJournalSource({
+    dir,
+    generation: 0,
+    folded: false,
+    logBytes: 0,
+    pending: seed,
+    origin
+  })
+  if (!snapshot) {
+    throw new Error('terminal_history_seed_replay_failed')
+  }
+  const writer = new TerminalHistorySessionWriter(dir, false)
+  const result = await writer.checkpoint(
+    { ...snapshot, cwd: snapshot.cwd ?? origin.cwd },
+    { pendingOutputSeq: 0 }
+  )
+  if (result.result !== 'committed') {
+    throw result.error
+  }
+  clearLegacyTerminalHistoryScrollback(dir)
+  writeTerminalHistoryMeta(
+    dir,
+    newTerminalHistoryMeta(
+      { cwd: origin.cwd, cols: origin.cols, rows: origin.rows },
+      DAEMON_HISTORY_RESIZE_MODEL
+    )
+  )
+  return writer
 }

@@ -79,6 +79,10 @@ async function readDaemonHistorySnapshot(
   await session.settleShellOwnershipConfirmation()
   const capture = () => (journal.session ? journal.captureCut() : null)
   const image = await journal.readImage(capture, { scrollbackRows })
+  if (journals.live(sessionId, session.incarnationId) !== journal) {
+    // The incarnation it was read for no longer owns the ID; never publish it for a successor.
+    return unavailable
+  }
   if (image) {
     return { snapshot: image.snapshot, history: image.outcome }
   }

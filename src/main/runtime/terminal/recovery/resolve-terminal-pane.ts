@@ -300,10 +300,10 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     opts: { limit?: number } = {}
   ): Promise<RuntimeTerminalRead> {
     // A host-owned binding's current frame comes from its daemon; no local frame stands in.
-    const visibleState = await this.readVisibleTerminalState(ptyId)
-    const projection =
-      visibleState ??
-      (await this.readProviderTerminalTailLines(ptyId, opts.limit, { visibleScreenOnly: true }))
+    const projection = this.hasHostHistoryAuthority(ptyId)
+      ? await this.readHostCurrentFrame(ptyId)
+      : ((await this.readVisibleTerminalState(ptyId)) ??
+        (await this.readProviderTerminalTailLines(ptyId, opts.limit, { visibleScreenOnly: true })))
     if (!projection || projection.lines.length === 0) {
       return { ...read, source: 'screen-unavailable' }
     }

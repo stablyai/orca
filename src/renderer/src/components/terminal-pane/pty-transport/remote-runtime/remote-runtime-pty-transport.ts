@@ -39,6 +39,7 @@ import {
 import type { AcceptedInputOptions } from '../input/pty-preconnect-input-buffer'
 import type { TerminalInputKind } from '../../../../../../shared/terminal/input/terminal-input-kind'
 import { isSshSignInPendingTerminalError } from '../../errors/terminal-ssh-sign-in-error'
+import { isTerminalHistoryUnavailableError } from '../../errors/terminal-error-display'
 import { terminalCreateThemeParams } from '../../appearance/terminal-view-attributes-publisher'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
@@ -221,7 +222,8 @@ function isRetryableUnboundAttachError(error: unknown): boolean {
     isSshSignInPendingTerminalError(runtimeTerminalErrorMessage(error)) ||
     isRecoverableRemoteRuntimeConnectionError(clientError) ||
     isRuntimeRpcQueueOverloadError(clientError) ||
-    isRemoteTerminalStaleMessage(runtimeTerminalErrorMessage(error))
+    isRemoteTerminalStaleMessage(runtimeTerminalErrorMessage(error)) ||
+    isTerminalHistoryUnavailableError(runtimeTerminalErrorMessage(error))
   )
 }
 
@@ -2717,6 +2719,12 @@ export function createRemoteRuntimePtyTransport(
     if (isRemoteTerminalGoneMessage(message)) {
       // Why: an explicit terminal-gone response is lifecycle evidence, unlike a replaceable stale handle seen during reconnect.
       retireRemoteTerminalId()
+      return
+    }
+    if (isTerminalHistoryUnavailableError(message)) {
+      // The live owner is known; only its history image failed. Reattach the same ID, input held.
+      closeMultiplexedStream()
+      scheduleResubscribeAfterBackoff()
       return
     }
     if (message.includes('no_connected_pty')) {

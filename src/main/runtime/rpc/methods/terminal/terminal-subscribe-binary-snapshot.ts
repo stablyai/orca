@@ -67,6 +67,9 @@ async function publishSnapshot(
   // After an exit only the held model is read: renderer seeding would build a model for a dead PTY.
   const seedsFromRenderer = (): boolean =>
     missingHeadlessStateBeforeMobileFit && !registration.ptyExited
+  // A host-owned image, or its unavailability, is never replaced by renderer rows.
+  const publishesRendererSeed = (): boolean =>
+    seedsFromRenderer() && !runtime.hasHostHistoryAuthority(ptyId)
   // Fit first so the seed uses the phone-owned grid.
   const hydratedFromRenderer =
     seedsFromRenderer() && (await runtime.maybeHydrateHeadlessFromRenderer?.(ptyId)) === true
@@ -86,7 +89,7 @@ async function publishSnapshot(
   }
   // Missing model state, unlike blank text, means never-attached; null renderer answers fall back to mount wait even for stale host flags.
   const needsRendererScreen =
-    seedsFromRenderer() && !hydratedFromRenderer && serialized?.source !== 'renderer'
+    publishesRendererSeed() && !hydratedFromRenderer && serialized?.source !== 'renderer'
   let rendererReady =
     needsRendererScreen &&
     (await runtime.serializeRendererTerminalBuffer(ptyId, { scrollbackRows: 0 })) !== null
@@ -142,7 +145,7 @@ async function publishSnapshot(
     }
   }
   let rendererSeed: { seq?: number } | null = null
-  if (rendererReady && seedsFromRenderer()) {
+  if (rendererReady && publishesRendererSeed()) {
     read = await runtime.readTerminal(params.terminal)
     const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(
       runtime,

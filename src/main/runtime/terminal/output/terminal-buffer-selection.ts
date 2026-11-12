@@ -135,7 +135,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
   protected async serializeProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
-    wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
+    wait: { timeoutMs?: number; retireOnTimeout?: boolean; currentFrame?: boolean } = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
     return (await this.awaitProviderTerminalBuffer(ptyId, opts, wait)).snapshot
   }
@@ -144,11 +144,14 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
   protected async awaitProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
-    wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
+    wait: { timeoutMs?: number; retireOnTimeout?: boolean; currentFrame?: boolean } = {}
   ): Promise<ProviderTerminalBufferWait> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
-    let acquisition = this.providerBufferAcquisitionsByPtyId.get(ptyId)
+    const acquisitions = wait.currentFrame
+      ? this.providerFrameAcquisitionsByPtyId
+      : this.providerBufferAcquisitionsByPtyId
+    let acquisition = acquisitions.get(ptyId)
     if (acquisition?.generation === generation && acquisition.timedOut) {
       return { snapshot: null, late: acquisition.promise }
     }
@@ -159,10 +162,10 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     ) {
       const promise = this.captureProviderTerminalBuffer(ptyId, opts, generation)
       acquisition = { generation, scrollbackRows, promise, timedOut: false }
-      this.providerBufferAcquisitionsByPtyId.set(ptyId, acquisition)
+      acquisitions.set(ptyId, acquisition)
       void promise.finally(() => {
-        if (this.providerBufferAcquisitionsByPtyId.get(ptyId) === acquisition) {
-          this.providerBufferAcquisitionsByPtyId.delete(ptyId)
+        if (acquisitions.get(ptyId) === acquisition) {
+          acquisitions.delete(ptyId)
         }
       })
     }

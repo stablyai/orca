@@ -8,6 +8,7 @@ import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
 } from '../../protocol/daemon-protocol-version'
 import { TerminalKilledError } from './daemon-pty-lifecycle-errors'
+import { newHistoryRecoveryContext } from './daemon-pty-host-history'
 import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
 import type { DaemonPtySpawnContext } from './daemon-pty-spawn-request'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
@@ -57,12 +58,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     if (opts.agentSessionEnsure) {
       this.pendingClaimSpawnOperations.add(operation)
     }
-    const historyRecovery: HistoryRecoveryContext = {
-      admission: this.historyStore?.admit(sessionId),
-      freeze: null,
-      unreadableSessionId: null,
-      identityChanged: false
-    }
+    const historyRecovery = newHistoryRecoveryContext(this.historyStore?.hold(sessionId))
     try {
       return await this.withHistorySpawnLock(sessionId, () =>
         this.withDaemonRetry(() =>
@@ -73,6 +69,8 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       if (historyRecovery.freeze) {
         this.historyStore?.abandonRecoveryFreeze(historyRecovery.freeze)
       }
+      // A failed or host-owned start keeps no main claim; an installed legacy writer does.
+      this.historyStore?.drop(sessionId, historyRecovery.admission, !this.hostHistory.enabled)
       this.pendingClaimSpawnOperations.delete(operation)
       operations.delete(operation)
       if (operations.size === 0) {

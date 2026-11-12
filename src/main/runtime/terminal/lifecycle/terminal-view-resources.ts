@@ -114,6 +114,9 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerBufferAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
 
+  // Current-frame reads never join or inherit a deep or timed-out history acquisition.
+  protected providerFrameAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
+
   protected providerVisibleStateByPtyId = new Map<string, RuntimeVisibleTerminalState>()
 
   protected providerVisibleStateReadsByPtyId = new Map<
@@ -131,6 +134,7 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   /** Forgets the provider frame facts of a PTY whose screen restarts or ends. */
   protected forgetProviderVisibleState(ptyId: string): void {
     this.providerVisibleStateByPtyId.delete(ptyId)
+    this.providerFrameAcquisitionsByPtyId.delete(ptyId)
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
     this.restoredAgentDialogRuledOutPtys.delete(ptyId)
   }

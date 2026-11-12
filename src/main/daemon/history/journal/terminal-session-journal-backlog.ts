@@ -69,12 +69,12 @@ export class TerminalJournalBacklog {
 
   /** The uncommitted records as an immutable cut; a streamed head starts at its offset. */
   snapshot(): PendingOutputRecord[] {
-    const records = this.queue.slice()
-    const head = records[0]
-    if (this.headOffset > 0 && head?.kind === 'output') {
-      records[0] = { kind: 'output', data: head.data.slice(this.headOffset) }
-    }
-    return records
+    // Copies, because later output coalesces into the queued tail object in place.
+    return this.queue.map((record, index) =>
+      record.kind === 'output'
+        ? { kind: 'output', data: index === 0 ? record.data.slice(this.headOffset) : record.data }
+        : record
+    )
   }
 
   /** Returns the bytes released by committing these head records. */

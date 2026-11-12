@@ -23,7 +23,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       // Only the daemon's current frame may replace the summary; otherwise keep the summary.
       const frame =
         knownAlternateScreen || this.headlessTerminals.has(ptyId)
-          ? await this.readVisibleTerminalState(ptyId)
+          ? await this.readHostCurrentFrame(ptyId)
           : null
       return frame?.isAlternateScreen && frame.lines.length > 0
         ? buildPreview(frame.lines, '')
@@ -67,10 +67,6 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
   protected async loadVisibleTerminalState(
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null> {
-    if (this.hasHostHistoryAuthority(ptyId)) {
-      // Qualified current frame: live-owner scrollback 0, existing cache and in-flight sharing.
-      return this.readCurrentProviderVisibleState(ptyId) ?? this.captureProviderVisibleState(ptyId)
-    }
     if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
       return this.readHeadlessVisibleTerminalState(ptyId)
     }
@@ -96,6 +92,17 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     return this.captureProviderVisibleState(ptyId)
   }
 
+  /**
+   * Public reads of a host-owned binding: the daemon's live scrollback-0 frame at the current
+   * sequence. Private screen, input and status services keep reading main's projection.
+   */
+  protected async readHostCurrentFrame(ptyId: string): Promise<RuntimeVisibleTerminalState | null> {
+    return (
+      this.readCurrentProviderVisibleState(ptyId) ??
+      this.captureProviderVisibleState(ptyId, { currentFrame: true })
+    )
+  }
+
   /** The provider's last frame while no later output or mode switch has outdated it. */
   protected readCurrentProviderVisibleState(ptyId: string): RuntimeVisibleTerminalState | null {
     const cached = this.providerVisibleStateByPtyId.get(ptyId)
@@ -109,7 +116,8 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
 
   /** Asks the provider for its current frame and caches it; null while it cannot give one now. */
   protected async captureProviderVisibleState(
-    ptyId: string
+    ptyId: string,
+    acquisition: { currentFrame?: boolean } = {}
   ): Promise<RuntimeVisibleTerminalState | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     if ((this.providerVisibleRetryAtByPtyId.get(ptyId) ?? 0) > Date.now()) {
@@ -119,7 +127,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
-      { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
+      { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS, ...acquisition }
     )
     if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)

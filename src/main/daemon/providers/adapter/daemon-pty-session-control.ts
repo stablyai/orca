@@ -115,10 +115,14 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     }
     if (!opts.keepHistory) {
       // The close's removal claim is captured here, before any lock or kill await.
-      const historyAdmission = this.historyStore?.admit(id)
-      await this.withHistorySpawnLock(id, () =>
-        this.shutdownWithHistoryLock(id, { ...opts, historyAdmission })
-      )
+      const historyAdmission = this.historyStore?.hold(id)
+      try {
+        await this.withHistorySpawnLock(id, () =>
+          this.shutdownWithHistoryLock(id, { ...opts, historyAdmission })
+        )
+      } finally {
+        this.historyStore?.drop(id, historyAdmission, !this.hostHistory.enabled)
+      }
       return
     }
     const shutdown = Promise.resolve().then(async () => {

@@ -243,7 +243,8 @@ export abstract class DaemonPtyRuntimeState {
     const client = this.client
     this.hostHistory = new DaemonPtyHostHistoryBindings(
       this.protocolVersion >= HOST_HISTORY_OWNER_PROTOCOL_VERSION,
-      (id) => this.activeSessionIds.has(id)
+      (id) => this.activeSessionIds.has(id),
+      () => this.historyStore
     )
     this.historyStore = opts.historyPath
       ? new HistoryManager(opts.historyPath, { resizeModel: () => client.getDaemonResizeModel() })

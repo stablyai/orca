@@ -27,7 +27,7 @@ export function activateTerminalSubscribeBinaryLive(
   if (lateRendererReady) {
     void lateRendererReady
       .then(async (rendererReady) => {
-        if (!rendererReady || state.closed) {
+        if (!rendererReady || state.closed || runtime.hasHostHistoryAuthority(ptyId)) {
           return
         }
         state.outputBatcher?.flush()

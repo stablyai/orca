@@ -84,6 +84,19 @@ export class HistoryManager {
     return this.admissions.admit(sessionId)
   }
 
+  /** See TerminalHistoryWriterAdmissions.hold; every hold is dropped when its operation ends. */
+  hold(sessionId: string): HistoryWriterAdmission {
+    return this.admissions.hold(sessionId)
+  }
+
+  drop(sessionId: string, admission: HistoryWriterAdmission | undefined, releaseIdle = true): void {
+    this.admissions.drop(sessionId, admission, releaseIdle)
+  }
+
+  releaseUnheld(sessionId: string, admission: HistoryWriterAdmission): void {
+    this.admissions.releaseUnheld(sessionId, admission)
+  }
+
   captureWriter(sessionId: string): CapturedHistoryWriter | undefined {
     return this.writers.get(sessionId)
   }
@@ -224,24 +237,25 @@ export class HistoryManager {
     captured: CapturedHistoryWriter | undefined = this.writers.get(sessionId)
   ): Promise<void> {
     if (!captured || this.writers.get(sessionId) !== captured) {
-      return
+      return this.admissions.releaseIdle(sessionId)
     }
 
     this.writers.delete(sessionId)
     // Normal exit must also release IDs disabled by transient write failures.
     this.disabledSessions.delete(sessionId)
-    if (!captured.admission.current()) {
-      return
+    if (captured.admission.current()) {
+      try {
+        updateTerminalHistoryMeta(captured.writer.dir, {
+          endedAt: new Date().toISOString(),
+          exitCode
+        })
+      } catch (err) {
+        // Missing endedAt would falsely authorize cold restore on the next launch.
+        this.handleWriteError(sessionId, err)
+      }
     }
-    try {
-      updateTerminalHistoryMeta(captured.writer.dir, {
-        endedAt: new Date().toISOString(),
-        exitCode
-      })
-    } catch (err) {
-      // Missing endedAt would falsely authorize cold restore on the next launch.
-      this.handleWriteError(sessionId, err)
-    }
+    // The ended physical owner's claim goes; a successor waits only on its issued work.
+    this.admissions.releaseIdle(sessionId)
   }
 
   /** Uses the close's captured claim; without one, only an unclaimed ID is cleaned up. */

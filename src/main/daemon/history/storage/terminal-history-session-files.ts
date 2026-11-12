@@ -1,4 +1,4 @@
-import { unlinkSync } from 'node:fs'
+import { existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   PRIVATE_DIR_MODE,
@@ -23,6 +23,17 @@ export function clearReplayableTerminalHistorySessionFiles(dir: string): void {
       unlinkSync(join(dir, name))
     } catch {}
   }
+}
+
+export function hasReplayableTerminalHistorySessionFiles(dir: string): boolean {
+  return REPLAYABLE_SESSION_FILE_NAMES.some((name) => existsSync(join(dir, name)))
+}
+
+/** Once a checkpoint supersedes it, legacy scrollback must not outlive the predecessor. */
+export function clearLegacyTerminalHistoryScrollback(dir: string): void {
+  try {
+    unlinkSync(join(dir, 'scrollback.bin'))
+  } catch {}
 }
 
 /** Tighten existing files too: writeFile creation modes leave older permissions unchanged. */

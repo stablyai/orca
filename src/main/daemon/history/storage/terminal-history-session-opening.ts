@@ -42,7 +42,7 @@ export async function openTerminalHistorySession(
     recoveryFreeze ??= await ctx.freeze(sessionId)
     const activeFreeze = ctx.freezes.require(sessionId, recoveryFreeze)
     // No await from here: a closed admission must not touch a successor's directory.
-    if (!admission.current()) {
+    if (!admission.current() || !admission.isReady()) {
       throw new Error('terminal_history_admission_closed')
     }
     if (opts.quarantineUnreadableRecovery) {
@@ -76,7 +76,8 @@ export function registerTerminalHistoryWriter(
   recoveryFreeze: HistoryRecoveryFreeze | undefined,
   admission: HistoryWriterAdmission
 ): void {
-  if (!admission.current()) {
+  // An unsettled predecessor fence leaves history suspended rather than racing its I/O.
+  if (!admission.current() || !admission.isReady()) {
     return ctx.freezes.abandon(recoveryFreeze)
   }
   if (ctx.admissions.writers.has(sessionId)) {
@@ -111,7 +112,7 @@ export function reopenTerminalHistorySession(
   recoveryFreeze: HistoryRecoveryFreeze | undefined,
   admission: HistoryWriterAdmission
 ): void {
-  if (!admission.current()) {
+  if (!admission.current() || !admission.isReady()) {
     return ctx.freezes.abandon(recoveryFreeze)
   }
   ctx.disabledSessions.delete(sessionId)

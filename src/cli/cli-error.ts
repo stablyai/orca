@@ -5,6 +5,7 @@ import {
 } from '../shared/automations/ownership/automation-owner-conflict'
 import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
 import { worktreeSelectorRecovery } from './worktree-selector-recovery'
+import { terminalCommandRecovery } from './terminal-command-error-recovery'
 import { ambiguousWorkspaceChoices, selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
 import type { RuntimeRpcFailure } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
@@ -24,9 +25,6 @@ export type CliErrorContext = {
 
 type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>
 
-const STALE_HANDLE_SERVER_HINT =
-  'Terminal handles belong to the Orca server that issued them. If this handle came from a paired server (for example `orca terminal list --environment <server>`), pass the same --environment <server> to this command.'
-
 function contextRecovery(error: unknown, context: CliErrorContext): ContextRecovery | undefined {
   const code = cliErrorCode(error)
   if (code === 'selector_not_found' && context.worktreeSelector) {
@@ -40,15 +38,7 @@ function contextRecovery(error: unknown, context: CliErrorContext): ContextRecov
       remoteServerSelected: context.remoteServerSelected
     })
   }
-  // A remote handle sent locally looks stale rather than missing a flag.
-  if (
-    code === 'terminal_handle_stale' &&
-    context.commandPath?.[0] === 'terminal' &&
-    context.remoteServerSelected === false
-  ) {
-    return { nextSteps: [STALE_HANDLE_SERVER_HINT] }
-  }
-  return undefined
+  return terminalCommandRecovery(code, context)
 }
 
 function isDuplicateFolderIdData(data: unknown): boolean {

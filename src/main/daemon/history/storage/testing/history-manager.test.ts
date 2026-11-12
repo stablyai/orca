@@ -275,7 +275,7 @@ describe('HistoryManager', () => {
       }
     })
 
-    it('admits a successor only after issued predecessor writes actually settle', async () => {
+    it('installs a successor only after issued predecessor writes actually settle', async () => {
       const id = 'stalled'
       await mgr.openSession(id, { cwd: '/tmp', cols: 80, rows: 24 })
       const releaseRename = Promise.withResolvers<void>()
@@ -289,12 +289,11 @@ describe('HistoryManager', () => {
       const successor = new HistoryManager(dir)
       try {
         const admission = successor.admit(id)
-        let admitted = false
-        void admission.ready.then(() => {
-          admitted = true
-        })
-        await new Promise((resolve) => setTimeout(resolve, 50))
-        expect(admitted).toBe(false)
+        // The caller does not wait on the fence; the install itself must refuse.
+        await successor.openSession(id, { cwd: '/next', cols: 80, rows: 24, admission })
+        expect(JSON.parse(readFileSync(sessionPath(dir, id, 'meta.json'), 'utf-8')).cwd).toBe(
+          '/tmp'
+        )
 
         releaseRename.resolve()
         await predecessorWrite
@@ -307,6 +306,23 @@ describe('HistoryManager', () => {
         await successor.dispose()
       }
     })
+  })
+
+  // CJ5: every normally exited ID used to keep its claim until the whole manager retired.
+  it('releases an exited session for another owner while a live one stays claimed', async () => {
+    await mgr.openSession('exited', { cwd: '/tmp', cols: 80, rows: 24 })
+    await mgr.openSession('live', { cwd: '/tmp', cols: 80, rows: 24 })
+    await mgr.closeSession('exited', 0)
+    const other = new HistoryManager(dir)
+    try {
+      await other.removeSession('exited')
+      await other.removeSession('live')
+      expect(existsSync(join(dir, getHistorySessionDirName('exited')))).toBe(false)
+      expect(existsSync(sessionPath(dir, 'live', 'meta.json'))).toBe(true)
+      expect(await mgr.checkpoint('live', makeSnapshot())).toBe('committed')
+    } finally {
+      await other.dispose()
+    }
   })
 
   describe('error handling', () => {

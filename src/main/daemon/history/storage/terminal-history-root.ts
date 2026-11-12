@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import type { TerminalHistoryWriterAdmissions } from './terminal-history-writer-admissions'
 import {
   TerminalHistoryWriterHandoff,
   type HistoryWriterAdmission
@@ -32,7 +33,7 @@ export class TerminalHistoryRoot {
 
   admitWriter(
     id: string,
-    owner: object,
+    owner: TerminalHistoryWriterAdmissions,
     retire: () => Promise<void> | undefined
   ): HistoryWriterAdmission {
     return this.registered().writers.admitWriter(id, owner, retire)
@@ -40,7 +41,7 @@ export class TerminalHistoryRoot {
 
   admitUnclaimedWriter(
     id: string,
-    owner: object,
+    owner: TerminalHistoryWriterAdmissions,
     retire: () => Promise<void> | undefined
   ): HistoryWriterAdmission | undefined {
     return this.registered().writers.admitWriter(id, owner, retire, { ifUnclaimed: true })
