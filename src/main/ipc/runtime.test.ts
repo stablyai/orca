@@ -113,6 +113,7 @@ it('cancels the GitHub host handler through the existing local subscription boun
   handleMock.mockClear()
   onMock.mockClear()
   const entered = Promise.withResolvers<AbortSignal>()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies every runtime method reached by this upload subscription.
   registerRuntimeHandlers({
     getRuntimeId: () => 'local',
     uploadGitHubAttachment: (_params: unknown, _bytes: Buffer, signal: AbortSignal) => {

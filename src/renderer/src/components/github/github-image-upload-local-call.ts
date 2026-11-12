@@ -34,5 +34,6 @@ export async function callAbortableGitHubImageUpload<T>(
       })
       .catch((error) => finish(() => reject(error)))
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The caller supplies the method result type erased by the IPC bridge.
   return unwrapRuntimeRpcResult<T>(response as RuntimeRpcResponse<T>)
 }
