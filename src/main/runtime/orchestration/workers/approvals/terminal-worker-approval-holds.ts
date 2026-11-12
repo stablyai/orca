@@ -137,17 +137,22 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
   }
 
   /** The open approval this pane's worker waits on, for its one escalation. */
+  /** Its escalation went out, so its close owes the coordinator one closing line. */
+  markReported(approvalId: string): void {
+    const hold = this.byApprovalId.get(approvalId)
+    if (hold) {
+      hold.reported = true
+    }
+  }
+
   /** Whether Orca still holds this prompt's hook, answering or not. */
   isHeld(approvalId: string): boolean {
     return this.byApprovalId.has(approvalId)
   }
 
-  /** `reporting`: whether the caller still sends its report, read last, so a close owes a closing
-   *  line only to an approval whose escalation went out. */
   async takeOpenApproval(
     paneKey: string,
-    dispatchId: string,
-    reporting: () => boolean = () => true
+    dispatchId: string
   ): Promise<WorkerApprovalPayload | null> {
     const hold = this.openByPane.get(paneKey)
     if (hold?.state !== 'open' || hold.dispatch.id !== dispatchId) {
@@ -158,10 +163,9 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       const screen = this.deps.readScreen(paneKey)
       return screen && showsClaudeDialog(screen) ? screen : null
     })
-    if (hold.state !== 'open' || this.openByPane.get(paneKey) !== hold || !reporting()) {
+    if (hold.state !== 'open' || this.openByPane.get(paneKey) !== hold) {
       return null
     }
-    hold.reported = true
     this.readDialog(hold, lines)
     return holdPayload(hold)
   }

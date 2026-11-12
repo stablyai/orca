@@ -95,7 +95,9 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    // Gated by a user setting; the escalation names it only when on, so group help never does.
     path: ['orchestration', 'approve'],
+    hidden: true,
     summary:
       "Allow a worker's permission prompt with a reason, when the user lets coordinators approve",
     usage:

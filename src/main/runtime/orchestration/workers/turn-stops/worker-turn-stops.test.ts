@@ -66,7 +66,16 @@ function moved(from: 'working' | 'done', to: 'done' | 'needs-you'): AgentPaneCha
   }
 }
 
-function terminal(ctx: ReturnType<typeof setup>, current: { row: AgentStatusIpcPayload }) {
+function terminal(
+  ctx: ReturnType<typeof setup>,
+  current: { row: AgentStatusIpcPayload },
+  approvals: Partial<
+    Pick<
+      ConstructorParameters<typeof TerminalWorkerTurnStops>[0],
+      'takeOpenApproval' | 'markApprovalReported'
+    >
+  > = {}
+) {
   return new TerminalWorkerTurnStops({
     ...ctx.deps,
     readHookRow: () => current.row,
@@ -77,6 +86,8 @@ function terminal(ctx: ReturnType<typeof setup>, current: { row: AgentStatusIpcP
     getHandle: () => HANDLE,
     getProcessIncarnation: () => null,
     takeOpenApproval: async () => null,
+    markApprovalReported: () => {},
+    ...approvals,
     readScreen: async () => ({
       handle: HANDLE,
       status: 'running',
@@ -110,6 +121,38 @@ describe('terminal worker turn stops', () => {
     await settle()
     expect(ctx.mail()).toHaveLength(0)
   })
+
+  it.each([
+    { waitingForMail: false, marked: ['apr_1'] },
+    { waitingForMail: true, marked: [] }
+  ])(
+    'marks an approval reported only when its escalation went out (%o)',
+    async ({ waitingForMail, marked }) => {
+      const ctx = setup()
+      if (waitingForMail) {
+        ctx.waiting.add(`dispatch:${ctx.dispatch.id}`)
+      }
+      const markApprovalReported = vi.fn()
+      const current = { row: hookRow({ state: 'working', agentType: 'claude' }) }
+      const stops = terminal(ctx, current, {
+        takeOpenApproval: async () => ({
+          v: 1,
+          approvalId: 'apr_1',
+          state: 'open',
+          worker: { handle: HANDLE, dispatchId: ctx.dispatch.id, taskId: ctx.dispatch.task_id },
+          summary: { title: 'Allow Bash?', detail: 'rm -rf build', reason: null },
+          allowedActions: ['allow', 'deny']
+        }),
+        markApprovalReported
+      })
+      current.row = hookRow({ state: 'blocked', agentType: 'claude' })
+      stops.observe(moved('working', 'needs-you'))
+      await settle()
+
+      expect(ctx.mail()).toHaveLength(marked.length)
+      expect(markApprovalReported.mock.calls.flat()).toEqual(marked)
+    }
+  )
 
   it('never mails a capability or credential carried in why a worker went away', () => {
     const ctx = setup()
