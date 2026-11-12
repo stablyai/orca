@@ -67,8 +67,8 @@ import {
   type AiVaultScanIssue,
   type AiVaultSession
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { AI_VAULT_AGENT_SOURCES } from '../../session-scanner-agent-sources'
-import { discoverFiles } from '../../session-scanner-discovery'
+import { AI_VAULT_AGENT_SOURCES } from '../../discovery/session-scanner-agent-sources'
+import { discoverFiles } from '../../discovery/session-scanner-discovery'
 import { scanAiVaultSessions } from '../../session-scanner'
 import {
   createSessionParseStats,
@@ -82,7 +82,7 @@ import {
   resolveSessionScopeCwd
 } from '../../parse-cache/session-parse-cache-store'
 
-import { isolatedScanRoots } from '../../session-scanner-test-fixtures'
+import { isolatedScanRoots } from '../../scanner-fixtures/session-scanner-test-fixtures'
 import type { FileWithMtime } from '../../session-scanner-types'
 
 // Mirror Cursor meta.json keys (2026-09).

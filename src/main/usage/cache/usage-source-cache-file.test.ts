@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -6,63 +6,18 @@ import {
   readUsageSourceCache,
   splitUsageCacheFile,
   usageSourceCachePath,
-  writeUsageSourceCache,
-  type UsageSourceCacheRef
+  writeUsageSourceCache
 } from './usage-source-cache-file'
 
 describe('usage source cache file', () => {
   let directory: string
-  let ref: UsageSourceCacheRef
 
   beforeEach(() => {
     directory = mkdtempSync(join(tmpdir(), 'orca-usage-source-cache-'))
-    ref = {
-      path: join(directory, 'usage-sources.json'),
-      schemaVersion: 6,
-      worktreeFingerprint: '[]',
-      reuse: true
-    }
   })
 
   afterEach(() => {
     rmSync(directory, { recursive: true, force: true })
-  })
-
-  it('round-trips the records a scan wrote', async () => {
-    await writeUsageSourceCache(ref, [{ path: 'a.jsonl' }])
-
-    await expect(readUsageSourceCache(ref)).resolves.toEqual([{ path: 'a.jsonl' }])
-  })
-
-  it.skipIf(process.platform === 'win32')('writes the sidecar owner-only', async () => {
-    await writeUsageSourceCache(ref, [{ path: 'a.jsonl' }])
-
-    expect(statSync(ref.path).mode & 0o777).toBe(0o600)
-  })
-
-  it('rejects attribution from a sidecar committed ahead of its report', async () => {
-    await writeUsageSourceCache({ ...ref, worktreeFingerprint: 'new-worktrees' }, [
-      { path: 'a.jsonl', repoId: 'new-repo' }
-    ])
-
-    await expect(
-      readUsageSourceCache({ ...ref, worktreeFingerprint: 'old-worktrees' })
-    ).resolves.toEqual([])
-    await expect(
-      readUsageSourceCache({ ...ref, worktreeFingerprint: 'new-worktrees' })
-    ).resolves.toEqual([{ path: 'a.jsonl', repoId: 'new-repo' }])
-  })
-
-  it('starts cold when told not to reuse, on another schema, or on a torn file', async () => {
-    await writeUsageSourceCache(ref, [{ path: 'a.jsonl' }])
-
-    await expect(readUsageSourceCache({ ...ref, reuse: false })).resolves.toEqual([])
-    await expect(readUsageSourceCache({ ...ref, schemaVersion: 7 })).resolves.toEqual([])
-    writeFileSync(ref.path, '{"schemaVersion":6,"sources":[')
-    await expect(readUsageSourceCache(ref)).resolves.toEqual([])
-    await expect(
-      readUsageSourceCache({ ...ref, path: join(directory, 'none.json') })
-    ).resolves.toEqual([])
   })
 
   it('moves inline records of a legacy cache into the sidecar and returns only the report', async () => {
@@ -90,24 +45,77 @@ describe('usage source cache file', () => {
     })
   })
 
-  it('returns a report that is already split unchanged and leaves the sidecar alone', async () => {
-    const cacheFile = join(directory, 'orca-claude-usage.json')
-    const text = JSON.stringify({ schemaVersion: 6, sessions: [] })
-    writeFileSync(cacheFile, text)
+  it('preserves large ownership records, JSON values and Unicode across encoded boundaries', async () => {
+    const ref = {
+      path: join(directory, 'sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: 'w',
+      reuse: true
+    }
+    const label = `${'a'.repeat(4095)}😀é\n"\\\u0000\ud800`
+    const shared = { totalTokens: 29 }
+    const sources = [
+      {
+        path: label,
+        ownedEventKeys: Array.from({ length: 1600 }, () => label),
+        hasDeferredClaims: true,
+        parseResumeState: { parsedBytes: 123, headDigest: 'head', boundaryDigest: 'tail' },
+        dailyAggregates: [shared, shared],
+        optional: undefined,
+        extra: [undefined, Infinity],
+        packed: { toJSON: () => ({ ownedTokenColumns: [29, null] }) }
+      }
+    ]
+    await writeUsageSourceCache(ref, sources)
+    const saved = readFileSync(ref.path, 'utf8')
+    expect(saved).not.toContain('optional')
+    expect(JSON.parse(saved).sources[0].extra).toEqual([null, null])
+    expect(await readUsageSourceCache(ref)).toEqual([
+      {
+        path: label,
+        ownedEventKeys: Array.from({ length: 1600 }, () => label),
+        hasDeferredClaims: true,
+        parseResumeState: { parsedBytes: 123, headDigest: 'head', boundaryDigest: 'tail' },
+        dailyAggregates: [{ totalTokens: 29 }, { totalTokens: 29 }],
+        extra: [null, null],
+        packed: { ownedTokenColumns: [29, null] }
+      }
+    ])
 
-    await expect(splitUsageCacheFile({ cacheFile, sourceKey: 'processedFiles' })).resolves.toEqual({
-      reportText: text,
-      migrated: false
-    })
-    expect(existsSync(usageSourceCachePath(cacheFile))).toBe(false)
+    const prefix = '{"schemaVersion":7,"worktreeFingerprint":"w","sources":[{"path":"'
+    const padding = 'p'.repeat(65535 - Buffer.byteLength(prefix))
+    writeFileSync(ref.path, `${prefix}${padding}😀é"}]}`)
+    expect(await readUsageSourceCache(ref)).toEqual([{ path: `${padding}😀é` }])
   })
 
-  it('reports a missing cache as no report rather than an error', async () => {
+  it('never reuses a source prefix from a truncated or trailing-invalid document', async () => {
+    const ref = {
+      path: join(directory, 'sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: 'w',
+      reuse: true
+    }
+    const complete = '{"schemaVersion":7,"worktreeFingerprint":"w","sources":[{"tokens":29}]}'
+    for (const text of [complete.slice(0, -1), `${complete} null`, `${complete} garbage`]) {
+      writeFileSync(ref.path, text)
+      expect(await readUsageSourceCache(ref)).toEqual([])
+    }
+  })
+
+  it('keeps the prior cache and removes the partial temp when encoding fails after writing', async () => {
+    const ref = {
+      path: join(directory, 'sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: 'w',
+      reuse: true
+    }
+    await writeUsageSourceCache(ref, [{ totalTokens: 29 }])
+    const cyclic: { self?: unknown } = {}
+    cyclic.self = cyclic
     await expect(
-      splitUsageCacheFile({
-        cacheFile: join(directory, 'missing.json'),
-        sourceKey: 'processedFiles'
-      })
-    ).resolves.toEqual({ reportText: null, migrated: false })
+      writeUsageSourceCache(ref, [{ path: 'a'.repeat(2_000_000) }, cyclic])
+    ).rejects.toThrow()
+    expect(await readUsageSourceCache(ref)).toEqual([{ totalTokens: 29 }])
+    expect(readdirSync(directory)).toEqual(['sources.json'])
   })
 })

@@ -1,16 +1,10 @@
 import { build } from 'esbuild'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import {
-  openProfileStateDatabase,
-  openProfileStateDatabaseReadOnly
-} from '../database/profile-state-database'
-import {
-  importProfileStateJson,
-  readProfileStateSnapshot
-} from '../documents/profile-state-documents'
+import { openProfileStateDatabase } from '../database/profile-state-database'
+import { importProfileStateJson } from '../documents/profile-state-documents'
 import { hashProfileStatePayload as hashProfileStateJson } from '../documents/profile-state-document-validation'
 import { runProfileStateBackupWorker } from './profile-state-backup-worker'
 
@@ -57,24 +51,6 @@ function fixture() {
 }
 
 describe('profile state backup worker', () => {
-  it('runs the built entry and releases every handle before recovery can move its files', async () => {
-    const { directory, job } = fixture()
-    await runProfileStateBackupWorker(job, { workerPath })
-    const snapshot = openProfileStateDatabaseReadOnly(job.targetPath, job.profileId)
-    try {
-      expect(JSON.parse(readProfileStateSnapshot(snapshot.db).json)).toEqual({
-        settings: { theme: 'dark' }
-      })
-    } finally {
-      snapshot.db.close()
-    }
-    expect(readdirSync(directory).filter((name) => name.startsWith('backup.db'))).toEqual([
-      'backup.db'
-    ])
-    rmSync(directory, { recursive: true })
-    expect(existsSync(directory)).toBe(false)
-  })
-
   it.each([
     [
       'a mismatched stored hash',

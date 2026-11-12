@@ -18,7 +18,7 @@ import {
   planDelegatedMobileDevices,
   type DelegatedMobileDeviceEntry
 } from './delegated-mobile-devices'
-import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
+import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import { validGrants } from './device-registry-row-validation'
 import {
   expiredPairingOffers,

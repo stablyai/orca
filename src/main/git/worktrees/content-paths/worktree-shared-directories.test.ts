@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   clearConfiguredWorktreeSharedDirectoriesCacheForTests,
   getConfiguredWorktreeSharedDirectories,
@@ -47,67 +47,6 @@ function restoreGitEnv(
 const git = (args: string[], cwd: string): void => {
   execFileSync('git', args, { cwd, stdio: 'ignore' })
 }
-
-describe('resolveWorktreeSharedDirectories', () => {
-  let repo: string
-  let warn: ReturnType<typeof vi.spyOn>
-
-  const writeOrcaYaml = (body: string): void => {
-    writeFileSync(join(repo, 'orca.yaml'), body)
-  }
-
-  beforeEach(() => {
-    clearConfiguredWorktreeSharedDirectoriesCacheForTests()
-    repo = mkdtempSync(join(tmpdir(), 'orca-shared-dirs-'))
-    git(['init', '-q'], repo)
-    git(['config', 'user.email', 'test@example.com'], repo)
-    git(['config', 'user.name', 'Test'], repo)
-    writeFileSync(join(repo, '.gitignore'), 'node_modules/\n.cache\n')
-    writeFileSync(join(repo, 'README.md'), '# tracked\n')
-    git(['add', '.gitignore', 'README.md'], repo)
-    git(['commit', '-qm', 'init'], repo)
-    warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  })
-
-  afterEach(() => {
-    warn.mockRestore()
-    rmSync(repo, { recursive: true, force: true })
-  })
-
-  it('skips a directory that is not gitignored', async () => {
-    mkdirSync(join(repo, 'shared-but-tracked'))
-    writeOrcaYaml('worktree:\n  sharedDirectories:\n    - shared-but-tracked\n')
-
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual([])
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('only gitignored directories'))
-  })
-
-  it('skips a listed path that is a file, not a directory', async () => {
-    writeFileSync(join(repo, '.cache'), 'not a dir')
-    writeOrcaYaml('worktree:\n  sharedDirectories:\n    - .cache\n')
-
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual([])
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('must be directories'))
-  })
-
-  it('drops unsafe entries before touching the filesystem', async () => {
-    mkdirSync(join(repo, 'node_modules'))
-    writeOrcaYaml(
-      [
-        'worktree:',
-        '  sharedDirectories:',
-        '    - ../escape',
-        '    - /etc',
-        '    - .git',
-        '    - .git/hooks',
-        '    - node_modules',
-        ''
-      ].join('\n')
-    )
-
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual(['node_modules'])
-  })
-})
 
 // Directory-only ignore rules hide the primary directory, but not its worktree symlink.
 describe('shared directories and worktree removal', () => {

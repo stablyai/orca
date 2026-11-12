@@ -39,7 +39,7 @@ vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: vi.fn()
 }))
 
-vi.mock('../../git/command-runner/wsl-aware-spawn', async (importOriginal) => ({
+vi.mock('../../git/command-runner/host-routing/wsl-aware-spawn', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   wslAwareSpawn: wslAwareSpawnMock
 }))

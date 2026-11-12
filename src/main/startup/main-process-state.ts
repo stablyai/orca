@@ -1,10 +1,9 @@
+import type { BackendSupervisor } from '../backend-desktop/backend-supervisor'
+import type { AutomationUsageClient } from '../../shared/backend-service-contract'
 import { type BrowserWindow, type Tray, app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
-import type { ClaudeUsageStore } from '../claude-usage/store'
-import type { CodexUsageStore } from '../codex-usage/store'
-import type { OpenCodeUsageStore } from '../opencode-usage/store'
-import type { MuseUsageStore } from '../muse-usage/store'
+import type { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
@@ -66,6 +65,14 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
   return undefined
 }
 
+function createInitialBackendServices(): {
+  backend: BackendSupervisor | null
+  claudeUsage: AutomationUsageClient | null
+  codexUsage: AutomationUsageClient | null
+} {
+  return { backend: null, claudeUsage: null, codexUsage: null }
+}
+
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 const desktopRelayStatus: MobileRelayStatusDetail = { status: 'offline' }
 
@@ -79,11 +86,9 @@ export const mainProcessState = {
   profileStateStartup: createInitialProfileStateStartup(),
   profileStateAdmission: createInitialProfileStateAdmission(),
   stats: null as StatsCollector | null,
-  claudeUsage: null as ClaudeUsageStore | null,
-  codexUsage: null as CodexUsageStore | null,
-  openCodeUsage: null as OpenCodeUsageStore | null,
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the store type assigned by main-process-observers.
-  museUsage: null as MuseUsageStore | null,
+  ...createInitialBackendServices(),
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot assigned by main-process-observers.
+  usageWorktreeHistory: null as UsageWorktreeHistory | null,
   codexAccounts: null as CodexAccountService | null,
   codexRuntimeHome: null as CodexRuntimeHomeService | null,
   codexSessionMigration: null as ReturnType<typeof createCodexSessionMigrationScheduler> | null,

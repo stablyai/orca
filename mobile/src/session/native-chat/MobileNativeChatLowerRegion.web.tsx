@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ScrollView, View } from 'react-native'
+import { ScrollView, View, type HostInstance, type ScrollViewInstance } from 'react-native'
 import {
   MobileNativeChatLowerRegionContext,
   MobileNativeChatLowerGeometryContext,
@@ -16,8 +16,8 @@ export function MobileNativeChatLowerRegion({
   composerPresent?: boolean
   scopeKey?: string
 }) {
-  const scrollRef = useRef<ScrollView>(null)
-  const contentRef = useRef<View>(null)
+  const scrollRef = useRef<ScrollViewInstance>(null)
+  const contentRef = useRef<HostInstance>(null)
   const coordinator = useRef<ReturnType<typeof connectMobileNativeChatLowerScroll> | null>(null)
   const [geometry, setGeometry] = useState<{
     viewportHeight: number

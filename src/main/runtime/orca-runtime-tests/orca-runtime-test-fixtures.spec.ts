@@ -79,16 +79,6 @@ function makeDeferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve }
 }
 
-function makeStatusFrame(index: number, first: boolean): string {
-  const pad = '·'.repeat(60)
-  const rows = [
-    `✻ 执行任务中… (esc to interrupt) [${index}] ${pad}`,
-    `  ⎿ 正在分析代码库结构与依赖关系，请稍候… ${pad}`,
-    `  ⎿ tokens: ${1000 + index * 137} · elapsed: ${index}s ${pad}`
-  ]
-  return `${first ? '' : '\x1b[2A'}\r${rows.map((row) => `\x1b[K${row}`).join('\r\n')}\r`
-}
-
 async function writeHeadless(emulator: HeadlessTerminal, data: string): Promise<void> {
   await emulator.write(data)
 }
@@ -109,23 +99,6 @@ async function parseHeadlessSnapshotLines(
     return visibleNonEmptyLines(restored)
   } finally {
     restored.dispose()
-  }
-}
-
-async function referenceStatusFrameLines(
-  spawn: { cols: number; rows: number },
-  resized: { cols: number; rows: number }
-): Promise<string[]> {
-  const truth = new HeadlessEmulator({ cols: spawn.cols, rows: spawn.rows })
-  try {
-    await writeHeadless(truth, 'user@host % claude\r\n')
-    truth.resize(resized.cols, resized.rows)
-    for (let index = 0; index < 5; index += 1) {
-      await writeHeadless(truth, makeStatusFrame(index, index === 0))
-    }
-    return visibleNonEmptyLines(truth)
-  } finally {
-    truth.dispose()
   }
 }
 
@@ -176,59 +149,6 @@ function isOriginMainBaseRefProbe(args: string[]): boolean {
       args.includes('refs/remotes/origin/main') ||
       args.includes('refs/remotes/origin/main^{commit}'))
   )
-}
-
-function antigravityReadyScreen(model = 'Gemini 3.5 Flash (High)'): string {
-  return [
-    'Antigravity CLI 1.0.3',
-    'user@example.com (Antigravity Business)',
-    model,
-    '~/orca/workspaces/orca/agy-dispatch-issue',
-    '>'
-  ].join('\n')
-}
-
-function antigravityPromptBeforeModelReadyScreen(model = 'Gemini 3.5 Flash (High)'): string {
-  return [
-    'Antigravity CLI 1.0.3',
-    'user@example.com',
-    '~/orca/workspaces/orca/agy-dispatch-issue',
-    '',
-    '',
-    '',
-    '',
-    '>',
-    '',
-    '? for shortcuts',
-    `\t\t  ${model}`,
-    '~/orca/workspaces/orca/agy-dispatch-issue',
-    '',
-    model,
-    ' (Antigravity Business)'
-  ].join('\n')
-}
-
-// Captured Cursor 2026.07 idle screen: readiness keys on →, never its changing placeholder.
-function cursorReadyScreen(): string {
-  return [
-    'Cursor Agent',
-    'v2026.07.09-a3815c0',
-    'Tip: Use /plan to plan execution and reach the right outcome faster.',
-    '→ Plan, search, build anything',
-    'Composer 2.5 Fast                                          Run Everything',
-    '~/Documents/projects/AutoGenie · main'
-  ].join('\n')
-}
-
-function cursorBusyScreen(): string {
-  return [
-    'Cursor Agent',
-    'v2026.07.09-a3815c0',
-    '⠰⠳ Thinking  28.61k tokens',
-    '→ Plan, search, build anything',
-    'Composer 2.5 Fast                                          Run Everything',
-    '~/Documents/projects/AutoGenie · main'
-  ].join('\n')
 }
 
 function setInMemoryOrchestrationMessages(
@@ -323,7 +243,8 @@ function createFolderWorkspaceRuntimeStore(
   return {
     ...store,
     getProjectGroups: () => [projectGroup],
-    getFolderWorkspaces: () => [folderWorkspace]
+    getFolderWorkspaces: () => [folderWorkspace],
+    getFolderWorkspace: (id: string) => (id === folderWorkspace.id ? folderWorkspace : undefined)
   }
 }
 
@@ -723,14 +644,14 @@ export { LIST_PROVIDER_DEADLINE, RESTORED_AUTHORITY_TOKEN }
 export { RESTORED_AUTHORITY_TOKEN_HASH, TEST_FOLDER_PROJECT_GROUP_ID, TEST_FOLDER_WORKSPACE_ID }
 export { TEST_FOLDER_WORKSPACE_KEY, TEST_FOLDER_WORKSPACE_PATH, TEST_REPO_ID, TEST_REPO_PATH }
 export { TEST_WINDOW_ID, TEST_WORKTREE_ID, TEST_WORKTREE_PATH, UUID_RE }
-export { antigravityPromptBeforeModelReadyScreen, antigravityReadyScreen, bindSinglePtyRun }
+export { bindSinglePtyRun }
 export { createExplicitAgentStatusHarness, createFolderWorkspaceRuntimeStore, createRuntime }
-export { createRuntimeWithSshLease, createStaleRuntimeWorktreeStore, cursorBusyScreen }
-export { cursorReadyScreen, deferred, expectStablePaneKeyEnv, isOriginMainBaseRefProbe }
+export { createRuntimeWithSshLease, createStaleRuntimeWorktreeStore }
+export { deferred, expectStablePaneKeyEnv, isOriginMainBaseRefProbe }
 export { isLocalBranchCatalogQuery }
 export { makeDeferred, makeFolderProjectGroup, makeFolderWorkspace, makeHeadlessTerminalLayout }
-export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession, makeStatusFrame }
+export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession }
 export { makeWorkspaceSessionWithHeadlessTerminal, makeWorktreeInfo, makeWorktreeMeta }
-export { parseHeadlessSnapshotLines, pendingMailPointerRepoints, referenceStatusFrameLines }
+export { parseHeadlessSnapshotLines, pendingMailPointerRepoints }
 export { renderGateCapMs, setInMemoryOrchestrationMessages, store, syncSinglePty }
 export { visibleNonEmptyLines, withPlatform, writeHeadless }

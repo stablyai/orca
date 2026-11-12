@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { View } from 'react-native'
+import { View, type HostInstance } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
@@ -27,7 +27,7 @@ export type { TerminalWebViewHandle } from './terminal-webview-contract'
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
     useMobileTranslation()
-    const hostRef = useRef<View>(null)
+    const hostRef = useRef<HostInstance>(null)
     const documentRef = useRef<TerminalWebDocument | null>(null)
     // Readiness fires inside mount before a handle exists; buffer its synchronous controller flush until the handle returns.
     const beforeMountRef = useRef<(TerminalWebViewCommand & { id: number })[]>([])

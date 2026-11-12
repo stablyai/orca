@@ -166,6 +166,13 @@ export function createRepoUpdateActions(
           ) {
             return false
           }
+          // A host from before hidden projects drops the field, which would otherwise read as hidden.
+          if (
+            sanitizedUpdates.hiddenAt !== undefined &&
+            (updatedRepo?.hiddenAt ?? null) !== sanitizedUpdates.hiddenAt
+          ) {
+            return false
+          }
           set((s) => {
             const nextRepos = s.repos.map((r) => {
               const matchesOwner = ownerHasExplicitHost
@@ -189,6 +196,7 @@ export function createRepoUpdateActions(
                 projectGroupOrder: _projectGroupOrder,
                 sourceControlAi,
                 externalWorktreeDiscoverySuppressedAt,
+                hiddenAt,
                 ghAccount,
                 externalWorktreeVisibility,
                 agentWorktreeVisibility,
@@ -224,6 +232,12 @@ export function createRepoUpdateActions(
                 mergedRepo = repoWithoutSuppression
               } else if (externalWorktreeDiscoverySuppressedAt !== undefined) {
                 mergedRepo = { ...mergedRepo, externalWorktreeDiscoverySuppressedAt }
+              }
+              if (hiddenAt === null) {
+                const { hiddenAt: _hiddenAt, ...repoWithoutHiddenAt } = mergedRepo
+                mergedRepo = repoWithoutHiddenAt
+              } else if (hiddenAt !== undefined) {
+                mergedRepo = { ...mergedRepo, hiddenAt }
               }
               if (ghAccount === null) {
                 const { ghAccount: _ghAccount, ...repoWithoutGhAccount } = mergedRepo

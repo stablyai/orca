@@ -6,14 +6,16 @@ export type SttRecognizerInit = {
   sampleRate: number
   /** Absent = auto-detect. */
   language?: string
-  /** Silero VAD GGUF; when present, offline models commit text at each pause. */
+  /** Silero VAD GGUF; when present, offline models show live text at each pause. */
   vadModelPath?: string
 }
 
 export type SttRecognizerEvent =
-  /** One decoded offline chunk; `samples` counts the stream's input-rate samples decoded so far. */
+  /** One committed offline chunk; `samples` counts the stream's input-rate samples committed so far. */
   | { type: 'chunk'; streamId: string; text: string; samples: number }
-  /** Pause-cut streams only: speech was heard that no chunk has committed yet. */
+  /** The uncommitted phrases' live text so far; the next chunk replaces it. */
+  | { type: 'partial'; streamId: string; text: string }
+  /** Pause-cut streams only: speech was heard whose text hasn't arrived yet. */
   | { type: 'speech-pending'; streamId: string; pending: boolean }
   /** A load step finished, so a slow load is told apart from a hung GPU. */
   | { type: 'loading' }

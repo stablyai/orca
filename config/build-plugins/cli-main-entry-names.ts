@@ -3,7 +3,7 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'agent-hooks/installation/managed-agent-hook-controls',
   'gitlab/projects/project-ref-parser',
   'orca-profiles/profile-index-store',
-  'claude-accounts/keychain',
+  'claude-accounts/runtime-auth/keychain',
   // The CLI checks a relocated runtime socket dir before it sends the auth token.
   'daemon/endpoint/publication/daemon-socket-endpoint-path',
   'skills/bundled-skill-install/bundled-skill-local-host',
@@ -11,7 +11,9 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'filesystem/macos-tree-clone',
   'orcad/orcad-stale-lock-reclaim',
   'orcad/orcad-host-identity-reset',
-  'plugins/plugin-authoring-checks',
+  'plugins/plugin-artifact-validation',
+  'plugins/plugin-content-hash',
+  'plugins/plugin-catalog-release-entry',
   // `orca vm env doctor` runs its checks in the CLI process.
   'environment-doctor/environment-doctor',
   'environment-doctor/environment-doctor-host',

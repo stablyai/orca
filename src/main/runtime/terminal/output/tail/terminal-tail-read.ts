@@ -176,3 +176,17 @@ export function buildVisibleSnapshotReadFallback(
 export function labelTerminalReadSource(read: RuntimeTerminalRead): RuntimeTerminalRead {
   return read.source ? read : { ...read, source: 'stream' }
 }
+
+/** A terminal's last nonblank lines from the tail its record keeps, readable after its process is gone. */
+export function terminalLastOutput(
+  record: { tailBuffer: string[]; tailPartialLine: string } | undefined,
+  lineCount = 15
+): string | undefined {
+  if (!record) {
+    return undefined
+  }
+  const lines = visibleNonBlankTerminalLines(
+    buildTailLines(record.tailBuffer, record.tailPartialLine)
+  )
+  return lines.slice(-lineCount).join('\n') || undefined
+}

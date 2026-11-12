@@ -5,7 +5,10 @@ import { StarNagService } from '../star-nag/service'
 import { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { DESKTOP_RPC_CALLER, LOCAL_CLI_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
+import {
+  DESKTOP_RPC_CALLER,
+  LOCAL_CLI_RPC_CALLER
+} from '../runtime/rpc/callers/rpc-caller-identity'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { configureBrowserClientPageAutomationRuntime } from '../browser/client-pages/execution/browser-client-page-automation-runtime'
 import { BrowserExpectedUrlMismatch } from '../../shared/browser/client-hosting/browser-expected-url'
@@ -38,7 +41,7 @@ import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-l
 import { runAfterFirstWindowShown } from './first-window-deferral'
 import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
 import { logStartupMilestone } from './startup-diagnostics'
-import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
+import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/status-hooks/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
 import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'

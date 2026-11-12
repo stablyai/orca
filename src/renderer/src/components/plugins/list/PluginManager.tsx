@@ -16,6 +16,7 @@ import { usePluginCatalog } from '../state/use-plugin-catalog'
 import { usePluginHoverPrefetch } from '../state/use-plugin-hover-prefetch'
 import { usePluginInstallAction } from '../state/use-plugin-install-action'
 import { usePluginUpdateDialog } from '../state/use-plugin-update-dialog'
+import { PluginCatalogHighlights } from '../catalog/PluginCatalogHighlights'
 import {
   CatalogCard,
   CatalogNotice,
@@ -139,6 +140,7 @@ export function PluginManager({
     orcaVersion,
     t
   )
+  const allEntries = [...entries.installed, ...entries.available]
   const query = search.trim()
   const filterSize = pluginFilterSize(listFilter)
   const narrowed = Boolean(query) || filterSize > 0
@@ -326,11 +328,7 @@ export function PluginManager({
         installedCount={plugins.length}
         updateCount={updates.length}
         filters={
-          <PluginCategoryChips
-            entries={[...entries.installed, ...entries.available]}
-            filter={listFilter}
-            onChange={setListFilter}
-          />
+          <PluginCategoryChips entries={allEntries} filter={listFilter} onChange={setListFilter} />
         }
         toolbar={
           <PluginListToolbar
@@ -374,6 +372,13 @@ export function PluginManager({
           <PluginAllInstalled onShowInstalled={() => setTab('installed')} />
         ) : filter === 'all' || filter === 'available' ? (
           <div className="@container/plugin-catalog space-y-8">
+            {!narrowed && !catalog.loading && !pluginsLoading && !pluginsError ? (
+              <PluginCatalogHighlights
+                entries={allEntries}
+                orcaVersion={orcaVersion}
+                cardHandlers={cardHandlers}
+              />
+            ) : null}
             {/* Why the error and loading too: until installed plugins are read, Not installed can't tell what you have. */}
             {filter === 'all' || pluginsError || pluginsLoading ? installedGroup : null}
             {filter === 'available' && (pluginsLoading || pluginsError) ? null : (
