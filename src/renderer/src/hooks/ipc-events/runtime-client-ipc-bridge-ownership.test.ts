@@ -129,6 +129,7 @@ function createHarness() {
         _meta: { runtimeId: 'remote-runtime' },
         result: event ?? {
           type: 'linearLinkedIssueUpdated',
+          worktreeId: 'missing-row',
           identifier: 'ISSUE-1',
           workspaceId: 'workspace-a'
         }

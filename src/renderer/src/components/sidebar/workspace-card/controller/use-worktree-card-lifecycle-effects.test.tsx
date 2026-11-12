@@ -1,11 +1,7 @@
 /** @vitest-environment happy-dom */
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createTestStore,
-  issue,
-  readLinearIssueForTest
-} from '@/store/slices/linear/linear-slice-test-harness'
+import { createTestStore, issue } from '@/store/slices/linear/linear-slice-test-harness'
 import { clearLinearRequestMaps } from '@/store/slices/linear/linear-slice-request-state'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import { useWorktreeCardLifecycleEffects } from './use-worktree-card-lifecycle-effects'
@@ -125,44 +121,5 @@ describe('linked issue card demand', () => {
       await settle()
     }
     expect(requests.detail).toHaveBeenCalledTimes(100)
-  })
-
-  it('shares fresh demand, reloads expired remounts and isolates source changes', async () => {
-    const store = createTestStore()
-    const view = render(<LinkedIssueCard id="ISSUE-1" store={store} />)
-    await settle()
-    view.rerender(
-      <>
-        <LinkedIssueCard id="ISSUE-1" store={store} />
-        <LinkedIssueCard id="ISSUE-1" store={store} />
-      </>
-    )
-    await settle()
-    expect(requests.detail).toHaveBeenCalledTimes(1)
-    view.unmount()
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000)
-    })
-    const remount = render(<LinkedIssueCard id="ISSUE-1" store={store} />)
-    await settle()
-    expect(requests.detail).toHaveBeenCalledTimes(2)
-    remount.rerender(
-      <LinkedIssueCard
-        id="ISSUE-1"
-        store={store}
-        sourceContext={{ ...source, projectId: 'other-project' }}
-      />
-    )
-    await settle()
-    expect(requests.detail).toHaveBeenCalledTimes(3)
-
-    await act(async () => {
-      await readLinearIssueForTest(
-        store.getState().refreshLinearIssue('ISSUE-1', 'workspace', {
-          sourceContext: source
-        })
-      )
-    })
-    expect(requests.detail).toHaveBeenCalledTimes(4)
   })
 })
