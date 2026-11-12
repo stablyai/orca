@@ -1,3 +1,5 @@
+import { nativeChatVoiceTranscriptSpeaker } from '../../../../../../shared/native-chat/native-chat-voice-transcript'
+import { NativeChatVoiceTranscriptLine } from '../../voice/NativeChatVoiceTranscriptLine'
 import {
   CLAUDE_MODEL_FALLBACK_COPY,
   claudeModelFallbackLabels
@@ -91,6 +93,10 @@ export function NativeChatNoticeRow({
 
   if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
     return <NativeChatPullRequestEventLine block={block} messageId={messageId} />
+  }
+  const voiceSpeaker = nativeChatVoiceTranscriptSpeaker(block.presentation)
+  if (voiceSpeaker) {
+    return <NativeChatVoiceTranscriptLine speaker={voiceSpeaker} text={block.text} />
   }
   const look = nativeChatNoticeLook(block)
   if (look.kind === 'forked-from') {

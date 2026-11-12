@@ -140,6 +140,16 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   confirmIdle = (id: string) => this.liveOwnerOrNull(id)?.confirmIdle?.(id)
 
+  /** Only a live child can carry a voice session; a resting chat refuses rather than starting one. */
+  startVoiceConversation: NonNullable<Adapter['startVoiceConversation']> = (input) => {
+    const owner = this.liveOwnerOrNull(input.sessionId)
+    if (!owner?.startVoiceConversation) {
+      input.emit({ type: 'refused', reason: owner ? 'unsupported' : 'not-running' })
+      return { stop: () => {} }
+    }
+    return owner.startVoiceConversation(input)
+  }
+
   liveTurnId = (sessionId: string): string | null | undefined =>
     this.liveOwnerOrNull(sessionId)?.liveTurnId?.(sessionId)
 

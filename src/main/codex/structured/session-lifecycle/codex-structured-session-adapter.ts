@@ -53,14 +53,18 @@ import * as codexRewind from '../threads/codex-structured-rewind'
 import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
 import { codexAcquireFailure } from '../../app-server/codex-startup-outcome'
 import { openCodexStart, recoverCodexRewindAtStart } from './codex-structured-start-verdict'
+import { codexLiveProviderProcess } from './codex-structured-provider-liveness'
+import { CodexRealtimeVoice } from '../realtime/codex-realtime-voice'
 
 export class CodexStructuredSessionAdapter implements SessionAdapter {
   private readonly sessions = new Map<string, CodexSession>()
   private readonly acquisitions = new CodexAcquisitionRegistry()
   private readonly notificationRetries: ReturnType<typeof createCodexStructuredNotificationRetry>
   private readonly teardown: CodexStructuredSessionTeardown
+  private readonly voice = new CodexRealtimeVoice()
 
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
+    this.deps = deps = this.voice.endWithChildren(deps, (id) => this.sessions.get(id)?.connection)
     this.atRestCommands = deps.atRestCommands
     this.notificationRetries = createCodexStructuredNotificationRetry({
       sessionFor: (sessionId) => this.sessions.get(sessionId),
@@ -119,7 +123,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       handleUnhandledFrame: (sessionId, kind, payload) =>
         this.handleUnhandledFrame(sessionId, kind, payload),
       forceCloseUnexpected: (sessionId, fence, acquisitionGeneration, reason) =>
-        this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason)
+        this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason),
+      observeRealtime: this.voice.observe
     }).catch((error: unknown) => {
       throw codexAcquireFailure(error)
     })
@@ -201,19 +206,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
     this.sessions.get(sessionId)?.dispatchEchoes.heldSends()
 
-  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
-    const session = this.sessions.get(sessionId)
-    const starting = this.acquisitions.get(sessionId)
-    if (starting?.acquisitionGeneration === acquisitionGeneration) {
-      return !starting.exitProven && starting.window.connection?.pid !== undefined
-    }
-    return (
-      session?.acquisitionGeneration === acquisitionGeneration &&
-      session.connection.pid !== undefined &&
-      !session.ended &&
-      session.exitObservedAt === undefined
-    )
-  }
+  holdsLiveProviderProcess = codexLiveProviderProcess(this.sessions, this.acquisitions)
 
   backgroundTaskStops: NonNullable<SessionAdapter['backgroundTaskStops']> = (sessionId) =>
     backgroundStops.codexBackgroundTaskStops(this.sessions.get(sessionId))
@@ -308,6 +301,10 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       () => this.sessions.get(input.sessionId) === session
     )
   }
+
+  startVoiceConversation: NonNullable<SessionAdapter['startVoiceConversation']> = (input) =>
+    this.voice.start(this.sessions.get(input.sessionId), input)
+  confirmIdle = (sessionId: string) => this.voice.confirmIdle(sessionId)
 
   answerPrompt: SessionAdapter['answerPrompt'] = (request) =>
     answerCodexStructuredPrompt({ request, sessions: this.sessions })

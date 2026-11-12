@@ -23,6 +23,8 @@ import { NativeChatContextUsageRing } from '../../usage/NativeChatContextUsageRi
 import type { NativeChatContextUsageSummary } from '../../../../../../shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from '../../session/options/controls/native-chat-option-picker-request'
 import type { NativeChatSteerChordPreview } from '../../../../../../shared/native-chat/input/use-native-chat-steer-chord-preview'
+import { NativeChatCodexVoiceButton } from '../../voice/NativeChatCodexVoiceButton'
+import { useNativeChatCodexVoiceControl } from '../../voice/use-native-chat-codex-voice'
 
 export type NativeChatComposerActionsProps = {
   editSession?: { cancel: () => void }
@@ -69,7 +71,7 @@ export type NativeChatComposerActionsProps = {
 export const NativeChatComposerActions = memo(function NativeChatComposerActions({
   editSession,
   attachDisabled,
-  dictationDisabled,
+  dictationDisabled: dictationUnavailable,
   sendDisabled,
   sendBlockedReason,
   draftNotSaved,
@@ -98,6 +100,10 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
 }: NativeChatComposerActionsProps): React.JSX.Element {
   const t = useTranslate()
   useUiLanguageRevision()
+  const voice = useNativeChatCodexVoiceControl()
+  // Dictation and a voice call would both capture the microphone.
+  const voiceHoldsMicrophone = !!voice?.call && voice.call.phase !== 'ended'
+  const dictationDisabled = dictationUnavailable || (voiceHoldsMicrophone && !isDictating)
   const mode = useNativeChatPlanMode({
     surface: sessionOptionsSurface,
     snapshot: sessionOptionsSnapshot,
@@ -314,6 +320,9 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
         ]
       : []),
     { id: 'dictation', priority: 2, content: dictation },
+    ...(voice && !editSession
+      ? [{ id: 'voice', priority: 2, content: <NativeChatCodexVoiceButton voice={voice} /> }]
+      : []),
     ...(draftNotSaved
       ? [{ id: 'draft', priority: 1, content: <NativeChatComposerDraftNotSavedIcon shown /> }]
       : []),

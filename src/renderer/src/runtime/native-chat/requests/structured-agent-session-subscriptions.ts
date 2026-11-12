@@ -14,6 +14,7 @@ import type {
   AgentSessionStatusEvent
 } from '../../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
+import type { AgentSessionVoiceEvent } from '../../../../../shared/agent-session/agent-session-voice-conversation'
 
 async function subscribeStructuredAgentSessionMethod<TEvent>(
   target: RuntimeClientTarget,
@@ -78,6 +79,24 @@ export function subscribeStructuredAgentSessionTurnCompletions(
     'agentSession.subscribeTurnCompletions',
     // An older host ignores this and sends completions only: it raises no prompt alert, as before.
     { includePrompts: true },
+    onEvent,
+    onError,
+    onClose
+  )
+}
+
+/** One Codex voice attempt; unsubscribing stops the provider's voice session. */
+export function subscribeStructuredAgentSessionVoice(
+  target: RuntimeClientTarget,
+  params: { sessionId: string; offerSdp: string },
+  onEvent: (event: AgentSessionVoiceEvent) => void,
+  onError: (error: unknown) => void,
+  onClose: () => void
+): Promise<{ unsubscribe: () => void }> {
+  return subscribeStructuredAgentSessionMethod(
+    target,
+    'agentSession.voiceConversation',
+    params,
     onEvent,
     onError,
     onClose

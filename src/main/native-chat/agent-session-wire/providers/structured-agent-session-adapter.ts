@@ -30,6 +30,7 @@ import type {
 import type { StructuredAgentSessionAtRestCommands } from '../options/structured-agent-session-at-rest-commands'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
+import type { AgentSessionVoiceEvent } from '../../../../shared/agent-session/agent-session-voice-conversation'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentSessionCloseObserver,
@@ -257,6 +258,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     executionOptions?: AgentSessionExecutionOptions
     signal?: AbortSignal
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
+  /** The live child's native voice for its own thread; the client owns the media, and `emit`
+   *  receives this attempt's frames until one is terminal. Absent when the agent has none. */
+  startVoiceConversation?(input: {
+    sessionId: string
+    offerSdp: string
+    emit: (event: AgentSessionVoiceEvent) => void
+  }): { stop: () => void }
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
   /** Fresh answer before an idle stop: provider-declared work keeps the child; undefined has none to ask. */
