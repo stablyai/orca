@@ -466,7 +466,8 @@ test.describe('Combined diff scroll restore', () => {
         const editedBody =
           kind === 'saved' ? 'alpha FOCUS gamma UNSAVED_41116' : 'alpha FOCUS gamma DRAFT_41116'
         await textarea.fill(originalBody)
-        await textarea.press('Home')
+        await textarea.press('ControlOrMeta+A')
+        await textarea.press('ArrowLeft')
         for (let step = 0; step < 6; step++) {
           await orcaPage.keyboard.press('ArrowRight')
         }
