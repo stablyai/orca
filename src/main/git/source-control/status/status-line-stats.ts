@@ -19,35 +19,120 @@ import { readStampedGitConfig, type StampedGitConfig } from '../input-stamps/sta
 import { addGitattributesStampPaths } from '../input-stamps/gitattributes-stamp-paths'
 import { readWorktreePathsDiffStamp } from '../input-stamps/worktree-diff-stamp'
 
+// A worktree-wide pass aborts on one unreadable file; re-reading in bounded chunks keeps every other row counted.
+const NUMSTAT_FALLBACK_CHUNK_PATHS = 32
+const MAX_NUMSTAT_FALLBACK_PATHS = 512
+
+function numstatArgs(
+  cached: boolean,
+  detectRenames: boolean,
+  paths?: readonly string[]
+): string[] {
+  return [
+    '-c',
+    'core.quotePath=false',
+    '-c',
+    'diff.autoRefreshIndex=false',
+    'diff',
+    '-z',
+    ...(cached ? ['--cached'] : []),
+    '--numstat',
+    detectRenames ? '-M' : '--no-renames',
+    ...(paths && paths.length > 0 ? ['--', ...paths] : [])
+  ]
+}
+
+async function readNumstat(
+  worktreePath: string,
+  args: string[],
+  options: GitRuntimeOptions
+): Promise<Map<string, GitLineStats>> {
+  const { stdout } = await gitExecFileAsync(args, {
+    ...gitReadOptionsForWorktree(worktreePath, options),
+    env: gitOptionalLocksDisabledEnv()
+  })
+  return parseNumstat(stdout)
+}
+
+function pathsForLineStatsArea(
+  entries: readonly GitStatusEntry[],
+  area: GitStatusEntry['area']
+): string[] {
+  const paths = new Set<string>()
+  for (const entry of entries) {
+    if (entry.area !== area) {
+      continue
+    }
+    paths.add(entry.path)
+    if (entry.oldPath !== undefined) {
+      paths.add(entry.oldPath)
+    }
+  }
+  return [...paths]
+}
+
+/** One locked file fails its chunk; retry that chunk per path so only the unreadable row stays uncounted. */
+async function runNumstatFallback(
+  worktreePath: string,
+  cached: boolean,
+  detectRenames: boolean,
+  paths: readonly string[],
+  options: GitRuntimeOptions
+): Promise<Map<string, GitLineStats> | null> {
+  if (paths.length > MAX_NUMSTAT_FALLBACK_PATHS) {
+    return null
+  }
+  const stats = new Map<string, GitLineStats>()
+  let readAny = false
+  const read = async (subset: readonly string[]): Promise<void> => {
+    const part = await readNumstat(
+      worktreePath,
+      numstatArgs(cached, detectRenames, subset),
+      options
+    )
+    for (const [path, lineStats] of part) {
+      stats.set(path, lineStats)
+    }
+    readAny = true
+  }
+  for (let start = 0; start < paths.length; start += NUMSTAT_FALLBACK_CHUNK_PATHS) {
+    const chunk = paths.slice(start, start + NUMSTAT_FALLBACK_CHUNK_PATHS)
+    try {
+      await read(chunk)
+    } catch (error) {
+      if (options.signal?.aborted) {
+        throw error
+      }
+      for (const path of chunk) {
+        try {
+          await read([path])
+        } catch (singleError) {
+          if (options.signal?.aborted) {
+            throw singleError
+          }
+        }
+      }
+    }
+  }
+  return readAny ? stats : null
+}
+
 async function runNumstat(
   worktreePath: string,
   cached: boolean,
   detectRenames: boolean,
-  options: GitRuntimeOptions = {}
+  options: GitRuntimeOptions = {},
+  fallbackPaths: readonly string[] = []
 ): Promise<Map<string, GitLineStats> | null> {
   try {
-    const { stdout } = await gitExecFileAsync(
-      [
-        '-c',
-        'core.quotePath=false',
-        '-c',
-        'diff.autoRefreshIndex=false',
-        'diff',
-        '-z',
-        ...(cached ? ['--cached'] : []),
-        '--numstat',
-        detectRenames ? '-M' : '--no-renames'
-      ],
-      {
-        ...gitReadOptionsForWorktree(worktreePath, options),
-        env: gitOptionalLocksDisabledEnv()
-      }
-    )
-    return parseNumstat(stdout)
+    return await readNumstat(worktreePath, numstatArgs(cached, detectRenames), options)
   } catch (error) {
     // Propagate cancellation; ordinary numstat failures may degrade to uncounted rows.
     if (options.signal?.aborted) {
       throw error
+    }
+    if (fallbackPaths.length > 0) {
+      return runNumstatFallback(worktreePath, cached, detectRenames, fallbackPaths, options)
     }
     // null marks the pass incomplete and uncacheable; an empty map would imply success.
     return null
@@ -101,10 +186,11 @@ async function readNumstatThroughSettledCache(
 ): Promise<Map<string, GitLineStats> | null> {
   const readGeneration = settledNumstatCache.beginRead()
   const stampPaths = numstatStampPaths(entries, cached)
+  const fallbackPaths = pathsForLineStatsArea(entries, cached ? 'staged' : 'unstaged')
   // Null config means reuse is off or Git reads config and attributes the host cannot stamp (WSL).
   const config = stampPaths ? await configRead : null
   if (!stampPaths || !config) {
-    return runNumstat(worktreePath, cached, detectRenames, options)
+    return runNumstat(worktreePath, cached, detectRenames, options, fallbackPaths)
   }
   const stamp = await readWorktreePathsDiffStamp(worktreePath, stampPaths, options, [
     ...config.files,
@@ -115,7 +201,7 @@ async function readNumstatThroughSettledCache(
   if (reused) {
     return reused
   }
-  const stats = await runNumstat(worktreePath, cached, detectRenames, options)
+  const stats = await runNumstat(worktreePath, cached, detectRenames, options, fallbackPaths)
   if (stats) {
     settledNumstatCache.set(readKey, stamp, stats, readGeneration)
   }
