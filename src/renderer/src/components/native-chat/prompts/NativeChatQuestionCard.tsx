@@ -1,5 +1,4 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { Textarea } from '@/components/ui/textarea'
 import { useRef, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/class-names'
@@ -7,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
+import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
 import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../shared/native-chat/input/native-chat-ask-types'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
@@ -325,7 +325,12 @@ export function NativeChatQuestionCard({
               />
             ))}
           </div>
-          <div className="flex items-center gap-2.5 px-3.5 pb-3.5">
+          <div
+            className={cn(
+              'flex gap-2.5 px-3.5 pb-3.5',
+              freeTextInput?.multiline ? 'items-end' : 'items-center'
+            )}
+          >
             {questionAllowsOther ? (
               <div
                 className={cn(
@@ -349,7 +354,8 @@ export function NativeChatQuestionCard({
                 </span>
                 {/* Deliver free text verbatim as a tool result; composer slash commands and autocomplete do not apply. */}
                 {freeTextInput?.multiline ? (
-                  <Textarea
+                  // The box draws the field's edge, so the bare field (not the bordered Textarea primitive) sits inside it.
+                  <ImeTextarea
                     data-native-chat-answer-field
                     data-native-chat-prompt-card-focus-target={fieldTakesFocus}
                     disabled={isSubmitting}
@@ -357,7 +363,7 @@ export function NativeChatQuestionCard({
                     onChange={(e) => setOther(index, e.target.value)}
                     onClick={autoAdvance.cancel}
                     placeholder={answerPlaceholder}
-                    className="min-h-16 resize-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
+                    className="scrollbar-sleek min-h-16 min-w-0 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50"
                   />
                 ) : (
                   <ImeTextarea
@@ -404,26 +410,19 @@ export function NativeChatQuestionCard({
             ) : (
               <span className="flex-1" />
             )}
-            <button
-              type="button"
+            <NativeChatQuestionConfirmButton
+              label={
+                isSubmitting
+                  ? t('components.native-chat.question.sending', 'Sending…')
+                  : CONFIRM_LABEL[askConfirmLabel(currentAnswered, isLast)]()
+              }
+              answered={currentAnswered}
+              enterHint={
+                currentAnswered && !isSubmitting && !q.multiSelect && !freeTextInput?.multiline
+              }
               disabled={isSubmitting}
-              onClick={() => confirm()}
-              className={cn(
-                'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-lg border px-3.5 text-[length:calc(var(--text-sm)*13/14)] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-chat-focus-ring focus-visible:ring-offset-1 focus-visible:ring-offset-chat-canvas disabled:cursor-default disabled:opacity-50',
-                currentAnswered
-                  ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'border-question-option-border text-foreground hover:bg-foreground/5'
-              )}
-            >
-              {isSubmitting
-                ? t('components.native-chat.question.sending', 'Sending…')
-                : CONFIRM_LABEL[askConfirmLabel(currentAnswered, isLast)]()}
-              {currentAnswered && !isSubmitting ? (
-                <span aria-hidden className="ml-1.5 text-2xs font-medium opacity-70">
-                  ↵
-                </span>
-              ) : null}
-            </button>
+              onConfirm={() => confirm()}
+            />
           </div>
         </div>
 

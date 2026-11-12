@@ -266,8 +266,8 @@
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
   /* Answer card edge and the outline shared by its option tiles, badges, answer field and Skip. */
-  --question-card-border: rgb(0 0 0 / 0.14);
-  --question-option-border: rgb(0 0 0 / 0.16);
+  --question-card-border-mix: 14%;
+  --question-option-border-mix: 16%;
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
@@ -385,8 +385,8 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
-  --question-card-border: rgb(255 255 255 / 0.16);
-  --question-option-border: rgb(255 255 255 / 0.12);
+  --question-card-border-mix: 16%;
+  --question-option-border-mix: 12%;
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -749,6 +749,17 @@ body[data-modal-overlay-open]
   --chat-composer-border: color-mix(
     in srgb,
     var(--chat-source-foreground) var(--chat-composer-border-mix),
+    transparent
+  );
+  /* From the chat's own foreground, so the edges stay visible when chat follows the terminal's colors. */
+  --question-card-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--question-card-border-mix),
+    transparent
+  );
+  --question-option-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--question-option-border-mix),
     transparent
   );
   /* Mixed toward the foreground so each clears text contrast on the canvas in either scheme. */
