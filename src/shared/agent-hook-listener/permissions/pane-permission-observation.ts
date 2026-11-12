@@ -6,9 +6,11 @@ import {
   readHookAgentProcess,
   type AgentProcessIdentity
 } from '../../agent-status/process/agent-process-presence'
+import { beforeDeadline, monotonicNow } from '../../deadline-settle-notifier'
 import { parseHookEnvelope } from '../hook-envelope'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
+import { hookRootAnswerDeadline } from '../presence/hook-root-attempts'
 import {
   isFreshSessionStartHook,
   isSubagentHookPayload,
@@ -26,10 +28,20 @@ export type PaneAgentCommandLineReader = (
 export type PaneCliBypassObservation = {
   agent: TuiAgent
   bypass?: boolean
+  answerBy?: number
   inFlight?: Promise<void>
 }
 
 const IDENTITY_PANE_KEY = (paneKey: string): string => paneKey
+
+function waitForObservation(
+  entry: PaneCliBypassObservation | undefined
+): Promise<void> | undefined {
+  if (!entry?.inFlight || entry.answerBy === undefined || monotonicNow() >= entry.answerBy) {
+    return undefined
+  }
+  return beforeDeadline(entry.inFlight, entry.answerBy).then(() => {})
+}
 
 /** Observe the pane's live CLI argv on turn/session boundaries when hooks omit permission_mode. */
 export function observePanePermissionBeforeHook(
@@ -50,7 +62,7 @@ export function observePanePermissionBeforeHook(
   const paneKey = resolvePaneKey(envelope.paneKey)
   const hookPayload = envelope.hookPayloadRecord
   if (isSubagentHookPayload(hookPayload)) {
-    return state.paneCliBypassObservationByPaneKey.get(paneKey)?.inFlight
+    return waitForObservation(state.paneCliBypassObservationByPaneKey.get(paneKey))
   }
   if (readHookReportedPermissionMode(source, hookPayload) !== undefined) {
     state.paneCliBypassObservationByPaneKey.delete(paneKey)
@@ -60,15 +72,13 @@ export function observePanePermissionBeforeHook(
   const boundary =
     isNewTurnEvent(source, envelope.eventName) ||
     isFreshSessionStartHook(source, hookPayload, envelope.eventName)
-  if (cached?.agent === source) {
-    if (cached.inFlight) {
-      return cached.inFlight
-    }
-    if (!boundary) {
-      return undefined
-    }
+  if (cached?.agent === source && !boundary) {
+    return waitForObservation(cached)
   }
-  const entry: PaneCliBypassObservation = { agent: source }
+  const entry: PaneCliBypassObservation = {
+    agent: source,
+    answerBy: hookRootAnswerDeadline()
+  }
   const sender = readHookAgentProcess(source, envelope.record.agentProcess)
   const promise = reader(paneKey, source, sender)
     .catch(() => null)
@@ -79,10 +89,11 @@ export function observePanePermissionBeforeHook(
       entry.bypass =
         commandLine !== null && agentCommandLineBypassesPermissions(source, commandLine)
       entry.inFlight = undefined
+      entry.answerBy = undefined
     })
   entry.inFlight = promise
   state.paneCliBypassObservationByPaneKey.set(paneKey, entry)
-  return promise
+  return waitForObservation(entry)
 }
 
 export function applyObservedPanePermission(

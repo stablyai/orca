@@ -1,5 +1,4 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { isAgentForegroundProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
@@ -49,8 +48,8 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     return pty
   }
 
-  /** An unretired note is held only while its agent still holds the foreground; Windows local ConPTY
-   *  confirms the agent via the PTY controller when shell-group foreground observation is unknown. */
+  /** An unretired note is held only while its agent still holds the foreground. Main can't tell when
+   *  the host keeps no notes (an older daemon) or the foreground is unreadable (Windows). */
   protected recordReattachedLaunch(
     pty: RuntimePtyWorktreeRecord,
     incarnationId: PtyIncarnationId | undefined,
@@ -70,23 +69,9 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     note: DaemonLaunchNote,
     agent: TuiAgent
   ): Promise<void> {
-    let foreground = await this.readLaunchedAgentForeground(pty.ptyId, agent).catch(
+    const foreground = await this.readLaunchedAgentForeground(pty.ptyId, agent).catch(
       () => 'unknown' as const
     )
-    if (
-      foreground === 'unknown' &&
-      process.platform === 'win32' &&
-      !pty.connectionId &&
-      pty.isWsl !== true &&
-      !pty.wslDistro
-    ) {
-      const confirmed = await this.ptyController
-        ?.confirmForegroundProcess?.(pty.ptyId)
-        .catch(() => null)
-      if (confirmed && isAgentForegroundProcess(confirmed, agent)) {
-        foreground = 'agent'
-      }
-    }
     // Newer evidence (a later attach, a finished command, a fresh launch) outranks this read.
     if (
       pty.launchEvidence !== pending ||

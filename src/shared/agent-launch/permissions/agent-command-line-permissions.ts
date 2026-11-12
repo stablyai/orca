@@ -83,16 +83,7 @@ const CUSTOM_BYPASS_MATCHERS: Partial<Record<TuiAgent, (options: readonly string
       : options.includes('--dangerously-skip-permissions')
   },
   codex: (options) =>
-    options.includes('--dangerously-bypass-approvals-and-sandbox') || options.includes('--yolo'),
-  kimi: (options) =>
-    options.some(
-      (token) =>
-        token === '--auto' ||
-        token === '--yolo' ||
-        token === '-y' ||
-        token === '--yes' ||
-        token === '--auto-approve'
-    )
+    options.includes('--dangerously-bypass-approvals-and-sandbox') || options.includes('--yolo')
 }
 
 /** Detect whether a live OS process command line launches `agent` in full-access bypass mode. */
