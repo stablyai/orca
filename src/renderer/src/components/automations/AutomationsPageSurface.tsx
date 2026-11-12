@@ -1,6 +1,8 @@
 import React, { useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useAppStore } from '@/store/index'
+import { resolveAutomationRunTarget } from './runs/automation-run-open-target'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AutomationsPageEditorDialog } from './AutomationsPageEditorDialog'
@@ -166,8 +168,11 @@ export function AutomationsPageSurface({
             now={relativeNow}
             onRefresh={() => setRunHistoryReloadToken((token) => token + 1)}
             worktreeForRun={(entry) =>
-              store.worktreeForRow(entry.row, store.repoForRow(entry.row), entry.run.workspaceId) ??
-              null
+              resolveAutomationRunTarget(
+                useAppStore.getState(),
+                entry.run,
+                destination.automationAuthorityForRow(entry.row)
+              ).worktree
             }
             setPageView={setPageView}
             selectAutomationRow={list.selectAutomationRow}
