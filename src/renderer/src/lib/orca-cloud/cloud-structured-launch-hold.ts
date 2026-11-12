@@ -28,11 +28,18 @@ export function structuredCloudHoldKey(sessionId: string): string {
   return structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
 }
 
-/** Sessions whose launch joined a hold put back at startup (so Start doesn't launch them twice). */
+/** Holds put back at startup, and those of them a launch joined (so Start never launches twice). */
+const resumedSessions = new Set<string>()
 const joinedSessions = new Set<string>()
 
-/** Whether a launch joined this session's restored hold (read once). */
+/** Startup is putting this session's hold back (V3-01b); only a join of that hold is marked. */
+export function markStructuredHoldResumed(sessionId: string): void {
+  resumedSessions.add(sessionId)
+}
+
+/** Whether a launch joined this session's restored hold (read once; clears both marks). */
 export function takeStructuredHoldJoined(sessionId: string): boolean {
+  resumedSessions.delete(sessionId)
   return joinedSessions.delete(sessionId)
 }
 
@@ -55,7 +62,9 @@ export async function holdStructuredCloudLaunch(intent: {
   const paneKey = structuredCloudHoldKey(intent.sessionId)
   const joined = joinCloudAgentHold(paneKey)
   if (joined) {
-    joinedSessions.add(intent.sessionId)
+    if (resumedSessions.has(intent.sessionId)) {
+      joinedSessions.add(intent.sessionId)
+    }
     return joined
   }
   const restored = readHeldStructuredLaunch(intent.sessionId) !== null
@@ -81,9 +90,13 @@ export async function holdStructuredCloudLaunch(intent: {
 /**
  * V3-01b: while a structured chat waits on its Orca Cloud hold, the host's "not signed in" verdict
  * is the hold's to explain (the strip and the composer hint), never the generic sign-in notice.
- * Any other chat keeps the host's verdict as it is.
+ * Any other verdict, and any chat not held, keeps the host's verdict as it is.
  */
-export function useCloudHeldChatUnavailable<T>(sessionId: string, unavailable: T): T | null {
+export function useCloudHeldChatUnavailable<T extends { reason: string }>(
+  sessionId: string,
+  unavailable: T | null | undefined
+): T | null {
   const held = useCloudAgentHold(structuredCloudHoldKey(sessionId)) !== null
-  return held ? null : unavailable
+  // Only the sign-in verdict is the strip's; a missing agent CLI and the rest still say so.
+  return held && unavailable?.reason === 'notSignedIn' ? null : (unavailable ?? null)
 }

@@ -9,6 +9,7 @@ import { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminal
 import {
   cloudTabHoldKey,
   holdCloudAgentLaunch,
+  joinCloudAgentHold,
   readCloudAgentHold
 } from './cloud-agent-launch-hold'
 import {
@@ -16,7 +17,11 @@ import {
   readHeldStructuredLaunches,
   type HeldStructuredLaunchRecord
 } from './cloud-structured-held-launch-memory'
-import { structuredCloudHoldKey, takeStructuredHoldJoined } from './cloud-structured-launch-hold'
+import {
+  markStructuredHoldResumed,
+  structuredCloudHoldKey,
+  takeStructuredHoldJoined
+} from './cloud-structured-launch-hold'
 import {
   cancelStructuredAgentLaunch,
   retryStructuredAgentSessionLaunch
@@ -83,9 +88,11 @@ async function resumeChat(record: HeldStructuredLaunchRecord, waitMs: number): P
     return
   }
   const paneKey = structuredCloudHoldKey(record.sessionId)
-  if (readCloudAgentHold(paneKey)) {
+  // The launch's own retry already holds (or is deciding to): it owns Start and Cancel.
+  if (joinCloudAgentHold(paneKey)) {
     return
   }
+  markStructuredHoldResumed(record.sessionId)
   const outcome = await holdCloudAgentLaunch({
     paneKey,
     agent: record.agent,

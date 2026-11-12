@@ -234,7 +234,24 @@ async function holdReasonBeforeLaunch(
  * key to fall back to; then it holds until Renew fixes it (every held pane goes together) or the
  * person cancels.
  */
-export async function holdCloudAgentLaunch({
+export function holdCloudAgentLaunch(request: HoldRequest): Promise<'proceed' | 'cancel'> {
+  // V3-01b: one hold per key, joinable from the moment it is asked for (before its account read
+  // lands), so a second launch for the same key joins it instead of orphaning it.
+  const inFlight = settling.get(request.paneKey)
+  if (inFlight) {
+    return inFlight
+  }
+  const outcome = placeCloudAgentHold(request)
+  settling.set(request.paneKey, outcome)
+  void outcome.finally(() => {
+    if (settling.get(request.paneKey) === outcome) {
+      settling.delete(request.paneKey)
+    }
+  })
+  return outcome
+}
+
+async function placeCloudAgentHold({
   decided,
   restored,
   ...hold
@@ -250,7 +267,7 @@ export async function holdCloudAgentLaunch({
   const accountsRead = readOrcaCloudAgentAccounts().load.kind === 'ready'
   const awaiting =
     reason === 'awaitingStart' ? (accountsRead ? ('covered' as const) : ('unread' as const)) : null
-  const settled = new Promise<'proceed' | 'cancel'>((resolve) => {
+  return new Promise<'proceed' | 'cancel'>((resolve) => {
     const stop = subscribeOrcaCloudAgentAccounts(() => {
       // Renewed (or a key now covers it): every pane held on recovery starts. A first-time setup
       // waits for its "Start {{agent}}" click instead (PC-3b), so it never starts unasked.
@@ -290,15 +307,12 @@ export async function holdCloudAgentLaunch({
       }
       stop()
       holds.delete(hold.paneKey)
-      settling.delete(hold.paneKey)
       notify()
       resolve(outcome)
     }
     holds.set(hold.paneKey, { ...hold, reason, ...(awaiting ? { awaiting } : {}), release: finish })
     notify()
   })
-  settling.set(hold.paneKey, settled)
-  return settled
 }
 
 /**

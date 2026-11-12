@@ -14,7 +14,9 @@ const mocks = vi.hoisted(() => {
     load: 'ready' | 'loading'
     retried: string[]
     cancelled: string[]
-  } = { coverage: 'notSetUp', load: 'ready', retried: [], cancelled: [] }
+    /** A read that hangs until released (accounts still loading at startup). */
+    pendingRead: { resolve: () => void } | null
+  } = { coverage: 'notSetUp', load: 'ready', retried: [], cancelled: [], pendingRead: null }
   return state
 })
 
@@ -25,6 +27,11 @@ vi.mock('./orca-cloud-environment-id', () => ({
 vi.mock('./orca-cloud-agent-accounts-store', () => ({
   readOrcaCloudAgentAccounts: () => ({ load: { kind: mocks.load }, keyKinds: {} }),
   ensureFreshOrcaCloudAgentAccounts: async () => {
+    if (mocks.pendingRead) {
+      await new Promise<void>((resolve) => {
+        mocks.pendingRead = { resolve }
+      })
+    }
     if (mocks.load === 'loading') {
       throw new Error('read failed')
     }
@@ -111,6 +118,7 @@ beforeEach(() => {
   mocks.load = 'ready'
   mocks.retried = []
   mocks.cancelled = []
+  mocks.pendingRead = null
   resetHeldCloudLaunchResumeForTest()
   useAppStore.setState({ activeOrcaProfileId: 'profile-a' })
   setChatOpen(false)
@@ -207,6 +215,40 @@ describe('after a restart', () => {
   })
 })
 
+describe('races and marks', () => {
+  it('startup and the retry asking at once (read still pending) share one hold; one Start settles both', async () => {
+    remember()
+    setChatOpen(true)
+    mocks.pendingRead = { resolve: () => undefined }
+    resumeHeldCloudLaunches(ENV, { waitMs: 5_000 })
+    await flush()
+    const retry = holdStructuredCloudLaunch(intent)
+    mocks.pendingRead.resolve()
+    await flush()
+    expect(readCloudAgentHold(KEY)?.reason).toBe('notSetUp')
+    releaseCloudAgentHold(KEY, 'proceed')
+    await expect(retry).resolves.toBe('proceed')
+    await flush()
+    // The joined retry launches; startup doesn't launch it a second time.
+    expect(mocks.retried).toEqual([])
+  })
+
+  it('an in-session join leaves no mark: a later restored hold still retries on Start', async () => {
+    const first = holdStructuredCloudLaunch(intent)
+    await flush()
+    const second = holdStructuredCloudLaunch(intent)
+    releaseCloudAgentHold(KEY, 'cancel')
+    await Promise.all([first, second])
+    remember()
+    setChatOpen(true)
+    resumeHeldCloudLaunches(ENV, { waitMs: 5_000 })
+    await flush()
+    releaseCloudAgentHold(KEY, 'proceed')
+    await flush()
+    expect(mocks.retried).toEqual([SESSION])
+  })
+})
+
 describe('the generic sign-in notice', () => {
   const verdict = { reason: 'notSignedIn' }
 
@@ -221,6 +263,17 @@ describe('the generic sign-in notice', () => {
     expect(renderHook(() => useCloudHeldChatUnavailable(SESSION, verdict)).result.current).toBe(
       verdict
     )
+  })
+
+  it('a held chat still says a missing agent (only the sign-in verdict gives way)', async () => {
+    const held = holdStructuredCloudLaunch(intent)
+    await flush()
+    const missing = { reason: 'cliMissing' }
+    expect(renderHook(() => useCloudHeldChatUnavailable(SESSION, missing)).result.current).toBe(
+      missing
+    )
+    releaseCloudAgentHold(KEY, 'cancel')
+    await held
   })
 
   it('a chat that is not held (any host) keeps the generic notice', () => {
