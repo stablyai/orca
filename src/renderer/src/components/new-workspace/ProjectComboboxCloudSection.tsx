@@ -148,16 +148,17 @@ export function ProjectComboboxCloudSection({
             <span className="flex h-5 w-4 shrink-0 items-center justify-center">
               <Github aria-hidden className="size-3.5 text-muted-foreground" />
             </span>
+            {/* The lock follows the name so every name starts at the same x. */}
             <span className="flex min-w-0 flex-1 items-center gap-1">
+              <span className={cn('min-w-0 truncate', current && 'font-medium')}>
+                {repo.fullName}
+              </span>
               {repo.private ? (
                 <Lock
                   aria-label={t('components.newWorkspace.cloudOnly.privateLabel', 'Private')}
                   className="size-3 shrink-0 text-muted-foreground"
                 />
               ) : null}
-              <span className={cn('min-w-0 truncate', current && 'font-medium')}>
-                {repo.fullName}
-              </span>
             </span>
             {current ? (
               <span className="flex h-5 shrink-0 items-center">
