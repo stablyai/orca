@@ -1319,7 +1319,9 @@
           "pendingRemovalRefused": "伺服器仍保留在其離線期間移除的專案",
           "removeProjectHostUnreachable": "無法連線至此專案的伺服器。可立即從這台電腦移除，Orca 會在伺服器重新連線後將專案從伺服器移除。",
           "removeProjectLocallyNow": "立即從這台電腦移除",
-          "removeProjectHostDisconnected": "此專案的伺服器已中斷連線。可立即從這台電腦移除，重新連線後 Orca 會將專案從伺服器移除。"
+          "removeProjectHostDisconnected": "此專案的伺服器已中斷連線。可立即從這台電腦移除，重新連線後 Orca 會將專案從伺服器移除。",
+          "moveProjectGroupFailed": "無法移動專案群組",
+          "moveProjectGroupFailedDesc": "該群組所在主機未套用新的上層群組。請更新該電腦上的 Orca 後再試一次。"
         },
         "settings": {
           "e12dab333b": "切換伺服器失敗"
@@ -6158,7 +6160,8 @@
         },
         "SidebarHeader": {
           "92154beb7e": "新工作區",
-          "addProject": "新增專案"
+          "addProject": "新增專案",
+          "newProjectGroup": "新增群組"
         },
         "SidebarNav": {
           "80611a8b10": "搜尋",
@@ -6478,7 +6481,15 @@
           "hideChildWorkspaces_other": "隱藏 {{count}} 個子工作區",
           "childCount_other": "{{count}} 個子項目",
           "groupProjectsRemained_other": "刪除群組後，原先內含的 {{count}} 個專案中仍保留了 {{remaining}} 個。",
-          "hostServerReplaced": "伺服器不同：請先忘記，再連線"
+          "hostServerReplaced": "伺服器不同：請先忘記，再連線",
+          "newSubgroup": "新增子群組",
+          "newSubgroupTitle": "新增子群組",
+          "newSubgroupDesc": "在 {{group}} 內建立子群組。",
+          "newEmptyGroupDesc": "在側邊欄建立空白群組。",
+          "groupCreateFailed": "建立群組失敗",
+          "groupCreateFailedDesc": "Orca 無法向所在主機確認新群組。請檢查主機連線後再試一次。",
+          "moveProjectToParentGroup": "移至上層群組 ({{group}})",
+          "moveGroupToTopLevel": "移至最上層"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",

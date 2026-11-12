@@ -396,6 +396,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
       >
         <div
           role="presentation"
+          data-worktree-virtual-list=""
           className="relative w-full"
           style={{ height: `${virtualization.virtualizer.getTotalSize()}px` }}
         >

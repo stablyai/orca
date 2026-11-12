@@ -3,6 +3,7 @@ import React from 'react'
 import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
 import {
   CircleX,
+  CornerLeftUp,
   Ellipsis,
   Eye,
   FolderInput,
@@ -39,6 +40,10 @@ import {
 } from '../../../../../../shared/worktree/ownership'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
+import {
+  buildJoinableProjectGroupMenuEntries,
+  findJoinableParentGroupForRepo
+} from './project-group-menu-tree'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,
@@ -93,6 +98,14 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
   const t = useTranslate()
   // Memoized: subscribe so a language change still repaints its labels.
   useTranslation()
+  const joinableGroupEntries = React.useMemo(
+    () => buildJoinableProjectGroupMenuEntries(repo, projectGroups),
+    [projectGroups, repo]
+  )
+  const parentGroup = React.useMemo(
+    () => findJoinableParentGroupForRepo(repo, projectGroups),
+    [projectGroups, repo]
+  )
   return (
     <DropdownMenu modal={false}>
       <Tooltip>
@@ -154,17 +167,19 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           <FolderTree className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.cbfd565f83', 'New group from project')}
         </DropdownMenuItem>
-        {projectGroups.length > 0 ? (
+        {joinableGroupEntries.length > 0 ? (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <FolderInput className="size-3.5" />
               {t('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {projectGroups.map((group) => (
+            <DropdownMenuSubContent scrollable>
+              {joinableGroupEntries.map(({ group, depth, disabled, pathLabel }) => (
                 <DropdownMenuItem
                   key={group.id}
-                  disabled={repo.projectGroupId === group.id}
+                  disabled={disabled}
+                  aria-label={depth > 0 ? pathLabel : undefined}
+                  style={depth > 0 ? { paddingLeft: 8 + Math.min(depth, 6) * 12 } : undefined}
                   onSelect={() => actions.onMoveProjectToGroup(repo, group.id)}
                 >
                   <span className="max-w-48 truncate">{group.name}</span>
@@ -172,6 +187,16 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
               ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+        ) : null}
+        {parentGroup ? (
+          <DropdownMenuItem onSelect={() => actions.onMoveProjectToGroup(repo, parentGroup.id)}>
+            <CornerLeftUp className="size-3.5" />
+            {t(
+              'auto.components.sidebar.WorktreeList.moveProjectToParentGroup',
+              'Move to parent group ({{group}})',
+              { group: parentGroup.name }
+            )}
+          </DropdownMenuItem>
         ) : null}
         {repo.projectGroupId ? (
           <DropdownMenuItem onSelect={() => actions.onRemoveProjectFromGroup(repo)}>

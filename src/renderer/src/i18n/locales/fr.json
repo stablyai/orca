@@ -1142,7 +1142,9 @@
           "pendingRemovalRefused": "Le serveur a conservé un projet que vous avez supprimé pendant qu'il était hors ligne",
           "removeProjectHostUnreachable": "Son serveur est injoignable. Supprimez-le maintenant de ce bureau, et Orca le supprimera du serveur à la reconnexion.",
           "removeProjectLocallyNow": "Supprimer de ce bureau maintenant",
-          "removeProjectHostDisconnected": "Son serveur est déconnecté. Supprimez-le maintenant de ce bureau, et Orca le supprimera du serveur lorsque vous vous reconnecterez."
+          "removeProjectHostDisconnected": "Son serveur est déconnecté. Supprimez-le maintenant de ce bureau, et Orca le supprimera du serveur lorsque vous vous reconnecterez.",
+          "moveProjectGroupFailed": "Impossible de déplacer le groupe de projets",
+          "moveProjectGroupFailedDesc": "L’ordinateur du groupe n’a pas appliqué le nouveau groupe parent. Mettez à jour Orca sur cet ordinateur et réessayez."
         },
         "settings": {
           "e12dab333b": "Échec du changement de serveur"
@@ -6165,7 +6167,8 @@
         },
         "SidebarHeader": {
           "92154beb7e": "Nouvel espace de travail",
-          "addProject": "Ajouter un projet"
+          "addProject": "Ajouter un projet",
+          "newProjectGroup": "Nouveau groupe"
         },
         "SidebarNav": {
           "80611a8b10": "Recherche",
@@ -6505,7 +6508,15 @@
           "groupProjectsRemained_one": "Projets conservés après suppression du groupe : {{remaining}} sur {{count}}.",
           "groupProjectsRemained_other": "Projets conservés après suppression du groupe : {{remaining}} sur {{count}}.",
           "groupProjectsRemained_many": "Projets conservés après suppression du groupe : {{remaining}} sur {{count}}.",
-          "hostServerReplaced": "Serveur différent : oubliez-le, puis connectez-vous"
+          "hostServerReplaced": "Serveur différent : oubliez-le, puis connectez-vous",
+          "newSubgroup": "Nouveau sous-groupe",
+          "newSubgroupTitle": "Nouveau sous-groupe",
+          "newSubgroupDesc": "Créer un sous-groupe dans {{group}}.",
+          "newEmptyGroupDesc": "Créer un groupe vide dans la barre latérale.",
+          "groupCreateFailed": "Impossible de créer le groupe",
+          "groupCreateFailedDesc": "Orca n’a pas pu confirmer le nouveau groupe auprès de son hôte. Vérifiez la connexion et réessayez.",
+          "moveProjectToParentGroup": "Déplacer vers le groupe parent ({{group}})",
+          "moveGroupToTopLevel": "Déplacer au premier niveau"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Annuler",

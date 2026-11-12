@@ -4,21 +4,29 @@ import {
 } from './root-project-header-drop'
 import type { PointerEvent } from 'react'
 
+import { readHostHeaderRects } from './host-header-drag-dom'
+import { measureProjectGroupHeaderDragRects } from './project-group-header-drop'
 import {
   getProjectHeaderDragBucketKey,
   measureProjectHeaderDragRects,
   type ProjectHeaderDragBucketKey
 } from './project-header-drop'
+import { canRepoStartHeaderDrag, getJoinableGroupIdsForRepo } from './project-header-group-drop'
 import {
+  ROOT_INTERLEAVED_PROJECT_BUCKET_KEY,
   isProjectHeaderDragHandleTarget,
   isRepoHeaderActionTarget,
   type ProjectHeaderDragSession
 } from './project-header-drag-contract'
+import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 
 export function createProjectHeaderDragSession(args: {
   event: PointerEvent<HTMLElement>
   repo: Repo
+  groupRepo?: Repo | null
+  projectGroups: readonly ProjectGroup[]
+  allowSlotReorder: boolean
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
   rootProjectHeaderKeys?: readonly string[]
   getScrollContainer: () => HTMLElement | null
@@ -32,19 +40,36 @@ export function createProjectHeaderDragSession(args: {
   if (isRepoHeaderActionTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
-  const bucketKey = getProjectHeaderDragBucketKey(args.repo)
-  const rootProjectHeaderHostId = args.rootProjectHeaderKeys?.some((key) => key.startsWith('host:'))
-    ? args.event.currentTarget.dataset.rootProjectHeaderHost
-    : undefined
-  const rootProjectHeaderKeys = getRootProjectHeaderDragKeys(
-    args.rootProjectHeaderKeys,
-    `repo:${args.repo.id}`,
-    rootProjectHeaderHostId
-  )
-  const sidebarRepoHeaderIds =
-    rootProjectHeaderKeys ?? args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
-  // A lone project cannot move within its bucket; preserve the collapse click instead.
-  if (sidebarRepoHeaderIds.length <= 1) {
+  const effectiveGroupRepo = args.groupRepo === undefined ? args.repo : args.groupRepo
+  const bucketOwnerRepo = effectiveGroupRepo ?? args.repo
+  const bucketKey = getProjectHeaderDragBucketKey(bucketOwnerRepo)
+  const rootProjectHeaderHostId =
+    bucketKey === 'ungrouped' && args.rootProjectHeaderKeys?.some((key) => key.startsWith('host:'))
+      ? args.event.currentTarget.dataset.rootProjectHeaderHost
+      : undefined
+  const rootProjectHeaderKeys =
+    bucketKey === 'ungrouped'
+      ? getRootProjectHeaderDragKeys(
+          args.rootProjectHeaderKeys,
+          `repo:${args.repo.id}`,
+          rootProjectHeaderHostId
+        )
+      : undefined
+  const sidebarRepoHeaderIds = args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
+  const effectiveBucketItemCount = rootProjectHeaderKeys
+    ? Math.max(sidebarRepoHeaderIds.length, rootProjectHeaderKeys.length)
+    : sidebarRepoHeaderIds.length
+  const joinableGroupIds = effectiveGroupRepo
+    ? getJoinableGroupIdsForRepo(effectiveGroupRepo, args.projectGroups)
+    : new Set<string>()
+  if (
+    !canRepoStartHeaderDrag({
+      repo: bucketOwnerRepo,
+      allowSlotReorder: args.allowSlotReorder,
+      bucketItemCount: effectiveBucketItemCount,
+      joinableGroupIds
+    })
+  ) {
     return null
   }
   const container = args.getScrollContainer()
@@ -55,21 +80,27 @@ export function createProjectHeaderDragSession(args: {
   // Delay pointer capture until promotion so ordinary clicks can still toggle collapse.
   return {
     repo: args.repo,
+    groupRepo: effectiveGroupRepo,
     bucketKey,
     sidebarRepoHeaderIds,
-    pointerId: args.event.pointerId,
     rootProjectHeaderKeys,
     rootProjectHeaderHostId,
-    headerRects: rootProjectHeaderKeys
+    rootHeaderRects: rootProjectHeaderKeys
       ? measureRootProjectHeaderDragRects(
           container,
           rootProjectHeaderKeys,
           rootProjectHeaderHostId
         ).map((rect) => ({
           ...rect,
-          repoId: rect.key
+          repoId: rect.key,
+          bucketKey: ROOT_INTERLEAVED_PROJECT_BUCKET_KEY
         }))
-      : measureProjectHeaderDragRects(container, bucketKey),
+      : undefined,
+    joinableGroupIds,
+    hostHeaderRects: readHostHeaderRects(container),
+    pointerId: args.event.pointerId,
+    headerRects: measureProjectHeaderDragRects(container),
+    groupHeaderRects: measureProjectGroupHeaderDragRects(container),
     handleEl,
     startX: args.event.clientX,
     startY: args.event.clientY,

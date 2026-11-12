@@ -938,7 +938,9 @@
           "pendingRemovalRefused": "服务器保留了你在其离线期间移除的项目",
           "removeProjectHostUnreachable": "无法连接其服务器。现在从此桌面移除，Orca 会在服务器重新连接后将其从服务器移除",
           "removeProjectLocallyNow": "现在从此桌面移除",
-          "removeProjectHostDisconnected": "其服务器已断开连接。现在从此桌面移除，重新连接后 Orca 会将其从服务器移除"
+          "removeProjectHostDisconnected": "其服务器已断开连接。现在从此桌面移除，重新连接后 Orca 会将其从服务器移除",
+          "moveProjectGroupFailed": "无法移动项目组",
+          "moveProjectGroupFailedDesc": "该组所在主机未应用新的父分组。请更新该电脑上的 Orca 后重试。"
         },
         "settings": {
           "e12dab333b": "切换服务器失败"
@@ -5846,7 +5848,8 @@
         },
         "SidebarHeader": {
           "92154beb7e": "新工作区",
-          "addProject": "添加项目"
+          "addProject": "添加项目",
+          "newProjectGroup": "新建分组"
         },
         "SidebarNav": {
           "80611a8b10": "搜索",
@@ -6161,7 +6164,15 @@
           "hideChildWorkspaces_other": "隐藏 {{count}} 个子工作区",
           "childCount_other": "{{count}} 个子项",
           "groupProjectsRemained_other": "删除组后，原先包含的 {{count}} 个项目中仍保留了 {{remaining}} 个",
-          "hostServerReplaced": "服务器不同：请先遗忘，再连接"
+          "hostServerReplaced": "服务器不同：请先遗忘，再连接",
+          "newSubgroup": "新建子分组",
+          "newSubgroupTitle": "新建子分组",
+          "newSubgroupDesc": "在 {{group}} 内创建子分组。",
+          "newEmptyGroupDesc": "在侧边栏中创建一个空分组。",
+          "groupCreateFailed": "创建分组失败",
+          "groupCreateFailedDesc": "Orca 无法与所在主机确认新分组。请检查主机连接后重试。",
+          "moveProjectToParentGroup": "移至父分组 ({{group}})",
+          "moveGroupToTopLevel": "移至顶层"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",

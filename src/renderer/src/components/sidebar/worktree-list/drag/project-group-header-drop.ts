@@ -1,8 +1,13 @@
-import { measureSidebarHeaderDragRect } from './sidebar-header-drag-geometry'
 import {
   computeWorktreeSidebarHeaderDropPreview,
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
+import {
+  getHeaderVirtualRowInfo,
+  getOptionalNumberAttribute,
+  indexMountedVirtualRowBounds,
+  resolveMeasuredSectionBottom
+} from './header-drag-dom-measurement'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 
@@ -128,7 +133,8 @@ export function measureProjectGroupHeaderDragRects(
   container: HTMLElement,
   bucketKey?: ProjectGroupHeaderDragBucketKey
 ): ProjectGroupHeaderDragRect[] {
-  const containerRect = container.getBoundingClientRect()
+  const containerTop = container.getBoundingClientRect().top
+  const mountedRows = indexMountedVirtualRowBounds(container)
   const rects: ProjectGroupHeaderDragRect[] = []
   container.querySelectorAll<HTMLElement>('[data-project-group-header-id]').forEach((element) => {
     const groupId = element.getAttribute('data-project-group-header-id')
@@ -141,16 +147,27 @@ export function measureProjectGroupHeaderDragRects(
     if (bucketKey !== undefined && elementBucketKey !== bucketKey) {
       return
     }
+    const { top, height, rowIndex } = getHeaderVirtualRowInfo(element, container, containerTop)
+    const bottom = top + height
     rects.push({
       groupId,
       bucketKey: elementBucketKey,
       headerIndex,
-      ...measureSidebarHeaderDragRect(
-        element,
-        container,
-        containerRect,
-        'data-project-group-header-section-end'
-      )
+      top,
+      bottom,
+      sectionBottom: resolveMeasuredSectionBottom({
+        headerRowIndex: rowIndex,
+        headerBottom: bottom,
+        sectionEndIndex: getOptionalNumberAttribute(
+          element,
+          'data-project-group-header-section-end-index'
+        ),
+        estimatedSectionBottom: getOptionalNumberAttribute(
+          element,
+          'data-project-group-header-section-end'
+        ),
+        mountedRows
+      })
     })
   })
   rects.sort((left, right) => left.top - right.top)

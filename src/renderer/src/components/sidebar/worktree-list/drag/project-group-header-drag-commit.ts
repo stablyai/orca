@@ -1,31 +1,236 @@
-import { getProjectGroupTabOrderUpdatesForSidebarDrop } from './project-group-header-drop'
-import type { ProjectGroupHeaderDragSession } from './project-group-header-drag-contract'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import type { Repo } from '../../../../../../shared/repo-types'
+import {
+  getProjectGroupHeaderDragBucketKey,
+  getProjectGroupTabOrderUpdatesForSidebarDrop,
+  type ProjectGroupHeaderDragBucketKey
+} from './project-group-header-drop'
+import {
+  filterProjectGroupIdsByCatalogHost,
+  getReparentableTargetGroupIdsForGroup,
+  parseParentGroupIdFromBucketKey,
+  type ProjectGroupHeaderDropTarget
+} from './project-group-header-reparent-drop'
+import {
+  ROOT_INTERLEAVED_GROUP_BUCKET_KEY,
+  type ProjectGroupHeaderDragSession,
+  type ProjectGroupHeaderUpdatePatch
+} from './project-group-header-drag-contract'
+import { resolveRootPromotionPlacement } from './project-group-root-promotion-order'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { RootProjectHeaderDrag } from './root-project-header-drop'
 
-export function commitProjectGroupHeaderDragDrop(
-  args: RootProjectHeaderDrag & {
-    session: ProjectGroupHeaderDragSession
-    sidebarDropIndex: number
-    projectGroupById: ReadonlyMap<string, ProjectGroup>
-    onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
+export type ProjectGroupDropMutation = {
+  groupId: string
+  updates: ProjectGroupHeaderUpdatePatch
+}
+
+export function getProjectGroupMutationsForDrop(args: {
+  draggedGroup: ProjectGroup
+  sourceBucketKey: ProjectGroupHeaderDragBucketKey
+  dropTarget: ProjectGroupHeaderDropTarget
+  projectGroupById: ReadonlyMap<string, ProjectGroup>
+  repos?: readonly Repo[]
+  rootProjectHeaderKeys?: readonly string[]
+  sidebarProjectGroupHeaderIdsByBucket: ReadonlyMap<
+    ProjectGroupHeaderDragBucketKey,
+    readonly string[]
+  >
+  nextRootProjectOrder?: number
+}): ProjectGroupDropMutation[] {
+  const liveBucketKey = getProjectGroupHeaderDragBucketKey(args.draggedGroup, args.projectGroupById)
+  if (liveBucketKey !== args.sourceBucketKey) {
+    return []
   }
-): void {
-  if (args.session.rootProjectHeaderKeys) {
+  const draggedHostId = getRepoExecutionHostId(args.draggedGroup)
+
+  if (args.dropTarget.kind === 'slot' && args.dropTarget.targetBucketKey === args.sourceBucketKey) {
+    const sameHostHeaderIds = filterProjectGroupIdsByCatalogHost(
+      args.sidebarProjectGroupHeaderIdsByBucket.get(args.sourceBucketKey) ?? [],
+      draggedHostId,
+      args.projectGroupById
+    )
+    return getProjectGroupTabOrderUpdatesForSidebarDrop({
+      sidebarProjectGroupHeaderIds: sameHostHeaderIds,
+      draggedGroupId: args.draggedGroup.id,
+      sidebarDropIndex: args.dropTarget.dropIndex,
+      projectGroupById: args.projectGroupById
+    }).map((update) => ({
+      groupId: update.groupId,
+      updates: { tabOrder: update.tabOrder }
+    }))
+  }
+
+  const targetParentGroupId =
+    args.dropTarget.kind === 'group-header'
+      ? args.dropTarget.groupId
+      : parseParentGroupIdFromBucketKey(args.dropTarget.targetBucketKey)
+  const currentParentGroupId = parseParentGroupIdFromBucketKey(liveBucketKey)
+  if (args.dropTarget.kind === 'group-header' && targetParentGroupId === currentParentGroupId) {
+    return []
+  }
+  if (targetParentGroupId !== null) {
+    const reparentableIds = getReparentableTargetGroupIdsForGroup(args.draggedGroup, [
+      ...args.projectGroupById.values()
+    ])
+    if (!reparentableIds.has(targetParentGroupId)) {
+      return []
+    }
+  }
+
+  const targetBucketKey: ProjectGroupHeaderDragBucketKey = targetParentGroupId
+    ? `parent:${targetParentGroupId}`
+    : 'root'
+  const existingSiblingIds = filterProjectGroupIdsByCatalogHost(
+    args.sidebarProjectGroupHeaderIdsByBucket.get(targetBucketKey) ?? [],
+    draggedHostId,
+    args.projectGroupById
+  ).filter((groupId) => groupId !== args.draggedGroup.id)
+  const rootPlacement =
+    targetParentGroupId === null
+      ? resolveRootPromotionPlacement({
+          draggedGroup: args.draggedGroup,
+          existingSiblingIds,
+          dropTarget: args.dropTarget,
+          projectGroupById: args.projectGroupById,
+          repos: args.repos,
+          rootProjectHeaderKeys: args.rootProjectHeaderKeys,
+          nextRootProjectOrder: args.nextRootProjectOrder
+        })
+      : null
+  const insertIndex = rootPlacement
+    ? rootPlacement.groupInsertIndex
+    : args.dropTarget.kind === 'group-header'
+      ? existingSiblingIds.length
+      : Math.max(0, Math.min(existingSiblingIds.length, args.dropTarget.dropIndex))
+  const orderedIds = existingSiblingIds.slice()
+  orderedIds.splice(insertIndex, 0, args.draggedGroup.id)
+  const rootOrderPatch = rootPlacement
+    ? rootPlacement.rootOrderPatch
+    : args.draggedGroup.rootProjectOrder !== undefined
+      ? { rootProjectOrder: null }
+      : {}
+
+  const mutations: ProjectGroupDropMutation[] = []
+  for (const [index, groupId] of orderedIds.entries()) {
+    if (groupId === args.draggedGroup.id) {
+      mutations.push({
+        groupId,
+        updates: { parentGroupId: targetParentGroupId, tabOrder: index, ...rootOrderPatch }
+      })
+      continue
+    }
+    const sibling = args.projectGroupById.get(groupId)
+    if (sibling && sibling.tabOrder !== index) {
+      mutations.push({
+        groupId,
+        updates: { tabOrder: index }
+      })
+    }
+  }
+  return mutations
+}
+
+export async function commitProjectGroupHeaderDragDrop(
+  args: RootProjectHeaderDrag & {
+    session: Pick<ProjectGroupHeaderDragSession, 'groupId' | 'bucketKey' | 'rootProjectHeaderKeys'>
+    dropTarget: ProjectGroupHeaderDropTarget
+    projectGroupById: ReadonlyMap<string, ProjectGroup>
+    repos?: readonly Repo[]
+    sidebarProjectGroupHeaderIdsByBucket: ReadonlyMap<
+      ProjectGroupHeaderDragBucketKey,
+      readonly string[]
+    >
+    nextRootProjectOrder?: number
+    onCommitProjectGroupUpdate: (
+      groupId: string,
+      updates: ProjectGroupHeaderUpdatePatch
+    ) => Promise<boolean> | boolean | void
+  }
+): Promise<void> {
+  if (
+    args.session.bucketKey === 'root' &&
+    args.dropTarget.kind === 'slot' &&
+    args.dropTarget.targetBucketKey === ROOT_INTERLEAVED_GROUP_BUCKET_KEY &&
+    args.session.rootProjectHeaderKeys
+  ) {
     args.onCommitRootProjectOrder?.(
       args.session.rootProjectHeaderKeys,
       `group:${args.session.groupId}`,
-      args.sidebarDropIndex
+      args.dropTarget.dropIndex
     )
     return
   }
-  const updates = getProjectGroupTabOrderUpdatesForSidebarDrop({
-    sidebarProjectGroupHeaderIds: args.session.sidebarProjectGroupHeaderIds,
-    draggedGroupId: args.session.groupId,
-    sidebarDropIndex: args.sidebarDropIndex,
-    projectGroupById: args.projectGroupById
+  const draggedGroup = args.projectGroupById.get(args.session.groupId)
+  if (!draggedGroup) {
+    return
+  }
+  const mutations = getProjectGroupMutationsForDrop({
+    draggedGroup,
+    sourceBucketKey: args.session.bucketKey,
+    dropTarget: args.dropTarget,
+    projectGroupById: args.projectGroupById,
+    repos: args.repos,
+    rootProjectHeaderKeys: args.session.rootProjectHeaderKeys,
+    sidebarProjectGroupHeaderIdsByBucket: args.sidebarProjectGroupHeaderIdsByBucket,
+    nextRootProjectOrder: args.nextRootProjectOrder
   })
-  for (const update of updates) {
-    args.onCommitProjectGroupTabOrder(update.groupId, update.tabOrder)
+  const reparentMutation = mutations.find(
+    (mutation) => mutation.updates.parentGroupId !== undefined
+  )
+  if (reparentMutation) {
+    const accepted = await args.onCommitProjectGroupUpdate(
+      reparentMutation.groupId,
+      reparentMutation.updates
+    )
+    if (accepted === false) {
+      return
+    }
+  }
+  for (const mutation of mutations) {
+    if (mutation === reparentMutation) {
+      continue
+    }
+    await args.onCommitProjectGroupUpdate(mutation.groupId, mutation.updates)
+  }
+  if (
+    reparentMutation?.updates.parentGroupId === null &&
+    args.dropTarget.kind === 'slot' &&
+    (args.dropTarget.targetBucketKey === ROOT_INTERLEAVED_GROUP_BUCKET_KEY ||
+      args.dropTarget.targetBucketKey === 'root') &&
+    args.onCommitRootProjectOrder
+  ) {
+    const existingSiblingIds = filterProjectGroupIdsByCatalogHost(
+      args.sidebarProjectGroupHeaderIdsByBucket.get('root') ?? [],
+      getRepoExecutionHostId(draggedGroup),
+      args.projectGroupById
+    ).filter((groupId) => groupId !== draggedGroup.id)
+    const placement = resolveRootPromotionPlacement({
+      draggedGroup,
+      existingSiblingIds,
+      dropTarget: args.dropTarget,
+      projectGroupById: args.projectGroupById,
+      repos: args.repos,
+      rootProjectHeaderKeys: args.session.rootProjectHeaderKeys,
+      nextRootProjectOrder: args.nextRootProjectOrder
+    })
+    const baseKeys =
+      args.dropTarget.targetBucketKey === ROOT_INTERLEAVED_GROUP_BUCKET_KEY &&
+      args.session.rootProjectHeaderKeys
+        ? args.session.rootProjectHeaderKeys
+        : placement.respaceKeys
+    if (
+      placement.needsInterleavedRespace &&
+      placement.interleavedDropIndex !== undefined &&
+      baseKeys
+    ) {
+      const interleavedKeys = baseKeys.filter((key) => key !== `group:${args.session.groupId}`)
+      interleavedKeys.splice(placement.interleavedDropIndex, 0, `group:${args.session.groupId}`)
+      args.onCommitRootProjectOrder(
+        interleavedKeys,
+        `group:${args.session.groupId}`,
+        placement.interleavedDropIndex
+      )
+    }
   }
 }
