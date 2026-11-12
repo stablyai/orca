@@ -109,6 +109,8 @@ export type OrcaCloudWorkspaceApi = {
    */
   createFromGitHub: (args: {
     repoUrl: string
+    /** The name typed in the composer; becomes the workspace's title (NAME-DROPPED). */
+    title?: string
   }) => Promise<CloudWorkspaceResult<{ sandboxId: string }>>
   onWakeProgress: (callback: (event: CloudWakeProgressEvent) => void) => () => void
   onOom: (callback: (event: CloudOomEvent) => void) => () => void

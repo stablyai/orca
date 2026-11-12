@@ -82,6 +82,40 @@ it('starts a sandbox that clones a GitHub-only repository (D4), and refuses anyt
   ).toMatchObject({ ok: false })
   expect(create).toHaveBeenCalledTimes(1)
 })
+
+it('a GitHub-only create keeps the typed name as the workspace title (NAME-DROPPED)', async () => {
+  const create = vi.fn(async (body: { workspaceId: string; title?: string }) => ({
+    sandbox: {
+      id: 'sbx_2',
+      workspaceId: body.workspaceId,
+      status: 'running' as const,
+      machineSize: 'standard' as const,
+      region: 'iad1',
+      session: null,
+      createdAt: 1
+    },
+    connection: { type: 'orca-server' as const, pairingCode: 'code', projectRoot: '/work' }
+  }))
+  registerHostedAccountHandlers(
+    {
+      config: async () => ({ idleSleepMinutes: 15 }),
+      connectGitHub: async () => ({ installUrl: REPO, authorizeUrl: REPO }),
+      githubRepoAccess: async () => ({ access: 'granted', owner: 'acme', repo: REPO }),
+      githubRepositories: async () => ({ repositories: [], nextCursor: null }),
+      create,
+      ...githubUser
+    },
+    { repoIds: async () => null }
+  )
+  await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: REPO, title: '  ik-paired  ' })
+  expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'ik-paired' }))
+  // No name typed: no title (lists fall back to the repository's name), never an empty one.
+  await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: REPO, title: '   ' })
+  expect(create).toHaveBeenLastCalledWith(expect.not.objectContaining({ title: expect.anything() }))
+  // The control plane caps titles at 120.
+  await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: REPO, title: 'x'.repeat(200) })
+  expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'x'.repeat(120) }))
+})
 const SESSION = 'cs_abcdefghijklmnopqrstuv'
 
 it('asks again with the repo and owner ids when access is missing, so GitHub preselects the repo', async () => {

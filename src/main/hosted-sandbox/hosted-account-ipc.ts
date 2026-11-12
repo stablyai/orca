@@ -127,23 +127,29 @@ export function registerHostedAccountHandlers(
 
   // D4: a repository the account's GitHub installations reach, with no clone here. The sandbox
   // clones it; nothing touches this computer's disk. The id reads like the phone's: <repo>-<hex>.
-  ipcMain.handle(CH.createFromGitHub, async (_event, args?: { repoUrl?: unknown }) => {
-    const slug = typeof args?.repoUrl === 'string' ? githubRepoSlug(args.repoUrl) : null
-    if (!slug) {
-      return { ok: false, code: 'failed', message: 'Not a GitHub repository.' }
+  ipcMain.handle(
+    CH.createFromGitHub,
+    async (_event, args?: { repoUrl?: unknown; title?: unknown }) => {
+      const slug = typeof args?.repoUrl === 'string' ? githubRepoSlug(args.repoUrl) : null
+      if (!slug) {
+        return { ok: false, code: 'failed', message: 'Not a GitHub repository.' }
+      }
+      const name = (slug.split('/').pop() ?? 'workspace')
+        .replace(/[^A-Za-z0-9_.-]/g, '-')
+        .slice(0, 48)
+      // The name typed in the composer, as the owned create sends it; else lists show the repo name.
+      const title = typeof args?.title === 'string' ? args.title.trim().slice(0, 120) : ''
+      try {
+        const ready = await client.create({
+          workspaceId: `${name}-${randomBytes(4).toString('hex')}`,
+          machineSize: 'standard',
+          repo: { url: `https://github.com/${slug}.git` },
+          ...(title ? { title } : {})
+        })
+        return { ok: true, value: { sandboxId: ready.sandbox.id } }
+      } catch (error) {
+        return failure(error)
+      }
     }
-    const name = (slug.split('/').pop() ?? 'workspace')
-      .replace(/[^A-Za-z0-9_.-]/g, '-')
-      .slice(0, 48)
-    try {
-      const ready = await client.create({
-        workspaceId: `${name}-${randomBytes(4).toString('hex')}`,
-        machineSize: 'standard',
-        repo: { url: `https://github.com/${slug}.git` }
-      })
-      return { ok: true, value: { sandboxId: ready.sandbox.id } }
-    } catch (error) {
-      return failure(error)
-    }
-  })
+  )
 }

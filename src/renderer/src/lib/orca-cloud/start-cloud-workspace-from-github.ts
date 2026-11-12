@@ -33,8 +33,10 @@ export async function startCloudWorkspaceFromGitHub(
       repo: request.fullName
     })
   )
+  // The composer's name field is the workspace's name: send it as the title (NAME-DROPPED).
+  const title = request.prompt.trim().slice(0, 120)
   const created = await window.api.orcaCloudWorkspace
-    .createFromGitHub({ repoUrl: request.repoUrl })
+    .createFromGitHub({ repoUrl: request.repoUrl, ...(title ? { title } : {}) })
     .catch(() => null)
   if (!created?.ok) {
     toast.error(failedCopy(), { id: toastId })
