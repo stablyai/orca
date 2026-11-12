@@ -3,10 +3,10 @@ import { BROWSER_HANDLER_GROUPS } from './browser/browser-handler-groups'
 import { JIRA_HANDLER_GROUP } from './jira/jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from './linear/linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
-import { SERVE_PAIRING_HANDLER_GROUPS } from './serve-pairing-handler-groups'
+import { SERVE_PAIRING_HANDLER_GROUPS } from './server/serve-pairing-handler-groups'
 import { PLUGIN_HANDLER_GROUPS } from './plugin-handler-groups'
-import { HOST_HANDLER_GROUPS } from './host-handler-groups'
-import { WORKTREE_HANDLER_GROUPS } from './worktree-handler-groups'
+import { HOST_HANDLER_GROUPS } from './hosts/host-handler-groups'
+import { WORKTREE_HANDLER_GROUPS } from './workspaces/worktree-handler-groups'
 
 export type HandlerGroup = {
   name: string
@@ -29,12 +29,12 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'serve-reset-identity',
     keys: ['serve reset-identity'],
     load: async () =>
-      (await import('./handlers/serve-reset-identity.js')).SERVE_RESET_IDENTITY_HANDLERS
+      (await import('./server/serve-reset-identity.js')).SERVE_RESET_IDENTITY_HANDLERS
   },
   {
     name: 'serve-service',
     keys: ['serve service install', 'serve service status', 'serve service uninstall'],
-    load: async () => (await import('./handlers/serve-service.js')).SERVE_SERVICE_HANDLERS
+    load: async () => (await import('./server/serve-service.js')).SERVE_SERVICE_HANDLERS
   },
   {
     name: 'account',
@@ -76,7 +76,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'project setup-update',
       'project setup-delete'
     ],
-    load: async () => (await import('./handlers/project.js')).PROJECT_HANDLERS
+    load: async () => (await import('./projects/project.js')).PROJECT_HANDLERS
   },
   {
     name: 'repo',
@@ -88,7 +88,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'repo set-base-ref',
       'repo search-refs'
     ],
-    load: async () => (await import('./handlers/repo.js')).REPO_HANDLERS
+    load: async () => (await import('./projects/repo.js')).REPO_HANDLERS
   },
   ...WORKTREE_HANDLER_GROUPS,
   {
@@ -112,7 +112,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'terminal close',
       'terminal split'
     ],
-    load: async () => (await import('./handlers/terminal.js')).TERMINAL_HANDLERS
+    load: async () => (await import('./terminals/terminal.js')).TERMINAL_HANDLERS
   },
   ...BROWSER_HANDLER_GROUPS,
   {

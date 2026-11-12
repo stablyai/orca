@@ -9,7 +9,10 @@ import {
 import { getRequiredStringFlag } from '../flags'
 import { printResult } from '../command-result-output'
 import { RuntimeClientError } from '../runtime/types'
-import { getRequiredWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
+import {
+  getRequiredWorktreeSelector,
+  resolveCurrentWorktreeSelector
+} from '../workspace-selection/workspace-selector'
 
 export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
   'agent launch': async ({ flags, client, cwd, json, rawArgs }) => {

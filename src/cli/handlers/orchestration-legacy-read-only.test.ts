@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const callMock = vi.fn()
 
 vi.mock('../command-result-output', () => ({ printResult: vi.fn() }))
-vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
+vi.mock('../terminals/terminal-selector', () => ({ getTerminalHandle: vi.fn() }))
 
 import { printResult } from '../command-result-output'
 import { ORCHESTRATION_HANDLERS } from './orchestration'

@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 const callMock = vi.fn()
 const printResultMock = vi.hoisted(() => vi.fn())
 vi.mock('../command-result-output', () => ({ printResult: printResultMock }))
-vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
+vi.mock('../terminals/terminal-selector', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { orchestrationTestContext } from './orchestration-handler-test-context'

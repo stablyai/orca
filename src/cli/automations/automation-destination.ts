@@ -12,7 +12,7 @@ import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import { getManagedOrcadSshTargetId } from '../../shared/execution-host/managed-orcad-execution-host'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { RuntimeClient } from '../runtime/client'
-import { fetchSshTargetSummaries } from '../host-selector-alternatives'
+import { fetchSshTargetSummaries } from '../hosts/host-selector-alternatives'
 
 /** Empty selectors mean the execution host cannot change. */
 export type AutomationDestinationTarget = { repo?: string; workspace?: string }

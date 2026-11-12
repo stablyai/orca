@@ -7,7 +7,7 @@ const originalPaneKey = process.env.ORCA_PANE_KEY
 
 const printResultMock = vi.hoisted(() => vi.fn())
 vi.mock('../command-result-output', () => ({ printResult: printResultMock }))
-vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
+vi.mock('../terminals/terminal-selector', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
