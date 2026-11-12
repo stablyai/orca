@@ -5,7 +5,12 @@ import { useTranslate } from '@/i18n/use-translate'
 import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
 import { isNestedWorktreeRemovalError } from '../../../../../../shared/worktree/nested-removal'
-import { isCloudDeleteNotSentError } from '../../../../../../shared/recipe-host-removal'
+import {
+  CLOUD_DELETE_NOT_SENT_IN_USE,
+  CLOUD_DELETE_NOT_SENT_NO_DESTROY,
+  isCloudDeleteNotSentError
+} from '../../../../../../shared/recipe-host-removal'
+import { translate } from '@/i18n/i18n'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
@@ -130,6 +135,38 @@ function DeleteWorktreeFailureToastBody({
   )
 }
 
+/** REG-12: an Orca Cloud delete refused before anything was deleted, in design-squad's copy. */
+function cloudDeleteNotSentCopy(
+  worktreeName: string,
+  error: string
+): { title: string; description: string; isDestructive: boolean } {
+  const description = error.includes(CLOUD_DELETE_NOT_SENT_IN_USE)
+    ? translate(
+        'auto.components.sidebar.delete.worktree.failure.cloudInUse',
+        'Other workspaces still run in this sandbox, so nothing was deleted. Delete them first.'
+      )
+    : error.includes(CLOUD_DELETE_NOT_SENT_NO_DESTROY)
+      ? translate(
+          'auto.components.sidebar.delete.worktree.failure.cloudNoDestroy',
+          "The delete didn't go through, so nothing was deleted."
+        )
+      : translate(
+          'auto.components.sidebar.delete.worktree.failure.cloudUnchecked',
+          "Orca couldn't check the sandbox, so nothing was deleted."
+        )
+  return {
+    title: translate(
+      'auto.components.sidebar.delete.worktree.failure.cloudTitle',
+      "Couldn't delete {{name}}",
+      {
+        name: worktreeName
+      }
+    ),
+    description,
+    isDestructive: true
+  }
+}
+
 export function showDeleteWorktreeFailureToast({
   error,
   canForceDelete,
@@ -148,12 +185,9 @@ export function showDeleteWorktreeFailureToast({
   nestedRemovalTarget,
   onNestedDeleted
 }: DeleteWorktreeFailureToastOptions): void {
-  const toastCopy = getDeleteWorktreeToastCopy(
-    worktreeName,
-    forceDeleteReason,
-    error,
-    lockReason ?? null
-  )
+  const toastCopy = isCloudDeleteNotSentError(error)
+    ? cloudDeleteNotSentCopy(worktreeName, error)
+    : getDeleteWorktreeToastCopy(worktreeName, forceDeleteReason, error, lockReason ?? null)
   const showToast = toastCopy.isDestructive ? toast.error : toast.info
   const id = deleteWorktreeFailureToastId({
     id: worktreeId,

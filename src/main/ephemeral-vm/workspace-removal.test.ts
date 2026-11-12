@@ -280,14 +280,17 @@ describe('Orca Cloud: Delete destroys the sandbox or fails visibly, never "kept"
   const cloud: Partial<EphemeralVmRuntimeRecord> = {
     recipe: { id: 'cloud', name: 'Orca Cloud', create: 'orca-cloud create', provider: 'orca-cloud' }
   }
+  const removedCheckout = (ports: ReturnType<typeof makePorts>) =>
+    ports.call.mock.calls.some(([, method]) => method === 'worktree.rm')
 
-  it('the worktree list fails: an error, and no sandbox delete was sent', async () => {
+  it('the worktree list fails: an error, and nothing was deleted (no checkout removal, no destroy)', async () => {
     seed('orca-worktree', cloud)
     const ports = makePorts({ 'worktree.list': failed('runtime_unavailable') })
     await expect(removeRecipeWorkspace(root, params, ports)).rejects.toMatchObject({
       code: CLOUD_DELETE_NOT_SENT,
       message: CLOUD_DELETE_NOT_SENT_UNCHECKED
     })
+    expect(removedCheckout(ports)).toBe(false)
     expect(ports.cleanup).not.toHaveBeenCalled()
   })
 
@@ -297,10 +300,11 @@ describe('Orca Cloud: Delete destroys the sandbox or fails visibly, never "kept"
     await expect(removeRecipeWorkspace(root, params, ports)).rejects.toMatchObject({
       message: CLOUD_DELETE_NOT_SENT_UNCHECKED
     })
+    expect(removedCheckout(ports)).toBe(false)
     expect(ports.cleanup).not.toHaveBeenCalled()
   })
 
-  it('other workspaces still on the sandbox: an error naming that, nothing destroyed', async () => {
+  it('other workspaces still on the sandbox: an error naming that, nothing deleted', async () => {
     seed('orca-worktree', cloud)
     const ports = makePorts({
       'worktree.list': ok({
@@ -310,10 +314,21 @@ describe('Orca Cloud: Delete destroys the sandbox or fails visibly, never "kept"
     await expect(removeRecipeWorkspace(root, params, ports)).rejects.toMatchObject({
       message: CLOUD_DELETE_NOT_SENT_IN_USE
     })
+    expect(removedCheckout(ports)).toBe(false)
     expect(ports.cleanup).not.toHaveBeenCalled()
   })
 
-  it('a "cleaned" record without a destroy is not a delete', async () => {
+  it('a sandbox nothing would destroy: refused up front, nothing deleted', async () => {
+    seed('orca-worktree', { ...cloud, cleanupStatus: 'disabled' })
+    const ports = makePorts()
+    await expect(removeRecipeWorkspace(root, params, ports)).rejects.toMatchObject({
+      message: CLOUD_DELETE_NOT_SENT_NO_DESTROY
+    })
+    expect(ports.call).not.toHaveBeenCalled()
+    expect(ports.cleanup).not.toHaveBeenCalled()
+  })
+
+  it('a "cleaned" record without a destroy still never reads as deleted (guard)', async () => {
     seed('orca-worktree', cloud)
     const ports = makePorts({}, 'disabled')
     await expect(removeRecipeWorkspace(root, params, ports)).rejects.toMatchObject({
@@ -321,13 +336,14 @@ describe('Orca Cloud: Delete destroys the sandbox or fails visibly, never "kept"
     })
   })
 
-  it('an empty sandbox is destroyed, and only then reports success', async () => {
+  it('a sandbox that is this workspace’s alone is destroyed, and only then reports success', async () => {
     seed('orca-worktree', cloud)
     const ports = makePorts()
     await expect(removeRecipeWorkspace(root, params, ports)).resolves.toMatchObject({
       removed: true,
       host: { state: 'destroyed' }
     })
+    expect(removedCheckout(ports)).toBe(true)
     expect(ports.cleanup).toHaveBeenCalledWith('vm-a')
   })
 

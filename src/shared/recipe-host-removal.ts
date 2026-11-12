@@ -35,11 +35,13 @@ export class RecipeWorkspaceRemovalError extends Error {
  * reports success while the sandbox is kept (another workspace on it, or no proof it is empty).
  */
 export const CLOUD_DELETE_NOT_SENT = 'cloud_delete_not_sent'
+// Main sends these as the error message; the toast shows the translated copy for each (design-squad).
 export const CLOUD_DELETE_NOT_SENT_UNCHECKED =
-  "Orca Cloud couldn't check this sandbox, so it wasn't deleted. Try again."
+  "Orca couldn't check the sandbox, so nothing was deleted."
 export const CLOUD_DELETE_NOT_SENT_IN_USE =
-  "Other workspaces still run in this sandbox, so it wasn't deleted. Delete them first, then try again."
-export const CLOUD_DELETE_NOT_SENT_NO_DESTROY = "Orca Cloud didn't delete this sandbox. Try again."
+  'Other workspaces still run in this sandbox, so nothing was deleted. Delete them first.'
+export const CLOUD_DELETE_NOT_SENT_NO_DESTROY =
+  "The delete didn't go through, so nothing was deleted."
 
 /** The removal failed before any sandbox delete was sent: retrying is safe and may succeed. */
 export function isCloudDeleteNotSentError(message: string): boolean {

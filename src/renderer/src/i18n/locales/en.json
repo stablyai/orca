@@ -7455,7 +7455,11 @@
               "archive": {
                 "waiver": "Delete Anyway"
               },
-              "tryAgain": "Try again"
+              "tryAgain": "Try again",
+              "cloudInUse": "Other workspaces still run in this sandbox, so nothing was deleted. Delete them first.",
+              "cloudNoDestroy": "The delete didn't go through, so nothing was deleted.",
+              "cloudUnchecked": "Orca couldn't check the sandbox, so nothing was deleted.",
+              "cloudTitle": "Couldn't delete {{name}}"
             }
           }
         },
