@@ -160,7 +160,11 @@ it.each([null, 'ssh-1'])(
         agentLaunchChoices: { antigravity: { options: { effort: 'low' } } }
       },
       { worktreeId: WT, tabId, leafId: launchTab(tabId)!.agentLaunchPane!.leafId },
-      { connectionId, ...(connectionId ? { startupCommandDelivery: 'shell-ready' as const } : {}) }
+      {
+        connectionId,
+        cwd: launchTab(tabId)!.startupCwd,
+        ...(connectionId ? { startupCommandDelivery: 'shell-ready' as const } : {})
+      }
     )
     expect(tokenizeStartupCommand(planned.command ?? '', 'posix')).toMatchObject({
       ok: true,
