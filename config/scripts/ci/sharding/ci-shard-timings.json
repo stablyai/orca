@@ -2065,7 +2065,6 @@
       "src/main/ipc/markdown-documents-ripgrep.test.ts": 289,
       "src/main/ipc/mobile.test.ts": 1861,
       "src/main/ipc/notebook-project-link.test.ts": 548,
-      "src/main/ipc/notifications-custom-sound.test.ts": 289,
       "src/main/ipc/notifications-message-formatting.test.ts": 229,
       "src/main/ipc/notifications-subject-retirement.test.ts": 304,
       "src/main/ipc/profiles/orca-profiles-switch-persistence.test.ts": 2761,
