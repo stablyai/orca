@@ -119,9 +119,12 @@ export function useLocalImageSrc(
     return onImageCacheInvalidated(() => setGeneration(getLocalImageCacheGeneration()))
   }, [])
 
-  const [displaySrc, setDisplaySrc] = useState<string | undefined>(
-    () => externalSrc ?? (cacheKey ? blobUrlCache.get(cacheKey) : undefined)
-  )
+  // Why: a resolved URL belongs to the key that produced it, so switching sources never shows the previous image.
+  const [resolved, setResolved] = useState<{ key: string | null; url: string | undefined }>(() => ({
+    key: cacheKey,
+    url: externalSrc ?? (cacheKey ? blobUrlCache.get(cacheKey) : undefined)
+  }))
+  const setDisplaySrc = (url: string | undefined): void => setResolved({ key: cacheKey, url })
 
   useEffect(() => {
     if (externalSrc || !cacheKey) {
@@ -152,9 +155,13 @@ export function useLocalImageSrc(
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setDisplaySrc only closes over cacheKey, which is a dependency.
   }, [cacheKey, externalSrc, generation, retryKey])
 
-  return displaySrc
+  if (externalSrc) {
+    return externalSrc
+  }
+  return resolved.key === cacheKey ? resolved.url : undefined
 }
 
 /** Load through the same IPC/blob cache outside React, including ProseMirror node views. */

@@ -5,6 +5,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NativeChatImageAttachments } from './NativeChatImageAttachments'
+import { resetLocalImageCacheState } from '../../../editor/document-images/local-image-src-cache'
+import { readLocalImagePreview } from '../../../editor/document-images/local-image-src-reader'
+
+vi.mock('../../../editor/document-images/local-image-src-reader', () => ({
+  readLocalImagePreview: vi.fn()
+}))
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -25,6 +31,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  resetLocalImageCacheState()
   await act(async () => root.unmount())
   container.remove()
   vi.unstubAllGlobals()
@@ -80,5 +87,34 @@ describe('NativeChatImageAttachments gallery', () => {
     await click(dialog()?.querySelector('[aria-label="Previous image"]'))
     expect(shownImage()).toBe('https://example.test/two.png')
     expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1)
+  })
+
+  it('never shows the previous image while the selected local image is still loading', async () => {
+    const runtimeContext = {
+      target: { kind: 'local' as const },
+      worktreeId: 'wt',
+      worktreePath: '/repo'
+    }
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:first')
+    vi.mocked(readLocalImagePreview).mockImplementation((absolutePath) =>
+      absolutePath.endsWith('first.png')
+        ? Promise.resolve({ content: 'AAAA', isBinary: true, mimeType: 'image/png' })
+        : new Promise(() => {})
+    )
+    const blocks = ['first', 'second'].map((name) => ({
+      type: 'image-ref' as const,
+      path: `/repo/${name}.png`,
+      alt: name
+    }))
+    await act(async () => {
+      root.render(createElement(NativeChatImageAttachments, { blocks, runtimeContext }))
+    })
+
+    await click(container.querySelector('button'))
+    expect(shownImage()).toBe('blob:first')
+
+    await press('ArrowRight')
+    expect(dialog()?.textContent).toContain('2 of 2')
+    expect(shownImage()).toBeUndefined()
   })
 })
