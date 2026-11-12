@@ -144,13 +144,18 @@ export function EmptyState({
   scope,
   archived,
   filtered,
-  hasOrg = true
+  hasOrg = true,
+  archivedCount = 0,
+  onShowArchived
 }: {
   scope: 'team' | 'mine'
   archived: boolean
   filtered: boolean
   /** On a team: an empty Mine list says it's yours that's empty, not that nobody has started one. */
   hasOrg?: boolean
+  /** Archived workspaces in this scope: an empty list then says so and offers them (ARCHIVE-REACH). */
+  archivedCount?: number
+  onShowArchived?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   // Nothing to filter or share yet: say how to start one (JA-30), in the glossary's own words.
@@ -171,18 +176,26 @@ export function EmptyState({
             'Archived cloud workspaces show up here.'
           )
         ]
-      : scope === 'mine' && hasOrg
+      : archivedCount > 0
         ? [
             t(
-              'components.cloudWorkspaces.emptyMineYoursTitle',
-              'You don’t have any cloud workspaces yet.'
+              'components.cloudWorkspaces.emptyAllArchivedTitle',
+              'All your cloud workspaces are archived'
             ),
             startBody
           ]
-        : [
-            t('components.cloudWorkspaces.emptyFirstTitle', 'Start your first cloud workspace'),
-            startBody
-          ]
+        : scope === 'mine' && hasOrg
+          ? [
+              t(
+                'components.cloudWorkspaces.emptyMineYoursTitle',
+                'You don’t have any cloud workspaces yet.'
+              ),
+              startBody
+            ]
+          : [
+              t('components.cloudWorkspaces.emptyFirstTitle', 'Start your first cloud workspace'),
+              startBody
+            ]
   // Spec E3: an empty Mine or Team list offers a real button, not just copy.
   const offerCreate = !filtered && !archived
   return (
@@ -198,6 +211,13 @@ export function EmptyState({
         >
           <Cloud className="size-3.5" />
           {t('components.cloudWorkspaces.newCloudWorkspace', 'New cloud workspace')}
+        </Button>
+      ) : null}
+      {offerCreate && archivedCount > 0 && onShowArchived ? (
+        <Button type="button" size="sm" variant="quiet" className="mt-1" onClick={onShowArchived}>
+          {t('components.cloudWorkspaces.showArchivedCount', 'Show archived ({{count}})', {
+            count: archivedCount
+          })}
         </Button>
       ) : null}
     </div>

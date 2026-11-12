@@ -69,6 +69,18 @@ export function shouldShowCloudHomeFilters(
   return active || count >= CLOUD_HOME_FILTERS_MIN
 }
 
+/**
+ * ARCHIVE-REACH: with the filter row hidden (few workspaces, JA-30), archived workspaces still get
+ * their Archived switch on its own, so archiving your only workspace never leaves Home without a way
+ * back to it.
+ */
+export function shouldShowCloudHomeArchivedOnly(
+  showFilters: boolean,
+  archivedCount: number | null
+): boolean {
+  return !showFilters && (archivedCount ?? 0) > 0
+}
+
 /** Row 1: title, count and cost, refresh. Row 2: whose, by whom, which repo, running, routine runs, archived. */
 export function CloudWorkspacesToolbar({
   filters,
@@ -83,7 +95,9 @@ export function CloudWorkspacesToolbar({
   reading,
   onRefresh,
   routineRuns,
-  showFilters = true
+  showFilters = true,
+  archivedOnly = false,
+  archivedCount = null
 }: {
   filters: CloudWorkspacesFilters
   onFiltersChange: (next: Partial<CloudWorkspacesFilters>) => void
@@ -101,11 +115,30 @@ export function CloudWorkspacesToolbar({
   routineRuns?: CloudWorkspaceRoutineRuns
   /** False with only a few workspaces and no filter on: title and count only (JA-30). */
   showFilters?: boolean
+  /** With the filters hidden: still show the Archived switch, because archived ones exist. */
+  archivedOnly?: boolean
+  /** How many archived workspaces the switch shows; null while unknown. */
+  archivedCount?: number | null
 }): React.JSX.Element {
   const t = useTranslate()
   // Routines start cloud workspaces on their own, so they sit next to the list they fill.
   // Routines are parked (cloud-routines-ui.ts): no Routines entry and no Routine runs switch.
   const routinesAvailable = useOrcaCloudApiAvailable() && CLOUD_ROUTINES_UI_ENABLED
+  // The count says why the switch is there and what turning it on shows.
+  const archivedSwitch = (
+    <label className="flex h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+      <Switch
+        checked={filters.archived}
+        onCheckedChange={(archived) => onFiltersChange({ archived })}
+        aria-label={t('auto.components.cloudWorkspaces.showArchived', 'Show archived')}
+      />
+      {archivedCount
+        ? t('auto.components.cloudWorkspaces.archivedCount', 'Archived ({{count}})', {
+            count: archivedCount
+          })
+        : t('auto.components.cloudWorkspaces.archived', 'Archived')}
+    </label>
+  )
   return (
     <div className="mb-2 flex flex-col gap-2">
       <div className="flex items-center gap-2">
@@ -248,16 +281,15 @@ export function CloudWorkspacesToolbar({
               )}
             </label>
           ) : null}
-          <label className="flex h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-            <Switch
-              checked={filters.archived}
-              onCheckedChange={(archived) => onFiltersChange({ archived })}
-              aria-label={t('auto.components.cloudWorkspaces.showArchived', 'Show archived')}
-            />
-            {t('auto.components.cloudWorkspaces.archived', 'Archived')}
-          </label>
+          {/* One Archived switch at a time: here, or on its own row below. */}
+          {showFilters ? archivedSwitch : null}
         </div>
       </div>
+      {!showFilters && archivedOnly ? (
+        <div className="flex items-center justify-end" data-cloud-home-archived-only="">
+          {archivedSwitch}
+        </div>
+      ) : null}
       {/* T4: the team's trial ran out; running sandboxes sleep until a plan starts. */}
       <OrcaCloudTrialUsedUpBanner />
     </div>

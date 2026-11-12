@@ -237,24 +237,26 @@ function stubWithRoutineRuns(): void {
   })
   stubCloudWorkspacesApi(() => Promise.resolve({ ok: true, value: rows }))
   Object.assign(window.api.cloudWorkspaces, {
-    list: (query: { routines?: string }) =>
+    list: (query: { routines?: string; archived?: string }) =>
       Promise.resolve(
-        query.routines === 'include'
-          ? {
-              ok: true as const,
-              value: [run, ...rows],
-              routineRuns: { routines: 2, hidden: 0, hiddenRunning: 0, hiddenComputeMs: 0 }
-            }
-          : {
-              ok: true as const,
-              value: rows,
-              routineRuns: {
-                routines: 2,
-                hidden: 1,
-                hiddenRunning: 1,
-                hiddenComputeMs: run.cost.computeMs
+        query.archived === 'only'
+          ? { ok: true as const, value: [] }
+          : query.routines === 'include'
+            ? {
+                ok: true as const,
+                value: [run, ...rows],
+                routineRuns: { routines: 2, hidden: 0, hiddenRunning: 0, hiddenComputeMs: 0 }
               }
-            }
+            : {
+                ok: true as const,
+                value: rows,
+                routineRuns: {
+                  routines: 2,
+                  hidden: 1,
+                  hiddenRunning: 1,
+                  hiddenComputeMs: run.cost.computeMs
+                }
+              }
       )
   })
 }
@@ -330,8 +332,11 @@ export const emptyMine = defineFixture({
     const rows = teamWorkspaces()
     stubCloudWorkspacesApi(() => Promise.resolve({ ok: true, value: rows }))
     Object.assign(window.api.cloudWorkspaces, {
-      list: (query: { scope?: string }) =>
-        Promise.resolve({ ok: true as const, value: query.scope === 'mine' ? [] : rows })
+      list: (query: { scope?: string; archived?: string }) =>
+        Promise.resolve({
+          ok: true as const,
+          value: query.scope === 'mine' || query.archived === 'only' ? [] : rows
+        })
     })
   },
   render: () => <CloudWorkspacesHome />,
@@ -344,3 +349,55 @@ export const emptyMine = defineFixture({
     await waitFor(() => (document.querySelector('section')?.textContent ?? '').includes('yet.'))
   }
 })
+
+/** ARCHIVE-REACH: n archived workspaces for Home's archived count and the Archived switch. */
+function archivedRows(n: number) {
+  return Array.from({ length: n }, (_, i) =>
+    workspace({
+      title: ['fix-auth-redirect', 'billing-retries', 'docs-refresh', 'perf-trace'][i % 4],
+      status: 'suspended',
+      archivedAt: Date.now() - (i + 1) * 86_400_000,
+      section: null
+    })
+  )
+}
+
+function homeWith(active: number, archived: number, showArchived = false) {
+  return defineFixture({
+    width: WIDTH,
+    store: { orcaProfileAuthStatus: AUTH_STATUS },
+    setup: () => {
+      writeHomeSwitches(FIXTURE_ACCOUNT, {
+        running: false,
+        archived: showArchived,
+        routines: false
+      })
+      const rows = [...teamWorkspaces(), workspace({ title: 'Release notes' })].slice(0, active)
+      stubCloudWorkspacesApi(
+        () => Promise.resolve({ ok: true, value: rows }),
+        archivedRows(archived)
+      )
+    },
+    render: () => <CloudWorkspacesHome />,
+    interact: async () => {
+      await waitFor(() => document.querySelector('[data-cloud-workspace-row], section p') !== null)
+      // The archived count lands just after the list.
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    }
+  })
+}
+
+/** Archived your only workspace: Home says so and offers Show archived (2). */
+export const allArchived = homeWith(0, 2)
+/** Nothing at all: the first-run invitation, no archived link. */
+export const noneAtAll = homeWith(0, 0)
+/** 3 active, 2 archived: JA-30's minimal row plus the Archived (2) switch on its own. */
+export const fewWithArchived = homeWith(3, 2)
+/** 3 active, none archived: JA-30 unchanged, no switch. */
+export const fewNoArchived = homeWith(3, 0)
+/** 5+ active, 2 archived: the full filter row; the switch shows its count. */
+export const manyWithArchived = homeWith(7, 2)
+/** 5+ active, none archived: the full filter row, plain Archived. */
+export const manyNoArchived = homeWith(7, 0)
+/** The switch on: the archived rows. */
+export const archivedShown = homeWith(3, 2, true)
