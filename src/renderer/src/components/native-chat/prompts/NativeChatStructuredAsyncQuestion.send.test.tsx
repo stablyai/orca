@@ -134,7 +134,10 @@ describe('async question send ownership', () => {
     ).toBe(true)
   })
   it('submits with Enter on the chosen option even though the async card does not take focus', () => {
-    const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => true)
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _images, request) => {
+      request?.onCreated?.(send.mock.calls.length === 1 ? 'answer' : 'retry')
+      return true
+    })
     const render = (submissions: AgentJournalSubmission[] = []) =>
       act(() =>
         root.render(
@@ -159,7 +162,10 @@ describe('async question send ownership', () => {
     // The first delivery is uncertain, so the card comes back with Blue still chosen.
     render([{ ...pendingAnswer, dispatchState: 'unknown' }])
     expect(blue().getAttribute('aria-pressed')).toBe('true')
+    // A real keyboard user can reach the row: it is enabled and holds focus.
+    expect(blue().disabled).toBe(false)
     act(() => blue().focus())
+    expect(document.activeElement).toBe(blue())
     const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
     act(() => {
       blue().dispatchEvent(enter)
