@@ -58,14 +58,22 @@ export function CloudGitSetupStrip({
   const dismissed = useCloudGitSetup((s) => s.dismissed[id] === true)
   const restarted = useCloudGitSetup((s) => s.restarted[id] === true)
   const restarting = useCloudWorkspace((s) => s.pending[id] === 'restart')
-  const restart = useConfirmedRestart(id)
   if (!worktreeId || !isCloud) {
     return null
   }
   const phase = cloudGitSetupStripPhase({ gitSetupFailed, dismissed, restarting, restarted })
-  if (!phase) {
-    return null
-  }
+  // Mounted in every tab group: only a shown strip reads the workspace's activity (for Restart).
+  return phase ? <ShownCloudGitSetupStrip worktreeId={worktreeId} phase={phase} /> : null
+}
+
+function ShownCloudGitSetupStrip({
+  worktreeId,
+  phase
+}: {
+  worktreeId: string
+  phase: CloudGitSetupStripPhase
+}): React.JSX.Element {
+  const restart = useConfirmedRestart(worktreeId)
   return (
     <CloudGitSetupStripView
       phase={phase}

@@ -30,7 +30,10 @@ export function TerminalSurface({
     >
       <EditorAutosaveController />
       <TerminalTitlebarTabs controller={controller} />
-      <CloudGitSetupStrip worktreeId={renderedActiveWorktreeId} />
+      {/* Tab-group layouts mount it under their tab row (TabGroupPanel); the legacy layout's tabs live in the titlebar. */}
+      {controller.anyMountedWorktreeHasLayout ? null : (
+        <CloudGitSetupStrip worktreeId={renderedActiveWorktreeId} />
+      )}
       <TerminalSplitWorkspaceSurfaces controller={controller} />
       <TerminalLegacyWorkspaceSurface controller={controller} />
       <WslHostStoppedWorkspaceNotice worktreeId={renderedActiveWorktreeId} />
