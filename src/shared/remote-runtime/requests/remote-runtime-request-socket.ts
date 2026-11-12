@@ -28,6 +28,7 @@ import {
   takeRemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { readSealedFrame } from '../remote-runtime-sealed-frame'
+import { startRemoteRuntimeSocketLiveness } from '../remote-runtime-socket-liveness'
 import { RemoteRuntimeRequestResponseRouter } from './remote-runtime-request-response-router'
 import { serializePreparedRemoteRuntimeRequest } from './remote-runtime-request-preparation'
 import type {
@@ -108,12 +109,35 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         socket.off('error', onError)
         socket.off('close', onClose)
         socket.off('message', onMessage)
+        socket.off('pong', onLivenessSignal)
+        socket.off('ping', onLivenessSignal)
         if (socket.readyState !== WebSocket.CLOSED) {
           socket.on('error', ignoreSettledRemoteRuntimeSocketError)
         }
       }
 
       let timeout = setTimeout(onTimeout, timeoutMs)
+      // Why: a long poll is silent until it settles, so only pings can tell a quiet host from a dead path.
+      const liveness = startRemoteRuntimeSocketLiveness({
+        ping: () => {
+          if (ws?.readyState !== WebSocket.OPEN) {
+            return false
+          }
+          ws.ping()
+          return true
+        },
+        onDead: () => {
+          // Why: close() waits for a close frame that a dead path never delivers.
+          ws?.terminate()
+          finishError(
+            new RemoteRuntimeClientError(
+              'remote_runtime_unavailable',
+              'Remote Orca runtime connection closed: the connection was lost (keepalive pings went unanswered).',
+              { pairingStage: router.pairingStage }
+            )
+          )
+        }
+      })
 
       function onTimeout(): void {
         finishError(
@@ -147,6 +171,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         }
         settled = true
         clearTimeout(timeout)
+        liveness.stop()
         try {
           cleanupSocketListeners()
           ws?.close()
@@ -254,13 +279,20 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         if (settled) {
           return
         }
+        liveness.noteActivity()
         router.handleFrame(readSealedFrame(data, isBinary))
+      }
+
+      function onLivenessSignal(): void {
+        liveness.noteActivity()
       }
 
       ws.once('open', onOpen)
       ws.once('error', onError)
       ws.on('close', onClose)
       ws.on('message', onMessage)
+      ws.on('pong', onLivenessSignal)
+      ws.on('ping', onLivenessSignal)
     })
   const dialed = latchedHostCheck
     ? attempt(latchedHostCheck)

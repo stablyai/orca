@@ -213,6 +213,44 @@ describe('sendRemoteRuntimeRequest', () => {
     }
   })
 
+  it('fails a dispatched request as a lost connection when the host stops answering pings', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']
+    })
+    try {
+      let requestObserved: () => void = () => {}
+      const observed = new Promise<void>((resolve) => {
+        requestObserved = resolve
+      })
+      const server = await createOneShotServer({
+        onRequest: () => requestObserved(),
+        responseDelayMs: null,
+        disableAutoPong: true
+      })
+      const request = sendRemoteRuntimeRequestOnSocket(
+        server.pairing,
+        'terminal.wait',
+        {},
+        60_000,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      )
+      const rejection = expect(request).rejects.toMatchObject({
+        code: 'remote_runtime_unavailable'
+      })
+      await observed
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      await rejection
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('sends orchestration authentication fields in the admitted encrypted request', async () => {
     let receivedRequest: Record<string, unknown> | null = null
     const server = await createOneShotServer({
@@ -391,10 +429,15 @@ async function createOneShotServer(
     sendUndecryptableResponse?: boolean
     keepalive?: boolean
     responseDelayMs?: number | null
+    disableAutoPong?: boolean
   } = {}
 ): Promise<{ pairing: PairedRuntimeConnection }> {
   const serverKeyPair = generateKeyPair()
-  const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
+  const wss = new WebSocketServer({
+    host: '127.0.0.1',
+    port: 0,
+    autoPong: options.disableAutoPong !== true
+  })
   servers.push(wss)
 
   wss.on('connection', (ws) => {
