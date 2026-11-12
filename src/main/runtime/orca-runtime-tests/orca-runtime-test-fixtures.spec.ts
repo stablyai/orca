@@ -181,29 +181,6 @@ function antigravityPromptBeforeModelReadyScreen(model = 'Gemini 3.5 Flash (High
   ].join('\n')
 }
 
-// Captured Cursor 2026.07 idle screen: readiness keys on →, never its changing placeholder.
-function cursorReadyScreen(): string {
-  return [
-    'Cursor Agent',
-    'v2026.07.09-a3815c0',
-    'Tip: Use /plan to plan execution and reach the right outcome faster.',
-    '→ Plan, search, build anything',
-    'Composer 2.5 Fast                                          Run Everything',
-    '~/Documents/projects/AutoGenie · main'
-  ].join('\n')
-}
-
-function cursorBusyScreen(): string {
-  return [
-    'Cursor Agent',
-    'v2026.07.09-a3815c0',
-    '⠰⠳ Thinking  28.61k tokens',
-    '→ Plan, search, build anything',
-    'Composer 2.5 Fast                                          Run Everything',
-    '~/Documents/projects/AutoGenie · main'
-  ].join('\n')
-}
-
 function setInMemoryOrchestrationMessages(
   runtime: RuntimeService,
   db: InMemoryOrchestrationMessages
@@ -699,8 +676,8 @@ export { TEST_FOLDER_WORKSPACE_KEY, TEST_FOLDER_WORKSPACE_PATH, TEST_REPO_ID, TE
 export { TEST_WINDOW_ID, TEST_WORKTREE_ID, TEST_WORKTREE_PATH, UUID_RE }
 export { antigravityPromptBeforeModelReadyScreen, antigravityReadyScreen, bindSinglePtyRun }
 export { createExplicitAgentStatusHarness, createFolderWorkspaceRuntimeStore, createRuntime }
-export { createRuntimeWithSshLease, createStaleRuntimeWorktreeStore, cursorBusyScreen }
-export { cursorReadyScreen, deferred, expectStablePaneKeyEnv, isOriginMainBaseRefProbe }
+export { createRuntimeWithSshLease, createStaleRuntimeWorktreeStore }
+export { deferred, expectStablePaneKeyEnv, isOriginMainBaseRefProbe }
 export { isLocalBranchCatalogQuery }
 export { makeDeferred, makeFolderProjectGroup, makeFolderWorkspace, makeHeadlessTerminalLayout }
 export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession }
