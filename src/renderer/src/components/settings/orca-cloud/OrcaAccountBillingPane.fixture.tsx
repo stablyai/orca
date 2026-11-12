@@ -51,7 +51,7 @@ function page(status: OrcaProfileAuthStatus, billing: React.ReactNode) {
   const title = billing ? 'Account & billing' : 'Account'
   const description = billing
     ? 'Your Orca account, plan, sandbox hours and payment.'
-    : 'Your Orca account.'
+    : 'Your Orca account and what’s included with it.'
   return defineFixture({
     width: 760,
     store: { orcaProfileAuthStatus: status },

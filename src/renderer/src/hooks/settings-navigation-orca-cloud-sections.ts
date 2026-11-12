@@ -224,7 +224,7 @@ export function labelAccountBilling(
           title: translate('settings.accountBilling.accountOnly', 'Account'),
           description: translate(
             'settings.accountBilling.accountOnlyDescription',
-            'Your Orca account.'
+            'Your Orca account and what’s included with it.'
           )
         }
       : section
