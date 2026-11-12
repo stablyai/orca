@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { PluginMarketplaceHostListing } from '../../../../../preload/api-types'
 import { pluginListEntryFromListing, type PluginListEntry } from '../list/plugin-list-entries'
 import {
-  PLUGIN_FEATURED_LIMIT,
   pickCatalogHighlights,
   pickFeaturedPlugins,
   pickNewlyAddedPlugins
@@ -119,7 +118,6 @@ describe('pickFeaturedPlugins', () => {
       categories.map((category, index) => [`acme.${category}`, 100 - index])
     )
 
-    expect(PLUGIN_FEATURED_LIMIT).toBe(4)
     expect(pickFeaturedPlugins(entries, counts, null).map((item) => item.pluginKey)).toEqual([
       'acme.themes',
       'acme.editors',

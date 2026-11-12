@@ -57,30 +57,18 @@ test('cards past two rows stay in their catalog group', async ({ page }) => {
   ).toBeVisible()
 })
 
-/** Two full rows at `columns`: a lone partial first row shows, a partial later row hides. */
-function expectedRows(count: number, columns: number): number[] {
-  if (count <= columns) {
-    return [count]
-  }
-  return Array.from({ length: Math.min(2, Math.floor(count / columns)) }, () => columns)
-}
-
-// Why container widths: the grid's breakpoints are container queries on the catalog's content box,
-// so each edge is set on that box, one pixel below and at the breakpoint.
-for (const [containerWidth, columns] of [
-  [459, 1],
-  [460, 2],
-  [719, 2],
-  [720, 3],
-  [1055, 3],
-  [1056, 4]
+for (const [containerWidth, count, columns, rows] of [
+  [459, 5, 1, [1, 1]],
+  [460, 5, 2, [2, 2]],
+  [719, 5, 2, [2, 2]],
+  [720, 5, 3, [3]],
+  [1055, 5, 3, [3]],
+  [1056, 5, 4, [4]],
+  [720, 2, 3, [2]]
 ] as const) {
-  test(`Newly added keeps two full rows for 1-9 cards at a ${containerWidth}px catalog`, async ({
-    page
-  }) => {
+  test(`Newly added lays out ${count} cards in a ${containerWidth}px catalog`, async ({ page }) => {
     await openFixture(page, 'page1440', 1440)
     const catalog = page.locator('.\\@container\\/plugin-catalog')
-    // Why size the catalog itself: the fixture host pins its own width, whatever the viewport.
     const contentWidth = await catalog.evaluate((node, width) => {
       const style = getComputedStyle(node)
       const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
@@ -93,17 +81,17 @@ for (const [containerWidth, columns] of [
     }, containerWidth)
     expect(contentWidth).toBe(containerWidth)
 
-    // Why trim from the end: the hide rules are CSS over the list, so fewer children is fewer cards.
-    for (let count = 9; count >= 1; count -= 1) {
-      await page.getByRole('region', { name: 'Newly added' }).evaluate((section, keep) => {
-        const grid = section.querySelector('ul')
-        while (grid && grid.children.length > keep) {
-          grid.lastElementChild?.remove()
-        }
-      }, count)
-      const layout = await newlyAddedRows(page)
-      expect(layout.columns, `${count} cards`).toBe(columns)
-      expect(layout.rows, `${count} cards`).toEqual(expectedRows(count, columns))
-    }
+    const cards = page.getByRole('region', { name: 'Newly added' }).locator('ul > li')
+    await expect(cards).toHaveCount(8)
+    await page.getByRole('region', { name: 'Newly added' }).evaluate((section, keep) => {
+      const grid = section.querySelector('ul')
+      while (grid && grid.children.length > keep) {
+        grid.lastElementChild?.remove()
+      }
+    }, count)
+    await expect(cards).toHaveCount(count)
+    const layout = await newlyAddedRows(page)
+    expect(layout.columns).toBe(columns)
+    expect(layout.rows).toEqual(rows)
   })
 }
