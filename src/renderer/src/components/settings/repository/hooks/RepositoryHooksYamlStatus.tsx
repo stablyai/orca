@@ -15,6 +15,11 @@ const EXAMPLE_TEMPLATE = `scripts:
 issueCommand: |
   Complete {{artifact_url}}`
 
+const YAML_WARNING_CARD_STYLES = {
+  card: 'border-amber-500/20 bg-amber-500/5',
+  titleClassName: 'text-amber-700 dark:text-amber-300'
+}
+
 function getYamlStateCopy(
   yamlState: string,
   t: Translate = translate
@@ -119,25 +124,30 @@ function YamlScriptsDisclosure({
     <Collapsible>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <CollapsibleTrigger className="flex items-center gap-2 rounded-md text-left text-sm font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
-            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform in-data-[state=open]:rotate-90" />
-            <span>
-              <Trans
-                i18n={i18n}
-                defaults={
-                  loaded
-                    ? t(
-                        'auto.components.settings.RepositoryHooksSection.yamlDetected',
-                        '<yaml>orca.yaml</yaml> detected'
-                      )
-                    : t(
-                        'auto.components.settings.RepositoryHooksSection.yamlNotDetected',
-                        'No <yaml>orca.yaml</yaml> detected'
-                      )
-                }
-                components={YAML_CODE_COMPONENTS}
-              />
-            </span>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-2 rounded-md text-left text-sm font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform in-data-[state=open]:rotate-90" />
+              <span>
+                <Trans
+                  i18n={i18n}
+                  defaults={
+                    loaded
+                      ? t(
+                          'auto.components.settings.RepositoryHooksSection.yamlDetected',
+                          '<yaml>orca.yaml</yaml> detected'
+                        )
+                      : t(
+                          'auto.components.settings.RepositoryHooksSection.yamlNotDetected',
+                          'No <yaml>orca.yaml</yaml> detected'
+                        )
+                  }
+                  components={YAML_CODE_COMPONENTS}
+                />
+              </span>
+            </button>
           </CollapsibleTrigger>
           {loaded ? null : (
             <p className="pl-5.5 text-[11px] text-muted-foreground">
@@ -190,9 +200,11 @@ export function RepositoryHooksYamlStatus({
   const copy = getYamlStateCopy(yamlState, t)
   const parseErrorFixes = getParseErrorFixes(t)
   return (
-    <div className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+    <div className={`space-y-3 rounded-xl border p-3 ${YAML_WARNING_CARD_STYLES.card}`}>
       <div className="space-y-1">
-        <p className="text-sm font-medium text-amber-700 dark:text-amber-300">{copy.heading}</p>
+        <p className={`text-sm font-medium ${YAML_WARNING_CARD_STYLES.titleClassName}`}>
+          {copy.heading}
+        </p>
         <p className="text-xs text-muted-foreground">{copy.description}</p>
       </div>
       {yamlState === 'invalid' ? (
