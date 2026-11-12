@@ -1,76 +1,20 @@
-import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { onWorktreeScanGenerationBump } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { preserveFolderUpgradeWorktreePath } from './folder-upgrade-worktree-path'
+import type {
+  WorktreeCatalogOutcome,
+  WorktreeCatalogObservation,
+  WorktreeCatalogFlightPlan,
+  WorktreeCatalogVerifier,
+  WorktreeCatalogRequirement,
+  WorktreeCatalogRead
+} from './repo-worktree-catalog-observation'
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
 } from './local-worktree-scan-generation'
-
-/** One `git worktree list`; a confirmed missing/non-repo stays distinct from a failed run. */
-export type WorktreeCatalogOutcome =
-  | { kind: 'rows'; worktrees: GitWorktreeInfo[] }
-  | { kind: 'true-empty' }
-  | { kind: 'failed'; error: unknown }
-
-/** Captured before Git runs; destructive consumers claim it at most once. */
-export type WorktreeCatalogWitness = {
-  readonly authorizedRootsRevision: number
-  readonly hygieneDue: boolean
-  readonly expectation?: unknown
-  /** Returns an unconsumed claim so the evidence gate can re-arm. */
-  readonly release: () => void
-}
-
-export type WorktreeCatalogObservation = {
-  readonly outcome: WorktreeCatalogOutcome
-  /** Scan start: verification never moves it, so the full-list ceiling cannot slide. */
-  readonly startedAt: number
-  readonly generation: number
-  readonly revision: number
-  /** Only runtime-started flights fingerprint first; without one the rows cannot be verified. */
-  readonly adminFingerprint: Promise<string | null> | null
-  readonly startedBy: WorktreeCatalogReaderKind
-  witness: WorktreeCatalogWitness | undefined
-  /** Scan start, or the latest verifier answer that let a reader reuse these rows. */
-  confirmedAt: number
-}
-
-export type WorktreeCatalogFlightPlan = {
-  scan: () => Promise<WorktreeCatalogOutcome>
-  captureWitness?: () => WorktreeCatalogWitness | undefined
-  observed?: (observation: WorktreeCatalogObservation) => void
-}
-
-export type WorktreeCatalogVerifier = {
-  /** Full-list ceiling measured from scan start. */
-  ceilingMs: number
-  /** One outstanding probe per repo; 'in-flight' and timeouts reuse rows without proving them (#19312). */
-  probe: () => Promise<string | null> | 'in-flight'
-  timeoutMs: number
-  onUnknown?: (reason: string) => void
-}
-
-export type WorktreeCatalogReaderKind = 'desktop' | 'runtime'
-
-export type WorktreeCatalogRequirement = {
-  kind: WorktreeCatalogReaderKind
-  /** Oldest confirmation this reader accepts; a fresher demand refreshes the shared observation. */
-  maxAgeMs: number
-  /** Reuse failures only from this reader kind's own attempts; another kind's failure never blacks out a retry. */
-  reusesFailure?: boolean
-  verifier?: WorktreeCatalogVerifier
-  /** Trailing flights this read follows when mutations overtake it; callers with their own rescan loop keep 1. */
-  overtakenFlights?: number
-}
-
-export type WorktreeCatalogRead = {
-  observation: WorktreeCatalogObservation
-  /** Invalidations kept overtaking scans; callers must not treat these rows as authoritative. */
-  superseded: boolean
-}
 
 type Flight = {
   revision: number
@@ -80,7 +24,9 @@ type Flight = {
 type Entry = {
   repoId: string
   repoPath: string
+  runtimeKey: string
   revision: number
+  retired: boolean
   success: WorktreeCatalogObservation | null
   failure: WorktreeCatalogObservation | null
   flight: Flight | null
@@ -90,9 +36,13 @@ const entries = new Map<string, Entry>()
 
 onWorktreeScanGenerationBump((repoPath) => invalidateWorktreeCatalogForRepoPath(repoPath))
 
+function repoScope(repo: Repo): string {
+  return `${repo.id}\0${getRepoExecutionHostId(repo)}\0`
+}
+
 /** Owner identity: repo, host and the project runtime that runs Git (distro, selected Git, repair state). */
 function entryKey(repo: Repo, runtimeKey: string): string {
-  return `${repo.id}\0${getRepoExecutionHostId(repo)}\0${runtimeKey}`
+  return `${repoScope(repo)}${runtimeKey}`
 }
 
 function releaseWitness(observation: WorktreeCatalogObservation | null): void {
@@ -105,30 +55,60 @@ function releaseWitness(observation: WorktreeCatalogObservation | null): void {
 
 function retireEntry(key: string, entry: Entry): void {
   entries.delete(key)
+  entry.retired = true
   entry.revision += 1
   releaseWitness(entry.success)
 }
 
+/** The live owner for this repo and runtime; a path or runtime change retires the old one. */
+function resolveEntry(repo: Repo, runtimeKey: string): { key: string; entry: Entry } {
+  const key = entryKey(repo, runtimeKey)
+  const scope = repoScope(repo)
+  for (const [candidateKey, candidate] of entries) {
+    // One project runtime runs a repo's Git at a time; rows from another one are obsolete.
+    if (
+      candidateKey.startsWith(scope) &&
+      (candidateKey !== key || !areWorktreePathsEqual(candidate.repoPath, repo.path))
+    ) {
+      retireEntry(candidateKey, candidate)
+    }
+  }
+  let entry = entries.get(key)
+  if (!entry) {
+    entry = {
+      repoId: repo.id,
+      repoPath: repo.path,
+      runtimeKey,
+      revision: 0,
+      retired: false,
+      success: null,
+      failure: null,
+      flight: null
+    }
+    entries.set(key, entry)
+  }
+  return { key, entry }
+}
+
 function isCurrent(entry: Entry, observation: WorktreeCatalogObservation): boolean {
   return (
+    !entry.retired &&
     observation.revision === entry.revision &&
     isLocalWorktreeScanGenerationCurrent(entry.repoId, observation.generation)
   )
 }
 
 function startFlight(
-  key: string,
   entry: Entry,
   repo: Repo,
   requirement: WorktreeCatalogRequirement,
-  plan: WorktreeCatalogFlightPlan,
-  pendingProbe: Promise<string | null> | null
+  plan: WorktreeCatalogFlightPlan
 ): Flight {
   // Capture before Git can yield so a concurrent mutation is never stamped as observed.
   const revision = entry.revision
   const generation = getLocalWorktreeScanGeneration(entry.repoId)
   const startedAt = Date.now()
-  const probe = pendingProbe ?? requirement.verifier?.probe() ?? null
+  const probe = requirement.verifier?.probe() ?? null
   const adminFingerprint = probe && probe !== 'in-flight' ? probe : null
   const witness = plan.captureWitness?.()
   const flight: Flight = {
@@ -157,7 +137,7 @@ function startFlight(
         if (entry.flight === flight) {
           entry.flight = null
         }
-        publish(key, entry, observation, plan)
+        publish(entry, observation, plan)
         return observation
       })
   }
@@ -166,21 +146,20 @@ function startFlight(
 }
 
 function publish(
-  key: string,
   entry: Entry,
   observation: WorktreeCatalogObservation,
   plan: WorktreeCatalogFlightPlan
 ): void {
-  const retired = entries.get(key) !== entry
   if (observation.outcome.kind === 'failed') {
-    releaseWitness(observation)
-    if (!retired && (entry.failure?.startedAt ?? -1) <= observation.startedAt) {
+    // Like the evidence gate's own claim, a failed pass is not retried on every read (#17775); new evidence re-arms it.
+    observation.witness = undefined
+    if (!entry.retired && (entry.failure?.startedAt ?? -1) <= observation.startedAt) {
       entry.failure = observation
     }
     return
   }
   // A retired owner or a newer published observation keeps late completions out.
-  if (retired || (entry.success?.startedAt ?? -1) > observation.startedAt) {
+  if (entry.retired || (entry.success?.startedAt ?? -1) > observation.startedAt) {
     releaseWitness(observation)
     return
   }
@@ -194,21 +173,24 @@ function publish(
   }
 }
 
-type Verification = { reuse: true } | { reuse: false; probe: Promise<string | null> | null }
-
+/** True when a probe proves, or cannot yet disprove (#19312), that rows with a pre-scan fingerprint still hold. */
 async function verify(
   observation: WorktreeCatalogObservation,
   verifier: WorktreeCatalogVerifier,
   now: number
-): Promise<Verification> {
-  if (observation.outcome.kind !== 'rows' || now - observation.startedAt >= verifier.ceilingMs) {
-    return { reuse: false, probe: null }
+): Promise<boolean> {
+  // Without a fingerprint from before its scan, no probe can certify these rows.
+  if (
+    observation.outcome.kind !== 'rows' ||
+    !observation.adminFingerprint ||
+    now - observation.startedAt >= verifier.ceilingMs
+  ) {
+    return false
   }
-  // Probe before any rescan so changes during it cannot be stamped as already observed.
   const probe = verifier.probe()
   if (probe === 'in-flight') {
     verifier.onUnknown?.('previous probe still pending')
-    return { reuse: true }
+    return true
   }
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<'timeout'>((resolve) => {
@@ -218,75 +200,67 @@ async function verify(
   if (current === 'timeout') {
     // Unknown is not proof, but rescanning slow mounts on every read amplifies load (#19312).
     verifier.onUnknown?.('probe expired')
-    return { reuse: true }
+    return true
   }
-  const recorded = observation.adminFingerprint ? await observation.adminFingerprint : null
-  // Only a known fingerprint taken before this observation's scan proves nothing changed.
-  return current !== null && recorded === current ? { reuse: true } : { reuse: false, probe }
+  return current !== null && (await observation.adminFingerprint) === current
 }
 
-function acceptsAge(
+function acceptable(
   observation: WorktreeCatalogObservation,
   requirement: WorktreeCatalogRequirement,
   now: number
 ): boolean {
-  return now - observation.confirmedAt <= requirement.maxAgeMs
+  if (requirement.needsHygieneClaim?.() && !observation.witness?.hygieneDue) {
+    return false
+  }
+  // Verifier confirmations are a runtime admission; other readers need a full observation that young.
+  const basis = requirement.verifier ? observation.confirmedAt : observation.startedAt
+  return now - basis <= requirement.maxAgeMs
 }
 
-/** The sole owner of a repo's raw worktree rows: readers state what they accept and share its flights. */
+/** The sole owner of a repo's raw worktree rows: readers state what they accept and share its one flight. */
 export async function readWorktreeCatalog(
   repo: Repo,
   runtimeKey: string,
   requirement: WorktreeCatalogRequirement,
   plan: WorktreeCatalogFlightPlan
 ): Promise<WorktreeCatalogRead> {
-  const key = entryKey(repo, runtimeKey)
-  let entry = entries.get(key)
-  if (entry && !areWorktreePathsEqual(entry.repoPath, repo.path)) {
-    retireEntry(key, entry)
-    entry = undefined
-  }
-  if (!entry) {
-    entry = {
-      repoId: repo.id,
-      repoPath: repo.path,
-      revision: 0,
-      success: null,
-      failure: null,
-      flight: null
-    }
-    entries.set(key, entry)
-  }
   let last: WorktreeCatalogObservation | null = null
+  const { entry } = resolveEntry(repo, runtimeKey)
   for (let flights = 0; flights < (requirement.overtakenFlights ?? 1); flights += 1) {
+    // A newer runtime or path took over this repo mid-read; this reader's rows stay non-authoritative.
+    if (entry.retired && last) {
+      break
+    }
     const now = Date.now()
     const failure = entry.failure
     if (
       requirement.reusesFailure &&
       failure?.startedBy === requirement.kind &&
       isCurrent(entry, failure) &&
-      acceptsAge(failure, requirement, now)
+      now - failure.startedAt <= requirement.maxAgeMs
     ) {
       return { observation: failure, superseded: false }
     }
     const success = entry.success
-    let pendingProbe: Promise<string | null> | null = null
     if (success && isCurrent(entry, success)) {
-      if (acceptsAge(success, requirement, now)) {
+      if (acceptable(success, requirement, now)) {
         return { observation: success, superseded: false }
       }
-      if (requirement.verifier) {
-        const verification = await verify(success, requirement.verifier, now)
-        if (verification.reuse && entry.success === success && isCurrent(entry, success)) {
-          success.confirmedAt = Math.max(success.confirmedAt, Date.now())
-          return { observation: success, superseded: false }
-        }
-        pendingProbe = verification.reuse ? null : verification.probe
+      if (
+        requirement.verifier &&
+        !requirement.needsHygieneClaim?.() &&
+        (await verify(success, requirement.verifier, now)) &&
+        entry.success === success &&
+        isCurrent(entry, success)
+      ) {
+        success.confirmedAt = Math.max(success.confirmedAt, Date.now())
+        return { observation: success, superseded: false }
       }
     }
-    const joinable = entry.flight?.revision === entry.revision ? entry.flight : null
-    last = await (joinable ?? startFlight(key, entry, repo, requirement, plan, pendingProbe))
-      .promise
+    // At most one flight per owner: a reader arriving after an invalidation waits for the
+    // overtaken flight, then starts the single trailing one.
+    last = await (entry.flight ?? startFlight(entry, repo, requirement, plan)).promise
     if (isCurrent(entry, last)) {
       return { observation: last, superseded: false }
     }
@@ -325,12 +299,14 @@ export function invalidateWorktreeCatalogForRepoPath(repoPath: string): void {
   }
 }
 
-/** Drop owners whose repo or host registration is gone; late completions cannot recreate them. */
-export function retireUnregisteredWorktreeCatalogs(registered: readonly Repo[]): void {
-  const live = new Set(registered.map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}\0`))
+/** Drop owners whose repo, host or project runtime is gone; late completions cannot recreate them. */
+export function retireUnregisteredWorktreeCatalogs(
+  registered: readonly Repo[],
+  runtimeKeyFor: (repo: Repo) => string
+): void {
+  const live = new Set(registered.map((repo) => entryKey(repo, runtimeKeyFor(repo))))
   for (const [key, entry] of entries) {
-    const prefix = key.slice(0, key.lastIndexOf('\0') + 1)
-    if (!live.has(prefix)) {
+    if (!live.has(key)) {
       retireEntry(key, entry)
     }
   }
@@ -340,8 +316,4 @@ export function _resetWorktreeCatalogOwnerForTests(): void {
   for (const [key, entry] of entries) {
     retireEntry(key, entry)
   }
-}
-
-export function _getWorktreeCatalogOwnerSizeForTests(): number {
-  return entries.size
 }

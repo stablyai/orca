@@ -147,7 +147,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     listResolved: () => this.listResolvedWorktrees(),
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     selectRepos: (selector) => this.selectReposBySelector(selector),
-    scanRepo: (repo) => this.listRepoWorktreesForListing(repo),
+    // listDetected prunes metadata, so its scans carry the pre-scan hygiene claim.
+    scanRepo: (repo) => this.listRepoWorktreesForListing(repo, undefined, { claimsHygiene: true }),
     listKnownHostIds: () => this.listKnownExecutionHostIds()
   })
 

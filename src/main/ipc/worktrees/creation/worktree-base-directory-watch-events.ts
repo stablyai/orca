@@ -67,5 +67,8 @@ export function handleWatchOverflow(
     return
   }
   invalidateActiveGitStatusRefResolution(watch, getActiveWatches)
+  for (const repoId of watch.repos.keys()) {
+    runWorktreeChangeInvalidators(repoId)
+  }
   scheduleWorktreeBaseNotification(watch, { structureRepoIds: [...watch.repos.keys()] })
 }

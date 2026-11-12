@@ -5,10 +5,12 @@ import { bumpWorktreeScanGeneration } from '../../git/worktrees/catalog/worktree
 import {
   _resetWorktreeCatalogOwnerForTests,
   invalidateWorktreeCatalogForRepo,
-  readWorktreeCatalog,
-  type WorktreeCatalogFlightPlan,
-  type WorktreeCatalogOutcome
+  readWorktreeCatalog
 } from './repo-worktree-catalog-owner'
+import type {
+  WorktreeCatalogFlightPlan,
+  WorktreeCatalogOutcome
+} from './repo-worktree-catalog-observation'
 
 const repo = { id: 'repo-1', path: '/repos/app', kind: 'git' } as Repo
 const row = (path: string): GitWorktreeInfo => ({
@@ -78,6 +80,30 @@ describe('repo worktree catalog owner', () => {
     expect(sidebarRead.observation.outcome).toEqual(rows('/repos/app', '/repos/app-feature'))
   })
 
+  it('does not let a runtime verification stretch the sidebar past its 5 seconds', async () => {
+    const plan = scanner([rows('/repos/app'), rows('/repos/app', '/repos/app-external')])
+    const verifier = {
+      ceilingMs: 300_000,
+      timeoutMs: 1_000,
+      probe: () => Promise.resolve('fingerprint-1')
+    }
+    await readWorktreeCatalog(repo, 'local:default', { ...runtime, verifier }, plan)
+    vi.advanceTimersByTime(31_000)
+    const verified = await readWorktreeCatalog(
+      repo,
+      'local:default',
+      { ...runtime, verifier },
+      plan
+    )
+    expect(plan.calls).toBe(1)
+    expect(verified.observation.outcome).toEqual(rows('/repos/app'))
+
+    const sidebar = await readWorktreeCatalog(repo, 'local:default', desktop, plan)
+
+    expect(plan.calls).toBe(2)
+    expect(sidebar.observation.outcome).toEqual(rows('/repos/app', '/repos/app-external'))
+  })
+
   it('moves readers that joined an overtaken scan onto one trailing scan', async () => {
     const plan = scanner([rows('/repos/app'), rows('/repos/app', '/repos/app-new')])
     plan.gate = true
@@ -115,6 +141,21 @@ describe('repo worktree catalog owner', () => {
 
     expect(plan.calls).toBe(2)
     expect(read.observation.outcome).toEqual(rows('/repos/app'))
+  })
+
+  it('retires the old Git runtime so switching back lists again', async () => {
+    const plan = scanner([
+      rows('/repos/app'),
+      rows('/repos/app'),
+      rows('/repos/app', '/repos/app-new')
+    ])
+    await readWorktreeCatalog(repo, 'local:native', runtime, plan)
+    await readWorktreeCatalog(repo, 'local:wsl:Ubuntu', runtime, plan)
+
+    const back = await readWorktreeCatalog(repo, 'local:native', runtime, plan)
+
+    expect(plan.calls).toBe(3)
+    expect(back.observation.outcome).toEqual(rows('/repos/app', '/repos/app-new'))
   })
 
   it('returns an unclaimed hygiene claim when a newer observation replaces it', async () => {

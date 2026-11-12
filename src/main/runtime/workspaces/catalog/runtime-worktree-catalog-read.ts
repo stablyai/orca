@@ -1,4 +1,4 @@
-import type { WorktreeCatalogObservation } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
+import type { WorktreeCatalogObservation } from '../../../workspaces/catalog/repo-worktree-catalog-observation'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { dropRepeatedWorktreeRows } from './repeated-worktree-rows'
 

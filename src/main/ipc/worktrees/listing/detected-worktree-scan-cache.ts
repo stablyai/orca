@@ -34,6 +34,7 @@ import {
 import { resolveWorktreeScanRuntime } from '../../../runtime/workspaces/catalog/runtime-worktree-scan-cache'
 import {
   claimWorktreeCatalogHygiene,
+  needsWorktreeCatalogHygieneClaim,
   worktreeCatalogHygienePlan
 } from './worktree-catalog-observation-hygiene'
 
@@ -95,13 +96,17 @@ export async function listDetectedGitWorktrees(
   const { observation, superseded } = await readWorktreeCatalog(
     repo,
     resolveWorktreeScanRuntime(store, repo).runtimeKey,
-    { kind: 'desktop', maxAgeMs: DETECTED_WORKTREE_SCAN_CACHE_TTL_MS },
+    {
+      kind: 'desktop',
+      maxAgeMs: DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
+      needsHygieneClaim: needsWorktreeCatalogHygieneClaim(repo)
+    },
     {
       scan: async () => {
         const worktrees = await listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions)
         return worktrees.length > 0 ? { kind: 'rows', worktrees } : { kind: 'true-empty' }
       },
-      ...worktreeCatalogHygienePlan(store, repo, localWorktreeGitOptions)
+      ...worktreeCatalogHygienePlan(store, repo, localWorktreeGitOptions, true)
     }
   )
   if (observation.outcome.kind === 'failed') {

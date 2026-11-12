@@ -6,7 +6,7 @@ import type {
   WorktreeCatalogFlightPlan,
   WorktreeCatalogObservation,
   WorktreeCatalogWitness
-} from '../../../workspaces/catalog/repo-worktree-catalog-owner'
+} from '../../../workspaces/catalog/repo-worktree-catalog-observation'
 import {
   isLocalWorktreeMetadataPruneDue,
   markLocalWorktreeMetadataPruneStarted,
@@ -33,17 +33,19 @@ export type WorktreeCatalogHygieneClaim = Readonly<{
   expectation?: NativeLocalWorktreeMetadataScanExpectation
 }>
 
-/** Every reader's flight carries the same pre-scan capture, so whoever starts it observes for all (#17775). */
+/** Pre-scan facts for every flight; only readers that prune claim the evidence gate (#17775). */
 export function worktreeCatalogHygienePlan(
   store: Store | HygieneStore,
   repo: Repo,
-  gitOptions: { wslDistro?: string }
+  gitOptions: { wslDistro?: string },
+  claimsHygiene: boolean
 ): Pick<WorktreeCatalogFlightPlan, 'captureWitness' | 'observed'> {
   return {
     captureWitness: () => {
       const authorizedRootsRevision = getRegisteredWorktreeRootsRevision(repo.id)
-      // Whole-table capture and missing-path stats run only when changed evidence makes hygiene due.
-      const hygieneDue = isLocalWorktreeMetadataPruneDue(repo.id)
+      // Whole-table capture and missing-path stats run only when changed evidence makes hygiene due,
+      // and only for a reader that will consume them; unclaimed captures would re-arm and repeat.
+      const hygieneDue = claimsHygiene && isLocalWorktreeMetadataPruneDue(repo.id)
       if (hygieneDue) {
         markLocalWorktreeMetadataPruneStarted(repo.id)
       }
@@ -107,4 +109,9 @@ export function claimWorktreeCatalogHygiene(
     hygieneDue: witness.hygieneDue,
     ...(witness.expectation ? { expectation: witness.expectation } : {})
   }
+}
+
+/** A pruning reader must not settle for rows observed without its pre-scan claim while hygiene is due. */
+export function needsWorktreeCatalogHygieneClaim(repo: Repo): () => boolean {
+  return () => isLocalWorktreeMetadataPruneDue(repo.id)
 }

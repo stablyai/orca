@@ -21,11 +21,13 @@ import {
 import {
   invalidateWorktreeCatalogForRepo,
   peekWorktreeCatalog,
-  readWorktreeCatalog,
-  retireUnregisteredWorktreeCatalogs
+  readWorktreeCatalog
 } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
 import { runtimeResultForObservation } from './runtime-worktree-catalog-read'
-import { worktreeCatalogHygienePlan } from '../../../ipc/worktrees/listing/worktree-catalog-observation-hygiene'
+import {
+  needsWorktreeCatalogHygieneClaim,
+  worktreeCatalogHygienePlan
+} from '../../../ipc/worktrees/listing/worktree-catalog-observation-hygiene'
 import type { Store } from '../../../persistence/loading-store/store'
 import { SUPERSEDED_SCAN_RESCANS } from '../../../ipc/worktrees/listing/overtaken-scan-rerun'
 
@@ -53,7 +55,8 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
   protected async readRepoWorktreeCatalog(
     repo: Repo,
     projectRuntime: ProjectExecutionRuntimeResolution | undefined,
-    runtimeKey: string
+    runtimeKey: string,
+    claimsHygiene: boolean
   ): Promise<RuntimeWorktreeScanResult> {
     const gitOptions = getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
     // E9: the admin reads below and the Git scan both boot a stopped distro; keep known rows until it runs.
@@ -61,8 +64,9 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
       wslDistroForPath(repo.path, gitOptions.wslDistro) &&
       (await blockedWslDistroForPath(repo.path, gitOptions.wslDistro))
     ) {
+      // Known rows only while nothing has invalidated them; otherwise last stored rows, as non-authoritative.
       const known = peekWorktreeCatalog(repo, runtimeKey)
-      return known
+      return known?.current
         ? runtimeResultForObservation(known.observation)
         : { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
@@ -87,16 +91,22 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
         reusesFailure: true,
         // Readers that joined an overtaken scan follow current truth, within the detected listing's bound.
         overtakenFlights: SUPERSEDED_SCAN_RESCANS + 1,
-        ...(verifier ? { verifier } : {})
+        ...(verifier ? { verifier } : {}),
+        ...(claimsHygiene ? { needsHygieneClaim: needsWorktreeCatalogHygieneClaim(repo) } : {})
       },
       {
         scan: async () => {
           const scan = await scanLocalRepoWorktreesForResolution(repo.path, gitOptions)
-          return scan.ok
-            ? { kind: 'rows', worktrees: scan.worktrees }
+          if (scan.ok) {
+            return { kind: 'rows', worktrees: scan.worktrees }
+          }
+          return scan.trueEmpty
+            ? { kind: 'true-empty' }
             : { kind: 'failed', error: new Error(`worktree list failed for ${repo.path}`) }
         },
-        ...(store ? worktreeCatalogHygienePlan(store as unknown as Store, repo, gitOptions) : {})
+        ...(store
+          ? worktreeCatalogHygienePlan(store as unknown as Store, repo, gitOptions, claimsHygiene)
+          : {})
       }
     )
     const result = runtimeResultForObservation(observation)
@@ -133,7 +143,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
 
   invalidateWorktreeScanCacheForRepo(repoId: string): void {
     invalidateWorktreeCatalogForRepo(repoId)
-    retireUnregisteredWorktreeCatalogs(this.store?.getRepos() ?? [])
+    this.pruneUnregisteredWorktreeScans()
   }
 
   invalidateWorktreeCatalog(repoId: string): void {

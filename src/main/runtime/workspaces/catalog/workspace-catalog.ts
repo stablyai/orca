@@ -150,7 +150,13 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
   }
 
   protected pruneUnregisteredWorktreeScans(): void {
-    retireUnregisteredWorktreeCatalogs(this.store?.getRepos() ?? [])
+    const store = this.store
+    if (store) {
+      retireUnregisteredWorktreeCatalogs(
+        store.getRepos(),
+        (repo) => ScanCache.resolveWorktreeScanRuntime(store, repo).runtimeKey
+      )
+    }
   }
 
   private peekRepoWorktreeObservation(repo: Repo) {
@@ -214,9 +220,10 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
   /** The resolution scan plus the checkouts this host's removals own that Git no longer lists. */
   protected async listRepoWorktreesForListing(
     repo: Repo,
-    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
+    options: { claimsHygiene?: boolean } = {}
   ): Promise<RuntimeWorktreeScanResult> {
-    const cached = await this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
+    const cached = await this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId, options)
     // Paired detectedList must retain folder-upgrade locators or folder ids lose metadata and terminals (#30150).
     const scan = { ...cached, worktrees: preserveFolderUpgradeWorktreePath(repo, cached.worktrees) }
     const listing =
@@ -235,7 +242,8 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
 
   protected async listRepoWorktreesForResolution(
     repo: Repo,
-    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
+    options: { claimsHygiene?: boolean } = {}
   ): Promise<RuntimeWorktreeScanResult> {
     const { projectRuntime, runtimeKey, sshConnectionId } = ScanCache.resolveWorktreeScanRuntime(
       this.requireStore(),
@@ -246,7 +254,12 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     if (sshConnectionId) {
       return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
-    return await this.readRepoWorktreeCatalog(repo, projectRuntime, runtimeKey)
+    return await this.readRepoWorktreeCatalog(
+      repo,
+      projectRuntime,
+      runtimeKey,
+      options.claimsHygiene === true
+    )
   }
 
   listRepos(): Repo[] {
