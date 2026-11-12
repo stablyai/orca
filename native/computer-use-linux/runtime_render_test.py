@@ -212,13 +212,18 @@ class WaylandScreenshotTest(unittest.TestCase):
         self.app = types.SimpleNamespace(get_process_id=lambda: 42)
         self.window = types.SimpleNamespace(get_name=lambda: "Editor")
         self.clients = [{"pid": 42, "title": "Editor", "mapped": True, "hidden": False,
-                         "at": [-800, 40], "size": [640, 480]}]
+                         "workspace": {"id": 2}, "at": [-800, 40], "size": [640, 480]}]
+        self.monitors = [{"activeWorkspace": {"id": 1}, "specialWorkspace": {"id": 0}},
+                         {"activeWorkspace": {"id": 2}, "specialWorkspace": {"id": 0}}]
         self.commands = []
         self.context.enter_context(patch.object(runtime.subprocess, "run", side_effect=self.run_native))
 
     def run_native(self, command, **options):
         self.commands.append(command)
-        options["stdout"].write(json.dumps(self.clients).encode() if command[0].endswith("hyprctl") else b"png")
+        if command[0].endswith("hyprctl"):
+            options["stdout"].write(json.dumps(self.monitors if command[-1] == "monitors" else self.clients).encode())
+        else:
+            options["stdout"].write(b"png")
         return types.SimpleNamespace(returncode=0)
 
     def test_grim_captures_the_compositor_window_at_logical_scale(self):
@@ -232,26 +237,32 @@ class WaylandScreenshotTest(unittest.TestCase):
 
     def test_ambiguous_missing_and_hidden_windows_never_capture_another_region(self):
         for clients in ([], self.clients * 2, [{**self.clients[0], "hidden": True}],
+                        [{**self.clients[0], "workspace": {"id": 3}}],
                         [{**self.clients[0], "pid": 43}], [{**self.clients[0], "size": [0, 480]}]):
             with self.subTest(clients=clients):
                 self.clients = clients
                 self.commands.clear()
                 result = runtime.capture_png(runtime.Rect(0, 0, 640, 480), self.app, self.window)
                 self.assertEqual(result["error"]["code"], "screenshot_failed")
-                self.assertEqual(self.commands, [["/usr/bin/hyprctl", "-j", "clients"]])
+                self.assertFalse(any(command[0].endswith("grim") for command in self.commands))
 
     def test_sway_nested_floating_window_geometry(self):
         tree = {"nodes": [{"floating_nodes": [{"pid": 42, "name": "Editor",
                 "rect": {"x": 98, "y": 20, "width": 644, "height": 512},
-                "window_rect": {"x": 2, "y": 30, "width": 640, "height": 480}}]}]}
+                "window_rect": {"x": 2, "y": 30, "width": 640, "height": 480}, "visible": True}]}]}
         def sway(command, **options):
             self.assertEqual(command, ["/usr/bin/swaymsg", "-t", "get_tree", "-r"])
             options["stdout"].write(json.dumps(tree).encode())
             return types.SimpleNamespace(returncode=0)
         with patch.dict(runtime.os.environ, {"HYPRLAND_INSTANCE_SIGNATURE": "", "SWAYSOCK": "fixture"}), \
              patch.object(runtime.subprocess, "run", side_effect=sway):
-            rect = runtime.wayland_window_rect(self.app, self.window)
+            rect, error = runtime.wayland_window_rect("sway", self.app, self.window)
+            tree["nodes"][0]["floating_nodes"][0]["visible"] = False
+            hidden, hidden_error = runtime.wayland_window_rect("sway", self.app, self.window)
+        self.assertIsNone(error)
         self.assertEqual(rect.to_json(), {"x": 100, "y": 50, "width": 640, "height": 480})
+        self.assertIsNone(hidden)
+        self.assertIsNotNone(hidden_error)
 
     def test_grim_failure_and_timeout_preserve_accessibility_only_results(self):
         native = self.run_native

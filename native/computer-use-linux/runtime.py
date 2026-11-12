@@ -32,10 +32,14 @@ except (ImportError, ValueError) as error:
     sys.exit(1)
 try:
     gi.require_version("Gdk", "3.0")
-    gi.require_version("GdkPixbuf", "2.0")
-    from gi.repository import Gdk, GdkPixbuf
+    from gi.repository import Gdk
 except (ImportError, ValueError):
     Gdk = None
+try:
+    # Why separate: Wayland capture decodes grim's PNG with GdkPixbuf alone.
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+except (ImportError, ValueError):
     GdkPixbuf = None
 from gi.repository import Atspi
 
@@ -591,11 +595,11 @@ def rendered_element_index(line, depth):
     return int(match.group(1)) if match else None
 
 
-def wayland_capture_command():
+def wayland_compositor():
     if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") and shutil.which("hyprctl"):
-        return [shutil.which("hyprctl"), "-j", "clients"]
+        return "hyprland"
     if os.environ.get("SWAYSOCK") and shutil.which("swaymsg"):
-        return [shutil.which("swaymsg"), "-t", "get_tree", "-r"]
+        return "sway"
     return None
 
 
@@ -603,55 +607,79 @@ def screenshot_failure(message):
     return {"error": {"code": "screenshot_failed", "message": message}}
 
 
-def wayland_window_rect(app, window):
-    command = wayland_capture_command()
-    if command is None or app is None or window is None:
-        return None
+def compositor_json(command):
+    with tempfile.TemporaryFile() as output:
+        result = subprocess.run(command, stdout=output, stderr=subprocess.DEVNULL, timeout=2, check=False)
+        if result.returncode != 0 or output.tell() > 4_000_000:
+            raise ValueError("compositor query failed")
+        output.seek(0)
+        return json.load(output)
+
+
+def hyprland_windows(pid, title):
+    clients = compositor_json([shutil.which("hyprctl"), "-j", "clients"])
+    matches = [item for item in clients if item.get("pid") == pid and item.get("title") == title]
+    if len(matches) != 1:
+        return matches, False
+    monitors = compositor_json([shutil.which("hyprctl"), "-j", "monitors"])
+    shown = {monitor.get(key, {}).get("id") for monitor in monitors
+             for key in ("activeWorkspace", "specialWorkspace")}
+    item = matches[0]
+    visible = (item.get("mapped") and not item.get("hidden")
+               and (item.get("pinned") or item.get("workspace", {}).get("id") in shown))
+    return [item.get("at", []) + item.get("size", [])], bool(visible)
+
+
+def sway_windows(pid, title):
+    pending = [compositor_json([shutil.which("swaymsg"), "-t", "get_tree", "-r"])]
+    matches = []
+    while pending:
+        item = pending.pop()
+        pending.extend(item.get("nodes", []) + item.get("floating_nodes", []))
+        if item.get("pid") == pid and item.get("name") == title:
+            matches.append(item)
+    if len(matches) != 1:
+        return matches, False
+    rect = matches[0].get("rect", {})
+    content = matches[0].get("window_rect")
+    if content:
+        # Why: window_rect excludes borders and title bars drawn by Sway.
+        rect = {"x": rect["x"] + content["x"], "y": rect["y"] + content["y"],
+                "width": content["width"], "height": content["height"]}
+    return [[rect.get(key) for key in ("x", "y", "width", "height")]], matches[0].get("visible") is True
+
+
+def wayland_window_rect(compositor, app, window):
     try:
-        with tempfile.TemporaryFile() as output:
-            result = subprocess.run(command, stdout=output, stderr=subprocess.DEVNULL, timeout=2, check=False)
-            if result.returncode != 0 or output.tell() > 4_000_000:
-                return None
-            output.seek(0)
-            tree = json.load(output)
-        if isinstance(tree, list):
-            matches = [item for item in tree if item.get("pid") == pid_of(app)
-                       and item.get("title") == name_of(window) and item.get("mapped")
-                       and not item.get("hidden")]
-            rects = [item.get("at", []) + item.get("size", []) for item in matches]
-        else:
-            rects = []
-            pending = [tree]
-            while pending:
-                item = pending.pop()
-                pending.extend(item.get("nodes", []) + item.get("floating_nodes", []))
-                if item.get("pid") == pid_of(app) and item.get("name") == name_of(window):
-                    rect = item.get("rect", {})
-                    content = item.get("window_rect")
-                    if content:
-                        rect = {"x": rect["x"] + content["x"], "y": rect["y"] + content["y"],
-                                "width": content["width"], "height": content["height"]}
-                    rects.append([rect.get(key) for key in ("x", "y", "width", "height")])
-        if len(rects) != 1 or len(rects[0]) != 4:
-            return None
-        values = rects[0]
-        if any(not isinstance(value, (int, float)) or not math.isfinite(value) for value in values):
-            return None
-        if values[2] <= 0 or values[3] <= 0:
-            return None
-        return Rect(*values)
+        lookup = hyprland_windows if compositor == "hyprland" else sway_windows
+        rects, visible = lookup(pid_of(app), name_of(window))
     except (OSError, subprocess.TimeoutExpired, ValueError, TypeError, AttributeError, KeyError):
-        return None
+        return None, "could not read window geometry from the compositor"
+    if len(rects) != 1:
+        return None, "no single compositor window matches this app and window title"
+    # Why: grim captures a screen region, so a window off-workspace or behind a group tab would return other content.
+    if not visible:
+        return None, "the window is not visible on any output; switch to its workspace"
+    values = rects[0]
+    if (len(values) != 4 or any(not isinstance(value, (int, float)) or not math.isfinite(value) for value in values)
+            or values[2] <= 0 or values[3] <= 0):
+        return None, "the compositor reported invalid window geometry"
+    return Rect(*values), None
 
 
 def capture_wayland_png(app, window):
+    compositor = wayland_compositor()
+    if compositor is None:
+        return screenshot_failure("Wayland screenshots are supported on Hyprland and Sway only; use --no-screenshot or an X11 session")
     grim = shutil.which("grim")
     if grim is None or GdkPixbuf is None:
         return screenshot_failure("Wayland screenshots require grim and GdkPixbuf; install them or use --no-screenshot")
+    if app is None or window is None:
+        return screenshot_failure("Wayland screenshots need a target window")
     # AT-SPI often reports (0, 0) on Wayland, which would capture an unrelated desktop region.
-    rect = wayland_window_rect(app, window)
+    rect, error = wayland_window_rect(compositor, app, window)
     if rect is None:
-        return screenshot_failure("Wayland capture needs an unambiguous window on Hyprland (hyprctl) or Sway (swaymsg); no screenshot was taken")
+        return screenshot_failure(f"Wayland screenshot skipped: {error}")
     x, y = math.floor(rect.x), math.floor(rect.y)
     width, height = math.ceil(rect.x + rect.width) - x, math.ceil(rect.y + rect.height) - y
     if width > 16384 or height > 16384 or width * height > 67_108_864:
@@ -869,7 +897,7 @@ def handshake_response():
     has_hotkey = shutil.which("xdotool") is not None and not is_wayland
     has_clipboard = any(shutil.which(command) for command in ("wl-copy", "xclip", "xsel"))
     has_screenshot = GdkPixbuf is not None and (
-        bool(shutil.which("grim") and wayland_capture_command()) if is_wayland else Gdk is not None
+        bool(shutil.which("grim") and wayland_compositor()) if is_wayland else Gdk is not None
     )
     return {
         "platform": "linux",
