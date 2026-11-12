@@ -87,6 +87,7 @@ function Get-OrcaRootElement { $null }
 function Get-OrcaWindowFrame { @{ x = [OrcaDesktopWin32]::WindowX; y = 200 } }
 function Find-OrcaElement($RootElement, $Record) { $Record }
 function Invoke-OrcaPrimaryAction($Element) { $null -ne $Element }
+function Invoke-OrcaScrollPattern($Element, $RootElement, $Direction, $Pages) { $null -ne $Element }
 function New-OrcaSnapshot { [pscustomobject]@{} }
 
 foreach ($case in @(
@@ -112,6 +113,7 @@ foreach ($case in @(
             if ($inputCalls.Count -eq 0) { throw "$($case.tool) did not send pointer input after activation" }
             if ([OrcaDesktopWin32]::FocusReads -lt 2) { throw "$($case.tool) did not wait for activation" }
             Assert-TestEqual $inputCalls[0] "move:505,206" "$($case.tool) geometry after delayed activation"
+            Assert-TestEqual $result.action.delivery "foreground" "$($case.tool) pointer delivery"
         } else {
             Assert-TestEqual $denied $true "$($case.tool) denied activation"
             Assert-TestEqual $inputCalls.Count 0 "$($case.tool) denied activation sends no pointer or modifier input"
@@ -119,10 +121,18 @@ foreach ($case in @(
     }
 }
 
-[OrcaDesktopWin32]::Reset($false)
-$result = Invoke-OrcaOperation ([pscustomobject]@{ tool = "click"; app = "Fixture"; element = [pscustomobject]@{ index = 1 } })
-Assert-TestEqual $result.action.path "accessibility" "pattern click path"
-Assert-TestEqual ([OrcaDesktopWin32]::Calls.Count) 0 "pattern click bypasses activation and global input"
+foreach ($case in @(
+    @{ tool = "click" },
+    @{ tool = "scroll"; direction = "down"; pages = 1 }
+)) {
+    [OrcaDesktopWin32]::Reset($false)
+    $operation = [pscustomobject]@{ app = "Fixture"; element = [pscustomobject]@{ index = 1 } }
+    foreach ($key in $case.Keys) { $operation | Add-Member -NotePropertyName $key -NotePropertyValue $case[$key] }
+    $result = Invoke-OrcaOperation $operation
+    Assert-TestEqual $result.action.path "accessibility" "pattern $($case.tool) path"
+    Assert-TestEqual $result.action.delivery "background" "pattern $($case.tool) delivery"
+    Assert-TestEqual ([OrcaDesktopWin32]::Calls.Count) 0 "pattern $($case.tool) bypasses activation and global input"
+}
 foreach ($case in @(
     @{ tool = "click"; element = [pscustomobject]@{ index = 1 } },
     @{ tool = "click"; x = 5; y = 6; restoreWindow = $true },

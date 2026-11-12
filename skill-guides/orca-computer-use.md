@@ -147,7 +147,7 @@ Do not pass `--restore-window` by default. Use it only when foreground input is 
 
 Popup menus and web `<select>` controls: set the option with `set-value` on the popup element. Background clicks on them are refused because they open the menu off screen or wedge the app's input.
 
-On Linux and Windows, clicks, scrolling, drags and keyboard input still bring the target window forward.
+On Linux, clicks, scrolling, drags and keyboard input still bring the target window forward. On Windows, actions the control supports through UI Automation run in the background and report `action.delivery: background`: element clicks, `set-value` (including sliders), element scrolls by whole `--pages`, and the `Expand`, `Collapse` and `ScrollToVisible` secondary actions (the last brings a list or tree item into view). Everything else brings the window forward and reports `foreground`.
 
 ## Screenshots
 
