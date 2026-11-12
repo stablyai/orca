@@ -3,7 +3,7 @@ import { Animated, BackHandler, Easing, Text, View, type LayoutChangeEvent } fro
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrcaLogo } from '../src/components/OrcaLogo'
-import { ensureNotificationPermissions } from '../src/notifications/mobile-notifications'
+import { ensureNotificationPermissions } from '../src/notifications/delivery-policy/notification-permissions'
 import {
   MobileOnboardingPage,
   type MobileOnboardingBusyChoice,

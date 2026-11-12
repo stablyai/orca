@@ -1,5 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native'
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+  type ScrollViewInstance
+} from 'react-native'
 import { File, FileText, Globe, Plus, SquareTerminal } from 'lucide-react-native'
 import { triggerMediumImpact } from '../../platform/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -169,7 +176,7 @@ export function MobileSessionTabStrip({
     ]
   )
   const attachTabStrip = useCallback(
-    (view: ScrollView | null) => {
+    (view: ScrollViewInstance | null) => {
       if (view) {
         tabStripOffsetRef.current = 0
         tabStripViewportWidthRef.current = 0

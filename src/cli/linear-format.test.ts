@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LinearIssueContextResult } from '../shared/linear/agent-access'
+import type {
+  LinearIssueContextResult,
+  LinearTeamMembersResult
+} from '../shared/linear/agent-access'
 import {
   formatLinearIssue,
   formatLinearMcpIssueList,
+  formatLinearTeamMembers,
   printLinearMcpIssueListWarnings
 } from './linear-format'
 
@@ -122,5 +126,21 @@ describe('linear-format', () => {
     expect(console.error).toHaveBeenCalledWith(
       'warning: Acme unavailable for Linear: rate limited warning: fake'
     )
+  })
+
+  it('pads member names by terminal columns so wide Hangul names keep the id column aligned', () => {
+    const result: LinearTeamMembersResult = {
+      team: { id: 'team-1', name: 'Engineering', key: 'ENG' },
+      members: [
+        { id: 'user-0', displayName: '김철수' },
+        { id: 'user-1', displayName: 'Alice' }
+      ],
+      meta: { workspaceId: 'workspace-1', returned: 2 }
+    }
+
+    expect(formatLinearTeamMembers(result).split('\n')).toEqual([
+      `김철수${' '.repeat(18)} user-0`,
+      `Alice${' '.repeat(19)} user-1`
+    ])
   })
 })
