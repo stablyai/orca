@@ -25,10 +25,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
   }
 
   // Keep statusLine-fed numbers; an old failure or in-flight chip has nothing left to settle it.
-  // Fable and credit figures only come from OAuth, even on a live-session result.
   protected claudeUsageWithoutOAuth(limits: ProviderRateLimits | null): ProviderRateLimits {
     return limits?.status === 'ok' && limits.usageMetadata?.source === 'live-session'
-      ? { ...limits, fableWeekly: null, extraUsage: null }
+      ? limits
       : claudeOAuthUsageDisabledResult()
   }
 
@@ -187,16 +186,15 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       return
     }
     this.activeFailureStreakByProvider.claude = 0
-    const oauthEnabled = this.isClaudeOAuthUsageEnabled()
     this.updateState({
       ...this.state,
       claude: {
         provider: 'claude',
         session,
         weekly,
-        // Statusline lacks Fable scope and credits; retain the latest OAuth values while OAuth is on.
-        fableWeekly: oauthEnabled ? (inherited?.fableWeekly ?? null) : null,
-        extraUsage: oauthEnabled ? (inherited?.extraUsage ?? null) : null,
+        // Statusline lacks Fable scope and credits; retain the latest OAuth values.
+        fableWeekly: inherited?.fableWeekly ?? null,
+        extraUsage: inherited?.extraUsage ?? null,
         updatedAt: Date.now(),
         error: null,
         status: 'ok',

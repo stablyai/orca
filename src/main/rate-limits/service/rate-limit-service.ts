@@ -30,6 +30,7 @@ import {
   normalizeClaudeAccountSelectionTarget
 } from '../../claude-accounts/runtime-selection'
 import type { InactiveClaudeAccount } from '../providers/claude/claude-managed-account-usage'
+import { claudeOAuthUsageDisabledResult } from '../providers/claude/claude-usage-result'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { NetworkProxySettings } from '../../../shared/network-proxy'
 
@@ -76,6 +77,14 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
 
   setClaudeOAuthUsageEnabledResolver(resolver: ClaudeOAuthUsageEnabledResolver): void {
     this.claudeOAuthUsageEnabledResolver = resolver
+  }
+
+  // Opting out drops every figure OAuth produced, so later statusLine posts can only inherit their own.
+  discardClaudeOAuthUsage(): void {
+    this.inactiveClaudeAccountsGeneration += 1
+    this.inactiveClaudeCache.clear()
+    this.inactiveClaudeFetching.clear()
+    this.updateState({ ...this.state, claude: claudeOAuthUsageDisabledResult() })
   }
 
   setAntigravityUsageEnabledResolver(resolver: AntigravityUsageEnabledResolver): void {

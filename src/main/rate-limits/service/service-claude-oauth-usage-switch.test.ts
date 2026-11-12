@@ -200,40 +200,74 @@ describe('Claude OAuth usage switch', () => {
     expect(fetchActiveClaudeRateLimits).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['after a refresh', 'on the next statusLine post'] as const)(
-    'drops OAuth-only Fable and credit figures %s once opted out',
-    async (when) => {
-      let enabled = true
-      const service = new RateLimitService()
-      service.setClaudeOAuthUsageEnabledResolver(() => enabled)
-      vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValueOnce({
-        ...okProvider('claude', 18),
-        fableWeekly: okProvider('claude', 40).session,
-        extraUsage: {
-          unit: 'credits',
-          balance: 5,
-          unlimited: false,
-          enabled: true,
-          disabledReason: null,
-          resetsAt: null
-        }
-      })
-      await service.refresh()
-      service.ingestLiveClaudeRateLimits(LIVE_POST)
+  describe('opting out', () => {
+    let enabled: boolean
+    let service: RateLimitService
+
+    function optOut(): void {
       enabled = false
-
-      if (when === 'after a refresh') {
-        await service.refresh()
-      } else {
-        service.ingestLiveClaudeRateLimits({ ...LIVE_POST, fiveHour: { used_percentage: 34 } })
-      }
-
-      expect(service.getState().claude).toMatchObject({
-        status: 'ok',
-        fableWeekly: null,
-        extraUsage: null,
-        usageMetadata: { source: 'live-session' }
-      })
+      service.discardClaudeOAuthUsage()
     }
-  )
+
+    beforeEach(() => {
+      enabled = true
+      service = new RateLimitService()
+      service.setClaudeOAuthUsageEnabledResolver(() => enabled)
+    })
+
+    it.each(['nothing else', 'a refresh', 'a duplicate statusLine post', 'a new statusLine post'])(
+      'leaves no OAuth window, Fable or credit figure after %s',
+      async (next) => {
+        vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValueOnce({
+          ...okProvider('claude', 18),
+          weekly: { usedPercent: 50, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+          fableWeekly: okProvider('claude', 40).session,
+          extraUsage: {
+            unit: 'credits',
+            balance: 5,
+            unlimited: false,
+            enabled: true,
+            disabledReason: null,
+            resetsAt: null
+          }
+        })
+        await service.refresh()
+        // A five-hour-only post inherits the OAuth weekly window and relabels it live-session.
+        service.ingestLiveClaudeRateLimits(LIVE_POST)
+        optOut()
+
+        if (next === 'a refresh') {
+          await service.refresh()
+        } else if (next === 'a duplicate statusLine post') {
+          service.ingestLiveClaudeRateLimits(LIVE_POST)
+        } else if (next === 'a new statusLine post') {
+          service.ingestLiveClaudeRateLimits({ ...LIVE_POST, fiveHour: { used_percentage: 34 } })
+        }
+
+        const claude = service.getState().claude
+        expect(claude?.weekly ?? null).toBeNull()
+        expect(claude?.fableWeekly ?? null).toBeNull()
+        expect(claude?.extraUsage ?? null).toBeNull()
+      }
+    )
+
+    it('drops inactive account previews, including one still in flight', async () => {
+      service.setInactiveClaudeAccountsResolver(() => [{ id: 'cached' }, { id: 'pending' }])
+      const started = deferred<void>()
+      const pending = deferred<Awaited<ReturnType<typeof fetchInactiveClaudeAccountUsage>>>()
+      vi.mocked(fetchInactiveClaudeAccountUsage)
+        .mockResolvedValueOnce(okProvider('claude', 10))
+        .mockImplementationOnce(() => {
+          started.resolve()
+          return pending.promise
+        })
+      const previews = service.fetchInactiveClaudeAccountsOnOpen()
+      await started.promise
+      optOut()
+      pending.resolve(okProvider('claude', 20))
+      await previews
+
+      expect(service.getState().inactiveClaudeAccounts).toEqual([])
+    })
+  })
 })

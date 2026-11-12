@@ -138,6 +138,11 @@ export function createProviderAccountServices(
   }))
   rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)
   rateLimits.setClaudeOAuthUsageEnabledResolver(() => store.getSettings().claudeOAuthUsageEnabled)
+  store.onSettingsChanged((updates) => {
+    if (updates.claudeOAuthUsageEnabled === false) {
+      rateLimits.discardClaudeOAuthUsage()
+    }
+  })
   // Reuse the meter switch so hidden Antigravity usage does not spawn agy.
   rateLimits.setAntigravityUsageEnabledResolver(() =>
     store.getUI().statusBarItems.includes('antigravity')
