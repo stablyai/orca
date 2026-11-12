@@ -1,7 +1,8 @@
 import { useState, useRef, useMemo } from 'react'
 import { useTerminalSplitLayout } from '../terminal/session/use-terminal-split-layout'
 import { createLiveInputCapture } from '../terminal/session/live-input-capture'
-import { Animated, type ScrollView } from 'react-native'
+import { Animated, type ScrollViewInstance } from 'react-native'
+import type { MobileAnimatedValue } from '../platform/animated-handles'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
 import {
@@ -46,7 +47,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const activeSessionTabIdRef = useRef<string | null>(null)
   // Preserve an explicit phone tab pick while a host snapshot is transiently incomplete.
   const selectedSessionTabIdRef = useRef<string | null>(null)
-  const tabStripRef = useRef<ScrollView>(null)
+  const tabStripRef = useRef<ScrollViewInstance>(null)
   const tabStripOffsetRef = useRef(0)
   const tabStripViewportWidthRef = useRef(0)
   const tabStripContentWidthRef = useRef(0)
@@ -103,7 +104,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [dictationMode, setDictationMode] = useState<string | undefined>('toggle')
   const [dictationEnabled, setDictationEnabled] = useState(true)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const toastOpacityRef = useRef(new Animated.Value(0))
+  const toastOpacityRef = useRef<MobileAnimatedValue>(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const toastSeqRef = useRef(0)
   return {

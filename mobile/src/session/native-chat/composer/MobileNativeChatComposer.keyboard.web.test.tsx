@@ -5,7 +5,6 @@ import type * as ReactNative from 'react-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import { MobileNativeChatLowerRegion } from '../MobileNativeChatLowerRegion.web'
-import { NATIVE_CHAT_STEER_CHORD_HOLD_MS } from '../../../../../src/shared/native-chat/input/use-native-chat-steer-chord-preview'
 
 vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 vi.mock(
@@ -189,29 +188,16 @@ describe('mobile composer modifier submit in the paired web page', () => {
     expect(field().value).toBe(' hello ')
   })
 
-  it('holding Cmd alone on an empty composer shows Steer queued in Send, lights the head card and sends it on a press', async () => {
-    vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-    const steerHead = { steers: () => true, run: vi.fn(() => true), light: vi.fn() }
-    await render({ value: '', sendFollowUp: { action: 'queue', offersChoice: true }, steerHead })
-    const preview = () => container.querySelector<HTMLButtonElement>('[data-preview]')
-    vi.useFakeTimers()
-    try {
-      await act(async () => {
-        field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Meta', bubbles: true }))
-      })
-      await act(async () => vi.advanceTimersByTime(NATIVE_CHAT_STEER_CHORD_HOLD_MS))
-    } finally {
-      vi.useRealTimers()
-    }
-    expect(preview()?.dataset.preview).toBe('steer-queued')
-    expect(steerHead.light).toHaveBeenLastCalledWith(true)
-    await act(async () => preview()?.click())
-    expect(steerHead.run).toHaveBeenCalledExactlyOnceWith(true)
-    await act(async () => {
-      field().dispatchEvent(new KeyboardEvent('keyup', { key: 'Meta', bubbles: true }))
-    })
-    expect(preview()).toBeNull()
-    expect(steerHead.light).toHaveBeenLastCalledWith(false)
+  it('sends with Cmd+Enter, not Ctrl+Enter, in a desktop Mac browser', async () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36'
+    )
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel')
+    await render()
+    expect((await key({ ctrlKey: true })).defaultPrevented).toBe(false)
+    expect(onSend).not.toHaveBeenCalled()
+    expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
+    expect(onSend).toHaveBeenCalledTimes(1)
   })
 
   it.each([

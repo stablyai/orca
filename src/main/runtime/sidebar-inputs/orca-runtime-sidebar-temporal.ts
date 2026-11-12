@@ -29,11 +29,11 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import { anySleepKeyNames } from '../terminal/stop/worktree-terminal-sleep-key'
 import { resolveAgentWorkspaceExecutionHostId } from '../../agent-hooks/observations/restored-status-dead-terminal-sweep'
-import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
+import { WORKSPACE_RECORD_DOMAINS } from '../../persistence/profile-save-domains'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 /**
  * Feeds main's sleeping retention, and owns the host's sort stamps: clients sort by those, so main
@@ -106,7 +106,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     )
     // Every unread write (window, phone, CLI, activation) lands in a record; a Done may re-tier.
     this.store?.onStateWritten?.((domains) => {
-      if (domains === undefined || WORKTREE_METADATA_DOMAINS.some((d) => domains.includes(d))) {
+      if (domains === undefined || WORKSPACE_RECORD_DOMAINS.some((d) => domains.includes(d))) {
         this.sortStamps.noteRecordsWritten()
       }
     })

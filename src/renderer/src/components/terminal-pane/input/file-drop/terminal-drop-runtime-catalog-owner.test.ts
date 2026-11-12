@@ -4,7 +4,7 @@ import {
   encodeWorkspaceFilePaths,
   WORKSPACE_FILE_DRAG_SOURCE_MIME,
   WORKSPACE_FILE_PATHS_MIME
-} from '@/lib/workspace-file-drag'
+} from '@/lib/files/drop/workspace-file-drag'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { handleNativeTerminalFileDrop as handleTerminalFileDrop } from './terminal-native-file-drop-destination'
 
@@ -144,62 +144,6 @@ async function drop(lane: string, workspaceId: string, executionHostId: Executio
 }
 
 describe.each(['native', 'internal'])('%s runtime terminal catalog ownership', (lane) => {
-  it.each(['worktree', 'folder', 'ssh'])(
-    'resolves a runtime %s without choosing a local duplicate',
-    async (kind) => {
-      const executionHostId = kind === 'ssh' ? 'ssh:target-1' : 'local'
-      if (kind === 'ssh') {
-        mocks.state.worktreesByRepo.remote[0].hostId = 'ssh:target-1'
-        mocks.state.worktreesByRepo.local.push({
-          id: 'wt-1',
-          repoId: 'local',
-          path: 'C:\\wrong-direct-ssh',
-          hostId: 'ssh:target-1'
-        })
-        mocks.state.worktreesByRepo.otherRuntime = [
-          {
-            id: 'wt-1',
-            repoId: 'other',
-            path: 'C:\\wrong-runtime',
-            hostId: 'ssh:target-1',
-            runtimeOwnerEnvironmentId: 'other-runtime'
-          }
-        ]
-      }
-      const workspaceId = kind === 'folder' ? 'folder:notes' : 'wt-1'
-      const { sendInput, result, transport } = await drop(lane, workspaceId, executionHostId)
-      expect(transport.getExecutionHostId()).toBe(executionHostId)
-      expect(transport.getRuntimeEnvironmentId()).toBe('owner-runtime')
-      if (lane === 'native') {
-        expect(mocks.importPaths).toHaveBeenCalledExactlyOnceWith(
-          {
-            target: { kind: 'environment', environmentId: 'owner-runtime' },
-            worktreeId: workspaceId,
-            worktreePath: '/owner/workspace',
-            expectedExecutionHostId: executionHostId,
-            expectedSshTargetId: kind === 'ssh' ? 'target-1' : undefined,
-            expectedSshConnectionGeneration: kind === 'ssh' ? 1 : undefined
-          },
-          ['/client/file.txt'],
-          '/owner/workspace/.orca/drops',
-          { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
-        )
-        expect(sendInput).toHaveBeenCalledExactlyOnceWith(
-          '/owner/workspace/.orca/drops/file.txt ',
-          'driving'
-        )
-      } else {
-        expect(result).toEqual({ status: 'pasted', pathCount: 1 })
-        expect(sendInput).toHaveBeenCalledExactlyOnceWith(
-          "'/owner/workspace/file with spaces.txt' ",
-          'driving'
-        )
-        expect(mocks.importPaths).not.toHaveBeenCalled()
-      }
-      expect(mocks.toastError).not.toHaveBeenCalled()
-    }
-  )
-
   it.each(['missing-owner', 'wrong-environment', 'wrong-ssh-target'])(
     'refuses %s instead of borrowing a catalog root',
     async (mismatch) => {

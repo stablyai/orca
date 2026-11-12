@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { toast } from 'sonner'
-import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { translate } from '@/i18n/i18n'
 import type { AppMenuSelectionAction } from '@/lib/app-commands/app-menu-selection-actions'
 import type { TerminalCopyModeConfig } from '../../../../../shared/terminal/input/terminal-copy-mode-config'

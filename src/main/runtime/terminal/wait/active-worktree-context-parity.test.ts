@@ -152,6 +152,7 @@ function runtimeFor(session: Session, rows: StoredRows = localRows()): OrcaRunti
     getProjects: () => [],
     getProjectGroups: () => [group],
     getFolderWorkspaces: () => [folder],
+    getFolderWorkspace: (id: string) => (id === folder.id ? folder : undefined),
     getWorkspaceSession: () => ({ ...getDefaultWorkspaceSession(), ...session })
   })
   return new OrcaRuntimeService(store)

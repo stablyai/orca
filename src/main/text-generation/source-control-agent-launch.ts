@@ -4,8 +4,9 @@ import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { ORCA_AGENT_HOOKS_DISABLED_ENV } from '../../shared/agent-hook-listener/transport/agent-hook-suppression-env'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { resolveCliCommand } from '../codex-cli/command'
-import { wslAwareSpawn } from '../git/runner'
+import { wslAwareSpawn } from '../git/command-runner/host-routing/wsl-aware-spawn'
 import { AGENT_PANE_HOOK_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
+import { processEnvWithoutAgentSession } from '../../shared/agent-launch/startup/parent-agent-session-env'
 import { spawnSupervisedAgent } from './source-control-supervised-agent-spawn'
 import type {
   SourceControlAgentSpawnInput,
@@ -51,7 +52,7 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
     ? wslDistroForCommand(input.cwd, input.wslDistro)
     : input.wslDistro
   // Background agents cannot report hooks against the terminal that launched Orca.
-  const spawnEnv = { ...(input.env ?? process.env) }
+  const spawnEnv = { ...(input.env ?? processEnvWithoutAgentSession()) }
   for (const key of Object.keys(spawnEnv)) {
     if (BACKGROUND_HOOK_ENV_KEYS.has(process.platform === 'win32' ? key.toUpperCase() : key)) {
       delete spawnEnv[key]

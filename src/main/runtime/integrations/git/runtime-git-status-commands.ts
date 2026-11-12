@@ -5,7 +5,10 @@ import type {
 import type { GitMutationInFlight } from '../../../../shared/git/commands/git-mutation-in-flight'
 import { isGitWorktreeMutationInFlight } from '../../../git/command-runner/git-worktree-mutation-state'
 import type { BranchSwitchTarget } from '../../../../shared/git/branch-switch-target'
-import { BranchSwitchLandedWithWarningError, switchBranchGuarded } from '../../../git/branch-switch'
+import {
+  BranchSwitchLandedWithWarningError,
+  switchBranchGuarded
+} from '../../../git/worktrees/checkout/branch-switch'
 import type {
   GitConflictOperation,
   GitStagingArea,

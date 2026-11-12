@@ -1,5 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import { getSetupScriptPromptDismissalKey } from '../../../lib/setup-script-prompt'
+import { getSetupScriptPromptDismissalKey } from '../../../runtime/repo-hooks/setup-script-prompt'
 import {
   withOrcaHookRepoAlwaysTrusted,
   withOrcaHookScriptConfirmed
@@ -166,15 +166,6 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         }
         window.api.ui.set({ codexSharedSettingsNoticeSeen: true }).catch(console.error)
         return { codexSharedSettingsNoticeSeen: true }
-      }),
-    speechModelUpdateNoticeSeen: true,
-    markSpeechModelUpdateNoticeSeen: () =>
-      set((s) => {
-        if (s.speechModelUpdateNoticeSeen) {
-          return s
-        }
-        window.api.ui.set({ speechModelUpdateNoticeSeen: true }).catch(console.error)
-        return { speechModelUpdateNoticeSeen: true }
       }),
     claudeDiffPanelNoticeSeen: true,
     markClaudeDiffPanelNoticeSeen: () =>

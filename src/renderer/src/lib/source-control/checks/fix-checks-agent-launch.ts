@@ -9,19 +9,20 @@ import {
 import {
   AgentLaunchChoiceCancelled,
   acquireAgentLaunchChoices
-} from '../../host-chat-program-acquisition'
+} from '../../agent-session/launch/inventory/host-chat-program-acquisition'
 import { toast } from 'sonner'
 import {
   ensureDetectedAgentsForRepo,
   ensureDetectedAgentsForWorktree,
   type RepoHostFields
 } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { findGithubPrWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+
+import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
@@ -209,8 +210,8 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
       { renderedPrompt: prompt, settings: store.settings }
     )
     let revealFailed = false
-    const result = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
+    const result = launchAgentInNewTabWithOutcome({
+      requestId: createNonSecureContextUuid(),
       agent,
       worktreeId: targetWorktreeId,
       groupId: args.groupId ?? targetWorktreeId,

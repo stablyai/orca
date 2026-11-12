@@ -1,9 +1,10 @@
-import type { PluginWorkerFactory } from './workers/plugin-worker-manager'
+import type { PluginWorkerFactory } from './workers/worker-supervision/plugin-worker-startup'
 import type { KeybindingOverrides } from '../../shared/keybindings'
 import type { PluginKillListEntry } from '../../shared/plugins/catalog/plugin-kill-list'
-import type { PluginDesktopFrameServices } from './workers/plugin-host-method-bindings'
+import type { PluginDesktopFrameServices } from './workers/host-api/plugin-host-method-bindings'
 import type { PluginStatusBarState } from './status-bar/plugin-status-bar-state'
 import type { PluginAppearanceService } from './appearance/plugin-appearance-service'
+import type { PluginEditorTypographySource } from './appearance/plugin-editor-typography'
 
 export type PluginServiceOptions = {
   userDataPath: string
@@ -25,4 +26,6 @@ export type PluginServiceOptions = {
   /** Desktop main only: what `statusBar.update` writes for the windows' status bars. */
   statusBar?: PluginStatusBarState
   appearance?: PluginAppearanceService
+  /** What `editor.readTypography` answers; absent where no profile settings are loaded. */
+  editorTypography?: PluginEditorTypographySource
 }

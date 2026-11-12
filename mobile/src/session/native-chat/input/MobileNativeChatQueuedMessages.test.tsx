@@ -3,25 +3,12 @@ import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 
 import { createElement } from 'react'
-import type * as QueuedCardRowModule from './MobileQueuedMessageCardRow'
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
 
-const rowRenders = vi.hoisted(() => ({ count: 0 }))
-vi.mock('./MobileQueuedMessageCardRow', async (importOriginal) => {
-  const original = await importOriginal<typeof QueuedCardRowModule>()
-  return {
-    MobileQueuedMessageCardRow: (
-      props: Parameters<typeof original.MobileQueuedMessageCardRow>[0]
-    ) => {
-      rowRenders.count++
-      return createElement(original.MobileQueuedMessageCardRow, props)
-    }
-  }
-})
 let fontScale = 1
 vi.mock('../../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {

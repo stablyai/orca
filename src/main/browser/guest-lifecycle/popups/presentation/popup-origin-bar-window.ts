@@ -1,5 +1,8 @@
 import { BaseWindow, WebContentsView } from 'electron'
-import { isBackgroundLaunch } from '../../../../window/foreground-activation-policy'
+import {
+  isBackgroundLaunch,
+  showWhenAppActive
+} from '../../../../window/foreground-activation-policy'
 import {
   discardBrowserPopupContents,
   prepareNativeBrowserPopup
@@ -95,6 +98,10 @@ export function openPopupWithOriginBar(
     return prepareNativeBrowserPopup(options.nativeWindow, prepareContent)
   }
   const { width, height } = clampPopupContentSize(options)
+  const presentable =
+    Boolean(options.webContents || options.loadInitialUrl) &&
+    !isBackgroundLaunch() &&
+    options.show !== false
   const window = new BaseWindow({
     width,
     height: height + POPUP_ORIGIN_BAR_HEIGHT,
@@ -108,10 +115,7 @@ export function openPopupWithOriginBar(
     title: 'about:blank',
     // Windows/Linux attach the app menu to web popups too.
     autoHideMenuBar: true,
-    show:
-      Boolean(options.webContents || options.loadInitialUrl) &&
-      !isBackgroundLaunch() &&
-      options.show !== false
+    show: presentable && !options.showWhenAppActive
   })
 
   // Isolate the trusted origin bar from the arbitrary web content below it.
@@ -242,6 +246,9 @@ export function openPopupWithOriginBar(
     }
   })
 
+  if (presentable && options.showWhenAppActive) {
+    showWhenAppActive(window)
+  }
   return {
     contentWebContents,
     close: (): void => {

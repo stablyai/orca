@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/command'
 import { useTranslate } from '@/i18n/use-translate'
 import { agentModelChoiceChips } from './launch-settings/agent-model-choice-chips'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { AgentDefaultArgsInput } from './launch-settings/AgentLaunchDefaultsEditor'
 import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
@@ -77,7 +77,7 @@ export function AgentLaunchSetupPanel({
   const argumentsKnown = agentPickerArgumentsKnown(entry, draft)
   const effective = agentPickerEffectiveChoices(entry, draft)
   const argumentsView = agentPickerPanelArguments(entry, draft)
-  const models = agentPickerModels(entry)
+  const models = agentPickerModels(entry, draft.surface)
   const defaultsPending =
     draft.surface === 'chat' ? entry.structuredDefaultsPending : entry.defaultsPending
   const seed = getAgentSessionOptionLaunchCatalog(entry.agent)

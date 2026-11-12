@@ -17,7 +17,7 @@ import {
   normalizeExecutionHostId
 } from '../../../../shared/execution-host'
 import { countOpenRepoTerminalTabs } from '@/store/repos/repo-removal'
-import { getRecipeVmSshTargetForHost } from '@/lib/recipe-vm-managed-host'
+import { getRecipeVmSshTargetForHost } from '@/runtime/ephemeral-vm/recipe-vm-managed-host'
 import { RemovalUnsavedFilesNotice } from './workspace-actions/deletion/RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { projectRemovalTargets } from './workspace-actions/deletion/removal-unsaved-files'

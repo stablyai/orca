@@ -6,8 +6,8 @@ import {
   canonicalArtifactFilePath,
   fileArtifactSourceKey,
   LOCAL_FILE_ARTIFACT_OWNER
-} from '@/lib/file-artifact-source-key'
-import { userNamedFileAccess } from '@/lib/local-file-access'
+} from '@/lib/files/artifacts/file-artifact-source-key'
+import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
 
 export type ShareableBrowserArtifactFile = {
   fileName: string

@@ -1,6 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
-import { getTerminalWebglAddonConstructor } from '@/lib/pane-manager/terminal-webgl-addon-loader'
-import { releaseXtermWebglContext } from '@/lib/pane-manager/pane-webgl-renderer'
+import { getTerminalWebglAddonConstructor } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-addon-loader'
+import { releaseXtermWebglContext } from '@/lib/pane-manager/terminal-rendering/pane-webgl-renderer'
 
 export function attachCopyModeRenderer(
   terminal: Terminal,

@@ -80,10 +80,6 @@ export function getBrowserSettingsRuntimeEnvironmentId(
   return parsed?.kind === 'runtime' ? parsed.environmentId : null
 }
 
-export function getBrowserWorktreeHostId(state: AppState, worktreeId: string): ExecutionHostId {
-  return getExecutionHostIdForWorktree(state, worktreeId)
-}
-
 export function getBrowserSessionProfileHostId(
   state: AppState,
   worktreeId: string,
@@ -98,7 +94,7 @@ export function getBrowserSessionProfileHostId(
       ? toRuntimeExecutionHostId(runtimeEnvironmentId)
       : LOCAL_EXECUTION_HOST_ID
   }
-  return getBrowserWorktreeHostId(state, worktreeId)
+  return getExecutionHostIdForWorktree(state, worktreeId)
 }
 
 export function isLocalBrowserPageOwner(

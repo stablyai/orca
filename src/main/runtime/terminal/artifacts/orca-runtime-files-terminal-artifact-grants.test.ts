@@ -21,7 +21,7 @@ vi.mock(
 vi.mock('../../../ipc/filesystem/access/filesystem-auth', async () =>
   (await import('../../files/runtime-file-command-mock-registry')).filesystemAuthModuleMock()
 )
-vi.mock('../../../git/runner', async () =>
+vi.mock('../../../git/command-runner/host-routing/wsl-aware-spawn', async () =>
   (await import('../../files/runtime-file-command-mock-registry')).gitRunnerModuleMock()
 )
 vi.mock(

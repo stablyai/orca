@@ -15,7 +15,7 @@ import { CreateProjectParentBrowser } from '@/components/sidebar/project-admissi
 import {
   getProjectHostSetupSelectionKey,
   type NeedsSetupProjectHostOption
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoKind } from '../../../../shared/repo-types'
 import { pickLocalProjectLocationFolder } from './pick-local-project-folder'

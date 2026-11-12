@@ -13,6 +13,7 @@ import {
   type AgentJournalDispatchRejection
 } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../shared/agent-session/agent-session-attachments'
 import { claudeRecord } from './journal/claude-structured-item-translation'
 
 export class ClaudeDispatchContentError extends Error {
@@ -51,10 +52,10 @@ export function claudeDispatchContentRejection(error: unknown): AgentJournalDisp
   return claudeDispatchRejection(agentSessionFailureFact('attachmentUnreadable'))
 }
 
-const BYTES_PER_MB = 1024 * 1024
-const MAX_IMAGE_BYTES = 5 * BYTES_PER_MB
+// Claude shrinks every image before the API sees it, so these bound host memory, not API limits.
+const MAX_IMAGE_BYTES = AGENT_SESSION_ATTACHMENT_MAX_BYTES
 const MAX_IMAGE_COUNT = 20
-const MAX_TOTAL_IMAGE_BYTES = 20 * BYTES_PER_MB
+const MAX_TOTAL_IMAGE_BYTES = 64 * 1024 * 1024
 const MAX_REPLAY_CONTENT_KEY_BYTES = 256
 
 type ImageBudget = {

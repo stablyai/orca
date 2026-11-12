@@ -14,17 +14,19 @@ import {
 import type { AgentOpensAs } from '../../../lib/agent-session/launch/native-chat-provider-choice'
 import { SettingsSegmentedControl } from '../../settings/form-controls/SettingsFormControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../shared/agent-session/structured-chat-platform-support'
-import { isWindowsDesktopClient } from '@/lib/windows-path-access'
+import { isWindowsDesktopClient } from '@/lib/files/os-open/windows-path-access'
 
 // The chat choice is this computer's, so the downloaded chat programs are too.
 const CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
 
 export function AgentOpensAsControl({
   label,
-  opensAs
+  opensAs,
+  disabled = false
 }: {
   label: string
   opensAs: AgentOpensAs
+  disabled?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -36,11 +38,11 @@ export function AgentOpensAsControl({
       })}
       size="sm"
       options={[
-        { value: 'chat', label: t('settings.agents.defaultOpensAsChat', 'Chat') },
+        { value: 'chat', label: t('settings.agents.defaultOpensAsChat', 'Chat'), disabled },
         {
           value: 'cli',
           label: t('settings.agents.defaultOpensAsCli', 'CLI'),
-          disabled: opensAs.cliMissing,
+          disabled: disabled || opensAs.cliMissing,
           tooltip: opensAs.cliMissing
             ? t(
                 'settings.agents.installCliForTerminal',

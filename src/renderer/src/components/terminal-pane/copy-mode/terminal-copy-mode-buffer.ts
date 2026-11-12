@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { readReflowedRowCellCount } from '@/lib/pane-manager/terminal-reflow-scroll-anchor'
+import { readReflowedRowCellCount } from '@/lib/pane-manager/terminal-scroll/terminal-reflow-scroll-anchor'
 
 export type CopyModePosition = { row: number; column: number }
 export type CopyModeTerminal = Pick<Terminal, 'buffer' | 'cols' | 'rows'>

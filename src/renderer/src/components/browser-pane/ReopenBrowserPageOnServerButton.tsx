@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { reopenBrowserPageOnServer } from './browser-reopen-on-server'
 
 /** Deferred so a fast local round-trip never flashes a spinner. */
@@ -25,12 +25,12 @@ export function reopenOnServerCaveat(t: Translate = translate): string {
 export function ReopenBrowserPageOnServerButton({
   environmentId,
   worktreeId,
-  lastCommittedUrl,
+  reopenUrl,
   className
 }: {
   environmentId: string
   worktreeId: string
-  lastCommittedUrl: string | null | undefined
+  reopenUrl: string | null | undefined
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
@@ -54,7 +54,7 @@ export function ReopenBrowserPageOnServerButton({
       pendingTimerRef.current = null
       setShowPending(true)
     }, REOPEN_PENDING_FEEDBACK_DELAY_MS)
-    void reopenBrowserPageOnServer({ environmentId, worktreeId, lastCommittedUrl })
+    void reopenBrowserPageOnServer({ environmentId, worktreeId, reopenUrl })
       .then((created) => {
         if (!created) {
           toast.error(
@@ -73,7 +73,7 @@ export function ReopenBrowserPageOnServerButton({
         setShowPending(false)
         setPending(false)
       })
-  }, [clearPendingTimer, environmentId, lastCommittedUrl, worktreeId])
+  }, [clearPendingTimer, environmentId, reopenUrl, worktreeId])
 
   return (
     <Button
