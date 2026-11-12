@@ -90,6 +90,11 @@ export function cloudTabHoldKey(tabId: string): string {
 type HoldRequest = Omit<CloudAgentHold, 'reason'> & {
   /** The caller already read the account and decided to hold; skip the re-read. */
   decided?: boolean
+  /**
+   * V3-01: a hold put back after a restart waits for the person's Start even when the account now
+   * covers the agent: nothing launches unasked. The setup strip then offers "Start {{agent}}".
+   */
+  restored?: boolean
 }
 
 type Entry = CloudAgentHold & { release: (outcome: 'proceed' | 'cancel') => void }
@@ -215,12 +220,14 @@ async function holdReasonBeforeLaunch(
  */
 export async function holdCloudAgentLaunch({
   decided,
+  restored,
   ...hold
 }: HoldRequest): Promise<'proceed' | 'cancel'> {
   // The caller's read decided to hold; if it no longer does, start rather than wait on a strip.
-  const reason = decided
+  const read = decided
     ? cloudAgentHoldReason(hold.agent, readOrcaCloudAgentAccounts())
     : await holdReasonBeforeLaunch(hold.agent)
+  const reason = read ?? (restored ? 'notSetUp' : null)
   if (!reason) {
     return 'proceed'
   }
