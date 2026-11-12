@@ -61,6 +61,8 @@ import type { MobileNativeChatStatus } from './mobile-native-chat-session-status
 import type { OlderPagePhase } from './transcript/use-mobile-older-page-loader'
 import { MobileNativeChatOpenFileContext } from './mobile-native-chat-open-file-context'
 import { MobileNativeChatLowerRegion } from './MobileNativeChatLowerRegion'
+import { MobileNativeChatQueueAbovePromptContext } from './mobile-native-chat-lower-region-context'
+import { MobileNativeChatPromptStrip } from './input/MobileNativeChatPromptStrip'
 import { MobileNativeChatOfflineQueue } from './input/MobileNativeChatOfflineQueue'
 import { useMobileNativeChatOfflineQueue } from './composer/use-mobile-native-chat-offline-sends'
 
@@ -327,34 +329,31 @@ export function MobileNativeChatView({
   )
   const emptyStateView = emptyState ? <MobileNativeChatEmptyStateView copy={emptyState} /> : null
 
+  // The queue sits above a shown prompt card in a closed box, rather than tucking into the composer.
   const lowerContent = (
     <>
-      <MobileNativeChatPromptCard
-        key={promptKey ?? undefined}
-        answering={promptOwnsInput && keyboardInset > 0}
-        {...{ askPending, askSendSource }}
-        {...{
-          ask,
-          askKey,
-          onDismissAsk,
-          onAnswerAsk,
-          onCancelAsk,
-          onCancelPrompt,
-          onCollapseAsk
-        }}
-        requiresTerminal={askRequiresTerminal}
-        onAnswerInTerminal={onAnswerInTerminal}
-        {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
-        collapsedPrompt={collapsedPrompt}
-      />
+      <MobileNativeChatPromptStrip prompt={collapsedPrompt} />
       <MobileNativeChatInputLockStatus
         lockReason={offlineQueue.lockReason}
         waitingText={composerPlaceholder}
         hostOutage={hostOutage}
       />
       <MobileNativeChatSendErrorBanner message={sendErrorMessage} onDismiss={onDismissSendError} />
-      {trayContent}
-      <MobileNativeChatOfflineQueue queue={offlineQueue} />
+      <MobileNativeChatQueueAbovePromptContext value={promptShown}>
+        {trayContent}
+        <MobileNativeChatOfflineQueue queue={offlineQueue} />
+      </MobileNativeChatQueueAbovePromptContext>
+      <MobileNativeChatPromptCard
+        key={promptKey ?? undefined}
+        answering={promptOwnsInput && keyboardInset > 0}
+        {...{ askPending, askSendSource }}
+        {...{ ask, askKey, onDismissAsk, onAnswerAsk }}
+        {...{ onCancelAsk, onCancelPrompt, onCollapseAsk }}
+        requiresTerminal={askRequiresTerminal}
+        onAnswerInTerminal={onAnswerInTerminal}
+        {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
+        collapsedPrompt={collapsedPrompt}
+      />
       <View style={promptOwnsInput ? styles.hidden : undefined}>
         <MobileNativeChatDraftComposer
           draftScopeKey={composerScopeKey}
