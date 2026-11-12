@@ -1,6 +1,6 @@
 import { agentSessionRecordPredecessorIds } from './agent-session-record-lineage'
 import { clearSuccessor } from './agent-session-sender-identity-revision'
-import * as usageLimit from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from '../agent-session-conversation-receipts'
@@ -256,11 +256,10 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     return this.mutate(args.sessionId, (record) => evictAgentSessionOwner({ ...args, record }))
   }
 
-  recordUsageLimitCutAccount = (id: string, cut: usageLimit.UsageLimitCutAccount) =>
-    this.mutate(id, (record) => usageLimit.recordAgentSessionUsageLimitCutAccount(record, cut))
-
-  cancelUsageLimitContinue = (id: string, cut: usageLimit.UsageLimitContinueIdentity) =>
-    this.mutate(id, (record) => usageLimit.cancelAgentSessionUsageLimitContinue(record, cut))
+  cancelUsageLimitContinue = (id: string, cut: usageLimitContinue.UsageLimitContinueIdentity) =>
+    this.mutate(id, (record) =>
+      usageLimitContinue.cancelAgentSessionUsageLimitContinue(record, cut)
+    )
 
   transitionHandoff = (
     sessionId: string,
@@ -312,7 +311,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   /** The journal commit revealing a stopped cut co-writes its withdrawal; a saved one needs none. */
   usageLimitContinueCancelReceipt = (
     id: string,
-    cut: usageLimit.UsageLimitContinueIdentity
+    cut: usageLimitContinue.UsageLimitContinueIdentity
   ): JournalOperationReceipt | undefined => {
     const saved = this.getRecord(id)?.usageLimitContinueCancel
     return saved?.turnItemId === cut.turnItemId && saved.resetsAt === cut.resetsAt
@@ -320,7 +319,10 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       : this.transactions.receipt((draft) => {
           const record = draft.records.get(id)
           if (record) {
-            draft.records.set(id, usageLimit.cancelAgentSessionUsageLimitContinue(record, cut))
+            draft.records.set(
+              id,
+              usageLimitContinue.cancelAgentSessionUsageLimitContinue(record, cut)
+            )
           }
         })
   }

@@ -14,18 +14,6 @@ export function start(
     sessions: context.sessions,
     readLoadedCut: delivery.readUsageLimitCut,
     readSavedCut: (id) => readSavedUsageLimitCut(context.deps.journalDatabase.db, id),
-    cutAccountHome: async (id, turnItemId) => {
-      // Only the child that ran the cut's turn knows its account, so save it while that child is live.
-      const session = context.sessions.get(id)
-      const child = session?.child
-      if (child?.accountHome && session?.journal.itemFence(turnItemId) === child.fence) {
-        const accountHome = child.accountHome
-        await context.deps.store.recordUsageLimitCutAccount(id, { turnItemId, accountHome })
-        return accountHome
-      }
-      const saved = context.deps.store.getRecord(id)?.usageLimitCutAccount
-      return saved?.turnItemId === turnItemId ? saved.accountHome : null
-    },
     serialize: context.serialize,
     send: (params) => host.send({ callerKey: 'trusted-local:usage-limit-continue' }, params),
     publish: delivery.publishStatus,

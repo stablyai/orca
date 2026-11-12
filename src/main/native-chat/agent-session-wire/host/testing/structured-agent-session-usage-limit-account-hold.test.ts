@@ -75,12 +75,13 @@ async function heldChat() {
     launchUnder: (next: UsageLimitAccountScope) => {
       attributed = next
     },
-    /** The cut ran on account A; a start of this chat would now launch on `path`. */
+    /** The cut's runtime launched on account A; a start of this chat would now launch on `path`. */
     switchAccount: async (path: string) => {
-      await current.store.recordUsageLimitCutAccount(SESSION, {
-        turnItemId: cut.turnItemId,
-        accountHome: { variable: 'CODEX_HOME', path: '/homes/a' }
-      })
+      const fence = journal.itemFence(cut.turnItemId)!
+      await current.store.transitionHandoff(SESSION, (record) => ({
+        ...record,
+        launchedAccount: { fence, accountHome: { variable: 'CODEX_HOME', path: '/homes/a' } }
+      }))
       current.host.deps.launchAccountHome = async () => ({ variable: 'CODEX_HOME', path })
     },
     setEnabled: (next: boolean) => {
@@ -149,6 +150,24 @@ it('continues before the cut resets once the chat would start on another account
   expect(await chat.pass(start + 5_000, (now) => weekly(0, null, now))).toEqual([])
   expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: start + 5_000 })
   await settleOne(await chat.pass(start + 20_000, (now) => weekly(0, null, now)))
+})
+
+it('keeps the new account spent from a reading before the switch until a later one shows room', async () => {
+  const chat = await heldChat()
+  const start = chat.cut.resetsAt - 60_000
+  const newAccountReset = start + 2 * HOUR
+  await chat.switchAccount('/homes/b')
+  expect(await chat.pass(start + 5_000, () => weekly(100, newAccountReset, start + 1_000))).toEqual(
+    []
+  )
+  expect(chat.state()).toMatchObject({ continueAt: newAccountReset })
+  expect(await chat.pass(start + 10 * 60_000, () => weekly(100, newAccountReset, start))).toEqual(
+    []
+  )
+  const room = start + 20 * 60_000
+  expect(await chat.pass(room, (now) => weekly(0, null, now))).toEqual([])
+  expect(chat.state()).toMatchObject({ continueAt: room })
+  await settleOne(await chat.pass(room + 15_000, (now) => weekly(0, null, now)))
 })
 
 it('retires a hold when the launch moves to billing the reading does not describe', async () => {

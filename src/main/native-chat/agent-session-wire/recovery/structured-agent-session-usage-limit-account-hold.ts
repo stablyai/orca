@@ -195,10 +195,8 @@ export class UsageLimitAccountHolds {
   ): UsageLimitAccountVerdict {
     // The account the chat moved to never hit this cut: from the move on, only its reading holds.
     const moved = this.movedSince.get(id)
-    const cut =
-      moved?.cut === identity(limited)
-        ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) }
-        : limited
+    const movedCut = moved?.cut === identity(limited)
+    const cut = movedCut ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) } : limited
     const scope = this.scopes.get(id)
     let hold = this.holds.get(id)
     // Nothing attributed and nothing held: the cut decides, and nothing is kept for it.
@@ -232,10 +230,11 @@ export class UsageLimitAccountHolds {
       (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt,
       typeof covering === 'number' ? covering : cut.resetsAt
     )
+    // Spending the new account showed before the move still holds; only a later reading releases it.
     if (
       account &&
       reading &&
-      fresh(cut.resetsAt) &&
+      fresh(movedCut ? Number.NEGATIVE_INFINITY : cut.resetsAt) &&
       now - anchor <= NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS
     ) {
       if (typeof covering === 'number') {
@@ -250,7 +249,10 @@ export class UsageLimitAccountHolds {
           hold.heldUntil = Math.max(hold.heldUntil ?? spentUntil, spentUntil)
         }
         hold.spentSeenAt = Math.max(hold.spentSeenAt ?? reading.updatedAt, reading.updatedAt)
-      } else if (reading.updatedAt > (hold.spentSeenAt ?? Number.NEGATIVE_INFINITY)) {
+      } else if (
+        fresh(cut.resetsAt) &&
+        reading.updatedAt > (hold.spentSeenAt ?? Number.NEGATIVE_INFINITY)
+      ) {
         // Room newer than any spending seen releases the hold at that reading, so it counts from now.
         if (hold.unknownReset || (hold.heldUntil ?? Number.NEGATIVE_INFINITY) > reading.updatedAt) {
           hold.heldUntil = reading.updatedAt

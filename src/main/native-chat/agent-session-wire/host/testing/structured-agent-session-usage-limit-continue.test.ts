@@ -119,7 +119,6 @@ it('continues every chat whose limit reset in the same pass', async () => {
     sessions: new Map(ids.map((id) => [id, {}])),
     readSavedCut: () => null,
     readLoadedCut: cut,
-    cutAccountHome: async () => null,
     serialize: (_id, run) => run(),
     // Each send is answered as superseded, which spends no budget; only who was sent matters here.
     send: async (params) => {

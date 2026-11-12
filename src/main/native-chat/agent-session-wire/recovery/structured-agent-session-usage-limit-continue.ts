@@ -16,7 +16,6 @@ import type { sendStructuredAgentSessionTurn } from '../operations/structured-ag
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
 import { UsageLimitAccountHolds } from './structured-agent-session-usage-limit-account-hold'
 import { UsageLimitColdCuts } from './structured-agent-session-usage-limit-cold-cuts'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 
 type Cut = HostUsageLimitCut & { resetsAt: number; turnEndedAt: number }
 type Attempt = { identity: string; count: number; at: number; unconfirmed?: boolean }
@@ -39,8 +38,6 @@ type Deps = {
     params: Parameters<typeof sendStructuredAgentSessionTurn>[2]
   ) => ReturnType<typeof sendStructuredAgentSessionTurn>
   readLoadedCut: (id: string) => HostUsageLimitCut | null
-  /** The account the cut's turn ran on, when known. */
-  cutAccountHome: (id: string, turnItemId: string) => Promise<AgentSessionAccountHome | null>
   publish: (id: string) => void
   now: () => number
 }
@@ -225,9 +222,11 @@ export class StructuredAgentSessionUsageLimitContinue {
     }
   }
 
-  private async attribute(id: string, cut: HostUsageLimitCut): Promise<void> {
-    const home = await this.deps.cutAccountHome(id, cut.turnItemId).catch(() => null)
-    await this.holds.attribute(id, this.deps.host, { cut: identity(cut), home }, this.deps.now())
+  /** The account a cut hit is the one its turn's runtime launched under, when the record names it. */
+  private attribute(id: string, cut: HostUsageLimitCut): Promise<void> {
+    const launched = this.deps.host.store.getRecord(id)?.launchedAccount
+    const home = launched && launched.fence === cut.fence ? launched.accountHome : null
+    return this.holds.attribute(id, this.deps.host, { cut: identity(cut), home }, this.deps.now())
   }
 
   private deferUnchangedCut(id: string, cut: Cut, at: number): void {

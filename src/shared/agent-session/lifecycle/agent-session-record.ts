@@ -1,4 +1,4 @@
-import { hasValidUsageLimitRecordFields } from './agent-session-usage-limit-continue'
+import { isOptionalUsageLimitContinueCancel } from './agent-session-usage-limit-continue'
 import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
@@ -30,8 +30,10 @@ import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
 import { isNonNegativeSafeInteger } from '../../ssh-retained-payload-limits'
 import {
   isAgentSessionAccountHome,
+  isOptionalAgentSessionLaunchedAccount,
   MAX_PATH_LENGTH,
-  type AgentSessionAccountHome
+  type AgentSessionAccountHome,
+  type AgentSessionLaunchedAccount
 } from './agent-session-account-home'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
@@ -119,6 +121,8 @@ export type AgentSessionRecord = {
   providerHandleChain: AgentSessionProviderHandleLink[]
   providerContextBoundary?: AgentSessionProviderContextBoundary
   accountHome: AgentSessionAccountHome
+  /** Where the latest proven runtime actually launched; absent before any or from older hosts. */
+  launchedAccount?: AgentSessionLaunchedAccount
   /** Optional host-written construction observation; checked independently of record readability. */
   acquiredAccount?: unknown
   /** Initial launch directory in host path syntax. Floating sessions resume here; worktree/folder IDs resolve their durable location. */
@@ -128,8 +132,6 @@ export type AgentSessionRecord = {
   /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
   permissionMode?: string
   usageLimitContinueCancel?: { turnItemId: string; resetsAt: number }
-  /** The account the latest usage-limit cut hit, saved while the child that ran it was live. */
-  usageLimitCutAccount?: { turnItemId: string; accountHome: AgentSessionAccountHome }
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The conversation's one name: Orca's automatic name or the user's rename. Session History,
@@ -315,12 +317,13 @@ export function isPersistedAgentSessionObservationRecord(
       isAgentSessionExecutionLocation(record.location) &&
       isStructuredAgentId(record.provider) &&
       isAgentSessionAccountHome(record.accountHome) &&
+      isOptionalAgentSessionLaunchedAccount(record.launchedAccount) &&
       (record.launchDirectory === undefined ||
         isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
       (record.options === undefined || isAgentSessionOptions(record.options)) &&
       (record.permissionMode === undefined ||
         isBoundedString(record.permissionMode, MAX_ID_LENGTH)) &&
-      hasValidUsageLimitRecordFields(record) &&
+      isOptionalUsageLimitContinueCancel(record.usageLimitContinueCancel) &&
       (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
       (record.providerContextBoundary === undefined ||
         isAgentSessionProviderContextBoundary(record.providerContextBoundary)) &&
