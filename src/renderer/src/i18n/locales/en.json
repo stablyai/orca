@@ -28213,6 +28213,11 @@
       "notSetUp": "{{agent}} isn’t set up for Orca Cloud",
       "expired": "{{agent}} sign-in expired"
     },
+    "chatHold": {
+      "notSetUp": "Set up {{agent}} above to start",
+      "expired": "Renew {{agent}} sign-in above to start",
+      "signIn": "Sign in to {{agent}} above to start"
+    },
     "continueOffer": {
       "title": "An agent was interrupted by the restart",
       "action": "Continue"

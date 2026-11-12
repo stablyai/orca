@@ -4,7 +4,6 @@
 // terminal's size never changes. SSH, WSL and paired hosts keep #40228's card.
 import { openOrcaCloudSignInSheet } from '@/components/settings/agent-accounts/sign-in-sheet/orca-cloud-sign-in-sheet-store'
 import React, { useEffect, useSyncExternalStore } from 'react'
-import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -29,10 +28,10 @@ import type { TerminalPaneController } from '../terminal-pane/controller/use-ter
 import { agentSignInCardActions } from '../agent-sign-in/AgentSignInPanePortals'
 import {
   CloudAgentSignInStrip,
-  CloudStripLayer,
   cloudStripWidth,
   type CloudStripActions
 } from './CloudAgentSignInStrip'
+import { CloudPaneBannerPortal } from './CloudPaneBannerPortal'
 import { cloudAgentStripModel } from './cloud-agent-strip-model'
 import { cloudAgentSetupStripModel } from './cloud-agent-setup-strip-model'
 import { cloudSetupStripActions } from './cloud-setup-strip-actions'
@@ -200,17 +199,20 @@ function CloudStripPortal({
     useApiKey: () => openSettings('cloud-secrets'),
     cancel: () => (hold ? releaseCloudAgentHold(key, 'cancel') : gateActions.cancel())
   }
-  return createPortal(
-    <CloudStripLayer>
+  return (
+    <CloudPaneBannerPortal
+      pane={pane}
+      paneKey={paneKey}
+      portalKey={`cloud-sign-in-strip-${pane.id}`}
+      stripLayer
+    >
       <CloudAgentSignInStrip
         model={model}
         prompt={hold?.prompt ?? cloudGate?.prompt ?? null}
         width={width}
         actions={actions}
       />
-    </CloudStripLayer>,
-    pane.container,
-    `cloud-sign-in-strip-${pane.id}`
+    </CloudPaneBannerPortal>
   )
 }
 
