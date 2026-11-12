@@ -13,9 +13,8 @@ import type { PersistedState } from '../../shared/orca-profiles/persisted-state-
 import { getDefaultPersistedState } from '../../shared/orca-profiles/constants'
 import type { SshRemotePtyLease } from '../../shared/remote-runtime/ssh/ssh-types'
 import { hydrateWorktreeMetaAliasProjection } from './loading-store/worktree-metadata/worktree-meta-alias-projection'
-import { Store } from './loading-store/store'
+import { Store, type StoreOptions } from './loading-store/store'
 import { getDataFile, initDataPath } from './loading-store/user-data-path'
-import type { StoreRuntimeOptions } from './loading-store/store-runtime-state'
 import { ProfileStateSqliteAuthority } from './profile-state/profile-state-sqlite-authority'
 import { openProfileStateDatabaseReadOnly } from './profile-state/database/profile-state-database'
 import { profileStateDatabaseFile } from '../../shared/orca-profiles/profile-state-storage-paths'
@@ -31,7 +30,7 @@ class UnitTestProfileStateAuthority extends ProfileStateSqliteAuthority {
 
 export function createSqliteTestStore(
   StoreConstructor: typeof Store,
-  options: Omit<StoreRuntimeOptions, 'profileStateAuthority'> = {}
+  options: Omit<StoreOptions, 'profileStateAuthority'> = {}
 ): Store {
   const path = options.dataFile ?? getDataFile()
   const databaseFile = profileStateDatabaseFile(dirname(path))
@@ -85,7 +84,7 @@ export function readPersistedStateJson(path = dataFile(), profileId = 'persisten
 }
 
 export function createStore(
-  options: Pick<StoreRuntimeOptions, 'paneShellPath' | 'storageAuthority'> = {}
+  options: Pick<StoreOptions, 'paneShellPath' | 'storageAuthority' | 'initializeHomeWorkspace'> = {}
 ): Store {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()

@@ -3,7 +3,9 @@ import { useTranslate } from '@/i18n/use-translate'
 
 type OnboardingFooterProps = {
   shouldShowSetUpLater: boolean
-  busyLabel: string | null
+  opensAddProject: boolean
+  /** Disables every footer action, including while work runs without a visible busy label. */
+  locked: boolean
   onSetUpLater: () => void
   stepIndex: number
   onBack: () => void
@@ -16,7 +18,8 @@ type OnboardingFooterProps = {
 
 export function OnboardingFooter({
   shouldShowSetUpLater,
-  busyLabel,
+  opensAddProject,
+  locked,
   onSetUpLater,
   stepIndex,
   onBack,
@@ -32,10 +35,12 @@ export function OnboardingFooter({
       {shouldShowSetUpLater ? (
         <button
           className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
-          disabled={Boolean(busyLabel)}
+          disabled={locked}
           onClick={onSetUpLater}
         >
-          {t('auto.components.onboarding.OnboardingFooter.111d3f8d92', 'Set up later')}
+          {opensAddProject
+            ? t('components.onboarding.flow.actions.skipToProjectSetup', 'Skip to project setup')
+            : t('auto.components.onboarding.OnboardingFooter.111d3f8d92', 'Set up later')}
         </button>
       ) : (
         <span />
@@ -44,7 +49,7 @@ export function OnboardingFooter({
         {stepIndex > 0 && (
           <button
             className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-60"
-            disabled={Boolean(busyLabel)}
+            disabled={locked}
             onClick={onBack}
           >
             <ChevronLeft className="size-4" />
@@ -55,7 +60,7 @@ export function OnboardingFooter({
           <button
             className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             aria-busy={primaryBusy}
-            disabled={Boolean(busyLabel)}
+            disabled={locked}
             onClick={onPrimary}
           >
             {primaryBusy ? <Loader2 className="size-4 animate-spin" /> : null}

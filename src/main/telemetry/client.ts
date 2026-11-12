@@ -17,8 +17,6 @@ import { buildCommonProps, createPostHogClient } from './posthog-transport'
 import { captureOptOutBeforeSdkOptOut } from './opt-out-capture'
 import { commonPropsSchema, validate } from './validator'
 
-export { shouldOptOutSdkAtInit } from './posthog-transport'
-
 // Compile-time feature flag, independent of the build-identity gate — both must be satisfied to transmit.
 // NOTE: config/scripts/verify-telemetry-constants.mjs greps `const TELEMETRY_ENABLED = true|false`; keep that shape or update its regex.
 const TELEMETRY_ENABLED = true
@@ -109,6 +107,9 @@ function ensurePostHogClient(): PostHog | null {
 }
 
 export const isTelemetryInitialized = (): boolean => storeRef !== null
+
+// An unreported first launch must not label this session's later events (e.g. after a mid-session opt-in).
+export const clearFirstLaunchLayoutProp = (): boolean => delete commonProps?.first_launch_layout_v1
 
 /** Lets producers avoid preparing usage payloads when transmission is disabled. */
 export function isTelemetryEnabled(): boolean {
