@@ -2272,6 +2272,7 @@
       "resumeInNewCli": "新しい CLI で再開"
     },
     "nativeChatFloatingControls": {
+      "scrollToPrompt": "プロンプトにスクロール",
       "scrollToLatest": "最新の内容にスクロール"
     },
     "nativeChatFullContent": {

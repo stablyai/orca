@@ -2345,6 +2345,7 @@
       "resumeInNewCli": "Reanudar en una nueva CLI"
     },
     "nativeChatFloatingControls": {
+      "scrollToPrompt": "Ir al prompt",
       "scrollToLatest": "Ir a lo más reciente"
     },
     "nativeChatFullContent": {

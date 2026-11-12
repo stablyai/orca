@@ -28,6 +28,8 @@ function isAtTail(event: NativeScrollEvent): boolean {
 export type MobileNativeChatListHandle = {
   scrollToOffset: (params: { animated: boolean; offset: number }) => void
   scrollToEnd: (params: { animated: boolean }) => void
+  scrollToRow?: (key: string) => boolean
+  watchRow?: (key: string, onShown: (shown: boolean) => void) => () => void
 }
 
 export type MobileNativeChatTailFollow = {
@@ -40,6 +42,9 @@ export type MobileNativeChatTailFollow = {
   showJumpToTail: boolean
   pinToTail: () => void
   pinToTailAfterContentResize: (_width: number, height: number) => void
+  leaveTail: () => number
+  holdsIntent: (token: number) => boolean
+  list: () => MobileNativeChatListHandle | null
   jumpToTail: () => void
   beginUserScroll: () => void
   endUserDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
@@ -58,6 +63,7 @@ export function useMobileNativeChatTailFollow(args: {
 }): MobileNativeChatTailFollow {
   const { hasItems, scopeKey } = args
   const listRef = useRef<MobileNativeChatListHandle | null>(null)
+  const intentRef = useRef(0)
   const [following, setFollowingFlag] = useState(true)
   const [atTail, setAtTailFlag] = useState(true)
   // Event handlers read intent at event time, before a re-render lands.
@@ -124,6 +130,7 @@ export function useMobileNativeChatTailFollow(args: {
     (fromEnd: number, byReader: boolean) => {
       setAtTail(fromEnd <= AT_TAIL_SLOP)
       if (byReader) {
+        intentRef.current += 1
         setFollowing(fromEnd <= 1)
       }
     },
@@ -131,6 +138,7 @@ export function useMobileNativeChatTailFollow(args: {
   )
 
   const jumpToTail = useCallback(() => {
+    intentRef.current += 1
     clearUserScrollSettle()
     userScrollActiveRef.current = false
     setAtTail(true)
@@ -138,7 +146,17 @@ export function useMobileNativeChatTailFollow(args: {
     pinToTail()
   }, [clearUserScrollSettle, pinToTail, setAtTail, setFollowing])
 
+  const leaveTail = useCallback(() => {
+    clearUserScrollSettle()
+    userScrollActiveRef.current = false
+    setFollowing(false)
+    return ++intentRef.current
+  }, [clearUserScrollSettle, setFollowing])
+  const holdsIntent = useCallback((token: number) => intentRef.current === token, [])
+  const list = useCallback(() => listRef.current, [])
+
   const beginUserScroll = useCallback(() => {
+    intentRef.current += 1
     clearUserScrollSettle()
     userScrollActiveRef.current = true
     setFollowing(false)
@@ -212,6 +230,9 @@ export function useMobileNativeChatTailFollow(args: {
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail,
+    leaveTail,
+    holdsIntent,
+    list,
     beginUserScroll,
     endUserDrag,
     beginMomentum,

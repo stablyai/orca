@@ -2414,6 +2414,7 @@
       "resumeInNewCli": "Продолжить в новом CLI"
     },
     "nativeChatFloatingControls": {
+      "scrollToPrompt": "Прокрутить к запросу",
       "scrollToLatest": "Прокрутить к последним сообщениям"
     },
     "nativeChatFullContent": {

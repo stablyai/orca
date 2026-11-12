@@ -32,6 +32,7 @@ import {
 import { useMobileNativeChatTransientData } from './transcript/use-mobile-native-chat-transient-data'
 import { useMobileNativeChatRowKeys } from './transcript/mobile-native-chat-row-keys'
 import { useMobileNativeChatPinchGesture } from './transcript/use-mobile-native-chat-pinch-gesture'
+import { useMobileNativeChatPromptJump } from './transcript/use-mobile-native-chat-prompt-jump'
 import { useMobileNativeChatTailFollow } from './transcript/use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './transcript/use-mobile-native-chat-turn-disclosure'
 import { mobileNativeChatComposerPlaceholder } from './composer/use-mobile-native-chat-input-lease'
@@ -284,6 +285,7 @@ export function MobileNativeChatView({
   })
 
   const rowKeys = useMobileNativeChatRowKeys(folded, messages, sendSurfaceId, turns.presentation)
+  const promptJump = useMobileNativeChatPromptJump(tail, turns.listMessages, rowKeys.keyOf)
   const disclosures = useMobileNativeChatDisclosures(sendSurfaceId)
   const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(data), [data])
   const renderItem = useMobileNativeChatRowRenderer({
@@ -416,10 +418,7 @@ export function MobileNativeChatView({
                 </GestureDetector>
               </MobileNativeChatScrollRootsBoundary>
             </MobileNativeChatDisclosureContext.Provider>
-            <MobileNativeChatFloatingControls
-              showJumpToTail={tail.showJumpToTail}
-              onJumpToTail={jumpToTail}
-            />
+            <MobileNativeChatFloatingControls {...promptJump} />
           </GestureHandlerRootView>
         )}
         <MobileNativeChatLowerRegion scopeKey={sendSurfaceId} composerPresent={!promptOwnsInput}>

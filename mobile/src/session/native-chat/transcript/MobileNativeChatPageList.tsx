@@ -35,6 +35,7 @@ import {
   createMobileNativeChatGrowthHold,
   MobileNativeChatGrowthHoldContext
 } from './mobile-native-chat-growth-hold'
+import { mobileNativeChatPageListHandle } from './mobile-native-chat-page-list-handle'
 
 const FIRST_ROWS = 24
 const DRAW_BATCH = 12
@@ -281,23 +282,18 @@ export function MobileNativeChatPageList({
     [isFollowing]
   )
 
+  const drawRow = useCallback((key: string) => {
+    const { indexOf, first, n, rowKeys } = latest.current
+    const index = indexOf.get(key)
+    if (index !== undefined && index < first) {
+      setDrawn({ scope: rowKeys.scope, firstKey: key, count: n - index })
+    }
+  }, [])
+
   useImperativeHandle(
     ref,
-    () => ({
-      scrollToEnd: () => {
-        const s = scroller()
-        if (s) {
-          write(s, 0)
-        }
-      },
-      scrollToOffset: ({ offset }) => {
-        const s = scroller()
-        if (s) {
-          write(s, offset - (s.scrollHeight - s.clientHeight))
-        }
-      }
-    }),
-    [scroller, write]
+    () => mobileNativeChatPageListHandle(scroller, write, notePlace, drawRow),
+    [scroller, write, notePlace, drawRow]
   )
 
   const drawnHead = useRef<string | undefined>(undefined)

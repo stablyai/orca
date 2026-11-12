@@ -2278,6 +2278,7 @@
       "resumeInNewCli": "在新 CLI 中恢复"
     },
     "nativeChatFloatingControls": {
+      "scrollToPrompt": "滚动到提示",
       "scrollToLatest": "滚动到最新消息"
     },
     "nativeChatFullContent": {

@@ -2272,6 +2272,7 @@
       "resumeInNewCli": "새 CLI에서 재개"
     },
     "nativeChatFloatingControls": {
+      "scrollToPrompt": "프롬프트로 스크롤",
       "scrollToLatest": "최신 내용으로 스크롤"
     },
     "nativeChatFullContent": {

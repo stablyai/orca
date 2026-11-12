@@ -2276,6 +2276,7 @@
       "resumeInNewCli": "Yeni CLI'de Devam Et"
     },
     "nativeChatFloatingControls": {
+      "scrollToPrompt": "İsteme kaydır",
       "scrollToLatest": "En sona kaydır"
     },
     "nativeChatFullContent": {
