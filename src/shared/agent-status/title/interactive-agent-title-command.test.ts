@@ -51,22 +51,49 @@ describe('titleCommandLaunchesInteractiveTui', () => {
     'claude install stable',
     'claude setup-token',
     'claude plugin install foo',
-    'claude --debug mcp serve',
+    // The command position is found past option values and past `--` (F41366-C3-1).
+    'claude --model opus mcp serve',
+    'claude --model=opus mcp serve',
+    'claude --debug=x mcp serve',
+    'claude -- mcp list',
+    'claude -- mcp',
     '/usr/local/bin/claude mcp serve'
   ])('rejects the non-session subcommand %j', (title) => {
     expect(titleCommandLaunchesInteractiveTui(title, 'claude')).toBe(false)
   })
 
   it.each([
-    // A prompt word, a quoted prompt, a prompt after `--`, and the subcommands that open a session.
+    // A prompt word, a quoted prompt, an option value, and the subcommands that open a session.
     'claude fix the mcp server',
     'claude "mcp serve"',
-    'claude -- mcp',
+    'claude -- fix mcp',
+    // `doctor` names the session; `mcp` is the optional debug filter and `serve` the prompt (F41366-C3-1).
+    'claude --name doctor',
+    'claude -n doctor',
+    'claude --debug mcp serve',
     'claude attach 1a2b',
     'claude agents',
     'claude import codex'
   ])('accepts the session launch %j whose words only resemble a subcommand', (title) => {
     expect(titleCommandLaunchesInteractiveTui(title, 'claude')).toBe(true)
+  })
+
+  it.each(['claude --bg', 'claude --background', 'claude --background "fix the build"'])(
+    'rejects the background launch %j, which prints an id and returns (F41366-C3-2)',
+    (title) => {
+      expect(titleCommandLaunchesInteractiveTui(title, 'claude')).toBe(false)
+    }
+  )
+
+  it.each([
+    'claude --bogus-flag',
+    'claude -x',
+    'claude --verbose=1',
+    'claude --name',
+    'FOO=1 claude',
+    'node /opt/claude/cli.js'
+  ])('rejects %j: an argv it cannot read with confidence is not a known session', (title) => {
+    expect(titleCommandLaunchesInteractiveTui(title, 'claude')).toBe(false)
   })
 
   it.each(['✳ Claude Code', '~/repo', 'zsh', 'less'])(
