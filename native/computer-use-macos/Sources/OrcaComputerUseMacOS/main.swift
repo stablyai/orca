@@ -270,12 +270,13 @@ final class Provider {
         var action = try runAction()
         // Why: only --restore-window activates the app or posts to the HID tap; every other route leaves the user's desktop alone.
         action["delivery"] = isForegroundRequest(params) ? "foreground" : "background"
-        // Why: the action's currentSnapshot just cached this target's tree from before the action.
+        // Why: the action's currentSnapshot just cached this target's tree from before the action;
+        // a subtree read can't be compared with the whole-window read that follows.
         let before = action["path"] as? String == "accessibility" && action["verification"] == nil
-            ? try? cachedSnapshot(params: params)
+            ? (try? cachedSnapshot(params: params)).flatMap { $0.scope == nil ? $0 : nil }
             : nil
         do {
-            let after = try observeKeepingScope(params: params)
+            let after = try observe(params: params)
             guard let before, after.showsSameState(as: before) else {
                 return renderActionResult(action: action, snapshot: after)
             }
@@ -304,10 +305,10 @@ final class Provider {
         let deadline = Date().addingTimeInterval(1)
         while Date() < deadline {
             Thread.sleep(forTimeInterval: 0.2)
-            let polled = try observeKeepingScope(params: quietParams)
+            let polled = try observe(params: quietParams)
             if !polled.showsSameState(as: before) {
                 if params["noScreenshot"]?.bool == true { return polled }
-                return try observeKeepingScope(params: settleParams)
+                return try observe(params: settleParams)
             }
         }
         return nil
@@ -356,18 +357,6 @@ final class Provider {
             throw ProviderError.coded("element_not_found", "--element-index needs a get-app-state snapshot of this app/window first")
         }
         return (try element(base, rootIndex), base)
-    }
-
-    /// Re-reads the subtree the cached snapshot showed, so actions on its elements report that part of the window.
-    private func observeKeepingScope(params: [String: JSONValue]) throws -> Snapshot {
-        guard let rootIndex = (try? cachedSnapshot(params: params))?.scope?.rootIndex else {
-            return try observe(params: params)
-        }
-        do {
-            return try observe(params: params.merging(["rootElementIndex": .number(Double(rootIndex))]) { _, replacement in replacement })
-        } catch let error as ProviderError where error.code == "element_not_found" {
-            return try observe(params: params)
-        }
     }
 
     private func rememberSnapshot(
@@ -447,14 +436,15 @@ final class Provider {
         }
     }
 
-    private func currentSnapshot(params: [String: JSONValue]) throws -> Snapshot {
+    private func currentSnapshot(params: [String: JSONValue], needsFocus: Bool = false) throws -> Snapshot {
         pruneSnapshotCache()
         let cached = try cachedSnapshot(params: params)
         let requestedIndexes = try requestedElementIndexes(params)
         let observeParams = params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement }
-        // Why: elements read with --element-index may lie past the whole-window node limit, so only their subtree can re-find them.
+        // Why: elements read with --element-index, focused ones included, may lie past the whole-window node limit,
+        // so only their subtree can re-find them.
         if let scope = cached?.scope,
-           requestedIndexes.allSatisfy(scope.walkedIndexes.contains),
+           requestedIndexes.isEmpty ? needsFocus : requestedIndexes.allSatisfy(scope.walkedIndexes.contains),
            let scoped = try? observe(params: observeParams.merging(["rootElementIndex": .number(Double(scope.rootIndex))]) { _, replacement in replacement }),
            !requestedIndexes.isEmpty || scoped.focusedElementId != nil {
             try validateRequestedElements(cached: cached, current: scoped, requestedIndexes: requestedIndexes)
@@ -469,7 +459,7 @@ final class Provider {
 
     private func currentKeyboardSnapshot(params: [String: JSONValue]) throws -> Snapshot {
         // Why: keyboard actions need fresh focused-element state, never pixels.
-        try currentSnapshot(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
+        try currentSnapshot(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement }, needsFocus: true)
     }
 
     private func cachedSnapshot(params: [String: JSONValue]) throws -> Snapshot? {
@@ -2274,7 +2264,7 @@ private func renderTreeText(app: AppDescriptor, title: String, rootIndex: Int?, 
     output.append("")
     output.append(contentsOf: lines)
     output.append("")
-    output.append(focused.map { "The focused UI element is \($0)." } ?? "No UI element is currently focused.")
+    output.append(focused.map { "The focused UI element is \($0)." } ?? (rootIndex == nil ? "No UI element is currently focused." : "No UI element inside this one is focused."))
     return output.joined(separator: "\n")
 }
 
