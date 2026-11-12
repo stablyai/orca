@@ -17,6 +17,8 @@ import type { TuiIdleHookTurn } from './tui-idle-hook-lane'
 import { hasTerminalAgentPainted } from '../input/terminal-command-paint'
 import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { titleCommandLaunchesInteractiveTui } from '../../../../shared/agent-status/title/interactive-agent-title-command'
+import { isPagerProcess } from '../../../../shared/agent-status/process/pager-process-detection'
 import type {
   FirstPartyAgentStatus,
   TuiIdleEvaluationInput,
@@ -37,6 +39,9 @@ export type TuiIdleEvidenceSource = {
   readRuledScreen?(ptyId: string | null | undefined): RuledScreen | null
   /** The PTY's quiet clock: its last output, else when main began receiving its silent stream. */
   getOutputClockAt?(ptyId: string | null | undefined): number | null
+  /** The foreground process a poll read during the pane's current quiet stretch; absent before any
+   *  such read, and once output has moved on. Only the idle polls supply it. */
+  getQuietForegroundProcess?(ptyId: string | null | undefined): string | null
 }
 
 /** One clock per terminal, read by ptyId. */
@@ -119,16 +124,34 @@ function lazyWaitText(readWaitText: () => string): () => string {
 }
 
 /** The agent whose paint corroborates a name-only idle: launch authority first, else the title's
- *  name, the same fallback `nameOnlyIdleNeedsCorroboration` uses. Why: an adopted pane, or a Claude
+ *  agent, the same fallback `nameOnlyIdleNeedsCorroboration` uses. Why: an adopted pane, or a Claude
  *  run through a command Orca does not recognize, is identified by its title alone; without this the
  *  title required corroboration while the paint check fell back to any visible byte, so a printing
- *  preexec hook could still settle it before the composer existed (STA-14925). */
-function paintAgent(agent: TuiAgent | null, title: string | null | undefined): TuiAgent | null {
+ *  preexec hook could still settle it before the composer existed (STA-14925).
+ *
+ *  Why only a positively interactive title: a shell title is retained from the command's start, so
+ *  `claude --help | less` or `claude -p …` keeps Claude's name while the live process (a pager, a
+ *  one-shot) never draws Claude's composer; holding for that composer would wait out the caller's
+ *  timeout. The gate therefore needs the title to read as the TUI itself (no pipe or redirect, no
+ *  print or informational flag) and the quiet foreground, where a poll has read it, to be something
+ *  other than a known non-agent such as a pager. Otherwise the pane keeps the any-visible-byte rule,
+ *  as before. Not covered: a title whose tokens name a second agent (`claude --resume codex`), which
+ *  the title policy attributes to that agent (STA-14961). */
+function paintAgent(
+  agent: TuiAgent | null,
+  title: string | null | undefined,
+  quietForegroundProcess: string | null
+): TuiAgent | null {
   if (agent) {
     return agent
   }
-  const fromTitle = title ? resolveTerminalTitlePolicyAgentType(title) : null
-  return isTuiAgent(fromTitle) ? fromTitle : null
+  if (!title || isPagerProcess(quietForegroundProcess)) {
+    return null
+  }
+  const fromTitle = resolveTerminalTitlePolicyAgentType(title)
+  return isTuiAgent(fromTitle) && titleCommandLaunchesInteractiveTui(title, fromTitle)
+    ? fromTitle
+    : null
 }
 
 export function ptyTuiIdleEvidence(
@@ -158,6 +181,14 @@ export function ptyTuiIdleEvidence(
     readHookTurn: hookTurnReader(source, agent, pty.ptyId),
     quiescenceMs: source.quiescenceMs,
     // Why per agent: Claude's corroboration is its own composer marker, which no shell hook can print.
-    readCommandPainted: () => hasTerminalAgentPainted(pty, paintAgent(agent, record.lastOscTitle))
+    readCommandPainted: () =>
+      hasTerminalAgentPainted(
+        pty,
+        paintAgent(
+          agent,
+          record.lastOscTitle,
+          source.getQuietForegroundProcess?.(pty.ptyId) ?? null
+        )
+      )
   }
 }

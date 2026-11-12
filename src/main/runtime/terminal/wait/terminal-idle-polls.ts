@@ -1,4 +1,5 @@
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
+import { isPagerProcess } from '../../../../shared/agent-status/process/pager-process-detection'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
@@ -62,11 +63,31 @@ type IdlePollSample = {
   isQuiet(lane: QuietForegroundLane): boolean
 }
 
+/** A foreground read pinned to the quiet stretch it was taken in; output moving on retires it. */
+type QuietForegroundRead = {
+  pty: RuntimePtyWorktreeRecord
+  process: string | null
+  outputClockAt: number | null
+}
+
 export class RuntimeTerminalIdlePolls {
   private readonly entries = new Set<IdlePollEntry>()
   private sweepTimer: ReturnType<typeof setInterval> | null = null
+  private readonly quietForegroundByPtyId = new Map<string, QuietForegroundRead>()
+  /** The evidence source the polls evaluate with: the shared one plus this poll's own foreground reads. */
+  private readonly evidenceSource: TuiIdleEvidenceSource
 
-  constructor(private readonly deps: RuntimeTerminalIdlePollDependencies) {}
+  constructor(private readonly deps: RuntimeTerminalIdlePollDependencies) {
+    this.evidenceSource = {
+      ...deps,
+      getQuietForegroundProcess: (ptyId) => this.quietForegroundProcessOf(ptyId)
+    }
+  }
+
+  private quietForegroundProcessOf(ptyId: string | null | undefined): string | null {
+    const read = ptyId ? this.quietForegroundByPtyId.get(ptyId) : undefined
+    return read && outputClockOf(this.deps, read.pty) === read.outputClockAt ? read.process : null
+  }
 
   /** `verdict` is what the caller just evaluated; weak ready is checked at once, not a sweep later. */
   start(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord, verdict?: TuiIdleVerdict): void {
@@ -118,7 +139,7 @@ export class RuntimeTerminalIdlePolls {
       buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
     return {
       verdict: evaluateTuiIdle({
-        ...ptyTuiIdleEvidence(this.deps, pty, readWaitText),
+        ...ptyTuiIdleEvidence(this.evidenceSource, pty, readWaitText),
         launchReadiness: entry.waiter.launchReadiness
       }),
       ptyId: pty.ptyId,
@@ -168,9 +189,13 @@ export class RuntimeTerminalIdlePolls {
         return
       }
       const lane = verdict.quietForeground
+      if (lane === 'closed') {
+        await this.readTitleOnlyQuietForeground(entry, sample)
+        return
+      }
       // Why quiet before the read too: a streaming or not-yet-painted pane cannot settle, so it
       // must not pay a process inspection every tick for a whole turn.
-      if (lane !== 'closed' && !entry.foregroundPollInFlight && sample.isQuiet(lane)) {
+      if (!entry.foregroundPollInFlight && sample.isQuiet(lane)) {
         const foregroundRead = this.deps.getForegroundProcess(ptyId)
         if (!foregroundRead) {
           return
@@ -188,6 +213,50 @@ export class RuntimeTerminalIdlePolls {
       if (startedForegroundPoll) {
         entry.foregroundPollInFlight = false
       }
+    }
+  }
+
+  /** A closed lane normally settles on evidence alone. A pane identified only by its retained
+   *  title (no launch, foreground or command authority) may be holding for a composer the live
+   *  process never draws: `claude --help | less` leaves Claude's name over a pager. Read the quiet
+   *  foreground once per quiet stretch; when it is a known non-agent, the paint gate reads it on the
+   *  re-sample and the any-byte rule decides. Launched or foreground-recognized agents never pay
+   *  this read (STA-14925). */
+  private async readTitleOnlyQuietForeground(
+    entry: IdlePollEntry,
+    sample: IdlePollSample
+  ): Promise<void> {
+    const { ptyId } = sample
+    if (
+      entry.foregroundPollInFlight ||
+      this.deps.getPaneAgent(ptyId) !== null ||
+      !sample.isQuiet('closed')
+    ) {
+      return
+    }
+    const outputClockAt = outputClockOf(this.deps, entry.pty)
+    if (this.quietForegroundByPtyId.get(ptyId)?.outputClockAt === outputClockAt) {
+      return
+    }
+    const foregroundRead = this.deps.getForegroundProcess(ptyId)
+    if (!foregroundRead) {
+      return
+    }
+    entry.foregroundPollInFlight = true
+    try {
+      const process = await foregroundRead
+      if (!this.entries.has(entry)) {
+        return
+      }
+      this.quietForegroundByPtyId.set(ptyId, { pty: entry.pty, process, outputClockAt })
+      if (isPagerProcess(process)) {
+        const resample = this.sample(entry)
+        if (resample.verdict.kind === 'ready-weak' && resample.isQuiet('closed')) {
+          this.settle(entry, resample.ready())
+        }
+      }
+    } finally {
+      entry.foregroundPollInFlight = false
     }
   }
 
@@ -218,6 +287,7 @@ export class RuntimeTerminalIdlePolls {
     if (!this.entries.delete(entry)) {
       return
     }
+    this.quietForegroundByPtyId.delete(entry.pty.ptyId)
     entry.waiter.cancelIdlePoll = null
     clearTimeout(entry.recheckTimer)
     if (this.entries.size === 0 && this.sweepTimer) {

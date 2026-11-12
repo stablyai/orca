@@ -19,16 +19,23 @@ const LATER_PREEXEC_HOOK_PRINTS =
 const CLAUDE_CAPABILITY_PROBE = '\x1b[?u\x1b]11;?\x1b\\\x1b[c'
 // Claude's composer under the shell's bare title: palette reports on, paste mode on, `❯`+NBSP.
 const CLAUDE_COMPOSER_BARE_TITLE = '\x1b[?2031h\x1b[?2004h╭──────╮\r\n│ ❯  │\r\n╰──────╯\x1b[?25h'
+// A shell whose title carries the whole command line (oh-my-zsh's window title), as a pipeline or a one-shot.
+const shellRunsTitled = (commandLine: string) =>
+  `\x1b]133;A\x07~/repo % ${commandLine}\r\n\x1b]133;C\x07\x1b]0;${commandLine}\x07`
+const CLAUDE_HELP_TEXT =
+  'Usage: claude [options] [command] [prompt]\r\n\r\nClaude Code - starts an interactive session by default\r\n'
 
 async function startClaudePane(
   writes?: { data: string; at: number }[],
-  identity: 'launched' | 'title-only' = 'launched'
+  identity: 'launched' | 'title-only' = 'launched',
+  // Title-only panes: what the foreground probe sees; the shell while hooks run, or the live process.
+  titleOnlyForeground = 'zsh'
 ) {
-  // Title-only: no launch authority and a foreground probe that still sees the shell, as for an
+  // Title-only: no launch authority and a foreground probe that does not name an agent, as for an
   // adopted pane or a `claude` run through a command Orca does not recognize (STA-14925).
   const { runtime, handle } = await createTranscriptPane({
     paneTitle: 'Terminal',
-    foregroundProcess: identity === 'launched' ? 'claude' : 'zsh',
+    foregroundProcess: identity === 'launched' ? 'claude' : titleOnlyForeground,
     ...(identity === 'launched' ? { launchAgent: 'claude' as const } : {}),
     data: ''
   })
@@ -99,6 +106,50 @@ describe('tui-idle on a slow-starting Claude', () => {
 
     write(CLAUDE_COMPOSER_BARE_TITLE)
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it('keeps holding a title-only Claude pane while the quiet foreground is Claude itself, not a pager', async () => {
+    // Native Claude's foreground name is its node process; the probe must not relax the gate for it.
+    const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'node')
+    write(SHELL_RUNS_CLAUDE + LATER_PREEXEC_HOOK_PRINTS)
+    const settled = vi.fn()
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+    wait.then(settled, () => {})
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 5)
+    expect(settled).not.toHaveBeenCalled()
+
+    write(CLAUDE_COMPOSER_BARE_TITLE)
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it('settles a title-only `claude --help | less` pane on the pager text; no composer will come (F41366-1)', async () => {
+    const { runtime, handle, write } = await startClaudePane(undefined, 'title-only')
+    write(`${shellRunsTitled('claude --help | less')}${CLAUDE_HELP_TEXT}:`)
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it('settles a title-only print-mode `claude -p …` pane on its output (F41366-1)', async () => {
+    const { runtime, handle, write } = await startClaudePane(undefined, 'title-only')
+    write(`${shellRunsTitled('claude -p "summarize the diff"')}The diff renames two files.\r\n`)
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it('settles a bare-titled `claude` pane once the quiet foreground probe shows a pager (F41366-1)', async () => {
+    // A tab title carries only the command word; the live foreground is what tells the pager apart.
+    const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'less')
+    write(`${SHELL_RUNS_CLAUDE}${CLAUDE_HELP_TEXT}:`)
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
 })
