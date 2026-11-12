@@ -6,18 +6,21 @@ import { placeUnshownLiveTerminalsBestEffort } from '../../terminal/adoption/uns
 import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
 import { watchRuntimeMetadataOwnership } from './runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../transport'
-import { UnixSocketTransport } from '../unix-socket-transport'
-import { PinnedPortUnavailableError, WebSocketTransport } from '../ws-transport'
+import { UnixSocketTransport } from '../transports/unix-socket-transport'
+import {
+  PinnedPortUnavailableError,
+  WebSocketTransport
+} from '../transports/websocket/ws-transport'
 import {
   clearWsFallbackPort,
   readWsFallbackPort,
   wsFallbackPortLadder,
   writeWsFallbackPort
-} from '../ws-fallback-port-store'
+} from '../transports/websocket/ws-fallback-port-store'
 import type { DeviceRegistry } from './pairing/device-registry'
 import type { E2EEKeypair } from './pairing/e2ee-keypair'
-import { UnpairedDeviceAuthThrottle } from '../unpaired-device-auth-throttle'
-import { MobileSocketWiring } from '../mobile-socket-wiring'
+import { UnpairedDeviceAuthThrottle } from '../mobile/unpaired-device-auth-throttle'
+import { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
 import { createServeNetworkSourceGuard } from './serve-network-source-policy'
 import { RuntimeRpcWebSocketDispatch } from './runtime-rpc-websocket-dispatch'
 import {

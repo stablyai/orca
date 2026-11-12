@@ -9,16 +9,16 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addDecodedSessionMessage } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addDecodedSessionMessage } from '../../parsing/session-scanner-messages'
 import {
   decodeSessionMessage,
   type DecodedSessionMessage
 } from '../../transcripts/session-decoded-message'
-import { arrayValue, extractString } from '../../session-scanner-values'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractContentText } from '../../session-scanner-text-normalization'
-import { numberValue } from '../../session-scanner-token-values'
+import { arrayValue, asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import { extractContentText } from '../../parsing/session-scanner-text-normalization'
+import { numberValue } from '../../parsing/session-scanner-token-values'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../selectors', () => ({ getTerminalHandle: vi.fn() }))
+vi.mock('../../terminals/terminal-selector', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from '../orchestration'
 import { orchestrationTestContext } from '../orchestration-handler-test-context'

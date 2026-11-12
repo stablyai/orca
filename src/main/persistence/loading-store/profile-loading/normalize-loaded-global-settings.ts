@@ -23,6 +23,7 @@ import {
 } from '../../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../../applying-settings/onboarding-normalization'
 import { normalizeMachineName } from '../../../../shared/machine-name'
+import { normalizeWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { replaceRetiredSpeechModelId } from '../../../speech/model-catalog'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
 import type { VoiceSettings } from '../../../../shared/speech-types'
@@ -98,6 +99,7 @@ export function normalizeLoadedGlobalSettings(
       parsed.settings?.nativeChatAppearance
     ),
     worktreeVisibilityDefaults: migratedExternalVisibility.defaults,
+    workspaceCleanupPolicy: normalizeWorkspaceCleanupRules(parsed.settings?.workspaceCleanupPolicy),
     prBotAuthorOverrides: normalizePRBotAuthorOverrides(parsed.settings?.prBotAuthorOverrides),
     // Only fresh profiles take the on default; a stored profile saved before the key existed was off.
     artifactSharingEnabled: parsed.settings?.artifactSharingEnabled === true,

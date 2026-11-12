@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import { printOrchestrationResult } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
 import { formatWorkerStart } from './worker-output'

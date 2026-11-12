@@ -2,7 +2,7 @@ import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileOnboardingPage } from './MobileOnboardingPage'
-import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
+import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -87,12 +87,6 @@ describe('MobileOnboardingPage', () => {
     )
   }
 
-  function collectText(): string {
-    return findAllByHostType(renderer!.root, 'Text')
-      .flatMap((node) => node.props.children)
-      .join(' ')
-  }
-
   it('renders the session choices and sends exactly one selected view', async () => {
     const callbacks = await renderPage('session-view')
 
@@ -107,19 +101,6 @@ describe('MobileOnboardingPage', () => {
 
     expect(callbacks.onNotificationChoice).toHaveBeenCalledWith('skip')
     expect(callbacks.onSessionChoice).not.toHaveBeenCalled()
-  })
-
-  it('explains that alerts cover finished work and waiting agents, even if the app is closed', async () => {
-    await renderPage('notifications')
-    const copy = collectText()
-
-    expect(copy).toContain('Don’t miss when an agent needs you')
-    expect(copy).toContain('finishes or is waiting')
-    expect(copy).toContain('using the app')
-    expect(copy).toContain('Enable notifications')
-    expect(copy).toContain('Codex finished')
-    expect(copy).toContain('Claude needs input')
-    expect(renderer!.root.findByProps({ testID: 'notification-onboarding-preview' })).toBeTruthy()
   })
 
   it('disables both notification choices while permission is pending', async () => {

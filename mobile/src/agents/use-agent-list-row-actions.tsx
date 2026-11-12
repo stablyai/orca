@@ -35,6 +35,8 @@ export function useAgentListRowActions(
         hostId: row.hostId,
         worktreeId: row.entry.worktreeId,
         name: row.entry.workspaceName,
+        // Home's lists span desktops, so Back returns to them rather than to this desktop's list.
+        standalone: true,
         ...(withPane ? { paneKey: row.entry.agent.paneKey } : {})
       }),
     [openMobileSession]

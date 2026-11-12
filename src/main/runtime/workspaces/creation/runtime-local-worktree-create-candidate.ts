@@ -12,7 +12,7 @@ import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktree-d
 import {
   getBranchConflictKind,
   getBranchConflictKindStrict
-} from '../../../git/repo-branch-conflict'
+} from '../../../git/refs/resolution/repo-branch-conflict'
 import {
   exactNameBranchConflict,
   exactNameTakenError

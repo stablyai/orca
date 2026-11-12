@@ -7,20 +7,19 @@ import {
   exposeWorker,
   inspectWorkerTerminal,
   projectFleetWorker,
-  resolvePinnedFederatedServer,
   showContextOnlyWorker
 } from './worker-observation'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { readArchivedWorkerOutput } from './worker-archive-read'
+import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import { readStructuredWorkerOutput } from '../structured-workers/orchestration-structured-worker-lifecycle'
 import { releaseStructuredWorkerSession } from '../structured-workers/orchestration-structured-worker-session'
 import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { readExactWorkerOutput } from './worker-output'
 import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
 import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
-import {
-  readFederatedWorkerOutput,
-  showFederatedWorker
-} from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
+import { readFederatedWorkerOutput } from '../../../../orchestration/legacy-remote-home/federated-worker-read'
+import { showFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-show'
 import {
   WorkerDispatchParams,
   WorkerReadParams
@@ -91,6 +90,16 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
     params: WorkerReadParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      const dispatch = db.getDispatchContextById(params.dispatch)
+      const worker = db.getWorkerDispatch(params.dispatch)
+      const terminalHandle = worker?.agent_terminal_handle ?? dispatch?.assignee_handle
+      // A start that never got a terminal has only its failure, on any host.
+      if (worker?.state === 'failed' && !terminalHandle) {
+        throw new OrchestrationError(
+          'worker_never_started',
+          `Worker Dispatch ${params.dispatch} never started: ${worker.last_error ?? 'its start failed'}`
+        )
+      }
       const federated = db.getFederatedDispatch(params.dispatch)
       if (federated) {
         const server = resolvePinnedFederatedServer(runtime, federated)
@@ -105,9 +114,6 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           limit: params.limit
         })
       }
-      const dispatch = db.getDispatchContextById(params.dispatch)
-      const worker = db.getWorkerDispatch(params.dispatch)
-      const terminalHandle = worker?.agent_terminal_handle ?? dispatch?.assignee_handle
       if (!dispatch) {
         throw new OrchestrationError(
           'dispatch_not_found',
@@ -133,6 +139,10 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
               : observed.status === 'exited'
                 ? 'exited'
                 : 'unverifiable'
+        }
+        if (isStructuredWorkerHandle(resource.terminal_handle)) {
+          // A released chat's history is read from its closed session, which needs the host after a restart.
+          await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
         }
         const archived = await readArchivedWorkerOutput({
           db,

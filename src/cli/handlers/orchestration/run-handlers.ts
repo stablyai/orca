@@ -1,6 +1,6 @@
 import { abbreviateOrchestrationText } from '../../../shared/orchestration/orchestration-task-summary'
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import { printOrchestrationResult } from './agent-view'
 import {
   getOptionalPositiveIntegerFlag,

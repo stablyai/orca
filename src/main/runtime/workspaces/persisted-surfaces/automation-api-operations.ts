@@ -93,10 +93,11 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
 
   createAutomation(
     input: RuntimeAutomationCreateInput,
-    destination?: AutomationDestination
+    destination?: AutomationDestination,
+    beforeWrite?: () => void
   ): Promise<Automation> {
     return this.automation.withExternalProbePriority(() =>
-      this.automation.create(input, destination).then((automation) => {
+      this.automation.create(input, destination, beforeWrite).then((automation) => {
         const selector = this.automationChangeSelector(automation.id)
         this.publishAutomationDefinitionChange(selector, selector)
         return automation

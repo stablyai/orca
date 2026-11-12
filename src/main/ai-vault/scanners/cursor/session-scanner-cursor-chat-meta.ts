@@ -1,13 +1,14 @@
-import { waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
+import { waitForAiVaultScan } from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { basename, dirname, join } from 'node:path'
 import { wslGatedReaddir, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
-import { timestampIso } from '../../session-scanner-accumulator'
-import { scanIssueTextFromError } from '../../session-scan-issues'
+import { timestampIso } from '../../parsing/session-scanner-accumulator'
+import { scanIssueTextFromError } from '../../parsing/session-scan-issues'
 import type { AiVaultScanIssueText } from '../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
-import { extractString, readJsonObjectIfExists } from '../../session-scanner-values'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
+import { extractString } from '../../../../shared/trimmed-string'
+import { readJsonObjectIfExists } from '../../discovery/session-json-file'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
 // Transcript paths cannot derive hashed metadata buckets; index the separate chats tree by chat ID.
 

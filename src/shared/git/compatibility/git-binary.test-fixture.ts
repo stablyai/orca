@@ -50,6 +50,8 @@ export class GitBinaryTestFixture {
       HOME: this.executionRoot,
       XDG_CONFIG_HOME: this.executionRoot,
       GIT_CONFIG_NOSYSTEM: '1',
+      // An inherited GIT_CONFIG_GLOBAL (e.g. the suite unsigned wrapper) would bypass HOME/XDG isolation.
+      GIT_CONFIG_GLOBAL: undefined,
       ...env
     }
     if (!this.image) {

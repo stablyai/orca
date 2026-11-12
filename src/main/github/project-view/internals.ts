@@ -1,6 +1,7 @@
 import { acquire, release } from '../gh-utils'
 import { isGitHubOwnerSlug } from '../../../shared/github/owner-slug'
-import { extractExecError, ghExecFileAsync } from '../../git/runner'
+import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
+import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
 import {
   repositoryRateLimitGuard,
   noteRepositoryRateLimitSpend,

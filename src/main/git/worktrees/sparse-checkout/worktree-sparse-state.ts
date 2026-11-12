@@ -1,6 +1,6 @@
 import { readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
-import type { GitRuntimeOptions } from '../../git-runtime-options'
+import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
 import { resolveGitDir } from '../../source-control/resolve-git-dir'
 
 export async function detectSparseCheckout(

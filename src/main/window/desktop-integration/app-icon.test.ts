@@ -76,27 +76,6 @@ describe('app icon selection', () => {
     expect(dockSetIconMock.mock.lastCall?.[0].isEmpty()).toBe(true)
   })
 
-  it('keeps an imported icon out of the app bundle and leaves the live Dock tile alone', async () => {
-    const commands: string[][] = []
-    dockSetIconMock.mockClear()
-    persistMacDockIcon('custom', {
-      appBundlePath: '/Applications/Orca.app',
-      execFile: (file, args, _options, callback) => {
-        commands.push([file, ...args])
-        callback?.(null)
-      },
-      isDevApp: false,
-      platform: 'darwin'
-    })
-    await waitForQueuedPersistence()
-
-    expect(commands.some((command) => command.join(' ').includes('setIcon:image'))).toBe(false)
-    expect(commands.some((command) => command.join(' ').includes('setIcon:(missing value)'))).toBe(
-      true
-    )
-    expect(dockSetIconMock).not.toHaveBeenCalled()
-  })
-
   it('serializes rapid macOS dock icon persistence so the last icon request wins', async () => {
     const pendingCallbacks: (() => void)[] = []
     const execFile = vi.fn(

@@ -13,8 +13,8 @@ import type {
   BrowserUploadResult
 } from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
-import { resolveRepoPathArgument } from '../repo-path-arguments'
-import { printResult } from '../format'
+import { resolveRepoPathArgument } from '../projects/repo-path-arguments'
+import { printResult } from '../command-result-output'
 import {
   getOptionalNumberFlag,
   getOptionalStringFlag,
