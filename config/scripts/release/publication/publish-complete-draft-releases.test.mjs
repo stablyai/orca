@@ -61,6 +61,37 @@ describe('isTagBuiltFromCurrentRef', () => {
 })
 
 describe('publishCompleteDraftReleases', () => {
+  it('recovers the configured release creator while rejecting other creators', async () => {
+    const releases = [
+      {
+        id: 7,
+        draft: true,
+        tag_name: 'v1.4.2-rc.7',
+        author: { id: 12345, login: 'release-owner' }
+      },
+      { id: 8, draft: true, tag_name: 'v1.4.2-rc.8', author: { id: 67890, login: 'other-owner' } }
+    ]
+    const fetchImpl = vi.fn(async (url, options) => {
+      if (url.endsWith('/releases?per_page=100')) {
+        return jsonResponse(releases)
+      }
+      if (url.endsWith('/releases/7') && options.method === 'PATCH') {
+        return jsonResponse({ draft: false })
+      }
+      throw new Error(`Unexpected request: ${url}`)
+    })
+    const result = await publishCompleteDraftReleases({
+      repo: 'stablyai/orca',
+      token: 'token',
+      releaseCreatorId: '12345',
+      fetchImpl,
+      verifyReleaseAssets: vi.fn().mockResolvedValue(undefined),
+      isDraftBuiltFromCurrentRef: () => true,
+      log: vi.fn()
+    })
+    expect(result).toEqual({ published: ['v1.4.2-rc.7'], skipped: [] })
+  })
+
   it('publishes complete release-cut drafts and skips incomplete ones', async () => {
     await withGitRepo(async (repo) => {
       commit(repo, 'release source')

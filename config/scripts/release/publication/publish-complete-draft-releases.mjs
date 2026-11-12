@@ -9,10 +9,11 @@ const API_VERSION = '2022-11-28'
 const RELEASE_CUT_AUTHOR = 'github-actions[bot]'
 const DESKTOP_RC_TAG_PATTERN = /^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$/
 
-export function isReleaseCutDraft(release) {
+export function isReleaseCutDraft(release, releaseCreatorId = '') {
   return (
     release?.draft === true &&
-    release?.author?.login === RELEASE_CUT_AUTHOR &&
+    (release?.author?.login === RELEASE_CUT_AUTHOR ||
+      (/^[0-9]+$/.test(releaseCreatorId) && String(release?.author?.id) === releaseCreatorId)) &&
     typeof release?.tag_name === 'string' &&
     DESKTOP_RC_TAG_PATTERN.test(release.tag_name)
   )
@@ -76,6 +77,7 @@ async function fetchReleases(repo, token, fetchImpl) {
 export async function publishCompleteDraftReleases({
   repo,
   token,
+  releaseCreatorId = '',
   fetchImpl = fetch,
   verifyReleaseAssets = verifyRequiredReleaseAssets,
   isDraftBuiltFromCurrentRef = ({ tag }) => isTagBuiltFromCurrentRef(tag),
@@ -90,7 +92,7 @@ export async function publishCompleteDraftReleases({
 
   const releases = await fetchReleases(repo, token, fetchImpl)
   const candidates = releases
-    .filter(isReleaseCutDraft)
+    .filter((release) => isReleaseCutDraft(release, releaseCreatorId))
     .sort((a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime())
 
   const published = []
@@ -157,7 +159,11 @@ export function writeGithubOutputs({ published, skipped }, outputPath = process.
 async function main() {
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   const repo = process.env.GITHUB_REPOSITORY || 'stablyai/orca'
-  const result = await publishCompleteDraftReleases({ repo, token })
+  const result = await publishCompleteDraftReleases({
+    repo,
+    token,
+    releaseCreatorId: process.env.RELEASE_PUSH_ACTOR_ID
+  })
   writeGithubOutputs(result)
 }
 

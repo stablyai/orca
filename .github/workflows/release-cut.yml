@@ -44,23 +44,60 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  cut:
+  preflight:
+    if: github.repository == 'stablyai/orca'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      short_sha: ${{ steps.source.outputs.short_sha }}
+      actor_id: ${{ steps.credential.outputs.actor_id }}
+    steps:
+      - name: Check release credential configuration
+        id: credential
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PUSH_TOKEN }}
+          ACTOR_ID: ${{ vars.RELEASE_PUSH_ACTOR_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$GH_TOKEN" || ! "$ACTOR_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Release setup required: production environment RELEASE_PUSH_TOKEN needs Contents and Workflows write on this repo; set repository variable RELEASE_PUSH_ACTOR_ID to its owner ID. Dry run does not prove write access."
+            exit 1
+          fi
+          actual_id="$(gh api user --jq '.id | tostring')"
+          [[ "$actual_id" == "$ACTOR_ID" ]] || { echo "::error::Release credential owner does not match RELEASE_PUSH_ACTOR_ID."; exit 1; }
+          echo "actor_id=$ACTOR_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve source before executing its scripts
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref || 'main' }}
+          persist-credentials: false
+
+      - name: Pin source
+        id: source
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+
+  prepare:
     # Limit version/tag mutations to canonical repo; fork schedules must not diverge their main and conflict upstream.
     if: github.repository == 'stablyai/orca'
+    needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
     outputs:
-      tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
-      should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
+      new_tag: ${{ steps.tag.outputs.tag }}
+      recovered_tag: ${{ steps.version.outputs.recovered_tag }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
       # Why: downstream SignPath Slack pings need the cut source (not only the
       # new tag) so approvers know what they're signing and who cut it.
       source_ref: ${{ steps.resolve.outputs.ref }}
       source_sha: ${{ steps.resolve.outputs.sha }}
       source_short_sha: ${{ steps.resolve.outputs.short_sha }}
-      ships_orcad_template: ${{ steps.orcad-template-support.outputs.ships }}
     steps:
       # Render dispatch audit summary locally rather than run mutable external action beside write token/secrets; parse env JSON with jq as data.
       - name: Summarize workflow inputs
@@ -80,7 +117,7 @@ jobs:
       - name: Checkout ref
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
+          ref: ${{ needs.preflight.outputs.sha }}
           fetch-depth: 0
           # Version recovery needs complete history and tags, but not historical file contents.
           filter: blob:none
@@ -291,12 +328,21 @@ jobs:
           echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
           echo "Reason: ${{ steps.existing.outputs.reason }}"
 
+      - name: Restore creator-aware RC recovery entry point
+        if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git restore --source="$WORKFLOW_SHA" --worktree -- config/scripts/release/publication/publish-complete-draft-releases.mjs
+
       - name: Publish complete release-cut RC drafts from prior runs
         id: publish_drafts
         # Recover complete RC drafts before deciding whether manual dispatch needs another tag.
         if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_PUSH_ACTOR_ID: ${{ needs.preflight.outputs.actor_id }}
         run: node config/scripts/release/publication/publish-complete-draft-releases.mjs
 
       - name: Compute next version
@@ -612,7 +658,7 @@ jobs:
           echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
 
-      - name: Push tag
+      - name: Push main version with the existing job identity
         if: steps.tag.outputs.tag != ''
         env:
           PUSH_MAIN: ${{ steps.resolve.outputs.push_main }}
@@ -631,22 +677,21 @@ jobs:
               exit 1
             fi
           fi
-          git push origin "$TAG"
-
-      # Why: a patch cut from a base older than #24155 has no orcad template to build or ship.
-      - name: Detect whether the tag ships the orcad template
-        id: orcad-template-support
-        if: steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != ''
+      - name: Bundle prepared tag
+        if: steps.tag.outputs.tag != ''
         env:
-          TAG: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
-        run: |
-          set -euo pipefail
-          if git cat-file -e "refs/tags/${TAG}^{commit}:config/scripts/orcad-distribution/template/packaged-orcad-template.cjs" 2>/dev/null || git cat-file -e "refs/tags/${TAG}^{commit}:config/scripts/packaged-orcad-template.cjs" 2>/dev/null; then
-            echo "ships=true" >>"$GITHUB_OUTPUT"
-          else
-            echo "ships=false" >>"$GITHUB_OUTPUT"
-            echo "::notice::$TAG predates the orcad template; skipping its build and download."
-          fi
+          TAG: ${{ steps.tag.outputs.tag }}
+          SOURCE_SHA: ${{ needs.preflight.outputs.sha }}
+        run: git bundle create "$RUNNER_TEMP/release-tag.bundle" "refs/tags/$TAG" "^$SOURCE_SHA"
+
+      - name: Transfer Git objects only
+        if: steps.tag.outputs.tag != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-tag-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-tag.bundle
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Release E2E signal summary
         if: always()
@@ -662,10 +707,66 @@ jobs:
             echo "Publishing behavior is controlled by the existing job dependencies; this summary does not change release gating."
           } >> "$GITHUB_STEP_SUMMARY"
 
+  cut:
+    needs: [preflight, prepare]
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.validate.outputs.tag }}
+      release_sha: ${{ steps.validate.outputs.release_sha }}
+      should_release: ${{ steps.validate.outputs.should_release }}
+      latest_published_rc_tag: ${{ steps.validate.outputs.latest_published_rc_tag }}
+      source_ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref || 'main' }}
+      source_sha: ${{ needs.preflight.outputs.sha }}
+      source_short_sha: ${{ needs.preflight.outputs.short_sha }}
+      ships_orcad_template: ${{ steps.validate.outputs.ships_orcad_template }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Fetch independently pinned source as Git data
+        env:
+          SOURCE_SHA: ${{ needs.preflight.outputs.sha }}
+        run: git fetch --no-tags --depth=1 origin "$SOURCE_SHA"
+      - uses: actions/download-artifact@v8
+        if: ${{ !inputs.dry_run && needs.prepare.outputs.new_tag != '' }}
+        with:
+          name: release-tag-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-tag
+      - name: Validate publication envelope without the release credential
+        id: validate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ needs.preflight.outputs.sha }}
+          NEW_TAG: ${{ needs.prepare.outputs.new_tag }}
+          RECOVERED_TAG: ${{ needs.prepare.outputs.recovered_tag }}
+          LATEST_PUBLISHED_RC: ${{ needs.prepare.outputs.latest_published_rc_tag }}
+          BUNDLE_PATH: ${{ runner.temp }}/release-tag/release-tag.bundle
+          DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_SUFFIX: ${{ inputs.version_suffix }}
+          INPUT_KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
+        run: node config/scripts/release/publication/validate-release-tag.mjs
+      - name: Push only the validated tag
+        if: ${{ !inputs.dry_run && needs.prepare.outputs.new_tag != '' && steps.validate.outputs.should_release == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PUSH_TOKEN }}
+          TAG: ${{ steps.validate.outputs.tag }}
+          TAG_OBJECT: ${{ steps.validate.outputs.tag_object_sha }}
+        run: |
+          git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push \
+            https://github.com/stablyai/orca.git "$TAG_OBJECT:refs/tags/$TAG"
+
   create-release:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: write
     steps:
@@ -673,6 +774,12 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
+          persist-credentials: false
+
+      - name: Verify the tag still names the validated release
+        env:
+          RELEASE_SHA: ${{ needs.cut.outputs.release_sha }}
+        run: test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
 
       - name: Restore draft-release scripts from the workflow ref
         env:
@@ -686,7 +793,7 @@ jobs:
 
       - name: Create draft release with bounded generated notes
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_PUSH_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/release/publication/create-draft-release.mjs "$TAG"
 
