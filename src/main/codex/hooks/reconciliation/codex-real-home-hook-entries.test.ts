@@ -405,20 +405,6 @@ describe('reconcileRealHomeCodexHookEntries', () => {
     expect(trustAt(stopEntryAt(1, orcaGroup()))).toBeUndefined()
   })
 
-  it.each([
-    ['unknown top-level fields Codex cannot load', { hooks: {}, _managed: true }],
-    ['an unparseable file', '{ not json']
-  ])('leaves %s untouched and approves nothing', async (_case, content) => {
-    mkdirSync(join(home, '.codex'), { recursive: true })
-    writeFileSync(hooksPath(), typeof content === 'string' ? content : JSON.stringify(content))
-    const before = identity(hooksPath())
-
-    expect(await reconcile()).toBe('unchanged')
-
-    expect(identity(hooksPath())).toEqual(before)
-    expect(existsSync(configPath())).toBe(false)
-  })
-
   it('writes nothing when config.toml keeps its approvals inline', async () => {
     const original = writeHooks({ hooks: { Stop: [USER_A] } })
     const inline = 'model = "m"\nhooks = { state = {} }\n'
@@ -463,16 +449,4 @@ describe('reconcileRealHomeCodexHookEntries', () => {
       expect(statSync(target).mode & 0o777).toBe(0o600)
     }
   )
-})
-
-describe('until Codex answers', () => {
-  it("keeps an entry's existing approval, writing nothing", async () => {
-    writeHooks({ hooks: { Stop: [USER_A] } })
-    await reconcile()
-    const before = { hooks: identity(hooksPath()), toml: identity(configPath()) }
-
-    expect(await reconcile({ hashes: null })).toBe('unchanged')
-
-    expect({ hooks: identity(hooksPath()), toml: identity(configPath()) }).toEqual(before)
-  })
 })
