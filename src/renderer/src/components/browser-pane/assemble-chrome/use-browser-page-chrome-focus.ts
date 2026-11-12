@@ -234,13 +234,15 @@ export function useBrowserPageChromeFocus({
       } else {
         frameId = window.requestAnimationFrame(runFocus)
       }
-      return ({ requeue = true }: { requeue?: boolean } = {}): void => {
+      // Returns whether the retry got to act: tried focus, or settled without it.
+      return ({ requeue = true }: { requeue?: boolean } = {}): boolean => {
         cancelled = true
         window.cancelAnimationFrame(frameId)
         // Requeue active StrictMode/dependency retries, but drop departed panes so revisiting cannot steal focus.
         if (requeue && !settled && waitedFrames < GUEST_ATTACH_WAIT_FRAMES && isActiveRef.current) {
           queueBrowserFocusRequest({ pageId: browserTabId, target: 'webview' })
         }
+        return settled || attempts > 0
       }
     },
     [browserTabId, focusGuestNow, guestFocus]
@@ -260,7 +262,8 @@ export function useBrowserPageChromeFocus({
     // Cancel the bar grab as well as its latch or remaining frames will steal page focus back.
     cancelAddressBarFocusGrab()
     // Why a frame first: focus can be queued before the pane mounts and is claimed here.
-    return startGuestFocusRetry({ firstAttempt: 'next-frame' })
+    const cancelGuestFocus = startGuestFocusRetry({ firstAttempt: 'next-frame' })
+    return () => void cancelGuestFocus()
   }, [
     browserTabId,
     cancelAddressBarFocusGrab,
@@ -331,8 +334,12 @@ export function useBrowserPageChromeFocus({
       firstAttempt: 'now',
       stillWanted: () => !inputLocked && isSplitFocused() && !keepAddressBarFocusRef.current
     })
-    // Why no requeue: an activation is not a queued request, so leaving the tab drops it.
-    return () => cancelGuestFocus({ requeue: false })
+    return () => {
+      // Why: no requeue, since leaving the tab drops an activation; but a re-run that cancels it while waiting for the guest to attach (StrictMode remount as Settings closes) must retry.
+      if (!cancelGuestFocus({ requeue: false })) {
+        focusedForActivationRef.current = false
+      }
+    }
   }, [dragPassthroughActive, inputLocked, isActive, startGuestFocusRetry])
 
   return { focusAddressBarNow, focusGuestNow, startAddressBarFocusGrab, keepAddressBarFocusRef }

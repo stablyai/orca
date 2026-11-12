@@ -19001,7 +19001,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Birlikte aç (odak düzenlenebilir bir alanda değilken)"
+            "openWith": "Birlikte aç (bir Orca metin alanına yazarken hariç)"
           }
         },
         "pluginInstallCount": {

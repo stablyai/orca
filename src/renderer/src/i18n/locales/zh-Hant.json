@@ -18764,7 +18764,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "開啟方式（焦點不在可編輯欄位時）"
+            "openWith": "開啟方式（在 Orca 文字欄位中輸入時除外）"
           }
         },
         "pluginInstallCount": {

@@ -12,7 +12,7 @@ export function PluginsSectionDescription({ text }: { text: string }): React.JSX
         <span className="ml-2 inline-flex items-center gap-1.5 whitespace-nowrap align-middle">
           {t(
             'auto.components.plugins.list.PluginsSectionDescription.openWith',
-            'Open with (when focus is not in an editable field)'
+            'Open with (except while typing in an Orca text field)'
           )}
           <ShortcutKeyCombo keys={shortcut.keys} doubleTap={shortcut.doubleTap} />
         </span>

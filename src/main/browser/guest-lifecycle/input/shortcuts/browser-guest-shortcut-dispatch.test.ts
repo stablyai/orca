@@ -29,6 +29,19 @@ function fixture(local = true) {
   return { context, event, send }
 }
 
+function withPlatform(platform: NodeJS.Platform, run: () => void): void {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+  if (!descriptor) {
+    throw new Error('Missing process.platform descriptor')
+  }
+  Object.defineProperty(process, 'platform', { ...descriptor, value: platform })
+  try {
+    run()
+  } finally {
+    Object.defineProperty(process, 'platform', descriptor)
+  }
+}
+
 describe('Plugins shortcut from a browser guest', () => {
   it('replays the configured chord once, consuming repeats', () => {
     const { context, event, send } = fixture()
@@ -61,12 +74,7 @@ describe('Plugins shortcut from a browser guest', () => {
   })
 
   it('leaves an explicit AltGraph chord in the guest', () => {
-    const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
-    if (!descriptor) {
-      throw new Error('Missing process.platform descriptor')
-    }
-    Object.defineProperty(process, 'platform', { ...descriptor, value: 'darwin' })
-    try {
+    withPlatform('darwin', () => {
       const { context, event, send } = fixture()
       context.getKeybindings = () => ({ 'view.plugins': ['Cmd+Alt+Q'] })
       const input = { key: 'q', code: 'KeyQ', meta: true, alt: true }
@@ -79,28 +87,53 @@ describe('Plugins shortcut from a browser guest', () => {
       ).toBe(false)
       expect(event.preventDefault).not.toHaveBeenCalled()
       expect(send).not.toHaveBeenCalled()
-    } finally {
-      Object.defineProperty(process, 'platform', descriptor)
-    }
+    })
   })
 
-  it('leaves Electron Ctrl+Alt input to the page on Windows', () => {
-    const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
-    if (!descriptor) {
-      throw new Error('Missing process.platform descriptor')
+  it.each(['win32', 'linux'] as const)(
+    'leaves Electron Ctrl+Alt input to the page on %s',
+    (platform) => {
+      withPlatform(platform, () => {
+        const { context, event, send } = fixture()
+        context.getKeybindings = () => ({ 'view.plugins': ['Ctrl+Alt+Q'] })
+        const input = { key: 'q', code: 'KeyQ', control: true, alt: true }
+        expect(forwardGuestShortcutInput(context, event, { ...input, altGraph: true })).toBe(false)
+        expect(forwardGuestShortcutInput(context, event, input)).toBe(false)
+        expect(event.preventDefault).not.toHaveBeenCalled()
+        expect(send).not.toHaveBeenCalled()
+      })
     }
-    Object.defineProperty(process, 'platform', { ...descriptor, value: 'win32' })
-    try {
+  )
+
+  it('opens from the default macOS chord when Option turns X into a symbol, not when it is a dead key', () => {
+    withPlatform('darwin', () => {
       const { context, event, send } = fixture()
-      context.getKeybindings = () => ({ 'view.plugins': ['Ctrl+Alt+Q'] })
-      const input = { key: 'q', code: 'KeyQ', control: true, alt: true }
-      expect(forwardGuestShortcutInput(context, event, { ...input, altGraph: true })).toBe(false)
-      expect(forwardGuestShortcutInput(context, event, input)).toBe(false)
-      expect(event.preventDefault).not.toHaveBeenCalled()
+      context.getKeybindings = () => ({})
+      const chord = { code: 'KeyX', meta: true, alt: true }
+      expect(forwardGuestShortcutInput(context, event, { ...chord, key: 'Dead' })).toBe(false)
       expect(send).not.toHaveBeenCalled()
-    } finally {
-      Object.defineProperty(process, 'platform', descriptor)
-    }
+      expect(forwardGuestShortcutInput(context, event, { ...chord, key: '≈' })).toBe(true)
+      expect(send).toHaveBeenCalledWith(
+        'ui:browserPageTabShortcut',
+        expect.objectContaining({ key: '≈', code: 'KeyX', meta: true, alt: true })
+      )
+    })
+  })
+
+  it('follows the typed letter on a German layout where Y and Z swap keys on Linux', () => {
+    withPlatform('linux', () => {
+      const { context, event, send } = fixture()
+      context.getKeybindings = () => ({})
+      const chord = { control: true, shift: true }
+      expect(forwardGuestShortcutInput(context, event, { ...chord, key: 'Z', code: 'KeyY' })).toBe(
+        false
+      )
+      expect(send).not.toHaveBeenCalled()
+      expect(forwardGuestShortcutInput(context, event, { ...chord, key: 'Y', code: 'KeyZ' })).toBe(
+        true
+      )
+      expect(send).toHaveBeenCalledOnce()
+    })
   })
 
   it('replays a configured modifier double tap', () => {

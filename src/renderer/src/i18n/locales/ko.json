@@ -18343,7 +18343,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "다음으로 열기 (편집 가능한 필드에 포커스가 없을 때)"
+            "openWith": "다음으로 열기 (Orca 텍스트 필드에 입력하는 중 제외)"
           }
         },
         "pluginInstallCount": {

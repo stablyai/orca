@@ -18346,7 +18346,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "次で開く（編集可能なフィールドにフォーカスがない場合）"
+            "openWith": "次で開く（Orca のテキストフィールドで入力中を除く）"
           }
         },
         "pluginInstallCount": {
