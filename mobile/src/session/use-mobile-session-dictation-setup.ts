@@ -30,6 +30,12 @@ export function useMobileSessionDictationSetup(scope: MobileSessionFeedbackCapab
   )
   // The host's "Send when dictation ends" delay for chat dictation; null while off or unread.
   const [autoSendDelayMs, setAutoSendDelayMs] = useState<number | null>(null)
+  // It sends on its own, so another host or worktree reads as off until its own setup read lands.
+  const [autoSendReadFor, setAutoSendReadFor] = useState({ client, worktreeId })
+  if (autoSendReadFor.client !== client || autoSendReadFor.worktreeId !== worktreeId) {
+    setAutoSendReadFor({ client, worktreeId })
+    setAutoSendDelayMs(null)
+  }
   // Only a host setup read sets this; while false, the host's start refusal decides (older hosts, first tap before the read).
   const dictationNeedsSetupRef = useRef(false)
 
@@ -52,7 +58,10 @@ export function useMobileSessionDictationSetup(scope: MobileSessionFeedbackCapab
         dictationNeedsSetupRef.current = dictationNeedsSetup(setup)
       }
     } catch {
-      // Keep the last settings when an older host cannot report them.
+      // Keep the last settings when an older host cannot report them, but never a send that may be stale.
+      if (read === dictationSettingsReadRef.current) {
+        setAutoSendDelayMs(null)
+      }
     }
   }, [client, connState, phoneDictation.refresh, setDictationEnabled, setDictationMode, worktreeId])
 
