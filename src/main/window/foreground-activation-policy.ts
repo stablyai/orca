@@ -1,4 +1,4 @@
-import { app as electronApp, BaseWindow } from 'electron'
+import { app as electronApp, BaseWindow, type BrowserWindow } from 'electron'
 
 /** Automation must not steal OS foreground. Background/sidecar requests override E2E_FOREGROUND; the hosted-Xvfb benchmark may present explicitly after startup (tests/AGENTS.md), while automatic reveals stay suppressed. */
 
@@ -109,6 +109,20 @@ export function showWindowWithoutStealingFocus(
   window.show()
 }
 
+// Popups waiting for the user to come back share one pair of app listeners.
+const windowsAwaitingAppActive = new Set<BaseWindow>()
+
+function revealWindowsAwaitingAppActive(): void {
+  electronApp.off('browser-window-focus', revealWindowsAwaitingAppActive)
+  electronApp.off('did-become-active', revealWindowsAwaitingAppActive)
+  for (const window of windowsAwaitingAppActive) {
+    if (!window.isDestroyed()) {
+      window.showInactive()
+    }
+  }
+  windowsAwaitingAppActive.clear()
+}
+
 /** Shows a window an agent opened without activating Orca: now if Orca is in front, else once the user returns to it. */
 export function showWhenAppActive(window: BaseWindow, env: PolicyEnv = process.env): void {
   if (window.isDestroyed() || isWindowlessLaunch(env)) {
@@ -119,21 +133,11 @@ export function showWhenAppActive(window: BaseWindow, env: PolicyEnv = process.e
     window.showInactive()
     return
   }
-  // macOS reports the app's return through any window; elsewhere only BrowserWindows report focus.
-  const events = ['browser-window-focus', 'did-become-active'] as const
-  const reveal = (): void => {
-    stopWaiting()
-    if (!window.isDestroyed()) {
-      window.showInactive()
-    }
+  if (windowsAwaitingAppActive.size === 0) {
+    // macOS reports the app's return through any window; elsewhere only BrowserWindows report focus.
+    electronApp.on('browser-window-focus', revealWindowsAwaitingAppActive)
+    electronApp.on('did-become-active', revealWindowsAwaitingAppActive)
   }
-  const stopWaiting = (): void => {
-    for (const event of events) {
-      electronApp.off(event, reveal)
-    }
-  }
-  for (const event of events) {
-    electronApp.on(event, reveal)
-  }
-  window.once('closed', stopWaiting)
+  windowsAwaitingAppActive.add(window)
+  window.once('closed', () => windowsAwaitingAppActive.delete(window))
 }
