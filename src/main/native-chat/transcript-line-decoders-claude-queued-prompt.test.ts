@@ -34,7 +34,12 @@ describe('Claude queued_command attachment', () => {
       blocks: [{ type: 'text', text: 'or you know what, use fable as orchestrator' }],
       timestamp: Date.parse('2026-10-06T21:49:54.910Z'),
       source: 'transcript',
-      parentId: 'tool-result-row'
+      parentId: 'tool-result-row',
+      inputContent: {
+        images: [],
+        provider: 'claude',
+        textDigest: 'c403486dbaf2f30f3b83b738763684a0c5b7ac69da4e2ece472858a19fffdce3'
+      }
     })
   })
 })

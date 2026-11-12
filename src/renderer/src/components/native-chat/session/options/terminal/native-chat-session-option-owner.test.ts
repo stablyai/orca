@@ -112,6 +112,7 @@ describe('terminal option owner catalog invalidation', () => {
           if (typeof key === 'string' && /^\d+$/.test(key)) {
             repoRowsRead++
           }
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The plain Repo[] fixture preserves string/symbol reads, including undefined for absent keys.
           return target[key as keyof typeof target]
         }
       })
