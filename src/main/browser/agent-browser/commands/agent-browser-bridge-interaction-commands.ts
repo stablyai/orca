@@ -35,7 +35,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserHoverResult> {
-    return this.enqueuePageAction(
+    return this.enqueueInertAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -115,7 +115,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           await chooser.release()
         }
       },
-      { elements: [element] }
+      { elements: [element], skipFileChooserBlock: true }
     )
   }
 
