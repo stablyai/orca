@@ -38,6 +38,7 @@
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Public share links (src/share-gateway.ts): /s/<token>/*, plus the root-path cookie fallback
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
+import { purgeTeamSecrets, teamDeleteRoute, teamWorkspaceCount } from './team-delete'
 import { ReadSnapshotRouteError, getReadSnapshot, handleReaderKeysRoute, pruneReadSnapshotToOwner, revokeDeviceSessionReaderKeys } from './read-snapshots'
 import { refreshStaleEnvironments } from './environment-golden-refresh'
 import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
@@ -1217,13 +1218,23 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return await internalInstallUrl(env, deps, url)
     }
     if (url.pathname.startsWith('/v1/internal/')) {
-      // Auth's member-removed push holds a token good for that one route, not the operator token.
-      const memberRemovedOnly =
-        url.pathname === '/v1/internal/org-members/removed' &&
-        request.method === 'POST' &&
+      // Auth's token (MEMBER_REMOVED_TOKEN) is good for its own routes only: the member-removed
+      // push and deleting a team. Never the operator routes.
+      const teamDelete = teamDeleteRoute(url.pathname, request.method)
+      const authOnly =
+        ((url.pathname === '/v1/internal/org-members/removed' && request.method === 'POST') || teamDelete !== null) &&
         (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
-      if (!memberRemovedOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
+      if (!authOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
         return fail('not_found', 404)
+      }
+      if (teamDelete) {
+        if (teamDelete.action === 'delete-check') {
+          return json({ workspaces: await teamWorkspaceCount(env.SANDBOX_DB, teamDelete.accountId) })
+        }
+        const purged = await purgeTeamSecrets(env.SANDBOX_DB, teamDelete.accountId)
+        return purged.ok
+          ? json({ purged: purged.purged })
+          : json({ error: 'workspaces_exist', workspaces: purged.workspaces }, 409)
       }
       const life = await lifecycleDeps(env, deps)
       if (!life) {
