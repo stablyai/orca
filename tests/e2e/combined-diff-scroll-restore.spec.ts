@@ -468,12 +468,17 @@ test.describe('Combined diff scroll restore', () => {
           throw new Error('note textarea missing')
         }
         const selection = () =>
-          input.evaluate((element) => ({
-            focused: document.activeElement === element,
-            start: element.selectionStart,
-            end: element.selectionEnd,
-            body: element.value
-          }))
+          input.evaluate((element) => {
+            if (!(element instanceof HTMLTextAreaElement)) {
+              throw new Error('note control is not a textarea')
+            }
+            return {
+              focused: document.activeElement === element,
+              start: element.selectionStart,
+              end: element.selectionEnd,
+              body: element.value
+            }
+          })
         await expect.poll(selection).toEqual({
           focused: true,
           start: 6,
