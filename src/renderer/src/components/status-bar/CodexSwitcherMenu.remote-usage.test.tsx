@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
@@ -7,15 +7,19 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type * as ProviderAccountsClient from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { OwnerUsageRateLimits } from './use-owner-usage-rate-limits'
+import { useOwnerUsageRateLimits, type OwnerUsageRateLimits } from './use-owner-usage-rate-limits'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
 
-const mocks = vi.hoisted(() => ({
-  state: vi.fn<() => ReturnType<typeof localState>>(),
-  accounts: vi.fn<() => ProviderAccountsSnapshot>(),
-  owner: { kind: 'environment', environmentId: 'laptop' } satisfies RuntimeClientTarget,
-  fetchInactive: vi.fn()
-}))
+const mocks = vi.hoisted(() => {
+  const watchers: Parameters<typeof ProviderAccountsClient.watchProviderAccounts>[1][] = []
+  return {
+    state: vi.fn<() => ReturnType<typeof localState>>(),
+    accounts: vi.fn<() => ProviderAccountsSnapshot>(),
+    owner: { kind: 'environment', environmentId: 'laptop' } satisfies RuntimeClientTarget,
+    fetchInactive: vi.fn(),
+    watchers
+  }
+})
 
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: ReturnType<typeof localState>) => unknown) =>
@@ -28,18 +32,18 @@ vi.mock('@/runtime/hosts/capabilities/windows-terminal-capabilities', () => ({
   getWindowsTerminalCapabilityOwnerKey: () => 'laptop',
   useWindowsTerminalCapabilities: () => ({ wslDistros: [] })
 }))
-vi.mock('./use-provider-account-list', () => ({
-  useProviderAccountList: () => ({
-    accounts: mocks.accounts().codex,
-    setAccounts: vi.fn(),
-    mountedRef: { current: true }
-  })
-}))
 vi.mock(
   '@/runtime/provider-accounts/observations/runtime-provider-accounts-client',
   async (load) => ({
     ...(await load<typeof ProviderAccountsClient>()),
-    fetchProviderAccountsSnapshot: async () => mocks.accounts()
+    fetchProviderAccountsSnapshot: async () => mocks.accounts(),
+    watchProviderAccounts: (
+      _target: RuntimeClientTarget,
+      handlers: Parameters<typeof ProviderAccountsClient.watchProviderAccounts>[1]
+    ) => {
+      mocks.watchers.push(handlers)
+      return { close: () => {} }
+    }
   })
 )
 
@@ -80,7 +84,7 @@ function localState() {
   }
 }
 
-function ownerUsage() {
+function ownerUsage(): OwnerUsageRateLimits & { accounts: ProviderAccountsSnapshot } {
   const accounts = {
     accounts: [
       {
@@ -125,6 +129,10 @@ function ownerUsage() {
 
 async function showMenu(owned: OwnerUsageRateLimits) {
   render(<CodexSwitcherMenu codex={usage(4)} ownerUsage={owned} compact={false} iconOnly={false} />)
+  return openMenu()
+}
+
+async function openMenu() {
   fireEvent.pointerDown(
     screen.getByRole('button', { name: 'Open Codex details and account switcher' }),
     { button: 0, ctrlKey: false }
@@ -133,6 +141,7 @@ async function showMenu(owned: OwnerUsageRateLimits) {
 }
 
 beforeEach(() => {
+  mocks.watchers.length = 0
   mocks.fetchInactive.mockClear()
   mocks.state.mockReturnValue(localState())
   const accounts = ownerUsage().accounts
@@ -167,5 +176,55 @@ describe('Codex account usage on a paired host', () => {
     owned.rateLimits.codex.usageMetadata = { unverifiableOwner: true }
     const other = await showMenu(owned)
     expect(within(other).queryByRole('img')).toBeNull()
+  })
+
+  it('keeps the account identity and quota together when another client switches the host account', async () => {
+    function ObservedMenu() {
+      const owned = useOwnerUsageRateLimits(mocks.state().rateLimits)
+      return (
+        <CodexSwitcherMenu
+          codex={owned.rateLimits.codex ?? usage(0)}
+          ownerUsage={owned}
+          compact={false}
+          iconOnly={false}
+        />
+      )
+    }
+    render(<ObservedMenu />)
+    act(() => mocks.watchers[0].onSnapshot(ownerUsage().accounts))
+    await openMenu()
+    const next = ownerUsage().accounts
+    next.codex.activeAccountId = 'same-id'
+    next.codex.activeAccountIdsByRuntime = { host: 'same-id', wsl: {} }
+    next.rateLimits = createEmptyRateLimitState({
+      codex: usage(25),
+      inactiveCodexAccounts: [
+        { accountId: 'active-id', rateLimits: usage(4), updatedAt: 1, isFetching: false }
+      ]
+    })
+    act(() => mocks.watchers[0].onSnapshot(next))
+    const previous = screen.getByRole('menuitem', { name: /active@laptop.test/ })
+    const current = screen.getByRole('menuitem', { name: /other@laptop.test/ })
+    expect(within(previous).getByRole('img').getAttribute('aria-label')).toContain('4%')
+    expect(within(current).getByRole('img').getAttribute('aria-label')).toContain('25%')
+    expect(current.getAttribute('aria-disabled')).toBe('true')
+    expect(previous.getAttribute('aria-disabled')).not.toBe('true')
+  })
+
+  it('does not offer a viewer-backed runtime switch for a host with WSL accounts', async () => {
+    const owned = ownerUsage()
+    owned.accounts.codex.accounts.push({
+      ...owned.accounts.codex.accounts[0],
+      id: 'linux-id',
+      email: 'linux@laptop.test',
+      managedHomeRuntime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+    mocks.accounts.mockReturnValue(owned.accounts)
+    await showMenu(owned)
+    expect(screen.queryByRole('radiogroup', { name: 'Codex usage runtime' })).toBeNull()
+    const active = screen.getByRole('menuitem', { name: /active@laptop.test/ })
+    expect(within(active).getByRole('img').getAttribute('aria-label')).toContain('4%')
+    expect(screen.queryByRole('menuitem', { name: /linux@laptop.test/ })).toBeNull()
   })
 })

@@ -75,7 +75,9 @@ export function useCodexSwitcherController(
       ? []
       : (usageState?.inactiveCodexAccounts ?? [])
     : localRateLimits.inactiveCodexAccounts
-  const codexTarget = usageState?.codexTarget ?? localRateLimits.codexTarget
+  const codexTarget: CodexStatusRuntimeTarget = hasActiveRuntimeEnvironment
+    ? (usageState?.codexTarget ?? { runtime: 'host', wslDistro: null })
+    : localRateLimits.codexTarget
   const activeUsage = hasActiveRuntimeEnvironment ? (usageState?.codex ?? null) : codex
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
     ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
@@ -92,11 +94,15 @@ export function useCodexSwitcherController(
     'codex',
     runtimeTarget,
     codexAccountSyncKey,
-    emptyCodexAccountsState()
+    emptyCodexAccountsState(),
+    false,
+    !hasActiveRuntimeEnvironment
   )
   const accountState = resolveCodexStatusAccountState(
     settings,
-    accounts,
+    hasActiveRuntimeEnvironment
+      ? (ownerUsage?.accounts?.codex ?? emptyCodexAccountsState())
+      : accounts,
     activeRuntimeEnvironmentId
   )
 
@@ -175,6 +181,9 @@ export function useCodexSwitcherController(
     })
 
   const handleSelectRuntime = async (group: CodexStatusSwitchGroup): Promise<void> => {
+    if (hasActiveRuntimeEnvironment) {
+      return
+    }
     const currentKey = getCodexStatusRuntimeKey(
       normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
     )

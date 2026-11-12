@@ -27,6 +27,7 @@ type SampleAccount = {
   weekly: number | null
   error?: string
   resetsInDays: number
+  wslDistro?: string
 }
 
 const BASE_ACCOUNTS: SampleAccount[] = [
@@ -122,6 +123,8 @@ function managed(account: SampleAccount): CodexManagedAccount {
     id: account.id,
     email: account.email,
     managedHomePath: `/home/me/.orca/codex/${account.id}`,
+    managedHomeRuntime: account.wslDistro ? 'wsl' : 'host',
+    wslDistro: account.wslDistro ?? null,
     providerAccountId: `provider-${account.id}`,
     workspaceLabel: account.workspace,
     workspaceAccountId: null,
@@ -158,6 +161,7 @@ function switcherFixture(
   const ownerUsage = remote
     ? {
         rateLimits,
+        accounts: snapshot,
         remoteOwner: { environmentId: 'laptop', label: 'Laptop' },
         refreshRemote: null
       }
@@ -275,3 +279,11 @@ export const transientUsageFailures = switcherFixture([
 ])
 
 export const pairedHost = switcherFixture(BASE_ACCOUNTS.slice(0, 5), false, false, false, true)
+
+export const pairedHostWithWsl = switcherFixture(
+  [...BASE_ACCOUNTS.slice(0, 5), { ...BASE_ACCOUNTS[0], id: 'linux', wslDistro: 'Ubuntu' }],
+  false,
+  false,
+  false,
+  true
+)

@@ -167,12 +167,14 @@ export function CodexSwitcherMenu({
         ) : undefined
       }
       topContent={
-        <AccountRuntimeToggle
-          groups={switchGroups}
-          value={selectedGroup?.key ?? selectedRuntimeKey}
-          onChange={(group) => void handleSelectRuntime(group)}
-          ariaLabel={t('auto.components.status.bar.StatusBar.38b5647724', 'Codex usage runtime')}
-        />
+        !hasActiveRuntimeEnvironment ? (
+          <AccountRuntimeToggle
+            groups={switchGroups}
+            value={selectedGroup?.key ?? selectedRuntimeKey}
+            onChange={(group) => void handleSelectRuntime(group)}
+            ariaLabel={t('auto.components.status.bar.StatusBar.38b5647724', 'Codex usage runtime')}
+          />
+        ) : undefined
       }
       open={open}
       onOpenChange={handleOpenChange}

@@ -16,7 +16,8 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
   target: RuntimeClientTarget,
   syncKey: string,
   initial: ProviderAccountsSnapshot[Provider],
-  observe = false
+  observe = false,
+  enabled = true
 ) {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const ownerTarget = useMemo<RuntimeClientTarget>(
@@ -35,7 +36,7 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
     () => observedProviderAccounts(ownerTarget, provider),
     [ownerTarget, provider]
   )
-  const observing = observe && environmentId !== null
+  const observing = enabled && observe && environmentId !== null
   const answer = useSyncExternalStore(
     observing ? observation.subscribe : noSubscription,
     observing ? observation.getSnapshot : noSnapshot,
@@ -68,6 +69,9 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
     [mountedRef, observing, observation, ownerKey]
   )
   const loadAccounts = useCallback(async () => {
+    if (!enabled) {
+      return
+    }
     const snapshot = await fetchProviderAccountsSnapshot(ownerTarget)
     if (snapshot.failedProviders?.includes(provider)) {
       console.error(`${provider} account list failed; keeping previous state.`)
@@ -80,13 +84,13 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
         setLocal({ ownerKey, accounts: snapshot[provider], known: true })
       }
     }
-  }, [provider, ownerTarget, ownerKey, observing, observation, mountedRef])
+  }, [provider, ownerTarget, ownerKey, observing, observation, mountedRef, enabled])
   useEffect(() => {
-    if (!observing) {
+    if (enabled && !observing) {
       void loadAccounts().catch((error: unknown) =>
         console.error(`Failed to load ${provider} accounts:`, error)
       )
     }
-  }, [loadAccounts, observing, provider, syncKey])
+  }, [loadAccounts, observing, provider, syncKey, enabled])
   return { accounts, setAccounts, accountsLoaded, loadAccounts, mountedRef }
 }
