@@ -1,4 +1,4 @@
-import { isOptionalUsageLimitContinueCancel } from './agent-session-usage-limit-continue'
+import { hasValidUsageLimitRecordFields } from './agent-session-usage-limit-continue'
 import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
@@ -128,6 +128,8 @@ export type AgentSessionRecord = {
   /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
   permissionMode?: string
   usageLimitContinueCancel?: { turnItemId: string; resetsAt: number }
+  /** The account the latest usage-limit cut hit, saved while the child that ran it was live. */
+  usageLimitCutAccount?: { turnItemId: string; accountHome: AgentSessionAccountHome }
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The conversation's one name: Orca's automatic name or the user's rename. Session History,
@@ -318,7 +320,7 @@ export function isPersistedAgentSessionObservationRecord(
       (record.options === undefined || isAgentSessionOptions(record.options)) &&
       (record.permissionMode === undefined ||
         isBoundedString(record.permissionMode, MAX_ID_LENGTH)) &&
-      isOptionalUsageLimitContinueCancel(record.usageLimitContinueCancel) &&
+      hasValidUsageLimitRecordFields(record) &&
       (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
       (record.providerContextBoundary === undefined ||
         isAgentSessionProviderContextBoundary(record.providerContextBoundary)) &&

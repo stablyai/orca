@@ -79,7 +79,7 @@ export class UsageLimitAccountHolds {
   /** The source witness each chat's attribution was computed under. */
   private readonly witnesses = new Map<string, string | undefined>()
   /** When each chat was first seen continuing on another account than the one its cut hit. */
-  private readonly movedSince = new Map<string, number>()
+  private readonly movedSince = new Map<string, { cut: string; at: number }>()
   /** Shared by every chat of a pass and keyed by source witness: work scales with accounts and
    *  their changes, not chats. */
   private launchHomes = new Map<string, Promise<AgentSessionAccountHome | null>>()
@@ -96,11 +96,11 @@ export class UsageLimitAccountHolds {
   }
 
   /** Re-attributed each pass: the account a chat continues on follows the host's selection.
-   *  `cutHome` is the account the cut hit, when known. */
+   *  `hit` names the cut and the account it hit, when known. */
   async attribute(
     id: string,
     host: AttributionHost,
-    cutHome?: AgentSessionAccountHome | null,
+    hit?: { cut: string; home: AgentSessionAccountHome | null },
     now = Date.now()
   ): Promise<void> {
     const record = host.store.getRecord(id)
@@ -119,7 +119,7 @@ export class UsageLimitAccountHolds {
           this.launchHomes.set(target, launch)
         }
         const home = (await launch) ?? record.accountHome
-        moved = cutHome !== undefined && cutHome !== null && !sameAccountHome(home, cutHome)
+        moved = !!hit?.home && !sameAccountHome(home, hit.home)
         const path = agentSessionAccountHomePath(home)
         if (read && home && path) {
           const key = JSON.stringify([witness, record.provider, path])
@@ -142,10 +142,10 @@ export class UsageLimitAccountHolds {
     }
     this.scopes.set(id, scope)
     this.witnesses.set(id, witness)
-    if (!moved) {
+    if (!moved || !hit) {
       this.movedSince.delete(id)
-    } else if (!this.movedSince.has(id)) {
-      this.movedSince.set(id, now)
+    } else if (this.movedSince.get(id)?.cut !== hit.cut) {
+      this.movedSince.set(id, { cut: hit.cut, at: now })
     }
   }
 
@@ -194,11 +194,11 @@ export class UsageLimitAccountHolds {
     now: number
   ): UsageLimitAccountVerdict {
     // The account the chat moved to never hit this cut: from the move on, only its reading holds.
-    const movedAt = this.movedSince.get(id)
+    const moved = this.movedSince.get(id)
     const cut =
-      movedAt === undefined
-        ? limited
-        : { ...limited, resetsAt: Math.min(limited.resetsAt, movedAt) }
+      moved?.cut === identity(limited)
+        ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) }
+        : limited
     const scope = this.scopes.get(id)
     let hold = this.holds.get(id)
     // Nothing attributed and nothing held: the cut decides, and nothing is kept for it.

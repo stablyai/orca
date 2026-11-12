@@ -75,8 +75,12 @@ async function heldChat() {
     launchUnder: (next: UsageLimitAccountScope) => {
       attributed = next
     },
-    /** Switches the account a start of this chat would launch on. */
-    switchAccount: (path: string) => {
+    /** The cut ran on account A; a start of this chat would now launch on `path`. */
+    switchAccount: async (path: string) => {
+      await current.store.recordUsageLimitCutAccount(SESSION, {
+        turnItemId: cut.turnItemId,
+        accountHome: { variable: 'CODEX_HOME', path: '/homes/a' }
+      })
       current.host.deps.launchAccountHome = async () => ({ variable: 'CODEX_HOME', path })
     },
     setEnabled: (next: boolean) => {
@@ -141,7 +145,7 @@ it('holds again on spending inside the grace, and leaves an unknown reset once r
 it('continues before the cut resets once the chat would start on another account with room', async () => {
   const chat = await heldChat()
   const start = chat.cut.resetsAt - 60_000
-  chat.switchAccount('/homes/b')
+  await chat.switchAccount('/homes/b')
   expect(await chat.pass(start + 5_000, (now) => weekly(0, null, now))).toEqual([])
   expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: start + 5_000 })
   await settleOne(await chat.pass(start + 20_000, (now) => weekly(0, null, now)))

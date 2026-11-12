@@ -40,7 +40,7 @@ type Deps = {
   ) => ReturnType<typeof sendStructuredAgentSessionTurn>
   readLoadedCut: (id: string) => HostUsageLimitCut | null
   /** The account the cut's turn ran on, when known. */
-  cutAccountHome: (id: string, turnItemId: string) => AgentSessionAccountHome | null
+  cutAccountHome: (id: string, turnItemId: string) => Promise<AgentSessionAccountHome | null>
   publish: (id: string) => void
   now: () => number
 }
@@ -225,13 +225,9 @@ export class StructuredAgentSessionUsageLimitContinue {
     }
   }
 
-  private attribute(id: string, cut: HostUsageLimitCut): Promise<void> {
-    return this.holds.attribute(
-      id,
-      this.deps.host,
-      this.deps.cutAccountHome(id, cut.turnItemId),
-      this.deps.now()
-    )
+  private async attribute(id: string, cut: HostUsageLimitCut): Promise<void> {
+    const home = await this.deps.cutAccountHome(id, cut.turnItemId).catch(() => null)
+    await this.holds.attribute(id, this.deps.host, { cut: identity(cut), home }, this.deps.now())
   }
 
   private deferUnchangedCut(id: string, cut: Cut, at: number): void {
