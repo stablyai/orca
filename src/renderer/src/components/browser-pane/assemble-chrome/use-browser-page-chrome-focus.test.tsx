@@ -138,4 +138,17 @@ describe('useBrowserPageChromeFocus activation', () => {
 
     expect(document.activeElement).toBe(addressBar)
   })
+
+  it('keeps the address bar the user picked when the page activated mid-drag', () => {
+    const guest = createLateGuest()
+    const endDrag = acquireWebviewsDragPassthrough()
+    const view = render(<PageHarness guestFocus={guest.guestFocus} />)
+    const addressBar = view.getByLabelText('Address')
+    addressBar.focus()
+    guest.attach()
+    act(() => endDrag())
+    flushFrame()
+
+    expect(document.activeElement).toBe(addressBar)
+  })
 })

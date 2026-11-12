@@ -303,14 +303,15 @@ export function useBrowserPageChromeFocus({
       activationFocusAtRequestRef.current = null
       return
     }
+    // Why before the drag guard: a page activated mid-drag still yields to focus the user picks during it.
+    if (activationFocusAtRequestRef.current === null) {
+      activationFocusAtRequestRef.current = { element: document.activeElement }
+    }
     // Why defer, not consume: focusing a guest mid-drag reads as an aborted drag.
     if (focusedForActivationRef.current || dragPassthroughActive) {
       return
     }
     focusedForActivationRef.current = true
-    if (activationFocusAtRequestRef.current === null) {
-      activationFocusAtRequestRef.current = { element: document.activeElement }
-    }
     // Why the focused split only: never pull the keyboard across splits.
     const cancelGuestFocus = startGuestFocusRetry({
       firstAttempt: 'now',
