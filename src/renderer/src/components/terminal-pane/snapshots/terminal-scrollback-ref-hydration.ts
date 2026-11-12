@@ -1,5 +1,5 @@
-import { collectLeafIds } from '../../../../../shared/workspace-layout/terminal-pane-layout-tree'
-import { resolveRootlessTerminalLayoutLeafId } from '../../../../../shared/workspace-layout/terminal-pane-tree'
+import { collectLeafIds } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { LocalScrollbackSnapshots } from '@/runtime/hosted-terminals/hydration/host-terminal-scrollback-hydration'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 

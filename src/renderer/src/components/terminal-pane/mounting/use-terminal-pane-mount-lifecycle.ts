@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { getCachedTerminalTabForWorktree } from '../controller/tab-state/terminal-tab-lookup'
-import { sanitizeTerminalLayoutPaneTitles } from '../../../../../shared/workspace-layout/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-title-sanitization'
 import { EMPTY_LAYOUT } from '../layout/empty-terminal-layout'
 import {
   startHostTerminalScrollbackHydration,
