@@ -1,5 +1,5 @@
-import { renderHook } from '@testing-library/react'
-import { expect, vi } from 'vitest'
+import { renderHook, type RenderHookResult } from '@testing-library/react'
+import { expect, vi, type Mock } from 'vitest'
 import { useAppStore } from '@/store'
 import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -12,6 +12,21 @@ import {
 } from './remote-browser-page-observation'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { RemoteBrowserScreencastSubscribe } from './remote-browser-screencast-subscription'
+
+type NavigationOptions = Parameters<typeof useRemoteBrowserPageNavigation>[0]
+type NavigationFixture = RenderHookResult<
+  ReturnType<typeof useRemoteBrowserPageNavigation>,
+  unknown
+> & {
+  lifecycle: RemoteBrowserStreamLifecycle
+  subscribe: Mock<RemoteBrowserScreencastSubscribe>
+  session: RemoteBrowserStreamLifecycle['session']
+  tokens: RemoteBrowserStreamLifecycle['tokens']
+  identity: { mounted: boolean; active: boolean; environmentId: string }
+  busy: Mock<NavigationOptions['setPaneBusy']>
+  notice: Mock<NavigationOptions['setPaneNotice']>
+  closeMissing: Mock<NavigationOptions['closeMissingRemotePage']>
+}
 
 export function page(id = 'page-a'): BrowserPage {
   return {
@@ -64,7 +79,7 @@ export function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-export function renderNavigation(count = 1, addressBarValue = 'about:blank') {
+export function renderNavigation(count = 1, addressBarValue = 'about:blank'): NavigationFixture {
   const pages = Array.from({ length: count }, (_, index) =>
     page(index ? `page-${index}` : 'page-a')
   )
@@ -122,9 +137,9 @@ export function renderNavigation(count = 1, addressBarValue = 'about:blank') {
   })
   const { session, tokens } = lifecycle
   tokens.setRemotePage('remote-page-a')
-  const closeMissing = vi.fn()
-  const busy = vi.fn()
-  const notice = vi.fn()
+  const closeMissing = vi.fn<NavigationOptions['closeMissingRemotePage']>()
+  const busy = vi.fn<NavigationOptions['setPaneBusy']>()
+  const notice = vi.fn<NavigationOptions['setPaneNotice']>()
   const hook = renderHook(() =>
     useRemoteBrowserPageNavigation({
       browserTab: first,
