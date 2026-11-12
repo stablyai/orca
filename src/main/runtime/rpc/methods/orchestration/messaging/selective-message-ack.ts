@@ -14,6 +14,7 @@ export function acknowledgeSelectedMessages(
   ids: string[],
   options?: {
     recordReceipt?: (receipt: unknown) => void
+    mailboxIdentity?: { runId: string; dispatchId?: string }
     residualMailbox?: string
     dispatchConsumer?: { generation: number; readCurrentGeneration: () => number | undefined }
   }
@@ -71,6 +72,7 @@ export function acknowledgeSelectedMessages(
     const markedIds = unread.map((message) => message.id)
     db.markAsRead(markedIds)
     const result = {
+      ...options?.mailboxIdentity,
       messages: exposeMessages(markedIds.map((id) => db.getMessageById(id)!)),
       count: markedIds.length,
       acknowledged: null,

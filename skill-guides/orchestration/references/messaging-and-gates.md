@@ -25,7 +25,9 @@ Unselected mail, including questions arriving after inspection, stays unread.
 Every ID must exist in the caller's current mailbox (direct, bound Run or
 Dispatch); an unknown, foreign or legacy ID rejects the entire selection.
 An implicitly bound child Run can also acknowledge pre-bind Dispatch mail while
-it remains that Dispatch's current consumer. Existing consumer/pane fencing still
+it remains that Dispatch's current consumer, even with an outstanding Run delivery.
+The response and its durable retry receipt retain the Run/Dispatch identity.
+Existing consumer/pane fencing still
 applies: reattachment rejects the replaced consumer's selection even on the same
 pane. Do not use this to discard mail the agent has not processed.
 Released agent sessions cannot acknowledge wake-up mail until they are running

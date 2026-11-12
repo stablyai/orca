@@ -180,13 +180,11 @@ export async function checkWorkerMailbox(args: {
   await revalidateWorkerMailbox()
   args.revalidateConsumer?.()
   if (params.ackIds) {
-    return {
-      ...mailboxIdentity,
-      ...acknowledgeSelectedMessages(db, address, params.ackIds, {
-        recordReceipt: args.recordMutationReceipt,
-        dispatchConsumer: { generation: workerMailbox.generation, readCurrentGeneration }
-      })
-    }
+    return acknowledgeSelectedMessages(db, address, params.ackIds, {
+      mailboxIdentity,
+      recordReceipt: args.recordMutationReceipt,
+      dispatchConsumer: { generation: workerMailbox.generation, readCurrentGeneration }
+    })
   }
   let acknowledged
   try {

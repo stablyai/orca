@@ -62,19 +62,17 @@ export async function checkRunPendingMail(args: {
         residual.assignee_orca_session_id === caller.orcaSessionId) &&
       callerHoldsDispatchPane(residual, paneKey) &&
       currentDispatchAssigneeRun(runtime, db, residual)?.id === run.id &&
-      Boolean(residualAck || !db.hasOutstandingMailboxDelivery(address))
+      Boolean(params.ackIds || residualAck || !db.hasOutstandingMailboxDelivery(address))
     )
   }
   if (params.ackIds) {
     revalidateConsumer()
     return {
-      result: {
-        ...acknowledgeSelectedMessages(db, address, params.ackIds, {
-          recordReceipt: recordMutationReceipt,
-          residualMailbox: residual && ownsResidual() ? `dispatch:${residual.id}` : undefined
-        }),
-        runId: run.id
-      }
+      result: acknowledgeSelectedMessages(db, address, params.ackIds, {
+        mailboxIdentity: { runId: run.id },
+        recordReceipt: recordMutationReceipt,
+        residualMailbox: residual && ownsResidual() ? `dispatch:${residual.id}` : undefined
+      })
     }
   }
   const acknowledgeRun = () =>

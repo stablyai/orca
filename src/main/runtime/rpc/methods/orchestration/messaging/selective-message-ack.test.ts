@@ -48,7 +48,7 @@ it('acknowledges only selected recipient IDs, atomically rejects mixed recipient
   expect(db.getUnreadMessages('term_other').map((message) => message.id)).toEqual(['msg_foreign'])
 })
 
-it('selectively acknowledges inspected pre-bind Dispatch mail through its current child Run consumer', async () => {
+it('selectively acknowledges pre-bind Dispatch mail without disturbing an outstanding Run delivery', async () => {
   const { db, runtime, ctx } = harness.setup()
   const pane = 'tab_lead:22222222-2222-4222-9222-222222222222'
   vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
@@ -86,8 +86,32 @@ it('selectively acknowledges inspected pre-bind Dispatch mail through its curren
     subject: 'new question',
     type: 'question'
   })
+  const delivery = db.getOrCreateRunDelivery({
+    runId: run.id,
+    consumerGeneration: run.consumer_generation
+  })!
+  expect(delivery.messages.map((message) => message.id)).toEqual([
+    'msg_child_status',
+    'msg_child_question'
+  ])
+  const receiptIdentity = {
+    callerFingerprint: 'caller_run',
+    requestId: 'selected_run_ack',
+    method: 'orchestration.ackMessages',
+    payloadHash: 'selected_run_payload'
+  }
+  db.beginMutationReceipt(receiptIdentity)
+  ctx.recordMutationReceipt = (receipt) => {
+    db.completeMutationReceipt({ ...receiptIdentity, receipt: JSON.stringify(receipt) })
+  }
   const selection = { terminal: 'term_lead', ackIds: ['msg_prebind', 'msg_child_status'] }
   await expect(harness.call('orchestration.ackMessages', selection, ctx)).resolves.toMatchObject({
+    markedIds: ['msg_prebind', 'msg_child_status']
+  })
+  expect(
+    JSON.parse(db.getMutationReceipt('caller_run', 'selected_run_ack')!.receipt!)
+  ).toMatchObject({
+    runId: run.id,
     markedIds: ['msg_prebind', 'msg_child_status']
   })
   await expect(harness.call('orchestration.ackMessages', selection, ctx)).resolves.toMatchObject({
@@ -95,4 +119,49 @@ it('selectively acknowledges inspected pre-bind Dispatch mail through its curren
   })
   expect(db.getMessageById('msg_prebind')?.read).toBe(1)
   expect(db.getMessageById('msg_child_question')?.read).toBe(0)
+  expect(
+    db.getOrCreateRunDelivery({ runId: run.id, consumerGeneration: run.consumer_generation })
+  ).toMatchObject({
+    delivery: { id: delivery.delivery.id },
+    messages: [{ id: 'msg_child_status' }, { id: 'msg_child_question' }]
+  })
+})
+
+it('records the Dispatch mailbox identity with the selective acknowledgment', async () => {
+  const { db, runtime, ctx, activeRunId } = harness.setup()
+  const pane = 'tab_worker:33333333-3333-4333-9333-333333333333'
+  vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+    handle === 'term_worker' ? pane : harness.coordinatorPaneKey
+  )
+  const task = db.createTask({ spec: 'worker receipt' })
+  const dispatch = createRootDispatch(db, task.id, 'term_worker', pane)
+  db.insertMessage({
+    id: 'msg_worker_selected',
+    from: 'term_coord',
+    to: `dispatch:${dispatch.id}`,
+    subject: 'selected status'
+  })
+  const identity = {
+    callerFingerprint: 'caller_worker',
+    requestId: 'selected_worker_ack',
+    method: 'orchestration.ackMessages',
+    payloadHash: 'selected_worker_payload'
+  }
+  db.beginMutationReceipt(identity)
+  ctx.recordMutationReceipt = (receipt) => {
+    db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(receipt) })
+  }
+  await harness.call(
+    'orchestration.ackMessages',
+    { terminal: 'term_worker', ackIds: ['msg_worker_selected'] },
+    ctx
+  )
+  expect(
+    JSON.parse(db.getMutationReceipt('caller_worker', 'selected_worker_ack')!.receipt!)
+  ).toMatchObject({
+    runId: activeRunId,
+    dispatchId: dispatch.id,
+    markedIds: ['msg_worker_selected']
+  })
+  expect(db.getMessageById('msg_worker_selected')?.read).toBe(1)
 })
