@@ -5,7 +5,6 @@ import {
   type BrowserWindow,
   type MessageBoxOptions,
   type MessageBoxReturnValue,
-  type Tray,
   type WebContents
 } from 'electron'
 import { isNativeBrowserPopupWindow } from '../browser/guest-lifecycle/popups/presentation/native-browser-popup-windows'
@@ -18,6 +17,7 @@ import { checkForUpdatesFromMenu, isQuittingForUpdate } from '../updater/updater
 import {
   createSystemTray,
   setMacMenuBarIconVisible,
+  type SystemTray,
   type SystemTrayOptions
 } from '../tray/system-tray'
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
@@ -237,12 +237,15 @@ export function getAppMenuQuitHandlers(): AppMenuQuitHandlers {
     : { onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand }
 }
 
-export function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
+export function syncMacMenuBarIcon(
+  showMenuBarIcon: boolean,
+  onCreated?: () => void
+): SystemTray | null {
   if (process.platform !== 'darwin' || state.isServeMode) {
     return null
   }
   const options = getSystemTrayOptions()
-  return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
+  return options ? setMacMenuBarIconVisible(showMenuBarIcon, { ...options, onCreated }) : null
 }
 
 export function createSystemTrayDeferred(
@@ -256,9 +259,7 @@ export function createSystemTrayDeferred(
     }
     trayCreated = true
     if (process.platform === 'darwin') {
-      if (syncMacMenuBarIcon(state.store.getSettings().showMenuBarIcon !== false)) {
-        onCreated?.()
-      }
+      syncMacMenuBarIcon(state.store.getSettings().showMenuBarIcon !== false, onCreated)
       return
     }
     const options = getSystemTrayOptions()

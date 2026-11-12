@@ -97,4 +97,8 @@ export type PlatformApi = {
 
 export type E2EApi = {
   getConfig: () => E2EConfig
+  menuBar: (command: {
+    operation: 'inspect' | 'invoke' | 'tracking'
+    action?: string
+  }) => Promise<unknown>
 }

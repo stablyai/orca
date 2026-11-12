@@ -132,7 +132,7 @@ function installWillQuitHandler(): void {
       )
     }
     // Remove the Windows tray icon only after renderer vetoes are past.
-    destroySystemTray()
+    const menuBarShutdown = destroySystemTray()
     // Final stats flush closes working sessions synchronously; quit supplies no terminating hook to preserve their duration.
     state.starNag?.stop()
     state.automations?.stop()
@@ -275,6 +275,7 @@ function installWillQuitHandler(): void {
       { name: 'local-ssh-browser-routes', promise: localSshRouteShutdown },
       { name: 'ssh', promise: sshShutdown },
       { name: 'plugin-hosts', promise: pluginHostShutdown },
+      { name: 'menu-bar-helper', promise: menuBarShutdown },
       { name: 'skill-uploads', promise: skillUploadShutdown },
       { name: 'grok-hooks', promise: grokHookCleanup },
       { name: 'ref-maintenance', promise: refMaintenanceShutdown },

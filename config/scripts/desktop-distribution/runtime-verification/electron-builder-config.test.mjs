@@ -15,6 +15,35 @@ const electronBuilderConfig = require('../../../electron-builder.config.cjs')
 const { copyFiles, FileMatcher } = require('app-builder-lib/out/fileMatcher')
 
 describe('electron-builder config', () => {
+  it('copies the nested menu-bar executable and identity to the macOS resource path', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-menu-bar-package-'))
+    const source = join(root, 'source')
+    const resources = join(root, 'resources')
+    try {
+      const helper = join(source, 'native/menu-bar-macos/.build/release/Orca Menu Bar.app/Contents')
+      await mkdir(join(helper, 'MacOS'), { recursive: true })
+      await writeFile(join(helper, 'MacOS/orca-menu-bar'), 'owned native executable')
+      await writeFile(join(helper, 'Info.plist'), 'nested app identity')
+      const entries = electronBuilderConfig.mac.extraResources.filter(
+        (entry) => entry.to === 'Orca Menu Bar.app'
+      )
+      await copyFiles(
+        entries.map(
+          (entry) =>
+            new FileMatcher(join(source, entry.from), join(resources, entry.to), (value) => value)
+        )
+      )
+      expect(
+        await readFile(join(resources, 'Orca Menu Bar.app/Contents/MacOS/orca-menu-bar'), 'utf8')
+      ).toBe('owned native executable')
+      expect(await readFile(join(resources, 'Orca Menu Bar.app/Contents/Info.plist'), 'utf8')).toBe(
+        'nested app identity'
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it.each(['file', 'directory'])('keeps a root notes %s out of app.asar', async (kind) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-packaging-notes-'))
     const source = join(root, 'app')

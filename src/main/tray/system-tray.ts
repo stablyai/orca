@@ -7,6 +7,11 @@ import { translateMain } from '../i18n/main-i18n'
 import { quitAndStopAllSessionsMenuText } from '../menu/app-menu-quit-item'
 import { composeTrayAttentionIcon, tintTrayTemplateForAttention } from './tray-attention-icon'
 import { stampTrayDevBadge } from './tray-dev-badge'
+import { MacMenuBarTray, waitForMacMenuBarRetirement, type TrayMenuItem } from './mac-menu-bar-tray'
+
+import type { MenuBarQACommand } from './mac-menu-bar-protocol'
+
+export type SystemTray = Tray | MacMenuBarTray
 
 export type SystemTrayOptions = {
   /** App icon id from settings; the tray reuses the app icon image. */
@@ -25,10 +30,11 @@ export type SystemTrayOptions = {
   onQuit: () => void
   /** Confirm, then quit with every terminal session stopped; omitted where the item must not show (serve mode). */
   onQuitAndStopAllSessions?: () => void
+  onCreated?: () => void
 }
 
 // Keep a live reference or Electron GC removes the tray icon.
-let tray: Tray | null = null
+let tray: SystemTray | null = null
 let trayOptions: SystemTrayOptions | null = null
 
 // Cache the plain icon so attention changes do not reload the app PNG.
@@ -197,7 +203,7 @@ function safeMenuAction(action: () => void): () => void {
 }
 
 /** Create at most one Windows/macOS tray; Linux has none. */
-export function createSystemTray(opts: SystemTrayOptions): Tray | null {
+export function createSystemTray(opts: SystemTrayOptions): SystemTray | null {
   if (process.platform !== 'win32' && process.platform !== 'darwin') {
     return null
   }
@@ -222,34 +228,47 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
     })
   }
 
-  tray = new Tray(baseTrayImage)
-  applyTrayImage()
-
-  trayOptions = opts
-  tray.setContextMenu(buildTrayMenu(opts))
-  if (process.platform === 'win32') {
-    tray.setToolTip(baseTooltip())
-    // Windows left-click restores the app; macOS uses its attached menu.
-    tray.on(
+  if (process.platform === 'darwin') {
+    tray = new MacMenuBarTray(baseTrayImage, opts.onCreated)
+  } else {
+    const windowsTray = new Tray(baseTrayImage)
+    windowsTray.on(
       'click',
       safeMenuAction(() => opts.onOpen())
     )
+    tray = windowsTray
+  }
+  applyTrayImage()
+  trayOptions = opts
+  setTrayMenu(opts)
+  if (process.platform === 'win32') {
+    tray.setToolTip(baseTooltip())
   } else {
     watchMacAppearance()
   }
   return tray
 }
 
-function buildTrayMenu(opts: SystemTrayOptions): Menu {
-  return Menu.buildFromTemplate([
+function setTrayMenu(opts: SystemTrayOptions): void {
+  const menu = buildTrayMenu(opts)
+  if (tray instanceof MacMenuBarTray) {
+    tray.setMenu(menu)
+  } else {
+    tray?.setContextMenu(Menu.buildFromTemplate(menu))
+  }
+}
+
+function buildTrayMenu(opts: SystemTrayOptions): TrayMenuItem[] {
+  return [
     ...(devIndicator
       ? ([
           // Label dev trays by worktree/branch to distinguish concurrent instances.
           { label: baseTooltip(), enabled: false },
           { type: 'separator' }
-        ] satisfies Electron.MenuItemConstructorOptions[])
+        ] satisfies TrayMenuItem[])
       : []),
     {
+      id: 'open',
       label: translateMain('tray.openOrca', 'Open Orca'),
       click: safeMenuAction(() => opts.onOpen())
     },
@@ -258,26 +277,33 @@ function buildTrayMenu(opts: SystemTrayOptions): Menu {
     ...(process.platform === 'darwin'
       ? ([
           {
+            id: 'settings',
             label: translateMain('menu.settings', 'Settings'),
             click: safeMenuAction(() => opts.onOpenSettings())
           },
           {
+            id: 'updates',
             label: translateMain('menu.checkForUpdates', 'Check for Updates...'),
             click: safeMenuAction(() => opts.onCheckForUpdates())
           },
           { type: 'separator' }
-        ] satisfies Electron.MenuItemConstructorOptions[])
+        ] satisfies TrayMenuItem[])
       : []),
     ...(opts.onQuitAndStopAllSessions
       ? ([
           {
+            id: 'quit-completely',
             ...quitAndStopAllSessionsMenuText(),
             click: safeMenuAction(opts.onQuitAndStopAllSessions)
           }
-        ] satisfies Electron.MenuItemConstructorOptions[])
+        ] satisfies TrayMenuItem[])
       : []),
-    { label: translateMain('tray.quit', 'Quit'), click: safeMenuAction(() => opts.onQuit()) }
-  ])
+    {
+      id: 'quit',
+      label: translateMain('tray.quit', 'Quit'),
+      click: safeMenuAction(() => opts.onQuit())
+    }
+  ]
 }
 
 /** Refreshes translated labels without recreating the tray or its actions. */
@@ -287,18 +313,21 @@ export function rebuildSystemTrayMenu(): void {
     if (!tray || tray.isDestroyed() || !trayOptions) {
       return
     }
-    tray.setContextMenu(buildTrayMenu(trayOptions))
+    setTrayMenu(trayOptions)
     applyTrayImage()
   })
 }
 
 /** Applies the persisted macOS visibility preference without affecting Windows. */
-export function setMacMenuBarIconVisible(visible: boolean, opts: SystemTrayOptions): Tray | null {
+export function setMacMenuBarIconVisible(
+  visible: boolean,
+  opts: SystemTrayOptions
+): SystemTray | null {
   if (process.platform !== 'darwin') {
     return null
   }
   if (!visible) {
-    destroySystemTray()
+    void destroySystemTray()
     return null
   }
   return createSystemTray(opts)
@@ -314,13 +343,20 @@ export function setTrayAttention(active: boolean): void {
   scheduleTrayImage()
 }
 
-export function destroySystemTray(): void {
+export function destroySystemTray(): Promise<void> {
   stopWatchingMacAppearance()
   if (tray && !tray.isDestroyed()) {
-    tray.destroy()
+    void tray.destroy()
   }
   tray = null
   trayOptions = null
   baseTrayImage = null
   // Notification/visibility flow owns attention; preserve its dot across menu-bar icon hide/show.
+  return waitForMacMenuBarRetirement()
+}
+
+export function inspectSystemTrayForQA(command: MenuBarQACommand): Promise<unknown> {
+  return tray instanceof MacMenuBarTray
+    ? tray.inspectForQA(command)
+    : Promise.reject(new Error('Native menu bar helper unavailable'))
 }

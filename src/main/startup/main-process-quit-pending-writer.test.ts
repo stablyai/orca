@@ -8,6 +8,7 @@ const stopAgentHookServer = idle()
 const stopStructuredAgentSessionRuntime = settled()
 const beginSshShutdown = settled()
 const killAllPty = idle()
+const destroySystemTray = settled()
 /** Final-save calls seen by the first microtask after the SSH shutdown began. */
 let flushesByNextMicrotask = -1
 
@@ -55,7 +56,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../git/refs/maintenance/local-repo-ref-maintenance': { awaitPackedRefsLockRelease: settled() },
   '../worktree-background-removal': { stopBackgroundWorktreeRemovals: idle() },
   '../dock/unread-badge': { setUnreadDockBadgeCount: idle() },
-  '../tray/system-tray': { destroySystemTray: idle() },
+  '../tray/system-tray': { destroySystemTray },
   '../telemetry/client': { shutdownTelemetry: settled() },
   '../observability/index': { shutdownObservability: settled() },
   '../updater': { isQuittingForUpdate: vi.fn(() => false) },
@@ -207,3 +208,14 @@ it.each([
     expect(app.quit).toHaveBeenCalledOnce()
   }
 )
+
+it('keeps committed quit waiting for observed menu-bar helper exit', async () => {
+  const helperExit = Promise.withResolvers<void>()
+  destroySystemTray.mockImplementationOnce(() => helperExit.promise)
+  const { app } = await startQuit(async () => {})
+  await vi.advanceTimersByTimeAsync(0)
+  expect(app.quit).not.toHaveBeenCalled()
+  helperExit.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(app.quit).toHaveBeenCalledOnce()
+})

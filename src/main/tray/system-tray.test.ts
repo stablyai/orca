@@ -111,7 +111,23 @@ vi.mock('./tray-dev-badge', () => ({
 }))
 
 type TrayModule = typeof SystemTrayModule
-type MenuItem = { label?: string; type?: string; click?: () => void }
+type MenuItem = { id?: string; click?: () => void }
+
+const macInstances: FakeMacTray[] = []
+class FakeMacTray {
+  setImage = vi.fn()
+  setToolTip = vi.fn()
+  setMenu = vi.fn<(items: MenuItem[]) => void>()
+  destroy = vi.fn(() => Promise.resolve())
+  isDestroyed = vi.fn(() => false)
+  constructor() {
+    macInstances.push(this)
+  }
+}
+vi.mock('./mac-menu-bar-tray', () => ({
+  MacMenuBarTray: FakeMacTray,
+  waitForMacMenuBarRetirement: () => Promise.resolve()
+}))
 
 const originalPlatform = process.platform
 
@@ -142,14 +158,10 @@ function builtMenuItems(): MenuItem[] {
   return menuFromTemplateMock.mock.calls.at(-1)?.[0] as MenuItem[]
 }
 
-// Flush the deferred native scene mutation after the AppKit caller stack returns.
-function flushTraySceneMutation(): void {
-  vi.advanceTimersByTime(0)
-}
-
 beforeEach(() => {
   vi.useFakeTimers()
   trayInstances.length = 0
+  macInstances.length = 0
   menuFromTemplateMock.mockClear()
   composeAttentionMock.mockClear()
   tintTemplateMock.mockClear()
@@ -190,460 +202,48 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('createSystemTray', () => {
-  it('keeps the Windows icon, Open/Quit menu, and left-click behavior', async () => {
-    setPlatform('win32')
-    const { createSystemTray } = await loadModule()
-    const options = createOptions()
-
-    createSystemTray(options)
-
-    expect(trayInstances).toHaveLength(1)
-    expect(trayInstances[0].image).toBe(resizedImage)
-    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca')
-    expect(builtMenuItems().map((item) => item.label)).toEqual(['Open Orca', undefined, 'Quit'])
-    const clickHandler = trayInstances[0].on.mock.calls.find((call) => call[0] === 'click')?.[1]
-    expect(clickHandler).toBeTypeOf('function')
-
-    builtMenuItems()[0].click?.()
-    ;(clickHandler as () => void)()
-    builtMenuItems()[2].click?.()
-    expect(options.onOpen).toHaveBeenCalledTimes(2)
-    expect(options.onQuit).toHaveBeenCalledOnce()
-  })
-
-  it('creates a macOS template status item with the full native menu', async () => {
-    setPlatform('darwin')
-    const { createSystemTray } = await loadModule()
-    const options = createOptions()
-
-    createSystemTray(options)
-
-    expect(trayInstances).toHaveLength(1)
-    expect(trayInstances[0].image).toBe(baseMacImage)
-    expect(baseMacImage.setTemplateImage).toHaveBeenCalledWith(true)
-    expect(baseMacImage.addRepresentation).toHaveBeenCalledWith({
-      scaleFactor: 2,
-      dataURL: 'data:image/png;base64,mac-retina'
-    })
-    expect(builtMenuItems().map((item) => item.label)).toEqual([
-      'Open Orca',
-      undefined,
-      'Settings',
-      'Check for Updates...',
-      undefined,
-      'Quit'
-    ])
-    expect(trayInstances[0].on).not.toHaveBeenCalled()
-    expect(nativeThemeMock.on).toHaveBeenCalledWith('updated', expect.any(Function))
-
-    for (const [label, callback] of [
-      ['Open Orca', options.onOpen],
-      ['Settings', options.onOpenSettings],
-      ['Check for Updates...', options.onCheckForUpdates],
-      ['Quit', options.onQuit]
-    ] as const) {
-      builtMenuItems()
-        .find((item) => item.label === label)
-        ?.click?.()
-      expect(callback).toHaveBeenCalledOnce()
-    }
-  })
-
-  it.each(['win32', 'darwin'] as const)(
-    'offers Quit Completely directly above Quit on %s when a handler is supplied',
-    async (platform) => {
-      setPlatform(platform)
-      const { createSystemTray } = await loadModule()
-      const options = { ...createOptions(), onQuitAndStopAllSessions: vi.fn() }
-
-      createSystemTray(options)
-
-      expect(builtMenuItems().map((item) => item.label)).toEqual(
-        platform === 'darwin'
-          ? [
-              'Open Orca',
-              undefined,
-              'Settings',
-              'Check for Updates...',
-              undefined,
-              'Quit Completely...',
-              'Quit'
-            ]
-          : ['Open Orca', undefined, 'Quit Completely...', 'Quit']
-      )
-      builtMenuItems().at(-2)?.click?.()
-      expect(options.onQuitAndStopAllSessions).toHaveBeenCalledOnce()
-      expect(options.onQuit).not.toHaveBeenCalled()
-    }
-  )
-
-  it('does not create a blank macOS item when the template asset fails to load', async () => {
-    setPlatform('darwin')
-    baseMacImage.getSize.mockReturnValue({ width: 0, height: 0 })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { createSystemTray } = await loadModule()
-
-    expect(createSystemTray(createOptions())).toBeNull()
-    expect(trayInstances).toHaveLength(0)
-    expect(warn).toHaveBeenCalledWith('[system-tray] macOS menu bar icon could not be loaded')
-  })
-
-  it('is idempotent and remains disabled on Linux', async () => {
-    setPlatform('darwin')
-    const { createSystemTray } = await loadModule()
-    const options = createOptions()
-    expect(createSystemTray(options)).toBe(createSystemTray(options))
-    expect(trayInstances).toHaveLength(1)
-
-    setPlatform('linux')
-    const linuxModule = await loadModule()
-    expect(linuxModule.createSystemTray(options)).toBeNull()
-  })
-})
-
-describe('dev instance indicator', () => {
-  it('falls back to the plain icon when badge stamping fails', async () => {
-    setPlatform('darwin')
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    stampDevBadgeMock.mockImplementation(() => {
-      throw new Error('bitmap failure')
-    })
-    const { createSystemTray } = await loadModule()
-
-    expect(createSystemTray(createOptions({ isDevInstance: true }))).not.toBeNull()
-    expect(trayInstances[0].image).toBe(baseMacImage)
-    expect(warn).toHaveBeenCalledWith(
-      '[system-tray] dev badge could not be stamped; showing plain icon',
-      expect.any(Error)
-    )
-  })
-})
-
-describe('macOS visibility', () => {
-  it('creates and destroys the item as the setting toggles', async () => {
-    setPlatform('darwin')
-    const { setMacMenuBarIconVisible } = await loadModule()
-    const options = createOptions()
-
-    expect(setMacMenuBarIconVisible(false, options)).toBeNull()
-    expect(trayInstances).toHaveLength(0)
-    expect(setMacMenuBarIconVisible(true, options)).not.toBeNull()
-    expect(trayInstances).toHaveLength(1)
-
-    setMacMenuBarIconVisible(false, options)
-    setMacMenuBarIconVisible(false, options)
-    expect(trayInstances[0].destroy).toHaveBeenCalledOnce()
-  })
-})
-
-describe('setTrayAttention', () => {
-  it('preserves the Windows attention swap behavior', async () => {
-    setPlatform('win32')
-    const { createSystemTray, setTrayAttention } = await loadModule()
-    createSystemTray(createOptions())
-    const created = trayInstances[0]
-    created.setImage.mockClear()
-
-    setTrayAttention(true)
-    flushTraySceneMutation()
-    expect(composeAttentionMock).toHaveBeenCalledWith(resizedImage)
-    expect(created.setImage).toHaveBeenCalledWith(attentionImage)
-    setTrayAttention(false)
-    flushTraySceneMutation()
-    expect(created.setImage).toHaveBeenLastCalledWith(resizedImage)
-  })
-
-  it('uses a literal theme-aware glyph for macOS attention, then restores template mode', async () => {
-    setPlatform('darwin')
-    const { createSystemTray, setTrayAttention } = await loadModule()
-    createSystemTray(createOptions())
-    const created = trayInstances[0]
-    created.setImage.mockClear()
-    created.setToolTip.mockClear()
-
-    setTrayAttention(true)
-    flushTraySceneMutation()
-    expect(tintTemplateMock).toHaveBeenCalledWith(baseMacImage, false)
-    expect(composeAttentionMock).toHaveBeenCalledWith(tintedMacImage)
-    // Bitmap rebuild starts at 1x; re-add 2x or attention glyphs blur on Retina.
-    expect(tintTemplateMock).toHaveBeenCalledWith(baseMacImage, false, 2)
-    expect(attentionImage.addRepresentation).toHaveBeenCalledWith({
-      scaleFactor: 2,
-      dataURL: 'data:image/png;base64,attention'
-    })
-    expect(attentionImage.setTemplateImage).toHaveBeenCalledWith(false)
-    expect(created.setImage).toHaveBeenCalledWith(attentionImage)
-    expect(created.setToolTip).toHaveBeenCalledWith('Orca - activity waiting')
-
-    setTrayAttention(false)
-    flushTraySceneMutation()
-    expect(baseMacImage.setTemplateImage).toHaveBeenLastCalledWith(true)
-    expect(created.setImage).toHaveBeenLastCalledWith(baseMacImage)
-    expect(created.setToolTip).toHaveBeenLastCalledWith('Orca')
-  })
-
-  it('recomposes active macOS attention when the system appearance changes', async () => {
-    setPlatform('darwin')
-    const { createSystemTray, setTrayAttention } = await loadModule()
-    createSystemTray(createOptions())
-    setTrayAttention(true)
-    flushTraySceneMutation()
-    tintTemplateMock.mockClear()
-    nativeThemeMock.shouldUseDarkColors = true
-
-    themeState.updatedListener?.()
-    // Appearance events also arrive from AppKit; defer their native writes.
-    expect(tintTemplateMock).not.toHaveBeenCalled()
-
-    flushTraySceneMutation()
-    expect(tintTemplateMock).toHaveBeenCalledWith(baseMacImage, true)
-  })
-
-  it('reflects attention requested before deferred macOS creation', async () => {
-    setPlatform('darwin')
-    const { createSystemTray, setTrayAttention } = await loadModule()
-    setTrayAttention(true)
-    createSystemTray(createOptions())
-
-    expect(trayInstances[0].setImage).toHaveBeenCalledWith(attentionImage)
-  })
-
-  it('ignores repeated same-state attention calls', async () => {
-    setPlatform('win32')
-    const { createSystemTray, setTrayAttention } = await loadModule()
-    createSystemTray(createOptions())
-    const created = trayInstances[0]
-    created.setImage.mockClear()
-
-    setTrayAttention(true)
-    setTrayAttention(true)
-    flushTraySceneMutation()
-
-    expect(created.setImage).toHaveBeenCalledTimes(1)
-  })
-
-  it('never touches the NSStatusItem scene inside the caller stack', async () => {
-    setPlatform('darwin')
-    const { createSystemTray, setTrayAttention } = await loadModule()
-    createSystemTray(createOptions())
-    const created = trayInstances[0]
-    created.setImage.mockClear()
-    created.setToolTip.mockClear()
-
-    // Native scene writes inside AppKit window-state dispatch can deadlock main on macOS 26.
-    setTrayAttention(true)
-    expect(created.setImage).not.toHaveBeenCalled()
-    expect(created.setToolTip).not.toHaveBeenCalled()
-
-    flushTraySceneMutation()
-    expect(created.setImage).toHaveBeenCalledWith(attentionImage)
-  })
-
-  it('collapses a burst of toggles into one deferred repaint', async () => {
-    setPlatform('darwin')
-    const { createSystemTray, setTrayAttention } = await loadModule()
-    createSystemTray(createOptions())
-    const created = trayInstances[0]
-    created.setImage.mockClear()
-
-    setTrayAttention(true)
-    setTrayAttention(false)
-    setTrayAttention(true)
-    flushTraySceneMutation()
-
-    expect(created.setImage).toHaveBeenCalledTimes(1)
-    expect(created.setImage).toHaveBeenCalledWith(attentionImage)
-  })
-
-  it('still dedupes after the deferred repaint has run', async () => {
-    setPlatform('darwin')
-    const { createSystemTray, setTrayAttention } = await loadModule()
-    createSystemTray(createOptions())
-    const created = trayInstances[0]
-    created.setImage.mockClear()
-
-    setTrayAttention(true)
-    flushTraySceneMutation()
-    setTrayAttention(true)
-    flushTraySceneMutation()
-
-    expect(created.setImage).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not throw when the tray is destroyed before the deferred repaint runs', async () => {
-    setPlatform('darwin')
-    const { createSystemTray, destroySystemTray, setTrayAttention } = await loadModule()
-    createSystemTray(createOptions())
-    const created = trayInstances[0]
-    created.setImage.mockClear()
-
-    setTrayAttention(true)
-    destroySystemTray()
-
-    expect(() => flushTraySceneMutation()).not.toThrow()
-    expect(created.setImage).not.toHaveBeenCalled()
-  })
-
-  it('keeps a pending attention dot across a macOS hide/show toggle', async () => {
-    setPlatform('darwin')
-    const { setMacMenuBarIconVisible, setTrayAttention } = await loadModule()
-    const options = createOptions()
-    setMacMenuBarIconVisible(true, options)
-    setTrayAttention(true)
-
-    setMacMenuBarIconVisible(false, options)
-    setMacMenuBarIconVisible(true, options)
-
-    expect(trayInstances).toHaveLength(2)
-    expect(trayInstances[1].setImage).toHaveBeenCalledWith(attentionImage)
-  })
-})
-
-describe('destroySystemTray', () => {
-  it('destroys idempotently and removes the macOS appearance listener', async () => {
+describe('system tray ownership and actions', () => {
+  it('keeps macOS native tray ownership outside main and routes every offered action', async () => {
     setPlatform('darwin')
     const { createSystemTray, destroySystemTray } = await loadModule()
-    createSystemTray(createOptions())
-    const created = trayInstances[0]
-    const listener = themeState.updatedListener
-
-    destroySystemTray()
-    destroySystemTray()
-
-    expect(created.destroy).toHaveBeenCalledOnce()
-    expect(nativeThemeMock.removeListener).toHaveBeenCalledWith('updated', listener)
-  })
-})
-
-describe('macOS hardening', () => {
-  it('warns but still creates the item when only the @2x asset fails to load', async () => {
-    setPlatform('darwin')
-    retinaMacImage.getSize.mockReturnValue({ width: 0, height: 0 })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { createSystemTray } = await loadModule()
-
-    expect(createSystemTray(createOptions())).not.toBeNull()
-    expect(trayInstances).toHaveLength(1)
-    expect(baseMacImage.addRepresentation).not.toHaveBeenCalled()
-    expect(warn).toHaveBeenCalledWith(
-      '[system-tray] macOS retina menu bar icon could not be loaded'
-    )
-  })
-
-  it('degrades to the plain icon instead of throwing when attention composition fails', async () => {
-    setPlatform('darwin')
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { createSystemTray, setTrayAttention } = await loadModule()
-    createSystemTray(createOptions())
-    const created = trayInstances[0]
-    created.setImage.mockClear()
-    composeAttentionMock.mockImplementationOnce(() => {
-      throw new Error('native image failure')
-    })
-
-    setTrayAttention(true)
-    expect(() => flushTraySceneMutation()).not.toThrow()
-    expect(created.setImage).toHaveBeenLastCalledWith(baseMacImage)
-    expect(created.setToolTip).toHaveBeenLastCalledWith('Orca')
-    expect(warn).toHaveBeenCalledWith(
-      '[system-tray] macOS attention icon failed; showing plain icon',
-      expect.any(Error)
-    )
-  })
-
-  it('contains a throwing menu-item callback instead of crashing', async () => {
-    setPlatform('darwin')
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const { createSystemTray } = await loadModule()
-    const options = createOptions()
-    options.onOpenSettings.mockImplementation(() => {
-      throw new Error('boom')
-    })
+    const options = { ...createOptions(), onQuitAndStopAllSessions: vi.fn() }
     createSystemTray(options)
-
-    const settingsItem = builtMenuItems().find((item) => item.label === 'Settings')
-    expect(() => settingsItem?.click?.()).not.toThrow()
-    expect(error).toHaveBeenCalledWith('[system-tray] menu action failed', expect.any(Error))
-  })
-})
-
-describe('language changes', () => {
-  it.each(['darwin', 'win32'] as const)(
-    'refreshes the existing %s menu and keeps its actions',
-    async (platform) => {
-      setPlatform(platform)
-      const { createSystemTray, rebuildSystemTrayMenu } = await loadModule()
-      const { setMainUiLanguage } = await import('../i18n/main-i18n')
-      await setMainUiLanguage('en')
-      const options = { ...createOptions(), onQuitAndStopAllSessions: vi.fn() }
-      createSystemTray(options)
-      expect(builtMenuItems()[0].label).toBe('Open Orca')
-
-      await setMainUiLanguage('ja')
-      rebuildSystemTrayMenu()
-      expect(builtMenuItems()[0].label).toBe('Open Orca')
-      flushTraySceneMutation()
-
-      expect(trayInstances).toHaveLength(1)
-      expect(trayInstances[0].setContextMenu).toHaveBeenCalledTimes(2)
-      expect(builtMenuItems()[0].label).toBe('Orca を開く')
-      expect(builtMenuItems().at(-2)?.label).toBe('完全に終了…')
-      expect(builtMenuItems().at(-1)?.label).toBe('終了')
-      builtMenuItems()[0].click?.()
-      builtMenuItems().at(-2)?.click?.()
-      builtMenuItems().at(-1)?.click?.()
-      expect(options.onOpen).toHaveBeenCalledOnce()
-      expect(options.onQuitAndStopAllSessions).toHaveBeenCalledOnce()
-      expect(options.onQuit).toHaveBeenCalledOnce()
-      if (platform === 'darwin') {
-        expect(builtMenuItems()[2].label).toBe('設定')
-        expect(builtMenuItems()[3].label).toBe('アップデートを確認…')
-        builtMenuItems()[2].click?.()
-        builtMenuItems()[3].click?.()
-        expect(options.onOpenSettings).toHaveBeenCalledOnce()
-        expect(options.onCheckForUpdates).toHaveBeenCalledOnce()
-        expect(nativeThemeMock.on).toHaveBeenCalledTimes(1)
-      } else {
-        expect(trayInstances[0].on).toHaveBeenCalledTimes(1)
-      }
+    expect(trayInstances).toHaveLength(0)
+    const menu = macInstances[0].setMenu.mock.calls.at(-1)?.[0] ?? []
+    for (const [id, callback] of [
+      ['open', options.onOpen],
+      ['settings', options.onOpenSettings],
+      ['updates', options.onCheckForUpdates],
+      ['quit-completely', options.onQuitAndStopAllSessions],
+      ['quit', options.onQuit]
+    ] as const) {
+      menu.find((item) => item.id === id)?.click?.()
+      expect(callback).toHaveBeenCalledOnce()
     }
-  )
-
-  it('refreshes the attention tooltip and replacements in the active language catalog', async () => {
-    setPlatform('darwin')
-    const { createSystemTray, rebuildSystemTrayMenu, setTrayAttention } = await loadModule()
-    const { mainI18n, setMainUiLanguage } = await import('../i18n/main-i18n')
-    await setMainUiLanguage('en')
-    createSystemTray(createOptions({ isDevInstance: true, devInstanceLabel: 'language-test' }))
-    setTrayAttention(true)
-    flushTraySceneMutation()
-    await setMainUiLanguage('ja')
-    rebuildSystemTrayMenu()
-    flushTraySceneMutation()
-    expect(trayInstances[0].setToolTip).toHaveBeenLastCalledWith(
-      'Orca DEV (language-test) - 件のアクティビティが待機中'
-    )
-    expect(builtMenuItems()[0].label).toBe('Orca DEV (language-test)')
-    expect(composeAttentionMock).toHaveBeenCalled()
-
-    mainI18n.addResource('ja', 'translation', 'tray.openOrca', 'Orca を表示')
-    rebuildSystemTrayMenu()
-    flushTraySceneMutation()
-    expect(builtMenuItems()[2].label).toBe('Orca を表示')
+    await destroySystemTray()
   })
 
-  it('does nothing without a tray or when destroyed before the deferred refresh', async () => {
-    setPlatform('darwin')
-    const { createSystemTray, destroySystemTray, rebuildSystemTrayMenu } = await loadModule()
-    rebuildSystemTrayMenu()
-    flushTraySceneMutation()
-    expect(menuFromTemplateMock).not.toHaveBeenCalled()
-    createSystemTray(createOptions())
-    rebuildSystemTrayMenu()
-    destroySystemTray()
-    menuFromTemplateMock.mockClear()
-    flushTraySceneMutation()
-    expect(menuFromTemplateMock).not.toHaveBeenCalled()
+  it('keeps Windows native tray actions and left-click restore without a macOS helper', async () => {
+    setPlatform('win32')
+    const { createSystemTray, destroySystemTray } = await loadModule()
+    const options = createOptions()
+    createSystemTray(options)
+    expect(macInstances).toHaveLength(0)
+    const menu = builtMenuItems()
+    menu.find((item) => item.id === 'open')?.click?.()
+    const click = trayInstances[0].on.mock.calls.find((call) => call[0] === 'click')?.[1]
+    click?.()
+    menu.find((item) => item.id === 'quit')?.click?.()
+    expect(options.onOpen).toHaveBeenCalledTimes(2)
+    expect(options.onQuit).toHaveBeenCalledOnce()
+    await destroySystemTray()
+  })
+
+  it('does not introduce a tray on Linux', async () => {
+    setPlatform('linux')
+    const { createSystemTray } = await loadModule()
+    expect(createSystemTray(createOptions())).toBeNull()
+    expect(macInstances).toHaveLength(0)
+    expect(trayInstances).toHaveLength(0)
   })
 })

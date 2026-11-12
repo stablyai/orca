@@ -6,7 +6,7 @@ import path from 'node:path'
 const repoRoot = path.resolve(import.meta.dirname, '../../../..')
 
 /** Builds a single-file Swift CLI helper from native/<nativeDir>/main.swift (universal unless --single-arch). */
-export function buildSwiftCliHelper({ nativeDir, executable, argv }) {
+export function buildSwiftCliHelper({ nativeDir, executable, argv, minimumMacOSVersion = '11.0' }) {
   if (process.platform !== 'darwin') {
     return
   }
@@ -23,14 +23,7 @@ export function buildSwiftCliHelper({ nativeDir, executable, argv }) {
       const output = path.join(workDir, `${executable}-${triple}`)
       execFileSync(
         'swiftc',
-        [
-          '-O',
-          sourcePath,
-          '-target',
-          triple.replace('-apple-macosx', '-apple-macosx11.0'),
-          '-o',
-          output
-        ],
+        ['-O', sourcePath, '-target', `${triple}${minimumMacOSVersion}`, '-o', output],
         { stdio: 'inherit' }
       )
       return output
