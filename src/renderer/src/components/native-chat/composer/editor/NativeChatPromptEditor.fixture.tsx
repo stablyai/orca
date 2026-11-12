@@ -10,7 +10,7 @@ export const listIndentation = defineFixture({
       <div className="rounded-md border border-border bg-input p-3">
         <NativeChatPromptEditor
           inputRef={createRef<NativeChatComposerInput>()}
-          initialValue={'- Improve the composer\n- Preserve the draft'}
+          initialValue={'• Improve the composer\n• Preserve the draft'}
           disabled={false}
           placeholder="Message"
           className="text-sm"

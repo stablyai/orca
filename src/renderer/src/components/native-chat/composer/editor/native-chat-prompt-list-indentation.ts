@@ -3,7 +3,7 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { closeHistory } from '@tiptap/pm/history'
 import { Plugin } from '@tiptap/pm/state'
 
-const LIST_ITEM = /^([ \t]*)(?:[-+*]|\d{1,9}[.)])[ \t]+/
+const LIST_ITEM = /^([ \t]*)(?:[-+*•]|\d{1,9}[.)])[ \t]+/
 
 function positionLeafText(node: ProseMirrorNode): string {
   // Chips occupy one document position; their serialized tokens would shift the calculated line start.
@@ -61,6 +61,25 @@ export const NativeChatListIndentation = Extension.create({
     return [
       new Plugin({
         props: {
+          handleTextInput(view, from, to, text) {
+            if (text !== ' ' || from !== to || view.composing || !view.editable) {
+              return false
+            }
+            const $from = view.state.doc.resolve(from)
+            const before = $from.parent.textBetween(0, $from.parentOffset, '\n', positionLeafText)
+            const prefix = before.slice(before.lastIndexOf('\n') + 1)
+            if (!/^ *[-+*]$/.test(prefix)) {
+              return false
+            }
+            const previousLines = view.state.doc
+              .textBetween(0, from - prefix.length, '\n', positionLeafText)
+              .split('\n')
+            if (isInsideCodeFence(previousLines)) {
+              return false
+            }
+            view.dispatch(view.state.tr.insertText('• ', from - 1, to))
+            return true
+          },
           handleKeyDown(view, event) {
             if (
               event.key !== 'Tab' ||
@@ -113,6 +132,10 @@ export const NativeChatListIndentation = Extension.create({
                 return false
               }
               tr.insertText(' '.repeat(Math.max(4, previous[0].length - indent)), lineStart)
+            }
+            if (/[-+*]/.test(line[indent])) {
+              const marker = tr.mapping.map(lineStart + indent)
+              tr.insertText('•', marker, marker + 1)
             }
             view.dispatch(tr.scrollIntoView())
             view.dispatch(closeHistory(view.state.tr))
