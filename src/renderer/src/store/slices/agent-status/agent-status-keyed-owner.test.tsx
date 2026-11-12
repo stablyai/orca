@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import * as recordTransitions from '../../keyed-record-transitions'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppStateViewContext } from '../../retained-views/app-state-view'
@@ -17,6 +18,11 @@ import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCounts'
 import { acceptedAgentStatuses, AcceptedAgentStatuses } from './accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+
+vi.mock('../../keyed-record-transitions', async (importOriginal) => {
+  const actual = await importOriginal<typeof recordTransitions>()
+  return { ...actual, recordDraft: vi.fn(actual.recordDraft) }
+})
 
 const NOW = 1_800_000_000_000
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -228,7 +234,28 @@ describe('accepted keyed owner', () => {
           ])
         )
       })
-      const provenanceWrites = vi.spyOn(WeakMap.prototype, 'set')
+      const draftFactory = vi.mocked(recordTransitions.recordDraft)
+      const realDraft = draftFactory.getMockImplementation()!
+      const state = store.getState()
+      const presentationSources = new Set<unknown>([
+        state.ptyIdsByTabId,
+        state.terminalLayoutsByTabId,
+        state.runtimePaneTitlesByTabId
+      ])
+      let finishCalls = 0
+      draftFactory.mockImplementation(<V,>(source: Readonly<Record<string, V>>) => {
+        const draft = realDraft(source)
+        if (!presentationSources.has(source)) {
+          return draft
+        }
+        return {
+          ...draft,
+          finish: () => {
+            finishCalls++
+            return draft.finish()
+          }
+        }
+      })
       const snapshots = Array.from(
         { length: count },
         (_, index): RuntimeMobileSessionTabsResult => ({
@@ -260,22 +287,9 @@ describe('accepted keyed owner', () => {
         expect(
           store.getState().runtimePaneTitlesByTabId[toWebTerminalSurfaceTabId(`host-${count - 1}`)]
         ).toEqual({ 1: 'Remote' })
-        const published = new Set<unknown>([
-          store.getState().ptyIdsByTabId,
-          store.getState().terminalLayoutsByTabId,
-          store.getState().runtimePaneTitlesByTabId
-        ])
-        const addressedWrites = provenanceWrites.mock.calls.filter(
-          ([record, value]) =>
-            published.has(record) &&
-            value &&
-            typeof value === 'object' &&
-            'previous' in value &&
-            'keys' in value
-        )
-        // One accepted provenance link per output; repeating a cumulative link per input is quadratic.
-        expect(addressedWrites).toHaveLength(3)
+        expect(finishCalls).toBe(3)
       } finally {
+        draftFactory.mockImplementation(realDraft)
         resetWebSessionTabsSyncTestState()
       }
     }
