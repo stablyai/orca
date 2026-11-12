@@ -47,7 +47,7 @@
 5 src/main/persistence/restoring-sessions/session-owner-fields.ts
 12 src/main/persistence/restoring-sessions/session-owner-removal.ts
 2 src/main/persistence/restoring-sessions/workspace-pane-normalization.ts
-4 src/main/persistence/terminal-topology/terminal-topology-membership.ts
+4 src/main/persistence/terminal-topology/pane-ownership/terminal-topology-membership.ts
 1 src/main/persistence/tracking-repos/project-group-operations.ts
 4 src/main/persistence/tracking-repos/repo-worktree-pruning.ts
 3 src/main/persistence/tracking-repos/worktree-identity-migration.ts
