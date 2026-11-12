@@ -112,9 +112,13 @@ export function showWindowWithoutStealingFocus(
 // Popups waiting for the user to come back share one pair of app listeners.
 const windowsAwaitingAppActive = new Set<BaseWindow>()
 
-function revealWindowsAwaitingAppActive(): void {
+function stopAwaitingAppActive(): void {
   electronApp.off('browser-window-focus', revealWindowsAwaitingAppActive)
   electronApp.off('did-become-active', revealWindowsAwaitingAppActive)
+}
+
+function revealWindowsAwaitingAppActive(): void {
+  stopAwaitingAppActive()
   for (const window of windowsAwaitingAppActive) {
     if (!window.isDestroyed()) {
       window.showInactive()
@@ -139,5 +143,9 @@ export function showWhenAppActive(window: BaseWindow, env: PolicyEnv = process.e
     electronApp.on('did-become-active', revealWindowsAwaitingAppActive)
   }
   windowsAwaitingAppActive.add(window)
-  window.once('closed', () => windowsAwaitingAppActive.delete(window))
+  window.once('closed', () => {
+    if (windowsAwaitingAppActive.delete(window) && windowsAwaitingAppActive.size === 0) {
+      stopAwaitingAppActive()
+    }
+  })
 }
