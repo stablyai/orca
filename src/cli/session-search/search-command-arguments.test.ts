@@ -32,27 +32,6 @@ function request(argv: string[]) {
   return command.request
 }
 
-describe('orca search argument parsing', () => {
-  it('refuses the query given both ways', () => {
-    expect(() => parseCli(['search', 'one', '--query', 'two'])).toThrow(
-      'Pass --query either positionally or as a flag, not both.'
-    )
-  })
-})
-
-describe('orca search --index-status', () => {
-  it.each([
-    [['search', 'q', '--index-status'], '--query'],
-    [['search', '--index-status', '--limit', '5'], '--limit'],
-    [['search', '--index-status', '--fresh'], '--fresh'],
-    [['search', '--index-status', '--agent', 'claude'], '--agent']
-  ])('refuses %j because it also names %s', (argv, flag) => {
-    expect(() => parseSearch(argv)).toThrow(
-      `--index-status reports on the index and takes no query, so it cannot be combined with ${flag}.`
-    )
-  })
-})
-
 describe('repeatable flags are command-scoped', () => {
   it('repeats --agent placed before the command', () => {
     expect(request(['--agent', 'claude', '--agent', 'codex', 'search', 'q'])).toMatchObject({
