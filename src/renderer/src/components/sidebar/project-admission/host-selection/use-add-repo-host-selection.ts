@@ -79,7 +79,7 @@ export function useAddRepoHostSelection({
   const pairedWebRuntimeHost = isWebClient
     ? selectableHostOptions.find((host) => host.kind === 'runtime' && canSelectAddRepoHost(host))
     : undefined
-  const hostsById = indexExecutionHostsById(hostOptions)
+  const hostsById = useMemo(() => indexExecutionHostsById(hostOptions), [hostOptions])
   const preferredHost = preferredHostId ? hostsById.get(preferredHostId) : undefined
   const defaultHost = defaultHostId ? hostsById.get(defaultHostId) : undefined
   const focusedHost = isOpen
@@ -151,7 +151,7 @@ export function useAddRepoHostSelection({
       setStep('add')
       return true
     },
-    [selectableHostOptions, setSelectedAddProjectHostId, setStep]
+    [selectableHostOptions, setStep]
   )
 
   const handleConnectAddProjectHost = useCallback(
@@ -230,14 +230,7 @@ export function useAddRepoHostSelection({
         return false
       }
     },
-    [
-      selectableHostOptions,
-      setHostSelectorOpen,
-      setSelectedAddProjectHostId,
-      setSshConnectionState,
-      setStep,
-      sshConnectionStates
-    ]
+    [selectableHostOptions, setSshConnectionState, setStep, sshConnectionStates]
   )
 
   return {

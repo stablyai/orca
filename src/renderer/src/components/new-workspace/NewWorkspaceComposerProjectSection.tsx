@@ -112,6 +112,8 @@ export function NewWorkspaceComposerProjectSection({
       selectedRepoExecutionHostId
     ]
   )
+  // Why: the combobox cascade lives inside a popover that closes before a remote-host dialog
+  // could open, so it needs the caller-owned dialog; otherwise fall back to the plain row.
   const comboboxAddProjectMenu = useMemo<ProjectComboboxAddProjectMenu | undefined>(
     () =>
       onAddProjectEntryRequest && handleOpenRemoteHostDialog
@@ -184,7 +186,7 @@ export function NewWorkspaceComposerProjectSection({
               )}
               onValueChange={onProjectChange}
               onValueSelected={focusNameInput}
-              onAddProject={onAddProjectEntryRequest ? undefined : onAddProject}
+              onAddProject={comboboxAddProjectMenu ? undefined : onAddProject}
               addProjectMenu={comboboxAddProjectMenu}
               placeholder={
                 projectPlaceholder ??

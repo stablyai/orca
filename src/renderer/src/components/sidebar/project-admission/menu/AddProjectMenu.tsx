@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react'
-import { FolderOpen, Globe, Plus } from 'lucide-react'
+import { FolderOpen, Globe, Plus, type LucideIcon } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   AddRemoteHostDialog,
@@ -23,6 +24,31 @@ import { AddProjectHostSubmenu } from './AddProjectHostSubmenu'
 import { launchAddProjectMenuAction } from './launch-add-project-menu-action'
 
 const NOOP_SET_STEP = (): void => {}
+
+const ACTION_ITEMS: readonly {
+  action: AddProjectMenuAction
+  Icon: LucideIcon
+  label: (t: Translate) => string
+  showShortcut?: boolean
+}[] = [
+  {
+    action: 'browse',
+    Icon: FolderOpen,
+    label: (t) => t('auto.components.sidebar.AddProjectMenu.browseFolder', 'Browse folder…'),
+    showShortcut: true
+  },
+  {
+    action: 'clone',
+    Icon: Globe,
+    label: (t) => t('auto.components.sidebar.AddProjectMenu.cloneFromUrl', 'Clone from URL…')
+  },
+  {
+    action: 'create',
+    Icon: Plus,
+    label: (t) =>
+      t('auto.components.sidebar.AddProjectMenu.createNewProject', 'Create new project…')
+  }
+]
 
 type AddProjectMenuProps = {
   children: React.ReactNode
@@ -88,16 +114,20 @@ function AddProjectMenuOpenContent({
       }
       onCloseMenu()
       onBeforeLaunchAction?.()
-      void launchAddProjectMenuAction({
-        action,
-        hostId: targetHostId,
-        onOpenEntryRequest
-      })
+      // Why: the menu is already closed, so a native picker failure needs a visible error.
+      launchAddProjectMenuAction({ action, hostId: targetHostId, onOpenEntryRequest }).catch(
+        (err: unknown) => toast.error(err instanceof Error ? err.message : String(err))
+      )
     },
     [hostSelection.selectedHostId, onBeforeLaunchAction, onCloseMenu, onOpenEntryRequest]
   )
 
   const actionsDisabled = !hostSelection.selectedHostId
+  const closeHostSubmenu = (): void => {
+    if (hostSubOpen) {
+      setHostSubOpen(false)
+    }
+  }
 
   return (
     <DropdownMenuContent
@@ -144,50 +174,19 @@ function AddProjectMenuOpenContent({
           preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
         />
       </div>
-      <DropdownMenuItem
-        ref={browseItemRef}
-        disabled={actionsDisabled}
-        onPointerMove={() => {
-          if (hostSubOpen) {
-            setHostSubOpen(false)
-          }
-        }}
-        onSelect={() => handleSelectAction('browse')}
-      >
-        <FolderOpen />
-        <span className="truncate">
-          {t('auto.components.sidebar.AddProjectMenu.browseFolder', 'Browse folder…')}
-        </span>
-        <DropdownMenuShortcut>↵</DropdownMenuShortcut>
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        disabled={actionsDisabled}
-        onPointerMove={() => {
-          if (hostSubOpen) {
-            setHostSubOpen(false)
-          }
-        }}
-        onSelect={() => handleSelectAction('clone')}
-      >
-        <Globe />
-        <span className="truncate">
-          {t('auto.components.sidebar.AddProjectMenu.cloneFromUrl', 'Clone from URL…')}
-        </span>
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        disabled={actionsDisabled}
-        onPointerMove={() => {
-          if (hostSubOpen) {
-            setHostSubOpen(false)
-          }
-        }}
-        onSelect={() => handleSelectAction('create')}
-      >
-        <Plus />
-        <span className="truncate">
-          {t('auto.components.sidebar.AddProjectMenu.createNewProject', 'Create new project…')}
-        </span>
-      </DropdownMenuItem>
+      {ACTION_ITEMS.map(({ action, Icon, label, showShortcut }) => (
+        <DropdownMenuItem
+          key={action}
+          ref={action === 'browse' ? browseItemRef : undefined}
+          disabled={actionsDisabled}
+          onPointerMove={closeHostSubmenu}
+          onSelect={() => handleSelectAction(action)}
+        >
+          <Icon />
+          <span className="truncate">{label(t)}</span>
+          {showShortcut ? <DropdownMenuShortcut>↵</DropdownMenuShortcut> : null}
+        </DropdownMenuItem>
+      ))}
     </DropdownMenuContent>
   )
 }
