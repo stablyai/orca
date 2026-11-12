@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalHostDatabase } from '../database/journal-host-database'
+import { journalDatabasePath, type JournalHostDatabase } from '../database/journal-host-database'
+import Database from '../../../sqlite/sync-database'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import { restoreJournal } from '../replay/journal-open'
 import {
@@ -75,6 +76,7 @@ it('stores only the first and newest record of a streamed item, and reopens to t
 
 function seedOldHistory(): void {
   database.transaction((db) => {
+    db.exec('DROP TRIGGER journal_outcome_item_supersede')
     publishTestJournalEpoch(db, sessionId, epoch)
     publishJournalOutcomeEpoch(db, sessionId, epoch, [
       {
@@ -172,6 +174,15 @@ it('removes the persistent trigger before a newer writer can insert unknown reco
     SELECT generation, 7, field, entry_key, 4, ordinal, value_json, deleted
     FROM journal_outcomes WHERE field = 'items' AND seq = 6`)
   expect(itemRecordSeqs()).toEqual([2, 3, 4, 5, 6, 7])
+  const laterWriter = new Database(journalDatabasePath(root))
+  try {
+    laterWriter.exec(`INSERT INTO journal_outcomes
+      SELECT generation, 8, field, entry_key, 3, ordinal, value_json, deleted
+      FROM journal_outcomes WHERE field = 'items' AND seq = 6`)
+  } finally {
+    laterWriter.close()
+  }
+  expect(itemRecordSeqs()).toEqual([2, 3, 4, 5, 6, 7, 8])
 })
 
 it('defers history deletion while the serving database is active, then resumes', () => {

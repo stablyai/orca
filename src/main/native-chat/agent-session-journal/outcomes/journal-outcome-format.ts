@@ -43,8 +43,17 @@ export function ensureJournalOutcomeTables(db: Database.Database): void {
   CREATE TABLE IF NOT EXISTS journal_maintenance (
     task TEXT PRIMARY KEY, generation INTEGER NOT NULL, entry_key TEXT NOT NULL, done INTEGER NOT NULL
   );
-  -- Pruning belongs to the versioned writer, never a trigger inherited by future builds.
-  DROP TRIGGER IF EXISTS journal_outcome_item_supersede`)
+  -- Only this connection inherits this build's whole-value replacement contract.
+  DROP TRIGGER IF EXISTS main.journal_outcome_item_supersede;
+  CREATE TEMP TRIGGER IF NOT EXISTS journal_outcome_item_supersede AFTER INSERT ON main.journal_outcomes
+  WHEN NEW.field = 'items' AND NEW.format IN (1, 2, 3) BEGIN
+    DELETE FROM journal_outcomes WHERE generation = NEW.generation AND field = 'items'
+      AND entry_key = NEW.entry_key
+      AND seq = (SELECT seq FROM journal_outcomes WHERE generation = NEW.generation
+        AND field = 'items' AND entry_key = NEW.entry_key AND seq < NEW.seq ORDER BY seq DESC LIMIT 1)
+      AND seq > (SELECT seq FROM journal_outcomes WHERE generation = NEW.generation
+        AND field = 'items' AND entry_key = NEW.entry_key ORDER BY seq LIMIT 1);
+  END`)
 }
 
 /** Every owning mutation calls this inside its transaction, before changing the epoch. Null means
