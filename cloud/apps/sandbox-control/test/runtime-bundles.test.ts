@@ -100,8 +100,26 @@ describe('boot-time refresh script', () => {
     return { path, sha: sha(readFileSync(path)) }
   }
 
+  // The script runs on the VM's GNU sha256sum (`-c --status` on stdin). macOS now ships a BSD
+  // /sbin/sha256sum that rejects those flags, so the test puts a GNU-compatible one first on PATH.
+  const gnuShaPath = (): string => {
+    const bin = join(dir, 'bin')
+    mkdirSync(bin, { recursive: true })
+    writeFileSync(join(bin, 'sha256sum'), '#!/bin/sh\nexec shasum -a 256 "$@"\n', { mode: 0o755 })
+    return `${bin}:${process.env.PATH ?? ''}`
+  }
+  // shasum (perl) takes the same `-c --status` on stdin on macOS and Linux; without it, the host's own.
+  const hasShasum = (() => {
+    try {
+      execFileSync('sh', ['-c', 'command -v shasum'], { stdio: 'pipe' })
+      return true
+    } catch {
+      return false
+    }
+  })()
+  const scriptPath = (): string | undefined => (hasShasum ? gnuShaPath() : process.env.PATH)
   const run = (root: string, env: Record<string, string>) =>
-    execFileSync('bash', ['-c', RUNTIME_REFRESH_SCRIPT], { env: { PATH: process.env.PATH, ORCA_ROOT: root, RT, ...env }, encoding: 'utf8' }).trim()
+    execFileSync('bash', ['-c', RUNTIME_REFRESH_SCRIPT], { env: { PATH: scriptPath(), ORCA_ROOT: root, RT, ...env }, encoding: 'utf8' }).trim()
 
   it('installs the active golden orcad into an older image, verified by the expected hash', () => {
     const root = vm(OLD)
@@ -120,7 +138,7 @@ describe('boot-time refresh script', () => {
     expect(run(root, { WANT: COMMIT, SHA: b.sha, URL: `file://${dir}/missing.tgz` })).toBe(`skip_download ${OLD}`)
     expect(
       execFileSync('bash', ['-c', RUNTIME_REFRESH_SCRIPT], {
-        env: { PATH: process.env.PATH, ORCA_ROOT: root, RT: '0'.repeat(64), WANT: COMMIT, SHA: b.sha, URL: `file://${b.path}` },
+        env: { PATH: scriptPath(), ORCA_ROOT: root, RT: '0'.repeat(64), WANT: COMMIT, SHA: b.sha, URL: `file://${b.path}` },
         encoding: 'utf8'
       }).trim()
     ).toBe(`skip_runtime ${OLD}`)
