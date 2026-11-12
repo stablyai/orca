@@ -111,8 +111,9 @@ async function shouldHideImplicitDefaultBranchPR(
   }
   const headRepoKey = githubRepoIdentityKey(headRepo)
   const remoteName =
-    input.secondaryHeads.find((head) => githubRepoIdentityKey(head.headRepo) === headRepoKey)
-      ?.branch.remoteName ??
+    input.secondaryHeads.find(
+      (head) => !head.configuredPush && githubRepoIdentityKey(head.headRepo) === headRepoKey
+    )?.branch.remoteName ??
     (input.originHeadRepo && githubRepoIdentityKey(input.originHeadRepo) === headRepoKey
       ? 'origin'
       : null)
