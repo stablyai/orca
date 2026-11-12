@@ -166,6 +166,7 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'agent_session_attachment_claims',
         'agent_session_attachment_sweeps',
         'journal_imports',
+        'journal_maintenance',
         'journal_outcomes',
         'journal_outcome_epochs',
         'journal_outcome_generations',

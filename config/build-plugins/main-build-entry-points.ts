@@ -43,6 +43,10 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   // Usage scans synchronously walk histories/SQLite; keep them off the main loop.
   'usage-scan-worker-entry': resolve('src/main/usage/scan-worker/usage-scan-worker-entry.ts'),
+  // Old chat history is compacted on its own connection, never on main.
+  'journal-item-compaction-worker-entry': resolve(
+    'src/main/native-chat/agent-session-journal/outcomes/journal-item-compaction-worker-entry.ts'
+  ),
   'workspace-space-scan-worker-entry': resolve(
     'src/main/workspaces/space-analysis/workspace-space-scan-worker-entry.ts'
   ),

@@ -39,7 +39,19 @@ export function ensureJournalOutcomeTables(db: Database.Database): void {
     PRIMARY KEY (generation, seq, field, entry_key)
   );
   CREATE INDEX IF NOT EXISTS journal_outcome_keys ON journal_outcomes
-    (generation, field, entry_key, seq DESC)`)
+    (generation, field, entry_key, seq DESC);
+  -- An item keeps its first record (restore reads it as admission evidence) and its newest (what a
+  -- chat opens to); a new record supersedes every one between them.
+  CREATE TRIGGER IF NOT EXISTS journal_outcome_item_supersede AFTER INSERT ON journal_outcomes
+  WHEN NEW.field = 'items' BEGIN
+    DELETE FROM journal_outcomes WHERE generation = NEW.generation AND field = 'items'
+      AND entry_key = NEW.entry_key AND seq < NEW.seq AND seq > (SELECT MIN(seq)
+      FROM journal_outcomes WHERE generation = NEW.generation AND field = 'items'
+      AND entry_key = NEW.entry_key);
+  END;
+  CREATE TABLE IF NOT EXISTS journal_maintenance (
+    task TEXT PRIMARY KEY, generation INTEGER NOT NULL, entry_key TEXT NOT NULL, done INTEGER NOT NULL
+  )`)
 }
 
 /** Every owning mutation calls this inside its transaction, before changing the epoch. Null means

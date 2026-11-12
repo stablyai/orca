@@ -48,6 +48,7 @@ function install(directory = stateDirectory): void {
     },
     readOnly: true,
     isClosed: false,
+    stateDirectory: directory,
     get db(): Database.Database {
       throw new Error('not opened in this test')
     }
