@@ -1,4 +1,4 @@
-import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-row-order'
+import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
@@ -23,7 +23,7 @@ import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../../runtime-aut
 import { dropClosedTerminalTabs } from '../../closed-terminal-tab-write-fence'
 import { findWorktreeIdForTab } from '../../restoring-sessions/pane-identity-migration'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../../workspaces/catalog/local-worktree-metadata-prune-gate'
-import { isWslMoveWorkspaceSessionFrozen } from '../../moving-wsl-projects/wsl-move-scope-guard'
+import { isWslMoveWorkspaceSessionFrozen } from '../../moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import {
   removeWorkspaceSessionOwner,
   workspaceSessionPartitionIdsForHost

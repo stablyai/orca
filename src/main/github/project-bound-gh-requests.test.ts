@@ -17,7 +17,7 @@ vi.mock('./github-api-repository', () => ({
   githubHostExecOptions: () => ({ host: 'github.com' })
 }))
 
-import { _resetGhRateLimitBreaker } from '../git/gh-rate-limit-breaker'
+import { _resetGhRateLimitBreaker } from '../git/command-runner/hosted-cli/gh-rate-limit-breaker'
 import { installGitHubProjectAccounts } from './github-project-account'
 import { createGitHubPullRequest } from './client/create/create-github-pull-request'
 import { clearGhAccountTokenCacheForTests } from './gh-account-token'

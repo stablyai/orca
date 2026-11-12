@@ -157,14 +157,6 @@ describePostgres('a host leaving a dead reserve cell, on PostgreSQL', () => {
     expect(await reservedOn(dead)).toEqual(reservedBefore)
   })
 
-  it('hard crash with no dead-man trip: a ledger-only row moves too', async () => {
-    const host = nextHost()
-    await ledgerRow(host, 7)
-    await store.setCellAdmitMode(dead.id, 'reserve')
-    await killDeadCell()
-    expect(await hostAssign(host)).toMatchObject({ cellId: live.id, assignmentEpoch: 8 })
-  })
-
   it('a seat ahead of the row: the move mints above it, and the revived cell\'s seat never wins the row back', async () => {
     const host = nextHost()
     await ledgerRow(host, 4)

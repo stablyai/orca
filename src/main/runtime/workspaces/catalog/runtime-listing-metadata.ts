@@ -3,6 +3,25 @@ import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorkspaceMetadataCursor } from '../../../../shared/worktree/workspace-metadata-set'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
+import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+
+export function readRuntimeWorktreeMetadata(
+  store: RuntimeStore,
+  repo: Repo,
+  worktreeId: string,
+  repoOwnerCount?: number
+): WorktreeMeta | undefined {
+  return (
+    readWorktreeMetaForHost(store, worktreeId, getRepoExecutionHostId(repo)) ??
+    getRepoOwnedWorktreeMeta(
+      repo,
+      worktreeId,
+      store.getAllWorktreeMeta(),
+      repoOwnerCount ?? store.getRepos().filter((row) => row.id === repo.id).length
+    )
+  )
+}
 
 /**
  * The metadata a listing reads, with the store's workspaceMetadata cursor taken in the same turn, so

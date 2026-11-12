@@ -6,7 +6,7 @@ import {
   PTY_SPAWN_HEALTH_TIMEOUT_MS,
   runPtySpawnHealthProbe
 } from '../daemon/pty-subprocess/spawn-preflight'
-import { WatcherProcessSupervisor } from '../ipc/filesystem/watcher-process/parcel-watcher-process-supervisor'
+import { WatcherProcessSupervisor } from '../ipc/filesystem/watcher-process/supervision/parcel-watcher-process-supervisor'
 import { resolveWatcherProcessEntryPath } from '../ipc/filesystem/watcher-process/parcel-watcher-entry-path'
 import { resolveOrcadInstallRoot } from './orcad-app-paths'
 import {

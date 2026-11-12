@@ -23,9 +23,11 @@ type AgentHookCommandResult = {
 // Covers managed-home verification, WSL identity, trust grant, and bounded app-server reap.
 const WSL_CODEX_PREPARE_TIMEOUT_MS = 50_000
 
-async function getDataPath(): Promise<string> {
-  return (
-    (await getProfileStateLocation())?.dataFile ?? join(getDefaultUserDataPath(), 'orca-data.json')
+async function getSettingsPath(): Promise<string> {
+  const { resolveAgentHookSettingsPath } =
+    await import('../../main/persistence/profile-state/offline-access/profile-state-offline-settings.js')
+  return resolveAgentHookSettingsPath(
+    (await getProfileStateLocation()) ?? legacyProfileStateLocation()
   )
 }
 
@@ -128,6 +130,17 @@ async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Pr
   return true
 }
 
+/** Null when no runtime answers; a running app owns the live setting. */
+async function readRunningRuntimeHooksEnabled(client: RuntimeClient): Promise<boolean | null> {
+  if (!(await client.getOfflineRuntimeAdmission()).reachable) {
+    return null
+  }
+  const response = await client.call<{
+    settings: Pick<GlobalSettings, 'agentStatusHooksEnabled'>
+  }>('settings.get')
+  return response.result.settings.agentStatusHooksEnabled !== false
+}
+
 function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
   return {
     id: 'local',
@@ -166,7 +179,7 @@ async function setAgentHooksEnabled(
     await import('../../main/agent-hooks/installation/managed-agent-hook-controls.js')
   const updatedRuntime = await updateRunningRuntime(client, enabled)
   const offlineUpdate = updatedRuntime ? null : await updateEnabledOnDisk(enabled)
-  const settingsPath = offlineUpdate?.settingsPath ?? (await getDataPath())
+  const settingsPath = offlineUpdate?.settingsPath ?? (await getSettingsPath())
   const statuses = updatedRuntime
     ? getManagedAgentHookStatuses()
     : await applyAgentStatusHooksEnabled(enabled, offlineUpdate?.settings)
@@ -199,14 +212,15 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
       // Best effort: old or unavailable runtimes must not block Codex launch.
     }
   },
-  'agent hooks status': async ({ json, flags }) => {
+  'agent hooks status': async ({ client, json, flags }) => {
     rejectRemoteHookSelection(flags)
     const { getManagedAgentHookStatuses } =
       await import('../../main/agent-hooks/installation/managed-agent-hook-controls.js')
+    const runtimeEnabled = await readRunningRuntimeHooksEnabled(client)
     const result: AgentHookCommandResult = {
-      enabled: (await readHookSettingsFromDisk()).agentStatusHooksEnabled,
-      settingsPath: await getDataPath(),
-      appliedBy: 'offline',
+      enabled: runtimeEnabled ?? (await readHookSettingsFromDisk()).agentStatusHooksEnabled,
+      settingsPath: await getSettingsPath(),
+      appliedBy: runtimeEnabled === null ? 'offline' : 'runtime',
       statuses: getManagedAgentHookStatuses()
     }
     printResult(localSuccess(result), json, formatAgentHookCommandResult)

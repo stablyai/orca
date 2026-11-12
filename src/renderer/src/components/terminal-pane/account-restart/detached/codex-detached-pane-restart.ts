@@ -19,7 +19,7 @@ import {
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import '../../pty-transport/delivery/pty-dispatcher'
 import { ptyDataHandlers } from '../../pty-transport/shutdown/pty-shutdown-data-suspension'
-import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
 import { restartPaneOwner } from '../pane-ownership/codex-restart-main-pane'
 import {

@@ -84,10 +84,9 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
         ])
       ).stdout
     )
-    expect(recipientPaste.result.action?.verification).toMatchObject({
+    expect(recipientPaste.result.action?.verification).toEqual({
       state: 'verified',
-      property: 'focusedText',
-      expected: recipient
+      property: 'focusedText'
     })
 
     state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
@@ -126,10 +125,9 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
         ])
       ).stdout
     )
-    expect(bodyPaste.result.action?.verification).toMatchObject({
+    expect(bodyPaste.result.action?.verification).toEqual({
       state: 'verified',
-      property: 'focusedText',
-      expected: body
+      property: 'focusedText'
     })
 
     state = parseJsonOutput<{ result: ComputerSnapshotResult }>(

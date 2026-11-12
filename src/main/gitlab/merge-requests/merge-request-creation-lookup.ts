@@ -2,7 +2,7 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../../source-control/hosted-review-git-options'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import { glabHostEnvOptions, glabRepoExecOptions } from '../projects/gitlab-project-ref-resolution'
 import type { ProjectRef } from '../projects/project-ref-parser'
 

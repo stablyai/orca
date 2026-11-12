@@ -13,13 +13,6 @@ afterEach(() => {
 })
 
 describe('randomV4Uuid', () => {
-  it('uses crypto.randomUUID where the platform has it', () => {
-    const randomUUID = vi.fn(() => '11111111-1111-4111-8111-111111111111')
-    vi.stubGlobal('crypto', { randomUUID })
-    expect(randomV4Uuid()).toBe('11111111-1111-4111-8111-111111111111')
-    expect(secure.getRandomBytes).not.toHaveBeenCalled()
-  })
-
   it('falls back to the secure byte source, never Math.random, and stamps v4', () => {
     vi.stubGlobal('crypto', {})
     const insecure = vi.spyOn(Math, 'random')

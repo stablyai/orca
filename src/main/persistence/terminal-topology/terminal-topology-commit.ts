@@ -1,10 +1,10 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../../shared/workspace-layout/terminal-leaf-move'
+} from '../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
   CommandOf,
