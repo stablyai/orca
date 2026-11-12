@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { NewWorkspaceComposerNameSection } from './NewWorkspaceComposerNameSection'
-import { buildWorkspaceSourceSelection } from '@shared/new-workspace/workspace-source'
+import { buildWorkspaceSourceSelection } from '../../../../shared/new-workspace/workspace-source'
 
 function BranchReusePreview({
   busy = false,
