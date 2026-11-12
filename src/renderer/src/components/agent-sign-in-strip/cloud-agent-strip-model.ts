@@ -48,6 +48,8 @@ export type CloudStripModel = {
      * once sent, and sent on its own when a whole code is pasted.
      */
     setupCode?: { placeholder: string; submitLabel: string }
+    /** Shown but not usable yet (the fresh sign-in link is on its way). */
+    disabled?: boolean
   } | null
   /** "Other ways" under ⋯: the code fallback and the key path. */
   otherWays: boolean

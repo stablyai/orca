@@ -187,10 +187,10 @@ export function SetupRow({
           }
         >
           {/* Line 2 (design-squad): [Paste code ………] [Finish setup], the field filling the column. */}
-          {setup.acceptsCode ? (
+          {setup.acceptsCode || setup.code === 'rejected' ? (
             <CloudStripPasteForm
               fill
-              paste={setupCodePaste(agent, setup.code, t)}
+              paste={setupCodePaste(agent, setup.code, t, { waiting: !setup.acceptsCode })}
               onSubmitCode={() => undefined}
               onSubmitSetupCode={(code) => actions.submitSetupCode?.(code)}
             />
