@@ -6,57 +6,85 @@ const MAX_STEPS = 50
 type ExplorerOp = {
   undo: () => Promise<void>
   redo: () => Promise<void>
+  dispose?: () => Promise<unknown> | void
+  // Why: image paste throws before any byte changes. A timeout on other edits may already have landed.
+  keepOnError?: boolean
 }
 
 const past: ExplorerOp[] = []
 const future: ExplorerOp[] = []
+let running = false
+let revision = 0
+
+function dispose(op: ExplorerOp | undefined): void {
+  if (op?.dispose) {
+    void Promise.resolve()
+      .then(op.dispose)
+      .catch((error) => {
+        console.error('Failed to release file explorer undo resources:', error)
+      })
+  }
+}
 
 export function commitFileExplorerOp(op: ExplorerOp): void {
+  revision += 1
   past.push(op)
   if (past.length > MAX_STEPS) {
-    past.shift()
+    dispose(past.shift())
   }
+  future.forEach(dispose)
   future.length = 0
 }
 
 export function clearFileExplorerUndoHistory(): void {
+  revision += 1
+  past.forEach(dispose)
+  future.forEach(dispose)
   past.length = 0
   future.length = 0
 }
 
-export async function undoFileExplorer(): Promise<boolean> {
-  const op = past.pop()
+async function runOperation(
+  source: ExplorerOp[],
+  destination: ExplorerOp[],
+  action: 'undo' | 'redo'
+): Promise<boolean> {
+  if (running) {
+    return false
+  }
+  const op = source.pop()
   if (!op) {
     return false
   }
+  running = true
+  const startedAt = revision
   try {
-    await op.undo()
+    await op[action]()
+    if (revision === startedAt) {
+      destination.push(op)
+    } else {
+      dispose(op)
+    }
+    return true
   } catch (error) {
-    // Only refusals guarantee no write and can retry; timeouts may have applied, so replay could overwrite newer changes.
-    if (error instanceof FileWriteRefusedError) {
-      past.push(op)
+    if (revision !== startedAt) {
+      dispose(op)
+    } else if (error instanceof FileWriteRefusedError || op.keepOnError) {
+      // Refusals did not write. Other errors stay off the stack unless the op proved that.
+      source.push(op)
     }
     throw error
+  } finally {
+    running = false
   }
-  future.push(op)
-  return true
 }
 
-export async function redoFileExplorer(): Promise<boolean> {
-  const op = future.pop()
-  if (!op) {
-    return false
-  }
-  try {
-    await op.redo()
-  } catch (error) {
-    if (error instanceof FileWriteRefusedError) {
-      future.push(op)
-    }
-    throw error
-  }
-  past.push(op)
-  return true
+export function undoFileExplorer(): Promise<boolean> {
+  return runOperation(past, future, 'undo')
+}
+
+export function redoFileExplorer(): Promise<boolean> {
+  return runOperation(future, past, 'redo')
 }
 
 export function fileExplorerHasUndo(): boolean {

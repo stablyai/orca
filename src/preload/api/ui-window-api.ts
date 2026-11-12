@@ -1,5 +1,6 @@
 import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session/agent-session-attachments'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
+import type { ClipboardImageImport } from '../../shared/clipboard-image-import'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type {
   RichMarkdownContextMenuCommandPayload,
@@ -27,6 +28,9 @@ export type UiWindowApi = {
     agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
   }) => Promise<string>
   clipboardHasImage: () => Promise<boolean | null>
+  /** Desktop only. Release in a finally block after the destination import settles. */
+  stageClipboardImageForImport?: () => Promise<ClipboardImageImport | null>
+  releaseClipboardImageImport?: (handle: string) => Promise<boolean>
   /** Empty if no files were copied or the host cannot list them. */
   readClipboardFilePaths: () => Promise<string[]>
   /** Only files inside Orca's paste folder count as kept. */

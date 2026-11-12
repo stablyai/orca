@@ -48,6 +48,8 @@ type FileExplorerVirtualRowsProps = {
   onStartNew: (type: 'file' | 'folder', parentPath: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
+  onPasteImage?: (node: TreeNode) => void
+  isPastingImage?: boolean
   onAddFolderAsProject: (node: TreeNode) => void
   canAddFolderAsProject: (node: TreeNode) => boolean
   onOpenInTerminal: (node: TreeNode) => void
@@ -136,6 +138,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     onStartNew,
     onStartRename,
     onDuplicate,
+    onPasteImage,
+    isPastingImage,
     onAddFolderAsProject,
     canAddFolderAsProject,
     onOpenInTerminal,
@@ -253,6 +257,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               onStartNew={onStartNew}
               onStartRename={onStartRename}
               onDuplicate={onDuplicate}
+              onPasteImage={onPasteImage}
+              isPastingImage={isPastingImage}
               onAddFolderAsProject={() => onAddFolderAsProject(n)}
               canAddAsProject={canAddFolderAsProject(n)}
               onOpenInTerminal={() => onOpenInTerminal(n)}

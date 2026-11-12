@@ -40,6 +40,7 @@ import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upl
 import { uploadPasteToAgentSessionAttachments } from '../ipc/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
+import { registerClipboardImageImportHandlers } from './clipboard-image-import-ipc'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { readClipboardPlainText } from './clipboard-plain-text-read'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
@@ -106,6 +107,7 @@ export function registerClipboardHandlers(
   store: Store,
   handlerOptions: ClipboardHandlerOptions = {}
 ): void {
+  registerClipboardImageImportHandlers(assertTrustedClipboardSender)
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:readSelectionText')
   ipcMain.removeHandler('clipboard:readLinkHtml')

@@ -31,6 +31,7 @@ export async function importExternalPathsToRuntime(
   destinationDir: string,
   options?: {
     ensureDestinationDir?: boolean
+    requireExistingDestination?: boolean
     assertCurrent?: () => void
     /** Local imports only; remote destinations stay root-relative. */
     access?: LocalFileAccess
@@ -45,7 +46,7 @@ export async function importExternalPathsToRuntime(
         sourcePaths,
         destDir: destinationDir,
         connectionId: context.connectionId,
-        ensureDir: options?.ensureDestinationDir,
+        ensureDir: options?.requireExistingDestination ? false : options?.ensureDestinationDir,
         ...localAccess(context.connectionId, options?.access)
       })
     )
@@ -64,7 +65,8 @@ export async function importExternalPathsToRuntime(
   )
   const expectedEnvironmentRuntimeId = await assertRuntimeFileMutationCapability(
     target,
-    expectedEnvironmentPairingRevision
+    expectedEnvironmentPairingRevision,
+    options?.requireExistingDestination
   )
   const assertImportSessionCurrent = createRuntimeImportSessionGuard(
     target.environmentId,
@@ -88,7 +90,9 @@ export async function importExternalPathsToRuntime(
   const results: ImportItemResult[] = []
   const reservedNames = new Set<string>()
 
-  await ensureRuntimeDirectory(context, destinationDir, importSession)
+  if (!options?.requireExistingDestination) {
+    await ensureRuntimeDirectory(context, destinationDir, importSession)
+  }
   await ensureRuntimeDropStagingIgnored(context, destinationDir, importSession)
   // The ignore step swallows a stale session; re-check before results that never reach the host.
   importSession.assertCurrent()
@@ -148,7 +152,8 @@ export async function importExternalPathsToRuntime(
           context.expectedExecutionHostId ??
             (context.expectedSshTargetId
               ? `ssh:${encodeURIComponent(context.expectedSshTargetId)}`
-              : 'local')
+              : 'local'),
+          options?.requireExistingDestination
         )
       }
       reservedNames.add(finalName)

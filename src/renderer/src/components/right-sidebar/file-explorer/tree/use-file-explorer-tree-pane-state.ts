@@ -1,15 +1,14 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/file-preview'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
-import {
+import type {
   buildFolderStatusMap,
   buildStatusMap
 } from '../../../../lib/source-control/paths/git-path-decoration'
@@ -20,16 +19,14 @@ import { useFileExplorerImport } from '../mutations/useFileExplorerImport'
 import { useFileExplorerInlineInput } from '../mutations/useFileExplorerInlineInput'
 import { useFileExplorerNodeCommands } from '../mutations/use-file-explorer-node-commands'
 import { useFileExplorerRowScrolling } from '../selection/use-file-explorer-row-scrolling'
+import { useFileExplorerImagePasteSession } from './use-file-explorer-image-paste-session'
 import { useFileExplorerLoadMore } from './use-file-explorer-load-more'
+import { useFileExplorerPaneFacts } from './use-file-explorer-pane-facts'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
 import { useFileExplorerWatch } from '../watching/useFileExplorerWatch'
 import type { useFileExplorerSelection } from '../selection/useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { LocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
-
-// Why: a stable reference keeps the selector from re-rendering the pane when the active worktree has no status.
-const NO_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 
 type UseFileExplorerTreePaneStateParams = {
   onRevealOutsideRoot?: () => void
@@ -68,6 +65,7 @@ type UseFileExplorerTreePaneStateResult = {
   handlers: ReturnType<typeof useFileExplorerHandlers>
   nodeCommands: ReturnType<typeof useFileExplorerNodeCommands>
   fileDropOwnerRef: (root: HTMLElement | null) => void
+  imagePaste: ReturnType<typeof useFileExplorerImagePasteSession>
 }
 
 /** Call above FileExplorer’s null-worktree return; losing reset/SSH refs for one render would discard the returning workspace’s directory cache. */
@@ -127,41 +125,25 @@ export function useFileExplorerTreePaneState({
   const scrollRef = useRef<HTMLDivElement>(null)
   const canOpenWorkspaceFileBrowserForPath =
     useWorkspaceFileBrowserActionPredicate(activeWorktreeId)
-  const supportsFolderDownload = useAppStore((s) => {
-    const connectionId = activeRepo?.connectionId
-    return connectionId
-      ? s.sshConnectionStates.get(connectionId)?.supportsFolderDownload === true
-      : false
-  })
   const ownerRuntimeEnvironmentId = useAppStore((s) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
   const toggleDir = useAppStore((s) => s.toggleDir)
   const openFile = useAppStore((s) => s.openFile)
   const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
-  const entries = useAppStore((s) =>
-    activeWorktreeId
-      ? (s.gitStatusByWorktree[activeWorktreeId] ?? NO_GIT_STATUS_ENTRIES)
-      : NO_GIT_STATUS_ENTRIES
-  )
   const closeFile = useAppStore((s) => s.closeFile)
-
-  const runtimeDownloadContext = useMemo(
-    () =>
-      ownerRuntimeEnvironmentId && activeWorktreeId && worktreePath
-        ? {
-            target: runtimeTargetForOwnerEnvironment(ownerRuntimeEnvironmentId),
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId: activeRepo?.connectionId ?? undefined
-          }
-        : null,
-    [activeRepo?.connectionId, ownerRuntimeEnvironmentId, activeWorktreeId, worktreePath]
-  )
-  const isWindows = useMemo(() => navigator.userAgent.includes('Windows'), [])
-
-  const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
-  const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
+  const {
+    supportsFolderDownload,
+    runtimeDownloadContext,
+    isWindows,
+    statusByRelativePath,
+    folderStatusByRelativePath
+  } = useFileExplorerPaneFacts({
+    activeWorktreeId,
+    connectionId: activeRepo?.connectionId,
+    ownerRuntimeEnvironmentId,
+    worktreePath
+  })
 
   const deletion = useFileDeletion({
     activeWorktreeId,
@@ -263,6 +245,19 @@ export function useFileExplorerTreePaneState({
     loadMoreDir
   })
 
+  const imagePaste = useFileExplorerImagePasteSession({
+    displayRootPath,
+    worktreePath: visibleFilesWorktreePath,
+    worktreeId: activeWorktreeId,
+    refreshDir,
+    setSelectedPath: setSingleSelectedPath,
+    operationOwner: rootCache?.operationOwner,
+    selectedNode,
+    containerRef: rowScrolling.explorerShellRef,
+    rowProjection,
+    isEditing: inlineInputState.inlineInput !== null
+  })
+
   const handlers = useFileExplorerHandlers({
     activeWorktreeId,
     runtimeEnvironmentId: ownerRuntimeEnvironmentId,
@@ -311,6 +306,7 @@ export function useFileExplorerTreePaneState({
     rowScrolling,
     handlers,
     nodeCommands,
-    fileDropOwnerRef
+    fileDropOwnerRef,
+    imagePaste
   }
 }

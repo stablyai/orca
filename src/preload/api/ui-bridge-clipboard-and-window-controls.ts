@@ -10,6 +10,7 @@ import {
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
+import type { ClipboardImageImport } from '../../shared/clipboard-image-import'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type {
   AgentPaneActivityReply,
@@ -122,6 +123,10 @@ export const uiClipboardAndWindowControlsApi = {
     agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
   }): Promise<string> => ipcRenderer.invoke('clipboard:savePastedTextAsFile', args),
   clipboardHasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
+  stageClipboardImageForImport: (): Promise<ClipboardImageImport | null> =>
+    ipcRenderer.invoke('clipboard:stageImageForImport'),
+  releaseClipboardImageImport: (handle: string): Promise<boolean> =>
+    ipcRenderer.invoke('clipboard:releaseImageImport', handle),
   readClipboardFilePaths: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFilePaths'),
   restoreNativeChatPastes: (
     paths: string[]

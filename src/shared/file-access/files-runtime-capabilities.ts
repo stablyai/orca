@@ -10,6 +10,10 @@ export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-owners
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
   'Remote file changes require a newer Orca server. Update the HUB and try again.'
 
+// Why: older hosts create upload parents even when the destination was removed.
+export const FILE_UPLOAD_EXISTING_PARENT_RUNTIME_CAPABILITY =
+  'files.upload-existing-parent.v1' as const
+
 // Why: older hosts drop `offset`/`limit` and answer with the whole folder.
 export const FILE_READ_DIR_PAGED_RUNTIME_CAPABILITY = 'files.readDir.paged.v1' as const
 
@@ -29,6 +33,7 @@ export const FILES_RUNTIME_CAPABILITIES = [
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
+  FILE_UPLOAD_EXISTING_PARENT_RUNTIME_CAPABILITY,
   STAGED_FILE_SAVE_RUNTIME_CAPABILITY,
   FILE_REPLACE_WITH_UPLOAD_RUNTIME_CAPABILITY,
   TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY

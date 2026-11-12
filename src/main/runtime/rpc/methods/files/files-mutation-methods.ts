@@ -37,6 +37,20 @@ function sshMutationArguments(
   ]
 }
 
+function uploadMutationArguments(
+  params: SshMutationParams & { requireExistingParent?: boolean }
+): [generation?: number, targetId?: string, hostId?: string, requireExistingParent?: boolean] {
+  if (params.requireExistingParent === undefined) {
+    return sshMutationArguments(params)
+  }
+  return [
+    params.expectedSshConnectionGeneration,
+    params.expectedSshTargetId,
+    params.expectedExecutionHostId,
+    params.requireExistingParent
+  ]
+}
+
 export const FILE_MUTATION_METHODS = [
   defineMethod({
     name: 'files.formatText',
@@ -99,7 +113,7 @@ export const FILE_MUTATION_METHODS = [
         params.relativePath,
         params.contentBase64,
         params.append === true,
-        ...sshMutationArguments(params)
+        ...uploadMutationArguments(params)
       )
   }),
   defineMethod({
@@ -144,7 +158,7 @@ export const FILE_MUTATION_METHODS = [
         params.worktree,
         params.tempRelativePath,
         params.finalRelativePath,
-        ...sshMutationArguments(params)
+        ...uploadMutationArguments(params)
       )
   }),
   defineMethod({

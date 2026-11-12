@@ -1,14 +1,18 @@
 import { preventSecondaryMenuSelection } from '@/components/ui/prevent-secondary-menu-selection'
 import React, { useEffect } from 'react'
-import { FilePlus, FolderPlus } from 'lucide-react'
+import { ClipboardPaste, FilePlus, FolderPlus } from 'lucide-react'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { formatKeybindingList } from '../../../../../../shared/keybindings/formatting'
 
 /** Targets creation and paste at the displayed directory while keeping workspace operations rooted at the worktree. */
 export function FileExplorerBackgroundMenu({
@@ -17,7 +21,9 @@ export function FileExplorerBackgroundMenu({
   point,
   worktreePath,
   displayDepth = 0,
-  onStartNew
+  onStartNew,
+  onPasteImage,
+  isPastingImage
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -25,6 +31,8 @@ export function FileExplorerBackgroundMenu({
   displayDepth?: number
   worktreePath: string
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
+  onPasteImage?: () => void
+  isPastingImage?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   useEffect(() => {
@@ -58,6 +66,18 @@ export function FileExplorerBackgroundMenu({
           <FolderPlus />
           {t('auto.components.right.sidebar.FileExplorerBackgroundMenu.3b5e2dcb8d', 'New Folder')}
         </DropdownMenuItem>
+        {onPasteImage && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled={isPastingImage} onSelect={() => onPasteImage()}>
+              <ClipboardPaste />
+              {t('fileExplorer.pasteImage', 'Paste Image')}
+              <DropdownMenuShortcut>
+                {formatKeybindingList(['Mod+V'], getShortcutPlatform())}
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -165,6 +165,7 @@ async function sendChunk(
       relativePath: args.relativePath,
       contentBase64,
       append,
+      ...(args.requireExistingParent ? { requireExistingParent: true } : {}),
       expectedSshTargetId: args.expectedSshTargetId,
       expectedSshConnectionGeneration: args.expectedSshConnectionGeneration,
       expectedExecutionHostId: args.expectedExecutionHostId

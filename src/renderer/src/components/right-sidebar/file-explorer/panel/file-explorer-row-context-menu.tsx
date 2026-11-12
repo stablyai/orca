@@ -12,6 +12,7 @@ import {
   Globe,
   ListCollapse,
   Pencil,
+  ClipboardPaste,
   Search,
   SquareTerminal,
   Trash2
@@ -28,6 +29,8 @@ import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { openFileInBrowserTab } from '@/lib/browser/documents/file-preview'
 import { useTranslate } from '@/i18n/use-translate'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { formatKeybindingList } from '../../../../../../shared/keybindings/formatting'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
@@ -69,6 +72,8 @@ type FileExplorerRowContextMenuProps = Pick<
   | 'onStartNew'
   | 'onStartRename'
   | 'onDuplicate'
+  | 'onPasteImage'
+  | 'isPastingImage'
   | 'onAddFolderAsProject'
   | 'canAddAsProject'
   | 'onOpenInTerminal'
@@ -94,6 +99,8 @@ export function FileExplorerRowContextMenu({
   onStartNew,
   onStartRename,
   onDuplicate,
+  onPasteImage,
+  isPastingImage,
   onAddFolderAsProject,
   canAddAsProject,
   onOpenInTerminal,
@@ -168,6 +175,15 @@ export function FileExplorerRowContextMenu({
         <ContextMenuItem onSelect={handleCopyFile}>
           <Copy />
           {t('auto.components.right.sidebar.FileExplorerRow.98a79948b3', 'Copy')}
+        </ContextMenuItem>
+      )}
+      {onPasteImage && (
+        <ContextMenuItem disabled={isPastingImage} onSelect={() => onPasteImage(node)}>
+          <ClipboardPaste />
+          {t('fileExplorer.pasteImage', 'Paste Image')}
+          <ContextMenuShortcut>
+            {formatKeybindingList(['Mod+V'], getShortcutPlatform())}
+          </ContextMenuShortcut>
         </ContextMenuItem>
       )}
       <ContextMenuItem onSelect={() => onCopyPaths('absolute')}>

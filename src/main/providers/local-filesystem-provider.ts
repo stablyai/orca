@@ -1,4 +1,14 @@
-import { constants, copyFile, lstat, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  constants,
+  copyFile,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  rm,
+  stat,
+  writeFile
+} from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
@@ -74,10 +84,27 @@ export function createLocalFilesystemProvider(
     windowsFsPath(
       await resolveAuthorizedPath(path, options.requireStore(), { preserveSymlink: true })
     )
-  const writeBase64 = async (filePath: string, contentBase64: string, append: boolean) => {
+  const writeBase64 = async (
+    filePath: string,
+    contentBase64: string,
+    append: boolean,
+    requireExistingParent = false
+  ) => {
     const content = Buffer.from(contentBase64, 'base64')
     const authorizedPath = await authorize(filePath)
-    await mkdir(dirname(authorizedPath), { recursive: true })
+    if (!requireExistingParent) {
+      await mkdir(dirname(authorizedPath), { recursive: true })
+    }
+    if (requireExistingParent && append) {
+      // Appending must not recreate a temporary file removed between chunks.
+      const handle = await open(authorizedPath, constants.O_WRONLY | constants.O_APPEND)
+      try {
+        await handle.writeFile(content)
+      } finally {
+        await handle.close()
+      }
+      return
+    }
     await writeFile(authorizedPath, content, { flag: append ? 'a' : 'wx' })
   }
   const writeTextFile = async (

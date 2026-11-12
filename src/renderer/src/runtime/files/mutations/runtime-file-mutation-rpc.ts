@@ -1,5 +1,6 @@
 import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../../../web/web-runtime-request-registry'
+import { FILE_UPLOAD_EXISTING_PARENT_RUNTIME_CAPABILITY } from '../../../../../shared/file-access/files-runtime-capabilities'
 import { assertFileMutationOwnershipCapability } from '../../../../../shared/file-write/file-mutation-ownership'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
@@ -32,9 +33,17 @@ async function getRuntimeFileMutationStatus(
 
 export async function assertRuntimeFileMutationCapability(
   target: RuntimeFileMutationTarget,
-  expectedEnvironmentPairingRevision: number | undefined
+  expectedEnvironmentPairingRevision: number | undefined,
+  requireExistingParent = false
 ): Promise<string> {
-  return (await getRuntimeFileMutationStatus(target, expectedEnvironmentPairingRevision)).runtimeId
+  const status = await getRuntimeFileMutationStatus(target, expectedEnvironmentPairingRevision)
+  if (
+    requireExistingParent &&
+    !status.capabilities?.includes(FILE_UPLOAD_EXISTING_PARENT_RUNTIME_CAPABILITY)
+  ) {
+    throw new Error('Pasting images requires a newer Orca server. Update the HUB and try again.')
+  }
+  return status.runtimeId
 }
 
 /** Thrown before sending, so nothing reached either runtime and a re-probed retry is safe. */

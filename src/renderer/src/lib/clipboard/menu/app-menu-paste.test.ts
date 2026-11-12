@@ -16,6 +16,20 @@ afterEach(() => {
 })
 
 describe('app menu paste', () => {
+  it('lets an owned paste target claim the menu action before reading text', async () => {
+    const readClipboardText = vi.fn(async () => 'secret')
+    const performNativePaste = vi.fn()
+    const result = await handleAppMenuPasteRequest({
+      readClipboardText,
+      performNativePaste,
+      dispatchOwnedPasteEvent: () => true
+    })
+
+    expect(result).toEqual({ status: 'handled', target: 'owned-target' })
+    expect(readClipboardText).not.toHaveBeenCalled()
+    expect(performNativePaste).not.toHaveBeenCalled()
+  })
+
   it('does not native-fallback after resolving a text control that loses focus', async () => {
     const textarea = appendTextarea('unchanged')
     const other = appendTextarea('other')
