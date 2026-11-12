@@ -272,7 +272,27 @@ async function placeCloudAgentHold({
       // Renewed (or a key now covers it): every pane held on recovery starts. A first-time setup
       // waits for its "Start {{agent}}" click instead (PC-3b), so it never starts unasked.
       const entry = holds.get(hold.paneKey)
-      if (entry?.release !== finish || entry.reason !== 'accountExpired') {
+      if (entry?.release !== finish) {
+        return
+      }
+      // V3-01b: a restored hold placed before the account read could land ('unread') takes the
+      // read's answer once it arrives: "isn't set up", "expired" or covered. It still never starts.
+      if (entry.reason === 'awaitingStart' && entry.awaiting === 'unread') {
+        const read = readOrcaCloudAgentAccounts()
+        if (read.load.kind !== 'ready') {
+          return
+        }
+        const answer = cloudAgentHoldReason(hold.agent, read)
+        holds.set(
+          hold.paneKey,
+          answer
+            ? { ...entry, reason: answer, awaiting: undefined }
+            : { ...entry, awaiting: 'covered' }
+        )
+        notify()
+        return
+      }
+      if (entry.reason !== 'accountExpired') {
         return
       }
       const accounts = readOrcaCloudAgentAccounts()
