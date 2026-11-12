@@ -15076,6 +15076,14 @@
                   "body": "This repository provider does not support creating a {{reviewLabel}} from Orca."
                 }
               },
+              "commentOptions": {
+                "triggerActive_one": "Comment display options ({{count}} filter)",
+                "triggerActive_other": "Comment display options ({{count}} filters)",
+                "hideResolved": "Hide resolved threads",
+                "hiddenResolved_one": "{{count}} resolved thread hidden",
+                "hiddenResolved_other": "{{count}} resolved threads hidden",
+                "showResolved": "Show"
+              },
               "runTime": {
                 "justNow": "just now",
                 "started": "Started {{time}}",

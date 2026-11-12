@@ -8,10 +8,14 @@ import {
   type PRCommentAudienceFilter
 } from '../../../../../../shared/source-control/review-comments/pr-comment-audience'
 import {
+  excludeResolvedPRCommentThreads,
   getPRCommentGroupId,
   groupPRComments,
+  isResolvedPRCommentGroup,
   type PRCommentGroup
 } from '../../../../../../shared/source-control/review-comments/pr-comment-groups'
+import type { PRCommentsDisplayMode } from '../../../../../../shared/pr-comments-list-settings'
+import { useAppStore } from '@/store'
 import {
   getPRCommentGroupActionState,
   isPRCommentGroupQueueableForAI,
@@ -38,7 +42,7 @@ import { PRCommentGroupView } from './comment-group'
 import { useNow } from '@/hooks/use-now'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
-export type PRCommentsListDisplayMode = 'triage' | 'timeline'
+export type PRCommentsListDisplayMode = PRCommentsDisplayMode
 export const PR_COMMENT_LIST_DISPLAY_MODES: PRCommentsListDisplayMode[] = ['triage', 'timeline']
 export function getPRCommentsListDisplayModeLabel(
   mode: PRCommentsListDisplayMode,
@@ -139,15 +143,36 @@ export function useCommentsListState({
   const presentation = React.useMemo(() => getPRCommentPresentationClasses(), [])
   const now = useNow(60_000, comments.length > 0)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
-  const [displayMode, setDisplayMode] = useState<PRCommentsListDisplayMode>('triage')
+  const displayMode: PRCommentsListDisplayMode = useAppStore((s) =>
+    s.settings?.prCommentsDisplayMode === 'timeline' ? 'timeline' : 'triage'
+  )
+  const hideResolved = useAppStore((s) => s.settings?.prCommentsHideResolved === true)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  // Why: persisted per-user so the choice survives workspace switches and restarts.
+  const setDisplayMode = useCallback(
+    (mode: PRCommentsListDisplayMode) => void updateSettings({ prCommentsDisplayMode: mode }),
+    [updateSettings]
+  )
+  const setHideResolved = useCallback(
+    (hide: boolean) => void updateSettings({ prCommentsHideResolved: hide }),
+    [updateSettings]
+  )
   const [replyingCommentId, setReplyingCommentId] = useState<number | null>(null)
   const [isAddingComment, setIsAddingComment] = useState(false)
   const addCommentSurfaceRef = useRef<HTMLDivElement>(null)
   const shouldScrollAddCommentRef = useRef(false)
   const botAuthorOverrides = usePRBotAuthorOverrides()
+  const shownComments = React.useMemo(
+    () => (hideResolved ? excludeResolvedPRCommentThreads(comments) : comments),
+    [comments, hideResolved]
+  )
+  const hiddenResolvedThreadCount = React.useMemo(
+    () => (hideResolved ? groupPRComments(comments).filter(isResolvedPRCommentGroup).length : 0),
+    [comments, hideResolved]
+  )
   const commentCounts = React.useMemo(
-    () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
-    [botAuthorOverrides, comments]
+    () => getPRCommentAudienceCounts(shownComments, botAuthorOverrides),
+    [botAuthorOverrides, shownComments]
   )
   const {
     isSelectingForAI,
@@ -160,8 +185,8 @@ export function useCommentsListState({
     toggleGroupSelection
   } = usePRCommentsListSelection(comments, selectionContextKey, selectionClearRequest)
   const visibleComments = React.useMemo(
-    () => filterPRCommentsByAudience(comments, commentFilter, botAuthorOverrides),
-    [botAuthorOverrides, commentFilter, comments]
+    () => filterPRCommentsByAudience(shownComments, commentFilter, botAuthorOverrides),
+    [botAuthorOverrides, commentFilter, shownComments]
   )
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
   const triageGroups = React.useMemo(
@@ -308,6 +333,9 @@ export function useCommentsListState({
     setCommentFilter,
     displayMode,
     setDisplayMode,
+    hideResolved,
+    setHideResolved,
+    hiddenResolvedThreadCount,
     replyingCommentId,
     setReplyingCommentId,
     isAddingComment,

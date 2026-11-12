@@ -66,6 +66,19 @@ vi.mock('@/components/ui/dropdown-menu', () => {
         {children}
       </button>
     ),
+    DropdownMenuCheckboxItem: ({
+      children,
+      checked,
+      onCheckedChange
+    }: {
+      children: ReactNode
+      checked?: boolean
+      onCheckedChange?: (checked: boolean) => void
+    }) => (
+      <button type="button" onClick={() => onCheckedChange?.(!checked)}>
+        {children}
+      </button>
+    ),
     DropdownMenuSeparator: () => <hr />,
     DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
   }
@@ -77,6 +90,8 @@ import {
   type PRCommentsListSelectionClearRequest
 } from './pr-comments-list-selection'
 import { PRCommentsList } from './comments-list'
+import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../../../shared/constants'
 
 let container: HTMLDivElement
 let root: Root
@@ -192,6 +207,55 @@ describe('PRCommentsList comment resolution selection', () => {
 
     expect(hasButton('Send 1 queued comment to AI')).toBe(false)
     expect(container.querySelector('button[role="checkbox"]')).toBeNull()
+  })
+})
+
+describe('PRCommentsList hide resolved threads', () => {
+  const realUpdateSettings = useAppStore.getState().updateSettings
+
+  afterEach(() => {
+    useAppStore.setState({ settings: null, updateSettings: realUpdateSettings })
+  })
+
+  it('hides resolved threads from the list and counts until the filter is turned off', () => {
+    useAppStore.setState({
+      // Timeline shows resolved threads inline, so hiding them is observable without expanding.
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        prCommentsDisplayMode: 'timeline',
+        prCommentsHideResolved: true
+      },
+      updateSettings: async (updates) => {
+        useAppStore.setState((state) => ({
+          settings: state.settings ? { ...state.settings, ...updates } : state.settings
+        }))
+      }
+    })
+    renderList({
+      comments: [
+        comment({ id: 1, body: 'Still open.', threadId: 'open', path: 'a.ts', isResolved: false }),
+        comment({ id: 2, body: 'Fixed.', threadId: 'done', path: 'b.ts', isResolved: true }),
+        comment({ id: 3, body: 'Fixed reply.', threadId: 'done', path: 'b.ts', isResolved: true }),
+        comment({ id: 4, body: 'Top-level note.' })
+      ]
+    })
+    const allCount = (): string | null | undefined =>
+      container.querySelector('button[aria-pressed="true"] .tabular-nums')?.textContent
+
+    expect(container.textContent).toContain('Still open.')
+    expect(container.textContent).toContain('Top-level note.')
+    expect(container.textContent).not.toContain('Fixed.')
+    expect(allCount()).toBe('2')
+
+    clickButton('Show')
+
+    expect(container.textContent).toContain('Fixed.')
+    expect(allCount()).toBe('4')
+
+    clickButton('Hide resolved threads')
+
+    expect(container.textContent).not.toContain('Fixed.')
+    expect(allCount()).toBe('2')
   })
 })
 
