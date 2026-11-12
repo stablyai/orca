@@ -5,6 +5,7 @@ import type {
   WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import type { Translate } from '@/i18n/use-translate'
+import { toolInputCommand } from '../../../../../shared/native-chat/tools/native-chat-tool-summary'
 
 /** The card a worker's open approval shows: its own words, and only the answers Orca can give. */
 export function workerApprovalCard(approval: WorkerApprovalPayload, t: Translate): ChatApproval {
@@ -27,6 +28,10 @@ export function isWorkerApprovalDecision(value: string): value is WorkerApproval
   return value === 'allow' || value === 'deny'
 }
 
+function approvalDetailCommand(detail: string | null): string | null {
+  return detail === null ? null : (toolInputCommand(detail) ?? detail)
+}
+
 /** A closed approval as the answered-prompt row reads it. */
 export function workerApprovalReceiptBody(
   approval: WorkerApprovalPayload,
@@ -37,7 +42,8 @@ export function workerApprovalReceiptBody(
   return {
     kind: 'approval',
     title: approval.summary.title,
-    detail: approval.summary.detail,
+    // A tool call's input reads as its command, as the agent's own tool rows show it.
+    detail: approvalDetailCommand(approval.summary.detail),
     options: [
       { id: 'allow', label: t('components.native-chat.approval.allow', 'Allow') },
       { id: 'deny', label: t('components.native-chat.approval.deny', 'Deny') }
