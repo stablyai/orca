@@ -181,7 +181,7 @@ describe('remote command loading ownership', () => {
           if (typeof key === 'string' && key.startsWith('unrelated-')) {
             unrelatedReads += 1
           }
-          // SAFETY: preserve ordinary record access while counting unrelated lookups.
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy must forward record access unchanged while counting unrelated lookups.
           return Reflect.get(target, key, receiver)
         }
       }
