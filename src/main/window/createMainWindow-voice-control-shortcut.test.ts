@@ -12,7 +12,7 @@ vi.mock('../browser/browser-manager', async () =>
 )
 
 import { createMainWindow } from './createMainWindow'
-import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
+import { resetExpectedTeardownStateForTest } from '../crash-reporting/process-exits/expected-teardown-state'
 import { browserWindowMock, resetMainWindowMocks } from './createMainWindow-test-harness'
 
 describe('createMainWindow voice control shortcut', () => {
