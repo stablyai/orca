@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { RuntimeClientError, type RuntimeClient } from '../../runtime-client'
-import { readRetryRequestFlag } from '../../retry-request-flag'
+import { readRequestIdFlag, readRetryRequestFlag } from '../../retry-request-flag'
 import { orchestrationMutationRecoveryError } from '../../orchestration-mutation-recovery'
 import { isRequestUnsent } from '../../runtime/client-error-recovery'
 
@@ -16,7 +16,9 @@ export async function callOrchestrationMutation<TResult>(
 ) {
   // Reuse one request id so retries replay the mutation instead of applying it twice.
   const retryRequest = readRetryRequestFlag(flags)
-  const requestId = retryRequest ?? (unavailableRetryMs > 0 ? randomUUID() : undefined)
+  const suppliedRequest = readRequestIdFlag(flags)
+  const requestId =
+    retryRequest ?? suppliedRequest ?? (unavailableRetryMs > 0 ? randomUUID() : undefined)
   const deadline = Date.now() + unavailableRetryMs
   let sentError: RuntimeClientError | undefined
   for (let delayMs = 1_000; ; delayMs = Math.min(delayMs * 2, MAX_UNAVAILABLE_RETRY_DELAY_MS)) {
@@ -39,8 +41,8 @@ export async function callOrchestrationMutation<TResult>(
       if (!unavailable || Date.now() + delayMs > deadline) {
         // A later failure may lack the request id even though an earlier attempt landed.
         throw orchestrationMutationRecoveryError(sent ? error : (sentError ?? error), {
-          // Only a fresh id that never got past the contract check is known not to have run.
-          unsent: !retryRequest && !sentError && isRequestUnsent(error)
+          // Only a CLI-generated id that never passed the contract check is known not to have run.
+          unsent: !retryRequest && !suppliedRequest && !sentError && isRequestUnsent(error)
         })
       }
       await new Promise((resolve) => setTimeout(resolve, delayMs))

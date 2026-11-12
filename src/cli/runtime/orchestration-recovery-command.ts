@@ -89,11 +89,11 @@ export function recoverableOrchestrationArgs(args: readonly string[]): string[] 
   const result: string[] = []
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
-    if (arg === '--retry-request') {
+    if (arg === '--retry-request' || arg === '--request-id') {
       index += 1
       continue
     }
-    if (arg.startsWith('--retry-request=')) {
+    if (arg.startsWith('--retry-request=') || arg.startsWith('--request-id=')) {
       continue
     }
     result.push(arg)

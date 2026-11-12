@@ -73,6 +73,8 @@ orca orchestration send \
 
 Inspect / recover:
 
+To correlate a first `worker-start` before its CLI process can lose the response, persist a caller-generated UUID and pass `--request-id <uuid>`. The existing native ledger still checks the caller and payload. Inspect that same key with `request-show --request <uuid> --full --json`; a pending receipt can already identify its accepted Dispatch. This lookup never launches a worker. An absent receipt does not prove no effect. Use `--retry-request` for keyed recovery and never combine it with `--request-id`.
+
 ```bash
 orca orchestration worker-show --dispatch <dispatchId>
 orca orchestration worker-read --dispatch <dispatchId> --limit 50

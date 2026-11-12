@@ -24,6 +24,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
     '--wait-submit <seconds> Wait up to this long to see the prompt start a turn; never resends',
   'retry-request':
     '--retry-request <id>  Reissue an earlier request by its ID; replays its result instead of repeating it',
+  'request-id':
+    '--request-id <uuid>   Correlate a first worker-start with a UUID the caller persisted before sending',
   force:
     '--force                Force worktree removal when supported; does not force branch deletion',
   focus: '--focus                Reveal the created terminal session in Orca',

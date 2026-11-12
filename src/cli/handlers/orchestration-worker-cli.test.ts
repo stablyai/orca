@@ -11,7 +11,9 @@ vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
 
-import { RuntimeClient } from '../runtime-client'
+import { RuntimeClient, RuntimeClientError } from '../runtime-client'
+import { parseArgs, validateCommandAndFlags } from '../args'
+import { ORCHESTRATION_WORKER_COMMAND_SPECS } from '../specs/orchestration-worker-specs'
 
 const client = new RuntimeClient('/tmp/orca-worker-cli', 60_000, null, null)
 
@@ -63,5 +65,96 @@ describe('orchestration worker-start CLI contract', () => {
     )
 
     expect(process.exitCode).toBe(1)
+  })
+
+  it('carries a persisted caller request id into the native mutation envelope', async () => {
+    callMock.mockResolvedValue({ result: { dispatchId: 'ctx_1', state: 'ready' } })
+    const parsed = parseArgs([
+      'orchestration',
+      'worker-start',
+      '--task',
+      'task_1',
+      '--agent',
+      'codex',
+      '--from',
+      'term_coord',
+      '--request-id',
+      '11111111-2222-4333-8444-555555555555'
+    ])
+    validateCommandAndFlags(ORCHESTRATION_WORKER_COMMAND_SPECS, parsed)
+    await invokeWorkerStart(parsed.flags)
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.workerStart',
+      expect.objectContaining({ task: 'task_1', agent: 'codex', from: 'term_coord' }),
+      { orchestrationRequestId: '11111111-2222-4333-8444-555555555555' }
+    )
+  })
+
+  it('refuses malformed or conflicting caller identities before mutating', async () => {
+    for (const identity of ['broken', true, false]) {
+      const flags = new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['agent', 'codex'],
+        ['from', 'term_coord'],
+        ['request-id', identity]
+      ])
+      await expect(invokeWorkerStart(flags)).rejects.toMatchObject({ code: 'invalid_argument' })
+    }
+    await expect(
+      invokeWorkerStart(
+        new Map([
+          ['task', 'task_1'],
+          ['agent', 'codex'],
+          ['from', 'term_coord'],
+          ['request-id', '11111111-2222-4333-8444-555555555555'],
+          ['retry-request', 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee']
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('retains uncertainty for a caller-supplied id when preflight reports unsent', async () => {
+    callMock.mockRejectedValue(
+      new RuntimeClientError('runtime_unavailable', 'Unavailable', {
+        orchestrationRequestId: '11111111-2222-4333-8444-555555555555',
+        requestSent: false,
+        originalCommand: [
+          'orca',
+          'orchestration',
+          'worker-start',
+          '--task',
+          'task_1',
+          '--request-id',
+          '11111111-2222-4333-8444-555555555555'
+        ]
+      })
+    )
+    await expect(
+      invokeWorkerStart(
+        new Map([
+          ['task', 'task_1'],
+          ['agent', 'codex'],
+          ['from', 'term_coord'],
+          ['request-id', '11111111-2222-4333-8444-555555555555']
+        ])
+      )
+    ).rejects.toMatchObject({
+      data: {
+        recovery: {
+          disposition: 'outcome_unknown',
+          retryCommand: [
+            'orca',
+            'orchestration',
+            'worker-start',
+            '--task',
+            'task_1',
+            '--retry-request',
+            '11111111-2222-4333-8444-555555555555'
+          ]
+        }
+      }
+    })
   })
 })
