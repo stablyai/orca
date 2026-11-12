@@ -183,7 +183,11 @@ export function renderDesktopCapabilitySettingsSections(
         searchEntries={navigation.getSectionSearchEntries('voice')}
       >
         {view.isSectionMounted('voice') ? (
-          <VoicePane settings={model.settings} updateSettings={model.updateSettings} />
+          <VoicePane
+            settings={model.settings}
+            updateSettings={model.updateSettings}
+            writeSourceControlAiSettings={context.interactions.writeSourceControlAiSettingsOrThrow}
+          />
         ) : null}
       </SettingsSection>
     </>

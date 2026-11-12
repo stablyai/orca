@@ -37,7 +37,19 @@ orca computer click --app com.spotify.client --element-index 42 --json
 
 Element indexes are scoped to the latest `get-app-state` result and may be **sparse**. In `--json` output, read the tree from `result.snapshot.treeText`. Do not invent indexes from `elementCount`. Refresh state after navigation, focus changes, scrolling, or any app re-render before reusing an index.
 
-Action results return only the accessibility-tree lines that changed since the last state for that window (`~` changed, `+` added, `-` removed), marked by `snapshot.treeDiff`; pass `--full-tree` to get the whole tree. To find one control in a large window, `get-app-state --query <text>` prints only matching elements and their ancestors, and `--max-elements <n>` caps the output.
+Action results return only the accessibility-tree lines that changed since the last state for that window (`~` changed, `+` added, `-` removed), marked by `snapshot.treeDiff`; pass `--full-tree` to get the whole tree. To find one control in a large window, `get-app-state --query <text>` prints only matching elements and their ancestors, and `--max-elements <n>` caps the output. A window larger than the snapshot limit shows `... N more not shown (snapshot limit)` where the tree was cut; `get-app-state --element-index <n>` reads only that element's subtree, so pass the cut-off children's parent to see them.
+
+## Waiting for the app
+
+Instead of sleeping between actions, wait for what the app should show next. `wait` returns as soon as the condition holds, prints the matching elements or windows, and fails with `wait_timeout` after `--timeout` milliseconds (default 10000, at most 120000):
+
+```bash
+orca computer wait --app com.apple.TextEdit --text "Saved" --json
+orca computer wait --app com.apple.TextEdit --enabled "Continue" --json
+orca computer wait --app com.apple.TextEdit --window-title "Save As" --json
+```
+
+`--text` matches element lines the same way as `get-app-state --query`. `--enabled` holds once elements containing the text exist and none of them is disabled. `--window-title` checks the window titles `list-windows` reports (on Windows, only the main window's). `wait` only reads the app and keeps checking while the app or window doesn't exist yet. `--enabled` needs a runtime whose provider marks disabled elements (`supports.observation.disabledState` in `capabilities`).
 
 ## Multi-window apps
 
@@ -75,7 +87,9 @@ orca computer perform-secondary-action --app <app> --element-index <i> --action 
 
 Prefer semantic actions (`click`, `set-value`, `perform-secondary-action`) over raw `type-text` or `press-key` — they target accessibility elements directly and survive focus changes that keyboard input doesn't.
 
-On macOS, actions run in the background: the target app isn't brought forward, your frontmost app and key window stay put, and the pointer doesn't move, so you can keep working while an agent drives another window. Each action result reports `action.delivery` (`background` or `foreground`). Pass `--restore-window` only when an app ignores background input, such as drags in Chromium or Electron apps or games; it brings the app forward and uses the real pointer and keyboard. Popup menus and web `<select>` controls are set with `set-value` instead of a click. On Linux and Windows, clicks, scrolling, drags and keyboard input still bring the window forward.
+`hotkey` and `press-key` refuse shortcuts that quit or close the app, log out, lock the screen, force-quit or end the session, such as `Cmd+Q`, `Shift+Cmd+Q`, `Ctrl+Cmd+Q` and `Option+Cmd+Esc` on macOS, `Alt+F4` and `Win+L` on Windows, and `Ctrl+Q`, `Alt+F4`, `Super+L` and `Ctrl+Alt+Delete` on Linux. The error code is `system_shortcut_blocked`. Pass `--allow-system-shortcut` to send one anyway.
+
+On macOS, actions run in the background: the target app isn't brought forward, your frontmost app and key window stay put, and the pointer doesn't move, so you can keep working while an agent drives another window. Each action result reports `action.delivery` (`background` or `foreground`). Pass `--restore-window` only when an app ignores background input, such as drags in Chromium or Electron apps or games; it brings the app forward and uses the real pointer and keyboard. Popup menus and web `<select>` controls are set with `set-value` instead of a click. On Linux, clicks, scrolling, drags and keyboard input still bring the window forward. On Windows, element clicks, `set-value` (including sliders), element scrolls and secondary actions (`Invoke`, `Toggle`, `Select`, `Expand`, `Collapse`, `ScrollToVisible`) go through UI Automation when the control supports them, without moving the pointer or sending keys. Some apps still bring their own window forward when driven this way (WPF apps do for most of these), so `action.delivery` reports `foreground` whenever the target window came forward. Anything else brings the window forward.
 
 When accessibility targeting fails, fall back carefully to coordinates:
 

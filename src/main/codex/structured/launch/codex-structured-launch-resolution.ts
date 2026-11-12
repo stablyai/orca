@@ -149,7 +149,9 @@ export function codexStructuredLaunchPart(
     const executable = execution
       ? await readCodexExecutionExecutable(command, prefixArgs, launchDirectory, environment)
       : undefined
-    const selectedHome = await deps.prepareLaunchAccountHome?.(record, launchDirectory)
+    const selectedHome = execution
+      ? undefined
+      : await deps.prepareLaunchAccountHome?.(record, launchDirectory)
     const accountHome = selectedHome
       ? requireLegacyAgentSessionAccountHome(selectedHome)
       : recordHome

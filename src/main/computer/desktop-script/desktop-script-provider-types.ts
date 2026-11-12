@@ -77,6 +77,8 @@ export type BridgeSnapshot = {
   focusedElementId?: number | null
   selectedText?: string | null
   elements?: BridgeElement[]
+  /** Set by the client when treeLines show only this element's subtree. */
+  rootElementIndex?: number
 }
 
 export type BridgeWindow = {
@@ -128,6 +130,8 @@ export type BridgeRequest = {
   requestId?: number
   app?: string
   element?: BridgeElement
+  /** get_app_state renders only this element's subtree. */
+  root?: BridgeElement
   fromElement?: BridgeElement
   toElement?: BridgeElement
   x?: number

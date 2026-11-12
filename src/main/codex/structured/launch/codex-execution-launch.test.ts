@@ -14,7 +14,10 @@ vi.mock('./codex-execution-executable', () => ({
     .mockResolvedValue({ path: '/native/codex', sha256: 'c'.repeat(64), version: '0.167.2' })
 }))
 
-function resolve(deadlineAt = Date.now() + 120_000) {
+function resolve(
+  deadlineAt = Date.now() + 120_000,
+  prepareLaunchAccountHome?: () => Promise<null>
+) {
   const record = agentSessionRecordFixture({
     sessionId: 'session-bounded',
     provider: 'codex',
@@ -43,6 +46,7 @@ function resolve(deadlineAt = Date.now() + 120_000) {
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async () => '/work/repo',
     resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
+    ...(prepareLaunchAccountHome ? { prepareLaunchAccountHome } : {}),
     resolveLaunchArgs: () => [
       '--dangerously-bypass-approvals-and-sandbox',
       '-c',
@@ -65,6 +69,13 @@ it('pins included Codex inference settings instead of inheriting privileged user
     expect.arrayContaining(['OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL'])
   )
   expect(launch.permissionPolicy).toBeUndefined()
+})
+
+it('launches the recorded bounded account without mutable account-home preparation', async () => {
+  const launch = await resolve(undefined, async () => {
+    throw new Error('Mutable account-home preparation must not run.')
+  })
+  expect(launch.codexHome).toBe('/account')
 })
 
 it('refuses an expired bounded launch before acquiring a native child', async () => {

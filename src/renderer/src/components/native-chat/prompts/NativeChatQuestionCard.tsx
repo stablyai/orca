@@ -158,8 +158,8 @@ export function NativeChatQuestionCard({
     }
   }
 
-  // Briefly show a single-select pick before advancing; picking again retracts it. With previews,
-  // a pick stays put: a digit focuses its row, and Enter on the chosen row confirms.
+  // Briefly show a single-select pick before advancing; clicking it again retracts it, while Enter on
+  // the chosen row confirms. With previews, a pick stays put and a digit only focuses its row.
   const pickOption = (
     optionIndex: number,
     via: 'pointer' | 'digit' | 'enter' = 'pointer'
@@ -171,7 +171,8 @@ export function NativeChatQuestionCard({
         ?.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
         [optionIndex]?.focus()
     }
-    if (showsPreviews && cur.includes(optionIndex)) {
+    // Enter on a chosen single-select row does what the footer says (Next/Submit), never deselects.
+    if (cur.includes(optionIndex) && (showsPreviews || (via === 'enter' && !q.multiSelect))) {
       if (via === 'enter') {
         confirm(true)
       }
@@ -322,6 +323,7 @@ export function NativeChatQuestionCard({
                 selected={(selections[index] ?? []).includes(i)}
                 disabled={isSubmitting}
                 onSelect={() => pickOption(i)}
+                onEnter={() => pickOption(i, 'enter')}
               />
             ))}
           </div>

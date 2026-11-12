@@ -18,6 +18,11 @@ export function computerUseErrorRecoveryData(
       return recoverWith(
         'Do not continue with this app through computer-use; choose a non-sensitive target or ask the user to handle it manually.'
       )
+    case 'system_shortcut_blocked':
+      return recoverWith(
+        'Do not retry this shortcut; the error says what it would do. Reach the same goal with a semantic action such as a button or menu item, or ask the user to do it.',
+        'Retry with `--allow-system-shortcut` only when the user explicitly asked for this exact shortcut.'
+      )
     case 'window_not_found':
       return recoverWith(
         'Run `orca computer list-windows --app <app> --json` and target one of the listed windows.',
@@ -72,9 +77,25 @@ export function computerUseErrorRecoveryData(
         'Do not infer valid indexes from `elementCount` or reuse indexes after navigation, scrolling, focus changes, or delays.'
       )
     case 'element_not_clickable':
+      if (message?.includes(' is covered by ')) {
+        return recoverWith(
+          'Run `orca computer get-app-state --app <app> --json` and deal with what covers the element first (answer or close the dialog, sheet or popover).',
+          'Then click the element again using an index from the fresh tree; do not click by coordinates to get past the cover.'
+        )
+      }
+      if (message?.includes(' out of view')) {
+        return recoverWith(
+          "Scroll the element's container with `orca computer scroll`, then run `orca computer get-app-state --app <app> --json` and click the element using an index from the fresh tree."
+        )
+      }
       return recoverWith(
         'Choose a nearby parent or child element that has an actionable frame.',
         'If using coordinates, derive window-local coordinates from the latest screenshot/state for the same target window.'
+      )
+    case 'element_not_enabled':
+      return recoverWith(
+        'The element is disabled, so nothing was sent. Do what enables it first (for example fill required fields), then run `orca computer get-app-state --app <app> --json` and act once its line no longer lists `disabled`.',
+        'Do not retry the same action unchanged or click it by coordinates instead.'
       )
     case 'action_not_supported':
       return recoverWith(

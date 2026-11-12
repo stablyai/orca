@@ -37,6 +37,16 @@ export function parseComputerTreeText(treeText: string): ComputerTreeText {
   return { header: lines.slice(0, first), elements, footer: lines.slice(footerStart) }
 }
 
+/** Rewrites the index of an element line; other lines pass through. */
+export function renumberComputerTreeLine(
+  line: string,
+  indexes: ReadonlyMap<number, number>
+): string {
+  const match = ELEMENT_LINE.exec(line)
+  const index = match ? indexes.get(Number(match[2])) : undefined
+  return match && index !== undefined ? `${match[1]}${index}${line.slice(match[0].length)}` : line
+}
+
 export function joinComputerTreeText(header: string[], body: string[], footer: string[]): string {
   return [...trimTrailingBlank(header), '', ...body, ...footer].join('\n')
 }

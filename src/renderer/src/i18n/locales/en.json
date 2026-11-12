@@ -1413,6 +1413,11 @@
       "settings": "Settings",
       "label": "Settings breadcrumb",
       "close": "Close settings"
+    },
+    "voice": {
+      "cleanup": {
+        "recipeDescription": "Clean up dictated text before it lands."
+      }
     }
   },
   "menu": {
@@ -4611,7 +4616,9 @@
             "remoteTerminalClosed": "Remote terminal was closed.",
             "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",
             "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again.",
-            "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again."
+            "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again.",
+            "title": "Terminal issue",
+            "errorTitle": "Terminal error"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash console limit reached",
@@ -6491,7 +6498,9 @@
           "updateSkipped": "Update skipped: {{value0}}",
           "updateAvailable": "Update available",
           "repairAvailable": "Repair available",
-          "installAvailable": "Install available"
+          "installAvailable": "Install available",
+          "otherBuild": "Installed by another Orca version",
+          "otherBuildKept": "Kept: written by another Orca version"
         },
         "installResult": {
           "installed": "Installed and verified.",
@@ -12039,7 +12048,10 @@
               "shortcutDescription": "The key that starts dictation.",
               "shortcutKeyword": "keyboard",
               "keepLoadedTitle": "Keep model loaded",
-              "gpuKeyword": "graphics card"
+              "gpuKeyword": "graphics card",
+              "cleanupDescription": "Fix punctuation, numbers and spoken corrections with your agent before text lands.",
+              "cleanupKeyword": "correction word",
+              "cleanupScratchKeyword": "scratch that"
             }
           }
         },
@@ -22094,7 +22106,13 @@
           "listening": "{{model}} is listening too…",
           "heardLabel": "{{model}} heard",
           "heardNothing": "No words. Try speaking louder.",
-          "heardFailed": "{{model}} couldn’t transcribe the recording."
+          "heardFailed": "{{model}} couldn’t transcribe the recording.",
+          "cleaningUp": "Cleaning up…",
+          "tryCleanup": "Try cleanup",
+          "cleanupFailed": "Cleanup failed: {{reason}}",
+          "cleanupTimedOut": "Cleanup took too long.",
+          "cleanupOff": "AI cleanup is off.",
+          "afterCleanup": "After cleanup · {{agent}}, {{model}} · {{seconds}} s"
         },
         "silenceStop": {
           "off": "Off",
@@ -22127,6 +22145,44 @@
         },
         "gpu": {
           "description": "Turn off if dictation freezes your computer."
+        },
+        "cleanup": {
+          "consent": {
+            "goesToKnown": "{{company}}, through {{agent}} on this computer. Counts toward your {{plan}} plan.",
+            "goesToAgent": "Wherever {{agent}} on this computer is set up to send prompts.",
+            "sentLabel": "Sent",
+            "sent": "The dictated text, your vocabulary and your instructions.",
+            "notSentLabel": "Not sent",
+            "notSent": "Audio, files, or what’s on screen.",
+            "goesToLabel": "Goes to",
+            "waitLabel": "Wait",
+            "wait": "Text lands a few seconds later.",
+            "title": "Turn on AI cleanup?",
+            "description": "After each dictation, Orca sends the text to {{agent}} to tidy it before it lands.",
+            "cancel": "Cancel",
+            "confirm": "Turn on"
+          },
+          "instructions": {
+            "label": "Instructions",
+            "custom": "Your own instructions.",
+            "builtIn": "Built-in: fix punctuation, numbers and corrections. Keep my wording.",
+            "edit": "Edit",
+            "emptyHint": "Leave empty for the built-in ones.",
+            "reset": "Reset",
+            "cancel": "Cancel",
+            "save": "Save"
+          },
+          "saveFailed": "Could not save AI cleanup.",
+          "noAgent": "No agent can run AI cleanup. Pick one below.",
+          "title": "Cleanup",
+          "label": "AI cleanup",
+          "description": "Fixes punctuation, numbers and spoken corrections before text lands. Sends the text to {{agent}}, never audio.",
+          "anAgent": "an AI agent",
+          "agent": "Agent and model",
+          "agentDescription": "Runs on this computer. A small, fast model keeps the wait short.",
+          "correctionWord": "Correction word",
+          "correctionWordDescription": "Say it to take back what you just said: “at four, {{word}}, at five”.",
+          "correctionWordOff": "None"
         }
       },
       "repositoryHooks": {
@@ -22406,7 +22462,16 @@
       "notWritableSelection": "The {{target}} agent did not accept the selection."
     },
     "dictation": {
-      "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence"
+      "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence",
+      "cleanupNotice": {
+        "timedOut": "Cleanup took too long. Inserted as heard.",
+        "failed": "Cleanup failed. Inserted as heard.",
+        "dismiss": "Dismiss"
+      },
+      "DictationIndicator": {
+        "cleaningUp": "Cleaning up…",
+        "skipCleanup": "Skip cleanup and insert as heard"
+      }
     }
   },
   "dashboardPopout": {
@@ -22801,7 +22866,10 @@
         "kimiProviderLimited": "Kimi reached a provider limit or the provider is busy. Wait before retrying or reduce request frequency.",
         "kimiContextOverflow": "Kimi ran out of context. Shorten the prompt or start a new session, then retry.",
         "kimiConfigInvalid": "Kimi has invalid configuration. Check the model and provider configuration on the execution host before retrying.",
-        "kimiContinueSessionConflict": "Kimi received conflicting options: --continue, --session. Correct the generation recipe or CLI arguments before retrying."
+        "kimiContinueSessionConflict": "Kimi received conflicting options: --continue, --session. Correct the generation recipe or CLI arguments before retrying.",
+        "commandTemplateEmptyDictationCleanup": "Command template is empty for dictation cleanup.",
+        "dictationCleanupAgentUnsupported": "Choose a supported agent for AI cleanup in Settings -> Voice -> Cleanup. Supported agents: {{agents}}, or Custom command.",
+        "agentCannotGenerateDictationCleanup": "Agent \"{{agent}}\" does not support dictation cleanup. Supported agents: {{agents}}, or Custom command."
       },
       "enableSourceControlAi": "Enable Source Control AI in Settings -> Git.",
       "chooseBaseBranch": "Choose a base branch before generating.",

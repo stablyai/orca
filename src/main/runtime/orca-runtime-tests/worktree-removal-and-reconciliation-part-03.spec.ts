@@ -96,8 +96,9 @@ describe('OrcaRuntimeService', () => {
       hostId: 'ssh:host-b'
     })
 
+    const remoteRefusal = expect(remote).rejects.toThrow('selector_not_found')
     await localStarted.promise
-    await expect(remote).rejects.toThrow('selector_not_found')
+    await remoteRefusal
 
     finishRemovals.resolve()
     await expect(local).resolves.toEqual({})

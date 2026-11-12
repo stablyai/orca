@@ -38,8 +38,10 @@ import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
 import { isNonNegativeSafeInteger } from '../../ssh-retained-payload-limits'
 import {
   isAgentSessionAccountHome,
+  isOptionalAgentSessionLaunchedAccount,
   MAX_PATH_LENGTH,
-  type AgentSessionAccountHome
+  type AgentSessionAccountHome,
+  type AgentSessionLaunchedAccount
 } from './agent-session-account-home'
 
 export {
@@ -133,6 +135,8 @@ export type AgentSessionRecord = {
   providerHandleChain: AgentSessionProviderHandleLink[]
   providerContextBoundary?: AgentSessionProviderContextBoundary
   accountHome: AgentSessionAccountHome
+  /** Where the latest proven runtime actually launched; absent before any or from older hosts. */
+  launchedAccount?: AgentSessionLaunchedAccount
   /** Optional host-written construction observation; checked independently of record readability. */
   acquiredAccount?: unknown
   /** Initial launch directory in host path syntax. Floating sessions resume here; worktree/folder IDs resolve their durable location. */
@@ -313,6 +317,7 @@ export function isPersistedAgentSessionObservationRecord(
       isAgentSessionExecutionLocation(record.location) &&
       isStructuredAgentId(record.provider) &&
       isAgentSessionAccountHome(record.accountHome) &&
+      isOptionalAgentSessionLaunchedAccount(record.launchedAccount) &&
       (record.launchDirectory === undefined ||
         isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
       (record.options === undefined || isAgentSessionOptions(record.options)) &&
@@ -363,7 +368,5 @@ export function isPersistedAgentSessionRecord(
     return false
   }
   const floor = value.lease.minimumNextFence
-  return (
-    floor === undefined || (typeof floor === 'number' && Number.isSafeInteger(floor) && floor >= 0)
-  )
+  return floor === undefined || isNonNegativeSafeInteger(floor)
 }

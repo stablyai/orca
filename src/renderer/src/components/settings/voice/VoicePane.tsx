@@ -14,6 +14,8 @@ import {
   voiceDictationPermissionToasts
 } from './voice-dictation-toggle'
 import { VoiceWordsSettings } from './VoiceWordsSettings'
+import { VoiceCleanupSettings } from './VoiceCleanupSettings'
+import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { VoiceInputSettings } from './VoiceInputSettings'
 import { isSpeechModelDownloading } from './voice-speech-model-rows'
 import { VoiceDictationSettings } from './VoiceDictationSettings'
@@ -31,9 +33,14 @@ import { suggestSpeechModel } from '../../../../../shared/speech-model-suggestio
 type VoicePaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  writeSourceControlAiSettings: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }
 
-export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.JSX.Element {
+export function VoicePane({
+  settings,
+  updateSettings,
+  writeSourceControlAiSettings
+}: VoicePaneProps): React.JSX.Element {
   const t = useTranslate()
   // Keep fallback identity stable so parent renders cannot repeat fetch effects.
   const [defaultVoiceSettings] = useState(getDefaultVoiceSettings)
@@ -335,6 +342,13 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       <VoiceWordsSettings
         voiceSettings={voiceSettings}
         onUpdateVoiceSettings={updateVoiceSettings}
+      />
+
+      <VoiceCleanupSettings
+        settings={settings}
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={updateVoiceSettings}
+        writeSourceControlAiSettings={writeSourceControlAiSettings}
       />
 
       <SettingsGroup title={t('components.settings.voice.advanced.title', 'Advanced')}>
