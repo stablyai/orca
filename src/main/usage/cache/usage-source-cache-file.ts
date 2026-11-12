@@ -102,10 +102,11 @@ export async function splitUsageCacheFile(
     }
     throw error
   }
-  if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed[request.sourceKey])) {
+  const sources = parsed?.[request.sourceKey]
+  if (!parsed || typeof parsed !== 'object' || !Array.isArray(sources)) {
     return { reportText: JSON.stringify(parsed), migrated: false }
   }
-  const { [request.sourceKey]: sources, ...report } = parsed
+  const { [request.sourceKey]: _sources, ...report } = parsed
   await writeUsageSourceCache(
     {
       path: usageSourceCachePath(request.cacheFile),
@@ -114,7 +115,7 @@ export async function splitUsageCacheFile(
         typeof report.worktreeFingerprint === 'string' ? report.worktreeFingerprint : null,
       reuse: true
     },
-    sources as unknown[]
+    sources
   )
   return { reportText: JSON.stringify(report), migrated: true }
 }
