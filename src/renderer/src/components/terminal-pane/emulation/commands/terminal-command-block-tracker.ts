@@ -1,12 +1,6 @@
 import type { IBuffer, IMarker } from '@xterm/xterm'
 import { closesAppOsc133Zone } from '../../../../../../shared/terminal/output/terminal-osc133-command-finished'
-import { stripTerminalSelectionGutter } from '../../../../../../shared/terminal/output/terminal-selection-gutter'
-import {
-  readTerminalCommandBlockText,
-  type TerminalBlockLineReader,
-  type TerminalCommandBlockLines,
-  type TerminalCommandBlockPart
-} from './terminal-command-block-text'
+import { snapshotBlockCommandText, terminalCommandBlockLines } from './terminal-command-block-read'
 
 /** Structural minimum for block tracking; satisfied by @xterm/xterm and @xterm/headless terminals. */
 export type CommandBlockTerminal = {
@@ -21,12 +15,7 @@ export type CommandBlockTerminal = {
   readonly onResize?: (callback: () => void) => { dispose: () => void }
 }
 
-export type TerminalCommandBlockTextOptions = {
-  /** Mirror the terminalCopyTrimsGutter setting; the caller reads it. */
-  trimGutter: boolean
-}
-
-const MAX_TRACKED_BLOCKS = 50
+const MIN_TRACKED_BLOCKS = 50
 
 export type TrackedCommandBlock = {
   promptMarker: IMarker
@@ -44,6 +33,8 @@ export type TrackedCommandBlock = {
   outputEndRowSnapshot: { text: string; wrapped: boolean } | null
   /** True once a later prompt repainted the D row; the block no longer owns it. */
   outputEndRowRepainted: boolean
+  /** Command text snapshotted at C time; set when the prompt rows are already gone at D. */
+  commandSnapshot: string | null
   exitCode: number | null
 }
 
@@ -62,32 +53,15 @@ function parseOsc133Sequence(payload: string): { letter: string; exitCode: numbe
   }
 }
 
-function blockLines(block: TrackedCommandBlock): TerminalCommandBlockLines | null {
-  if (
-    block.promptMarker.isDisposed ||
-    block.outputStartMarker.isDisposed ||
-    block.outputEndMarker.isDisposed
-  ) {
-    return null
-  }
-  const promptLine = block.promptMarker.line
-  return {
-    promptLine,
-    outputStartLine: block.outputStartMarker.line,
-    outputEndLine: block.outputEndMarker.line + (block.outputEndExtraRow ? 1 : 0),
-    inputStart:
-      block.inputStartMarker && !block.inputStartMarker.isDisposed
-        ? { row: block.inputStartMarker.line, col: block.inputStartCol }
-        : null,
-    outputEndRowSnapshot: block.outputEndExtraRow ? block.outputEndRowSnapshot : null
-  }
-}
-
 function disposeBlock(block: TrackedCommandBlock): void {
-  block.promptMarker.dispose()
-  block.outputStartMarker.dispose()
-  block.outputEndMarker.dispose()
-  block.inputStartMarker?.dispose()
+  // Output-only blocks share one marker as prompt and output start.
+  const markers = new Set([block.promptMarker, block.outputStartMarker, block.outputEndMarker])
+  if (block.inputStartMarker) {
+    markers.add(block.inputStartMarker)
+  }
+  for (const marker of markers) {
+    marker.dispose()
+  }
 }
 
 function absoluteCursorRow(buffer: IBuffer): number {
@@ -101,6 +75,7 @@ export function createTerminalCommandBlockTracker(
   let pendingPrompt: IMarker | null = null
   let pendingOutputStart: IMarker | null = null
   let pendingInputStart: { marker: IMarker; col: number } | null = null
+  let pendingCommandSnapshot: string | null = null
   let adjacentMarkers = ''
   let lastPayloadCursor: { x: number; row: number } | null = null
 
@@ -119,16 +94,20 @@ export function createTerminalCommandBlockTracker(
     pendingPrompt = null
     pendingOutputStart = null
     pendingInputStart = null
+    pendingCommandSnapshot = null
   }
 
+  // Retention follows the buffer: blocks die with their rows, and the count
+  // cap scales with retained rows so visible blocks are never evicted.
   const prune = (): void => {
     for (let index = blocks.length - 1; index >= 0; index -= 1) {
-      if (blockLines(blocks[index]) === null) {
+      if (terminalCommandBlockLines(blocks[index]) === null) {
         const [removed] = blocks.splice(index, 1)
         disposeBlock(removed)
       }
     }
-    while (blocks.length > MAX_TRACKED_BLOCKS) {
+    const maxBlocks = Math.max(MIN_TRACKED_BLOCKS, terminal.buffer.active.length)
+    while (blocks.length > maxBlocks) {
       const removed = blocks.shift()
       if (removed) {
         disposeBlock(removed)
@@ -181,6 +160,7 @@ export function createTerminalCommandBlockTracker(
         if (pendingOutputStart && pendingOutputStart.line === cursor.row) {
           pendingOutputStart.dispose()
           pendingOutputStart = null
+          pendingCommandSnapshot = null
         }
         if (pendingInputStart && pendingInputStart.marker.line === cursor.row) {
           pendingInputStart.marker.dispose()
@@ -212,17 +192,24 @@ export function createTerminalCommandBlockTracker(
       } else if (letter === 'C') {
         if (pendingPrompt && !pendingOutputStart) {
           pendingOutputStart = registerCurrentLine()
+          // Prompt rows never change after C until they scroll out, so this
+          // snapshot equals any later buffer read and outlives the rows.
+          pendingCommandSnapshot = snapshotBlockCommandText(
+            terminal,
+            pendingPrompt.line,
+            absoluteCursorRow(buffer),
+            pendingInputStart && !pendingInputStart.marker.isDisposed
+              ? { row: pendingInputStart.marker.line, col: pendingInputStart.col }
+              : null
+          )
         }
       } else if (letter === 'D') {
-        if (!pendingPrompt || !pendingOutputStart) {
+        if (!pendingOutputStart || pendingOutputStart.isDisposed) {
           clearPending()
           return
         }
-        if (
-          pendingPrompt.isDisposed ||
-          pendingOutputStart.isDisposed ||
-          (pendingInputStart && pendingInputStart.marker.isDisposed)
-        ) {
+        const promptAlive = !!pendingPrompt && !pendingPrompt.isDisposed
+        if (!promptAlive && pendingCommandSnapshot === null) {
           clearPending()
           return
         }
@@ -231,27 +218,49 @@ export function createTerminalCommandBlockTracker(
           clearPending()
           return
         }
+        // Output longer than the scrollback evicts the prompt rows before D;
+        // anchor the range at the surviving output start instead of dropping
+        // the visible output, with the command text from the C snapshot.
+        let promptMarker: IMarker
+        let commandSnapshot: string | null = null
+        if (pendingPrompt && !pendingPrompt.isDisposed) {
+          promptMarker = pendingPrompt
+        } else {
+          pendingPrompt?.dispose()
+          promptMarker = pendingOutputStart
+          commandSnapshot = pendingCommandSnapshot
+        }
         // Without a trailing newline the D row itself holds output text; the
         // next prompt will repaint it, so snapshot now.
         const endRow = buffer.getLine(absoluteCursorRow(buffer))
         const endRowText = endRow?.translateToString(true) ?? ''
         const hasTrailingOutput = endRowText.trim() !== ''
+        let inputStartMarker: IMarker | null = null
+        if (pendingInputStart) {
+          if (pendingInputStart.marker.isDisposed) {
+            pendingInputStart.marker.dispose()
+          } else {
+            inputStartMarker = pendingInputStart.marker
+          }
+        }
         blocks.push({
-          promptMarker: pendingPrompt,
+          promptMarker,
           outputStartMarker: pendingOutputStart,
           outputEndMarker: outputEnd,
-          inputStartMarker: pendingInputStart?.marker ?? null,
+          inputStartMarker,
           inputStartCol: pendingInputStart?.col ?? 0,
           outputEndExtraRow: hasTrailingOutput,
           outputEndRowSnapshot: hasTrailingOutput
             ? { text: endRowText, wrapped: endRow?.isWrapped ?? false }
             : null,
           outputEndRowRepainted: false,
+          commandSnapshot,
           exitCode
         })
         pendingPrompt = null
         pendingOutputStart = null
         pendingInputStart = null
+        pendingCommandSnapshot = null
         prune()
       }
     },
@@ -262,7 +271,7 @@ export function createTerminalCommandBlockTracker(
       }
       prune()
       for (let index = blocks.length - 1; index >= 0; index -= 1) {
-        const lines = blockLines(blocks[index])
+        const lines = terminalCommandBlockLines(blocks[index])
         if (!lines) {
           continue
         }
@@ -284,60 +293,4 @@ export function createTerminalCommandBlockTracker(
       lastPayloadCursor = null
     }
   }
-}
-
-export function readTerminalBlockTextFromTerminal(
-  terminal: CommandBlockTerminal,
-  block: TrackedCommandBlock,
-  part: TerminalCommandBlockPart,
-  options: TerminalCommandBlockTextOptions
-): string | null {
-  if (terminal.buffer.active.type !== 'normal') {
-    return null
-  }
-  const lines = blockLines(block)
-  if (!lines) {
-    return null
-  }
-  const reader: TerminalBlockLineReader = {
-    getLine: (row: number) => {
-      const line = terminal.buffer.active.getLine(row)
-      if (!line) {
-        return null
-      }
-      return { text: line.translateToString(true), wrapped: line.isWrapped }
-    },
-    sliceLineFromCol: (row: number, col: number) => {
-      const line = terminal.buffer.active.getLine(row)
-      if (!line) {
-        return null
-      }
-      // Walk cells, not string units: wide glyphs span two cells and joined
-      // marks share one. Measuring the live line keeps this exact under any
-      // Unicode provider version instead of mirroring a width table.
-      let index = 0
-      for (let x = 0; x < col; x += 1) {
-        const cell = line.getCell(x)
-        if (!cell) {
-          break
-        }
-        if (cell.getWidth() !== 0) {
-          index += cell.getChars().length
-        }
-      }
-      return line.translateToString(true).slice(index)
-    }
-  }
-  // The gutter strip applies to output rows only: command rows start with the
-  // prompt, so including them would under-strip shared leading spaces.
-  const output = readTerminalCommandBlockText(reader, lines, 'output')
-  const trimmedOutput = options.trimGutter ? stripTerminalSelectionGutter(output) : output
-  if (part === 'output') {
-    return trimmedOutput
-  }
-  const command = readTerminalCommandBlockText(reader, lines, 'command')
-  if (part === 'command') {
-    return command
-  }
-  return trimmedOutput ? `${command}\n${trimmedOutput}` : command
 }

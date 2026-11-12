@@ -9,7 +9,11 @@ import {
   terminalCopyTrimsGutter
 } from './terminal-clipboard-selection-text'
 import { getTerminalCommandBlockTracker } from '../emulation/commands/terminal-command-lifecycle'
-import { readTerminalBlockTextFromTerminal } from '../emulation/commands/terminal-command-block-tracker'
+import type { TrackedCommandBlock } from '../emulation/commands/terminal-command-block-tracker'
+import {
+  readTerminalBlockTextFromTerminal,
+  selectMenuCommandBlockForCopy
+} from '../emulation/commands/terminal-command-block-read'
 import type { TerminalCommandBlockPart } from '../emulation/commands/terminal-command-block-text'
 import { useAppStore } from '@/store/index'
 import { fencedCode } from '../../editor/selection-copy'
@@ -28,26 +32,22 @@ export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): P
   })
 }
 
-export const resolveMenuCommandBlock = (
-  pane: ManagedPane | null,
-  bufferRow: number | null
-): boolean => {
-  if (!pane || bufferRow === null) {
-    return false
-  }
-  const block = getTerminalCommandBlockTracker(pane.terminal)?.resolveBlockAtRow(bufferRow)
-  return block !== null && block !== undefined
-}
-
 export const copyTerminalPaneMenuCommandBlock = async (
   pane: ManagedPane | null,
+  capturedBlock: TrackedCommandBlock | null,
   bufferRow: number | null,
   part: TerminalCommandBlockPart
 ): Promise<void> => {
-  if (!pane || bufferRow === null) {
+  if (!pane) {
     return
   }
-  const block = getTerminalCommandBlockTracker(pane.terminal)?.resolveBlockAtRow(bufferRow)
+  // The click row may be stale if scrollback trimmed while the menu was open;
+  // the captured block's markers followed the scroll instead.
+  const current =
+    bufferRow === null
+      ? null
+      : (getTerminalCommandBlockTracker(pane.terminal)?.resolveBlockAtRow(bufferRow) ?? null)
+  const block = selectMenuCommandBlockForCopy(capturedBlock, current)
   if (!block) {
     return
   }

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import {
   createTerminalCommandBlockTracker,
-  readTerminalBlockTextFromTerminal,
   type TerminalCommandBlockTracker
 } from './terminal-command-block-tracker'
+import { readTerminalBlockTextFromTerminal } from './terminal-command-block-read'
 import {
   readTerminalCommandBlockText,
   type TerminalBlockLineReader
@@ -344,6 +344,69 @@ describe('terminal-command-block-tracker', () => {
       expect(
         readTerminalBlockTextFromTerminal(terminal, block, 'command', { trimGutter: false })
       ).toBe('echo hi')
+    } finally {
+      dispose()
+    }
+  })
+
+  it('keeps blocks while their rows stay visible past the old count cap', async () => {
+    const { terminal, tracker, dispose } = trackedTerminal()
+    try {
+      for (let n = 0; n < 51; n += 1) {
+        await write(
+          terminal,
+          `${OSC}A${BEL}$ ${OSC}B${BEL}echo ${n}\r\n${OSC}C${BEL}${n}\r\n${OSC}D;0${BEL}`
+        )
+      }
+      // All 51 commands are still in scrollback; none may be evicted. Each
+      // command spans two rows (the next prompt starts on the D row).
+      const first = tracker.resolveBlockAtRow(0)
+      expect(first).not.toBeNull()
+      if (!first) {
+        return
+      }
+      expect(
+        readTerminalBlockTextFromTerminal(terminal, first, 'command', { trimGutter: false })
+      ).toBe('echo 0')
+      expect(tracker.resolveBlockAtRow(100)).not.toBeNull()
+    } finally {
+      dispose()
+    }
+  })
+
+  it('offers an output-only block when long output evicts the prompt', async () => {
+    const { terminal, tracker, dispose } = trackedTerminal({ cols: 80, rows: 4, scrollback: 0 })
+    try {
+      await write(
+        terminal,
+        `${OSC}A${BEL}$ ${OSC}B${BEL}printf hi\r\n${OSC}C${BEL}out1\r\nout2\r\nout3\r\n${OSC}D;0${BEL}`
+      )
+      // The prompt row scrolled out before D, but the output is visible.
+      const block = tracker.resolveBlockAtRow(2)
+      expect(block).not.toBeNull()
+      if (!block) {
+        return
+      }
+      expect(
+        readTerminalBlockTextFromTerminal(terminal, block, 'command', { trimGutter: false })
+      ).toBe('printf hi')
+      expect(
+        readTerminalBlockTextFromTerminal(terminal, block, 'output', { trimGutter: false })
+      ).toBe('out1\nout2\nout3')
+    } finally {
+      dispose()
+    }
+  })
+
+  it('resolves nothing when output evicts the whole block before D', async () => {
+    const { terminal, tracker, dispose } = trackedTerminal({ cols: 80, rows: 4, scrollback: 0 })
+    try {
+      await write(
+        terminal,
+        `${OSC}A${BEL}$ ${OSC}B${BEL}printf hi\r\n${OSC}C${BEL}out1\r\nout2\r\nout3\r\nout4\r\nout5\r\n${OSC}D;0${BEL}`
+      )
+      expect(tracker.resolveBlockAtRow(1)).toBeNull()
+      expect(tracker.resolveBlockAtRow(4)).toBeNull()
     } finally {
       dispose()
     }

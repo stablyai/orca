@@ -6,6 +6,8 @@ import { copyTerminalSelection } from '../clipboard/terminal-selection-copy'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { createTerminalRightClickPasteCapture } from '../input/paste/create-terminal-right-click-paste-capture'
 import { getTerminalBufferPositionForMouseEvent } from '../input/pointer/terminal-mouse-buffer-position'
+import { getTerminalCommandBlockTracker } from '../emulation/commands/terminal-command-lifecycle'
+import type { TrackedCommandBlock } from '../emulation/commands/terminal-command-block-tracker'
 
 type UseTerminalContextMenuTriggerDeps = {
   managerRef: React.RefObject<PaneManager | null>
@@ -13,6 +15,8 @@ type UseTerminalContextMenuTriggerDeps = {
   contextPaneIdRef: React.RefObject<number | null>
   /** 0-based absolute buffer row under the pointer, captured synchronously at menu open. */
   menuBufferRowRef: React.RefObject<number | null>
+  /** Command block under the pointer; markers follow scrollback trims while the menu is open. */
+  menuCommandBlockRef: React.RefObject<TrackedCommandBlock | null>
   rightClickToPaste: boolean
   pasteResolvedPane: (
     source: Extract<TerminalPasteSource, 'context-menu' | 'right-click'>
@@ -34,6 +38,7 @@ export function useTerminalContextMenuTrigger({
   containerRef,
   contextPaneIdRef,
   menuBufferRowRef,
+  menuCommandBlockRef,
   rightClickToPaste,
   pasteResolvedPane
 }: UseTerminalContextMenuTriggerDeps): TerminalContextMenuTrigger {
@@ -74,6 +79,14 @@ export function useTerminalContextMenuTrigger({
       ? getTerminalBufferPositionForMouseEvent(clickedPane.terminal, event.nativeEvent)
       : null
     menuBufferRowRef.current = bufferPosition ? bufferPosition.y - 1 : null
+    // Capture the block with the row: a trim between open and click would
+    // otherwise resolve whatever scrolled into the stale row.
+    menuCommandBlockRef.current =
+      clickedPane && menuBufferRowRef.current !== null
+        ? (getTerminalCommandBlockTracker(clickedPane.terminal)?.resolveBlockAtRow(
+            menuBufferRowRef.current
+          ) ?? null)
+        : null
 
     // Configured right-click copies selection or pastes; Ctrl+right-click preserves menu access.
     if (rightClickToPaste && !event.ctrlKey) {

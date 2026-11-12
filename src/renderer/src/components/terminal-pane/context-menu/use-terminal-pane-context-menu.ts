@@ -1,8 +1,8 @@
 import type { UseTerminalPaneContextMenuDeps } from './terminal-pane-context-menu-types'
 import { createTerminalPaneMenuPaste } from '../input/paste/create-terminal-pane-menu-paste'
 import { createTerminalPaneMenuCopyActions } from '../clipboard/create-terminal-pane-menu-copy-actions'
-import { resolveMenuCommandBlock } from '../clipboard/terminal-pane-menu-copy-actions'
 import type { TerminalCommandBlockPart } from '../emulation/commands/terminal-command-block-text'
+import type { TrackedCommandBlock } from '../emulation/commands/terminal-command-block-tracker'
 import { createTerminalPaneMenuLayoutActions } from '../layout/ownership/create-terminal-pane-menu-layout-actions'
 import { createTerminalPaneMenuAgentSessionActions } from './terminal-pane-menu-agent-session-actions'
 import { createTerminalPaneMenuQuickCommand } from '../quick-commands/create-terminal-pane-menu-quick-command'
@@ -73,7 +73,12 @@ export function useTerminalPaneContextMenu({
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
   const menuBufferRowRef = useRef<number | null>(null)
+  const menuCommandBlockRef = useRef<TrackedCommandBlock | null>(null)
   const resolveMenuBufferRow = useCallback((): number | null => menuBufferRowRef.current, [])
+  const resolveMenuCommandBlock = useCallback(
+    (): TrackedCommandBlock | null => menuCommandBlockRef.current,
+    []
+  )
 
   const resolveMenuPane = useCallback((): ManagedPane | null => {
     const manager = managerRef.current
@@ -111,6 +116,7 @@ export function useTerminalPaneContextMenu({
     containerRef,
     contextPaneIdRef,
     menuBufferRowRef,
+    menuCommandBlockRef,
     rightClickToPaste,
     pasteResolvedPane
   })
@@ -147,7 +153,8 @@ export function useTerminalPaneContextMenu({
     paneTransportsRef,
     tabId,
     resolveMenuPane,
-    resolveMenuBufferRow
+    resolveMenuBufferRow,
+    resolveMenuCommandBlock
   })
 
   const onPaste = async (): Promise<void> => pasteResolvedPane('context-menu')
@@ -212,9 +219,7 @@ export function useTerminalPaneContextMenu({
   const paneCount = open ? (managerRef.current?.getPanes().length ?? 1) : 1
   const menuPane = open ? resolveMenuPane() : null
   const menuPaneId = menuPane?.id ?? null
-  const canCopyCommandBlock = open
-    ? resolveMenuCommandBlock(menuPane, menuBufferRowRef.current)
-    : false
+  const canCopyCommandBlock = open ? menuCommandBlockRef.current !== null : false
 
   return {
     open,
