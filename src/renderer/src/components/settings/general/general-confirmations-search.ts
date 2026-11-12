@@ -114,3 +114,24 @@ export const getGeneralConfirmationSearchEntries = createLocalizedCatalog(() => 
     ]
   }
 }))
+
+export const getGeneralMacConfirmationSearchEntries = createLocalizedCatalog(() => ({
+  applicationsFolder: {
+    title: translate(
+      'settings.general.confirmations.applicationsFolder',
+      'Running Orca outside Applications'
+    ),
+    description: translate(
+      'settings.general.confirmations.applicationsFolderHelp',
+      'Offer to move Orca to the Applications folder on launch.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.confirmations', 'confirmations'),
+      ...translateSearchKeyword('settings.general.search.keywords.applications', 'Applications'),
+      ...translateSearchKeyword('settings.general.search.keywords.move', 'move'),
+      ...translateSearchKeyword('settings.general.search.keywords.dmg', 'DMG'),
+      ...translateSearchKeyword('settings.general.search.keywords.disk_image', 'disk image'),
+      ...translateSearchKeyword('auto.components.settings.general.search.0efc9d96ad', 'prompt')
+    ]
+  }
+}))

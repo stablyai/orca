@@ -1,5 +1,9 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
-import { getGeneralConfirmationSearchEntries } from './general-confirmations-search'
+import {
+  getGeneralConfirmationSearchEntries,
+  getGeneralMacConfirmationSearchEntries
+} from './general-confirmations-search'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -51,7 +55,19 @@ export function GeneralConfirmationsSection({
       checked: !settings.skipDeleteArtifactConfirm,
       onChange: () =>
         updateSettings({ skipDeleteArtifactConfirm: !settings.skipDeleteArtifactConfirm })
-    }
+    },
+    ...(isMacUserAgent()
+      ? [
+          {
+            ...getGeneralMacConfirmationSearchEntries().applicationsFolder,
+            checked: settings.offerMoveToApplicationsFolder !== false,
+            onChange: () =>
+              updateSettings({
+                offerMoveToApplicationsFolder: settings.offerMoveToApplicationsFolder === false
+              })
+          }
+        ]
+      : [])
   ].filter((row) => matchesSettingsSearch(query, row))
   if (rows.length === 0) {
     return null

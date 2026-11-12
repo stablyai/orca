@@ -32,6 +32,7 @@ import {
   recordProcessGoneCrash
 } from './main-window-lifecycle-flags'
 import { presentGpuFallbackRecoveredLaunchPrompt } from './gpu-lifecycle'
+import { presentApplicationsFolderMovePrompt } from './applications-folder-move-prompt'
 import {
   resumeSyntheticTitleSpinnerTimer,
   stopSyntheticTitleSpinnerTimer
@@ -175,7 +176,10 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   })
   window.once('show', () => {
     logStartupMilestone('window-shown')
-    void presentGpuFallbackRecoveredLaunchPrompt(window)
+    // Sequential so the two startup sheets never stack on one window.
+    void presentGpuFallbackRecoveredLaunchPrompt(window).finally(() =>
+      presentApplicationsFolderMovePrompt(window)
+    )
   })
   const trayCreateFallback = setTimeout(createTray, TRAY_CREATE_FALLBACK_MS)
   trayCreateFallback.unref?.()

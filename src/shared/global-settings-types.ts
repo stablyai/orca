@@ -409,6 +409,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   tabAutoGenerateTitle: boolean
   /** Why: pinned tabs can still be closed via keyboard/native-menu; this gates that behind a confirmation. Defaults on. */
   confirmClosePinnedTab: boolean
+  /** macOS: offer to move Orca into Applications when it launches from elsewhere. Absent reads as on. */
+  offerMoveToApplicationsFolder?: boolean
   /** Why: preview tabs reuse one slot per group, so browsing replaces the open file; off makes every open its own tab. Defaults on. */
   editorPreviewTabsEnabled: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
