@@ -41,6 +41,7 @@ export function codexExecutionLaunch(record: AgentSessionRecord) {
   }
   const profileId = `orca-bounded-${record.sessionId}`
   const settings = [
+    `default_permissions="${escapeTomlBasicString(profileId)}"`,
     'forced_login_method="chatgpt"',
     'model_provider="openai"',
     'openai_base_url="https://chatgpt.com/backend-api/codex"',

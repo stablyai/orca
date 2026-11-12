@@ -2,17 +2,22 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
+import {
+  openCodexAppServerConnection,
+  spawnCodexAppServerConnection
+} from '../../app-server/codex-app-server-connection'
 import { openCodexThread } from '../threads/codex-structured-thread-open'
 import { escapeTomlBasicString } from '../../configuration/toml/config-toml-syntax'
 import { existsSync } from 'node:fs'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import { codexExecutionLaunch } from './codex-execution-controls'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
+import { CodexStructuredSessionAdapter } from '../session-lifecycle/codex-structured-session-adapter'
+import { identityFor } from '../session-lifecycle/codex-structured-session-adapter-fixture'
 
 const PROFILE = 'orca-bounded-native-probe'
 
-function nativeArgs(access: 'read-only' | 'workspace') {
+function nativeLaunch(access: 'read-only' | 'workspace', deadlineAt?: number) {
   return codexExecutionLaunch(
     agentSessionRecordFixture({
       sessionId: 'native-probe',
@@ -33,10 +38,10 @@ function nativeArgs(access: 'read-only' | 'workspace') {
         effort: 'low',
         access,
         // ast-grep-ignore: test-no-wall-clock -- A real native admission needs a future deadline; no assertion depends on elapsed time.
-        deadlineAt: Date.now() + 120_000
+        deadlineAt: deadlineAt ?? Date.now() + 120_000
       }
     })
-  )!.args
+  )!
 }
 
 it.skipIf(!process.env.ORCA_CODEX_CONTRACT_BINARY || process.platform === 'win32').each([
@@ -64,7 +69,7 @@ it.skipIf(!process.env.ORCA_CODEX_CONTRACT_BINARY || process.platform === 'win32
       connection = await openCodexAppServerConnection(
         {
           command: process.env.ORCA_CODEX_CONTRACT_BINARY!,
-          args: [...nativeArgs(access), 'app-server'],
+          args: [...nativeLaunch(access).args, 'app-server'],
           cwd,
           env: { HOME: root, CODEX_HOME: home, ORCA_ROUTING_PARENT_CANARY: 'PARENT-ENV-CANARY' },
           envToDelete: ['OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL', 'CHATGPT_BASE_URL']
@@ -115,4 +120,53 @@ it.skipIf(!process.env.ORCA_CODEX_CONTRACT_BINARY || process.platform === 'win32
     }
   },
   20_000 // Bounds fresh native startup, command execution and teardown without model inference.
+)
+
+it.skipIf(!process.env.ORCA_CODEX_CONTRACT_BINARY || process.platform === 'win32')(
+  'observes root and tree exit after the production acquisition deadline without model input',
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-codex-deadline-native-'))
+    const home = join(root, 'account')
+    await mkdir(home)
+    // ast-grep-ignore: test-no-wall-clock -- This opt-in native calibration exercises a real admission timer and process owner.
+    const execution = nativeLaunch('read-only', Date.now() + 2_000)
+    let connection: Awaited<ReturnType<typeof openCodexAppServerConnection>> | undefined
+    const adapter = new CodexStructuredSessionAdapter({
+      resolveLaunch: async () => ({
+        command: process.env.ORCA_CODEX_CONTRACT_BINARY!,
+        args: [...execution.args, 'app-server'],
+        cwd: root,
+        codexHome: home,
+        resumeThreadId: null,
+        env: { HOME: root, CODEX_HOME: home },
+        envToDelete: ['OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL', 'CHATGPT_BASE_URL'],
+        execution: { policy: execution.policy, profileId: execution.profileId }
+      }),
+      openConnection: async (launch, handlers) => {
+        connection = await spawnCodexAppServerConnection(launch, handlers)
+        return connection
+      }
+    })
+    try {
+      const acquired = await adapter.acquire({
+        identity: identityFor('native-probe'),
+        fence: 7,
+        spawnToken: 'bounded-native-probe'
+      })
+      await adapter.open({
+        sessionId: 'native-probe',
+        fence: 7,
+        acquisitionGeneration: acquired.acquisitionGeneration,
+        signal: new AbortController().signal
+      })
+      // The native process needs time to reach its real deadline and report physical teardown.
+      await expect
+        .poll(() => connection?.closeResult, { timeout: 5_000 })
+        .toMatchObject({ root: 'exited', tree: 'exited' })
+    } finally {
+      await adapter.closeAll()
+      await rm(root, { recursive: true, force: true })
+    }
+  },
+  10_000 // Bounds real native startup, the two-second deadline and process teardown.
 )

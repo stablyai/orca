@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import {
   acquireReadyCodexForTest,
@@ -7,6 +7,12 @@ import {
   identityFor,
   THREAD_ID
 } from '../session-lifecycle/codex-structured-session-adapter-fixture'
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(1_800_000_000_000)
+})
+afterEach(() => vi.useRealTimers())
 
 async function bounded(account: unknown) {
   const codex = fakeCodex({
@@ -36,7 +42,7 @@ async function bounded(account: unknown) {
           'codex:07e998012c1137decdf3efbbb1c3ee6d79b015638cbc197bdbcce1875de4faad',
         model: 'gpt-live',
         effort: 'low',
-        deadlineAt: Date.now() + 120_000,
+        deadlineAt: 1_800_000_120_000,
         access: 'read-only'
       }
     }
