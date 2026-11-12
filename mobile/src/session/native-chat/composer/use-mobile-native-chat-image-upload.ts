@@ -90,7 +90,6 @@ export function useMobileNativeChatImageUpload(args: {
           canContinue: () => destination.active,
           client,
           getConnectionId: getActiveWorktreeConnectionId,
-          forNativeChatDraft: !structuredNativeChat,
           pickImages: (from) =>
             typeof from === 'string'
               ? picker.pickImages(from)

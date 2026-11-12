@@ -65,8 +65,7 @@ describe('clipboard RPC methods', () => {
     const contentBase64 = Buffer.from('png-bytes').toString('base64')
     const start = await callMobile(dispatcher, 'clipboard.startImageUpload', {
       expectedBase64Length: contentBase64.length,
-      connectionId: null,
-      forNativeChatDraft: true
+      connectionId: null
     })
     const uploadId = (start.ok ? start.result : null) as { uploadId: string }
 
@@ -99,29 +98,6 @@ describe('clipboard RPC methods', () => {
     ).resolves.toMatchObject({ ok: true, result: '/tmp/orca-paste-image.png' })
     expect(hasMobileClipboardImagePath('device-a', '/tmp/orca-paste-image.png')).toBe(true)
     expect(hasMobileClipboardImagePath('device-b', '/tmp/orca-paste-image.png')).toBe(false)
-    expect(saveClipboardImageBufferAsTempFile).toHaveBeenCalledWith(Buffer.from('png-bytes'), {
-      connectionId: null,
-      fileName: undefined,
-      forNativeChatDraft: true
-    })
-  })
-
-  it('retains single-frame Chat uploads while ordinary uploads keep the temp destination', async () => {
-    saveClipboardImageBufferAsTempFile.mockResolvedValue('/tmp/upload.png')
-    const dispatcher = makeDispatcher()
-    await callMobile(dispatcher, 'clipboard.saveImageAsTempFile', {
-      contentBase64: 'AAAA',
-      forNativeChatDraft: true
-    })
-    expect(saveClipboardImageBufferAsTempFile).toHaveBeenLastCalledWith(Buffer.from([0, 0, 0]), {
-      connectionId: undefined,
-      forNativeChatDraft: true
-    })
-    await callMobile(dispatcher, 'clipboard.saveImageAsTempFile', { contentBase64: 'AAAA' })
-    expect(saveClipboardImageBufferAsTempFile).toHaveBeenLastCalledWith(Buffer.from([0, 0, 0]), {
-      connectionId: undefined,
-      forNativeChatDraft: undefined
-    })
   })
 
   it('rejects out-of-order chunk offsets', async () => {

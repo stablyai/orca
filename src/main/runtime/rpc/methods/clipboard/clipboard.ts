@@ -17,7 +17,6 @@ type ClipboardImageUpload = {
   expectedBase64Length: number
   connectionId?: string | null
   fileName?: string
-  forNativeChatDraft?: boolean
   mobileClientId?: string
   chunks: string[]
   receivedBase64Length: number
@@ -113,8 +112,7 @@ export const CLIPBOARD_METHODS = [
       const path = await saveClipboardImageBufferAsTempFile(
         Buffer.from(params.contentBase64, 'base64'),
         {
-          connectionId: params.connectionId,
-          forNativeChatDraft: params.forNativeChatDraft
+          connectionId: params.connectionId
         }
       )
       if (clientId && !params.connectionId) {
@@ -137,7 +135,6 @@ export const CLIPBOARD_METHODS = [
         expectedBase64Length: params.expectedBase64Length,
         connectionId: params.connectionId,
         fileName: params.fileName,
-        forNativeChatDraft: params.forNativeChatDraft,
         mobileClientId: mobileClientId(ctx),
         chunks: [],
         receivedBase64Length: 0,
@@ -182,8 +179,7 @@ export const CLIPBOARD_METHODS = [
           decodeClipboardImageUpload(upload.chunks),
           {
             connectionId: upload.connectionId,
-            fileName: upload.fileName,
-            forNativeChatDraft: upload.forNativeChatDraft
+            fileName: upload.fileName
           }
         )
         if (clientId && !upload.connectionId) {

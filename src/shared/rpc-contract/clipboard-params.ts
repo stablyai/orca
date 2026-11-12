@@ -37,8 +37,7 @@ export const SaveImageAsTempFile = z.object({
     MAX_CLIPBOARD_IMAGE_BASE64_CHARS,
     CLIPBOARD_IMAGE_TOO_LARGE_ERROR
   ),
-  connectionId: z.string().min(1).nullable().optional(),
-  forNativeChatDraft: z.boolean().optional()
+  connectionId: z.string().min(1).nullable().optional()
 })
 
 export const StartImageUpload = z.object({
@@ -48,7 +47,6 @@ export const StartImageUpload = z.object({
     .nonnegative()
     .max(MAX_CLIPBOARD_IMAGE_BASE64_CHARS, CLIPBOARD_IMAGE_TOO_LARGE_ERROR),
   connectionId: z.string().min(1).nullable().optional(),
-  forNativeChatDraft: z.boolean().optional(),
   // Older hosts drop this unknown key and keep naming the upload .png.
   fileName: z.string().min(1).max(1024).optional()
 })

@@ -729,42 +729,6 @@ describe('registerClipboardHandlers', () => {
     expect(fsWriteFileMock).not.toHaveBeenCalled()
   })
 
-  it('keeps the Chat storage destination through remote upload and the older-host fallback', async () => {
-    const png = Buffer.from([0, 0, 0])
-    clipboardReadImageMock.mockReturnValue({
-      getSize: () => ({ height: 1, width: 1 }),
-      isEmpty: () => false,
-      toPNG: () => png
-    })
-    registerClipboardHandlers({} as never)
-    const save = getRegisteredHandlers().get('clipboard:saveImageAsTempFile')!
-    const args = { runtimeEnvironmentId: 'remote-host-1', forNativeChatDraft: true }
-    callRuntimeEnvironmentMock
-      .mockResolvedValueOnce({ ok: true, result: { uploadId: 'chat-upload' } })
-      .mockResolvedValueOnce({ ok: true, result: { receivedBase64Length: 4 } })
-      .mockResolvedValueOnce({ ok: true, result: '/retained/chat.png' })
-    await expect(save(makeClipboardEvent(), args)).resolves.toBe('/retained/chat.png')
-    expect(callRuntimeEnvironmentMock).toHaveBeenNthCalledWith(
-      1,
-      '/tmp',
-      'remote-host-1',
-      'clipboard.startImageUpload',
-      { expectedBase64Length: 4, connectionId: null, forNativeChatDraft: true },
-      30_000
-    )
-    callRuntimeEnvironmentMock
-      .mockResolvedValueOnce({ ok: false, error: { code: 'method_not_found', message: 'missing' } })
-      .mockResolvedValueOnce({ ok: true, result: '/retained/legacy.png' })
-    await expect(save(makeClipboardEvent(), args)).resolves.toBe('/retained/legacy.png')
-    expect(callRuntimeEnvironmentMock).toHaveBeenLastCalledWith(
-      '/tmp',
-      'remote-host-1',
-      'clipboard.saveImageAsTempFile',
-      { contentBase64: 'AAAA', connectionId: null, forNativeChatDraft: true },
-      30_000
-    )
-  })
-
   it('downscales a clipboard image whose PNG outgrows the byte limit instead of rejecting it', async () => {
     const fittedPng = Buffer.from([0, 1, 2, 3])
     const resize = vi.fn(() => ({ toPNG: () => fittedPng }))

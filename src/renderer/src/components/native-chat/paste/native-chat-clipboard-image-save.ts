@@ -36,15 +36,9 @@ async function clipboardImageSaveArgs(
       }
     }
   }
-  // The agent can read sent file references after the chat's draft has gone away.
+  // A terminal-backed chat's agent reads the path from the server's own temp dir, as a terminal paste does.
   if (owner.kind === 'remote') {
-    return {
-      ok: true,
-      args: {
-        runtimeEnvironmentId: owner.clipboardImageEnvironmentId,
-        forNativeChatDraft: true
-      }
-    }
+    return { ok: true, args: { runtimeEnvironmentId: owner.clipboardImageEnvironmentId } }
   }
   const prepared = await prepareNativeChatSessionAttachmentUpload(owner)
   if (!prepared.ok) {

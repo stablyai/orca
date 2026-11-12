@@ -28,18 +28,13 @@ async function saveClipboardImageBase64InRuntime(
   userDataPath: string,
   runtimeEnvironmentId: string,
   contentBase64: string,
-  connectionId: string | null,
-  forNativeChatDraft?: boolean
+  connectionId: string | null
 ): Promise<string> {
   const startResponse = await callRuntimeEnvironment(
     userDataPath,
     runtimeEnvironmentId,
     'clipboard.startImageUpload',
-    {
-      expectedBase64Length: contentBase64.length,
-      connectionId,
-      ...(forNativeChatDraft ? { forNativeChatDraft: true } : {})
-    },
+    { expectedBase64Length: contentBase64.length, connectionId },
     CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
   )
   if (!startResponse.ok) {
@@ -51,7 +46,7 @@ async function saveClipboardImageBase64InRuntime(
         userDataPath,
         runtimeEnvironmentId,
         'clipboard.saveImageAsTempFile',
-        { contentBase64, connectionId, ...(forNativeChatDraft ? { forNativeChatDraft: true } : {}) }
+        { contentBase64, connectionId }
       )
     }
     throw new Error(startResponse.error.message)
@@ -114,15 +109,13 @@ export function saveClipboardImageBufferInRuntime(
   userDataPath: string,
   runtimeEnvironmentId: string,
   buffer: Buffer,
-  connectionId: string | null = null,
-  forNativeChatDraft?: boolean
+  connectionId: string | null = null
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
   return saveClipboardImageBase64InRuntime(
     userDataPath,
     runtimeEnvironmentId,
     buffer.toString('base64'),
-    connectionId,
-    forNativeChatDraft
+    connectionId
   )
 }

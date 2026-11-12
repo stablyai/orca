@@ -137,11 +137,7 @@ export async function writeWebClipboardImage(dataUrl: string): Promise<void> {
 
 export async function saveClipboardImageAsTempFileInRuntime(
   contentBase64: string,
-  args?: {
-    connectionId?: string | null
-    runtimeEnvironmentId?: string | null
-    forNativeChatDraft?: boolean
-  }
+  args?: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
 ): Promise<string> {
   if (contentBase64.length > MAX_CLIPBOARD_IMAGE_BASE64_CHARS) {
     throw new Error(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
@@ -149,11 +145,7 @@ export async function saveClipboardImageAsTempFileInRuntime(
   const connectionId = args?.connectionId ?? null
   const startResponse = await callRuntimeEnvelope<{ uploadId: string }>(
     'clipboard.startImageUpload',
-    {
-      expectedBase64Length: contentBase64.length,
-      connectionId,
-      ...(args?.forNativeChatDraft ? { forNativeChatDraft: true } : {})
-    },
+    { expectedBase64Length: contentBase64.length, connectionId },
     CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
   )
   if (!startResponse.ok) {
@@ -163,11 +155,7 @@ export async function saveClipboardImageAsTempFileInRuntime(
     ) {
       return callRuntimeResult<string>(
         'clipboard.saveImageAsTempFile',
-        {
-          contentBase64,
-          connectionId,
-          ...(args?.forNativeChatDraft ? { forNativeChatDraft: true } : {})
-        },
+        { contentBase64, connectionId },
         CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
       )
     }
