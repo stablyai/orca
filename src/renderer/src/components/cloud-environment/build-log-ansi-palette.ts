@@ -1,5 +1,5 @@
 import type { ITheme } from '@xterm/xterm'
-import { getBuiltinTheme } from '@/lib/terminal/appearance/terminal-theme'
+import { getTheme } from '@/lib/terminal/appearance/terminal-themes-data'
 import {
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT
@@ -69,7 +69,7 @@ export function clampAnsiPalette(
 }
 
 function themePalette(name: string): (string | undefined)[] {
-  const theme = getBuiltinTheme(name)
+  const theme = getTheme(name)
   return ANSI_PALETTE_KEYS.map((key) => theme?.[key])
 }
 

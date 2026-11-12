@@ -194,7 +194,7 @@ describe('resuming a recipe VM server', () => {
   it('answers before the probe when confirming in the background, and re-pairs later if needed', async () => {
     const environmentId = provision()
     const before = listEnvironments(desktopDataPath)[0]!
-    rmSync(serverDataPath, { recursive: true, force: true })
+    await removeTree(serverDataPath)
     serverDataPath = mkdtempSync(join(tmpdir(), 'orca-resume-server-'))
     const invalidateTransport = vi.fn()
     let release!: () => void
@@ -225,7 +225,7 @@ describe('resuming a recipe VM server', () => {
 
   it('does not let a stale background re-pair overwrite a newer resume', async () => {
     const environmentId = provision()
-    rmSync(serverDataPath, { recursive: true, force: true })
+    await removeTree(serverDataPath)
     serverDataPath = mkdtempSync(join(tmpdir(), 'orca-resume-server-'))
     let releaseFirst!: () => void
     const firstGate = new Promise<void>((resolve) => (releaseFirst = resolve))

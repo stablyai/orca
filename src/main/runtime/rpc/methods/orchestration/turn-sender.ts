@@ -1,4 +1,5 @@
-import { defineMethod, type RpcContext } from '../../core'
+import type { RpcContext } from '../../core'
+import { defineOrchestrationMethod } from './access/orchestration-method-access'
 import {
   TURN_SENDER_METHOD,
   type TurnSenderResult
@@ -48,8 +49,10 @@ function turnSender(ctx: RpcContext): TurnSenderResult {
   if (ctx.caller?.kind !== 'local-cli') {
     return { caller: null, sender: null }
   }
-  if (ctx.orchestrationCaller?.sessionId) {
-    const sessionId = ctx.orchestrationCaller.sessionId
+  const orchestrationCaller = ctx.orchestrationCaller
+  // A paired Orca coordinating a Run here is not an agent session on this host.
+  if (orchestrationCaller && orchestrationCaller.kind !== 'peer') {
+    const sessionId = orchestrationCaller.sessionId
     return {
       caller: { kind: 'session', sessionId },
       sender: drivingDeviceFor(agentSessionSenderKey(sessionId))
@@ -66,8 +69,10 @@ function turnSender(ctx: RpcContext): TurnSenderResult {
 }
 
 export const ORCHESTRATION_TURN_SENDER_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: TURN_SENDER_METHOD,
+    // The caller reads only its own sender, attested by orcad; nothing is addressed by params.
+    access: { kind: 'reads', targets: {} },
     permission: 'workspace',
     params: null,
     handler: (_params, ctx): TurnSenderResult => turnSender(ctx)
