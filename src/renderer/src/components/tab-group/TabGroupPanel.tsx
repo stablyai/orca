@@ -308,8 +308,10 @@ export default function TabGroupPanel({
             {/* Why: the tab-strip container excludes the reserved spacers, so width rules see only the room tabs and actions share. */}
             <div className="@container/tab-strip flex min-w-0 flex-1 items-stretch">
               <div className="min-w-10 flex-1 h-full">{tabBar}</div>
-              {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It may shrink so a narrow pane keeps its grabbable tab. */}
-              {reserveRightTitlebarSpace ? <div className="w-10 min-w-0" /> : null}
+              {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It goes first in narrow strips: 203 = 40 gap + 163 for the tab floor and every control, so controls never clip behind it. */}
+              {reserveRightTitlebarSpace ? (
+                <div className="w-10 min-w-0 @max-[203px]/tab-strip:hidden" />
+              ) : null}
               <div
                 className={actionChromeClassName}
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}

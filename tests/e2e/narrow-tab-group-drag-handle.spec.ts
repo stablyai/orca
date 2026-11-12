@@ -4,37 +4,44 @@ import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } fro
 
 type NarrowLayout = { leftGroupId: string; rightGroupId: string; rightTabId: string }
 
-async function buildThreeColumns(page: Page, worktreeId: string): Promise<NarrowLayout> {
-  return page.evaluate((id) => {
-    const state = window.__store?.getState()
-    if (!state) {
-      throw new Error('window.__store is not available')
-    }
-    state.setSidebarOpen(false)
-    // Open so the right column reserves no window-controls space, which differs per platform.
-    state.setRightSidebarOpen(true)
-    const leftGroupId = state.activeGroupIdByWorktree[id] ?? state.groupsByWorktree[id]?.[0]?.id
-    if (!leftGroupId) {
-      throw new Error('No root tab group')
-    }
-    const middleGroupId = state.createEmptySplitGroup(id, leftGroupId, 'right')
-    if (!middleGroupId) {
-      throw new Error('Middle split was not created')
-    }
-    state.createTab(id, middleGroupId, undefined, { activate: true })
-    const rightGroupId = state.createEmptySplitGroup(id, middleGroupId, 'right')
-    if (!rightGroupId) {
-      throw new Error('Right split was not created')
-    }
-    const rightTab = state.createTab(id, rightGroupId, undefined, { activate: true })
-    const rightTabId =
-      window.__store
-        ?.getState()
-        .unifiedTabsByWorktree[id]?.find(
-          (tab) => tab.contentType === 'terminal' && tab.entityId === rightTab.id
-        )?.id ?? ''
-    return { leftGroupId, rightGroupId, rightTabId }
-  }, worktreeId)
+async function buildThreeColumns(
+  page: Page,
+  worktreeId: string,
+  rightSidebarOpen = true
+): Promise<NarrowLayout> {
+  return page.evaluate(
+    ({ id, rightSidebarOpen }) => {
+      const state = window.__store?.getState()
+      if (!state) {
+        throw new Error('window.__store is not available')
+      }
+      state.setSidebarOpen(false)
+      // Open by default so the right column reserves no window-controls space, which differs per platform.
+      state.setRightSidebarOpen(rightSidebarOpen)
+      const leftGroupId = state.activeGroupIdByWorktree[id] ?? state.groupsByWorktree[id]?.[0]?.id
+      if (!leftGroupId) {
+        throw new Error('No root tab group')
+      }
+      const middleGroupId = state.createEmptySplitGroup(id, leftGroupId, 'right')
+      if (!middleGroupId) {
+        throw new Error('Middle split was not created')
+      }
+      state.createTab(id, middleGroupId, undefined, { activate: true })
+      const rightGroupId = state.createEmptySplitGroup(id, middleGroupId, 'right')
+      if (!rightGroupId) {
+        throw new Error('Right split was not created')
+      }
+      const rightTab = state.createTab(id, rightGroupId, undefined, { activate: true })
+      const rightTabId =
+        window.__store
+          ?.getState()
+          .unifiedTabsByWorktree[id]?.find(
+            (tab) => tab.contentType === 'terminal' && tab.entityId === rightTab.id
+          )?.id ?? ''
+      return { leftGroupId, rightGroupId, rightTabId }
+    },
+    { id: worktreeId, rightSidebarOpen }
+  )
 }
 
 async function narrowRightColumns(page: Page, worktreeId: string): Promise<void> {
@@ -222,4 +229,31 @@ test('a strip too narrow for quick commands offers them in the pane actions menu
   await expect(rightStrip.getByRole('button', { name: 'Add quick command' })).toBeHidden()
   await paneActions.click()
   await expect(quickCommandsItem).toBeVisible()
+})
+
+test('with the right sidebar closed, no focused strip control is clipped at any width', async ({
+  orcaPage
+}) => {
+  await orcaPage.setViewportSize({ width: 1280, height: 800 })
+  await waitForSessionReady(orcaPage)
+  const worktreeId = await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+
+  // The top-right strip now also holds the window-drag gap and the reserved toggle/window-controls space.
+  const layout = await buildThreeColumns(orcaPage, worktreeId, false)
+  for (const secondRatio of [0.15, 0.3, 0.45, 0.6]) {
+    await orcaPage.evaluate(
+      ({ id, ratio }) => {
+        const state = window.__store?.getState()
+        state?.setTabGroupSplitRatio(id, '', 0.8)
+        state?.setTabGroupSplitRatio(id, 'second', ratio)
+      },
+      { id: worktreeId, ratio: secondRatio }
+    )
+    const focus = await tabThroughStrip(orcaPage, layout.rightGroupId)
+    expect(
+      focus.filter((control) => !control.fullyVisible),
+      `ratio ${secondRatio}`
+    ).toEqual([])
+  }
 })
