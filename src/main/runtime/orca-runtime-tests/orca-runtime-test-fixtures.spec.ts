@@ -151,36 +151,6 @@ function isOriginMainBaseRefProbe(args: string[]): boolean {
   )
 }
 
-function antigravityReadyScreen(model = 'Gemini 3.5 Flash (High)'): string {
-  return [
-    'Antigravity CLI 1.0.3',
-    'user@example.com (Antigravity Business)',
-    model,
-    '~/orca/workspaces/orca/agy-dispatch-issue',
-    '>'
-  ].join('\n')
-}
-
-function antigravityPromptBeforeModelReadyScreen(model = 'Gemini 3.5 Flash (High)'): string {
-  return [
-    'Antigravity CLI 1.0.3',
-    'user@example.com',
-    '~/orca/workspaces/orca/agy-dispatch-issue',
-    '',
-    '',
-    '',
-    '',
-    '>',
-    '',
-    '? for shortcuts',
-    `\t\t  ${model}`,
-    '~/orca/workspaces/orca/agy-dispatch-issue',
-    '',
-    model,
-    ' (Antigravity Business)'
-  ].join('\n')
-}
-
 function setInMemoryOrchestrationMessages(
   runtime: RuntimeService,
   db: InMemoryOrchestrationMessages
@@ -674,7 +644,7 @@ export { LIST_PROVIDER_DEADLINE, RESTORED_AUTHORITY_TOKEN }
 export { RESTORED_AUTHORITY_TOKEN_HASH, TEST_FOLDER_PROJECT_GROUP_ID, TEST_FOLDER_WORKSPACE_ID }
 export { TEST_FOLDER_WORKSPACE_KEY, TEST_FOLDER_WORKSPACE_PATH, TEST_REPO_ID, TEST_REPO_PATH }
 export { TEST_WINDOW_ID, TEST_WORKTREE_ID, TEST_WORKTREE_PATH, UUID_RE }
-export { antigravityPromptBeforeModelReadyScreen, antigravityReadyScreen, bindSinglePtyRun }
+export { bindSinglePtyRun }
 export { createExplicitAgentStatusHarness, createFolderWorkspaceRuntimeStore, createRuntime }
 export { createRuntimeWithSshLease, createStaleRuntimeWorktreeStore }
 export { deferred, expectStablePaneKeyEnv, isOriginMainBaseRefProbe }
