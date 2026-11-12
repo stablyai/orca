@@ -208,6 +208,29 @@ describe('tui-idle on a slow-starting Claude', () => {
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
+
+  it('reads the quiet foreground again after a failed read, then settles on the pager (CodeRabbit)', async () => {
+    // A failed read tells nothing about the foreground; keeping it for the quiet stretch would
+    // hold the pager pane until the caller's timeout.
+    const pane = { paneTitle: 'Terminal', foregroundProcess: null as string | null, data: '' }
+    const { runtime, handle } = await createTranscriptPane(pane)
+    vi.useFakeTimers()
+    runtime.onPtyData(
+      TRANSCRIPT_PANE_PTY_ID,
+      `${SHELL_RUNS_CLAUDE}${CLAUDE_HELP_TEXT}:`,
+      Date.now()
+    )
+    const settled = vi.fn()
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+    wait.then(settled, () => {})
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
+    expect(settled).not.toHaveBeenCalled()
+
+    pane.foregroundProcess = 'less'
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  })
 })
 
 describe('worker start on a slow-starting Claude', () => {

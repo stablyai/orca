@@ -248,6 +248,11 @@ export class RuntimeTerminalIdlePolls {
       if (!this.entries.has(entry)) {
         return
       }
+      // Why not a failed read: it says nothing about the foreground, and keeping it for the quiet
+      // stretch would stop the pager check until output moved again. The next sweep reads again.
+      if (process === null) {
+        return
+      }
       this.quietForegroundByPtyId.set(ptyId, { pty: entry.pty, process, outputClockAt })
       if (isPagerProcess(process)) {
         const resample = this.sample(entry)
