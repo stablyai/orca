@@ -65,7 +65,7 @@ function cueRanges(text: string, cue: string | undefined): [number, number][] {
   }
   const escaped = words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
   const pattern = new RegExp(
-    `(?<!${WORD_CHAR})${escaped.join(String.raw`[\s,]+`)}(?!${WORD_CHAR})`,
+    `(?<!${WORD_CHAR})${escaped.join(String.raw`[\s,\uFF0C\u3001]+`)}(?!${WORD_CHAR})`,
     'giu'
   )
   return [...text.matchAll(pattern)].map((match) => [match.index, match.index + match[0].length])

@@ -15,8 +15,13 @@ const AGENT_SERVICES: Record<string, { company: string; plan: string }> = {
   codex: { company: 'OpenAI', plan: 'ChatGPT' }
 }
 
-function destination(agentId: string, agentLabel: string, t: Translate): string {
-  const service = AGENT_SERVICES[agentId]
+function destination(
+  request: { agentId: string; agentLabel: string; commandOverridden: boolean },
+  t: Translate
+): string {
+  const { agentId, agentLabel } = request
+  // A replaced command can send prompts anywhere, so only the stock CLI names its company.
+  const service = request.commandOverridden ? undefined : AGENT_SERVICES[agentId]
   return service
     ? t(
         'components.settings.voice.cleanup.consent.goesToKnown',
@@ -37,7 +42,7 @@ export function VoiceCleanupConsentDialog({
   onConfirm
 }: {
   /** The agent text would go to; null keeps the dialog closed. */
-  request: { agentId: string; agentLabel: string } | null
+  request: { agentId: string; agentLabel: string; commandOverridden: boolean } | null
   onCancel: () => void
   onConfirm: () => void
 }): React.JSX.Element {
@@ -61,7 +66,7 @@ export function VoiceCleanupConsentDialog({
         },
         {
           label: t('components.settings.voice.cleanup.consent.goesToLabel', 'Goes to'),
-          value: destination(request.agentId, agentLabel, t)
+          value: destination(request, t)
         },
         {
           label: t('components.settings.voice.cleanup.consent.waitLabel', 'Wait'),

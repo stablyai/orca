@@ -84,6 +84,13 @@ export async function runGenerationRequest(input: {
       if (attempt.strictMcp && !attempt.legacyToolPolicy) {
         return execute(plan)
       }
+      // Old CLIs can't deny MCP tools by pattern, so a tool-free task stops rather than load them.
+      if (params.toolFree && !attempt.strictMcp && attempt.legacyToolPolicy) {
+        return Promise.resolve({
+          success: false,
+          error: 'This Claude CLI can’t run without tools under its MCP policy. Update Claude Code.'
+        })
+      }
       const retry = planCommitMessageGeneration(params, prompt, attempt)
       return retry.ok
         ? execute(retry.plan)

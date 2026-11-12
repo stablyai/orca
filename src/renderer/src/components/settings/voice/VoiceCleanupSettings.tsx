@@ -223,7 +223,10 @@ export function VoiceCleanupSettings({
           pending
             ? {
                 agentId: pending.agentId,
-                agentLabel: agentDisplayName(pending.agentId, customLabel)
+                agentLabel: agentDisplayName(pending.agentId, customLabel),
+                commandOverridden: Object.entries(settings.agentCmdOverrides ?? {}).some(
+                  ([id, command]) => id === pending.agentId && Boolean(command?.trim())
+                )
               }
             : null
         }

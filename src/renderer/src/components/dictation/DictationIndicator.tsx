@@ -177,8 +177,11 @@ function DictationPill({ captureLive, anchor, failure, queued, cleanup }: Dictat
   const failedKind = dictationState === 'error' ? failure : null
   const { committed, speechPending } = liveText
   const tentative = liveText.tentative.trim()
-  const queuedStatus =
-    queued === 'chat'
+  const { cleaning } = cleanup
+  // While cleaning up, the pill says so; the queued send shows again once the text lands.
+  const queuedStatus = cleaning
+    ? null
+    : queued === 'chat'
       ? t(
           'auto.components.dictation.DictationIndicator.sendsWhenLanded',
           'Sends when the text lands'
@@ -189,7 +192,6 @@ function DictationPill({ captureLive, anchor, failure, queued, cleanup }: Dictat
             'Presses Enter when the text lands'
           )
         : null
-  const { cleaning } = cleanup
   const status = cleaning
     ? t('components.dictation.DictationIndicator.cleaningUp', 'Cleaning up…')
     : finishing

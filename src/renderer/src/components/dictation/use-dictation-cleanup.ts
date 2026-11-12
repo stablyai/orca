@@ -5,6 +5,7 @@ import {
   type DictationCleanupResult
 } from '../../../../shared/dictation-cleanup'
 import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
+import { appendDictationText } from '../../../../shared/dictation-transcript-spacing'
 import { dictationPillAnchorFor, type DictationPillAnchor } from './dictation-pill-anchor'
 import type { DictationKeptRecording } from './dictation-kept-recording'
 
@@ -61,7 +62,11 @@ export function useDictationCleanup(keptRef: RefObject<DictationKeptRecording | 
     ])
     skipRef.current = null
     setCleaning(false)
-    kept.deliver.releaseHeld(result.status === 'cleaned' ? result.text : undefined)
+    // A final that arrived during cleanup follows the cleaned words instead of being dropped.
+    const late = kept.deliver.held()?.slice(heard.length) ?? ''
+    kept.deliver.releaseHeld(
+      result.status === 'cleaned' ? appendDictationText(result.text, late.trim()) : undefined
+    )
     if (result.status === 'failed') {
       console.warn('[dictation] AI cleanup failed:', result.reason)
     }
