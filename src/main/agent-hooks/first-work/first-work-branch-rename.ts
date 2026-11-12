@@ -234,6 +234,10 @@ async function runAutoRename(
   // An in-app branch switch can land during generation; recheck and rename under its lock.
   const renamed = await withCheckoutLock(worktreePath, async (): Promise<boolean | string> => {
     if (!deps.canRenameOrcaCreatedBranch(worktreeId)) {
+      if (generated.displayName) {
+        updateDisplayName(leaf, generated.displayName)
+        deps.onRenamed(repo.id)
+      }
       return stop('worktree is not eligible for auto-rename', true)
     }
     // Generation can outlive a branch switch or publication.

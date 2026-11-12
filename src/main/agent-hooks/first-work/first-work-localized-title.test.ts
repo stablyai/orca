@@ -46,7 +46,12 @@ function git(args: string[]) {
   return gitExecFileAsync(args, { cwd: folder })
 }
 
-async function startFirstTask(output: string, pending: boolean, displayName: string) {
+async function startFirstTask(
+  output: string,
+  pending: boolean,
+  displayName: string,
+  beforeGeneration?: (store: ReturnType<typeof createStore>, worktreeId: string) => Promise<void>
+) {
   const agent = join(folder, 'naming-agent.cjs')
   writeFileSync(
     agent,
@@ -85,7 +90,15 @@ async function startFirstTask(output: string, pending: boolean, displayName: str
       isReplay: false
     },
     firstWorkRenameDeps(store, {
-      getCommitMessageAgentEnvironmentResolvers: () => undefined,
+      getCommitMessageAgentEnvironmentResolvers: () =>
+        beforeGeneration
+          ? {
+              resolveBaseEnvironment: async () => {
+                await beforeGeneration(store, worktreeId)
+                return { PATH: process.env.PATH ?? '' }
+              }
+            }
+          : undefined,
       notifyFolderWorkspaceChanged: () => {},
       notifyBranchRenamed: () => {},
       notifyWorktreeFolderRenamed: () => {}
@@ -106,4 +119,21 @@ it('renames the branch without requiring a title for a manually named workspace'
 
   expect((await git(['branch', '--show-current'])).stdout.trim()).toBe('fix-login')
   expect(meta).toMatchObject({ displayName: '手动标题', pendingFirstAgentMessageRename: false })
+})
+
+it('finishes the pending title when branch selection changes during naming', async () => {
+  const meta = await startFirstTask(
+    '{"branch":"fix-login","title":"修复登录"}',
+    true,
+    'Nautilus',
+    async (store, worktreeId) => {
+      await git(['switch', '-c', 'chosen-branch'])
+      store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'local' }), {
+        branchNameIsUserChosen: true
+      })
+    }
+  )
+
+  expect(meta).toMatchObject({ displayName: '修复登录', pendingFirstAgentMessageRename: false })
+  expect((await git(['branch', '--show-current'])).stdout.trim()).toBe('chosen-branch')
 })

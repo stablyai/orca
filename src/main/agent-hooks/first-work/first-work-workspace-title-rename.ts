@@ -94,7 +94,8 @@ export function prepareFirstWorkDisplayNameUpdate(
     if (
       !canRename ||
       currentDisplayName !== originalDisplayName ||
-      !canRenameFirstWorkDisplayName(worktreeId, deps)
+      !canRenameFirstWorkDisplayName(worktreeId, deps) ||
+      (generatedDisplayName !== undefined && !canRenamePendingWorkspaceTitle(worktreeId, deps))
     ) {
       return `display kept ("${currentDisplayName}")`
     }
