@@ -69,7 +69,8 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       result: RuntimeMobileSessionTabsResult,
       changeSequence: number,
       clientNavigationId?: string,
-      candidates?: readonly MobileSessionTabSubscription[]
+      candidates?: readonly MobileSessionTabSubscription[],
+      delivery?: 'reconciliation'
     ): void => {
       const { agentSenderAssociations: _senders, ...tabsOnly } = result
       // A frame for one client is already its projection; projecting again stacks the epoch suffix and revision, so the client fences it.
@@ -88,9 +89,8 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
           let frame: RuntimeMobileSessionTabsResult = tabsOnly
           if (subscription.clientKind !== 'mobile') {
             if (!desktopFrame) {
-              if (result.agentSenderAssociations) {
-                desktopFrame = result
-              } else {
+              desktopFrame = result
+              if (!result.agentSenderAssociations) {
                 senderScope ??= this.agentProjections.senders.buildForFramePass()
                 desktopFrame = { ...result, agentSenderAssociations: senderScope(result.worktree) }
               }
@@ -98,7 +98,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
             frame = desktopFrame
           }
           const supplied = project(frame, subscription.clientNavigationId)
-          this.deliverMobileSessionTabsFrame(subscription, supplied, changeSequence)
+          this.deliverMobileSessionTabsFrame(subscription, supplied, changeSequence, delivery)
         }
         const senders = desktopFrame?.agentSenderAssociations
         if (clientNavigationId === undefined && senders) {

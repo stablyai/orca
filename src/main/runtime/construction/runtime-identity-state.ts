@@ -72,7 +72,11 @@ import type { TerminalHandleAccess } from '../agent-senders/runtime-agent-sender
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
 export type MobileSessionTabSubscription = {
-  listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void
+  listener: (
+    snapshot: RuntimeMobileSessionTabsResult,
+    changeSequence: number,
+    delivery?: 'reconciliation'
+  ) => void
   clientNavigationId?: string
   clientKind?: 'mobile' | 'runtime'
   observation?: 'caller'

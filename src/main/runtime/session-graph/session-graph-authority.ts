@@ -258,7 +258,8 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
         }),
         ++this.mobileSessionTabsChangeSequence,
         pairedDeviceId,
-        selected
+        selected,
+        'reconciliation'
       )
     }
   }

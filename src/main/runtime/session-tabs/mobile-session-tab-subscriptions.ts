@@ -3,7 +3,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-ses
 import { RuntimeWorkspaceFileTargets } from '../workspaces/workspace-file-session-targets'
 export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorkspaceFileTargets {
   onMobileSessionTabsChanged(
-    listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void,
+    listener: MobileSessionTabSubscription['listener'],
     clientNavigationId?: string,
     clientKind?: 'mobile' | 'runtime',
     options?: Pick<MobileSessionTabSubscription, 'observation' | 'acceptsWorktree'>
@@ -33,15 +33,12 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
   }
 
   protected deliverMobileSessionTabsFrame(
-    subscription: {
-      listener(frame: RuntimeMobileSessionTabsResult, sequence: number): void
-      clientNavigationId?: string
-      observation?: 'caller'
-    },
+    subscription: MobileSessionTabSubscription,
     frame: RuntimeMobileSessionTabsResult,
-    sequence: number
+    sequence: number,
+    delivery?: 'reconciliation'
   ): void {
-    subscription.listener(frame, sequence)
+    subscription.listener(frame, sequence, delivery)
     if (
       subscription.observation === 'caller' ||
       !this.mobileSessionTabListeners.has(subscription)

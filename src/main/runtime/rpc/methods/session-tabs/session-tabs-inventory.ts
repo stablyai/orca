@@ -132,7 +132,11 @@ export async function subscribeSessionTabsInventory(
       )
     }
   }
-  const publishChange = (snapshot: SessionTabsChange, changeSequence: number): void => {
+  const publishChange = (
+    snapshot: SessionTabsChange,
+    changeSequence: number,
+    delivery?: 'reconciliation'
+  ): void => {
     const { navigationIntent: _intent, ...canonical } = snapshot
     if (snapshot.removed) {
       canonicalSnapshotsByWorktree.delete(snapshot.worktree)
@@ -142,7 +146,11 @@ export async function subscribeSessionTabsInventory(
     const projected = projectChange(snapshot)
     const state = withoutNavigationIntent(projected)
     const published = publishedSnapshotsByWorktree.get(snapshot.worktree)
-    if (projected.navigationIntent === undefined && isDeepStrictEqual(published, state)) {
+    if (
+      delivery !== 'reconciliation' &&
+      projected.navigationIntent === undefined &&
+      isDeepStrictEqual(published, state)
+    ) {
       deliveredChangeSequenceByWorktree.set(snapshot.worktree, changeSequence)
       return
     }
@@ -159,7 +167,7 @@ export async function subscribeSessionTabsInventory(
     }
   }
   const unsubscribe = runtime.onMobileSessionTabsChanged(
-    (runtimeSnapshot, changeSequence) => {
+    (runtimeSnapshot, changeSequence, delivery) => {
       if (closed) {
         return
       }
@@ -174,7 +182,7 @@ export async function subscribeSessionTabsInventory(
       ) {
         return
       }
-      publishChange(snapshot, changeSequence)
+      publishChange(snapshot, changeSequence, delivery)
     },
     pairedDeviceId,
     context.clientKind,

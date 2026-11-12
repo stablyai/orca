@@ -60,67 +60,82 @@ it.each([750, 7500])(
   }
 )
 
-it('keeps an independent held read after stream progression, then forgets disposed streams and removed workspaces', async () => {
-  vi.useFakeTimers({ toFake: ['Date'] })
-  const h = createReconciliationDeliveryRuntime()
-  const runtime = h.hostRuntime
-  runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
-    tabs: [],
-    leaves: [],
-    mobileSessionTabs: [
-      {
-        worktree: WORKSPACE,
-        publicationEpoch: 'renderer',
-        snapshotVersion: 1,
-        activeGroupId: null,
-        activeTabId: null,
-        activeTabType: null,
-        tabs: []
-      }
-    ]
-  })
-  const stream = openRecoveryTabsStream(runtime, 'progressing-stream', `id:${WORKSPACE}`)
-  const independent = openRecoveryTabsStream(runtime, 'independent-stream')
-  try {
-    await Promise.all([stream.initial, independent.initial])
-    expect(runtime.snapshotForClient(WORKSPACE, 'device-a').clientHostedPagesUnreconciled).toBe(
-      true
+it.each(['workspace', 'all'])(
+  'keeps an independent held read after %s stream progression, then forgets disposed streams and removed workspaces',
+  async (kind) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const h = createReconciliationDeliveryRuntime()
+    const runtime = h.hostRuntime
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: WORKSPACE,
+          publicationEpoch: 'renderer',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      ]
+    })
+    const stream = openRecoveryTabsStream(
+      runtime,
+      'progressing-stream',
+      kind === 'workspace' ? `id:${WORKSPACE}` : undefined
     )
-    independent.stop()
-    await independent.completion
-    vi.setSystemTime(Date.now() + 46_000)
-    runtime.notifyMobileSessionTabsChanged(WORKSPACE)
-    runtime.onMobileSessionTabsChanged(() => {}, 'flush-device', 'mobile')()
-    expect(stream.frames.at(-1)?.clientHostedPagesUnreconciled).toBeUndefined()
-    runtime.projectedFrames = 0
-    const delivered = stream.frames.length
-    runtime.markClientHostedPagesReconciled('device-a')
-    expect(runtime.projectedFrames).toBe(1)
-    expect(stream.frames).toHaveLength(delivered + 1)
-    expect(stream.frames.at(-1)?.clientHostedPagesUnreconciled).toBeUndefined()
-    stream.stop()
-    await stream.completion
-    vi.setSystemTime(Date.now() - 46_000)
-    const removed = openRecoveryTabsStream(runtime, 'removed-stream', undefined, 'device-b')
-    await removed.initial
-    expect(
-      removed.frames.findLast((frame) => frame.worktree === WORKSPACE)
-        ?.clientHostedPagesUnreconciled
-    ).toBe(true)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
-    runtime.projectedFrames = 0
-    runtime.markClientHostedPagesReconciled('device-b')
-    expect(runtime.projectedFrames).toBe(0)
-    removed.stop()
-    await removed.completion
-  } finally {
-    stream.stop()
-    independent.stop()
-    await h.close()
-    vi.useRealTimers()
+    const independent = openRecoveryTabsStream(runtime, 'independent-stream')
+    try {
+      await Promise.all([stream.initial, independent.initial])
+      const rpc = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+      const reads: string[] = []
+      await rpc.dispatchStreaming(
+        { id: 'independent-read', authToken: 'test', method: 'session.tabs.listAll', params: {} },
+        (reply) => reads.push(reply),
+        { connectionId: 'independent-read', pairedDeviceId: 'device-a', clientKind: 'mobile' }
+      )
+      expect(JSON.parse(reads[0]!).result.snapshots[0].clientHostedPagesUnreconciled).toBe(true)
+      independent.stop()
+      await independent.completion
+      vi.setSystemTime(Date.now() + 46_000)
+      runtime.notifyMobileSessionTabsChanged(WORKSPACE)
+      runtime.onMobileSessionTabsChanged(() => {}, 'flush-device', 'mobile')()
+      expect(stream.frames.at(-1)?.clientHostedPagesUnreconciled).toBeUndefined()
+      runtime.projectedFrames = 0
+      const delivered = stream.frames.length
+      runtime.markClientHostedPagesReconciled('device-a')
+      expect(runtime.projectedFrames).toBe(1)
+      expect(stream.frames).toHaveLength(delivered + 1)
+      expect(stream.frames.at(-1)?.clientHostedPagesUnreconciled).toBeUndefined()
+      runtime.markClientHostedPagesReconciled('device-a')
+      expect(runtime.projectedFrames).toBe(1)
+      expect(stream.frames).toHaveLength(delivered + 1)
+      stream.stop()
+      await stream.completion
+      vi.setSystemTime(Date.now() - 46_000)
+      const removed = openRecoveryTabsStream(runtime, 'removed-stream', undefined, 'device-b')
+      await removed.initial
+      expect(
+        removed.frames.findLast((frame) => frame.worktree === WORKSPACE)
+          ?.clientHostedPagesUnreconciled
+      ).toBe(true)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+      runtime.projectedFrames = 0
+      runtime.markClientHostedPagesReconciled('device-b')
+      expect(runtime.projectedFrames).toBe(0)
+      removed.stop()
+      await removed.completion
+    } finally {
+      stream.stop()
+      independent.stop()
+      await h.close()
+      vi.useRealTimers()
+    }
   }
-})
+)
 
 it('cannot recreate a raw observation when its listener unsubscribes during delivery', async () => {
   const h = createReconciliationDeliveryRuntime()
