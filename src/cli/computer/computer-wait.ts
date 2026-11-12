@@ -30,10 +30,15 @@ export type ComputerWaitSnapshotResult = ComputerSnapshotResult & { wait: Comput
 export type ComputerWaitWindowsResult = ComputerListWindowsResult & { wait: ComputerWaitSummary }
 
 const POLL_INTERVAL_MS = 250
+// Why: a read started near the deadline still gets long enough to answer for a large window.
+const MIN_READ_TIMEOUT_MS = 2_000
 // Why: the app or window may not exist yet; waiting for it to appear is part of the wait.
 const NOT_YET_CODES = new Set(['app_not_found', 'window_not_found', 'window_stale'])
 
-type Poll<T> = { call: () => Promise<RuntimeRpcSuccess<T>>; check: (result: T) => string | null }
+type Poll<T> = {
+  call: (timeoutMs: number) => Promise<RuntimeRpcSuccess<T>>
+  check: (result: T) => string | null
+}
 
 // Polls the same reads every provider and runtime version serves, so the wait needs no host support.
 export async function waitForComputerSnapshot(
@@ -46,11 +51,12 @@ export async function waitForComputerSnapshot(
     await assertDisabledStateSupported(client)
   }
   const { response, elapsedMs } = await pollUntil(condition, timeoutMs, {
-    call: () =>
-      client.call<ComputerSnapshotResult>('computer.getAppState', {
-        ...params,
-        noScreenshot: true
-      }),
+    call: (readTimeoutMs) =>
+      client.call<ComputerSnapshotResult>(
+        'computer.getAppState',
+        { ...params, noScreenshot: true },
+        { timeoutMs: readTimeoutMs }
+      ),
     check: (result) => snapshotMiss(condition, result.snapshot.treeText)
   })
   const { snapshot } = response.result
@@ -74,11 +80,13 @@ export async function waitForComputerWindowTitle(
   timeoutMs: number
 ): Promise<RuntimeRpcSuccess<ComputerWaitWindowsResult>> {
   const { response, elapsedMs } = await pollUntil(condition, timeoutMs, {
-    call: () => client.call<ComputerListWindowsResult>('computer.listWindows', { app }),
-    check: (result) =>
-      matchingWindows(result.windows, condition.value).length > 0
-        ? null
-        : `its windows are ${result.windows.map((window) => `"${window.title}"`).join(', ') || 'none'}`
+    call: (readTimeoutMs) =>
+      client.call<ComputerListWindowsResult>(
+        'computer.listWindows',
+        { app },
+        { timeoutMs: readTimeoutMs }
+      ),
+    check: (result) => windowTitleMiss(result.windows, condition.value)
   })
   return {
     ...response,
@@ -111,6 +119,16 @@ function snapshotMiss(condition: ComputerTreeWaitCondition, treeText: string): s
     .join(' | ')}`
 }
 
+function windowTitleMiss(windows: ComputerWindowListWindow[], title: string): string | null {
+  if (matchingWindows(windows, title).length > 0) {
+    return null
+  }
+  if (windows.length > 0 && windows.every((window) => window.title === '')) {
+    return 'every window title is empty (on macOS, window titles need the Screen Recording permission)'
+  }
+  return `its windows are ${windows.map((window) => `"${window.title}"`).join(', ') || 'none'}`
+}
+
 function matchingWindows(
   windows: ComputerWindowListWindow[],
   title: string
@@ -139,7 +157,8 @@ async function pollUntil<T>(
   for (;;) {
     let miss: string
     try {
-      const response = await poll.call()
+      const remainingMs = timeoutMs - (Date.now() - startedAt)
+      const response = await poll.call(Math.max(remainingMs, MIN_READ_TIMEOUT_MS))
       const result = poll.check(response.result)
       if (result === null) {
         return { response, elapsedMs: Date.now() - startedAt }
@@ -147,10 +166,13 @@ async function pollUntil<T>(
       miss = result
     } catch (error) {
       const code = cliErrorCode(error)
-      if (!code || !NOT_YET_CODES.has(code)) {
+      if (code === 'runtime_timeout' && Date.now() - startedAt >= timeoutMs) {
+        miss = 'the last read did not answer before the deadline'
+      } else if (code && NOT_YET_CODES.has(code)) {
+        miss = `${code}: ${error instanceof Error ? error.message : String(error)}`
+      } else {
         throw error
       }
-      miss = `${code}: ${error instanceof Error ? error.message : String(error)}`
     }
     const remainingMs = timeoutMs - (Date.now() - startedAt)
     if (remainingMs <= 0) {

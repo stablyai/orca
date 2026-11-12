@@ -58,7 +58,7 @@ ORCA computer wait --app <app> --window-title "Save As" --json
 
 - `--text <text>`: an element line contains the text (case-insensitive, like `--query`).
 - `--enabled <text>`: an element contains the text and none of the elements containing it is disabled. Use text only the intended control shows; a label that repeats the button text also has to be enabled.
-- `--window-title <text>`: one of the app's windows has the text in its title. Then target that window with its `--window-id` or `--window-index`.
+- `--window-title <text>`: one of the app's windows has the text in its title, as `list-windows` reports them. Then target that window with its `--window-id` or `--window-index`. On Windows, `list-windows` reports only the app's main window, so wait for a dialog with `--text` instead.
 
 `wait` only reads the app; it never acts, raises or restores a window. The app or window may be missing at first; `wait` keeps checking until it appears. Element indexes in the output come from a fresh tree, so you can act on them next.
 

@@ -27,7 +27,7 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     enabled:
       '--enabled <text>       Wait until elements containing this text exist and none is disabled',
     'window-title':
-      "--window-title <text> Wait until one of the app's windows has this in its title",
+      "--window-title <text>  Wait until one of the app's windows has this in its title",
     timeout: `--timeout <ms>         How long to wait before failing with wait_timeout (default ${COMPUTER_WAIT_DEFAULT_TIMEOUT_MS})`
   },
   'reference find': {

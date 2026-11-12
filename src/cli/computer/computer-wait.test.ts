@@ -48,11 +48,11 @@ describe('orca computer wait', () => {
     await run('--text', 'saved')
 
     expect(callMock).toHaveBeenCalledTimes(3)
-    expect(callMock).toHaveBeenLastCalledWith('computer.getAppState', {
-      session: 'manual',
-      app: 'TextEdit',
-      noScreenshot: true
-    })
+    expect(callMock).toHaveBeenLastCalledWith(
+      'computer.getAppState',
+      { session: 'manual', app: 'TextEdit', noScreenshot: true },
+      expect.anything()
+    )
     const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
     expect(output.result.wait).toMatchObject({ kind: 'text', value: 'saved' })
     expect(output.result.snapshot.treeText).toContain('1 text All changes saved')
@@ -106,7 +106,11 @@ describe('orca computer wait', () => {
 
     await run('--window-title', 'save as')
 
-    expect(callMock).toHaveBeenLastCalledWith('computer.listWindows', { app: 'TextEdit' })
+    expect(callMock).toHaveBeenLastCalledWith(
+      'computer.listWindows',
+      { app: 'TextEdit' },
+      expect.anything()
+    )
     const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
     expect(output.result.windows.map((window: { title: string }) => window.title)).toEqual([
       'Save As'
