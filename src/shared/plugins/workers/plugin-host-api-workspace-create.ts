@@ -60,7 +60,8 @@ const agentResumeParams = z.strictObject({
   agent: z
     .enum(RESUMABLE_TUI_AGENTS)
     .refine((agent) => pluginResumeKey(agent) !== null, 'this agent cannot resume by session id'),
-  /** The session, as `agents.list` and `agent.status.changed` give its `sessionId`. */
+  /** The session, as `agents.list`, `agent.status.changed` and `agent.listSessions` give its
+   *  `sessionId`. */
   sessionId: pluginAgentSessionIdSchema
 })
 const agentResumeResult = z.object({
@@ -85,7 +86,7 @@ export const PLUGIN_WORKSPACE_CREATE_API = {
   }),
   'agent.resume': spec({
     summary:
-      "Resumes an agent's earlier session by its `sessionId` in a new terminal of a workspace, in the background; `started` is false when an Orca terminal already runs it. In WSL it uses the distro's default agent account, as `agent.launch` does.",
+      "Resumes an agent's earlier session by its `sessionId` in a new terminal of a workspace, in the background; `started` is false when an Orca terminal already runs it. From host API 1.9, a session no Orca pane runs that Agent Session History lists on this computer (among the workspace's own sessions and the 200 newest) is prepared and started as Orca's own Resume does, in the agent account Orca would pick; only `agent:launch` is needed, since the plugin must already know the id. Other sessions, and workspaces on another host, resume by id. In WSL it uses the distro's default agent account, as `agent.launch` does.",
     since: 8,
     scope: 'any-workspace',
     capability: 'agent:launch',
