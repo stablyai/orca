@@ -48,10 +48,15 @@ export function LandingCloudSignInCard({
             {t('components.landing.cloudSignIn.title', 'Cloud workspaces')}
           </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {t(
-              'components.landing.cloudSignIn.body',
-              'Sign in to see your team’s cloud workspaces.'
-            )}
+            {reconnect
+              ? t(
+                  'components.landing.cloudSignIn.bodyAgain',
+                  'Your sign-in ended. Sign in again to see your team’s cloud workspaces.'
+                )
+              : t(
+                  'components.landing.cloudSignIn.body',
+                  'Sign in to see your team’s cloud workspaces.'
+                )}
           </p>
           <div className="mt-3 flex flex-col items-start gap-2">
             <OrcaSignInButton size="sm" variant="outline">
