@@ -20920,6 +20920,7 @@
           "about": {
             "parakeetV3": "Rapide. {{languages}} langues européennes.",
             "parakeetV2": "Rapide. Anglais uniquement, et le plus précis en anglais.",
+            "parakeetUnifiedEn": "Anglais uniquement. Les mots s’affichent à mesure que vous parlez.",
             "whisperTiny": "Le plus petit téléchargement. Idéal pour essayer la dictée.",
             "whisperTurbo": "Le plus de langues, environ 100. Lent sans GPU.",
             "senseVoice": "Rapide. Pour le chinois, le japonais et le coréen.",

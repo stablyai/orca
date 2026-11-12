@@ -20745,6 +20745,7 @@
           "about": {
             "parakeetV3": "Hızlı. {{languages}} Avrupa dili.",
             "parakeetV2": "Hızlı. Yalnızca İngilizce, bunda en doğrusu.",
+            "parakeetUnifiedEn": "Yalnızca İngilizce. Kelimeler siz konuşurken görünür.",
             "whisperTiny": "En küçük indirme. Dikteyi denemek için iyi.",
             "whisperTurbo": "En çok dil, yaklaşık 100. GPU olmadan yavaş.",
             "senseVoice": "Hızlı. Çince, Japonca ve Korece için.",

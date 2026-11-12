@@ -22068,6 +22068,7 @@
           "about": {
             "parakeetV3": "Fast. {{languages}} European languages.",
             "parakeetV2": "Fast. English only, and the most accurate at it.",
+            "parakeetUnifiedEn": "English only. Words appear as you speak.",
             "whisperTiny": "Smallest download. Good for trying dictation out.",
             "whisperTurbo": "Most languages, about 100. Slow without a GPU.",
             "senseVoice": "Fast. For Chinese, Japanese and Korean.",

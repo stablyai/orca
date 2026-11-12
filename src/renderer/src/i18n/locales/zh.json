@@ -20379,6 +20379,7 @@
           "about": {
             "parakeetV3": "速度快。支持 {{languages}} 种欧洲语言。",
             "parakeetV2": "速度快。仅支持英语，英语最准确。",
+            "parakeetUnifiedEn": "仅限英语。说话时即时显示文字。",
             "whisperTiny": "下载最小。适合试用听写。",
             "whisperTurbo": "语言最多，约 100 种。没有 GPU 时较慢。",
             "senseVoice": "速度快。适用于中文、日语和韩语。",
