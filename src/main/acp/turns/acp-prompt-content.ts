@@ -28,9 +28,9 @@ const ACP_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'i
 // Reserve space for the JSON-RPC envelope around the prompt blocks.
 const ACP_PROMPT_LINE_BUDGET = ACP_MAX_LINE_BYTES - 64 * 1024
 // Budget raw images for base64's 4:3 expansion and leave room for text.
-const ACP_PROMPT_IMAGES_MAX_BYTES = Math.floor((ACP_PROMPT_LINE_BUDGET * 3) / 4) - 1024 * 1024
+const ACP_PROMPT_TOTAL_IMAGE_MAX_BYTES = Math.floor((ACP_PROMPT_LINE_BUDGET * 3) / 4) - 1024 * 1024
 // OpenCode 2 fails the turn for any attachment over 20 MiB.
-const ACP_PROMPT_IMAGE_MAX_BYTES = 20 * 1024 * 1024
+const ACP_PROMPT_PER_IMAGE_MAX_BYTES = 20 * 1024 * 1024
 const MAX_IMAGE_COUNT = 20
 const READ_TIMEOUT_MS = 15_000
 
@@ -72,11 +72,11 @@ async function imageBlock(
     if (bytes === 0) {
       throw attachmentProblem({ reason: 'empty' })
     }
-    if (bytes > ACP_PROMPT_IMAGE_MAX_BYTES) {
-      throw attachmentProblem({ reason: 'tooLarge', limit: ACP_PROMPT_IMAGE_MAX_BYTES })
+    if (bytes > ACP_PROMPT_PER_IMAGE_MAX_BYTES) {
+      throw attachmentProblem({ reason: 'tooLarge', limit: ACP_PROMPT_PER_IMAGE_MAX_BYTES })
     }
     if (bytes > remainingBytes) {
-      throw attachmentProblem({ reason: 'totalTooLarge', limit: ACP_PROMPT_IMAGES_MAX_BYTES })
+      throw attachmentProblem({ reason: 'totalTooLarge', limit: ACP_PROMPT_TOTAL_IMAGE_MAX_BYTES })
     }
     return { block: { type: 'image', mimeType: match[1], data: match[2] }, bytes }
   }
@@ -89,7 +89,7 @@ async function imageBlock(
     block: { type: 'text' as const, text: formatNativeChatFileReference(path) },
     bytes: 0
   }
-  const maxBytes = Math.min(remainingBytes, ACP_PROMPT_IMAGE_MAX_BYTES)
+  const maxBytes = Math.min(remainingBytes, ACP_PROMPT_PER_IMAGE_MAX_BYTES)
   if (!mimeType || !ACP_IMAGE_MIME_TYPES.has(mimeType) || maxBytes <= 0) {
     return fallback
   }
@@ -162,10 +162,10 @@ export async function acpPromptBlocks(
         ? 0
         : 3 * Math.floor((ACP_PROMPT_LINE_BUDGET - encodedBytes + previousBytes - overhead) / 4)
     const remainingBytes = inline
-      ? ACP_PROMPT_IMAGES_MAX_BYTES - imageBytes
+      ? ACP_PROMPT_TOTAL_IMAGE_MAX_BYTES - imageBytes
       : imageCount >= MAX_IMAGE_COUNT
         ? 0
-        : Math.min(ACP_PROMPT_IMAGES_MAX_BYTES - imageBytes, encodedCapacity)
+        : Math.min(ACP_PROMPT_TOTAL_IMAGE_MAX_BYTES - imageBytes, encodedCapacity)
     const image = await imageBlock(block, remainingBytes, signal)
     if (image.block.type === 'image') {
       imageCount += 1
@@ -174,8 +174,8 @@ export async function acpPromptBlocks(
     blocks[index] = image.block
     encodedBytes += blockBytes(image.block) - previousBytes
   }
-  if (imageCount > 0 && Buffer.byteLength(JSON.stringify(blocks)) > ACP_PROMPT_LINE_BUDGET) {
-    throw attachmentProblem({ reason: 'totalTooLarge', limit: ACP_PROMPT_IMAGES_MAX_BYTES })
+  if (imageCount > 0 && encodedBytes > ACP_PROMPT_LINE_BUDGET) {
+    throw attachmentProblem({ reason: 'totalTooLarge', limit: ACP_PROMPT_TOTAL_IMAGE_MAX_BYTES })
   }
   return blocks
 }

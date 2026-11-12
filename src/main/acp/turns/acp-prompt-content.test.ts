@@ -36,12 +36,12 @@ describe('ACP prompt content', () => {
 
   it('sends a host image up to 20 MiB inline and keeps a larger one as a path', async () => {
     const inlinePath = join(dir, 'photo.png')
-    writeFileSync(inlinePath, Buffer.alloc(15 * 1024 * 1024))
+    writeFileSync(inlinePath, Buffer.alloc(20 * 1024 * 1024))
     const [inline] = await acpPromptBlocks(message({ type: 'image-ref', path: inlinePath }), true)
     expect(inline).toMatchObject({ type: 'image', mimeType: 'image/png' })
 
     const largePath = join(dir, 'large.png')
-    writeFileSync(largePath, Buffer.alloc(21 * 1024 * 1024))
+    writeFileSync(largePath, Buffer.alloc(20 * 1024 * 1024 + 1))
     expect(await acpPromptBlocks(message({ type: 'image-ref', path: largePath }), true)).toEqual([
       { type: 'text', text: `@${largePath}` }
     ])
@@ -62,7 +62,7 @@ describe('ACP prompt content', () => {
   })
 
   it('keeps a message with images within one protocol line', async () => {
-    // Raw images fit, but their encoded payload plus text exceeds the protocol line limit.
+    // The image fits its own budget, but the text around it overflows the protocol line.
     const text = 'x'.repeat(16 * 1024 * 1024)
     const image = {
       type: 'image-ref' as const,
