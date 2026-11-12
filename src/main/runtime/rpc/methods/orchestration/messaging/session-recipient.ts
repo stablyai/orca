@@ -15,7 +15,10 @@ import {
   lookupOrcaAgentSession,
   structuredSessionMailReach
 } from '../../../../orchestration/mailbox/routing/structured-session-mail-address'
-import type { AgentSessionRecordReader } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
+import {
+  readAgentSessionRecordStore,
+  type AgentSessionRecordReader
+} from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { canonicalOrcaSessionId } from '../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { agentHookServer } from '../../../../../agent-hooks/server/agent-hook-server'
@@ -40,7 +43,9 @@ export type TerminalAgentRecipient = {
 } | null
 
 /** Resolved before routing: a dormant terminal id is known only to the identity store, which
- *  answers asynchronously; the synchronous routing below then reads this fact. */
+ *  answers asynchronously. A known chat (or its provider id) is decided by the chat store alone,
+ *  so chat mail never waits on the identity worker. Callers reread the facts they act on after
+ *  awaiting this. */
 export async function resolveTerminalAgentRecipient(
   recipient: string
 ): Promise<TerminalAgentRecipient> {
@@ -49,8 +54,29 @@ export async function resolveTerminalAgentRecipient(
     : isOrcaSessionId(recipient)
       ? recipient
       : null
-  const places = sessionId ? await agentHookServer.terminalAgentPlaces(sessionId) : null
-  return sessionId && places ? { sessionId, places } : null
+  const store = sessionId ? readAgentSessionRecordStore() : null
+  if (!sessionId || (store && lookupOrcaAgentSession(store, sessionId).kind !== 'unknown')) {
+    return null
+  }
+  const places = await agentHookServer.terminalAgentPlaces(sessionId)
+  return places ? { sessionId, places } : null
+}
+
+/** Before routing a session-shaped recipient: opens the chat store, resolves a terminal agent,
+ *  then checks the caller's authority again, since the waits may have outlived it. */
+export async function prepareSessionRecipient(
+  runtime: { ensureStructuredAgentSessionHost(): Promise<unknown> },
+  recipient: string,
+  revalidateCaller?: () => unknown
+): Promise<TerminalAgentRecipient> {
+  if (!mayNameSession(recipient)) {
+    return null
+  }
+  // Recipient routing reads the session record store, which the host opens lazily.
+  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  const terminal = await resolveTerminalAgentRecipient(recipient)
+  revalidateCaller?.()
+  return terminal
 }
 
 /** Recognize bare ids as sessions only when a local record exists; preserve terminal-handle interpretation otherwise. */

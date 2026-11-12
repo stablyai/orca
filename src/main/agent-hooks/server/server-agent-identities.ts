@@ -28,8 +28,16 @@ type SleepingAgentSighting = Pick<
 
 /** Terminal agent ids are named when a row is admitted, so walks and publications only copy them. */
 export abstract class AgentHookServerAgentIdentities extends AgentHookServerState {
+  private identityPath: { from: string | null; path: string | null } = { from: null, path: null }
   protected readonly agentIdentities = new PaneAgentIdentities(
-    () => (this.lastStatusFilePath ? agentIdentityDatabasePath(this.lastStatusFilePath) : null),
+    // Read on every admission, so derived once per status path.
+    () => {
+      const from = this.lastStatusFilePath
+      if (from !== this.identityPath.from) {
+        this.identityPath = { from, path: from ? agentIdentityDatabasePath(from) : null }
+      }
+      return this.identityPath.path
+    },
     (settled) => this.publishSettledAgentIdentities(settled),
     () => this.createAgentIdentityClient()
   )
@@ -42,19 +50,20 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
   /** Tab snapshot rows copy ids, so a settled id clears them. */
   protected providerRowsByTab: Map<string, AgentStatusIpcPayload[]> | null = null
 
+  /** Window readers and session.tabs see a row's new id with no hook event attached, so no
+   *  transition effect or enriched subscriber runs again. */
+  protected abstract publishAgentIdentityProjection(row: EnrichedAgentHookEventPayload): void
+
   /** A committed answer re-stamps the current rows still pending on its key and republishes each
-   *  as an identity-only replay: status, clocks and order stay as they are. */
+   *  as a projection: status, clocks and order stay as they are. */
   private publishSettledAgentIdentities(settled: SettledAgentIdentityPlace[]): void {
+    const projections: EnrichedAgentHookEventPayload[] = []
     for (const { place, paneKey, canonicalSubject, identity } of settled) {
       if (canonicalSubject) {
         const subject = this.canonicalSubjectsByPane.get(paneKey)?.get(canonicalSubject)
         const status = subject && this.canonicalStatusStore.getParent(subject)?.status
         if (status) {
-          this.emitEnrichedStatus({
-            ...structuredStatusLegacyEvent(status),
-            agentIdentity: identity,
-            isReplay: true
-          })
+          projections.push({ ...structuredStatusLegacyEvent(status), agentIdentity: identity })
         }
         continue
       }
@@ -78,10 +87,14 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
           AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
         )
       ) {
-        this.emitEnrichedStatus({ ...next, isReplay: true })
+        projections.push(next)
       }
     }
+    // Readers of the projection must not see the cached ids it replaces.
     this.providerRowsByTab = null
+    for (const projection of projections) {
+      this.publishAgentIdentityProjection(projection)
+    }
   }
 
   // A prototype getter: the base class reads it while its own fields initialize.
@@ -159,8 +172,12 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     if (!selected || selected.id) {
       return selected?.id ?? null
     }
+    const generation = this.agentIdentities.generation
     const id = await this.agentIdentities.identify(selected.sighting)
-    // The pane may have moved to another conversation while the worker answered.
+    // The owner may have closed, or the pane moved to another conversation, during the wait.
+    if (generation !== this.agentIdentities.generation) {
+      return null
+    }
     const current = this.paneAgentSighting(paneKey, readSleeping)
     const asked = agentProviderKeyOf(selected.sighting)
     const now = current && agentProviderKeyOf(current.sighting)

@@ -55,6 +55,8 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   programStatus?: ProgramStatusFacet
   /** Facet-only publication; state readers must not infer a transition. */
   programStatusOnly?: true
+  /** A settled agent id republished to window readers; never a transition or hook event. */
+  identityOnly?: true
   /** The conversation's terminal agent id on this host, named when the row's provider key
    *  changed; publication copies it. Never persisted. */
   agentIdentity?: RowAgentIdentity

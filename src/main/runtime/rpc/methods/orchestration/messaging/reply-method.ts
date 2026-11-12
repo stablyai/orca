@@ -141,6 +141,8 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
     if (db.getRun(original.run_id)?.home_database === 'remote') {
       return await replyToRemoteRunHome({ runtime, db, original, params, signal })
     }
+    // Await first, so the refusals and routing below read state as it is after the wait.
+    const terminalRecipient = await resolveTerminalAgentRecipient(original.from_handle)
     // A finished task's worker never reads a reply to its report; refuse before marking or storing anything.
     const reportDispatchId = completionReportDispatchId(db, original)
     const followUp = reportDispatchId ? reportFollowUpAction(db, reportDispatchId) : undefined
@@ -156,7 +158,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       db,
       originalFrom: original.from_handle,
       originalRunId: original.run_id,
-      terminalRecipient: await resolveTerminalAgentRecipient(original.from_handle)
+      terminalRecipient
     })
     db.markAsRead([original.id])
     const reply = db.insertMessage({

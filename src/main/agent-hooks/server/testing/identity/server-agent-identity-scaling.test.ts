@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { normalizeHookPayload } from '../../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../../../../shared/agent-hook-listener/listener-state'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { PaneAgentIdentities } from '../../../identity/pane-agent-identities'
+import {
+  PaneAgentIdentities,
+  publishedOrcaSessionId
+} from '../../../identity/pane-agent-identities'
+import { installHookStatusSessionTabsRepublish } from '../../../runtime/hook-status-session-tabs-republish'
 import { InProcessAgentIdentityClient } from '../../../identity/agent-identity-client.test-fixtures'
 import type { AgentIdentityClient } from '../../../identity/agent-identity-worker-client'
 import { AgentHookServer } from '../../agent-hook-server'
@@ -138,22 +142,22 @@ describe.each([200, 2_000])('terminal agent ids at %i panes', (panes) => {
     counts.assign.mockClear()
     counts.canonicalIdentity.mockClear()
 
-    // `/clear` in pane 0: only that pane's new key is named, in one worker request; the
-    // notifications this mutation builds do no identity work for the other panes.
+    // `/clear` in pane 0: only that pane's new key is named; admission and the notifications it
+    // builds send nothing and do no identity work for the other panes.
     server.ingestRemote(hook(0, 'session-0-cleared'), WSL)
     for (const [sighting] of counts.assign.mock.calls) {
       expect(['session-0', 'session-0-cleared']).toContain(sighting.providerSession?.id)
     }
-    expect(counts.workerRequests()).toBe(1)
+    expect(counts.workerRequests()).toBe(0)
     // A tmux agent's own change likewise: its notification outputs no id, so no canonical id work.
     server.publishTmuxTerminal(1, 'tmux-session-1-cleared')
     expect(counts.canonicalIdentity).not.toHaveBeenCalled()
-    expect(counts.workerRequests()).toBe(2)
-    // Pending until the worker answers; the answer re-stamps the two rows without another event.
+    // Pending until the worker answers; one request per new key re-stamps both rows.
     expect(
       server.getStatusSnapshot().find((row) => row.paneKey === paneKey(0))?.orcaSessionId
     ).toBeNull()
     await answered()
+    expect(counts.workerRequests()).toBe(2)
     const after = server.getStatusSnapshot()
     const pane0 = (rows: typeof after) => rows.find((row) => row.paneKey === paneKey(0))
     expect(pane0(after)?.orcaSessionId).toBeTruthy()
@@ -265,4 +269,56 @@ it('publishes a lost first answer as pending, and the click recovers the committ
   expect(id).toMatch(/^claude_/)
   await answered()
   expect(server.getStatusSnapshot()[0]?.orcaSessionId).toBe(id)
+})
+
+it('publishes a settled id as a projection: session.tabs wakes, no hook effect repeats', async () => {
+  const server = await started(new IdentityTestServer())
+  server.identityClient.hold = true
+  const window: { hookEventName?: string; orcaSessionId?: string | null; replay?: boolean }[] = []
+  server.setListener((row) =>
+    window.push({
+      hookEventName: row.hookEventName,
+      orcaSessionId: publishedOrcaSessionId(row.agentIdentity),
+      replay: row.isReplay
+    })
+  )
+  const enriched: (string | undefined)[] = []
+  cleanups.unshift(server.subscribeEnrichedStatus((row) => enriched.push(row.hookEventName)))
+  const touched: string[] = []
+  const snapshotsSeen: (string | null | undefined)[] = []
+  cleanups.unshift(
+    installHookStatusSessionTabsRepublish(server, () => ({
+      getTerminalWorktreeIdForHandle: () => null,
+      getTerminalWorktreeIdForPaneKey: () => null,
+      scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree: () => {},
+      touchMobileSessionTabsForWorktree: (worktreeId) => {
+        touched.push(worktreeId)
+        // A projection listener reads the settled state, not a cached copy.
+        snapshotsSeen.push(server.getStatusSnapshot()[0]?.orcaSessionId)
+      }
+    }))
+  )
+  server.ingestRemote(hook(0, 'session-0', 'Stop'), WSL)
+  server.publishTmuxTerminal(0, 'tmux-session-0')
+  await answered()
+  // The initial frames went out pending; the Stop and the tmux publish each ran their effects once.
+  expect(enriched.filter((name) => name === 'Stop')).toHaveLength(1)
+  const enrichedBefore = enriched.length
+  window.length = 0
+  touched.length = 0
+  snapshotsSeen.length = 0
+
+  server.identityClient.release()
+  await answered()
+  server.identityClient.release()
+  await answered()
+  expect(enriched.length).toBe(enrichedBefore)
+  expect(window).toHaveLength(2)
+  for (const projection of window) {
+    expect(projection.hookEventName).toBeUndefined()
+    expect(projection.replay).toBe(true)
+    expect(projection.orcaSessionId).toMatch(/^(claude|opencode)_/)
+  }
+  expect(touched).toEqual(['wt-1', 'workspace'])
+  expect(snapshotsSeen[0]).toMatch(/^claude_/)
 })

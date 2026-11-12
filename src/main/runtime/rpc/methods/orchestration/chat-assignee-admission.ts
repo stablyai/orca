@@ -34,12 +34,14 @@ export async function admitChatAssignee(
 ): Promise<AgentSessionConversationView> {
   // A failed install leaves no store, which the refusal below names.
   await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  const terminalRecipient = await resolveTerminalAgentRecipient(sessionId)
+  // Read after every wait: the store this admission checks is the one it then observes.
   const store = readAgentSessionRecordStore()
   const refusal = refuseUndeliverableSessionRecipient(
     { sessionId, address: formatOrcaSessionAddress(sessionId) },
     store,
     db,
-    await resolveTerminalAgentRecipient(sessionId),
+    terminalRecipient,
     NO_EFFECTS
   )
   if (refusal) {

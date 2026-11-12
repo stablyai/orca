@@ -5,7 +5,7 @@ import { isGeneratedId } from '../../../../orchestration/db/generated-id'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { FederationRelayItemRow } from '../../../../orchestration/db/orchestration-records'
 import { resolveBareOrchestrationRecipient } from '../messaging/recipient-routing'
-import { mayNameSession, resolveTerminalAgentRecipient } from '../messaging/session-recipient'
+import { prepareSessionRecipient } from '../messaging/session-recipient'
 import { waitForPeerMail } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
 import {
   PeerMailAckParams,
@@ -96,6 +96,8 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
           NOTHING_DELIVERED
         )
       }
+      // Await first, so the replay check and routing below read state as it is after the wait.
+      const terminalRecipient = await prepareSessionRecipient(runtime, to)
       // A retry after a lost answer is acknowledged even if the recipient has since gone.
       const delivered = db.getPeerMailMessage(params.messageId)
       if (delivered) {
@@ -112,15 +114,11 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         }
         return { message: { id: params.messageId, to } }
       }
-      if (mayNameSession(to)) {
-        // Recipient routing reads the session record store, which the host opens lazily.
-        await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-      }
       const recipient = resolveBareOrchestrationRecipient({
         runtime,
         db,
         handle: to,
-        terminalRecipient: await resolveTerminalAgentRecipient(to)
+        terminalRecipient
       })
       if (!recipient.ok) {
         throw new OrchestrationError(

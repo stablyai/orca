@@ -1,4 +1,10 @@
+import { EventEmitter } from 'node:events'
 import type { AgentProviderKey } from './agent-provider-key'
+import type {
+  AgentIdentityWorkerRequest,
+  AgentIdentityWorkerResponse
+} from './agent-identity-worker-protocol'
+import type { WorkerRequestTransport } from '../../worker-threads/worker-thread-transport'
 import type { AgentIdentityClient, AgentIdentityLookup } from './agent-identity-worker-client'
 import { handleAgentIdentityRequest } from './agent-identity-worker-entry'
 import { isOrcaSessionId } from '../../../shared/orca-session-address'
@@ -44,5 +50,82 @@ export class InProcessAgentIdentityClient implements AgentIdentityClient {
     }
   }
 
+  readonly isRetiring = false
+
+  retired(): Promise<void> {
+    return Promise.resolve()
+  }
+
   dispose(): void {}
+}
+
+type ScriptedAnswer = AgentIdentityWorkerResponse | 'never'
+
+/** Fake identity worker threads behind the real client and request queue: each request is
+ *  answered after `serviceMs` by `answer`, and exits can be held to prove no worker starts
+ *  beside a retiring one. */
+export class ScriptedIdentityWorkers {
+  readonly posts: AgentIdentityWorkerRequest[] = []
+  spawns = 0
+  live = 0
+  maxLive = 0
+  serviceMs = 0
+  spawnFails = false
+  holdExit = false
+  readonly known = new Set<string>()
+  answer: (request: AgentIdentityWorkerRequest) => ScriptedAnswer = (request) =>
+    request.kind === 'identify'
+      ? { id: request.id, ok: true, value: `claude_${request.key.providerSessionId}` }
+      : { id: request.id, ok: true, value: this.known.has(request.orcaSessionId) }
+  private readonly exits: (() => void)[] = []
+
+  readonly factory = (): WorkerRequestTransport => {
+    if (this.spawnFails) {
+      throw new Error('identity worker could not start')
+    }
+    this.spawns++
+    this.live++
+    this.maxLive = Math.max(this.maxLive, this.live)
+    const worker = new EventEmitter()
+    let exited = false
+    const exit = (): void => {
+      if (!exited) {
+        exited = true
+        this.live--
+        worker.emit('exit', 1)
+      }
+    }
+    return Object.assign(worker, {
+      unref: () => {},
+      postMessage: (request: AgentIdentityWorkerRequest) => {
+        this.posts.push(request)
+        const reply = this.answer(request)
+        if (reply !== 'never') {
+          setTimeout(() => !exited && worker.emit('message', reply), this.serviceMs)
+        }
+      },
+      terminate: () =>
+        new Promise<number>((resolve) => {
+          const done = (): void => {
+            exit()
+            resolve(1)
+          }
+          if (this.holdExit) {
+            this.exits.push(done)
+          } else {
+            queueMicrotask(done)
+          }
+        })
+    })
+  }
+
+  identifyPosts(): number {
+    return this.posts.filter((post) => post.kind === 'identify').length
+  }
+
+  releaseExits(): void {
+    for (const exit of this.exits.splice(0)) {
+      exit()
+    }
+  }
 }

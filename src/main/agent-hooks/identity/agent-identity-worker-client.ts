@@ -16,8 +16,8 @@ import type {
 } from './agent-identity-worker-protocol'
 
 const WORKER_ENTRY_FILENAME = 'agent-identity-worker-entry.js'
-// Covers a cold open (version read, WAL setup, DDL) plus a lock wait; a click's queue wait counts.
-const REQUEST_TIMEOUT_MS = 10_000
+// One operation's budget from dispatch: a cold open (version read, WAL setup, DDL) plus a lock wait.
+const OPERATION_TIMEOUT_MS = 10_000
 // Identity work comes in bursts (hydration, new agents); an idle worker is released.
 const IDLE_TEARDOWN_MS = 60_000
 
@@ -27,6 +27,9 @@ export type AgentIdentityLookup = { id: OrcaSessionId | null } | undefined
 export type AgentIdentityClient = {
   identify(path: string, key: AgentProviderKey): Promise<AgentIdentityLookup>
   has(path: string, orcaSessionId: string): Promise<boolean | undefined>
+  /** Terminated but not yet exited: a replacement must wait for `retired()`. */
+  readonly isRetiring: boolean
+  retired(): Promise<void>
   dispose(): void
 }
 
@@ -73,19 +76,25 @@ export class AgentIdentityWorkerClient implements AgentIdentityClient {
     return typeof value === 'boolean' ? value : undefined
   }
 
+  get isRetiring(): boolean {
+    return this.queue.isRetiring
+  }
+
+  retired(): Promise<void> {
+    return this.queue.retired()
+  }
+
   dispose(): void {
     this.queue.dispose()
   }
 
+  /** The owner sends one operation at a time, so its deadline is the operation's own, from
+   *  dispatch; callers' waits are bounded by the owner, not here. */
   private async request(
     build: (id: number) => AgentIdentityWorkerRequest
   ): Promise<string | null | boolean | undefined> {
-    // The deadline includes queue wait, so a waiting caller never hangs behind a stuck call.
-    const deadline = new AbortController()
-    const timer = setTimeout(() => deadline.abort(), REQUEST_TIMEOUT_MS)
-    timer.unref()
     try {
-      const response = await this.queue.dispatch(build, REQUEST_TIMEOUT_MS, deadline.signal)
+      const response = await this.queue.dispatch(build, OPERATION_TIMEOUT_MS)
       if (!response.ok) {
         console.warn('[agent-hooks] agent identity lookup failed:', response.error)
         return undefined
@@ -93,8 +102,6 @@ export class AgentIdentityWorkerClient implements AgentIdentityClient {
       return response.value
     } catch {
       return undefined
-    } finally {
-      clearTimeout(timer)
     }
   }
 }

@@ -1,4 +1,4 @@
-import { resolveTerminalAgentRecipient } from './session-recipient'
+import { resolveTerminalAgentRecipient, type TerminalAgentRecipient } from './session-recipient'
 import type {
   MessagePriority,
   MessageType
@@ -31,6 +31,9 @@ type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipi
 type GroupAgentSnapshot = OrchestrationAddressableAgent & { tabId?: string; leafId?: string }
 
 type GroupCandidate = OrchestrationAddressableAgent & { mailbox?: { to: string; runId: string } }
+
+// A selection that changes during its own resolution is asked about again, at most this often.
+const MAX_RECIPIENT_RESOLUTIONS = 3
 
 function listRunGroupCandidates(args: {
   db: OrchestrationDb
@@ -160,23 +163,30 @@ export async function sendGroupMessage(args: {
     })
     agents = [...terminals, ...listAddressableStructuredWorkers(db)]
   }
-  // Revalidate after discovery before selecting recipients or writing mail.
-  revalidateLegacyCoordinator?.()
-  if (!worktreeGroup) {
-    audienceRunId = resolveAudienceRunId()
+  // Authority, audience and candidates are read again after every wait, before any effect.
+  function selectCandidates(): {
+    candidates: GroupCandidate[]
+    groupWarnings: SendRecipientWarning[]
+  } {
+    revalidateLegacyCoordinator?.()
+    if (!worktreeGroup) {
+      audienceRunId = resolveAudienceRunId()
+    }
+    const groupWarnings: SendRecipientWarning[] = []
+    const candidates: GroupCandidate[] =
+      worktreeGroup || !audienceRunId
+        ? agents
+        : listRunGroupCandidates({
+            db,
+            runtime,
+            senderRunId: audienceRunId,
+            groupAddress,
+            agents,
+            warnings: groupWarnings
+          })
+    return { candidates, groupWarnings }
   }
-  const groupWarnings: SendRecipientWarning[] = []
-  const candidates: GroupCandidate[] =
-    worktreeGroup || !audienceRunId
-      ? agents
-      : listRunGroupCandidates({
-          db,
-          runtime,
-          senderRunId: audienceRunId,
-          groupAddress,
-          agents,
-          warnings: groupWarnings
-        })
+  let { candidates, groupWarnings } = selectCandidates()
   // Read up front: a structured worker's status comes from its journal, which may need opening.
   const statuses =
     groupAddress.toLowerCase() === '@idle'
@@ -189,12 +199,34 @@ export async function sendGroupMessage(args: {
           )
         )
       : new Map<string, string | null>()
-  const handles = resolveGroupAddress(
-    groupAddress,
-    from,
-    candidates,
-    (handle: string) => statuses.get(handle) ?? null
-  )
+  const selectHandles = (): string[] =>
+    resolveGroupAddress(groupAddress, from, candidates, (handle) => statuses.get(handle) ?? null)
+  let handles = selectHandles()
+  // Terminal agent ids are known to the identity store, which answers asynchronously; a changed
+  // selection asks again, a bounded number of times, rather than mailing stale recipients.
+  const terminalRecipients = new Map<string, TerminalAgentRecipient>()
+  for (let attempt = 0; ; attempt++) {
+    const unresolved = [...handles, from].filter((handle) => !terminalRecipients.has(handle))
+    if (unresolved.length === 0) {
+      break
+    }
+    if (attempt === MAX_RECIPIENT_RESOLUTIONS) {
+      throw new OrchestrationError(
+        'terminal_not_found',
+        `The recipients of ${groupAddress} kept changing while they were resolved. No message was sent.`
+      )
+    }
+    const resolved = await Promise.all(
+      unresolved.map(
+        async (handle) => [handle, await resolveTerminalAgentRecipient(handle)] as const
+      )
+    )
+    for (const [handle, terminal] of resolved) {
+      terminalRecipients.set(handle, terminal)
+    }
+    ;({ candidates, groupWarnings } = selectCandidates())
+    handles = selectHandles()
+  }
   if (handles.length === 0) {
     // Preserve the recovery addresses even when every worker was skipped.
     const skipped = groupWarnings.map((warning) => warning.message).join(' ')
@@ -205,14 +237,6 @@ export async function sendGroupMessage(args: {
   }
 
   const legacyAdoptedMailboxOwner = db.getLegacyAdoptedRunMailboxOwner()
-  // Terminal agent ids are known to the identity store, which answers asynchronously.
-  const terminalRecipients = new Map(
-    await Promise.all(
-      [...handles, from].map(
-        async (handle) => [handle, await resolveTerminalAgentRecipient(handle)] as const
-      )
-    )
-  )
   const resolvedRecipients = handles.map((handle): BareRecipientResolution => {
     const mailbox = candidates.find((candidate) => candidate.handle === handle)?.mailbox
     return mailbox

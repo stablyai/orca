@@ -38,6 +38,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       programStatus,
       programStatusOnly,
       agentIdentity,
+      identityOnly,
       agentPresence
     }) => {
       if (state.mainWindow?.isDestroyed()) {
@@ -103,8 +104,8 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       }
       state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
       getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
-      // A facet-only republish (progress tick) is not a state the agent entered.
-      if (programStatusOnly !== true) {
+      // A facet-only republish (progress tick) or a settled id is not a state the agent entered.
+      if (programStatusOnly !== true && identityOnly !== true) {
         options.onRecordAgentState(payload.agentType ?? 'unknown', payload.state)
       }
     }
