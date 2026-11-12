@@ -43,22 +43,23 @@ const CANDIDATE_JOINS = `LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
 const SEED_SQL = `WITH seed(id) AS (
     SELECT id FROM dispatch_contexts
      WHERE run_id = ?1 AND status IN ('pending', 'dispatched', 'failed', 'circuit_broken')
-    UNION SELECT dispatch_id FROM worker_dispatches
+    UNION ALL SELECT dispatch_id FROM worker_dispatches
      WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
-    UNION SELECT owner_dispatch_id FROM worker_terminal_resources
+    UNION ALL SELECT owner_dispatch_id FROM worker_terminal_resources
      WHERE release_state IN ('not_requested', 'requested', 'releasing', 'unknown')
        AND ownership_state = 'owned'
-    UNION SELECT r.owner_dispatch_id FROM worker_terminal_resources r
+    UNION ALL SELECT r.owner_dispatch_id FROM worker_terminal_resources r
      WHERE r.release_state IN ('not_requested', 'requested', 'releasing', 'unknown', 'retained')
        AND NOT EXISTS (SELECT 1 FROM worker_dispatches w WHERE w.dispatch_id = r.owner_dispatch_id)
-    UNION SELECT dispatch_id FROM attempt_observation_facts WHERE facet = 'liveness')
+    UNION ALL SELECT dispatch_id FROM attempt_observation_facts WHERE facet = 'liveness')
   SELECT ${CANDIDATE_COLUMNS}
     FROM seed CROSS JOIN dispatch_contexts d ON d.id = seed.id AND d.run_id = ?1
     ${CANDIDATE_JOINS}`
 
 /** Newest-first position in the Run, which is how worker-list pages it. */
-const RUN_POSITION_SQL = `SELECT COUNT(*) AS position FROM dispatch_contexts
-  WHERE run_id = ? AND rowid > ?`
+const RUN_POSITION_SQL = `SELECT requested.value AS database_id,
+    (SELECT COUNT(*) FROM dispatch_contexts WHERE run_id = ?2 AND rowid > requested.value) AS position
+  FROM json_each(?1) AS requested`
 
 /** The row `offset` rows from `rowid` in the Run, newer or older. */
 const NEWER_ROW_SQL = `SELECT rowid AS database_id FROM dispatch_contexts
@@ -106,26 +107,34 @@ const isCandidate = (row: CandidateRow) => row.may_run === 1 || row.may_owe_acti
  */
 export function listWorkerReportWaitCandidates(this: OrchestrationDb, runId: string): string[][] {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects exactly these columns.
-  const seeded = this.db.prepare(SEED_SQL).all(runId) as CandidateRow[]
+  const seededRows = this.db.prepare(SEED_SQL).all(runId) as CandidateRow[]
+  // UNION ALL skips four de-duplicating sorts; a row two seeds name arrives twice.
+  const seeded = [...new Map(seededRows.map((row) => [row.dispatch_id, row])).values()]
   // Without a possibly running worker the hint cannot apply, so nothing needs projecting.
   if (!seeded.some((row) => row.may_run === 1)) {
     return []
   }
+  const candidates = seeded.filter(isCandidate)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects exactly these columns.
+  const positions = this.db
+    .prepare(RUN_POSITION_SQL)
+    .all(JSON.stringify(candidates.map((row) => row.database_id)), runId) as {
+    database_id: number
+    position: number
+  }[]
+  const positionOf = new Map(positions.map((row) => [row.database_id, row.position]))
   const pages = new Map<number, { anchor: CandidateRow; position: number; rows: CandidateRow[] }>()
-  for (const row of seeded.filter(isCandidate)) {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: COUNT(*) selects one number.
-    const { position } = this.db.prepare(RUN_POSITION_SQL).get(runId, row.database_id) as {
-      position: number
-    }
+  for (const row of candidates) {
+    const position = positionOf.get(row.database_id) ?? 0
     const page = Math.floor(position / ORCHESTRATION_FLEET_PAGE_MAX)
     const entry = pages.get(page) ?? { anchor: row, position, rows: [] }
     entry.rows.push(row)
     pages.set(page, entry)
   }
-  return [...pages.entries()].map(([page, { anchor, position, rows }]) => {
+  const groups = [...pages.entries()].map(([page, { anchor, position, rows }]) => {
     const keys = new Set(rows.flatMap(ownerKeys))
     if (keys.size === 0) {
-      return rows.map((row) => row.dispatch_id)
+      return rows
     }
     const rowAt = (sql: string, from: number, offset: number) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects one rowid.
@@ -155,9 +164,30 @@ export function listWorkerReportWaitCandidates(this: OrchestrationDb, runId: str
     const candidateIds = new Set(rows.map((row) => row.dispatch_id))
     return keptRowsOfPage([...rows, ...owners.filter((row) => !candidateIds.has(row.dispatch_id))])
   })
+  return mergeDisjointPages(groups)
 }
 
-function keptRowsOfPage(page: CandidateRow[]): string[] {
+/** Pages that share no identity project the same together, so join them up to one projection slice. */
+function mergeDisjointPages(pages: CandidateRow[][]): string[][] {
+  const merged: { rows: CandidateRow[]; keys: Set<string> }[] = []
+  for (const rows of pages) {
+    const keys = new Set(rows.flatMap(ownerKeys))
+    const target = merged.find(
+      (group) =>
+        group.rows.length + rows.length <= ORCHESTRATION_FLEET_PAGE_MAX &&
+        ![...keys].some((key) => group.keys.has(key))
+    )
+    if (target) {
+      target.rows.push(...rows)
+      keys.forEach((key) => target.keys.add(key))
+    } else {
+      merged.push({ rows, keys })
+    }
+  }
+  return merged.map((group) => group.rows.map((row) => row.dispatch_id))
+}
+
+function keptRowsOfPage(page: CandidateRow[]): CandidateRow[] {
   const kept = page.filter(isCandidate)
   // One more owner already makes a key shared; further owners change nothing.
   const unshared = new Set(kept.flatMap(ownerKeys))
@@ -168,5 +198,5 @@ function keptRowsOfPage(page: CandidateRow[]): string[] {
       kept.push(row)
     }
   }
-  return kept.map((row) => row.dispatch_id)
+  return kept
 }
