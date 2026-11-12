@@ -275,14 +275,14 @@ export class PRRefreshQueue {
   }
 
   ordered(
-    activeOrder: (a: PRRefreshQueueEntry, b: PRRefreshQueueEntry) => number
+    pacingOrder: (a: PRRefreshQueueEntry, b: PRRefreshQueueEntry) => number
   ): PRRefreshQueueEntry[] {
     const now = Date.now()
     return Array.from(this.entries.values()).sort((a, b) => {
       const aReady = a.dueAt <= now
       const bReady = b.dueAt <= now
       if (aReady && bReady) {
-        return b.priority - a.priority || activeOrder(a, b) || a.dueAt - b.dueAt
+        return pacingOrder(a, b) || b.priority - a.priority || a.dueAt - b.dueAt
       }
       if (aReady !== bReady) {
         return aReady ? -1 : 1

@@ -135,7 +135,7 @@ export class PRRefreshQueueDrainer {
 
   private ordered(): PRRefreshQueueEntry[] {
     this.watchJobs.age(this.queue.values(), Date.now())
-    return this.queue.ordered((a, b) => this.pacing.activeOrder(a, b))
+    return this.queue.ordered((a, b) => this.pacing.order(a, b))
   }
 
   private nextQueuedWakeDelay(excludedKey: string): number | null {
@@ -235,7 +235,7 @@ export class PRRefreshQueueDrainer {
             continue
           }
           if (next.bypassBackgroundBudget !== true && isBudgetedBackground(next.reason)) {
-            this.pacing.noteBackgroundStart()
+            this.pacing.noteBackgroundStart(next)
             this.watchJobs.noteBudgetedStart(next)
           }
           if (usesActiveRefreshPacing(next)) {

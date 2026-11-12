@@ -66,13 +66,13 @@ export function SourceControlMergedReviewNotice({
   } else if (worktree.isMainWorktree) {
     message = t(
       'auto.components.right.sidebar.SourceControl.mergedReviewNothingLeft',
-      '{{review}} is merged and everything on this branch is in it.',
+      '{{review}} is merged and includes this branch’s committed changes.',
       { review: label }
     )
   } else {
     message = t(
       'auto.components.right.sidebar.SourceControl.mergedReviewSafeToDelete',
-      '{{review}} is merged and everything in this workspace is in it. It is safe to delete.',
+      '{{review}} is merged and includes this branch’s committed changes. Ignored files may still be lost when deleting this workspace.',
       { review: label }
     )
   }
@@ -95,7 +95,8 @@ export function SourceControlMergedReviewNotice({
             onClick={() =>
               runWorktreeDelete(worktree.id, {
                 expectedHostId: worktree.hostId,
-                expectedInstanceId: worktree.instanceId
+                expectedInstanceId: worktree.instanceId,
+                forceConfirm: true
               })
             }
           >
