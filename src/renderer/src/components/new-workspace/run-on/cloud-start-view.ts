@@ -14,10 +14,12 @@ export type CloudStartView = {
   /** JA-21b (flagged): Orca Cloud is selected and a billing wall applies; Create waits for the fix. */
   wall?: OrcaCloudWallNotice | null
   /**
-   * RR-c1: Orca Cloud is selected but the project is a plain folder. Both selections stay; one line
-   * under Project says so and Create waits for a GitHub repository. `hasRepos`: any to choose from.
+   * RR-c1: Orca Cloud is selected but the project is a plain folder. Both selections stay and Create
+   * stays enabled; Create (button or ⌘↵) then stops before submitting and this error shows under
+   * Project. `hasRepos`: any to choose from. `attempt` counts those stopped Creates (focus moves to
+   * Project on each); absent until the first.
    */
-  needsGitHubRepo?: { hasRepos: boolean } | null
+  needsGitHubRepo?: { hasRepos: boolean; attempt?: number } | null
 }
 
 /**

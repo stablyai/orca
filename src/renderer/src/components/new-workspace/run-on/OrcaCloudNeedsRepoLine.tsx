@@ -4,8 +4,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import { ORCA_CLOUD_NEEDS_REPO_ID } from './cloud-start-view'
 
 /**
- * RR-c1 (design-squad): Orca Cloud is selected but the project is a plain folder. Nothing switches
- * on its own; this line says why Create waits and offers the one way forward: choose a GitHub
+ * RR-c1 (Neil): Project's error after Create was pressed with Orca Cloud on a plain folder. Nothing
+ * switches on its own; it says why Create stopped and offers the one way forward: choose a GitHub
  * repository (the Project picker opens at them), or add one when there are none.
  */
 export function OrcaCloudNeedsRepoLine({
@@ -21,11 +21,11 @@ export function OrcaCloudNeedsRepoLine({
   return (
     <div
       id={ORCA_CLOUD_NEEDS_REPO_ID}
-      role="status"
+      role="alert"
       className="flex flex-col items-start text-[11px]"
       data-orca-cloud-needs-repo
     >
-      <p className="text-muted-foreground">
+      <p className="text-destructive">
         {t(
           'components.newWorkspace.cloudOnly.needsRepository',
           'Orca Cloud needs a GitHub repository.'

@@ -1,6 +1,7 @@
 // The composer modal's side of Orca Cloud: feeds the composer state into useCloudStartComposer and
 // returns what the primary button and ⌘↵ do.
-import { useCallback, useEffect, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useMemo, type MutableRefObject } from 'react'
+import { useNeedsRepoSubmitGuard } from './use-needs-repo-submit-guard'
 import type { ComposerModalData } from '../composer-modal-data'
 import type { NewWorkspaceComposerCardProps } from '../new-workspace-composer-card-props'
 import { useCloudStartComposer } from './use-cloud-start-composer'
@@ -68,13 +69,18 @@ export function useComposerCloudStart({
   useEffect(() => {
     recordCreatedRef.current = cloudStart.recordCreated
   }, [cloudStart.recordCreated, recordCreatedRef])
+  // RR-c1 (Neil): Create stays enabled; one that needs a GitHub repository stops and says so.
+  const needsRepo = cloudStart.view?.needsGitHubRepo ?? null
+  const guard = useNeedsRepoSubmitGuard(needsRepo, cloudStart.onPrimary ?? runCreate)
+  const view = useMemo(
+    () => cloudStart.view && { ...cloudStart.view, needsGitHubRepo: guard.shown },
+    [cloudStart.view, guard.shown]
+  )
   return {
-    cloudStart,
+    cloudStart: { ...cloudStart, view },
     // Local and Orca Cloud share one button: same label, same rules for when it's enabled.
     // JA-21b: a billing wall on the selected Orca Cloud holds Create until it's fixed.
-    // RR-c1: a folder project on Orca Cloud waits for a GitHub repository; Create never fails after.
-    primaryCreateDisabled:
-      createDisabled || Boolean(cloudStart.view?.wall) || Boolean(cloudStart.view?.needsGitHubRepo),
-    onPrimary: cloudStart.onPrimary ?? runCreate
+    primaryCreateDisabled: createDisabled || Boolean(cloudStart.view?.wall),
+    onPrimary: guard.onPrimary
   }
 }

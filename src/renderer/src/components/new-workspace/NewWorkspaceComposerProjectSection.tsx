@@ -1,4 +1,5 @@
 import { OrcaCloudNeedsRepoLine } from './run-on/OrcaCloudNeedsRepoLine'
+import { ORCA_CLOUD_NEEDS_REPO_ID } from './run-on/cloud-start-view'
 import { OrcaCloudWallLine } from './run-on/OrcaCloudWallLine'
 import React from 'react'
 import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
@@ -104,12 +105,24 @@ export function NewWorkspaceComposerProjectSection({
   const t = useTranslate()
   // RR-c1: "Choose repository" opens the Project picker at its GitHub repositories.
   const [repoPickerSignal, setRepoPickerSignal] = React.useState(0)
+  // RR-c1: each stopped Create moves focus to Project, where the error is.
+  const projectFieldRef = React.useRef<HTMLDivElement | null>(null)
+  const needsRepo = cloudStart?.needsGitHubRepo ?? null
+  const repoAttempt = needsRepo?.attempt ?? 0
+  React.useEffect(() => {
+    if (repoAttempt > 0) {
+      // The Project picker's trigger (the one the error describes), not the Add project button.
+      projectFieldRef.current
+        ?.querySelector<HTMLElement>(`[aria-describedby="${ORCA_CLOUD_NEEDS_REPO_ID}"]`)
+        ?.focus()
+    }
+  }, [repoAttempt])
   return (
     <fieldset disabled={disabled} className="space-y-1">
       {/* One row, two equal columns: Project | Run on. Picking a target never changes the rows
           below it, so the dialog keeps its height (composer-redo). */}
       <div className={cn('grid gap-3', shouldShowRunTargetPicker && 'grid-cols-2')}>
-        <div className="min-w-0 space-y-1">
+        <div ref={projectFieldRef} className="min-w-0 space-y-1">
           <div className="flex h-5 items-center justify-between gap-2">
             <label className="text-xs font-medium text-muted-foreground">
               {projectLabel ?? t('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
@@ -166,17 +179,19 @@ export function NewWorkspaceComposerProjectSection({
                 t('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
               }
               triggerClassName="h-9 w-full border-input text-sm focus-visible:border-focus-ring focus-visible:ring-1 focus-visible:ring-focus-ring"
-              invalid={Boolean(projectError)}
-              describedBy={projectDescriptionId}
+              invalid={Boolean(projectError) || Boolean(needsRepo)}
+              describedBy={
+                !projectError && needsRepo ? ORCA_CLOUD_NEEDS_REPO_ID : projectDescriptionId
+              }
               openSignal={repoPickerSignal}
             />
             {projectError ? (
               <p id={projectDescriptionId} className="text-[11px] text-destructive">
                 {projectError}
               </p>
-            ) : cloudStart?.needsGitHubRepo ? (
+            ) : needsRepo ? (
               <OrcaCloudNeedsRepoLine
-                hasRepos={cloudStart.needsGitHubRepo.hasRepos}
+                hasRepos={needsRepo.hasRepos}
                 onChooseRepository={() => setRepoPickerSignal((signal) => signal + 1)}
                 onAddRepository={onAddProject}
               />
