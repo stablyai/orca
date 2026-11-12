@@ -19,7 +19,8 @@ vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
 
 const { githubPreviewRouteCandidates, pickGitHubPreviewRouteRepo } =
   await import('./native-chat-github-route-repo')
-const { loadRoutedGitHubLinkPreview } = await import('./native-chat-github-link-preview')
+const { loadRoutedGitHubLinkPreview, readCachedRoutedGitHubLinkPreview } =
+  await import('./native-chat-github-link-preview')
 
 function repo(id: string, extra: Partial<Repo> = {}): Repo {
   return { id, path: `/src/${id}`, displayName: id, badgeColor: '', addedAt: 0, ...extra }
@@ -87,5 +88,53 @@ describe('GitHub preview routing for a chat without a repo of its own', () => {
     const link = parseGitHubIssueOrPRLink('https://github.com/stablyai/orca-private/pull/686')!
     await expect(loadRoutedGitHubLinkPreview('local', link)).resolves.toBeNull()
     expect(mocks.lookup).not.toHaveBeenCalled()
+  })
+
+  it('uses the remaining repo after the repo that answered is removed', async () => {
+    const link = parseGitHubIssueOrPRLink('https://github.com/acme/private/pull/701')!
+    const alice = repo('alice', { ghAccount: { host: 'github.com', user: 'alice' } })
+    const bob = repo('bob', { ghAccount: { host: 'github.com', user: 'bob' } })
+    mocks.repos = [alice, bob]
+    mocks.slugs.set('alice', 'acme/alice')
+    mocks.slugs.set('bob', 'acme/bob')
+    mocks.lookup.mockImplementation(async ({ repoId }) => ({ title: `${repoId}'s preview` }))
+
+    await expect(loadRoutedGitHubLinkPreview('local', link)).resolves.toEqual({
+      title: "alice's preview"
+    })
+    mocks.repos = [bob]
+    expect(readCachedRoutedGitHubLinkPreview('local', link)).toBeNull()
+    await expect(loadRoutedGitHubLinkPreview('local', link)).resolves.toEqual({
+      title: "bob's preview"
+    })
+  })
+
+  it('leaves no cached preview when the last eligible repo is removed', async () => {
+    const link = parseGitHubIssueOrPRLink('https://github.com/acme/private/pull/702')!
+    mocks.repos = [repo('alice')]
+    mocks.slugs.set('alice', 'acme/alice')
+    mocks.lookup.mockResolvedValue({ title: "alice's preview" })
+
+    await expect(loadRoutedGitHubLinkPreview('local', link)).resolves.toEqual({
+      title: "alice's preview"
+    })
+    mocks.repos = []
+    expect(readCachedRoutedGitHubLinkPreview('local', link)).toBeNull()
+    await expect(loadRoutedGitHubLinkPreview('local', link)).resolves.toBeNull()
+  })
+
+  it('reloads a preview when the answering repo changes its account binding', async () => {
+    const link = parseGitHubIssueOrPRLink('https://github.com/acme/private/pull/703')!
+    const alice = repo('bound', { ghAccount: { host: 'github.com', user: 'alice' } })
+    mocks.repos = [alice]
+    mocks.slugs.set('bound', 'acme/bound')
+    mocks.lookup.mockResolvedValueOnce({ title: "alice's preview" }).mockResolvedValueOnce(null)
+
+    await expect(loadRoutedGitHubLinkPreview('local', link)).resolves.toEqual({
+      title: "alice's preview"
+    })
+    mocks.repos = [{ ...alice, ghAccount: { host: 'github.com', user: 'bob' } }]
+    expect(readCachedRoutedGitHubLinkPreview('local', link)).toBeNull()
+    await expect(loadRoutedGitHubLinkPreview('local', link)).resolves.toBeNull()
   })
 })

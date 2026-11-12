@@ -7,7 +7,10 @@ import { githubRepoIdentityKey } from '../../../../../../shared/github/repositor
 import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { createHoverPreviewCache } from './native-chat-hover-preview-cache'
-import { findGitHubPreviewRouteRepo } from './native-chat-github-route-repo'
+import {
+  findGitHubPreviewRouteRepo,
+  githubPreviewRouteCandidates
+} from './native-chat-github-route-repo'
 
 const previews = createHoverPreviewCache<GitHubWorkItem>({ freshMs: 60_000, maxEntries: 200 })
 
@@ -68,10 +71,22 @@ export function reloadGitHubLinkPreview(
   return loadGitHubLinkPreview(repo, link)
 }
 
-/** For a chat without a repo on the link's GitHub host; the repo that answers is picked on the chat's
- *  host when the card opens. */
-export function routedGitHubLinkPreviewKey(hostId: string, link: GitHubIssueOrPRLink): string {
-  return `${hostId}:routed:${githubRepoIdentityKey(link.slug)}#${link.number}:${link.type}`
+/** Candidate changes must rerun route selection before reusing an answer from another repo/account. */
+export function routedGitHubLinkPreviewKey(
+  hostId: string,
+  link: GitHubIssueOrPRLink,
+  repos: readonly Repo[] = useAppStore.getState().repos
+): string {
+  const routes = githubPreviewRouteCandidates(repos, hostId).map((repo) => [
+    repo.id,
+    repo.path,
+    repo.connectionId ?? null,
+    repo.ghAccount?.host ?? null,
+    repo.ghAccount?.user ?? null,
+    repo.upstream ?? null,
+    repo.gitRemoteIdentity ?? null
+  ])
+  return `${hostId}:routed:${githubRepoIdentityKey(link.slug)}#${link.number}:${link.type}:${JSON.stringify(routes)}`
 }
 
 export function readCachedRoutedGitHubLinkPreview(

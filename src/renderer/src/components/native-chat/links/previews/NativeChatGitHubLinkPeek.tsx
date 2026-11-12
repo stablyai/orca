@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
@@ -101,8 +102,31 @@ export function NativeChatGitHubPeekBody({
    *  Null shows just the name until then. Undefined for the chat repo's own links. */
   otherRepoFallback?: ReactNode
 }): ReactNode {
+  const key = useAppStore((state) =>
+    source.kind === 'repo'
+      ? githubLinkPreviewKey(source.repo, link)
+      : routedGitHubLinkPreviewKey(source.hostId, link, state.repos)
+  )
+  return (
+    <GitHubPeekContent
+      key={key}
+      lookup={peekLookup(source, link)}
+      link={link}
+      otherRepoFallback={otherRepoFallback}
+    />
+  )
+}
+
+function GitHubPeekContent({
+  lookup,
+  link,
+  otherRepoFallback
+}: {
+  lookup: ReturnType<typeof peekLookup>
+  link: GitHubIssueOrPRLink
+  otherRepoFallback?: ReactNode
+}): ReactNode {
   const t = useTranslate()
-  const lookup = peekLookup(source, link)
   const { state, retry } = useNativeChatHoverPreview(lookup.key, lookup.read, lookup.load)
   if (otherRepoFallback && state.status !== 'ready') {
     return otherRepoFallback
