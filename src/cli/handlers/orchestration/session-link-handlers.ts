@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../../runtime-client'
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import { getOptionalStringFlag, getOptionalJsonFlag, getRequiredStringFlag } from '../../flags'
 import { sessionLinkSendReceipt } from '../../../shared/session-link-receipt'
 import {
