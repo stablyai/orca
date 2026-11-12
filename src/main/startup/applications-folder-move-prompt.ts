@@ -41,7 +41,7 @@ function movePromptOptions(): MessageBoxOptions {
     ),
     detail: translateMain(
       'applicationsFolderMove.prompt.detail',
-      'Orca is running from outside Applications, such as a disk image or Downloads. From there it can’t install updates, and ejecting a disk image while Orca is open can crash it. Orca will quit and reopen from Applications.'
+      'Orca is running from outside Applications, such as a disk image or Downloads. From there it can’t install updates, and ejecting a disk image while Orca is open can crash it. Orca will move itself into Applications, then quit and reopen. Your settings and sessions are kept.'
     )
   }
 }

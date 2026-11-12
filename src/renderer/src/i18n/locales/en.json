@@ -24363,7 +24363,7 @@
     "prompt": {
       "title": "Move Orca to Applications?",
       "message": "Move Orca to your Applications folder?",
-      "detail": "Orca is running from outside Applications, such as a disk image or Downloads. From there it can’t install updates, and ejecting a disk image while Orca is open can crash it. Orca will quit and reopen from Applications.",
+      "detail": "Orca is running from outside Applications, such as a disk image or Downloads. From there it can’t install updates, and ejecting a disk image while Orca is open can crash it. Orca will move itself into Applications, then quit and reopen. Your settings and sessions are kept.",
       "moveButton": "Move and Relaunch",
       "notNowButton": "Not Now",
       "neverButton": "Don’t Ask Again"
