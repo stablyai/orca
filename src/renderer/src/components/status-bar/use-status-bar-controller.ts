@@ -17,13 +17,15 @@ import { useStatusBarDensity } from './status-bar-density'
 import { getUsageOwnerHostScope, useOwnerUsageRateLimits } from './use-owner-usage-rate-limits'
 import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
 import { useTranslate } from '@/i18n/use-translate'
+import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const t = useTranslate()
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const localRateLimits = useAppStore((s) => s.rateLimits)
   // Why: with a remote account owner the agents run there, so its usage is the one to show.
-  const { rateLimits, remoteOwner, refreshRemote } = useOwnerUsageRateLimits(localRateLimits)
+  const ownerUsage = useOwnerUsageRateLimits(localRateLimits)
+  const { rateLimits, remoteOwner, refreshRemote } = ownerUsage
   const remoteOwned = remoteOwner !== null
   const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
@@ -299,6 +301,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     menuOpen,
     menuPoint,
     overflowing,
+    ownerUsage,
+    ownerUsageKey: getProviderAccountsOwnerKey(hostScope),
     petEnabled,
     recordFeatureInteraction,
     remoteOwner,

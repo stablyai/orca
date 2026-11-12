@@ -1,4 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { setRendererUiLanguage } from '@/i18n/i18n'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { CodexManagedAccount } from '../../../../shared/managed-account-types'
 import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
@@ -97,11 +98,11 @@ function weeklyWindow(usedPercent: number, resetsInDays: number): RateLimitWindo
   }
 }
 
-function usageFor(account: SampleAccount): ProviderRateLimits {
+function usageFor(account: SampleAccount, weeklyOnly = false): ProviderRateLimits {
   return {
     provider: 'codex',
     session:
-      account.weekly === null
+      account.weekly === null || weeklyOnly
         ? null
         : {
             usedPercent: 32,
@@ -134,24 +135,39 @@ function switcherFixture(
   accounts: SampleAccount[],
   asSubmenu = false,
   staleRestart = false,
-  systemDefaultOnly = false
+  systemDefaultOnly = false,
+  remote = false
 ) {
   const [active, ...inactive] = accounts
   const codex: ProviderRateLimits = {
-    ...usageFor(active),
+    ...usageFor(active, remote),
     rateLimitResetCredits: { availableCount: 1, nextExpiresAt: NOW + 29 * DAY }
   }
   const inactiveCodexAccounts: InactiveAccountUsage[] = inactive.map((account) => ({
     accountId: account.id,
-    rateLimits: usageFor(account),
+    rateLimits: usageFor(account, remote),
     updatedAt: NOW - 60_000,
     isFetching: false
   }))
+  const rateLimits = createEmptyRateLimitState({ codex, inactiveCodexAccounts })
+  const snapshot = {
+    claude: { accounts: [], activeAccountId: null },
+    codex: { accounts: accounts.map(managed), activeAccountId: active.id },
+    rateLimits
+  }
+  const ownerUsage = remote
+    ? {
+        rateLimits,
+        remoteOwner: { environmentId: 'laptop', label: 'Laptop' },
+        refreshRemote: null
+      }
+    : undefined
   return defineFixture({
     width: 520,
     store: {
       settings: {
         ...getDefaultSettings('/home/me'),
+        activeRuntimeEnvironmentId: remote ? 'laptop' : null,
         codexManagedAccounts: systemDefaultOnly ? [] : accounts.map(managed),
         activeCodexManagedAccountId: systemDefaultOnly ? null : active.id,
         activeCodexManagedAccountIdsByRuntime: {
@@ -159,7 +175,12 @@ function switcherFixture(
           wsl: {}
         }
       },
-      rateLimits: createEmptyRateLimitState({ codex, inactiveCodexAccounts }),
+      rateLimits: remote
+        ? createEmptyRateLimitState({
+            codex: { ...codex, weekly: weeklyWindow(99, 1) },
+            codexTarget: { runtime: 'host', wslDistro: null }
+          })
+        : rateLimits,
       ...(staleRestart
         ? {
             tabsByWorktree: { wt1: [makeTab({ id: 'tab1', worktreeId: 'wt1' })] },
@@ -178,6 +199,19 @@ function switcherFixture(
       // Settings already carry the roster; the web bridge has no local account IPC to answer.
       window.api.codexAccounts.list = async () => ({ accounts: [], activeAccountId: null })
       window.api.claudeAccounts.list = async () => ({ accounts: [], activeAccountId: null })
+      if (remote) {
+        window.api.runtimeEnvironments.subscribe = async (_request, handlers) => {
+          queueMicrotask(() =>
+            handlers.onResponse({
+              id: 'fixture',
+              ok: true,
+              _meta: { runtimeId: 'laptop' },
+              result: { type: 'ready', snapshot }
+            })
+          )
+          return { unsubscribe: () => {}, sendBinary: () => true }
+        }
+      }
     },
     render: () => (
       <div className="flex h-[760px] items-end bg-background p-3">
@@ -187,6 +221,7 @@ function switcherFixture(
             <DropdownMenuContent>
               <CodexSwitcherMenu
                 codex={codex}
+                ownerUsage={ownerUsage}
                 compact={false}
                 iconOnly={false}
                 asSubmenu
@@ -195,11 +230,19 @@ function switcherFixture(
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <CodexSwitcherMenu codex={codex} compact={false} iconOnly={false} />
+          <CodexSwitcherMenu
+            codex={codex}
+            ownerUsage={ownerUsage}
+            compact={false}
+            iconOnly={false}
+          />
         )}
       </div>
     ),
-    interact: (frame) => {
+    interact: async (frame) => {
+      if (remote) {
+        await setRendererUiLanguage('en')
+      }
       if (asSubmenu) {
         const trigger = frame.ownerDocument.querySelector<HTMLElement>(
           '[data-slot="dropdown-menu-sub-trigger"]'
@@ -230,3 +273,5 @@ export const transientUsageFailures = switcherFixture([
   { ...BASE_ACCOUNTS[2], weekly: null, error: 'Sign-in probe timed out' },
   { ...BASE_ACCOUNTS[3], weekly: null, error: 'Session index rebuilding' }
 ])
+
+export const pairedHost = switcherFixture(BASE_ACCOUNTS.slice(0, 5), false, false, false, true)
