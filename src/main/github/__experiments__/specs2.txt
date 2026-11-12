@@ -1,0 +1,76 @@
+ghes-desk-before-default-n10-focused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_CADENCE=default EXP_FOCUS=focused EXP_HOURS=3
+ghes-desk-after-default-n10-focused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_CADENCE=default EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-default-n10-unfocused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_CADENCE=default EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-before-reduced-n10-focused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_CADENCE=reduced EXP_FOCUS=focused EXP_HOURS=3
+ghes-desk-after-reduced-n10-focused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_CADENCE=reduced EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-reduced-n10-unfocused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_CADENCE=reduced EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-before-minimal-n10-focused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_CADENCE=minimal EXP_FOCUS=focused EXP_HOURS=3
+ghes-desk-after-minimal-n10-focused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_CADENCE=minimal EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-minimal-n10-unfocused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_CADENCE=minimal EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-before-off-n10-focused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_CADENCE=off EXP_FOCUS=focused EXP_HOURS=3
+ghes-desk-after-off-n10-focused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_CADENCE=off EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-off-n10-unfocused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_CADENCE=off EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-before-default-n10-unfocused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_FOCUS=unfocused EXP_HOURS=3
+ghes-desk-before-default-n10-hidden EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_FOCUS=hidden EXP_HOURS=3
+ghes-desk-after-default-n10-hidden EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=hidden EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-default-n10-unfocused-noidle EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=unfocused EXP_IDLE=none EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-default-n10-return EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=return EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-before-default-n10-mixed EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_WORKLOAD=mixed EXP_HOURS=3
+ghes-desk-after-default-n10-mixed EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=3
+dotcom-desk-before-default-n10 EXP_SCENARIO=desktop-before EXP_HOST=dotcom EXP_N=10 EXP_HOURS=3
+dotcom-desk-after-default-n10 EXP_SCENARIO=desktop-after EXP_HOST=dotcom EXP_N=10 EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-before-default-n50-focused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=50 EXP_CADENCE=default EXP_FOCUS=focused EXP_HOURS=3
+ghes-desk-after-default-n50-focused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_CADENCE=default EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-default-n50-unfocused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_CADENCE=default EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-before-reduced-n50-focused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=50 EXP_CADENCE=reduced EXP_FOCUS=focused EXP_HOURS=3
+ghes-desk-after-reduced-n50-focused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_CADENCE=reduced EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-reduced-n50-unfocused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_CADENCE=reduced EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-before-minimal-n50-focused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=50 EXP_CADENCE=minimal EXP_FOCUS=focused EXP_HOURS=3
+ghes-desk-after-minimal-n50-focused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_CADENCE=minimal EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-minimal-n50-unfocused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_CADENCE=minimal EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-before-off-n50-focused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=50 EXP_CADENCE=off EXP_FOCUS=focused EXP_HOURS=3
+ghes-desk-after-off-n50-focused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_CADENCE=off EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-off-n50-unfocused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_CADENCE=off EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-before-default-n50-unfocused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=50 EXP_FOCUS=unfocused EXP_HOURS=3
+ghes-desk-before-default-n50-hidden EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=50 EXP_FOCUS=hidden EXP_HOURS=3
+ghes-desk-after-default-n50-hidden EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=hidden EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-default-n50-unfocused-noidle EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=unfocused EXP_IDLE=none EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-default-n50-return EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=return EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-before-default-n50-mixed EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=50 EXP_WORKLOAD=mixed EXP_HOURS=3
+ghes-desk-after-default-n50-mixed EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=3
+dotcom-desk-before-default-n50 EXP_SCENARIO=desktop-before EXP_HOST=dotcom EXP_N=50 EXP_HOURS=3
+dotcom-desk-after-default-n50 EXP_SCENARIO=desktop-after EXP_HOST=dotcom EXP_N=50 EXP_JITTER=0.1 EXP_HOURS=3
+ghes-desk-after-default-n50-focused-j0 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_JITTER=0 EXP_HOURS=3
+ghes-desk-after-default-n50-focused-j25 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_JITTER=0.25 EXP_HOURS=3
+ghes-desk-after-default-n10-detect EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=12 EXP_EVENTS=1 EXP_JITTER=0.1
+serve-before-n14-c2 EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_HOURS=2
+serve-after-n14-c2 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=2
+serve-before-n10-c3 EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=10 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_HOURS=2
+serve-after-n10-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=10 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=2
+serve-before-n50-c3 EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_HOURS=2
+serve-after-n50-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=2
+serve-after-n50-c3-j0 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_JITTER=0 EXP_HOURS=2
+serve-after-n14-c2-settled EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_JITTER=0.1 EXP_HOURS=2
+serve-before-n14-c2-settled EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=2
+serve-oldclient-n14-c2 EXP_SCENARIO=serve-after-oldclient EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=2
+serve-before-n200-c1 EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=200 EXP_CLIENTS=1 EXP_WORKLOAD=mixed EXP_HOURS=2
+serve-after-n200-c1 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=200 EXP_CLIENTS=1 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=2
+serve-after-n50-c3-disjoint EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_DISJOINT=1 EXP_JITTER=0.1 EXP_HOURS=2
+serve-after-n14-c2-unfocused EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=2
+serve-before-reduced-n14-c2 EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_CADENCE=reduced EXP_HOURS=3
+serve-after-reduced-n14-c2 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_CADENCE=reduced EXP_HOURS=3 EXP_JITTER=0.1
+serve-before-ghes-n14-c2 EXP_SCENARIO=serve-before EXP_HOST=ghes EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_HOURS=2
+serve-after-ghes-n14-c2 EXP_SCENARIO=serve-after EXP_HOST=ghes EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=2
+serve-after-n14-c2-detect EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=12 EXP_EVENTS=1 EXP_JITTER=0.1
+serve-after-n14-c2-detect-j0 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=12 EXP_EVENTS=1 EXP_JITTER=0
+serve-after-n14-c2-detect-seed2 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=12 EXP_EVENTS=1 EXP_JITTER=0.1 EXP_SEED=2
+serve-oldclient-n14-c2-detect EXP_SCENARIO=serve-after-oldclient EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=12 EXP_EVENTS=1 EXP_JITTER=0.1
+serve-after-n14-c2-detect3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1
+serve-after-n14-c2-detect3-seed2 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_SEED=2
+serve-after-n14-c2-detect3-j0 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0
+serve-oldclient-n14-c2-detect3 EXP_SCENARIO=serve-after-oldclient EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1
+serve-after-reduced-n14-c2-detect3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=48 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CADENCE=reduced
+ghes-desk-after-default-n10-detect3 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1
+ghes-desk-after-default-n10-detect3-j0 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0
+ghes-desk-before-default-n10-detect3 EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3
+serve-before-n14-c2-detect3 EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3
