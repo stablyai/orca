@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MobileNotificationEvent } from './notifications/runtime-mobile-notification-controller'
 import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import { DesktopPushService } from './desktop-push-service'
@@ -30,6 +30,7 @@ function createService(
   deviceId: string
   deletes: string[]
   send: ReturnType<typeof vi.fn>
+  registerDevice: ReturnType<typeof vi.fn>
   dispatch: (event: MobileNotificationEvent) => void
   retries: { run: () => void; delayMs: number }[]
 } {
@@ -88,6 +89,7 @@ function createService(
     deviceId: device.deviceId,
     deletes,
     send: client.send,
+    registerDevice: client.registerDevice,
     dispatch: (event) => listener?.(event),
     retries
   }
@@ -248,4 +250,72 @@ it('does not claim success for missing registrations or failed gateway sends', a
     results: [{ registrationId: 'reg-1', status: 'rate_limited' }]
   })
   await expect(service.test(deviceId)).resolves.toEqual({ accepted: false, reason: 'rate_limited' })
+})
+
+describe('host mobile push privacy', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('keeps existing content delivery when the host has no privacy override', async () => {
+    vi.stubEnv('ORCA_MOBILE_PUSH_MODE', undefined)
+    const h = createService()
+    try {
+      await h.service.register({ ...REGISTER_INPUT, deviceId: h.deviceId })
+      h.dispatch({
+        type: 'notification',
+        source: 'terminal-bell',
+        title: 'Private project',
+        body: 'Agent context',
+        notificationId: 'project-alert',
+        notificationSeq: 1,
+        notificationEpoch: 'epoch'
+      })
+      expect(h.send).toHaveBeenCalledWith({
+        registrationIds: ['reg-1'],
+        notification: expect.objectContaining({
+          title: 'Private project',
+          body: 'Agent context',
+          notificationId: 'project-alert'
+        })
+      })
+    } finally {
+      h.service.stop()
+    }
+  })
+
+  it.each(['disabled', 'invalid-mode'])(
+    'blocks registration and delivery in %s mode while retaining cleanup',
+    async (mode) => {
+      vi.stubEnv('ORCA_MOBILE_PUSH_MODE', mode)
+      const h = createService()
+      try {
+        await expect(
+          h.service.register({ ...REGISTER_INPUT, deviceId: h.deviceId })
+        ).resolves.toEqual({ registered: false, reason: 'gateway_rejected' })
+        expect(h.registerDevice).not.toHaveBeenCalled()
+        h.registry.setPushRegistration(h.deviceId, {
+          registrationId: 'existing-reg',
+          filter: {},
+          expiresAt: Date.now() + 60_000
+        })
+        h.dispatch({
+          type: 'notification',
+          source: 'terminal-bell',
+          title: 'Private',
+          body: 'Context',
+          notificationSeq: 1,
+          notificationEpoch: 'epoch'
+        })
+        await expect(h.service.test(h.deviceId)).resolves.toEqual({
+          accepted: false,
+          reason: 'unavailable'
+        })
+        expect(h.send).not.toHaveBeenCalled()
+        await h.service.unregister(h.deviceId)
+        await h.service.flushUnregisterOutbox()
+        expect(h.deletes).toEqual(['existing-reg'])
+      } finally {
+        h.service.stop()
+      }
+    }
+  )
 })
