@@ -1,11 +1,11 @@
 import React from 'react'
 import type { LucideIcon } from 'lucide-react'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
-import { CloudStateDot } from './CloudStateDot'
+import { CloudStatusGlyph } from './CloudStatusGlyph'
 
 /**
  * The one header for full-pane Orca Cloud views (asleep, archived): a small state icon, the workspace name
- * as the title, a state line led by the state dot, and one primary action.
+ * as the title, a state line led by the cloud showing that state, and one primary action.
  */
 export function CloudWorkspaceHeader({
   icon: Icon,
@@ -42,7 +42,7 @@ export function CloudWorkspaceHeader({
             {title}
           </h2>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <CloudStateDot state={state} size="md" />
+            <CloudStatusGlyph state={state} size={14} />
             <span className="truncate" title={stateTitle}>
               {stateLine}
             </span>

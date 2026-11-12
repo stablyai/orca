@@ -35,7 +35,7 @@ import {
 } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { useCloudSync } from '@/lib/orca-cloud/cloud-sync-store'
 import type { CloudSyncView } from '../../../../shared/cloud-sync/cloud-sync-contract'
-import { CloudStateDot } from './CloudStateDot'
+import { CloudStatusGlyph } from './CloudStatusGlyph'
 import { cloudStateLabel } from './cloud-state-copy'
 import { CloudWorkspaceSyncSection } from './CloudWorkspaceSyncSection'
 import { CloudWorkspaceCardDetails, MeterSkeleton } from './CloudWorkspaceCardDetails'
@@ -215,7 +215,10 @@ export function CloudWorkspaceStatusPanel({
           <div className="truncate text-[13px] font-medium text-foreground">{name}</div>
         ) : null}
         <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-muted-foreground">
-          <CloudStateDot state={unavailable ? 'unknown' : state} size="md" />
+          <CloudStatusGlyph
+            state={unavailable ? 'unknown' : restarting ? 'restarting' : state}
+            size={14}
+          />
           <span className="min-w-0 truncate">
             <span className="text-foreground">
               {unavailable ? (
