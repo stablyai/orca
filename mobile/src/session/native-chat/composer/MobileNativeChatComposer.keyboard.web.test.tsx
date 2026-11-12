@@ -188,6 +188,18 @@ describe('mobile composer modifier submit in the paired web page', () => {
     expect(field().value).toBe(' hello ')
   })
 
+  it('sends with Cmd+Enter, not Ctrl+Enter, in a desktop Mac browser', async () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36'
+    )
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel')
+    await render()
+    expect((await key({ ctrlKey: true })).defaultPrevented).toBe(false)
+    expect(onSend).not.toHaveBeenCalled()
+    expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
+    expect(onSend).toHaveBeenCalledTimes(1)
+  })
+
   it.each([
     { value: '@rea', expected: '@README.md ', filePaths: ['README.md', 'src/read.ts'] },
     { value: '/comp', expected: '/compact ', filePaths: [] }
