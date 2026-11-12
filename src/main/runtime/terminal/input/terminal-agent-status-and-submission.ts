@@ -156,7 +156,7 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     const incarnationId = pty?.incarnationId
     const generation = recoverCompletedHook ? this.getPtyLifecycleGeneration(ptyId) : null
     const titleObservedAt = pty?.lastOscTitleAt ?? null
-    const foregroundRead = this.readPtyForegroundProcessFromController(ptyId, titleObservedAt ?? 0)
+    const foregroundRead = this.ptyForegroundAgent.readFresh(ptyId, titleObservedAt ?? 0)
     if (!pty?.connected || !foregroundRead) {
       if (keepOnSilence) {
         this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()

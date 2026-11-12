@@ -70,6 +70,26 @@ export class RuntimePtyForegroundAgent {
     return entry.promise
   }
 
+  readFresh(ptyId: string, titleObservedAt: number): Promise<PtyForegroundProcessRead> | null {
+    const controller = this.deps.getController()
+    const confirm = controller?.confirmForegroundProcess?.bind(controller)
+    if (!controller || !confirm) {
+      return this.read(ptyId, titleObservedAt)
+    }
+    return Promise.resolve()
+      .then(() => confirm(ptyId))
+      .catch(() => null)
+      .then((process) =>
+        process === null
+          ? (this.read(ptyId, titleObservedAt) ?? {
+              controller,
+              process: null,
+              available: false
+            })
+          : { controller, process, available: true }
+      )
+  }
+
   refresh(ptyId: string, afterTitle = 0): Promise<boolean> {
     const pending = this.refreshes.get(ptyId)
     if (pending) {

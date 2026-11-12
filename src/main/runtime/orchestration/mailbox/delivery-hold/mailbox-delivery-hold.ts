@@ -2,6 +2,8 @@
  *  receipt says only what is true at send time. Null means delivery would go ahead. */
 
 export type MailboxDeliveryHold =
+  | { kind: 'not-foreground'; agentName: string }
+  | { kind: 'not-live'; agentName: string }
   /** A terminal dialog only a person can answer. */
   | { kind: 'prompt' }
   /** Typed text in the worker's terminal that delivery would submit with the mail. */
@@ -34,7 +36,9 @@ export type MailboxDeliveryHoldReaders = {
   readChatAdmit: (sessionId: string) => Promise<ChatMailAdmitFacts | null>
   /** The terminal handle a mailbox's pointer is typed into, if a terminal holds it. */
   terminalFor: (mailbox: string) => string | null
-  readTerminalHold: (terminalHandle: string) => MailboxDeliveryHold | null
+  readTerminalHold: (
+    terminalHandle: string
+  ) => MailboxDeliveryHold | null | Promise<MailboxDeliveryHold | null>
 }
 
 /** The chat pointer's own admission order: no fence or no attachment parks, a refusal parks, and an
@@ -65,6 +69,10 @@ export async function readMailboxDeliveryHold(
 
 export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeliveryHold): string {
   switch (hold.kind) {
+    case 'not-foreground':
+      return `Queued. ${hold.agentName} isn't in the foreground of that terminal; the message will be delivered when it's back.`
+    case 'not-live':
+      return `Queued. The message will arrive once ${hold.agentName} is back.`
     case 'prompt':
       return `Queued. ${recipient} is at a prompt that needs a person; delivery is held while it stays open.`
     case 'draft':

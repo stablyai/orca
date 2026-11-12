@@ -15,7 +15,7 @@ import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './pty-handle-invalida
 export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInvalidateAllHandlesForPty {
   abstract readLaunchedAgentForeground(
     ptyId: string,
-    agent: TuiAgent
+    agent?: TuiAgent
   ): Promise<LaunchedAgentForeground>
 
   protected abstract watchLaunchComposer(ptyId: string, agent: TuiAgent | null): void

@@ -19,6 +19,7 @@ import {
 } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
@@ -62,6 +63,10 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
 
   /** Point a terminal at its mail once it takes input and is settled; refusal re-arms the recheck. */
   protected deliverPendingMessagesForPty(ptyId: string): void {
+    if (this.orchestrationMailboxPointerDelivery.isForegroundHeld(ptyId)) {
+      this.clearDeliveryRecheck(ptyId)
+      return
+    }
     const terminal = this.getOrchestrationMailboxTerminal(ptyId)
     if (
       terminal &&
@@ -125,9 +130,33 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   }
 
   /** Why delivery would hold mail for this worker terminal now, for a send receipt: the gate's own reason. */
-  readTerminalMailHold(terminalHandle: string): MailboxDeliveryHold | null {
-    const ptyId = this.getOrchestrationMailboxTerminalForHandle(terminalHandle)?.ptyId
-    const refusal = ptyId ? this.deliveryRefusal(ptyId) : null
+  async readTerminalMailHold(terminalHandle: string): Promise<MailboxDeliveryHold | null> {
+    const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(terminalHandle)
+    const ptyId = terminal?.ptyId
+    if (!ptyId) {
+      return null
+    }
+    const incarnation = this.ptysById.get(ptyId)?.incarnationId
+    const foreground = await this.orchestrationMailboxPointerDelivery.probeForeground(ptyId)
+    if (
+      this.ptysById.get(ptyId)?.incarnationId !== incarnation ||
+      this.orchestrationMailboxDeliveryTarget.resolveTerminal(terminalHandle)?.ptyId !== ptyId
+    ) {
+      return null
+    }
+    if (foreground === 'shell' && incarnation) {
+      this.orchestrationMailboxPointerDelivery.holdForeground(ptyId)
+      this.clearDeliveryRecheck(ptyId)
+    }
+    const agent = this.getPaneTerminalAgent(ptyId)
+    const agentName = (agent && tuiAgentDisplayName(agent)) || 'The agent'
+    if (this.orchestrationMailboxPointerDelivery.isForegroundHeld(ptyId)) {
+      return { kind: 'not-foreground', agentName }
+    }
+    if (!terminal.lastAgentStatusObservedLive) {
+      return { kind: 'not-live', agentName }
+    }
+    const refusal = this.deliveryRefusal(ptyId)
     return refusal === 'no-terminal' ? null : refusal
   }
 

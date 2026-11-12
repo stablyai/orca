@@ -28,9 +28,6 @@ async function readDeliveryHoldWarning(
   db: OrchestrationDb,
   recipient: string
 ): Promise<SendRecipientWarning | null> {
-  if (recipient.startsWith('run:')) {
-    return null
-  }
   const hold = await readMailboxDeliveryHold(recipient, {
     chatSessionFor: (mailbox) => {
       const custody = structuredMailboxCustody(mailbox, db)
@@ -38,6 +35,9 @@ async function readDeliveryHoldWarning(
     },
     readChatAdmit: readStructuredMailAdmitFacts,
     terminalFor: (mailbox) => {
+      if (mailbox.startsWith('run:')) {
+        return mailbox
+      }
       if (!mailbox.startsWith('dispatch:')) {
         return mailbox
       }
@@ -46,7 +46,8 @@ async function readDeliveryHoldWarning(
     },
     readTerminalHold: (handle) => runtime.readTerminalMailHold(handle)
   })
-  return hold
+  return hold &&
+    (!recipient.startsWith('run:') || hold.kind === 'not-foreground' || hold.kind === 'not-live')
     ? {
         code: 'recipient_delivery_held',
         recipient,

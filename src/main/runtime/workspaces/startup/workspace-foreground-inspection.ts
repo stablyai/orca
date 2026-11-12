@@ -15,7 +15,7 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
   /** Read at the physical owner; discard a result that outlived this runtime binding. */
   async readLaunchedAgentForeground(
     ptyId: string,
-    agent: TuiAgent
+    agent?: TuiAgent
   ): Promise<LaunchedAgentForeground> {
     const pty = this.ptysById.get(ptyId)
     const incarnation = pty?.incarnationId

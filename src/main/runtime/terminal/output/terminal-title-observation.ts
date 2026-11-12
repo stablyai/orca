@@ -101,6 +101,9 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
      *  `status`: the agent reported its status some other way, so the title is not classified. */
     { statusOnly = false, status }: { statusOnly?: boolean; status?: AgentStatus } = {}
   ): boolean {
+    if (!meta?.staleWorkingTitleClear) {
+      this.orchestrationMailboxPointerDelivery.observeTerminal(ptyId)
+    }
     if (meta?.staleWorkingTitleClear) {
       return this.applyStaleWorkingTitleClear(ptyId, rawTitle, normalizedTitle)
     }

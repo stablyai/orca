@@ -19,6 +19,7 @@ type PointerSubmitDependencies = {
   state: OrchestrationMailboxPointerState
   getDb: () => OrchestrationDb | null
   resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
+  readForeground: (ptyId: string) => Promise<'agent' | 'shell' | 'unknown'>
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
@@ -62,6 +63,7 @@ export function submitOrchestrationMailboxPointer(
         clearAndRedrive = true
         return
       }
+      const foreground = await deps.readForeground(input.ptyId)
       if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
         finalizeReservation = false
         return
@@ -77,6 +79,10 @@ export function submitOrchestrationMailboxPointer(
       const queueSafe = !!terminal && isMailboxTerminalTakingInput(terminal)
       if (!terminal || !sameMailbox) {
         clearAndRedrive = true
+      } else if (foreground === 'shell') {
+        deps.state.holdForeground(input.ptyId, input.expectedTarget.processIncarnation)
+        clearAndRedrive = true
+        redriveClearedPointer = false
       } else if (
         (terminal.lastAgentStatusObservedLive && terminal.lastAgentStatus === null) ||
         deps.isPtyAwaitingUserInput(input.ptyId)

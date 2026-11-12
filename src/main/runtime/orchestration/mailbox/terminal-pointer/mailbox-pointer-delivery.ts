@@ -30,6 +30,10 @@ function pointerEnterDelayMs(): number {
 
 export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMessageWaiter> {
   private readonly state = new OrchestrationMailboxPointerState()
+  private readonly foregroundDeferredMailboxes = new Map<
+    string,
+    Map<string, ReadonlySet<string> | undefined>
+  >()
   private readonly coldParkedPtys = new Set<string>()
   constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {}
 
@@ -55,6 +59,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       mailboxHandle: string
       reservedTypes?: ReadonlySet<string>
       skipAbsenceProbe?: boolean
+      foregroundProbeIncarnation?: string
     }
   ): void {
     const db = this.deps.getDb()
@@ -69,6 +74,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       return
     }
     const { ptyId } = terminal
+    if (this.isForegroundHeld(ptyId)) {
+      return
+    }
     // Gate live, settled input at this shared commit point; refusal parks for recheck instead of dropping mail.
     if (!isMailboxTerminalTakingInput(terminal) || !this.deps.isAgentSettledForDelivery(ptyId)) {
       this.parkRedelivery(mailboxHandle, options.reservedTypes)
@@ -131,6 +139,40 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     ) {
       return
     }
+    const target = this.deps.resolveSubmitTarget(ptyId)
+    if (!target) {
+      return
+    }
+    if (options.foregroundProbeIncarnation !== target.processIncarnation) {
+      const deferred = this.foregroundDeferredMailboxes.get(ptyId)
+      if (deferred) {
+        deferred.set(mailboxHandle, options.reservedTypes)
+        return
+      }
+      const mailboxes = new Map([[mailboxHandle, options.reservedTypes]])
+      this.foregroundDeferredMailboxes.set(ptyId, mailboxes)
+      void this.probeForeground(ptyId)
+        .then((foreground) => {
+          this.foregroundDeferredMailboxes.delete(ptyId)
+          const current = this.deps.resolveSubmitTarget(ptyId)
+          if (current?.processIncarnation === target.processIncarnation && foreground === 'shell') {
+            this.holdForeground(ptyId, target.processIncarnation)
+          }
+          for (const [probedMailbox, reservedTypes] of mailboxes) {
+            const terminal = this.deps.getTerminal(ptyId)
+            if (terminal) {
+              this.deliver(terminal, {
+                mailboxHandle: probedMailbox,
+                reservedTypes,
+                skipAbsenceProbe: true,
+                foregroundProbeIncarnation: target.processIncarnation
+              })
+            }
+          }
+        })
+        .catch(() => undefined)
+      return
+    }
     // Every path stages here, async retries included: type only for a mailbox this terminal still owns.
     if (
       this.deps.mailboxOwner.resolve(terminal, mailboxHandle, { routeDirectMail: false }) !==
@@ -154,11 +196,43 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     })
   }
 
+  probeForeground(ptyId: string): Promise<'agent' | 'shell' | 'unknown'> {
+    return this.state.probeForeground(ptyId, () => this.deps.readForeground(ptyId))
+  }
+
+  holdForeground(
+    ptyId: string,
+    processIncarnation = this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
+  ): void {
+    if (processIncarnation) {
+      this.state.holdForeground(ptyId, processIncarnation)
+    }
+  }
+
+  isForegroundHeld(ptyId: string): boolean {
+    const hold = this.state.foregroundHold(ptyId)
+    if (!hold) {
+      return false
+    }
+    if (hold === this.deps.resolveSubmitTarget(ptyId)?.processIncarnation) {
+      return true
+    }
+    this.observeTerminal(ptyId)
+    return false
+  }
+
+  observeTerminal(ptyId: string): void {
+    if (this.state.clearForegroundHold(ptyId)) {
+      queueMicrotask(() => this.deps.redriveTerminal(ptyId))
+    }
+  }
+
   parkRedelivery(mailboxHandle: string, reservedTypes?: ReadonlySet<string>): void {
     this.state.parkRedelivery(mailboxHandle, reservedTypes)
   }
 
   retirePty(ptyId: string): void {
+    this.observeTerminal(ptyId)
     this.coldParkedPtys.delete(ptyId)
     const { flight, releasedMailboxes } = this.state.retirePty(ptyId)
     if (flight?.enterTimer != null) {

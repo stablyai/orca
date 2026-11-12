@@ -21,6 +21,41 @@ export class OrchestrationMailboxPointerState {
   private readonly watermarkMailboxesByPtyId = new Map<string, Set<string>>()
   private readonly parkedTypesByMailbox = new Map<string, ReadonlySet<string> | null>()
 
+  private readonly foregroundHolds = new Map<string, string>()
+  private readonly foregroundProbes = new Map<string, Promise<'agent' | 'shell' | 'unknown'>>()
+
+  probeForeground(
+    ptyId: string,
+    read: () => Promise<'agent' | 'shell' | 'unknown'>
+  ): Promise<'agent' | 'shell' | 'unknown'> {
+    const pending = this.foregroundProbes.get(ptyId)
+    if (pending) {
+      return pending
+    }
+    const probe = Promise.resolve()
+      .then(read)
+      .catch(() => 'unknown' as const)
+      .finally(() => {
+        if (this.foregroundProbes.get(ptyId) === probe) {
+          this.foregroundProbes.delete(ptyId)
+        }
+      })
+    this.foregroundProbes.set(ptyId, probe)
+    return probe
+  }
+
+  holdForeground(ptyId: string, processIncarnation: string): void {
+    this.foregroundHolds.set(ptyId, processIncarnation)
+  }
+
+  foregroundHold(ptyId: string): string | undefined {
+    return this.foregroundHolds.get(ptyId)
+  }
+
+  clearForegroundHold(ptyId: string): boolean {
+    return this.foregroundHolds.delete(ptyId)
+  }
+
   hasFlight(ptyId: string): boolean {
     return this.flightsByPtyId.has(ptyId)
   }

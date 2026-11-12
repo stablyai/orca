@@ -13,6 +13,7 @@ import {
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
 import { USER_INPUT_HOLD_CAP_MS } from '../../../terminal/wait/claude-open-dialog-hold'
+import { sendDeliveryHoldWarning } from '../../../rpc/methods/orchestration/messaging/send-delivery-hold'
 import { settledWriteStub } from '../../../../providers/settled-pty-write-stub'
 
 vi.mock('electron', () => ({
@@ -45,6 +46,113 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
+  })
+
+  it('keeps mail unread at a title-setting shell and delivers after the agent returns', async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-shell-mail-hold-')
+    const { runtime } = createRuntime(db, { launchAgent: null })
+    const write = vi.fn((_ptyId: string, _data: string) => true)
+    let foreground: 'codex' | 'zsh' = 'codex'
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: vi.fn(),
+      getForegroundProcess: async () => 'codex',
+      confirmForegroundProcess: async () => foreground,
+      confirmShellForeground: async () => foreground === 'zsh',
+      supportsForegroundObservation: () => true,
+      inspectProcess: async () => ({
+        foregroundProcess: foreground,
+        hasChildProcesses: foreground !== 'zsh',
+        foregroundObservation: {
+          ptyId: PTY_ID,
+          ptyIncarnationId: 'mailbox-incarnation',
+          authorityGeneration: 'mailbox-test',
+          observationEpoch: 1,
+          capturedAgeMs: 0,
+          verdict: 'observed',
+          source: 'pty-master',
+          foregroundKind: foreground === 'zsh' ? 'shell' : 'non-shell',
+          processName: foreground
+        }
+      })
+    })
+    const run = createBoundRun(db, 'Foreground delivery')
+    await runtime.listTerminals()
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 1)
+    await vi.advanceTimersByTimeAsync(200)
+
+    foreground = 'zsh'
+    runtime.onPtyData(PTY_ID, '\x1b]0;workspace shell\x07', 2)
+    await vi.advanceTimersByTimeAsync(200)
+    const message = insertDirectRunMessage(db, run.id, 'Worker finished')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(write).not.toHaveBeenCalled()
+    expect(db.getMessageById(message.id)).toMatchObject({ read: 0, delivered_at: null })
+    const receipt = await sendDeliveryHoldWarning(runtime, db, `run:${run.id}`)
+    expect(receipt?.code).toBe('recipient_delivery_held')
+
+    // A shell can reuse the last agent's title without giving it the terminal's input.
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 3)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(write).not.toHaveBeenCalled()
+    expect(db.getMessageById(message.id)).toMatchObject({
+      read: 0,
+      delivered_at: null,
+      pointer_enter_pending: 0
+    })
+    expect((await sendDeliveryHoldWarning(runtime, db, `run:${run.id}`))?.code).toBe(
+      'recipient_delivery_held'
+    )
+
+    foreground = 'codex'
+    // The unchanged title must still clear the mail hold and retry delivery.
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 4)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message'),
+      '\r'
+    ])
+    expect(db.getMessageById(message.id)).toMatchObject({
+      read: 0,
+      delivered_at: expect.any(String),
+      pointer_enter_pending: 0
+    })
+    expect(await sendDeliveryHoldWarning(runtime, db, `run:${run.id}`)).toBeNull()
+
+    write.mockClear()
+    const nextMessage = insertDirectRunMessage(db, run.id, 'Another worker finished')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message')
+    ])
+    foreground = 'zsh'
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message')
+    ])
+    expect(db.getMessageById(nextMessage.id)).toMatchObject({
+      read: 0,
+      delivered_at: null,
+      pointer_enter_pending: 0
+    })
+    foreground = 'codex'
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 5)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message'),
+      expect.stringContaining('You have 1 orchestration message'),
+      '\r'
+    ])
+    expect(db.getMessageById(nextMessage.id)).toMatchObject({
+      read: 0,
+      delivered_at: expect.any(String),
+      pointer_enter_pending: 0
+    })
+    db.close()
   })
 
   it.each([

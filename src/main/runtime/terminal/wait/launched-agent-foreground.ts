@@ -81,7 +81,7 @@ export async function readLaunchedAgentForeground(
   > | null,
   host: { remote: boolean; windows: boolean },
   ptyId: string,
-  agent: TuiAgent,
+  agent?: TuiAgent,
   expectedIncarnationId?: string
 ): Promise<LaunchedAgentForeground> {
   if (!controller) {
@@ -109,9 +109,13 @@ export async function readLaunchedAgentForeground(
         }
         // Local policy has always admitted any non-shell, including user wrappers.
         if (!host.remote) {
-          return observation.foregroundKind === 'shell' ? 'shell' : 'agent'
+          return observation.foregroundKind === 'shell' ? 'shell' : agent ? 'agent' : 'unknown'
         }
-        return judgeFreshForeground(observation.processName, agent)
+        return agent
+          ? judgeFreshForeground(observation.processName, agent)
+          : observation.processName && isLaunchShell(observation.processName)
+            ? 'shell'
+            : 'unknown'
       }
     }
     if (!host.remote) {
@@ -130,11 +134,13 @@ export async function readLaunchedAgentForeground(
       }
       const rootPid = target?.rootProcessId
       const rows = rootPid ? await readTerminalProcessRows(rootPid) : null
-      return rows && rootPid ? judgeTerminalForeground(rows, rootPid, agent) : 'unknown'
+      const verdict = rows && rootPid ? judgeTerminalForeground(rows, rootPid, agent) : 'unknown'
+      return !agent && verdict === 'agent' ? 'unknown' : verdict
     }
     const askedAt = Date.now()
     const evidence = (await controller.inspectProcess?.(ptyId))?.foregroundProcessEvidence
     if (
+      agent &&
       evidence?.verdict === 'live' &&
       evidence.fence.platform === 'posix' &&
       evidence.processName &&
@@ -167,9 +173,12 @@ export async function readLaunchedAgentForeground(
     }
     if (
       isLaunchShell(foreground) &&
-      !isExpectedAgentProcess(foreground, TUI_AGENT_CONFIG[agent].expectedProcess)
+      (!agent || !isExpectedAgentProcess(foreground, TUI_AGENT_CONFIG[agent].expectedProcess))
     ) {
       return 'shell'
+    }
+    if (!agent) {
+      return 'unknown'
     }
     // Legacy: relays that send no evidence (older versions) keep the possibly cached name.
     if (!evidence) {

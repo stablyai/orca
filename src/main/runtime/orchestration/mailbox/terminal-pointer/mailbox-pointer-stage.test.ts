@@ -35,6 +35,8 @@ function pointerDeps(
     getMessageWaiters: () => undefined,
     getCliCommand: () => 'orca' as const,
     resolveSubmitTarget: () => ({ terminal: TERMINAL, processIncarnation: 'inc-1' }),
+    readForeground: async () => 'unknown' as const,
+    redriveTerminal: vi.fn(),
     isLeafPtyProvenAbsent: async () => false,
     isPtyAwaitingUserInput: () => false,
     redriveMailbox: vi.fn(),
@@ -139,6 +141,7 @@ describe('retiring a pty mid-delivery', () => {
       const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'mail' })
       const delivery = new OrchestrationMailboxPointerDelivery(pointerDeps(db, writePty) as never)
       delivery.deliver(TERMINAL, { mailboxHandle: 'run:run-1' })
+      await vi.advanceTimersByTimeAsync(0)
 
       settlements[0]?.(WRITE_ACCEPTED)
       await vi.advanceTimersByTimeAsync(0)
@@ -173,6 +176,7 @@ describe('retiring a pty mid-delivery', () => {
       const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'mail' })
       const delivery = new OrchestrationMailboxPointerDelivery(pointerDeps(db, writePty) as never)
       delivery.deliver(TERMINAL, { mailboxHandle: 'run:run-1' })
+      await vi.advanceTimersByTimeAsync(0)
       settlements[0]?.(WRITE_ACCEPTED)
       await vi.advanceTimersByTimeAsync(0)
       expect(db.getMessageById(message.id)?.pointer_enter_pending).toBe(2)

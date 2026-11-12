@@ -179,6 +179,12 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     this.crewChanges.notify(new Set(['status', 'names']))
     const detachRows = store.subscribeStatusRowMutations(() => this.worktreeRowsChanges?.changed())
     const subscribe = store.subscribeEnrichedStatus?.bind(store)
+    const detachMail = subscribe?.((row) => {
+      const pty = this.getPtyRecordForPaneKey(row.paneKey)
+      if (pty) {
+        this.orchestrationMailboxPointerDelivery.observeTerminal(pty.ptyId)
+      }
+    })
     const detachTitles = subscribe
       ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)
       : () => {}
@@ -186,6 +192,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       detachCrew()
       detachRows()
       this.crewChanges.notify(new Set(['status', 'names']))
+      detachMail?.()
       detachTitles()
       detachTransitions()
     }

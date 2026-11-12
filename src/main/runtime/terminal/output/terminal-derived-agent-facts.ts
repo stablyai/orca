@@ -122,6 +122,9 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
     /** False for rows projected from the screen: they are not the agent's own prompt state. */
     recordsPromptLifecycle = true
   ): void {
+    if (chunk.payloads.length > 0 && !provenance && recordsPromptLifecycle) {
+      this.orchestrationMailboxPointerDelivery.observeTerminal(ptyId)
+    }
     const facet = chunk.programStatusFacet
     if (chunk.payloads.length === 0 && facet === undefined) {
       return

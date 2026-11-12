@@ -76,6 +76,10 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
   /** Record one derived side-effect fact: batched per chunk while applying
    *  bytes, emitted immediately for between-chunk facts (stale-title timer). */
   protected recordTerminalSideEffectFact(ptyId: string, fact: TerminalSideEffectFact): void {
+    if (fact.kind === 'agent-exited') {
+      this.orchestrationMailboxPointerDelivery.holdForeground(ptyId)
+      this.clearDeliveryRecheck(ptyId)
+    }
     if (!this.terminalSideEffectConsumerAvailable) {
       return
     }
