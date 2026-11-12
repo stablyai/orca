@@ -85,12 +85,14 @@ it('captures the M1 copied roots without events, excludes a racing CLI root, and
 it.each([100, 1000])(
   'decodes each of %i v2 messages once for content and fork evidence',
   (count) => {
-    const { path, insert } = fixture()
+    const { path, insert, db } = fixture()
     const data = { content: [{ type: 'text', text: 'response' }], outcome: 'succeeded' }
     const raw = JSON.stringify(data)
+    db.exec('BEGIN')
     for (let index = 1; index <= count; index++) {
       insert(`msg-${index}`, index === count ? 'idle' : 'assistant', data)
     }
+    db.exec('COMMIT')
     const parse = vi.spyOn(JSON, 'parse')
     let page
     let decodes

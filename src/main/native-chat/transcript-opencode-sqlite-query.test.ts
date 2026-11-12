@@ -265,6 +265,7 @@ it.each([100, 1000])(
     const { db, path } = createTempDb()
     applySchema(db)
     const raw = JSON.stringify({ role: 'assistant', time: { completed: 2 }, finish: 'stop' })
+    db.exec('BEGIN')
     for (let index = 1; index <= count; index++) {
       insertMessage(db, { id: `msg-${index}`, time: index, role: 'assistant' })
       insertPart(db, {
@@ -275,6 +276,7 @@ it.each([100, 1000])(
       })
     }
     db.prepare('UPDATE message SET data = ?').run(raw)
+    db.exec('COMMIT')
     const parse = vi.spyOn(JSON, 'parse')
     let page
     let decodes
