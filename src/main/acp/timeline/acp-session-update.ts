@@ -3,6 +3,7 @@ import { acpWindowUsage } from './acp-context-usage'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
 import type { AcpSubagents } from './acp-subagents'
+import type { AcpRunningBackgroundJobs } from './acp-running-background-jobs'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AcpToolTimeline } from './acp-tool-timeline'
 import type { SessionNotification } from '../generated/acp-protocol.generated'
@@ -27,6 +28,7 @@ export function acpSessionUpdate(
     dialect: AcpDialect
     backgroundTasks: AcpBackgroundTaskTimeline
     subagents: AcpSubagents
+    backgroundJobs: AcpRunningBackgroundJobs
     messageKey?: string
     scope?: AgentJournalTurnScope
   }
@@ -65,6 +67,7 @@ export function acpSessionUpdate(
     case 'tool_call':
     case 'tool_call_update': {
       const { tools, dialect, backgroundTasks, subagents } = context
+      context.backgroundJobs.observe(update, dialect, at)
       const events = tools.translate(update, dialect, join.join)
       const tool = events[0]
       const body = tool && 'body' in tool && tool.body?.kind === 'tool-call' ? tool.body : null

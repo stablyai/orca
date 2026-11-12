@@ -24,6 +24,12 @@ const toolResultSchema = z.looseObject({
     .optional()
 })
 const asyncInputSchema = z.looseObject({ async: z.literal(true) })
+// A task or async bash call reports `details.async.state` running while its job runs; a later frame settles it.
+const backgroundJobSchema = z.looseObject({
+  details: z.looseObject({
+    async: z.looseObject({ state: z.enum(['running', 'completed', 'failed', 'cancelled']) })
+  })
+})
 
 function contentText(block: ToolCallContent | undefined): string | undefined {
   return block?.type === 'content' && block.content.type === 'text' ? block.content.text : undefined
@@ -93,6 +99,11 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   }
 }
 
+function toolBackgroundJob(update: ToolCallUpdate): 'running' | 'settled' | undefined {
+  const state = backgroundJobSchema.safeParse(update.rawOutput).data?.details.async.state
+  return state === undefined ? undefined : state === 'running' ? 'running' : 'settled'
+}
+
 // OMP reports compaction failure, no-ops and refused arguments in a normally completed turn's reply.
 const COMPACTION_FAILED = /\bcompaction failed\b|\bdoes not take focus instructions\b/i
 const COMPACTION_NOOP = /\b(?:nothing to compact|already compacted)\b/i
@@ -135,6 +146,7 @@ export const OMP_ACP_DIALECT: AcpDialect = {
   // OMP offers its `ask` tool and extension dialogs only to clients that answer forms.
   clientCapabilities: { elicitation: { form: {} } },
   normalizeToolUpdate,
+  toolBackgroundJob,
   compactionReply,
   modelCommand: {
     // #setModelById (acp-agent.ts) takes listed provider/id values only.
