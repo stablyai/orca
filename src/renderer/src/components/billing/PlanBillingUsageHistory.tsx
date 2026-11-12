@@ -1,6 +1,5 @@
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
-import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatHoursUsed } from './plan-billing-format'
 import {
@@ -18,6 +17,22 @@ const LOADING_BAR_HEIGHTS = Array.from({ length: 30 }, (_, index) =>
   Math.round(30 + 25 * Math.sin(index / 3) + 20 * Math.cos(index / 5) + 25)
 )
 
+/** A part of Plan & billing, so a step below its section header (the size of "Overage"). */
+function UsageHistoryHeading({
+  title,
+  total = null
+}: {
+  title: string
+  total?: string | null
+}): React.JSX.Element {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <h4 className="text-sm font-medium">{title}</h4>
+      {total ? <span className="text-xs text-muted-foreground tabular-nums">{total}</span> : null}
+    </div>
+  )
+}
+
 /** "Last 30 days": the team's daily hours; owners and admins also see the top workspaces and members. */
 export function PlanBillingUsageHistory({
   state,
@@ -31,7 +46,7 @@ export function PlanBillingUsageHistory({
   if (state.status === 'failed') {
     return (
       <section className="space-y-3">
-        <SettingsGroupHeader title={title} className="px-0" />
+        <UsageHistoryHeading title={title} />
         <InlineError
           title={t('auto.components.billing.usage.loadFailed', 'Couldn’t load your usage history')}
           retryLabel={t('auto.components.billing.plans.retry', 'Try again')}
@@ -48,7 +63,7 @@ export function PlanBillingUsageHistory({
         aria-busy
         aria-label={t('auto.components.billing.usage.loading', 'Loading your usage history…')}
       >
-        <SettingsGroupHeader title={title} className="px-0" />
+        <UsageHistoryHeading title={title} />
         {/* Shaped like the chart it stands in for, so it reads as "loading", not an empty panel. */}
         <div className="flex h-[136px] w-full items-end gap-1" aria-hidden>
           {LOADING_BAR_HEIGHTS.map((height, index) => (
@@ -64,16 +79,9 @@ export function PlanBillingUsageHistory({
   const empty = history.totalSeconds <= 0
   return (
     <section className="space-y-3">
-      <SettingsGroupHeader
+      <UsageHistoryHeading
         title={title}
-        className="px-0"
-        action={
-          empty ? null : (
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {usageWindowTotalLine(history.totalSeconds, t)}
-            </span>
-          )
-        }
+        total={empty ? null : usageWindowTotalLine(history.totalSeconds, t)}
       />
       {empty ? (
         <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">

@@ -16,7 +16,7 @@ export function AccountBillingLayout({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <div className="space-y-4">
         <SettingsGroupHeader
           className="px-0"
@@ -25,7 +25,11 @@ export function AccountBillingLayout({
         {account}
       </div>
       {billing ? (
-        <div id={ACCOUNT_BILLING_PLAN_ANCHOR} className="scroll-mt-4 space-y-4">
+        // The page's second half: the same rule as under the page subtitle, then its header.
+        <div
+          id={ACCOUNT_BILLING_PLAN_ANCHOR}
+          className="scroll-mt-4 space-y-4 border-t border-border pt-8"
+        >
           <SettingsGroupHeader
             className="px-0"
             title={t('auto.components.billing.title', 'Plan & billing')}

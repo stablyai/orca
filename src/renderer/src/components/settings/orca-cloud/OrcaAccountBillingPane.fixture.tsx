@@ -52,8 +52,16 @@ function page(status: OrcaProfileAuthStatus, billing: React.ReactNode) {
     width: 760,
     store: { orcaProfileAuthStatus: status },
     // The account part re-reads auth status on mount; answer with the same state.
+    // Orca Cloud builds (the only ones with this page) have a control plane.
     setup: () => {
       Object.assign(window.api.orcaProfiles, { authStatus: () => Promise.resolve(status) })
+      Object.assign(window.api, {
+        cloudApi: {
+          ...window.api.cloudApi,
+          availability: () =>
+            Promise.resolve({ status: 'ready' as const, controlPlaneUrl: 'https://cloud.example' })
+        }
+      })
     },
     render: () => (
       <div className="bg-background px-8 py-6">
