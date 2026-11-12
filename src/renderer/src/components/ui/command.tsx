@@ -26,7 +26,16 @@ const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded
       // Why: matches DropdownMenuItem type so a searchable picker reads like its sibling menus.
       menu: '[&_[cmdk-item]]:py-[4px] [&_[cmdk-item]]:text-[12px]',
       model:
-        '[&_[cmdk-group]]:p-1.5 [&_[cmdk-group-items]]:flex [&_[cmdk-group-items]]:flex-col [&_[cmdk-group-items]]:gap-px [&_[cmdk-item]]:min-h-7 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[13px]'
+        '[&_[cmdk-group]]:p-1.5 [&_[cmdk-group-items]]:flex [&_[cmdk-group-items]]:flex-col [&_[cmdk-group-items]]:gap-px [&_[cmdk-item]]:min-h-7 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[13px]',
+      // Why: a flat launcher card (split-pane landing): field on a divider over a fixed-height list of 36px rows.
+      card: [
+        'rounded-[12px] border border-border',
+        // Field height, list padding, list height (5 rows + padding) and field inset (list padding + row px, so icons align) move as one set.
+        '[&_[data-cmdk-input-wrapper]]:h-10 [&_[cmdk-list]]:p-2 [&_[cmdk-list]]:h-[196px] [&_[data-cmdk-input-wrapper]]:px-[18px]',
+        '[&_[data-cmdk-input-wrapper]]:gap-2.5 [&_[data-cmdk-input-wrapper]]:bg-transparent [&_[data-cmdk-input-wrapper]]:py-0 [&_[data-cmdk-input-wrapper]_svg]:mr-0 [&_[data-cmdk-input-wrapper]_svg]:opacity-80',
+        '[&_[cmdk-input]]:h-full [&_[cmdk-input]]:py-0 [&_[cmdk-input]]:leading-none [&_[cmdk-input]]:text-ellipsis [&_[cmdk-group]]:p-0',
+        '[&_[cmdk-item]]:h-9 [&_[cmdk-item]]:gap-2.5 [&_[cmdk-item]]:rounded-[7px] [&_[cmdk-item]]:px-2.5 [&_[cmdk-item]]:py-0'
+      ]
     }
   },
   compoundVariants: [
