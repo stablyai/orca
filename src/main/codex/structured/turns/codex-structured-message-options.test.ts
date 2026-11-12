@@ -9,7 +9,11 @@ import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/pr
 import { describe, expect, it, vi } from 'vitest'
 import { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { optionSession } from '../catalog/codex-structured-option-session.test-fixture'
-import { resolvedCodexMessageOptions } from './codex-structured-message-options'
+import {
+  readCodexAppliedInputOptions,
+  resolvedCodexMessageOptions
+} from './codex-structured-message-options'
+import { codexTurnOptionsDiffer } from '../../../native-chat/agent-session-wire/options/structured-agent-session-message-options'
 import { startCodexTurn } from './codex-structured-turn-start'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
@@ -210,4 +214,83 @@ it('sends native Plan and Build on fresh turns while a steer keeps its running m
   })
   expect(request.mock.calls.at(-1)?.[0]).toBe('turn/steer')
   expect(request.mock.calls.at(-1)?.[1]).not.toHaveProperty('collaborationMode')
+})
+
+it.each(['priority', 'default'])(
+  'keeps the same priority input eligible after an actual %s start and catalog change',
+  async (initialTier) => {
+    const request = vi.fn(async () => ({ turn: { id: 'tier-turn' } }))
+    const session = optionSession(request)
+    const store = new AgentModelCatalogStore()
+    const catalog = (priority: boolean) =>
+      store.recordSuccess(
+        'input-intent',
+        'codex',
+        {
+          origin: 'probe',
+          models: [
+            {
+              id: 'gpt-live',
+              label: 'GPT',
+              isDefault: true,
+              efforts: [{ value: 'high', label: 'High' }],
+              serviceTiers: priority ? [{ value: 'priority', label: 'Fast' }] : []
+            }
+          ]
+        },
+        'discovery'
+      )
+    session.catalogAccess = { store, fingerprint: 'input-intent', accountHomePath: '/test-account' }
+    session.reportedOptions = { model: 'gpt-live', effort: 'high', serviceTier: 'default' }
+    catalog(initialTier === 'priority')
+    const choices = { model: 'gpt-live', effort: 'high', serviceTier: 'priority' }
+    await startCodexTurn(session, {
+      clientMessageId: 'priority-input',
+      body: USER_MESSAGE,
+      executionOptions: choices,
+      turnOptions: await resolvedCodexMessageOptions(session, choices)
+    })
+    expect(request).toHaveBeenCalledWith(
+      'turn/start',
+      expect.objectContaining({
+        serviceTier: initialTier
+      }),
+      expect.anything()
+    )
+    catalog(false)
+    const differs = (next: Record<string, string>) =>
+      codexTurnOptionsDiffer(
+        { provider: 'codex', sessionId: 'session-1' },
+        next,
+        { fence: 1, generation: 'generation-1', phase: 'ready' },
+        { readAppliedInputOptions: (input) => readCodexAppliedInputOptions(session, input) }
+      )
+    expect(differs(choices)).toBe(false)
+    expect(differs({ ...choices, serviceTier: 'default' })).toBe(true)
+  }
+)
+
+it('uses exact successful start controls when the first message omits model and effort', async () => {
+  const session = optionSession(vi.fn(async () => ({ turn: { id: 'first-turn' } })))
+  await startCodexTurn(session, {
+    clientMessageId: 'first',
+    body: USER_MESSAGE,
+    executionOptions: {},
+    turnOptions: {}
+  })
+  const read = (next: Record<string, string>) =>
+    readCodexAppliedInputOptions(session, {
+      sessionId: 'session-1',
+      fence: 1,
+      acquisitionGeneration: 'generation-1',
+      next
+    })
+  expect(read({ effort: 'high' })).toMatchObject({
+    active: { model: 'gpt-live', effort: 'high' },
+    next: { model: 'gpt-live', effort: 'high' }
+  })
+  expect(read({ effort: 'low' })).toMatchObject({
+    active: { effort: 'high' },
+    next: { effort: 'low' }
+  })
 })

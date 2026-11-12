@@ -121,6 +121,7 @@ export async function changeCodexThreadGoalWithSettings(
     if (startsWork) {
       const requested = resolvedCodexGoalSettings(session, input.executionOptions)
       const previousApplied = session.appliedTurnOptions
+      const previousInput = session.appliedTurnInputOptions
       const installed = await session.appliedSettings?.install(
         session.connection,
         session.threadId,
@@ -129,18 +130,23 @@ export async function changeCodexThreadGoalWithSettings(
         input.signal,
         () => {
           session.appliedTurnOptions = { ...session.appliedTurnOptions, ...requested }
+          session.appliedTurnInputOptions = { ...session.appliedTurnInputOptions, ...requested }
         },
         () => {
           session.appliedTurnOptions = previousApplied
+          session.appliedTurnInputOptions = previousInput
         },
         () => {
           const known = { ...previousApplied }
+          const knownInput = { ...previousInput }
           for (const key of ['model', 'effort'] as const) {
             if (requested[key] !== undefined && requested[key] !== known[key]) {
               delete known[key]
+              delete knownInput[key]
             }
           }
           session.appliedTurnOptions = known
+          session.appliedTurnInputOptions = knownInput
         }
       )
       if (installed && !installed.ok) {
