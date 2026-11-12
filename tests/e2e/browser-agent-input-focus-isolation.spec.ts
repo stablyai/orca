@@ -81,6 +81,7 @@ test('page-bound input stays out of chat drafts across hidden tabs and stale tar
 test('text insertion needs a focused page target and never crashes or wedges the tab', async ({
   orcaPage
 }) => {
+  // Waits out a deliberately busy page (6 s) on top of tab startup and agent-browser round trips.
   test.setTimeout(120_000)
   const server = await startProbeServer()
   try {
