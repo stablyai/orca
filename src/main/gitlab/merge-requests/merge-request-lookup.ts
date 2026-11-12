@@ -81,6 +81,10 @@ export async function getMergeRequest(
       head_pipeline?: { status?: string } | null
       pipeline?: { status?: string } | null
     }
+    // glab serializes GitLab's null changes_count as ''.
+    if (data.changes_count === '') {
+      data.changes_count = null
+    }
     // Why: older GitLab instances expose `pipeline` instead of `head_pipeline`; try both.
     const pipelineStatus = derivePipelineStatus(data.head_pipeline ?? data.pipeline ?? null)
     return mapMRInfo(data, pipelineStatus)

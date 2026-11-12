@@ -97,7 +97,6 @@ describe('workspace cleanup removal and protection', () => {
     const approvedCandidate = makeCandidate({ executionHostId: 'local' })
     const dirtySinceConfirmation = makeCandidate({
       executionHostId: 'local',
-      tier: 'review',
       blockers: ['dirty-files'],
       git: {
         clean: false,

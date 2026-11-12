@@ -5,7 +5,7 @@ import { basename, join } from 'node:path'
 import type * as NodeFsPromises from 'node:fs/promises'
 import '../../../ai-vault/scanners/codex/codex-session-root-dedup'
 import { prepareLegacySharedCodexSessionResume } from './codex-legacy-session-resume'
-import '../../../codex-accounts/host-codex-managed-home-ownership'
+import '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 const lstatFaults = vi.hoisted(() => ({
   path: null as string | null,

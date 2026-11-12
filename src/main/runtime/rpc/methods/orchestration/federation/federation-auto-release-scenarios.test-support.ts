@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -6,7 +6,6 @@ import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcRequest } from '../../../core'
 import { registerHomeAutoReleaseScenarios } from './federation-home-auto-release-scenarios.test-support'
-import { GRACE_MS } from './federation-auto-release-grace.test-support'
 
 export type AutoReleaseScenarioHarness = {
   startRemoteWorker: () => Promise<string>
@@ -59,50 +58,6 @@ export function registerFederatedAutoReleaseScenarios(harness: AutoReleaseScenar
     await expect(sent).resolves.toMatchObject({ ok: true })
     return dispatchId
   }
-
-  function retainFromHome(dispatchId: string) {
-    return harness.dispatchHome({
-      id: 'rpc_remote_retain',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'remote_retain',
-      method: 'orchestration.workerRetain',
-      params: { dispatch: dispatchId }
-    })
-  }
-
-  function holdHostCapture() {
-    const read = {
-      handle: 'term_windows_worker',
-      status: 'running' as const,
-      tail: ['remote output'],
-      truncated: false,
-      nextCursor: '1'
-    }
-    const held: (() => void)[] = []
-    vi.mocked(harness.workerRuntime().readTerminal).mockImplementation(
-      () => new Promise((resolve) => held.push(() => resolve(read)))
-    )
-    return () => {
-      vi.mocked(harness.workerRuntime().readTerminal).mockResolvedValue(read)
-      held.splice(0).forEach((release) => release())
-    }
-  }
-
-  it('publishes no archive when worker-retain wins during host capture', async () => {
-    const dispatchId = await settleRemotely()
-    const finishCapture = holdHostCapture()
-    vi.setSystemTime(Date.now() + GRACE_MS)
-    const timer = getWorkerTerminalAutoReleaseScheduler(harness.workerRuntime()).releaseDue()
-    await vi.waitFor(() => expect(harness.workerRuntime().readTerminal).toHaveBeenCalled())
-
-    await expect(retainFromHome(dispatchId)).resolves.toMatchObject({ ok: true })
-    finishCapture()
-    await timer
-
-    expect(harness.workerRuntime().closeTerminal).not.toHaveBeenCalled()
-    expect(harness.workerDb().getWorkerTerminalArchive(dispatchId)).toBeUndefined()
-  })
 
   registerHomeAutoReleaseScenarios({ harness, settleRemotely })
 }

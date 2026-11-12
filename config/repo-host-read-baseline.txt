@@ -13,7 +13,6 @@
 1 src/main/ipc/source-control/github-work-item-args.ts
 1 src/main/ipc/source-control/gitlab-repo-access.ts
 2 src/main/ipc/workspace-cleanup/workspace-cleanup-candidate.ts
-1 src/main/ipc/workspace-cleanup/workspace-cleanup-disconnected-ssh.ts
 1 src/main/ipc/worktrees-test-metadata-pruning-store.ts
 1 src/main/ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning.ts
 1 src/main/ipc/worktrees/listing/register-host-catalog-handlers.ts

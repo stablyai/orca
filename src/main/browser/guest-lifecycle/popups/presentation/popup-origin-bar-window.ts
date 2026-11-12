@@ -1,6 +1,7 @@
 import { BaseWindow, WebContentsView } from 'electron'
 import {
   isBackgroundLaunch,
+  revealWindowsAwaitingAppActive,
   showWhenAppActive
 } from '../../../../window/foreground-activation-policy'
 import {
@@ -147,6 +148,8 @@ export function openPopupWithOriginBar(
   // Re-pin on explicit fullscreen events; resize alone does not cover every platform.
   window.on('enter-full-screen', layoutViews)
   window.on('leave-full-screen', layoutViews)
+  // Off macOS, a return to Orca through this popup alone raises no app event.
+  window.on('focus', revealWindowsAwaitingAppActive)
   layoutViews()
 
   const contentWebContents = contentView.webContents
