@@ -1,7 +1,7 @@
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime/types'
 import { resolveLaunchUserDataPath } from '../runtime/launch-user-data-path'
-import { pluginDevWatchConfirmFor } from '../plugin-dev-watch/plugin-dev-watch-approval'
+import { pluginDevWatchConfirmFor } from '../plugins/dev-watch/plugin-dev-watch-approval'
 
 const RESET_WARNING =
   "This gives this machine's Orca server a new pairing key and installation id and removes every " +

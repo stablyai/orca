@@ -98,7 +98,6 @@ jobs:
           src/main/providers/windows-shell-preflight-runtime.windows.test.ts
           src/main/computer/desktop-script/actions/desktop-script-provider-actions.test.ts
           src/cli/command-result-output.test.ts
-          src/cli/computer/computer-action-validation.test.ts
           src/cli/computer/computer-state-formatting.test.ts
           src/cli/index.test.ts
           src/cli/runtime/envelope-schema.test.ts

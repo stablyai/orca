@@ -4,7 +4,7 @@ import { JIRA_HANDLER_GROUP } from './jira/jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from './linear/linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
 import { SERVE_PAIRING_HANDLER_GROUPS } from './server/serve-pairing-handler-groups'
-import { PLUGIN_HANDLER_GROUPS } from './plugin-handler-groups'
+import { PLUGIN_HANDLER_GROUPS } from './plugins/plugin-handler-groups'
 import { HOST_HANDLER_GROUPS } from './hosts/host-handler-groups'
 import { WORKTREE_HANDLER_GROUPS } from './workspaces/worktree-handler-groups'
 
@@ -248,13 +248,13 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'skill-sharing',
     keys: ['skills installed', 'skills share'],
-    load: async () => (await import('./handlers/skill-sharing.js')).SKILL_SHARING_HANDLERS
+    load: async () => (await import('./skills/skill-sharing.js')).SKILL_SHARING_HANDLERS
   },
   ...PLUGIN_HANDLER_GROUPS,
   {
     name: 'skills',
     keys: ['skills list', 'skills get', 'skills install', 'skills update'],
-    load: async () => (await import('./handlers/skills.js')).SKILL_HANDLERS
+    load: async () => (await import('./skills/skills.js')).SKILL_HANDLERS
   },
   {
     name: 'search',
