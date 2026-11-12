@@ -20,6 +20,11 @@ export function cloudSetupStripActions(args: {
   copyText: (text: string) => void
   openLink: (url: string) => void
   useApiKey: () => void
+  /**
+   * CHAT-CANCEL-ERROR: a structured chat has no plain shell to fall back to, so Cancel only stops a
+   * running setup and the chat stays held on its strip. Closing the chat gives the launch up.
+   */
+  keepHoldOnCancel?: boolean
 }): CloudStripActions {
   const { agent, holdKey } = args
   const api = window.api.orcaCloudAgents
@@ -53,6 +58,9 @@ export function cloudSetupStripActions(args: {
       if (args.setupRunning) {
         // Only the sign-in is abandoned; the person may still set up (here or in Settings) and start.
         stopOrcaCloudAgentSetups(agent)
+        return
+      }
+      if (args.keepHoldOnCancel) {
         return
       }
       releaseCloudAgentHold(holdKey, 'cancel')
