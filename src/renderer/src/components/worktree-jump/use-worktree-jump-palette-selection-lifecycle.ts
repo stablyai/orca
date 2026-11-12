@@ -65,6 +65,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   preserveCreateLookupOnCloseRef,
   selectedItemId,
   selectionItemIds,
+  defaultSelectionItemId,
   showCreateAction,
   deferredQuery,
   prefetchCreateWorkspaceBaseForComposer,
@@ -157,6 +158,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
           currentSelectedItemId: selectedItemId,
           queryChanged: false,
           selectableItemIds: selectionItemIds,
+          defaultSelectableItemId: defaultSelectionItemId,
           showCreateAction,
           autoSelectCreateAction: taskSourceUrl !== null
         })
@@ -173,6 +175,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
         currentSelectedItemId: '',
         queryChanged: true,
         selectableItemIds: selectionItemIds,
+        defaultSelectableItemId: defaultSelectionItemId,
         showCreateAction,
         autoSelectCreateAction: taskSourceUrl !== null
       })
