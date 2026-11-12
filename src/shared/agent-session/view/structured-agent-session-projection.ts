@@ -272,6 +272,7 @@ export function projectStructuredAgentSessionStatusState(
   owesWork: boolean
   /** Item ids of the approvals and questions waiting on the user: what makes the status `attention`. */
   pendingPromptIds: string[]
+  pendingQuestionIds?: string[]
 } {
   const latestPrompt = latestStructuredAgentSessionPrompt(items)
   if (!hasStructuredAgentSessionRequest(items, submissions, currentFence)) {
@@ -311,14 +312,16 @@ export function projectStructuredAgentSessionStatusState(
     currentFence,
     request
   )
+  const pendingPrompts =
+    status === 'attention' ? items.filter(pendingStructuredAgentSessionPrompt(scope)) : []
   return {
     latestRequest,
     owesWork:
       status !== 'idle' && owesStructuredAgentSessionWork(items, submissions, currentFence, scope),
-    pendingPromptIds:
-      status === 'attention'
-        ? items.filter(pendingStructuredAgentSessionPrompt(scope)).map((item) => item.itemId)
-        : [],
+    pendingPromptIds: pendingPrompts.map((item) => item.itemId),
+    pendingQuestionIds: pendingPrompts
+      .filter((item) => item.body.kind === 'question')
+      .map((item) => item.itemId),
     summary: {
       status,
       latestPrompt: normalizePromptField(latestPrompt),

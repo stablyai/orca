@@ -13,6 +13,7 @@ import {
   ONBOARDING_FLOW_VERSION
 } from '../../../shared/onboarding-defaults'
 
+/** Migrate older disk settings field by field, preserving explicit false values and leaving question-only delivery opt-in. */
 export function normalizeNotificationSettings(value: unknown): NotificationSettings {
   const defaults = getDefaultNotificationSettings()
   const candidate =
@@ -55,6 +56,7 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
       booleanOr(candidate.agentTaskComplete, defaults.agentNeedsInput)
     ),
     terminalBell: booleanOr(candidate.terminalBell, defaults.terminalBell),
+    agentQuestionsOnly: booleanOr(candidate.agentQuestionsOnly, false),
     suppressWhenFocused: booleanOr(candidate.suppressWhenFocused, defaults.suppressWhenFocused),
     customSoundId,
     customSoundPath:

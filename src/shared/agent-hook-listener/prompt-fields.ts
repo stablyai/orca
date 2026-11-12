@@ -112,11 +112,12 @@ export function resolvePrompt(
   return state.lastPromptByPaneKey.get(paneKey) ?? ''
 }
 
+/** Missing updates inherit tool context; providers can clear unnamed updates to avoid reusing a previous question tool. */
 export function resolveToolState(
   state: HookListenerState,
   paneKey: string,
   update: ToolSnapshot,
-  options: { resetOnNewTurn: boolean }
+  options: { resetOnNewTurn: boolean; clearUnnamedToolUpdate?: boolean }
 ): ToolSnapshot {
   if (options.resetOnNewTurn) {
     state.lastToolByPaneKey.delete(paneKey)
@@ -128,9 +129,10 @@ export function resolveToolState(
   const clearsUnidentifiedTool =
     update.hasToolUpdate === true &&
     update.toolName === undefined &&
-    update.hasToolInputField === true
+    (update.hasToolInputField === true || options.clearUnnamedToolUpdate === true)
   const toolName = clearsUnidentifiedTool ? undefined : (update.toolName ?? previous.toolName)
   const toolInput =
+    clearsUnidentifiedTool ||
     clearsUnpreviewableInput ||
     (update.toolName !== undefined &&
       update.toolName !== previous.toolName &&

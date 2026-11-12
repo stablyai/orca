@@ -1,4 +1,3 @@
-/** Use host journal facts instead of PTY inference, sharing neutral unread/delivery policy; unknown outcomes and already-read prompts stay quiet. */
 import {
   notificationExecutionHostForOwner,
   notificationWorkspaceExecutionHostForOwner,
@@ -48,6 +47,7 @@ export function dispatchStructuredPromptAttention(
   dispatchStructuredAttention(tab, { type: 'prompt', prompt }, subscriptionTarget, readFrontier)
 }
 
+/** Use host journal facts for unread/delivery policy; stale ownership, unknown outcomes and already-read prompts stay quiet. */
 function dispatchStructuredAttention(
   tab: StructuredTab,
   edge: AgentSessionAttentionEdge,
@@ -128,6 +128,9 @@ function dispatchStructuredAttention(
           isActiveWorktree: request.workspaceIsActive,
           ...(row?.agentType ? { agentType: row.agentType } : {}),
           agentState: news.agentState,
+          ...(edge.type === 'prompt' && edge.prompt.kind === 'question'
+            ? { agentToolName: 'AskUserQuestion' }
+            : {}),
           ...(news.outcome ? { agentTurnOutcome: news.outcome } : {}),
           ...(row?.prompt ? { agentPrompt: row.prompt } : {}),
           ...(row?.lastAssistantMessage

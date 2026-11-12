@@ -22967,7 +22967,9 @@
     "startupRegistration": {
       "title": "Orca is ready to notify you",
       "body": "Allow notifications so Orca can alert you when agents finish or terminals need attention."
-    }
+    },
+    "questionsOnly": "Questions Only",
+    "questionsOnlyDescription": "Only notify when an agent asks a question. Mute permission requests, completed tasks, and terminal bells."
   },
   "sessionSearch": {
     "panel": {

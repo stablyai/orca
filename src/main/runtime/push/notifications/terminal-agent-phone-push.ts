@@ -24,6 +24,7 @@ export type TerminalAgentWorkspaceLabels = { repoLabel?: string; worktreeLabel?:
 type PaneNews = {
   worktreeId: string
   event: MobileNotificationDispatchEvent
+  agentToolName?: string
 }
 
 export type TerminalAgentPhonePushDeps = {
@@ -48,10 +49,11 @@ export class TerminalAgentPhonePush {
   private readonly turnNews: TerminalAgentTurnNews<PaneNews>
 
   constructor(private readonly deps: TerminalAgentPhonePushDeps) {
-    this.turnNews = new TerminalAgentTurnNews({
+    this.turnNews = new TerminalAgentTurnNews<PaneNews>({
       readHookRow: (paneKey) => deps.readHookRow(paneKey),
       prepare: ({ paneKey, worktreeId, row }) => ({
         worktreeId,
+        agentToolName: row.toolName,
         event: this.buildEvent(worktreeId, paneKey, row)
       }),
       deliver: (news) => this.send(news),
@@ -103,8 +105,8 @@ export class TerminalAgentPhonePush {
     }
   }
 
+  /** A newly attached window owns fan-out; headless delivery forwards hook-time tool evidence through the shared source gate. */
   private send(news: PaneNews): void {
-    // Recheck window ownership at delivery to avoid duplicating a newly opened window's push.
     const { agentState, paneKey } = news.event
     if (
       this.deps.hasWindow() ||
@@ -120,7 +122,13 @@ export class TerminalAgentPhonePush {
     const settings = this.deps.readNotificationSettings()
     // The window's own fan-out gates the phone on these same preferences.
     const desktopAllowed =
-      !settings || isNotificationSourceEnabled(settings, news.event.source, news.event.agentState)
+      !settings ||
+      isNotificationSourceEnabled(
+        settings,
+        news.event.source,
+        news.event.agentState,
+        news.agentToolName
+      )
     const now = this.deps.now()
     const burstKey = JSON.stringify([desktopAllowed, news.event.agentState, news.worktreeId])
     if (!reserveNotificationCooldown(this.recentDispatches, burstKey, now)) {

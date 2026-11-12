@@ -17,6 +17,8 @@ export type NotificationSettings = {
   /** An agent finished its turn; permission and question prompts use agentNeedsInput. */
   agentTaskComplete: boolean
   agentNeedsInput: boolean
+  /** Only structured questions notify; other source preferences are retained when this is off. */
+  agentQuestionsOnly?: boolean
   terminalBell: boolean
   suppressWhenFocused: boolean
   customSoundId:

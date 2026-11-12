@@ -11,6 +11,7 @@ import type { HookListenerState } from '../listener-state'
 import { mainAgentTurnInterrupted } from '../../agent-status/lifecycle/agent-lead-status-fold'
 import { claudeMainAgentStatusForPayload } from './claude-roster-state'
 
+/** Lead events update Claude tool context; roster-only refreshes retain the live tool snapshot. */
 export function buildClaudeStatusPayload(
   state: HookListenerState,
   eventName: unknown,
@@ -28,7 +29,8 @@ export function buildClaudeStatusPayload(
   // Roster refreshes read cached tool state without clearing live cards or previews.
   const snapshot = options.updateToolSnapshot
     ? resolveToolState(state, paneKey, extractToolFields('claude', eventName, hookPayload), {
-        resetOnNewTurn: isNewTurnEvent('claude', eventName)
+        resetOnNewTurn: isNewTurnEvent('claude', eventName),
+        clearUnnamedToolUpdate: true
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
 
