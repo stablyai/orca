@@ -1,5 +1,13 @@
 import { extname } from 'node:path'
-import { resolveJsonlRpcPeerOptions } from '../../../jsonl-rpc/peer-limits'
+import {
+  resolveJsonlRpcPeerOptions,
+  type JsonlRpcPeerOptions
+} from '../../../jsonl-rpc/peer-limits'
+import {
+  AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
+  AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
+} from '../../../../shared/agent-session/agent-session-attachments'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatImageRefBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
@@ -12,10 +20,29 @@ import {
   readClaudeImage
 } from '../../../claude/structured/claude-structured-dispatch-content'
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024
-const MAX_IMAGE_COUNT = 20
-const MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024
-const MAX_PROMPT_WIRE_BYTES = resolveJsonlRpcPeerOptions().maxLineBytes - 1
+type ImageLimits = { image: number; total: number }
+const SHRUNK_IMAGE_LIMITS: ImageLimits = {
+  image: AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  total: AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
+}
+const PEER_DEFAULTS = resolveJsonlRpcPeerOptions()
+const MAX_TEXT_WIRE_BYTES = PEER_DEFAULTS.maxLineBytes - 1
+// Pi before 1.5.1 sends mid-turn images unshrunk: keep each under Anthropic's 5 MB of base64 and
+// the message to what one ordinary line held before.
+const UNSHRUNK_IMAGE_LIMITS: ImageLimits = {
+  image: (5 * 1024 * 1024 * 3) / 4,
+  total: (PEER_DEFAULTS.maxLineBytes * 3) / 4
+}
+// Pi echoes a prompt back in its events and history replies, so reads need the same room as writes.
+const MAX_LINE_BYTES =
+  PEER_DEFAULTS.maxLineBytes +
+  Math.ceil(AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES / 3) * 4 +
+  AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT * 64 +
+  1024
+export const PI_RPC_PEER_OPTIONS = {
+  maxLineBytes: MAX_LINE_BYTES,
+  maxQueuedWriteBytes: PEER_DEFAULTS.maxQueuedWriteBytes + MAX_LINE_BYTES
+} satisfies JsonlRpcPeerOptions
 const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   '.gif': 'image/gif',
   '.jpeg': 'image/jpeg',
@@ -29,10 +56,6 @@ export type PiRpcPrompt = Record<string, unknown> & {
   message: string
   images: { type: 'image'; data: string; mimeType: string }[]
   streamingBehavior?: 'steer' | 'followUp'
-}
-
-type ImageReads = {
-  readLocal(path: string): Promise<Buffer>
 }
 
 export class PiRpcPromptError extends Error {
@@ -82,7 +105,7 @@ function imageMime(bytes: Uint8Array): string | null {
 
 async function readImage(
   block: NativeChatImageRefBlock,
-  reads: ImageReads
+  maxBytes: number
 ): Promise<{ bytes: Buffer; mimeType: string }> {
   if (block.url) {
     throw attachmentError('Pi does not accept image URLs', { reason: 'unsupportedType' })
@@ -96,7 +119,7 @@ async function readImage(
   }
   let bytes: Buffer
   try {
-    bytes = await reads.readLocal(block.path)
+    bytes = await readClaudeImage(block.path, maxBytes)
   } catch (error) {
     if (error instanceof ClaudeDispatchContentError) {
       throw new PiRpcPromptError('Pi image could not be read', error.failure)
@@ -109,12 +132,6 @@ async function readImage(
   if (bytes.byteLength === 0) {
     throw attachmentError('Pi image is empty', { reason: 'empty' })
   }
-  if (bytes.byteLength > MAX_IMAGE_BYTES) {
-    throw attachmentError('Pi image exceeds the size limit', {
-      reason: 'tooLarge',
-      limit: MAX_IMAGE_BYTES
-    })
-  }
   if (imageMime(bytes) !== mimeType) {
     throw attachmentError('Pi image file did not contain a supported image', {
       reason: 'unsupportedType'
@@ -125,9 +142,9 @@ async function readImage(
 
 export async function preparePiRpcPrompt(
   body: AgentJournalMessageItem,
-  streamingBehavior?: PiRpcPrompt['streamingBehavior'],
-  reads: ImageReads = { readLocal: readClaudeImage }
+  piShrinksImages: boolean
 ): Promise<PiRpcPrompt> {
+  const limits = piShrinksImages ? SHRUNK_IMAGE_LIMITS : UNSHRUNK_IMAGE_LIMITS
   if (body.role !== 'user') {
     throw new Error('Pi prompt must be a user message')
   }
@@ -138,18 +155,18 @@ export async function preparePiRpcPrompt(
     if (block.type === 'text' && block.text.length > 0) {
       texts.push(block.text)
     } else if (block.type === 'image-ref') {
-      if (images.length >= MAX_IMAGE_COUNT) {
+      if (images.length >= AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
         throw attachmentError('Pi prompt has too many images', {
           reason: 'tooMany',
-          limit: MAX_IMAGE_COUNT
+          limit: AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT
         })
       }
-      const { bytes, mimeType } = await readImage(block, reads)
+      const { bytes, mimeType } = await readImage(block, limits.image)
       totalImageBytes += bytes.byteLength
-      if (totalImageBytes > MAX_TOTAL_IMAGE_BYTES) {
+      if (totalImageBytes > limits.total) {
         throw attachmentError('Pi images exceed the total size limit', {
           reason: 'totalTooLarge',
-          limit: MAX_TOTAL_IMAGE_BYTES
+          limit: limits.total
         })
       }
       images.push({ type: 'image', data: bytes.toString('base64'), mimeType })
@@ -161,10 +178,10 @@ export async function preparePiRpcPrompt(
   const prompt: PiRpcPrompt = {
     type: 'prompt',
     message: texts.join('\n'),
-    images,
-    ...(streamingBehavior ? { streamingBehavior } : {})
+    images
   }
-  if (Buffer.byteLength(JSON.stringify(prompt), 'utf8') > MAX_PROMPT_WIRE_BYTES) {
+  // Images are bounded by their total above; the rest of the line keeps the ordinary limit.
+  if (Buffer.byteLength(JSON.stringify({ ...prompt, images: [] }), 'utf8') > MAX_TEXT_WIRE_BYTES) {
     throw new PiRpcPromptError(
       'Pi prompt exceeds the RPC write limit',
       agentSessionFailureFact('historyTooLarge')
