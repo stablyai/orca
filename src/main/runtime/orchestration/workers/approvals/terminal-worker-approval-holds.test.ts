@@ -192,6 +192,23 @@ describe('terminal worker approval holds', () => {
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
   })
 
+  it('takes an allow whose command is still running, from the decision Claude recorded', async () => {
+    const ctx = setup()
+    const asked = hook('tool-1', () => {
+      ctx.screen.lines = AFTER
+      // The command outlasts the 3 s wait: the transcript holds the decision but no tool_result yet.
+      ctx.screen.record = record(null, 'allow')
+    })
+    const approvalId = await opened(ctx, asked)
+
+    expect(await answer(ctx, approvalId, 'allow')).toMatchObject({
+      ok: true,
+      approval: { approvalId }
+    })
+    expect(asked.replies).toEqual([{ behavior: 'allow' }])
+    expect(ctx.closings()).toEqual([])
+  })
+
   it('names a Yes whose PostToolUse arrived while the deny was in flight', async () => {
     const ctx = setup()
     const asked = hook('tool-1', () => {
