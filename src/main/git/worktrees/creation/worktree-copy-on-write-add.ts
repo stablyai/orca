@@ -11,6 +11,17 @@ import { rollBackCreatedWorktree } from './worktree-create-rollback'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../worktree-operation-options'
 import { gitExecOptions, resolveWorktreeAddTimeoutMs } from '../worktree-operation-options'
 
+/** `git hook run` (Git 2.36+), which runs post-checkout with the arguments `worktree add` uses. */
+function supportsHookRun(repoPath: string, options: AddWorktreeOptions): Promise<boolean> {
+  return gitExecFileAsync(
+    ['hook', 'run', '--ignore-missing', 'orca-hook-run-probe'],
+    gitExecOptions(repoPath, options)
+  ).then(
+    () => true,
+    () => false
+  )
+}
+
 /**
  * `addWorktree`, but on APFS and reflink filesystems files that match the main checkout are
  * cloned from it instead of written, so they share disk blocks until either side changes.
@@ -23,8 +34,11 @@ export async function addWorktreeWithCopyOnWriteCheckout(
   refreshLocalBaseRef: boolean,
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
-  const method = await resolveCopyOnWriteCheckout(repoPath, worktreePath, options)
-  if (!method) {
+  const [method, canRunHooks] = await Promise.all([
+    resolveCopyOnWriteCheckout(repoPath, worktreePath, options),
+    supportsHookRun(repoPath, options)
+  ])
+  if (!method || !canRunHooks) {
     return addWorktree(
       repoPath,
       worktreePath,
@@ -52,14 +66,14 @@ export async function addWorktreeWithCopyOnWriteCheckout(
       checkoutWorkersGitArgs(worktreePath, options),
       cloneMainCheckoutIntoWorktree(method, repoPath, worktreePath, 'HEAD', options)
     ])
-    // A checkout, not reset, so post-checkout hooks still run as they do for `worktree add`.
-    // Like `worktree add`, leave submodules unpopulated even when submodule.recurse is set.
+    // Materialize and run post-checkout exactly as `worktree add` does: a reset that leaves
+    // submodules unpopulated, then the hook with a null previous HEAD to mark a new checkout.
     await gitExecFileAsync(
       [
         ...checkoutWorkersArgs,
         ...windowsLongPathGitArgs(worktreePath),
-        'checkout',
-        '-f',
+        'reset',
+        '--hard',
         '--no-recurse-submodules'
       ],
       {
@@ -67,6 +81,24 @@ export async function addWorktreeWithCopyOnWriteCheckout(
         timeout: resolveWorktreeAddTimeoutMs(),
         ...(checkoutProgress ? { onStderr: checkoutProgress.read } : {})
       }
+    )
+    const { stdout } = await gitExecFileAsync(
+      ['rev-parse', 'HEAD'],
+      gitExecOptions(worktreePath, options)
+    )
+    const head = stdout.trim()
+    await gitExecFileAsync(
+      [
+        'hook',
+        'run',
+        '--ignore-missing',
+        'post-checkout',
+        '--',
+        '0'.repeat(head.length),
+        head,
+        '1'
+      ],
+      { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
     )
     return addResult
   } catch (error) {

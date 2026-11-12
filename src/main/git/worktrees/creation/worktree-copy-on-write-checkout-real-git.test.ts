@@ -73,18 +73,19 @@ describe.runIf(process.platform === 'darwin')('copy-on-write worktree checkout',
     await expectExactBaseCheckout(preparedPath)
   })
 
-  it('clones on direct creates and still runs post-checkout hooks', async () => {
+  it('clones on direct creates and runs post-checkout as for a new worktree', async () => {
     const { repoPath, root } = await createRepo()
     const hookLog = join(root, 'post-checkout.log')
     const hook = join(repoPath, '.git', 'hooks', 'post-checkout')
-    await writeFile(hook, `#!/bin/sh\necho ran >> "${hookLog}"\n`)
+    await writeFile(hook, `#!/bin/sh\necho "$1 $2 $3" >> "${hookLog}"\n`)
     await chmod(hook, 0o755)
     const worktreePath = join(root, 'feature')
 
     await addWorktreeWithCopyOnWriteCheckout(repoPath, worktreePath, 'feature', 'base', false)
 
     await expectExactBaseCheckout(worktreePath)
-    expect(await readFile(hookLog, 'utf8')).toBe('ran\n')
+    const base = git(repoPath, ['rev-parse', 'base']).trim()
+    expect(await readFile(hookLog, 'utf8')).toBe(`${'0'.repeat(40)} ${base} 1\n`)
   })
 
   it('leaves submodules unpopulated when submodule.recurse is set', async () => {
