@@ -215,6 +215,7 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
         row.type === 'session' && 'ai-vault-session-row',
         activeStickyHeader ? 'sticky top-0 z-10 bg-sidebar' : 'absolute top-0'
       )}
+      data-glass-surface={activeStickyHeader ? 'pinned' : undefined}
       style={activeStickyHeader ? undefined : { transform: `translateY(${start}px)` }}
     >
       {row.type === 'group' ? (

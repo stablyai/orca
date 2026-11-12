@@ -7,6 +7,7 @@ import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from './appearance/document-theme'
 import { applyThemeBackground } from './appearance/theme-background'
+import { applySidebarGlass } from './appearance/sidebar-glass'
 import { syncThemeBackgroundVideo } from './appearance/theme-background-video'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 import { useWindowActive } from '../hooks/use-window-active'
@@ -99,6 +100,7 @@ export function useDocumentAppearance(): void {
   usePluginFontRegistration()
   const reduceEffects = useReduceVisualEffects(useAppStore((s) => s.settings?.reduceVisualEffects))
   const surfaceOpacity = useAppStore((s) => s.settings?.terminalBackgroundOpacity ?? 1)
+  const sidebarOpacity = useAppStore((s) => s.settings?.sidebarBackgroundOpacity ?? 1)
   useEffect(() => {
     document.documentElement.style.setProperty(
       '--orca-window-surface-opacity',
@@ -177,6 +179,11 @@ export function useDocumentAppearance(): void {
       applyThemeBackground(paintsBackground ? themeBackground : null, surfaceOpacity)
     }
   }, [pluginThemesLoaded, paintsBackground, surfaceOpacity, themeBackground])
+
+  useEffect(() => {
+    // Why: the material stays until restart, so drop glass as soon as terminals go opaque.
+    applySidebarGlass(surfaceOpacity < 1 ? sidebarOpacity : 1)
+  }, [sidebarOpacity, surfaceOpacity])
 
   const reduceMotion = usePrefersReducedMotion()
   const video =

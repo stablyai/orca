@@ -149,7 +149,7 @@ export function AppWorkspaceShell(props: {
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* Workspace tab groups reach the top; other pages retain the titlebar. */}
           {!layout.leftTitlebarChromeLayout.shouldMount ? (
-            <div className="titlebar">
+            <div className="titlebar" data-glass-surface="tab-bar">
               <div className="flex items-center shrink-0 mr-2">{titlebarLeftControls}</div>
               {titlebarMainStrip}
             </div>
@@ -168,6 +168,7 @@ export function AppWorkspaceShell(props: {
                         ? ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
                         : ''
                     }`}
+                    data-glass-surface="worktree-sidebar"
                     style={{
                       // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
                       ...(layout.sidebarOpen ? layout.leftSidebarStyle : undefined),
@@ -191,7 +192,9 @@ export function AppWorkspaceShell(props: {
               {layout.stackedSidebarOpen &&
               layout.activeView !== 'automations' &&
               layout.activeView !== 'artifacts' ? (
-                <div className="titlebar">{titlebarMainStrip}</div>
+                <div className="titlebar" data-glass-surface="tab-bar">
+                  {titlebarMainStrip}
+                </div>
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                 {/* Match the open sidebar header’s alignment to prevent toggle jitter. */}

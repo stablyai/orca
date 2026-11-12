@@ -1037,6 +1037,85 @@ body[data-modal-overlay-open]
   background-color: var(--background);
 }
 
+/* Sidebar Opacity (app-shell/appearance/sidebar-glass.ts) thins the sidebars and chrome so the window material shows through. */
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='worktree-sidebar'] {
+  background-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar) var(--orca-sidebar-opacity, 100%),
+    transparent
+  );
+}
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='sidebar'] {
+  background-color: color-mix(
+    in srgb,
+    var(--sidebar) var(--orca-sidebar-opacity, 100%),
+    transparent
+  );
+}
+/* Tabs show their strip's glass instead of stacking a second fill on it. */
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='tab-bar'] {
+  --tab-active: transparent;
+  --tab-inactive: transparent;
+  background-color: color-mix(
+    in srgb,
+    var(--tab-bar, var(--card)) var(--orca-sidebar-opacity, 100%),
+    transparent
+  );
+}
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='status-bar'] {
+  background-color: color-mix(
+    in srgb,
+    var(--bg-titlebar, var(--card)) var(--orca-sidebar-opacity, 100%),
+    transparent
+  );
+}
+/* The collapsed sidebar's header floats over a tab strip that already paints the glass. */
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects]) .titlebar-left-floating {
+  background-color: transparent;
+}
+/* Pinned sidebar bars stay clear until rows scroll under them. */
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='worktree-sidebar']
+  [data-worktree-sticky-header-active],
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='sidebar']
+  [data-glass-surface^='pinned'] {
+  background-color: transparent;
+  backdrop-filter: none;
+  animation: orca-pinned-bar-fill linear both;
+  animation-timeline: scroll(nearest);
+  animation-range: 0 1px;
+}
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='worktree-sidebar'] {
+  --orca-pinned-bar-fill: var(--worktree-sidebar);
+}
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='sidebar']
+  [data-glass-surface='pinned-bottom'] {
+  animation-direction: reverse;
+  animation-range: calc(100% - 1px) 100%;
+}
+@keyframes orca-pinned-bar-fill {
+  to {
+    background-color: var(--orca-pinned-bar-fill, var(--sidebar));
+  }
+}
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='muted'] {
+  background-color: color-mix(in srgb, var(--muted) var(--orca-sidebar-opacity, 100%), transparent);
+}
+/* A docked tab covers the tabs scrolled beneath it. */
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  .terminal-tab-strip[data-active-tab-docked]
+  > [data-active-tab-dock] {
+  background-color: var(--tab-bar, var(--card));
+}
+
 /* The modal blur samples transparent pixels past the window edge; keep it over an opaque base. */
 :root[data-window-material] body:is([data-modal-overlay-open], [data-onboarding-overlay-open]) {
   background-color: var(--background);
