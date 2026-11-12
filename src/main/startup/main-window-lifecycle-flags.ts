@@ -1,7 +1,7 @@
-import { resolveExpectedTeardownScope } from '../crash-reporting/expected-teardown-state'
-import type { ExpectedTeardownScope } from '../crash-reporting/process-gone-classification'
-import { recordProcessGoneCrash as recordProcessGoneCrashEvent } from '../crash-reporting/process-gone-recorder'
-import { isQuittingForUpdate } from '../updater'
+import { resolveExpectedTeardownScope } from '../crash-reporting/process-exits/expected-teardown-state'
+import type { ExpectedTeardownScope } from '../crash-reporting/process-exits/process-gone-classification'
+import { recordProcessGoneCrash as recordProcessGoneCrashEvent } from '../crash-reporting/process-exits/process-gone-recorder'
+import { isQuittingForUpdate } from '../updater/updater-service'
 import { mainProcessState as state } from './main-process-state'
 
 export function markExpectedRendererReload(webContentsId: number, durationMs = 10_000): void {
@@ -30,7 +30,7 @@ export function markRecoveryReloadInFlight(webContentsId: number, durationMs = 1
 }
 
 export function isRecoveryReloadInFlight(webContentsId: number): boolean {
-  // Why: consume on read — the recovery reload fires exactly one did-finish-load, so a later genuine reload still sweeps orphaned PTYs.
+  // Consume once for recovery did-finish-load so later genuine reloads still sweep orphaned PTYs.
   return state.recoveryReloadInFlight.matches(webContentsId, { consume: true })
 }
 

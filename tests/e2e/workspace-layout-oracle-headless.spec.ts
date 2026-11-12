@@ -1,17 +1,6 @@
-/**
- * Layout oracle scenarios on a headless `orca serve` (orcad and Electron serve), driven only through
- * runtime RPC from paired clients and the local CLI. After every step the runtime's layout (its
- * saved session) is checked against the structural rules, what each client is told, the expected
- * panes per tab and, across restarts, the layout from before. #12723 needs SSH and is not covered.
- *
- * `ORCA_LAYOUT_ORACLE_RECORD=1` records without failing; `ORCA_LAYOUT_ORACLE_REPEAT=<n>` repeats;
- * `ORCA_LAYOUT_ORACLE_HEADLESS_HOSTS=orcad,electron` picks the hosts (both by default).
- *
- * Run:
- *   ORCA_BACKGROUND_LAUNCH=1 SKIP_BUILD=1 pnpm exec playwright test \
- *     tests/e2e/workspace-layout-oracle-headless.spec.ts --config tests/playwright.config.ts \
- *     --project electron-headless --workers=1
- */
+// Drive orcad/Electron serve with paired clients and CLI; after each step compare live layout rules, client views and expected panes, plus restart/disk round trips.
+// #12723 needs SSH and is not covered. ORCA_LAYOUT_ORACLE_RECORD=1 records without failing; ORCA_LAYOUT_ORACLE_REPEAT=<n> repeats; ORCA_LAYOUT_ORACLE_HEADLESS_HOSTS=orcad,electron chooses hosts (both default).
+// Run ORCA_BACKGROUND_LAUNCH=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/workspace-layout-oracle-headless.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1.
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -24,19 +13,26 @@ import type {
   RuntimeTerminalSplit
 } from '../../src/shared/runtime-terminal-contracts'
 import { expect, test } from './helpers/orca-app'
+import { pickNextActiveTabAfterClose } from '../../src/shared/workspace-session/workspace-session-terminal-tab-close'
 import {
   addRepoWorktree,
   cliClient,
   orcadNodeExecutable,
   pairedClient,
-  readHeadlessPartitions,
   startHeadlessOracleHost,
   type HeadlessHostKind,
   type HeadlessOracleHost
 } from './helpers/headless-layout-oracle-hosts'
 import { LayoutOracle, type OracleFinding } from './helpers/workspace-layout-oracle'
 import type { OracleLayout } from './helpers/workspace-layout-oracle-model'
+import { LiveLayoutFeed } from './helpers/workspace-layout-oracle-feed'
+import { subscribeHeadlessLayout } from './helpers/workspace-layout-oracle-stream'
+import { readSavedPartitions } from './helpers/workspace-layout-oracle-views'
 import { ORACLE_REPORT_DIR_ENV } from './helpers/workspace-layout-oracle-session'
+import {
+  summarizeEventLoopDelay,
+  type EventLoopDelaySummary
+} from './helpers/event-loop-delay-report'
 import { unexpectedFindings } from './workspace-layout-oracle-known-on-main'
 
 type Run = {
@@ -97,10 +93,10 @@ async function handleForTab(run: Run, tabId: string): Promise<string> {
   return handle!
 }
 
-async function createTab(run: Run, client: RuntimeClient): Promise<string> {
+async function createTab(run: Run, client: RuntimeClient, targetGroupId?: string): Promise<string> {
   const created = await client.call<{ tab: { parentTabId: string } }>(
     'session.tabs.createTerminal',
-    { worktree: run.worktree }
+    { worktree: run.worktree, ...(targetGroupId ? { targetGroupId } : {}) }
   )
   return created.result.tab.parentTabId
 }
@@ -147,16 +143,14 @@ async function groupsOf(run: Run): Promise<GroupView[]> {
   }))
 }
 
-/**
- * Moves a tab through the phone/CLI path, then checks the groups' tab orders and selection: the
- * moved tab is selected where it lands; any other group keeps its selection while that tab stays,
- * else falls back to its first tab.
- */
+// Move through phone/CLI: select the moved tab in its destination; other groups keep surviving selection or advance as desktop does.
+// shown carries client A’s tabs, most recent last.
 async function moveTab(
   run: Run,
   step: string,
   move: Record<string, unknown> & { tabId: string },
-  expectedOrders: string[][]
+  expectedOrders: string[][],
+  shown: string[] = []
 ): Promise<GroupView[]> {
   const before = await groupsOf(run)
   await attempt(run, step, () =>
@@ -181,12 +175,20 @@ async function moveTab(
       : [`groups ${orders}, expected ${JSON.stringify(expectedOrders)}`]
   )
   const selection = after.flatMap((group) => {
-    const kept = before.find((candidate) => candidate.id === group.id)?.activeTabId
+    const was = before.find((candidate) => candidate.id === group.id)
+    const kept = was?.activeTabId
     const expected = group.tabOrder.includes(move.tabId)
       ? move.tabId
       : kept && group.tabOrder.includes(kept)
         ? kept
-        : (group.tabOrder[0] ?? null)
+        : kept && was
+          ? pickNextActiveTabAfterClose(
+              { tabOrder: was.tabOrder, recentTabIds: shown },
+              new Set([kept]),
+              group.tabOrder,
+              new Set(group.tabOrder)
+            )
+          : (group.tabOrder[0] ?? null)
     return group.activeTabId === expected
       ? []
       : [`group ${group.id} selects ${group.activeTabId}, expected ${expected}`]
@@ -257,7 +259,7 @@ const SCENARIOS: Scenario[] = [
       )
       await run.check('CLI closes second', [1], undefined, 1)
       await run.restart('warm restart', [1])
-      const left = readHeadlessPartitions(run.host.userDataDir)
+      const left = readSavedPartitions(run.host.userDataDir)
         .flatMap(({ session }) => session.tabsByWorktree?.[run.worktreeId] ?? [])
         .map((tab) => tab.id)
       run.expectNone(
@@ -305,6 +307,42 @@ const SCENARIOS: Scenario[] = [
     }
   },
   {
+    // #27083 review: a phone create joins the group it targets, and an untargeted CLI create the
+    // first group, across a cold restart.
+    id: 'create-in-second-group-cold-restart',
+    journey: async (run) => {
+      const first = await createTab(run, run.a)
+      const second = await createTab(run, run.a)
+      await run.check('two tabs', [1, 1])
+      const [source] = await groupsOf(run)
+      const [, target] = await moveTab(
+        run,
+        'split second tab right',
+        { kind: 'split', tabId: second, targetGroupId: source!.id, splitDirection: 'right' },
+        [[first], [second]]
+      )
+      const phone = await createTab(run, run.a, target!.id)
+      await run.check('phone create in second group', [1, 1, 1])
+      const membership = async () =>
+        JSON.stringify((await groupsOf(run)).map((group) => group.tabOrder.toSorted()))
+      const joined = await membership()
+      const phoneExpected = JSON.stringify([[first], [second, phone].toSorted()])
+      run.expectNone(
+        'phone create joins the second group',
+        joined === phoneExpected ? [] : [`groups ${joined}, expected ${phoneExpected}`]
+      )
+      const cli = (await createTerminal(run)).tabId!
+      await run.check('CLI create in first group', [1, 1, 1, 1])
+      await run.restart('cold restart', [1, 1, 1, 1], true)
+      const after = await membership()
+      const expected = JSON.stringify([[first, cli].toSorted(), [second, phone].toSorted()])
+      run.expectNone(
+        'created tabs stay in their groups after a cold restart',
+        after === expected ? [] : [`groups ${after}, expected ${expected}`]
+      )
+    }
+  },
+  {
     // Moves between groups and a reorder; a group emptied by a move closes.
     id: 'move-tab-between-groups',
     journey: async (run) => {
@@ -317,13 +355,15 @@ const SCENARIOS: Scenario[] = [
         run,
         'split third tab right',
         { kind: 'split', tabId: third, targetGroupId: source!.id, splitDirection: 'right' },
-        [[first, second], [third]]
+        [[first, second], [third]],
+        [first, second, third]
       )
       await moveTab(
         run,
         'move second tab into the new group',
         { kind: 'move-to-group', tabId: second, targetGroupId: target!.id, index: 0 },
-        [[first], [second, third]]
+        [[first], [second, third]],
+        [first, second, third]
       )
       await run.check('move to group', [1, 1, 1])
       await moveTab(
@@ -371,16 +411,19 @@ async function runHeadlessScenario(
   const host = await startHeadlessOracleHost(kind)
   const started = Date.now()
   let findings: OracleFinding[] = []
+  let stream: { close: () => void } | null = null
   try {
     const a = pairedClient(host, 'a')
     const cli = cliClient(host)
     const worktreeId = await addRepoWorktree(host, cli)
+    const feed = new LiveLayoutFeed((current) => oracle.checkFrame(current))
     const target = (client: RuntimeClient) => ({
       client,
-      readPartitions: async () => readHeadlessPartitions(host.userDataDir),
+      feed,
+      readSavedPartitions: async () => readSavedPartitions(host.userDataDir),
       worktreeIds: () => [worktreeId]
     })
-    const oracle = new LayoutOracle(target(a))
+    const oracle = new LayoutOracle(target(a), `headless-${kind}-${scenario.id}`)
     findings = oracle.findings
     // A cold restart gives every pane a new terminal.
     let restarting = false
@@ -415,7 +458,9 @@ async function runHeadlessScenario(
       check,
       restart: async (label, panesPerTab, cold) => {
         oracle.rememberForRestart(await check(`before ${label}`, panesPerTab))
+        stream?.close()
         await host.restart({ cold })
+        stream = await subscribeHeadlessLayout(host.pairingUrl, feed)
         restarting = cold === true
         const after = await check(`after ${label}`, panesPerTab)
         restarting = false
@@ -427,16 +472,25 @@ async function runHeadlessScenario(
         }
       }
     }
+    stream = await subscribeHeadlessLayout(host.pairingUrl, feed)
     await oracle.start()
-    try {
-      await run.check('start', [])
-      await scenario.journey(run)
-    } finally {
-      await oracle.stop()
-    }
+    await run.check('start', [])
+    await scenario.journey(run)
     return findings
   } finally {
-    writeReport(testInfo, `${kind}-${scenario.id}`, findings, Date.now() - started)
+    stream?.close()
+    const ended = Date.now()
+    writeReport(testInfo, `${kind}-${scenario.id}`, {
+      durationMs: ended - started,
+      findings,
+      // orcad, or Electron serve's main process.
+      eventLoopDelay: summarizeEventLoopDelay(
+        host.userDataDir,
+        kind === 'orcad' ? 'orcad' : 'main',
+        started,
+        ended
+      )
+    })
     await host.dispose()
   }
 }
@@ -444,15 +498,18 @@ async function runHeadlessScenario(
 function writeReport(
   testInfo: TestInfo,
   scenarioId: string,
-  findings: OracleFinding[],
-  durationMs: number
+  report: {
+    durationMs: number
+    findings: OracleFinding[]
+    eventLoopDelay: EventLoopDelaySummary
+  }
 ): void {
   const dir = process.env[ORACLE_REPORT_DIR_ENV] ?? testInfo.outputPath('layout-oracle')
   mkdirSync(dir, { recursive: true })
   const file = path.join(dir, `headless-${scenarioId}-${Date.now()}.json`)
   writeFileSync(
     file,
-    `${JSON.stringify({ scenario: `headless-${scenarioId}`, durationMs, findings }, null, 2)}\n`
+    `${JSON.stringify({ scenario: `headless-${scenarioId}`, ...report }, null, 2)}\n`
   )
 }
 

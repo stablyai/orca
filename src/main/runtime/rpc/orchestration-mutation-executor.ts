@@ -1,10 +1,9 @@
-import { createHash } from 'node:crypto'
 import {
   isDurableMutation,
   isTerminalPromptMutation
-} from '../../../shared/orchestration-rpc-contract'
+} from '../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { OrcaSessionId } from '../../../shared/orca-session-address'
+import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { RpcRequest } from './core'
 import {
@@ -20,12 +19,6 @@ import {
   shouldObserveCompletedMutation
 } from './orchestration-mutation-receipt'
 
-export {
-  readMutationReplayNudge,
-  readWorkerDoneReplayNudge,
-  stripMutationReplayNudge
-} from './orchestration-mutation-receipt'
-
 export type DurableMutationInvocation = {
   identity: {
     callerFingerprint: string
@@ -38,6 +31,14 @@ export type DurableMutationInvocation = {
   markEffectPossible: () => void
   replayedReceipt?: unknown
 }
+
+/** Mutations whose pending receipt a restart re-enters, so a stop or cancel still finishes rather
+ *  than answering operation_unknown: each re-runs its ordinary owner, which is safe to repeat. */
+const RESUMABLE_PENDING_METHODS: ReadonlySet<string> = new Set([
+  'orchestration.workerRelease',
+  'orchestration.workerStop',
+  'orchestration.peerRunCancel'
+])
 
 type InFlightMutation = {
   method: string
@@ -55,8 +56,8 @@ export class OrchestrationMutationExecutor {
     params: unknown,
     invoke: (mutation?: DurableMutationInvocation) => unknown,
     callerFingerprintOverride?: string,
-    /** The resolved session's Orca session id; it joins the payload so another caller cannot replay it. */
-    callerOrcaSessionId?: OrcaSessionId
+    /** The resolved caller; its identity joins the payload so another caller cannot replay it. */
+    caller?: OrchestrationEntryCaller
   ): Promise<unknown> {
     const requestId = request.orchestrationRequestId
     if (!requestId || !isDurableMutation(request.method, params)) {
@@ -64,7 +65,7 @@ export class OrchestrationMutationExecutor {
     }
     const callerFingerprint =
       callerFingerprintOverride ?? this.getLocalAuthenticatedCallerFingerprint()
-    const stableParams = replayStableCallerParams(this.runtime, params, callerOrcaSessionId)
+    const stableParams = replayStableCallerParams(this.runtime, params, caller, request.method)
     const basePayloadHash = hashCanonical({ method: request.method, params: stableParams })
     const key = `${callerFingerprint}:${requestId}`
     const db = this.runtime.getOrchestrationDb()
@@ -85,8 +86,7 @@ export class OrchestrationMutationExecutor {
     const recordedPromptBindingHash = existingPromptReceipt
       ? readPromptBindingPayloadHash(existingPromptReceipt.payload_hash)
       : null
-    // The recorded observation is only true while the prompt's terminal incarnation survives, so
-    // every replay re-checks the binding rather than only the --wait-submit ones.
+    // Recheck binding on every replay, not just wait-submit: observations apply only to the original terminal incarnation.
     const promptBindingChanged =
       recordedPromptBindingHash !== null &&
       recordedPromptBindingHash !==
@@ -102,8 +102,7 @@ export class OrchestrationMutationExecutor {
     const atomicWorkerAcceptance =
       request.method === 'orchestration.workerStart' ||
       request.method === 'orchestration.federationAttachStart'
-    // Worker starts perform asynchronous topology validation before their durable
-    // acceptance claim. Join an identical in-process attempt before that boundary.
+    // Worker topology validation precedes durable acceptance; join identical in-process attempts before that boundary.
     if (atomicWorkerAcceptance) {
       const active = this.inFlight.get(key)
       if (active) {
@@ -138,7 +137,7 @@ export class OrchestrationMutationExecutor {
       isResumablePendingWorkerDone(request.method, params, begun.row.receipt)
     const resumedPendingMutation =
       begun.disposition === 'pending' &&
-      (request.method === 'orchestration.workerRelease' || resumedPendingWorkerDone)
+      (RESUMABLE_PENDING_METHODS.has(request.method) || resumedPendingWorkerDone)
 
     if (begun.disposition === 'completed') {
       const active = this.inFlight.get(key)
@@ -177,8 +176,7 @@ export class OrchestrationMutationExecutor {
         db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(replayed) })
         return replayed
       } catch {
-        // The original mutation is already durable; an observation-only replay
-        // must not turn a completed request into a retry or resend opportunity.
+        // Observation-only replay cannot reopen an already-durable mutation for retry or resend.
         return attachMutationReceipt(receipt, requestId, true)
       } finally {
         this.inFlight.delete(key)
@@ -196,7 +194,7 @@ export class OrchestrationMutationExecutor {
           { requestId }
         )
       }
-      if (request.method !== 'orchestration.workerRelease' && !resumedPendingWorkerDone) {
+      if (!resumedPendingMutation) {
         const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
         throw new OrchestrationError(
           'operation_unknown',
@@ -257,7 +255,7 @@ export class OrchestrationMutationExecutor {
     }
   }
 
-  // A replayed prompt may name a terminal that is gone; an unreadable binding is a changed one.
+  // Gone or unreadable prompt terminals count as changed bindings.
   private readTerminalPromptBindingHash(handle: string): string | null {
     try {
       return hashCanonical(this.runtime.getTerminalPromptRequestBinding(handle))
@@ -283,8 +281,4 @@ export function getOrchestrationMutationExecutor(
   const executor = new OrchestrationMutationExecutor(runtime)
   executorsByRuntime.set(runtime, executor)
   return executor
-}
-
-export function fingerprintAuthenticatedPairingCredential(token: string): string {
-  return createHash('sha256').update(token).digest('hex')
 }

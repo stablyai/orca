@@ -1,31 +1,22 @@
 import { hookScreenMount } from '../mounted-screen-tree'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
+import type * as MobileNativeChatSessionModule from '../../../session/native-chat/use-mobile-native-chat-session'
 
 const SOURCE_IDENTITY = 'host-1::repo-1::/work/feature'
 const AGENT = 'claude'
 const SESSION = 'session-1'
 const TRANSCRIPT_PATH = '/work/feature/.claude/session-1.jsonl'
 
-/**
- * Native chat's older-history page.
- *
- * The read is a callback, but only the mount effect's `nativeChat.subscribe` arms what it pages
- * against: `hasMore` gates the call at all, and the snapshot's `beforeOffset` decides whether the
- * request carries a cursor or asks for a growing tail. So the stream is the setup, not decoration —
- * the frames a scenario delivers are what make a page request exist and what shape it takes.
- *
- * Message ids rather than bodies: paging is about which window is held, and a full transcript in
- * every checkpoint would cost bytes without making a reordered or dropped page more visible.
- */
+// Use real subscribe frames to arm paging capability/cursor state; observe message ids because window membership, not text, is the claim.
 export function nativeChatPagingMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'session.native-chat-page': ({ client, effect }) => {
-      const useMobileNativeChatSession = modules.load<
-        typeof import('../../../session/use-mobile-native-chat-session')
-      >('mobile/src/session/use-mobile-native-chat-session.ts').useMobileNativeChatSession
+      const useMobileNativeChatSession = modules.load<typeof MobileNativeChatSessionModule>(
+        'mobile/src/session/native-chat/use-mobile-native-chat-session.ts'
+      ).useMobileNativeChatSession
       let value: ReturnType<typeof useMobileNativeChatSession> | undefined
       const screen = hookScreenMount(() => {
         value = useMobileNativeChatSession({

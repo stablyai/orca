@@ -1,29 +1,12 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE } from './browser-chrome-address-slot'
 
-/**
- * One step of toolbar compaction. Steps apply in this order as the row narrows, so the least-used
- * tools leave first and the page tools the chrome exists for (grab, annotate) leave last.
- */
-export type BrowserChromeFoldStage =
-  | 'import-label'
-  | 'external'
-  | 'devtools'
-  | 'share'
-  | 'import'
-  | 'draw'
-  | 'grab'
-  | 'annotate'
+/** Compaction stages run in order: pinned extensions fold into ⋯ first, then Annotate drops its label. */
+export type BrowserChromeFoldStage = 'extensions' | 'annotate-label'
 
 export const BROWSER_CHROME_FOLD_ORDER: readonly BrowserChromeFoldStage[] = [
-  'import-label',
-  'external',
-  'devtools',
-  'share',
-  'import',
-  'draw',
-  'grab',
-  'annotate'
+  'extensions',
+  'annotate-label'
 ]
 
 /** Below this the URL stops being readable, so tools fold before the address shrinks further. */
@@ -43,14 +26,7 @@ function measureRow(row: HTMLElement | null): RowMeasure | null {
   }
 }
 
-/**
- * Folds `stages` one at a time until the address slot keeps its minimum width and the row stops
- * overflowing, and unfolds as room returns.
- *
- * Why record the width each fold freed instead of re-measuring from zero on every resize: resetting
- * would re-render the toolbar once per stage per resize frame. A fold is undone only when the
- * address has that much slack, so an unfold can never immediately re-trigger its own fold.
- */
+/** Remember the width each fold freed; unfold only with that much slack to avoid resize loops and repeated full resets. */
 export function useBrowserChromeToolFold(
   rowRef: RefObject<HTMLElement | null>,
   stages: readonly BrowserChromeFoldStage[]
@@ -101,8 +77,7 @@ export function useBrowserChromeToolFold(
     if (!row || typeof ResizeObserver === 'undefined') {
       return
     }
-    // Why both: the slot resizes when a sibling tool appears or hides, but stops resizing once it
-    // hits zero while the row keeps overflowing.
+    // Observe row and slot: tool changes resize the slot, but overflow can continue after it reaches zero.
     const observer = new ResizeObserver(() => checkRef.current())
     observer.observe(row)
     if (slot) {

@@ -157,8 +157,16 @@ struct Snapshot {
     let screenshotScale: CGSize
     let screenshotEngine: String?
     let elements: [Int: ElementRecord]
+    let elementOrder: [Int]
+    let nextFreshElementIndex: Int
     let truncated: Bool
     let maxDepthReached: Bool
+    /// On-screen windows of the app (menus and sheets included), so a new or closed window counts as a change.
+    let appWindowIds: [CGWindowID]
+
+    func showsSameState(as other: Snapshot) -> Bool {
+        treeText == other.treeText && windowBounds == other.windowBounds && appWindowIds == other.appWindowIds
+    }
 
     func withoutScreenshotPayload() -> Snapshot {
         Snapshot(
@@ -175,8 +183,11 @@ struct Snapshot {
             screenshotScale: CGSize(width: 1, height: 1),
             screenshotEngine: nil,
             elements: elements,
+            elementOrder: elementOrder,
+            nextFreshElementIndex: nextFreshElementIndex,
             truncated: truncated,
-            maxDepthReached: maxDepthReached
+            maxDepthReached: maxDepthReached,
+            appWindowIds: appWindowIds
         )
     }
 }
@@ -208,6 +219,11 @@ private struct CachedSnapshotEntry {
 final class Provider {
     private var snapshots: [String: Snapshot] = [:]
     private var snapshotEntries: [CachedSnapshotEntry] = []
+
+    init() {
+        // Why: the system-wide element sets the wait for every AX call in this process, so a hung app costs one bounded timeout whatever the macOS default.
+        _ = AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), AccessibilityMessaging.timeoutSeconds)
+    }
 
     func handle(method: String, params: [String: JSONValue]) throws -> Any {
         switch method {
@@ -244,8 +260,23 @@ final class Provider {
 
     private func actionResult(params: [String: JSONValue], action runAction: () throws -> [String: Any]) throws -> [String: Any] {
         var action = try runAction()
+        // Why: only --restore-window activates the app or posts to the HID tap; every other route leaves the user's desktop alone.
+        action["delivery"] = isForegroundRequest(params) ? "foreground" : "background"
+        // Why: the action's currentSnapshot just cached this target's tree from before the action.
+        let before = action["path"] as? String == "accessibility" && action["verification"] == nil
+            ? try? cachedSnapshot(params: params)
+            : nil
         do {
-            return try renderActionResult(action: action, snapshot: observe(params: params))
+            let after = try observe(params: params)
+            guard let before, after.showsSameState(as: before) else {
+                return renderActionResult(action: action, snapshot: after)
+            }
+            if let changed = try observeLateChange(before: before, params: params) {
+                return renderActionResult(action: action, snapshot: changed)
+            }
+            // Why: an AX call can succeed and do nothing, as AXPress does on many web controls (#31758).
+            action["verification"] = unverifiedAction(reason: "suspected_noop")
+            return renderActionResult(action: action, snapshot: after)
         } catch let error as ProviderError where (error.code == "window_not_found" || error.code == "window_stale") && hasRequestedWindowSelector(params) {
             var fallbackParams = params
             fallbackParams.removeValue(forKey: "windowId")
@@ -257,6 +288,23 @@ final class Provider {
         }
     }
 
+    /// Re-reads the target for about a second, since apps often apply an action on a later run-loop turn.
+    /// Returns the observation to report once something changed, or nil if nothing did.
+    private func observeLateChange(before: Snapshot, params: [String: JSONValue]) throws -> Snapshot? {
+        let settleParams = params.merging(["restoreWindow": .bool(false)]) { _, replacement in replacement }
+        let quietParams = settleParams.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement }
+        let deadline = Date().addingTimeInterval(1)
+        while Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.2)
+            let polled = try observe(params: quietParams)
+            if !polled.showsSameState(as: before) {
+                if params["noScreenshot"]?.bool == true { return polled }
+                return try observe(params: settleParams)
+            }
+        }
+        return nil
+    }
+
     private func observe(params: [String: JSONValue]) throws -> Snapshot {
         let query = try requiredString(params, "app")
         let windowId = try requestedWindowId(params)
@@ -265,12 +313,19 @@ final class Provider {
         if params["restoreWindow"]?.bool == true {
             recoverWindow(app)
         }
+        let namespace = snapshotNamespace(params)
+        pruneSnapshotCache()
         let snapshot = try buildSnapshot(
             app: app,
             includeScreenshot: params["noScreenshot"]?.bool != true,
             windowId: windowId,
             windowIndex: windowIndex,
-            restoreWindow: params["restoreWindow"]?.bool == true
+            restoreWindow: params["restoreWindow"]?.bool == true,
+            previousSnapshot: { [snapshots] resolvedWindowId in
+                // Why: indexes carry over from this caller's own last view of exactly this window.
+                snapshots[namespacedSnapshotKey(namespace, snapshotCanonicalWindowIdKey(resolvedWindowId))]
+                    .flatMap { $0.app.pid == app.pid ? $0 : nil }
+            }
         )
         // Why: cached snapshots only validate element identity for follow-up
         // actions; retaining MB-scale screenshot base64 in the long-lived agent grows memory.
@@ -372,8 +427,7 @@ final class Provider {
     }
 
     private func currentKeyboardSnapshot(params: [String: JSONValue]) throws -> Snapshot {
-        // Why: AX text replacement/select-all do not post global input, so only
-        // synthetic fallback paths require the target window to be focused.
+        // Why: keyboard actions need fresh focused-element state, never pixels.
         try currentSnapshot(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
     }
 
@@ -517,6 +571,9 @@ final class Provider {
                     "dock": false,
                     "menubar": false,
                 ],
+                "input": [
+                    "background": BackgroundInputTransport.isAvailable,
+                ],
             ],
         ]
     }
@@ -599,7 +656,8 @@ final class Provider {
         includeScreenshot: Bool,
         windowId: CGWindowID?,
         windowIndex: Int?,
-        restoreWindow: Bool
+        restoreWindow: Bool,
+        previousSnapshot: (CGWindowID) -> Snapshot?
     ) throws -> Snapshot {
         guard accessibilityTrustedSettled() else {
             // Why: agents retry failed observations. Only the explicit setup flow
@@ -610,6 +668,12 @@ final class Provider {
             )
         }
         let appElement = AXUIElementCreateApplication(app.pid)
+        var role: CFTypeRef?
+        let probeStart = CFAbsoluteTimeGetCurrent()
+        // Why: a hung app costs one timeout per AX read; walking it anyway held the request lock for every agent until the 60 s RPC timeout.
+        if AccessibilityMessaging.timedOut(AXUIElementCopyAttributeValue(appElement, kAXRoleAttribute as CFString, &role), since: probeStart) {
+            throw AccessibilityMessaging.appNotResponding(app.name)
+        }
         enableManualAccessibilityIfNeeded(appElement, app: app)
         let windowCandidates = WindowCapture.candidates(pid: app.pid)
         let focused = try focusedWindow(
@@ -639,6 +703,10 @@ final class Provider {
             compactBrowserTabs: app.isKnownBrowser
         )
         renderer.render(window)
+        if renderer.appStoppedResponding {
+            throw AccessibilityMessaging.appNotResponding(app.name)
+        }
+        let indexes = renderer.carryOverIndexes(from: previousSnapshot(capture.windowId))
         let screenshot = includeScreenshot ? capture.screenshotPayload() : nil
         let screenshotStatus: ScreenshotStatus = if screenshot != nil {
             .captured
@@ -663,8 +731,11 @@ final class Provider {
             screenshotScale: screenshotScale(screenshot: screenshot, bounds: capture.bounds),
             screenshotEngine: capture.image?.engine,
             elements: renderer.records,
+            elementOrder: indexes.order,
+            nextFreshElementIndex: indexes.nextFreshIndex,
             truncated: renderer.truncated,
-            maxDepthReached: renderer.maxDepthReached
+            maxDepthReached: renderer.maxDepthReached,
+            appWindowIds: windowCandidates.map(\.windowId).sorted()
         )
     }
 
@@ -736,11 +807,15 @@ final class Provider {
             )
         }
         let modifiers = try KeyMap.parseModifiers(params["modifiers"]?.string)
-        // Why: agents expect a click into a target app to make the next
-        // keyboard action safe, even when the click uses an AX action path.
-        recoverWindow(snapshot.app, windowId: snapshot.windowId, windowBounds: snapshot.windowBounds)
+        let foreground = isForegroundRequest(params)
+        if foreground {
+            recoverWindow(snapshot.app, windowId: snapshot.windowId, windowBounds: snapshot.windowBounds)
+        }
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
+            if !foreground {
+                try requireBackgroundClickAllowed(backgroundClickHit(record.element, snapshot: snapshot))
+            }
             if modifiers.isEmpty,
                count <= 1,
                button.hasAccessibilityAction,
@@ -748,13 +823,7 @@ final class Provider {
                 return actionMetadata(path: "accessibility", actionName: actionName)
             }
             if let point = center(record.localFrame, in: snapshot.windowBounds) {
-                try Input.click(
-                    at: point,
-                    button: button,
-                    count: count,
-                    modifiers: modifiers,
-                    targetWindow: snapshot
-                )
+                try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground, element: record.element)
                 return actionMetadata(
                     path: "synthetic",
                     fallbackReason: "actionUnsupported",
@@ -764,13 +833,7 @@ final class Provider {
             throw ProviderError.coded("element_not_clickable", "element \(record.index) has no clickable frame")
         }
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
-        try Input.click(
-            at: point,
-            button: button,
-            count: count,
-            modifiers: modifiers,
-            targetWindow: snapshot
-        )
+        try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground)
         return actionMetadata(
             path: "synthetic",
             verification: unverifiedAction(reason: "synthetic_input")
@@ -779,10 +842,10 @@ final class Provider {
 
     private func performClickAction(record: ElementRecord, mouseButton: MouseButtonSelection) throws -> String? {
         if mouseButton == .right {
-            return performAction(record.element, "AXShowMenu") ? "AXShowMenu" : nil
+            return try performAction(record.element, "AXShowMenu") ? "AXShowMenu" : nil
         }
         for action in ["AXPress", "AXConfirm", "AXOpen"] {
-            if performAction(record.element, action) {
+            if try performAction(record.element, action) {
                 return action
             }
         }
@@ -797,7 +860,7 @@ final class Provider {
         guard let action else {
             throw ProviderError.coded("action_not_supported", "'\(requested)' is not a valid secondary action for element \(record.index)")
         }
-        guard performAction(record.element, action) else {
+        guard try performAction(record.element, action) else {
             throw ProviderError.coded("accessibility_error", "AXUIElementPerformAction(\(action)) failed")
         }
         return actionMetadata(path: "accessibility", actionName: action)
@@ -813,6 +876,7 @@ final class Provider {
         let current = rawAttributeValue(record.element, kAXValueAttribute as String)
         let coercion = AttributeValueCoercion(existingValue: current, requested: expected)
         let result: AXError
+        let writeStart = CFAbsoluteTimeGetCurrent()
         switch coercion.writeValue {
         case .string:
             result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, expected as CFString)
@@ -823,11 +887,18 @@ final class Provider {
         case let .boolean(value):
             result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, value ? kCFBooleanTrue : kCFBooleanFalse)
         }
+        if AccessibilityMessaging.timedOut(result, since: writeStart) {
+            throw AccessibilityMessaging.unanswered("the value write")
+        }
         guard result == .success else {
             throw ProviderError.coded("accessibility_error", "AXUIElementSetAttributeValue failed with \(result.rawValue)")
         }
         let verification: [String: Any]
-        switch coercion.compare(readback: rawAttributeValue(record.element, kAXValueAttribute as String)) {
+        let readback = settledValueReadback(record.element) { readback in
+            if case .mismatch = coercion.compare(readback: readback) { return false }
+            return true
+        }
+        switch coercion.compare(readback: readback) {
         case let .match(actualPreview):
             verification = verifiedAction(property: "value", expected: expected, actualPreview: actualPreview)
         case let .mismatch(actualPreview):
@@ -841,11 +912,10 @@ final class Provider {
     private func typeText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
         let text = try requiredString(params, "text")
-        if let focused = focusedRecord(snapshot), let verification = TextInput.replaceSelection(focused.element, with: text) {
+        if let focused = focusedRecord(snapshot), let verification = try TextInput.replaceSelection(focused.element, with: text) {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
         }
-        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
-        try Input.typeText(text, pid: snapshot.app.pid)
+        try deliverKeys(try withTransportErrors { try BackgroundInputTransport.textEvents(text) }, snapshot: snapshot, params: params)
         return actionMetadata(
             path: "synthetic",
             actionName: "typeText",
@@ -855,8 +925,7 @@ final class Provider {
 
     private func pressKey(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
-        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
-        try Input.pressKey(try requiredString(params, "key"), pid: snapshot.app.pid)
+        try deliverKeys(try Input.keyEvents(try requiredString(params, "key")), snapshot: snapshot, params: params)
         return actionMetadata(
             path: "synthetic",
             actionName: "pressKey",
@@ -874,8 +943,7 @@ final class Provider {
                 verification: TextInput.selectionVerification(focused.element)
             )
         }
-        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
-        try Input.pressKey(key, pid: snapshot.app.pid)
+        try deliverKeys(try Input.keyEvents(key), snapshot: snapshot, params: params)
         return actionMetadata(
             path: "synthetic",
             actionName: "hotkey",
@@ -886,11 +954,13 @@ final class Provider {
     private func pasteText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
         let text = try requiredString(params, "text")
-        if let focused = focusedRecord(snapshot), let verification = TextInput.replaceSelection(focused.element, with: text) {
+        if let focused = focusedRecord(snapshot), let verification = try TextInput.replaceSelection(focused.element, with: text) {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
         }
-        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
-        try Input.pasteText(text, pid: snapshot.app.pid)
+        let pasteKeys = try Input.keyEvents("cmd+v")
+        try Input.withPasteboardText(text) {
+            try deliverKeys(pasteKeys, snapshot: snapshot, params: params)
+        }
         return actionMetadata(
             path: "clipboard",
             actionName: "paste",
@@ -908,18 +978,18 @@ final class Provider {
             if pages.rounded() == pages, let pageCount = boundedInteger(pages, as: Int.self),
                record.actions.contains(action) {
                 for _ in 0..<max(1, pageCount) {
-                    _ = performAction(record.element, action)
+                    _ = try performAction(record.element, action)
                 }
                 return actionMetadata(path: "accessibility", actionName: action)
             }
             guard let point = center(record.localFrame, in: snapshot.windowBounds) else {
                 throw ProviderError.coded("element_not_found", "element \(record.index) has no scrollable frame")
             }
-            try Input.scroll(pid: snapshot.app.pid, at: point, direction: direction, pages: pages)
+            try scrollPointer(at: point, direction: direction, pages: pages, snapshot: snapshot, params: params)
             return actionMetadata(path: "synthetic", fallbackReason: "actionUnsupported")
         }
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
-        try Input.scroll(pid: snapshot.app.pid, at: point, direction: direction, pages: pages)
+        try scrollPointer(at: point, direction: direction, pages: pages, snapshot: snapshot, params: params)
         return actionMetadata(path: "synthetic")
     }
 
@@ -942,7 +1012,14 @@ final class Provider {
             start = try coordinatePoint(params: params, xKey: "fromX", yKey: "fromY", snapshot: snapshot)
             end = try coordinatePoint(params: params, xKey: "toX", yKey: "toY", snapshot: snapshot)
         }
-        try Input.drag(pid: snapshot.app.pid, from: start, to: end)
+        if isForegroundRequest(params) {
+            try requireTargetWindowFocused(snapshot, restoreWindowRequested: true)
+            try Input.drag(from: start, to: end, targetWindow: snapshot)
+        } else {
+            try withTransportErrors {
+                try BackgroundInputTransport.drag(backgroundTarget(snapshot), from: start, to: end)
+            }
+        }
         return actionMetadata(path: "synthetic")
     }
 
@@ -1164,17 +1241,10 @@ private func focusedSystemWindow(systemWide: AXUIElement, app: AppDescriptor) ->
 }
 
 private func isTargetWindowFocused(_ snapshot: Snapshot) -> Bool {
-    guard let focusedWindow = focusedSystemWindow(systemWide: AXUIElementCreateSystemWide(), app: snapshot.app) else {
-        return false
-    }
-    if windowNumber(focusedWindow) == snapshot.windowId {
-        return true
-    }
-    guard let frame = absoluteFrame(focusedWindow) else {
-        return false
-    }
-    let intersection = frame.intersection(snapshot.windowBounds)
-    return !intersection.isNull && intersection.area >= min(frame.area, snapshot.windowBounds.area) * 0.75
+    focusedSyntheticClickRecipient(
+        targetPID: snapshot.app.pid,
+        targetCandidates: { WindowCapture.candidates(pid: snapshot.app.pid) }
+    ) == .focused(syntheticClickRecipient(pid: snapshot.app.pid, windowId: snapshot.windowId))
 }
 
 private enum AXElementProbe {
@@ -1258,19 +1328,8 @@ private func focusedSyntheticClickRecipient(
         return .unavailable
     }
 
-    if let windowId = windowNumber(focusedWindow) {
-        return .focused(syntheticClickRecipient(pid: ownerPID, windowId: windowId))
-    }
-    guard ownerPID == targetPID else { return .unavailable }
-    guard let frame = absoluteFrame(focusedWindow),
-          let candidate = SyntheticMouseClickDelivery.uniqueWindowCandidate(
-            from: targetCandidates(),
-            matching: {
-              windowFramesMatch($0.bounds, frame)
-            }
-          )
-    else { return .unavailable }
-    return .focused(syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId))
+    guard pidAttribute(focusedWindow) == ownerPID else { return .unavailable }
+    return pointerRecipient(of: focusedWindow, targetPID: targetPID, targetCandidates: targetCandidates)
 }
 
 private func hitTestSyntheticClickRecipient(
@@ -1278,6 +1337,7 @@ private func hitTestSyntheticClickRecipient(
     targetPID: pid_t,
     targetCandidates: () -> [WindowCandidate]
 ) -> SyntheticMouseClickDelivery.RecipientObservation {
+    guard Float(point.x).isFinite, Float(point.y).isFinite else { return .unavailable }
     let systemWide = AXUIElementCreateSystemWide()
     var hitElement: AXUIElement?
     switch AXUIElementCopyElementAtPosition(
@@ -1293,20 +1353,37 @@ private func hitTestSyntheticClickRecipient(
     default:
         return .unavailable
     }
-    guard let hitElement,
-          let ownerPID = pidAttribute(hitElement),
-          let window = containingWindow(hitElement)
-    else { return .unavailable }
-    if let windowId = windowNumber(window) {
-        return .focused(syntheticClickRecipient(pid: ownerPID, windowId: windowId))
+    guard let hitElement else { return .unavailable }
+    return pointerRecipient(of: hitElement, targetPID: targetPID, targetCandidates: targetCandidates)
+}
+
+private func pointerRecipient(
+    of element: AXUIElement,
+    targetPID: pid_t,
+    targetCandidates: () -> [WindowCandidate]
+) -> SyntheticMouseClickDelivery.RecipientObservation {
+    guard let ownerPID = pidAttribute(element), let window = containingWindow(element) else {
+        return .unavailable
     }
-    guard ownerPID == targetPID else { return .unavailable }
-    guard let frame = absoluteFrame(window),
+    do {
+        if let windowID = try AccessibilityWindowIdentity.windowID(of: window) {
+            return .focused(syntheticClickRecipient(pid: ownerPID, windowId: windowID))
+        }
+    } catch {
+        return .unavailable
+    }
+    guard ownerPID == targetPID, let frame = absoluteFrame(window),
+          let windows = copyArray(AXUIElementCreateApplication(ownerPID), kAXWindowsAttribute as String)
+    else { return .unavailable }
+    var matches: [AXUIElement] = []
+    for candidate in windows {
+        guard let candidateFrame = absoluteFrame(candidate) else { return .unavailable }
+        if windowFramesMatch(candidateFrame, frame) { matches.append(candidate) }
+    }
+    guard matches.count == 1, CFEqual(matches[0], window),
           let candidate = SyntheticMouseClickDelivery.uniqueWindowCandidate(
             from: targetCandidates(),
-            matching: {
-              windowFramesMatch($0.bounds, frame)
-            }
+            matching: { windowFramesMatch($0.bounds, frame) }
           )
     else { return .unavailable }
     return .focused(syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId))
@@ -1348,6 +1425,124 @@ private func requireTargetWindowFocused(_ snapshot: Snapshot, restoreWindowReque
         throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; retry with --restore-window or use set-value for editable elements")
     case .targetNotFocusedAfterRestore:
         throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; --restore-window was requested but the target is still not focused; bring it forward manually or check Accessibility permissions")
+    }
+}
+
+private func isForegroundRequest(_ params: [String: JSONValue]) -> Bool {
+    params["restoreWindow"]?.bool == true
+}
+
+private func backgroundTarget(_ snapshot: Snapshot) -> BackgroundInputTransport.Target {
+    BackgroundInputTransport.Target(pid: snapshot.app.pid, windowID: snapshot.windowId, windowFrame: snapshot.windowBounds)
+}
+
+private func withTransportErrors<T>(_ body: () throws -> T) throws -> T {
+    do {
+        return try body()
+    } catch let failure as BackgroundInputTransport.Failure {
+        switch failure {
+        case let .unavailable(missingSymbols):
+            throw ProviderError.coded("background_unavailable", "background input is unavailable on this macOS version (missing \(missingSymbols.joined(separator: ", "))); retry with --restore-window to bring the app forward and use foreground input")
+        case .processNotFound:
+            throw ProviderError.coded("app_not_found", "the target app quit before input was delivered")
+        case .eventCreationFailed:
+            throw ProviderError.coded("accessibility_error", "failed to create input event")
+        case .targetWindowNotKey:
+            throw ProviderError.coded("background_unavailable", "background input cannot change the key window of the active app; retry with --restore-window to target this window explicitly")
+        case let .focusRecordFailed(status):
+            throw ProviderError.coded("window_not_focused", "background key-window focus record failed (status \(status)); input may already have been delivered, so inspect current state before retrying")
+        }
+    }
+}
+
+private func clickPointer(
+    at point: CGPoint,
+    button: MouseButtonSelection,
+    count: Int,
+    modifiers: [KeyModifier],
+    snapshot: Snapshot,
+    foreground: Bool,
+    element: AXUIElement? = nil
+) throws {
+    if foreground {
+        try Input.click(at: point, button: button, count: count, modifiers: modifiers, targetWindow: snapshot)
+        return
+    }
+    let hitElement: AXUIElement
+    if let element {
+        hitElement = element
+    } else {
+        var found: AXUIElement?
+        guard Float(point.x).isFinite, Float(point.y).isFinite,
+              AXUIElementCopyElementAtPosition(AXUIElementCreateApplication(snapshot.app.pid), Float(point.x), Float(point.y), &found) == .success,
+              let found
+        else {
+            throw ProviderError.coded("background_unavailable", "cannot identify the background click target; run get-app-state again or retry with --restore-window")
+        }
+        hitElement = found
+    }
+    let hit = try backgroundClickHit(hitElement, snapshot: snapshot)
+    try requireBackgroundClickAllowed(hit)
+    try withTransportErrors {
+        try BackgroundInputTransport.click(
+            backgroundTarget(snapshot),
+            at: point,
+            button: button,
+            clickCount: count,
+            flags: eventFlags(modifiers),
+            hit: hit
+        )
+    }
+}
+
+private func backgroundClickHit(_ element: AXUIElement, snapshot: Snapshot) throws -> BackgroundInputTransport.PointerHit {
+    let recipient = pointerRecipient(of: element, targetPID: snapshot.app.pid) {
+        WindowCapture.candidates(pid: snapshot.app.pid)
+    }
+    guard recipient == .focused(syntheticClickRecipient(pid: snapshot.app.pid, windowId: snapshot.windowId)) else {
+        throw ProviderError.coded("background_unavailable", "the background click target does not identify the requested window; run get-app-state again or retry with --restore-window")
+    }
+    return BackgroundInputTransport.classifyPointerHit(element)
+}
+
+private func requireBackgroundClickAllowed(_ hit: BackgroundInputTransport.PointerHit) throws {
+    guard hit != .popupMenu else {
+        throw ProviderError.coded("background_unavailable", "a background click on a popup menu or web <select> opens the menu off screen or wedges the app's input; set the option with set-value on the popup element, or retry with --restore-window for a foreground click")
+    }
+}
+
+private func scrollPointer(at point: CGPoint, direction: String, pages: Double, snapshot: Snapshot, params: [String: JSONValue]) throws {
+    guard let delta = boundedInteger(max(1, (12 * pages).rounded()), as: Int32.self) else {
+        throw ProviderError.coded("invalid_argument", "pages is out of range")
+    }
+    let wheel1: Int32 = direction == "up" ? delta : direction == "down" ? -delta : 0
+    let wheel2: Int32 = direction == "left" ? delta : direction == "right" ? -delta : 0
+    if isForegroundRequest(params) {
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: true)
+        try Input.scroll(at: point, wheel1: wheel1, wheel2: wheel2, targetWindow: snapshot)
+        return
+    }
+    try withTransportErrors {
+        try BackgroundInputTransport.scroll(backgroundTarget(snapshot), at: point, wheel1: wheel1, wheel2: wheel2)
+    }
+}
+
+private func deliverKeys(_ events: [CGEvent], snapshot: Snapshot, params: [String: JSONValue]) throws {
+    if isForegroundRequest(params) {
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: true)
+        for event in events {
+            event.post(tap: .cghidEventTap)
+        }
+        return
+    }
+    try withTransportErrors {
+        try BackgroundInputTransport.sendKeys(events, to: backgroundTarget(snapshot))
+    }
+}
+
+private func eventFlags(_ modifiers: [KeyModifier]) -> CGEventFlags {
+    modifiers.reduce(into: CGEventFlags()) { result, modifier in
+        result.insert(modifier.flag)
     }
 }
 
@@ -1560,6 +1755,19 @@ private func rawStringAttribute(_ element: AXUIElement, _ attribute: String) -> 
     return value as? String
 }
 
+/// Reads the value until `settled` accepts it: Chromium answers from a cache that trails a successful write by about 100 ms.
+private func settledValueReadback(_ element: AXUIElement, settled: (CFTypeRef) -> Bool) -> CFTypeRef? {
+    var readback: CFTypeRef?
+    // Why: settle counts only its sleeps, and one slow or failed AX read can take the full 3 s timeout.
+    let deadline = CFAbsoluteTimeGetCurrent() + 0.5
+    _ = PermissionTrustSettling.settle(timeoutMs: 500, intervalMs: 25) {
+        readback = rawAttributeValue(element, kAXValueAttribute as String)
+        guard let readback, CFAbsoluteTimeGetCurrent() < deadline else { return true }
+        return settled(readback)
+    }
+    return readback
+}
+
 private func rawAttributeValue(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
@@ -1585,10 +1793,7 @@ private func numberAttribute(_ element: AXUIElement, _ attribute: String) -> NSN
 }
 
 private func windowNumber(_ element: AXUIElement) -> CGWindowID? {
-    guard let number = numberAttribute(element, "AXWindowNumber") else {
-        return nil
-    }
-    return CGWindowID(number.uint32Value)
+    try? AccessibilityWindowIdentity.windowID(of: element)
 }
 
 private func absoluteFrame(_ element: AXUIElement) -> CGRect? {
@@ -1625,9 +1830,44 @@ private func actions(_ element: AXUIElement) -> [String] {
     return value as? [String] ?? []
 }
 
-private func performAction(_ element: AXUIElement, _ action: String) -> Bool {
-    actions(element).contains(where: { $0.caseInsensitiveCompare(action) == .orderedSame }) &&
-        AXUIElementPerformAction(element, action as CFString) == .success
+private enum AccessibilityMessaging {
+    static let timeoutSeconds: Float = 3
+
+    /// Why: AX also returns cannotComplete at once for some attributes; only a call that waited out the timeout means the app is not answering.
+    static func timedOut(_ result: AXError, since start: CFAbsoluteTime) -> Bool {
+        result == .cannotComplete && CFAbsoluteTimeGetCurrent() - start >= Double(timeoutSeconds) * 0.9
+    }
+
+    static func appNotResponding(_ appName: String?) -> ProviderError {
+        .coded("action_timeout", "\(appName.map { "'\($0)'" } ?? "The app") is not answering accessibility requests (no reply within \(timeoutSeconds) s); it may be busy or hung. Wait until it responds, then retry.")
+    }
+
+    /// The request reached the app, which went quiet while handling it, so the effect may have happened.
+    static func unanswered(_ request: String) -> ProviderError {
+        .coded("action_timeout", "the app did not answer \(request) within \(timeoutSeconds) s; it may be busy or showing a dialog, and the action may already have taken effect. Run get-app-state to check before retrying.")
+    }
+}
+
+private func performAction(_ element: AXUIElement, _ action: String) throws -> Bool {
+    var names: CFArray?
+    let start = CFAbsoluteTimeGetCurrent()
+    let namesResult = AXUIElementCopyActionNames(element, &names)
+    if AccessibilityMessaging.timedOut(namesResult, since: start) {
+        throw AccessibilityMessaging.appNotResponding(nil)
+    }
+    guard namesResult == .success,
+          let names = names as? [String],
+          names.contains(where: { $0.caseInsensitiveCompare(action) == .orderedSame })
+    else {
+        return false
+    }
+    let pressStart = CFAbsoluteTimeGetCurrent()
+    let result = AXUIElementPerformAction(element, action as CFString)
+    // Why: falling through to another route after a delivered but unanswered press ran the action twice.
+    if AccessibilityMessaging.timedOut(result, since: pressStart) {
+        throw AccessibilityMessaging.unanswered(action)
+    }
+    return result == .success
 }
 
 private func isSettable(_ element: AXUIElement, _ attribute: String) -> Bool {
@@ -1700,43 +1940,6 @@ private func screenshotScale(screenshot: ScreenshotPayload?, bounds: CGRect) -> 
     )
 }
 
-extension MouseButtonSelection {
-    // Why: macOS has no dedicated middle-button event family; it rides `otherMouse*`
-    // with the button number carried by `mouseButton:` on the event constructor.
-    var cgButton: CGMouseButton {
-        switch self {
-        case .left:
-            return .left
-        case .right:
-            return .right
-        case .middle:
-            return .center
-        }
-    }
-
-    var downEvent: CGEventType {
-        switch self {
-        case .left:
-            return .leftMouseDown
-        case .right:
-            return .rightMouseDown
-        case .middle:
-            return .otherMouseDown
-        }
-    }
-
-    var upEvent: CGEventType {
-        switch self {
-        case .left:
-            return .leftMouseUp
-        case .right:
-            return .rightMouseUp
-        case .middle:
-            return .otherMouseUp
-        }
-    }
-}
-
 private func mouseButton(_ raw: String?) throws -> MouseButtonSelection {
     switch ActionArgumentValidation.mouseButton(raw) {
     case let .success(button):
@@ -1788,6 +1991,8 @@ private final class TreeRenderer {
     static let maxNodes = 1200
     static let maxDepth = 64
 
+    var appStoppedResponding: Bool { reader.appStoppedResponding }
+
     init(windowBounds: CGRect, focused: AXUIElement?, compactBrowserTabs: Bool) {
         self.windowBounds = windowBounds
         self.focused = focused
@@ -1795,6 +2000,7 @@ private final class TreeRenderer {
     }
 
     func render(_ element: AXUIElement, depth: Int = 0, ancestors: [AXUIElement] = []) {
+        guard !reader.appStoppedResponding else { return }
         guard nextIndex < Self.maxNodes else {
             truncated = true
             return
@@ -1944,6 +2150,28 @@ private final class TreeRenderer {
     }
 }
 
+extension TreeRenderer {
+    /// Swaps the walk-order indexes for ones carried over from the previous snapshot of this window.
+    func carryOverIndexes(from previous: Snapshot?) -> (order: [Int], nextFreshIndex: Int) {
+        let walked = records.values.sorted { $0.index < $1.index }
+        let assignment = StableElementIndexes.assign(
+            current: walked.map(\.element),
+            previous: previous?.elementOrder.compactMap { index in
+                previous?.elements[index].map { (key: $0.element, index: index) }
+            } ?? [],
+            previousNextFreshIndex: previous?.nextFreshElementIndex ?? 0
+        )
+        let renumbered = Dictionary(uniqueKeysWithValues: zip(walked.map(\.index), assignment.indexes))
+        records = Dictionary(uniqueKeysWithValues: zip(walked, assignment.indexes).map { record, index in
+            (index, ElementRecord(index: index, element: record.element, localFrame: record.localFrame, actions: record.actions, signature: record.signature))
+        })
+        lines = lines.map { StableElementIndexes.renumber(line: $0, indexes: renumbered) }
+        focusedElementId = focusedElementId.flatMap { renumbered[$0] }
+        focusedSummary = focusedSummary.map { StableElementIndexes.renumber(line: $0, indexes: renumbered) }
+        return (assignment.indexes, assignment.nextFreshIndex)
+    }
+}
+
 private final class AXSnapshotReader {
     private enum CachedAttribute {
         case missing
@@ -1995,7 +2223,7 @@ private final class AXSnapshotReader {
             return actions
         }
         var value: CFArray?
-        let actions = AXUIElementCopyActionNames(element, &value) == .success ? value as? [String] ?? [] : []
+        let actions = answered { AXUIElementCopyActionNames(element, &value) } == .success ? value as? [String] ?? [] : []
         cache.actions = actions
         return actions
     }
@@ -2006,9 +2234,22 @@ private final class AXSnapshotReader {
             return cached
         }
         var settable = DarwinBoolean(false)
-        let value = AXUIElementIsAttributeSettable(element, attribute as CFString, &settable) == .success && settable.boolValue
+        let value = answered { AXUIElementIsAttributeSettable(element, attribute as CFString, &settable) } == .success && settable.boolValue
         cache.settable[attribute] = value
         return value
+    }
+
+    /// Set once the app waits out a messaging timeout; later reads return nothing instead of each waiting it out again.
+    private(set) var appStoppedResponding = false
+
+    private func answered(_ call: () -> AXError) -> AXError? {
+        guard !appStoppedResponding else { return nil }
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = call()
+        if AccessibilityMessaging.timedOut(result, since: start) {
+            appStoppedResponding = true
+        }
+        return result
     }
 
     func frame(_ element: AXUIElement, windowBounds: CGRect) -> CGRect? {
@@ -2137,7 +2378,7 @@ private final class AXSnapshotReader {
             return nil
         }
         var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success, let value else {
+        guard answered({ AXUIElementCopyAttributeValue(element, attribute as CFString, &value) }) == .success, let value else {
             cache.attributes[attribute] = .missing
             return nil
         }
@@ -2151,7 +2392,7 @@ private final class AXSnapshotReader {
         }
         cache.loadedAttributeNames = true
         var value: CFArray?
-        guard AXUIElementCopyAttributeNames(cache.element, &value) == .success, let attributes = value as? [String] else {
+        guard answered({ AXUIElementCopyAttributeNames(cache.element, &value) }) == .success, let attributes = value as? [String] else {
             return nil
         }
         cache.advertisedAttributes = Set(attributes)
@@ -2567,11 +2808,9 @@ private enum Input {
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ProviderError.coded("accessibility_error", "failed to create event source")
         }
-        let flags = modifiers.reduce(into: CGEventFlags()) { result, modifier in
-            result.insert(modifier.flag)
-        }
+        let flags = eventFlags(modifiers)
         let target = syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId)
-        do {
+        try withRecipientErrors {
             try SyntheticMouseClickDelivery.deliver(
                 clickCount: count,
                 target: target,
@@ -2606,6 +2845,12 @@ private enum Input {
                 post: { $0.post(tap: .cghidEventTap) },
                 pause: { _ = usleep($0) }
             )
+        }
+    }
+
+    private static func withRecipientErrors(_ body: () throws -> Void) throws {
+        do {
+            try body()
         } catch let failure as SyntheticMouseClickDelivery.FenceFailure {
             switch failure {
             case let .recipientChanged(expected, actual, deliveredPresses):
@@ -2617,79 +2862,59 @@ private enum Input {
                     : "\(deliveredPresses) press(es) may already have been delivered; run get-app-state and verify state before retrying"
                 throw ProviderError.coded(
                     "window_not_focused",
-                    "coordinate click aborted because target pid \(expected.ownerPID) window \(expected.windowID) is no longer the focused topmost recipient (current: \(actualDescription)); \(recovery)"
+                    "pointer input aborted because target pid \(expected.ownerPID) window \(expected.windowID) is no longer the focused topmost recipient (current: \(actualDescription)); \(recovery)"
                 )
             }
         }
     }
 
-    static func scroll(pid: pid_t, at point: CGPoint, direction: String, pages: Double) throws {
-        guard let delta = boundedInteger(max(1, (12 * pages).rounded()), as: Int32.self) else {
-            throw ProviderError.coded("invalid_argument", "pages is out of range")
-        }
-        let wheel1: Int32 = direction == "up" ? delta : direction == "down" ? -delta : 0
-        let wheel2: Int32 = direction == "left" ? delta : direction == "right" ? -delta : 0
-        guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: wheel1, wheel2: wheel2, wheel3: 0) else {
+    static func scroll(at point: CGPoint, wheel1: Int32, wheel2: Int32, targetWindow: Snapshot) throws {
+        let move = try mouseEvent(.mouseMoved, at: point)
+        guard let wheel = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: wheel1, wheel2: wheel2, wheel3: 0) else {
             throw ProviderError.coded("accessibility_error", "failed to create scroll event")
         }
-        event.location = point
-        event.postToPid(pid)
-    }
-
-    static func drag(pid: pid_t, from start: CGPoint, to end: CGPoint) throws {
-        guard let source = CGEventSource(stateID: .combinedSessionState) else {
-            throw ProviderError.coded("accessibility_error", "failed to create event source")
-        }
-        try mouse(.mouseMoved, source: source, point: start, button: .left, pid: pid)
-        try mouse(.leftMouseDown, source: source, point: start, button: .left, pid: pid)
-        for step in 1...10 {
-            let progress = CGFloat(step) / 10
-            try mouse(
-                .leftMouseDragged,
-                source: source,
-                point: CGPoint(x: start.x + (end.x - start.x) * progress, y: start.y + (end.y - start.y) * progress),
-                button: .left,
-                pid: pid
+        wheel.location = point
+        try withRecipientErrors {
+            try SyntheticMouseClickDelivery.deliverScroll(
+                move: move, wheel: wheel,
+                target: syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId),
+                currentObservation: { currentSyntheticClickRecipient(snapshot: targetWindow, point: point) },
+                post: { $0.post(tap: .cghidEventTap) },
+                pause: { _ = usleep($0) }
             )
         }
-        try mouse(.leftMouseUp, source: source, point: end, button: .left, pid: pid)
     }
 
-    static func typeText(_ text: String, pid: pid_t) throws {
-        for unit in text.utf16 {
-            var char = unit
-            guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
-                  let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false)
-            else {
-                throw ProviderError.coded("accessibility_error", "failed to create keyboard event")
-            }
-            down.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)
-            up.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)
-            down.post(tap: .cghidEventTap)
-            up.post(tap: .cghidEventTap)
+    static func drag(from start: CGPoint, to end: CGPoint, targetWindow: Snapshot) throws {
+        let move = try mouseEvent(.mouseMoved, at: start)
+        let down = try mouseEvent(.leftMouseDown, at: start)
+        let up = try mouseEvent(.leftMouseUp, at: end)
+        let dragged = try (1...10).map { step in
+            let progress = CGFloat(step) / 10
+            return try mouseEvent(.leftMouseDragged, at: CGPoint(x: start.x + (end.x - start.x) * progress, y: start.y + (end.y - start.y) * progress))
+        }
+        try withRecipientErrors {
+            try SyntheticMouseClickDelivery.deliverDrag(
+                move: move, down: down, dragged: dragged, up: up,
+                target: syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId),
+                currentObservation: { currentSyntheticClickRecipient(snapshot: targetWindow, point: start) },
+                post: { $0.post(tap: .cghidEventTap) },
+                pause: { _ = usleep($0) }
+            )
         }
     }
 
-    static func pressKey(_ key: String, pid: pid_t) throws {
+    static func keyEvents(_ key: String) throws -> [CGEvent] {
         let parsed = try KeyMap.parse(key)
-        var flags = CGEventFlags()
-        var pressedModifiers: [KeyModifier] = []
-        defer {
-            for modifier in pressedModifiers.reversed() {
-                flags.remove(modifier.flag)
-                try? keyEvent(modifier.keyCode, down: false, flags: flags, pid: pid)
-            }
+        return try withTransportErrors {
+            try BackgroundInputTransport.chordEvents(
+                keyCode: parsed.keyCode,
+                modifiers: parsed.modifiers.map { (keyCode: $0.keyCode, flag: $0.flag) }
+            )
         }
-        for modifier in parsed.modifiers {
-            flags.insert(modifier.flag)
-            try keyEvent(modifier.keyCode, down: true, flags: flags, pid: pid)
-            pressedModifiers.append(modifier)
-        }
-        try keyEvent(parsed.keyCode, down: true, flags: flags, pid: pid)
-        try keyEvent(parsed.keyCode, down: false, flags: flags, pid: pid)
     }
 
-    static func pasteText(_ text: String, pid: pid_t) throws {
+    static func withPasteboardText(_ text: String, _ body: () throws -> Void) throws {
         let pasteboard = NSPasteboard.general
         let previousItems: [NSPasteboardItem] = pasteboard.pasteboardItems?.map { item in
             let copy = NSPasteboardItem()
@@ -2702,42 +2927,36 @@ private enum Input {
         } ?? []
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+        let changeCount = pasteboard.changeCount
         defer {
-            pasteboard.clearContents()
-            if !previousItems.isEmpty {
-                pasteboard.writeObjects(previousItems)
+            // Why: posting Cmd+V returns before the receiver reads the pasteboard.
+            usleep(200_000)
+            if pasteboard.changeCount == changeCount {
+                pasteboard.clearContents()
+                if !previousItems.isEmpty {
+                    pasteboard.writeObjects(previousItems)
+                }
             }
         }
-        try pressKey("cmd+v", pid: pid)
+        try body()
     }
 
-    private static func mouse(
-        _ type: CGEventType,
-        source: CGEventSource,
-        point: CGPoint,
-        button: CGMouseButton,
-        flags: CGEventFlags = [],
-        pid: pid_t
-    ) throws {
-        guard let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: button) else {
+    private static func mouseEvent(_ type: CGEventType, at point: CGPoint) throws -> CGEvent {
+        guard point.x.isFinite, point.y.isFinite else {
+            throw ProviderError.coded("invalid_argument", "pointer coordinates are out of range")
+        }
+        guard let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left) else {
             throw ProviderError.coded("accessibility_error", "failed to create mouse event")
         }
-        event.flags = flags
-        event.postToPid(pid)
-    }
-
-    private static func keyEvent(_ keyCode: CGKeyCode, down: Bool, flags: CGEventFlags, pid: pid_t) throws {
-        guard let event = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: down) else {
-            throw ProviderError.coded("accessibility_error", "failed to create key event")
-        }
-        event.flags = flags
-        event.post(tap: .cghidEventTap)
+        return event
     }
 }
 
 private enum TextInput {
-    static func replaceSelection(_ element: AXUIElement, with text: String) -> [String: Any]? {
-        guard isSettable(element, kAXValueAttribute as String),
+    static func replaceSelection(_ element: AXUIElement, with text: String) throws -> [String: Any]? {
+        // Why: Chromium applies AX value writes without the input events pages listen to; a contenteditable gets none, so editors like Discord's never see the text.
+        guard !BackgroundInputTransport.isChromiumNode(element),
+              isSettable(element, kAXValueAttribute as String),
               let current = rawStringAttribute(element, kAXValueAttribute as String)
         else {
             return nil
@@ -2748,12 +2967,24 @@ private enum TextInput {
         let start = String.Index(utf16Offset: startOffset, in: current)
         let end = String.Index(utf16Offset: endOffset, in: current)
         let next = String(current[..<start]) + text + String(current[end...])
-        guard AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, next as CFString) == .success else {
+        let writeStart = CFAbsoluteTimeGetCurrent()
+        let result = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, next as CFString)
+        // Why: typing the text as keys after an unanswered write could enter it twice.
+        if AccessibilityMessaging.timedOut(result, since: writeStart) {
+            throw AccessibilityMessaging.unanswered("the text write")
+        }
+        guard result == .success else {
             return nil
         }
         setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
-        guard rawStringAttribute(element, kAXValueAttribute as String) == next else {
-            return nil
+        // Why: a cached, out-of-process AX tree can show the old value for a moment; any other value is final.
+        let readback = settledValueReadback(element) { next == current || ($0 as? String) != current } as? String
+        guard readback == next else {
+            // Why: typing the text as keys after a write that landed enters it twice, so only an unchanged field falls back.
+            if readback == current {
+                return nil
+            }
+            return unverifiedAction(reason: "accessibility_action_unasserted", expected: text, actualPreview: readback.map { preview($0) })
         }
         return verifiedAction(
             property: "focusedText",
@@ -2949,15 +3180,18 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
 
 private final class PermissionRuntime: NSObject, NSApplicationDelegate {
     private let initialPermission: PermissionKind?
+    private let copy: PermissionWindowCopy
     private var windowController: PermissionWindowController?
 
-    init(initialPermission: PermissionKind?) {
+    init(initialPermission: PermissionKind?, copy: PermissionWindowCopy) {
         self.initialPermission = initialPermission
+        self.copy = copy
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowController = PermissionWindowController(
             initialPermission: initialPermission,
+            copy: copy,
             terminateWhenDragAssistantCloses: initialPermission != nil
         )
         if let initialPermission {
@@ -2983,25 +3217,36 @@ private final class PermissionWindowController: NSWindowController {
     private var dragAssistant: PermissionDragAssistantController?
     private var dragAssistantPermission: PermissionKind?
     private let initialPermission: PermissionKind?
+    private let copy: PermissionWindowCopy
     private let terminateWhenDragAssistantCloses: Bool
     private var permissionStatusRefresh: PermissionStatusRefreshCoordinator?
 
-    convenience init(initialPermission: PermissionKind? = nil, terminateWhenDragAssistantCloses: Bool = false) {
+    convenience init(
+        initialPermission: PermissionKind? = nil,
+        copy: PermissionWindowCopy,
+        terminateWhenDragAssistantCloses: Bool = false
+    ) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 315),
             styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        window.title = "Enable Orca Computer Use"
+        window.title = copy.windowTitle
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.backgroundColor = PermissionPalette.background
         window.center()
         window.isReleasedWhenClosed = false
-        self.init(window: window, initialPermission: initialPermission, terminateWhenDragAssistantCloses: terminateWhenDragAssistantCloses)
+        self.init(
+            window: window,
+            initialPermission: initialPermission,
+            copy: copy,
+            terminateWhenDragAssistantCloses: terminateWhenDragAssistantCloses
+        )
         window.contentView = PermissionView(
             frame: window.contentView?.bounds ?? .zero,
+            copy: copy,
             showDragAssistant: { [weak self] permission in
                 self?.showDragAssistant(for: permission)
             },
@@ -3011,8 +3256,14 @@ private final class PermissionWindowController: NSWindowController {
         )
     }
 
-    init(window: NSWindow?, initialPermission: PermissionKind?, terminateWhenDragAssistantCloses: Bool) {
+    init(
+        window: NSWindow?,
+        initialPermission: PermissionKind?,
+        copy: PermissionWindowCopy,
+        terminateWhenDragAssistantCloses: Bool
+    ) {
         self.initialPermission = initialPermission
+        self.copy = copy
         self.terminateWhenDragAssistantCloses = terminateWhenDragAssistantCloses
         super.init(window: window)
         permissionStatusRefresh = PermissionStatusRefreshCoordinator(
@@ -3034,6 +3285,7 @@ private final class PermissionWindowController: NSWindowController {
         dragAssistantPermission = permission
         dragAssistant = PermissionDragAssistantController(
             permission: permission,
+            copy: copy,
             fallbackVisibleFrame: window?.screen?.visibleFrame,
             onRefreshPermissions: { [weak self] in
                 self?.refreshPermissions()
@@ -3116,39 +3368,39 @@ private enum PermissionKind: CaseIterable {
         }
     }
 
-    var dragInstruction: String {
+    func dragInstruction(copy: PermissionWindowCopy) -> String {
         switch self {
         case .accessibility:
-            "Drag Orca Computer Use into the list above to allow Accessibility."
+            copy.dragAccessibilityInstruction
         case .screenshots:
-            "Drag Orca Computer Use into the list above to allow Screenshots."
+            copy.dragScreenshotsInstruction
         }
     }
 
-    var title: String {
+    func title(copy: PermissionWindowCopy) -> String {
         switch self {
         case .accessibility:
-            "Accessibility"
+            copy.accessibilityTitle
         case .screenshots:
-            "Screenshots"
+            copy.screenshotsTitle
         }
     }
 
-    var detail: String {
+    func detail(copy: PermissionWindowCopy) -> String {
         switch self {
         case .accessibility:
-            "Read and control app interfaces"
+            copy.accessibilityDetail
         case .screenshots:
-            "Capture windows for visual state"
+            copy.screenshotsDetail
         }
     }
 
-    var icon: NSImage {
+    func icon(copy: PermissionWindowCopy) -> NSImage {
         switch self {
         case .accessibility:
-            NSImage(systemSymbolName: "figure", accessibilityDescription: "Accessibility") ?? NSImage()
+            NSImage(systemSymbolName: "figure", accessibilityDescription: copy.accessibilityTitle) ?? NSImage()
         case .screenshots:
-            NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Screen Recording") ?? NSImage()
+            NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: copy.screenRecordingDescription) ?? NSImage()
         }
     }
 
@@ -3174,13 +3426,20 @@ private enum PermissionKind: CaseIterable {
 
 private final class PermissionView: NSView {
     private let appURL = Bundle.main.bundleURL
+    private let copy: PermissionWindowCopy
     private let showDragAssistant: (PermissionKind) -> Void
     private let close: () -> Void
     private var contentStack: NSStackView?
     private var contentConstraints: [NSLayoutConstraint] = []
     private var permissionStatus: PermissionStatusSnapshot?
 
-    init(frame frameRect: NSRect, showDragAssistant: @escaping (PermissionKind) -> Void, close: @escaping () -> Void) {
+    init(
+        frame frameRect: NSRect,
+        copy: PermissionWindowCopy,
+        showDragAssistant: @escaping (PermissionKind) -> Void,
+        close: @escaping () -> Void
+    ) {
+        self.copy = copy
         self.showDragAssistant = showDragAssistant
         self.close = close
         super.init(frame: frameRect)
@@ -3222,15 +3481,15 @@ private final class PermissionView: NSView {
         let ready = !checking && missingPermissions.isEmpty
 
         let titleText = checking
-            ? "Checking Computer Use"
-            : (ready ? "Computer Use is Ready" : "Enable Orca Computer Use")
+            ? copy.checkingTitle
+            : (ready ? copy.readyTitle : copy.enableTitle)
         let title = label(titleText, size: 22, weight: .bold)
         let subtitle = label(
             checking
-                ? "Checking Accessibility and Screenshots."
+                ? copy.checkingSubtitle
                 : (ready
-                    ? "Orca can use local apps when you ask."
-                    : "Grant permissions so Orca can use apps when you ask."),
+                    ? copy.readySubtitle
+                    : copy.permissionSubtitle),
             size: 12,
             weight: .regular
         )
@@ -3291,13 +3550,13 @@ private final class PermissionView: NSView {
         row.layer?.backgroundColor = PermissionPalette.card.cgColor
         row.translatesAutoresizingMaskIntoConstraints = false
 
-        let iconView = NSImageView(image: permission.icon)
+        let iconView = NSImageView(image: permission.icon(copy: copy))
         iconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 30, weight: .regular)
         iconView.contentTintColor = .controlAccentColor
         iconView.translatesAutoresizingMaskIntoConstraints = false
 
-        let titleLabel = label(permission.title, size: 13, weight: .bold)
-        let detailLabel = label(permission.detail, size: 11, weight: .regular)
+        let titleLabel = label(permission.title(copy: copy), size: 13, weight: .bold)
+        let detailLabel = label(permission.detail(copy: copy), size: 11, weight: .regular)
         detailLabel.textColor = PermissionPalette.secondaryText
         let textStack = NSStackView(views: [titleLabel, detailLabel])
         textStack.orientation = .vertical
@@ -3305,7 +3564,7 @@ private final class PermissionView: NSView {
         textStack.spacing = 4
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
-        let button = NSButton(title: "Allow", target: nil, action: nil)
+        let button = NSButton(title: copy.allowButton, target: nil, action: nil)
         button.bezelStyle = .rounded
         button.controlSize = .regular
         button.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
@@ -3315,8 +3574,8 @@ private final class PermissionView: NSView {
             .foregroundColor: NSColor.white,
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold)
         ]
-        button.attributedTitle = NSAttributedString(string: "Allow", attributes: buttonTitleAttributes)
-        button.attributedAlternateTitle = NSAttributedString(string: "Allow", attributes: buttonTitleAttributes)
+        button.attributedTitle = NSAttributedString(string: copy.allowButton, attributes: buttonTitleAttributes)
+        button.attributedAlternateTitle = NSAttributedString(string: copy.allowButton, attributes: buttonTitleAttributes)
         let target = ButtonTarget(action)
         button.target = target
         button.action = #selector(ButtonTarget.run)
@@ -3344,7 +3603,7 @@ private final class PermissionView: NSView {
     }
 
     private func doneButton() -> NSView {
-        let button = NSButton(title: "Done", target: nil, action: nil)
+        let button = NSButton(title: copy.doneButton, target: nil, action: nil)
         button.bezelStyle = .rounded
         button.controlSize = .regular
         button.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
@@ -3354,8 +3613,8 @@ private final class PermissionView: NSView {
             .foregroundColor: NSColor.white,
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold)
         ]
-        button.attributedTitle = NSAttributedString(string: "Done", attributes: buttonTitleAttributes)
-        button.attributedAlternateTitle = NSAttributedString(string: "Done", attributes: buttonTitleAttributes)
+        button.attributedTitle = NSAttributedString(string: copy.doneButton, attributes: buttonTitleAttributes)
+        button.attributedAlternateTitle = NSAttributedString(string: copy.doneButton, attributes: buttonTitleAttributes)
         let target = ButtonTarget(close)
         button.target = target
         button.action = #selector(ButtonTarget.run)
@@ -3392,6 +3651,7 @@ private final class PermissionDragAssistantController: NSWindowController {
 
     convenience init(
         permission: PermissionKind,
+        copy: PermissionWindowCopy,
         fallbackVisibleFrame: NSRect?,
         onRefreshPermissions: @escaping () -> Void,
         onClose: @escaping () -> Void
@@ -3402,7 +3662,7 @@ private final class PermissionDragAssistantController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "Drag Orca Computer Use"
+        window.title = copy.dragWindowTitle
         window.backgroundColor = .clear
         window.isOpaque = false
         window.isReleasedWhenClosed = false
@@ -3421,7 +3681,11 @@ private final class PermissionDragAssistantController: NSWindowController {
             onRefreshPermissions: onRefreshPermissions,
             onClose: onClose
         )
-        window.contentView = PermissionDragAssistantView(permission: permission, appURL: Bundle.main.bundleURL) { [weak self] in
+        window.contentView = PermissionDragAssistantView(
+            permission: permission,
+            copy: copy,
+            appURL: Bundle.main.bundleURL
+        ) { [weak self] in
             self?.dismissFromCloseButton()
         }
     }
@@ -3696,11 +3960,18 @@ private final class PermissionDragAssistantController: NSWindowController {
 
 private final class PermissionDragAssistantView: NSView {
     private let permission: PermissionKind
+    private let copy: PermissionWindowCopy
     private let appURL: URL
     private let close: () -> Void
 
-    init(permission: PermissionKind, appURL: URL, close: @escaping () -> Void) {
+    init(
+        permission: PermissionKind,
+        copy: PermissionWindowCopy,
+        appURL: URL,
+        close: @escaping () -> Void
+    ) {
         self.permission = permission
+        self.copy = copy
         self.appURL = appURL
         self.close = close
         super.init(frame: .zero)
@@ -3721,7 +3992,10 @@ private final class PermissionDragAssistantView: NSView {
         let closeButton = NSButton(title: "", target: nil, action: nil)
         closeButton.bezelStyle = .shadowlessSquare
         closeButton.isBordered = false
-        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close")
+        closeButton.image = NSImage(
+            systemSymbolName: "xmark",
+            accessibilityDescription: copy.closeButtonDescription
+        )
         closeButton.imagePosition = .imageOnly
         closeButton.contentTintColor = PermissionPalette.secondaryText
         closeButton.controlSize = .small
@@ -3731,7 +4005,7 @@ private final class PermissionDragAssistantView: NSView {
         closeButton.action = #selector(ButtonTarget.run)
         objc_setAssociatedObject(closeButton, "orca-action", target, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 
-        let instruction = label(permission.dragInstruction, size: 12, weight: .semibold)
+        let instruction = label(permission.dragInstruction(copy: copy), size: 12, weight: .semibold)
         instruction.textColor = PermissionPalette.primaryText
         instruction.maximumNumberOfLines = 2
 
@@ -4008,11 +4282,11 @@ private final class SocketListener: @unchecked Sendable {
         }
         let authorizedPeer = peerProcessId(fd).map(isAuthorizedAgentPeer) == true
         let decoder = JSONDecoder()
-        while let line = readLine(from: fd) {
+        AgentConnectionRequestLoop.run(readLine: { readLine(from: fd) }) { line in
             guard let data = line.data(using: .utf8),
                   let request = try? decoder.decode(Request.self, from: data)
             else {
-                continue
+                return true
             }
             if !registeredSession && isAuthenticatedAgentSession(
                 expectedToken: token,
@@ -4029,7 +4303,7 @@ private final class SocketListener: @unchecked Sendable {
                     )
                 } catch {
                     fputs("computer-use owner monitor failed: \(error)\n", stderr)
-                    return
+                    return false
                 }
                 sessionLock.lock()
                 let registration = sessionOwnership.registerConnection(
@@ -4039,7 +4313,7 @@ private final class SocketListener: @unchecked Sendable {
                 sessionLock.unlock()
                 guard registration != .rejected else {
                     monitor.cancel()
-                    return
+                    return false
                 }
                 registeredSession = true
                 hangupMonitor = monitor
@@ -4056,6 +4330,7 @@ private final class SocketListener: @unchecked Sendable {
                 authorizedPeer: authorizedPeer
             )
             writeJSON(response, to: fd)
+            return true
         }
     }
 
@@ -4106,11 +4381,7 @@ private func isTrustedOrcaApplication(_ pid: pid_t) -> Bool {
     else {
         return false
     }
-    // Why: dev validation runs from per-worktree wrapper apps with stable
-    // Orca-owned bundle ids; the sidecar peer check must still authorize them.
-    return bundleId == "com.stablyai.orca" ||
-        bundleId.hasPrefix("com.stablyai.orca.dev.") ||
-        bundleId == "com.github.Electron"
+    return TrustedOrcaApplication.isTrusted(bundleId: bundleId)
 }
 
 private func parentProcessId(_ pid: pid_t) -> pid_t? {
@@ -4157,9 +4428,12 @@ private func runAgent(socketPath: String, token: String?) {
 }
 
 @MainActor
-private func runPermissionCheck(initialPermission: PermissionKind? = nil) {
+private func runPermissionCheck(
+    initialPermission: PermissionKind? = nil,
+    copy: PermissionWindowCopy
+) {
     let app = NSApplication.shared
-    let delegate = PermissionRuntime(initialPermission: initialPermission)
+    let delegate = PermissionRuntime(initialPermission: initialPermission, copy: copy)
     app.delegate = delegate
     // Why: setup must foreground reliably; the long-running agent path stays accessory-only.
     app.setActivationPolicy(.regular)
@@ -4283,6 +4557,11 @@ private func writeAll(_ data: Data, to fd: Int32) -> Bool {
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
+let permissionLocale = arguments.firstIndex(of: "--locale").flatMap { index -> String? in
+    let valueIndex = index + 1
+    return valueIndex < arguments.count ? arguments[valueIndex] : nil
+}
+let permissionCopy = PermissionWindowCopy(localeIdentifier: permissionLocale)
 if arguments.first == "--agent" {
     guard arguments.count >= 2 else {
         fputs("usage: orca-computer-use-macos --agent <socket-path> --token-file <token-path>\n", stderr)
@@ -4302,9 +4581,12 @@ if arguments.first == "--agent" {
     }
     runAgent(socketPath: arguments[1], token: token)
 } else if arguments.first == "--permissions" {
-    runPermissionCheck()
+    runPermissionCheck(copy: permissionCopy)
 } else if arguments.first == "--permission" {
-    runPermissionCheck(initialPermission: PermissionKind.parse(arguments.dropFirst().first))
+    runPermissionCheck(
+        initialPermission: PermissionKind.parse(arguments.dropFirst().first),
+        copy: permissionCopy
+    )
 } else if arguments.first == "--permission-status" {
     printPermissionStatus()
 } else if arguments.first == "--permission-status-file" {

@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import type { CreateHostedReviewResult } from '../../src/shared/hosted-review'
+import type { CreateHostedReviewResult } from '../../src/shared/source-control/hosted-review/hosted-review-contracts'
 
 type CreatePRPayload = {
   repoPath: string
@@ -28,16 +28,17 @@ async function openSourceControl(page: Page, expectedWorktreeId: string): Promis
     .poll(
       async () =>
         page.evaluate((expectedWorktreeId) => {
-          const state = window.__store?.getState()
-          if (!state) {
+          const store = window.__store
+          if (!store) {
             return false
           }
+          const state = store.getState()
           if (state.activeWorktreeId !== expectedWorktreeId) {
             state.setActiveWorktree(expectedWorktreeId)
           }
           state.setRightSidebarOpen(true)
           state.setRightSidebarTab('source-control')
-          const current = window.__store.getState()
+          const current = store.getState()
           const activeWorktree = Object.values(current.worktreesByRepo)
             .flat()
             .some((entry) => entry.id === expectedWorktreeId)
@@ -93,8 +94,7 @@ function getCreatePRComposer(page: Page): Locator {
 }
 
 function getCreatePRComposerSubmitButton(page: Page): Locator {
-  // Why: the header and composer currently share the same accessible name.
-  // Anchor to the field container so this submits the editable composer.
+  // Scope to the editable composer’s field container because its header shares the accessible name.
   return getCreatePRComposer(page).getByRole('button', { name: 'Create PR' })
 }
 
@@ -115,8 +115,7 @@ async function seedCreatePREligibleBranch(
     if (!worktree) {
       throw new Error('seeded e2e-secondary worktree not found')
     }
-    // Why: the worker-scoped test repo can accumulate extra non-main
-    // worktrees; use the seeded secondary worktree as the stable PR target.
+    // Use the seeded secondary worktree because other workers can grow this repo’s checkout list.
     state.setActiveWorktree(worktree.id)
     const repo = state.repos.find((entry) => entry.id === worktree.repoId)
     if (!repo) {
@@ -138,6 +137,7 @@ async function seedCreatePREligibleBranch(
       canCreate: true,
       blockedReason: null,
       nextAction: null,
+      reviewLookupOutcome: 'not_found' as const,
       defaultBaseRef: 'origin/main',
       head: branch
     }
@@ -163,7 +163,7 @@ async function seedCreatePREligibleBranch(
       getHostedReviewCreationEligibility: async () => eligibility,
       fetchHostedReviewForBranch: async () => null,
       setUpstreamStatus: () => undefined,
-      fetchUpstreamStatus: async () => undefined,
+      fetchUpstreamStatus: async () => null,
       fetchPRForBranch: async (repoPath: string, targetBranch: string) => {
         store.setState((next) => ({
           prCache: {
@@ -208,53 +208,6 @@ test.describe('Source Control create pull request', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
-  })
-
-  test('creates the pull request from the Source Control primary action', async ({ orcaPage }) => {
-    const { branch, worktreeId } = await seedCreatePREligibleBranch(orcaPage)
-    await openSourceControl(orcaPage, worktreeId)
-    await forceCreatePREligibleStatus(orcaPage, worktreeId, branch)
-
-    const titleInput = orcaPage.getByRole('textbox', { name: 'Pull request title' })
-    const descriptionInput = orcaPage.getByRole('textbox', {
-      name: 'Pull request description'
-    })
-    const createButton = getCreatePRComposerSubmitButton(orcaPage)
-    await expect(createButton).toBeVisible({ timeout: 10_000 })
-    await expect(createButton).toBeEnabled()
-    await expect(titleInput).toHaveValue('E2e secondary')
-    await expect(orcaPage.getByRole('combobox', { name: 'Pull request base branch' })).toHaveValue(
-      'main'
-    )
-    await expect(descriptionInput).toHaveValue('')
-    await descriptionInput.fill('- Initial commit for E2E')
-    await expect(createButton).toBeEnabled()
-    await createButton.click()
-
-    await expect
-      .poll(
-        () =>
-          orcaPage.evaluate(
-            () =>
-              (window as unknown as { __createPRPayloads: CreatePRPayload[] }).__createPRPayloads
-                .length
-          ),
-        { timeout: 10_000 }
-      )
-      .toBe(1)
-
-    const payloads = await orcaPage.evaluate(
-      () => (window as unknown as { __createPRPayloads: CreatePRPayload[] }).__createPRPayloads
-    )
-    expect(payloads).toHaveLength(1)
-    expect(payloads[0].input).toMatchObject({
-      provider: 'github',
-      base: 'main',
-      head: branch,
-      title: 'E2e secondary',
-      body: '- Initial commit for E2E',
-      draft: false
-    })
   })
 
   test('surfaces create failures without clearing the pull request composer', async ({

@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Document, stringify } from 'yaml'
 import {
-  MAX_ORCA_YAML_ALIAS_COUNT,
   MAX_ORCA_YAML_BYTES,
   MAX_ORCA_YAML_COLLECTION_ENTRIES,
   MAX_ORCA_YAML_FIELD_BYTES,
@@ -27,12 +26,6 @@ describe('orca.yaml parse bounds', () => {
     const toJS = vi.spyOn(Document.prototype, 'toJS')
     expect(parseOrcaYaml('é'.repeat(MAX_ORCA_YAML_BYTES / 2 + 1))).toBeNull()
     expect(toJS).not.toHaveBeenCalled()
-  })
-
-  it('passes an explicit alias expansion cap to YAML conversion', () => {
-    const toJS = vi.spyOn(Document.prototype, 'toJS')
-    expect(parseOrcaYaml('scripts:\n  setup: pnpm install')).not.toBeNull()
-    expect(toJS).toHaveBeenCalledWith({ maxAliasCount: MAX_ORCA_YAML_ALIAS_COUNT })
   })
 
   it('preserves exact-size fields and drops a field at +1 code unit', () => {

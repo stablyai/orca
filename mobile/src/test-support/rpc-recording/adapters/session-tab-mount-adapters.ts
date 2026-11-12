@@ -1,3 +1,5 @@
+import type * as MobileSessionTabActivationModule from '../../../session/tabs/mobile-session-tab-activation'
+import type * as MobileSessionTabsStreamHealthModule from '../../../session/tabs/mobile-session-tabs-stream-health'
 import type { MountAdapter } from '../recording-scenario'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -6,22 +8,15 @@ const WORKTREE = 'id:workspace-1'
 const TERMINAL = 'terminal-1'
 const TAB = 'tab-1'
 
-/**
- * Making a session tab the active one, and the reconciliation loop that keeps the tab list honest.
- *
- * The activation pair is recorded because of its one retry: a logical cutover is replayed once, so
- * a golden has to show two sender calls for one action and a non-cutover error showing one. The
- * stream-health controller is recorded for the opposite reason — its generation, barrier and
- * application-revision guards each drop a reply, and only a recording says which drop happened.
- */
+// Record activation’s cutover-only retry and reconciliation’s generation/barrier/revision drops through the real owners.
 export function sessionTabMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'session.tab-activation': ({ client }) => {
-      const activation = modules.load<
-        typeof import('../../../session/mobile-session-tab-activation')
-      >('mobile/src/session/mobile-session-tab-activation.ts')
+      const activation = modules.load<typeof MobileSessionTabActivationModule>(
+        'mobile/src/session/tabs/mobile-session-tab-activation.ts'
+      )
       const replies: Record<string, unknown> = {}
       let failure: unknown = null
       return {
@@ -50,9 +45,9 @@ export function sessionTabMountAdapters(
       }
     },
     'session.tabs-stream-health': ({ client, effect }) => {
-      const Controller = modules.load<
-        typeof import('../../../session/mobile-session-tabs-stream-health')
-      >('mobile/src/session/mobile-session-tabs-stream-health.ts').MobileSessionTabsStreamHealth
+      const Controller = modules.load<typeof MobileSessionTabsStreamHealthModule>(
+        'mobile/src/session/tabs/mobile-session-tabs-stream-health.ts'
+      ).MobileSessionTabsStreamHealth
       let applicationRevision = 0
       let accepted: unknown = 'unapplied'
       let rejectApply = false
@@ -83,7 +78,6 @@ export function sessionTabMountAdapters(
       return {
         action(name) {
           if (name === 'activate') {
-            // Nothing is fetched until the screen turns reconciliation on; the class starts off.
             controller.setReconciliationActive(true)
             return true
           }

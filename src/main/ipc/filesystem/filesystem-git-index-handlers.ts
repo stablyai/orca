@@ -1,24 +1,28 @@
 import { ipcMain } from 'electron'
 import {
+  resolveConflict,
   stageFile,
   unstageFile,
-  discardChanges,
-  bulkDiscardChanges,
   bulkStageFiles,
   bulkUnstageFiles,
   stageWorktreeChanges
-} from '../../git/status'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+} from '../../git/source-control/staging'
+import { discardChanges, bulkDiscardChanges } from '../../git/source-control/discard-changes'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import {
   getLocalGitOptionsForRegisteredWorktree,
   getLocalRepoForRegisteredWorktree
 } from '../local-worktree-runtime-options'
-import { getWorktreeSharedLinkPaths } from '../../git/worktree-shared-directories'
-import { validateGitRelativeFilePath } from '../filesystem-path-containment'
+import { getWorktreeSharedLinkPaths } from '../../git/worktrees/content-paths/worktree-shared-directories'
+import { validateGitRelativeFilePath } from './access/filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
-import { parseGitStageWorktreeScope } from '../../../shared/git-stage-worktree-scope'
+import { parseGitStageWorktreeScope } from '../../../shared/git/paths/git-stage-worktree-scope'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import {
+  CONFLICT_RESOLUTIONS,
+  type ConflictResolution
+} from '../../../shared/source-control/listing/source-control-entry-actions'
 
 export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -28,10 +32,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
       _event,
       args: { worktreePath: string; filePath: string; connectionId?: string }
     ): Promise<void> => {
-      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      if (route.kind === 'ssh') {
-        return route.provider.stageFile(args.worktreePath, args.filePath)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -44,15 +45,41 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
   )
 
   ipcMain.handle(
+    'git:resolveConflict',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        filePath: string
+        resolution: ConflictResolution
+        connectionId?: string
+      }
+    ): Promise<void> => {
+      if (!CONFLICT_RESOLUTIONS.includes(args.resolution)) {
+        throw new Error('Unknown conflict resolution')
+      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await resolveConflict(worktreePath, filePath, args.resolution, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
+    }
+  )
+
+  ipcMain.handle(
     'git:unstage',
     async (
       _event,
       args: { worktreePath: string; filePath: string; connectionId?: string }
     ): Promise<void> => {
-      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      if (route.kind === 'ssh') {
-        return route.provider.unstageFile(args.worktreePath, args.filePath)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -70,10 +97,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
       _event,
       args: { worktreePath: string; filePath: string; connectionId?: string }
     ): Promise<void> => {
-      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      if (route.kind === 'ssh') {
-        return route.provider.discardChanges(args.worktreePath, args.filePath)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -91,10 +115,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
       _event,
       args: { worktreePath: string; filePaths: string[]; connectionId?: string }
     ): Promise<void> => {
-      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      if (route.kind === 'ssh') {
-        return route.provider.bulkDiscardChanges(args.worktreePath, args.filePaths)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -116,10 +137,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
       args: { worktreePath: string; filePaths: string[]; connectionId?: string; scope?: unknown }
     ): Promise<void> => {
       const scope = parseGitStageWorktreeScope(args.scope)
-      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      if (route.kind === 'ssh') {
-        return route.provider.bulkStageFiles(args.worktreePath, args.filePaths, scope)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -149,10 +167,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
       _event,
       args: { worktreePath: string; filePaths: string[]; connectionId?: string }
     ): Promise<void> => {
-      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      if (route.kind === 'ssh') {
-        return route.provider.bulkUnstageFiles(args.worktreePath, args.filePaths)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(

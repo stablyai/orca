@@ -1,10 +1,4 @@
-/**
- * Desktop delivery policy for dispatched notifications.
- *
- * Lifted out of the `notifications:dispatch` IPC closure so the ordering that matters —
- * tray attention before the gates, mobile fan-out before the desktop early returns — is
- * expressed once against injected collaborators instead of ambient Electron singletons.
- */
+// Set tray attention before gates and fan out to phones before desktop early returns.
 import type { BrowserWindow } from 'electron'
 import type {
   NotificationDispatchRequest,
@@ -14,16 +8,22 @@ import type {
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from '../ipc/notification-options'
 import { translateMain } from '../i18n/main-i18n'
-import { reserveNotificationCooldown } from '../ipc/notification-burst-cooldown'
+import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
+import { toHostSessionPaneKey } from '../../shared/workspace-layout/terminal-surface-id'
+import { isNotificationSourceEnabled } from '../../shared/notification-source-gate'
+import { notificationDeliveryId } from '../../shared/notification-delivery-id'
+
+type NativeNotificationReservation = {
+  isCurrent: () => boolean
+  release: () => void
+}
 
 export type NotificationDeliveryDependencies = {
   readNotificationSettings: () => NotificationSettings
-  /** The window the user would see the banner on, or null when none is open. */
   findActiveWindow: () => BrowserWindow | null
   isWindowVisible: (window: BrowserWindow | null) => boolean
   setTrayAttention: (attention: boolean) => void
   isNotificationSupported: () => boolean
-  /** Null when no runtime is paired, so mobile fan-out is skipped entirely. */
   dispatchMobileNotification: OrcaRuntimeService['dispatchMobileNotification'] | null
   readAuthorizationStatus: () => Promise<
     'authorized' | 'denied' | 'not-determined' | 'unknown' | null
@@ -36,7 +36,11 @@ export type NotificationDeliveryDependencies = {
   ) => NotificationDispatchResult | Promise<NotificationDispatchResult>
   platform: NodeJS.Platform
   now: () => number
-  /** Told once per path that actually announced the request: a desktop banner shown, or a mobile alert sent. */
+  reserveNative?: (
+    request: NotificationDispatchRequest
+  ) => NativeNotificationReservation | undefined
+  wasRead?: (request: NotificationDispatchRequest) => boolean
+  /** Called for each actual desktop banner or mobile alert. */
   recordAnnounced?: (request: NotificationDispatchRequest) => void
 }
 
@@ -54,14 +58,21 @@ export function createNotificationDeliveryService(
 
   // Keyed news is announced once by its producer, so only its own repeat may collapse it.
   const dedupeKeyFor = (request: NotificationDispatchRequest): string =>
-    request.attentionKey ?? request.worktreeId ?? request.worktreeLabel ?? 'global'
+    JSON.stringify([
+      request.executionHost,
+      request.attentionKey ?? request.worktreeId ?? request.worktreeLabel ?? 'global'
+    ])
 
   const deliverNativeAndRecord = (
     request: NotificationDispatchRequest,
     options: ReturnType<typeof buildNotificationOptions>,
-    settings: NotificationSettings
+    settings: NotificationSettings,
+    reservation?: NativeNotificationReservation
   ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
     const recordIfDelivered = (result: NotificationDispatchResult): NotificationDispatchResult => {
+      if (result.delivered && reservation?.isCurrent() === false) {
+        return { delivered: false, reason: 'already-read' }
+      }
       if (result.delivered) {
         deps.recordAnnounced?.(request)
       }
@@ -73,8 +84,16 @@ export function createNotificationDeliveryService(
 
   return {
     dispatch: (request) => {
-      // Why: light the tray attention dot before the cooldown/focus/enabled gates so they
-      // can't hold it back (clears on window show/restore; see index.ts).
+      if (request.executionHost && request.notificationId) {
+        request = {
+          ...request,
+          notificationId: notificationDeliveryId(request.notificationId, request.executionHost)
+        }
+      }
+      if (deps.wasRead?.(request)) {
+        return { delivered: false, reason: 'already-read' }
+      }
+      // Desktop gates must not suppress tray attention.
       if (request.source === 'agent-task-complete' || request.source === 'terminal-bell') {
         if (!deps.isWindowVisible(deps.findActiveWindow())) {
           deps.setTrayAttention(true)
@@ -86,15 +105,15 @@ export function createNotificationDeliveryService(
         request.notificationSourceId !== undefined &&
         settings.mutedNotificationSourceIds.includes(request.notificationSourceId)
       // Machine mutes leave mobile eligibility and its cooldown unchanged.
-      const desktopAllowed =
-        settings.enabled &&
-        (request.source !== 'agent-task-complete' || settings.agentTaskComplete) &&
-        (request.source !== 'terminal-bell' || settings.terminalBell)
+      const desktopAllowed = isNotificationSourceEnabled(
+        settings,
+        request.source,
+        request.agentState
+      )
 
       const notificationOptions = buildNotificationOptions(request, translateMain)
 
-      // Why: desktop focus only means this computer sees the worktree; the paired phone may still need the alert.
-      // The execution host pushed its own phones and retires them itself on acknowledgement.
+      // Desktop focus need not silence phones; execution hosts retire their own delivered alerts.
       if (
         !request.mobileDeliveredByHost &&
         deps.dispatchMobileNotification &&
@@ -120,9 +139,14 @@ export function createNotificationDeliveryService(
             title: notificationOptions.title,
             body: notificationOptions.body,
             worktreeId: request.worktreeId,
+            ...(request.workspaceExecutionHostId !== undefined
+              ? { workspaceExecutionHostId: request.workspaceExecutionHostId }
+              : {}),
+            // The phone asks the execution host for tabs, which never name this window's mirror tabs.
+            ...(request.paneKey ? { paneKey: toHostSessionPaneKey(request.paneKey) } : {}),
+            ...(request.executionHost ? { executionHost: request.executionHost } : {}),
             ...(request.notificationId ? { notificationId: request.notificationId } : {}),
-            // Why: background push needs the agent's real state to pick "needs input"
-            // vs "finished" — and to stay silent while the agent is still working.
+            // Push needs real agent state to distinguish input/completion and silence running agents.
             ...(request.agentState ? { agentState: request.agentState } : {}),
             ...(request.attentionKey ? { attentionKey: request.attentionKey } : {}),
             ...(request.structuredOrigin ? { structuredOrigin: request.structuredOrigin } : {})
@@ -148,9 +172,9 @@ export function createNotificationDeliveryService(
         return { delivered: false, reason: 'suppressed-focus' }
       }
 
-      // Why: the Settings test button is an explicit, often-repeated user action, so it bypasses burst dedupe.
+      // Explicit Settings tests bypass burst deduplication.
       if (request.source !== 'test') {
-        // Dedupe by worktree, not source — agent-finish and terminal-bell often fire in one chunk; surface only the first.
+        // Collapse unkeyed worktree events across sources; attention keys isolate their own repeats.
         if (
           !reserveNotificationCooldown(
             recentDesktopNotifications,
@@ -166,17 +190,33 @@ export function createNotificationDeliveryService(
         return { delivered: false, reason: 'not-supported' }
       }
 
-      if (deps.platform !== 'darwin') {
-        return deliverNativeAndRecord(request, notificationOptions, settings)
-      }
-      // Why: macOS silently swallows notifications while permission is denied/undecided (verified macOS 26); skip so the renderer can show a fallback.
-      return deps.readAuthorizationStatus().then((authorization) => {
-        if (authorization === 'denied' || authorization === 'not-determined') {
-          deps.recordDeliveryOutcome('failed')
-          return { delivered: false, reason: 'blocked-by-system' }
+      const reservation = deps.reserveNative?.(request)
+      const deliverNative = () =>
+        deliverNativeAndRecord(request, notificationOptions, settings, reservation)
+      try {
+        // macOS swallows denied/undecided notifications; allow the renderer fallback instead.
+        const result =
+          deps.platform !== 'darwin'
+            ? deliverNative()
+            : deps.readAuthorizationStatus().then((authorization) => {
+                if (deps.wasRead?.(request) || reservation?.isCurrent() === false) {
+                  return { delivered: false, reason: 'already-read' } as const
+                }
+                if (authorization === 'denied' || authorization === 'not-determined') {
+                  deps.recordDeliveryOutcome('failed')
+                  return { delivered: false, reason: 'blocked-by-system' } as const
+                }
+                return deliverNative()
+              })
+        if (result instanceof Promise) {
+          return result.finally(() => reservation?.release())
         }
-        return deliverNativeAndRecord(request, notificationOptions, settings)
-      })
+        reservation?.release()
+        return result
+      } catch (error) {
+        reservation?.release()
+        throw error
+      }
     }
   }
 }

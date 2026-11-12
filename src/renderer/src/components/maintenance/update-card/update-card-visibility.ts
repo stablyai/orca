@@ -1,3 +1,5 @@
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { UpdateStatus } from '../../../../../shared/update-status-types'
 
 export function isUpdateCardVisible({
@@ -37,22 +39,24 @@ export function isUpdateCardVisible({
   )
 }
 
-export function getUpdateCardAriaLabel(status: UpdateStatus): string {
+export function getUpdateCardAriaLabel(status: UpdateStatus, t: Translate = translate): string {
   switch (status.state) {
     case 'idle':
-      return 'Update status'
+      return t('auto.components.UpdateCard.aria.statusIdle', 'Update status')
     case 'checking':
-      return 'Checking for updates'
+      return t('auto.components.UpdateCard.aria.statusChecking', 'Checking for updates')
     case 'not-available':
-      return "You're on the latest version"
+      return t('auto.components.UpdateCard.aria.statusLatest', "You're on the latest version")
     case 'available':
-      return 'Update available'
+      return t('auto.components.UpdateCard.aria.statusAvailable', 'Update available')
     case 'downloading':
-      return 'Downloading update'
+      return t('auto.components.UpdateCard.aria.statusDownloading', 'Downloading update')
     case 'downloaded':
-      return 'Update ready to install'
+      return t('auto.components.UpdateCard.aria.statusDownloaded', 'Update ready to install')
     case 'error':
-      return 'Update error'
+      return status.installBlock
+        ? t('updates.installBlock.waitingLabel', 'Update waiting')
+        : t('auto.components.UpdateCard.aria.statusError', 'Update error')
   }
 }
 

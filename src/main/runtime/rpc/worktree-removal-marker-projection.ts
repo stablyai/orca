@@ -1,4 +1,4 @@
-import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
 import type { DetectedWorktreeListResult } from '../../../shared/worktree/types'
 import type {
   RuntimeWorktreeListResult,
@@ -7,17 +7,24 @@ import type {
 import {
   projectPendingWorktreeRemovals,
   type PendingWorktreeRemovals
-} from '../../worktree-removal-listing'
+} from '../../workspaces/removal/worktree-removal-listing'
 import type { RpcContext } from './core'
 
-// Why no in-process default: callers without negotiation (the CLI, host-side readers) print or act
-// on rows, and a checkout mid-delete is not a workspace they can use.
+// Without negotiation, CLI/host readers act on rows; omit deleting checkouts they cannot use.
 export function readsWorktreeRemovalMarker(
   context: Pick<RpcContext, 'clientCapabilities'>
 ): boolean {
   return (
     context.clientCapabilities?.includes(WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY) === true
   )
+}
+
+// Wait for clients showing removing or asking for the outcome; older clients get acceptance and hide the row.
+export function waitsForWorktreeRemoval(
+  context: Pick<RpcContext, 'clientCapabilities'>,
+  params: { waitForBackgroundRemoval?: boolean }
+): boolean {
+  return readsWorktreeRemovalMarker(context) || params.waitForBackgroundRemoval === true
 }
 
 export function projectWorktreeListRemovals<

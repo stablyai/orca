@@ -1,15 +1,15 @@
 import { ipcMain } from 'electron'
-import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
-import { getBranchDiff, getCommitDiff } from '../../git/status'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
-import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
+import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
+import { getBranchDiff } from '../../git/source-control/branch-diff'
+import { getCommitDiff } from '../../git/source-control/commit-diff'
 import {
   validateFullGitObjectId,
   validateGitRelativeFilePath
-} from '../filesystem-path-containment'
+} from './access/filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 
 export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -28,49 +28,28 @@ export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerCont
         filePath: string
         oldPath?: string
         connectionId?: string
+        /** Showing the diff tab or its Retry: a user act that may start a stopped WSL distro. */
+        wakeWslDistro?: boolean
       }
     ): Promise<GitDiffResult> => {
-      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      if (route.kind === 'ssh') {
-        const results = await route.provider.getBranchDiff(
-          args.worktreePath,
-          args.compare.mergeBase,
-          {
-            includePatch: true,
-            headOid: args.compare.headOid,
-            filePath: args.filePath,
-            oldPath: args.oldPath
-          }
-        )
-        return (
-          results[0] ?? {
-            kind: 'text',
-            originalContent: '',
-            modifiedContent: '',
-            originalIsBinary: false,
-            modifiedIsBinary: false
-          }
-        )
-      }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      const oldPath = args.oldPath
-        ? validateGitRelativeFilePath(worktreePath, args.oldPath)
-        : undefined
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      return readWorktreeGitUnlessWslStopped(
         store,
         args.worktreePath,
-        worktreePath
-      )
-      return getBranchDiff(
-        worktreePath,
-        {
-          mergeBase: args.compare.mergeBase,
-          headOid: args.compare.headOid,
-          filePath,
-          oldPath
-        },
-        { ...gitOptions, admissionTier: 'interactive' }
+        args.wakeWslDistro,
+        (worktreePath, gitOptions) =>
+          getBranchDiff(
+            worktreePath,
+            {
+              mergeBase: args.compare.mergeBase,
+              headOid: args.compare.headOid,
+              filePath: validateGitRelativeFilePath(worktreePath, args.filePath),
+              oldPath: args.oldPath
+                ? validateGitRelativeFilePath(worktreePath, args.oldPath)
+                : undefined
+            },
+            { ...gitOptions, admissionTier: 'interactive' }
+          )
       )
     }
   )
@@ -86,38 +65,30 @@ export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerCont
         filePath: string
         oldPath?: string
         connectionId?: string
+        /** Showing the diff tab or its Retry: a user act that may start a stopped WSL distro. */
+        wakeWslDistro?: boolean
       }
     ): Promise<GitDiffResult> => {
       const commitOid = validateFullGitObjectId(args.commitOid, 'commitOid')
       const parentOid = args.parentOid ? validateFullGitObjectId(args.parentOid, 'parentOid') : null
-      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      if (route.kind === 'ssh') {
-        return route.provider.getCommitDiff(args.worktreePath, {
-          commitOid,
-          parentOid,
-          filePath: args.filePath,
-          oldPath: args.oldPath
-        })
-      }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      const oldPath = args.oldPath
-        ? validateGitRelativeFilePath(worktreePath, args.oldPath)
-        : undefined
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      return readWorktreeGitUnlessWslStopped(
         store,
         args.worktreePath,
-        worktreePath
-      )
-      return getCommitDiff(
-        worktreePath,
-        {
-          commitOid,
-          parentOid,
-          filePath,
-          oldPath
-        },
-        { ...gitOptions, admissionTier: 'interactive' }
+        args.wakeWslDistro,
+        (worktreePath, gitOptions) =>
+          getCommitDiff(
+            worktreePath,
+            {
+              commitOid,
+              parentOid,
+              filePath: validateGitRelativeFilePath(worktreePath, args.filePath),
+              oldPath: args.oldPath
+                ? validateGitRelativeFilePath(worktreePath, args.oldPath)
+                : undefined
+            },
+            { ...gitOptions, admissionTier: 'interactive' }
+          )
       )
     }
   )

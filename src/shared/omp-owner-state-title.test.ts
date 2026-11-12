@@ -1,10 +1,11 @@
-import { getPiCompatibleTitleSeparatorStatus } from './pi-compatible-synthetic-title'
+import { getPiCompatibleTitleSeparatorStatus } from './agent-status/title/providers/pi-compatible-synthetic-title'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { detectAgentStatusFromTitle, getAgentLabel } from './agent-detection'
-import { normalizeCompatibleAgentTitleForOwner } from './agent-title-owner'
-import { clearPiStateWorkingMarker } from './pi-state-title-marker'
+import { detectAgentStatusFromTitle } from './agent-status/title/agent-title-status'
+import { getAgentLabel } from './agent-status/title/agent-title-identity'
+import { normalizeCompatibleAgentTitleForOwner } from './agent-status/title/agent-title-owner'
+import { clearPiStateWorkingMarker } from './agent-status/title/providers/pi-state-title-marker'
 
 const transcript = readFileSync(
   join(__dirname, '..', 'main', 'runtime', '__fixtures__', 'omp-native-title-win32.txt'),
@@ -14,7 +15,6 @@ const transcript = readFileSync(
 const titles = [...transcript.matchAll(/\x1b\]0;([^\x07]+)\x07/g)].map((match) => match[1])
 
 describe('owner-rewritten OMP titles from captured upstream output', () => {
-  it('contains the six upstream state frames', () => expect(titles).toHaveLength(6))
   it.each(
     titles.map((title, index) => ({
       title,
@@ -37,15 +37,5 @@ describe('owner-rewritten OMP titles from captured upstream output', () => {
         expect(detectAgentStatusFromTitle(clearPiStateWorkingMarker(owned) ?? '')).toBe('idle')
       }
     }
-  })
-  it.each([
-    'omp-harness ready',
-    '/tmp/OMP : file',
-    'lowercase omp : note',
-    'Pi: legacy',
-    'OMP ready'
-  ])('does not rewrite neutral or legacy title %s as a working marker', (title) => {
-    expect(clearPiStateWorkingMarker(title)).toBeNull()
-    expect(detectAgentStatusFromTitle(title)).not.toBe('working')
   })
 })

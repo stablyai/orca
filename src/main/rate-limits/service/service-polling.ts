@@ -8,9 +8,9 @@ import {
   normalizePollingInterval,
   type ActiveProviderState,
   type ActiveRateLimitProvider,
-  type ActiveWindowRefreshPlan,
-  type ProviderRateLimits
+  type ActiveWindowRefreshPlan
 } from './service-types'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 
 export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue {
   setPollingInterval(ms: number): void {
@@ -20,10 +20,6 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       this.startTimer()
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Internal
-  // ---------------------------------------------------------------------------
 
   protected startTimer(): void {
     this.stopTimer()
@@ -46,7 +42,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     this.clearDeferredStartupRefresh()
     this.deferredStartupRefreshTimer = setTimeout(() => {
       this.deferredStartupRefreshTimer = null
-      void this.refreshIfWindowActive()
+      void this.refreshIfWatched()
     }, DEFERRED_STARTUP_ACTIVE_REFRESH_MS)
   }
 
@@ -58,10 +54,14 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
   }
 
   protected shouldBackgroundPoll(): boolean {
+    // Poll only while someone watches: a paired client's stream, or the focused desktop window.
+    if (this.usageViewers > 0) {
+      return true
+    }
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return false
     }
-    // Why: these fetches only power in-app UI; skip polling when hidden/minimized/unfocused to save CLI/API budget (refresh on activate).
+    // UI-only polling pauses while inactive to save CLI/API budget; activation refreshes it.
     if (!this.mainWindow.isVisible() || this.mainWindow.isMinimized()) {
       return false
     }
@@ -69,7 +69,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
   }
 
   protected getActiveProviderState(): ActiveProviderState[] {
-    // Why: key by provider so a new provider is compile-forced an entry — a missing one silently never recovers from a startup error.
+    // Exhaustive provider keys prevent new providers from silently missing startup-error recovery.
     const byProvider: Record<ActiveRateLimitProvider, ProviderRateLimits | null> = {
       claude: this.state.claude,
       codex: this.state.codex,
@@ -80,12 +80,37 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       grok: this.state.grok,
       antigravity: this.state.antigravity,
       cursor: this.state.cursor,
-      zcode: this.state.zcode
+      zcode: this.state.zcode,
+      muse: this.state.muse
     }
-    return Object.entries(byProvider).map(([provider, limits]) => ({
-      provider: provider as ActiveRateLimitProvider,
-      limits
-    }))
+    // A hidden Muse meter keeps an idle snapshot, which must not force a full refresh on every focus.
+    const museEnabled = this.museUsageEnabledResolver?.() ?? true
+    return Object.entries(byProvider)
+      .filter(([provider]) => provider !== 'muse' || museEnabled)
+      .map(([provider, limits]) => ({
+        provider: provider as ActiveRateLimitProvider,
+        limits
+      }))
+  }
+
+  /** When a provider's reading was last checked; Claude counts its last completed check. */
+  protected providerCheckedAt(
+    provider: ActiveRateLimitProvider,
+    limits: ProviderRateLimits
+  ): number | null {
+    return provider === 'claude' ? this.lastClaudeCheckCompletedAt : limits.updatedAt
+  }
+
+  /** Whether a failing provider's backoff allows another automatic read now. */
+  protected failureRetryDue(provider: ActiveRateLimitProvider, now: number): boolean {
+    const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
+      ? Math.min(
+          ACTIVE_FAILURE_REFETCH_MS *
+            2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
+          MAX_ACTIVE_FAILURE_REFETCH_MS
+        )
+      : MIN_REFETCH_MS
+    return now - this.lastActiveFailureRetryAtByProvider[provider] >= throttleMs
   }
 
   protected getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {
@@ -95,26 +120,22 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
         return { kind: 'full' }
       }
       if (limits.status === 'ok' || limits.status === 'unavailable') {
-        if (now - limits.updatedAt >= MIN_REFETCH_MS) {
+        if (this.shouldSkipAutomatedFetch(provider, limits)) {
+          continue
+        }
+        const checkedAt = this.providerCheckedAt(provider, limits)
+        if (checkedAt === null || now - checkedAt >= MIN_REFETCH_MS) {
           return { kind: 'full' }
         }
         continue
       }
-      // Why: a failed startup read is not fresh data; keep it eligible for activation recovery, throttled per provider.
+      // Failed startup reads remain eligible for provider-throttled activation recovery.
       if (limits.status === 'error') {
-        // Why: the server told us when to come back (Retry-After); retrying earlier burns the endpoint's budget and keeps the 429 alive.
+        // Respect server Retry-After rather than spending budget and prolonging 429s.
         if (this.isRetryAfterActive(limits)) {
           continue
         }
-        const lastRetryAt = this.lastActiveFailureRetryAtByProvider[provider]
-        const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
-          ? Math.min(
-              ACTIVE_FAILURE_REFETCH_MS *
-                2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
-              MAX_ACTIVE_FAILURE_REFETCH_MS
-            )
-          : MIN_REFETCH_MS
-        if (now - lastRetryAt >= throttleMs) {
+        if (this.failureRetryDue(provider, now)) {
           retryableFailures.push(provider)
         }
       }
@@ -131,8 +152,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       return
     }
     if (plan.kind === 'full') {
-      // Why: a full fetch retries failing providers too; restart their retry clocks so the individual failure lane doesn't fire ahead of backoff.
-      // Why: gated on !isFetching — the fetchAll below no-ops mid-flight, so don't consume the retry throttle for free.
+      // Full fetches retry failures too; restart clocks only if one can start, never for an in-flight no-op.
       if (!this.isFetching) {
         const now = Date.now()
         for (const { provider, limits } of this.getActiveProviderState()) {
@@ -145,7 +165,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       return
     }
 
-    // Why: an in-flight fetch will refresh these; skip without consuming the per-provider retry throttle so the next activation retries.
+    // In-flight work already refreshes this data; preserve retry allowance for the next activation.
     if (this.isFetching) {
       return
     }
@@ -163,7 +183,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       return
     }
 
-    // Why: recover partial failures of dedicated-fetch providers without re-reading healthy providers still inside their debounce.
+    // Dedicated cycles retry failing providers without rereading healthy debounced siblings.
     if (plan.providers.includes('claude')) {
       await this.fetchClaudeOnly()
     }
@@ -175,7 +195,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     }
   }
 
-  protected async refreshIfWindowActive(): Promise<void> {
+  protected async refreshIfWatched(): Promise<void> {
     if (!this.shouldBackgroundPoll()) {
       return
     }

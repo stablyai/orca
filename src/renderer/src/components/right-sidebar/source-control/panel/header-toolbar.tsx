@@ -1,20 +1,26 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useEffect, useRef } from 'react'
-import { GitPullRequestArrow, Loader2, Search, X } from 'lucide-react'
-import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
-import type { GitBranchLineTotal } from '../../../../../../shared/git-status-types'
+import { createPortal } from 'react-dom'
+import { Search, X } from 'lucide-react'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitBranchLineTotal } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
-import type { PrimaryAction } from '../../source-control-primary-action'
+import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { PrimaryAction } from '../review/source-control-primary-action-types'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { PrimaryActionTooltip } from '../../source-control-primary-action-tooltip'
-import { translate } from '@/i18n/i18n'
-import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
-import { HostedReviewHeaderLink, HostedReviewIcon } from '../review/hosted-review-header-chrome'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import {
+  HostedReviewToolbarLink,
+  CreatePrHeaderButton,
+  SuppressedGitHubPRToolbar
+} from './header-review-actions'
 import { SourceControlBranchContextRow } from './branch-context-row'
 import { shouldShowSourceControlBranchContextChrome } from './branch-context-stats'
 import { SourceControlHeaderOverflowMenu } from './header-overflow-menu'
+import { useSourceControlHeaderActionsSlot } from './header-actions-slot'
+import { useSourceControlScope } from './worktree-scope'
 
 type SourceControlHeaderToolbarProps = {
   filterQuery: string
@@ -39,87 +45,10 @@ type SourceControlHeaderToolbarProps = {
   onExpandNotes: () => void
   branchSummary: GitBranchCompareSummary | null
   compareBaseRef: string | null
+  headControl?: React.ReactNode
   headDisplay?: WorktreeGitIdentityDisplay | null
   manualReviewUrl?: string | null
   branchLineTotal?: GitBranchLineTotal | null
-}
-
-function HostedReviewToolbarLink({
-  review,
-  onOpenHostedReviewInChecks,
-  compact
-}: {
-  review: HostedReviewInfo
-  onOpenHostedReviewInChecks: () => void
-  compact?: boolean
-}): React.JSX.Element {
-  return (
-    <div
-      className={cn(
-        'flex min-w-0 items-center gap-1 text-[11.5px] leading-none',
-        compact ? 'max-w-[72px] shrink-0' : 'flex-1'
-      )}
-    >
-      <HostedReviewIcon review={review} className="size-3 shrink-0" />
-      <HostedReviewHeaderLink
-        review={review}
-        onOpenHostedReviewInChecks={onOpenHostedReviewInChecks}
-      />
-    </div>
-  )
-}
-
-function CreatePrHeaderButton({
-  action,
-  isCreatePrIntentInFlight,
-  isCreatingPr,
-  onClick
-}: {
-  action: PrimaryAction
-  isCreatePrIntentInFlight: boolean
-  isCreatingPr: boolean
-  onClick: () => void
-}): React.JSX.Element {
-  return (
-    <PrimaryActionTooltip action={action} side="bottom">
-      <span className="inline-flex shrink-0">
-        <Button
-          type="button"
-          size="xs"
-          disabled={action.disabled}
-          onClick={onClick}
-          className="h-6 shrink-0 px-2 text-[11px]"
-        >
-          {isCreatePrIntentInFlight || isCreatingPr ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
-          )}
-          {action.label}
-        </Button>
-      </span>
-    </PrimaryActionTooltip>
-  )
-}
-
-function SuppressedGitHubPRToolbar({
-  number,
-  onRelink
-}: {
-  number: number
-  onRelink: () => void
-}): React.JSX.Element {
-  return (
-    <div className="flex min-w-0 items-center gap-1.5">
-      <span className="truncate text-[11.5px] text-muted-foreground">
-        {translate('sourceControl.unlinkedPr.status', 'PR #{{number}} unlinked', { number })}
-      </span>
-      <Button type="button" variant="outline" size="xs" onClick={onRelink} className="shrink-0">
-        <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
-        {translate('checksPanel.unlinked.relink', 'Link PR #{{number}}', { number })}
-      </Button>
-    </div>
-  )
 }
 
 function renderOverflowMenu(
@@ -135,7 +64,7 @@ function renderOverflowMenu(
     | 'onExpandNotes'
   >
 ): React.JSX.Element {
-  return <SourceControlHeaderOverflowMenu {...props} />
+  return <SourceControlHeaderOverflowMenu panelActions={props} />
 }
 
 export function SourceControlHeaderToolbar({
@@ -162,9 +91,13 @@ export function SourceControlHeaderToolbar({
   branchSummary,
   compareBaseRef,
   headDisplay = null,
+  headControl,
   manualReviewUrl,
   branchLineTotal
 }: SourceControlHeaderToolbarProps): React.JSX.Element {
+  const t = useTranslate()
+  const embedded = useSourceControlScope() !== null
+  const actionsSlot = useSourceControlHeaderActionsSlot()
   const filterInputRef = useRef<HTMLInputElement>(null)
   const normalizedFilter = filterQuery.trim()
   const showCollapsedToolbar = !filterExpanded
@@ -201,10 +134,143 @@ export function SourceControlHeaderToolbar({
   }, [filterExpanded])
 
   const filterToggleTitle = normalizedFilter
-    ? translate('auto.components.right.sidebar.SourceControl.c8e4a1f902', 'Filter: {{value0}}', {
+    ? t('auto.components.right.sidebar.SourceControl.c8e4a1f902', 'Filter: {{value0}}', {
         value0: filterQuery
       })
-    : translate('auto.components.right.sidebar.SourceControl.b3c8f1a902', 'Filter files by name')
+    : t('auto.components.right.sidebar.SourceControl.b3c8f1a902', 'Filter files by name')
+
+  const reviewControl = hostedReview ? (
+    <HostedReviewToolbarLink
+      review={hostedReview}
+      compact={embedded}
+      onOpenHostedReviewInChecks={onOpenHostedReviewInChecks}
+    />
+  ) : suppressedGitHubPRNumber !== null ? (
+    <SuppressedGitHubPRToolbar
+      number={suppressedGitHubPRNumber}
+      onRelink={onRelinkSuppressedGitHubPR}
+    />
+  ) : visibleCreatePrHeaderAction ? (
+    <CreatePrHeaderButton
+      action={visibleCreatePrHeaderAction}
+      isCreatePrIntentInFlight={isCreatePrIntentInFlight}
+      isCreatingPr={isCreatingPr}
+      onClick={onCreatePrHeaderClick}
+    />
+  ) : null
+
+  const filterToggle = (
+    <button
+      type="button"
+      data-testid="source-control-filter-toggle"
+      className={cn(
+        'relative inline-flex shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+        embedded ? 'size-6' : 'size-7',
+        (normalizedFilter || (embedded && filterExpanded)) && 'bg-muted text-foreground'
+      )}
+      onClick={embedded && filterExpanded ? collapseFilter : expandFilter}
+      aria-label={filterToggleTitle}
+      title={filterToggleTitle}
+      aria-expanded={embedded ? filterExpanded : false}
+    >
+      <Search className="size-3.5" />
+      {normalizedFilter ? (
+        <span className="absolute right-1 top-1 size-1.5 rounded-full bg-foreground" />
+      ) : null}
+    </button>
+  )
+
+  const filterRow = (
+    <>
+      {/* Give expanded search the row so PR links and overflow controls do not squeeze typing. */}
+      <div className="flex min-w-0 w-full flex-1 items-center gap-1.5">
+        <Search className="size-3.5 shrink-0 text-muted-foreground" />
+        <ImeInput
+          ref={filterInputRef}
+          data-testid="source-control-filter-input"
+          type="text"
+          value={filterQuery}
+          onChange={(event) => onFilterQueryChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              collapseFilter()
+            }
+          }}
+          placeholder={t('auto.components.right.sidebar.SourceControl.c35baf2f1e', 'Filter files…')}
+          className="min-w-0 w-full flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+          aria-label={t('auto.components.right.sidebar.SourceControl.c35baf2f1e', 'Filter files…')}
+        />
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
+        aria-label={t(
+          'auto.components.right.sidebar.SourceControl.d4f8c2a901',
+          'Clear and close filter'
+        )}
+        title={t(
+          'auto.components.right.sidebar.SourceControl.d4f8c2a901',
+          'Clear and close filter'
+        )}
+        onClick={clearAndCollapseFilter}
+      >
+        <X className="size-3.5" />
+      </Button>
+    </>
+  )
+
+  const showBranchContext = shouldShowSourceControlBranchContextChrome(
+    branchSummary,
+    compareBaseRef,
+    headDisplay
+  )
+  const branchContextRow = (reviewTrailing?: React.ReactNode) => (
+    <SourceControlBranchContextRow
+      summary={branchSummary}
+      compareBaseRef={compareBaseRef}
+      headDisplay={headDisplay}
+      headControl={headControl}
+      manualReviewUrl={manualReviewUrl}
+      branchLineTotal={branchLineTotal}
+      reviewControl={reviewTrailing}
+      onChangeBaseRef={onChangeBaseRef}
+      onRetry={onRefreshBranchCompare}
+    />
+  )
+
+  if (embedded) {
+    // The card header owns filter and overflow; the PR control joins the compare row's base line.
+    const reviewRowShown = reviewControl !== null && !showBranchContext
+    return (
+      <>
+        {actionsSlot
+          ? createPortal(
+              <>
+                {filterToggle}
+                {renderOverflowMenu(overflowProps)}
+              </>,
+              actionsSlot
+            )
+          : null}
+        {filterExpanded || showBranchContext || reviewRowShown ? (
+          <div className="flex flex-col gap-1 border-b border-border px-3 py-1.5">
+            {filterExpanded ? (
+              <div className="mb-1.5 flex min-w-0 items-center gap-1.5 border-b border-border pb-1.5">
+                {filterRow}
+              </div>
+            ) : null}
+            {showBranchContext ? branchContextRow(reviewControl) : null}
+            {reviewRowShown ? (
+              <div className="flex min-w-0 items-center">{reviewControl}</div>
+            ) : null}
+          </div>
+        ) : null}
+      </>
+    )
+  }
 
   return (
     <div className="border-b border-border px-3 pt-1.5 pb-1">
@@ -214,112 +280,20 @@ export function SourceControlHeaderToolbar({
       >
         {showCollapsedToolbar ? (
           <>
-            {hostedReview ? (
-              <HostedReviewToolbarLink
-                review={hostedReview}
-                onOpenHostedReviewInChecks={onOpenHostedReviewInChecks}
-              />
-            ) : suppressedGitHubPRNumber !== null ? (
-              <SuppressedGitHubPRToolbar
-                number={suppressedGitHubPRNumber}
-                onRelink={onRelinkSuppressedGitHubPR}
-              />
-            ) : visibleCreatePrHeaderAction ? (
-              <CreatePrHeaderButton
-                action={visibleCreatePrHeaderAction}
-                isCreatePrIntentInFlight={isCreatePrIntentInFlight}
-                isCreatingPr={isCreatingPr}
-                onClick={onCreatePrHeaderClick}
-              />
-            ) : (
-              <span className="min-w-0 flex-1" aria-hidden="true" />
-            )}
+            {reviewControl ?? <span className="min-w-0 flex-1" aria-hidden="true" />}
             {(visibleCreatePrHeaderAction || suppressedGitHubPRNumber !== null) && !hostedReview ? (
-              // Why: keep filter/overflow pinned right without stretching Create PR.
+              // Pin filter/overflow right without stretching Create PR.
               <span className="min-w-0 flex-1" aria-hidden="true" />
             ) : null}
-            <button
-              type="button"
-              data-testid="source-control-filter-toggle"
-              className={cn(
-                'relative inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-                normalizedFilter && 'bg-muted text-foreground'
-              )}
-              onClick={expandFilter}
-              aria-label={filterToggleTitle}
-              title={filterToggleTitle}
-              aria-expanded={false}
-            >
-              <Search className="size-3.5" />
-              {normalizedFilter ? (
-                <span className="absolute right-1 top-1 size-1.5 rounded-full bg-foreground" />
-              ) : null}
-            </button>
+            {filterToggle}
             {renderOverflowMenu(overflowProps)}
           </>
         ) : (
-          <>
-            {/* Why: expanded filter owns the toolbar row so typing isn't squeezed
-                beside PR links or overflow actions — collapse to reach those. */}
-            <div className="flex min-w-0 w-full flex-1 items-center gap-1.5">
-              <Search className="size-3.5 shrink-0 text-muted-foreground" />
-              <ImeInput
-                ref={filterInputRef}
-                data-testid="source-control-filter-input"
-                type="text"
-                value={filterQuery}
-                onChange={(event) => onFilterQueryChange(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault()
-                    collapseFilter()
-                  }
-                }}
-                placeholder={translate(
-                  'auto.components.right.sidebar.SourceControl.c35baf2f1e',
-                  'Filter files…'
-                )}
-                className="min-w-0 w-full flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/60"
-                aria-label={translate(
-                  'auto.components.right.sidebar.SourceControl.c35baf2f1e',
-                  'Filter files…'
-                )}
-              />
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
-              aria-label={translate(
-                'auto.components.right.sidebar.SourceControl.d4f8c2a901',
-                'Clear and close filter'
-              )}
-              title={translate(
-                'auto.components.right.sidebar.SourceControl.d4f8c2a901',
-                'Clear and close filter'
-              )}
-              onClick={clearAndCollapseFilter}
-            >
-              <X className="size-3.5" />
-            </Button>
-          </>
+          filterRow
         )}
       </div>
 
-      {shouldShowSourceControlBranchContextChrome(branchSummary, compareBaseRef, headDisplay) ? (
-        <div className="mt-1">
-          <SourceControlBranchContextRow
-            summary={branchSummary}
-            compareBaseRef={compareBaseRef}
-            headDisplay={headDisplay}
-            manualReviewUrl={manualReviewUrl}
-            branchLineTotal={branchLineTotal}
-            onChangeBaseRef={onChangeBaseRef}
-            onRetry={onRefreshBranchCompare}
-          />
-        </div>
-      ) : null}
+      {showBranchContext ? <div className="mt-1">{branchContextRow()}</div> : null}
     </div>
   )
 }

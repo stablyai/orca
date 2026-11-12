@@ -1,22 +1,28 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
   advancesSessionTabsFreshness,
-  shouldApplyRecoveredWebSessionTabsSnapshot,
-  sessionTabsFreshnessKey
+  shouldApplyRecoveredWebSessionTabsSnapshot
 } from './tracking'
-import { latestSessionTabsSnapshotByWorktree, sessionTabsEnvironmentsByWorktree } from './state'
+import {
+  sessionTabsFreshnessKey,
+  latestSessionTabsSnapshotByWorktree,
+  sessionTabsEnvironmentsByWorktree,
+  acceptReplayedWebSessionTabsSnapshot,
+  type VisibilityResumeOmission
+} from './state'
+
 import {
   isCurrentSessionTabsRuntimeId,
   isRetiredSessionTabsRuntimeId
 } from './publisher-identity-fences'
-import { acceptReplayedWebSessionTabsSnapshot } from './tracking-lifecycle'
+
 import type { WebSessionTabsSnapshotOperation } from './snapshot-api'
 import { applyVisibilityResumeRepairs } from './visibility-resume-repair'
 import {
   recordVisibilityResumeInventory,
   recordVisibilityResumeInventoryReceipt
 } from './visibility-resume-inventory'
-import type { VisibilityResumeOmission } from './state'
+
 import type {
   MirroredRuntimeEnvironment,
   VisibilityResumeBatch,
@@ -31,7 +37,6 @@ export type VisibilityResumeCoordinatorOptions = {
   activeRuntimeWorktreeKey: () => string | null
 }
 
-/** Coordinates inventory omissions and cross-environment replay during visibility resumes. */
 export class VisibilityResumeCoordinator {
   private batch: VisibilityResumeBatch | null = null
 

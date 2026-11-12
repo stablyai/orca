@@ -2,29 +2,20 @@ import { ArrowRight, LoaderCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { JiraUserOptionList } from '@/components/jira-user-picker'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { JiraIssueAssigneeControl } from '@/components/jira-issue-assignee-control'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { JiraIssueTransitionControl } from './jira-issue-transition-control'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import type {
   JiraIssue,
   JiraIssueUpdate,
+  JiraMutationResult,
   JiraPriority,
-  JiraTransition,
-  JiraUser
-} from '../../../shared/jira-types'
+  JiraTransition
+} from '../../../shared/jira/jira-types'
 
-function jiraStatusClass(categoryKey: string): string {
-  if (categoryKey === 'done') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-  }
-  if (categoryKey === 'indeterminate') {
-    return 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-200'
-  }
-  return 'border-border/50 bg-muted/40 text-muted-foreground'
-}
-
-/** Header row for an open Jira issue: key, summary, and workspace actions. */
 export function JiraIssueWorkspaceHeader({
   displayed,
   issueLoading,
@@ -36,6 +27,8 @@ export function JiraIssueWorkspaceHeader({
   onUse: (issue: JiraIssue) => void
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <div className="flex-none border-b border-border/50 bg-muted/30 px-4 py-3">
       <div className="flex items-start gap-3">
@@ -44,7 +37,7 @@ export function JiraIssueWorkspaceHeader({
             <span className="font-mono">{displayed.key}</span>
             {displayed.siteName ? <span>{displayed.siteName}</span> : null}
             <span>{displayed.project.key}</span>
-            <span>{formatUiRelativeTimeFromDate(displayed.updatedAt)}</span>
+            <span>{formatUiRelativeTimeFromDate(displayed.updatedAt, undefined, intlLocale)}</span>
             {issueLoading ? <LoaderCircle className="size-3 animate-spin" /> : null}
           </div>
           <h2 className="mt-1 text-[20px] font-semibold leading-tight text-foreground">
@@ -56,7 +49,7 @@ export function JiraIssueWorkspaceHeader({
           className="hidden shrink-0 gap-2 sm:inline-flex"
           size="sm"
         >
-          {translate('auto.components.JiraIssueWorkspace.2441be6f9f', 'Start workspace')}
+          {t('auto.components.JiraIssueWorkspace.2441be6f9f', 'Start workspace')}
           <ArrowRight className="size-4" />
         </Button>
         <Tooltip>
@@ -66,7 +59,7 @@ export function JiraIssueWorkspaceHeader({
               size="icon-sm"
               className="shrink-0"
               onClick={onClose}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.JiraIssueWorkspace.76513c7898',
                 'Close Jira issue preview'
               )}
@@ -75,7 +68,7 @@ export function JiraIssueWorkspaceHeader({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate('auto.components.JiraIssueWorkspace.7a96985ca0', 'Close')}
+            {t('auto.components.JiraIssueWorkspace.7a96985ca0', 'Close')}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -83,63 +76,50 @@ export function JiraIssueWorkspaceHeader({
   )
 }
 
-/** Status, assignee, and priority controls shown above an open Jira issue. */
 export function JiraIssueMetadataBar({
   displayed,
   pendingField,
   transitions,
+  transitionsLoading,
+  transitionsError,
+  reloadTransitions,
   priorities,
-  users,
+  sourceContext,
+  owner,
+  runtimeContextKey,
   mutateIssue
 }: {
   displayed: JiraIssue
   pendingField: string | null
   transitions: JiraTransition[]
+  transitionsLoading: boolean
+  transitionsError: string | null
+  reloadTransitions: () => void
   priorities: JiraPriority[]
-  users: JiraUser[]
+  sourceContext?: TaskSourceContext | null
+  owner: RuntimeClientTarget
+  runtimeContextKey: string
   mutateIssue: (
     field: string,
     updates: JiraIssueUpdate,
     optimistic?: Partial<JiraIssue>
-  ) => Promise<void>
+  ) => Promise<JiraMutationResult>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            disabled={pendingField === 'transition' || transitions.length === 0}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:opacity-80 disabled:opacity-50',
-              jiraStatusClass(displayed.status.categoryKey)
-            )}
-          >
-            {displayed.status.name}
-            {pendingField === 'transition' ? (
-              <LoaderCircle className="size-3 animate-spin" />
-            ) : null}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          {transitions.map((transition) => (
-            <button
-              key={transition.id}
-              type="button"
-              onClick={() =>
-                void mutateIssue(
-                  'transition',
-                  { transitionId: transition.id },
-                  { status: transition.to }
-                )
-              }
-              className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
-            >
-              {transition.name}
-            </button>
-          ))}
-        </PopoverContent>
-      </Popover>
+      <JiraIssueTransitionControl
+        key={`${displayed.siteId ?? ''}:${displayed.key}`}
+        issue={displayed}
+        transitions={transitions}
+        loading={transitionsLoading}
+        error={transitionsError}
+        pending={pendingField !== null}
+        onRetry={reloadTransitions}
+        onTransition={(updates, transition) =>
+          mutateIssue('transition', updates, { status: transition.to })
+        }
+      />
 
       <Popover>
         <PopoverTrigger asChild>
@@ -149,7 +129,7 @@ export function JiraIssueMetadataBar({
             className="rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/40 disabled:opacity-50"
           >
             {displayed.priority?.name ??
-              translate('auto.components.JiraIssueWorkspace.51bed73f88', 'No priority')}
+              t('auto.components.JiraIssueWorkspace.51bed73f88', 'No priority')}
             {pendingField === 'priority' ? (
               <LoaderCircle className="ml-1 inline size-3 animate-spin" />
             ) : null}
@@ -163,7 +143,7 @@ export function JiraIssueMetadataBar({
             }
             className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
           >
-            {translate('auto.components.JiraIssueWorkspace.51bed73f88', 'No priority')}
+            {t('auto.components.JiraIssueWorkspace.51bed73f88', 'No priority')}
           </button>
           {priorities.map((priority) => (
             <button
@@ -180,40 +160,14 @@ export function JiraIssueMetadataBar({
         </PopoverContent>
       </Popover>
 
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            disabled={pendingField === 'assignee'}
-            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/40 disabled:opacity-50"
-          >
-            {displayed.assignee?.displayName ??
-              translate('auto.components.JiraIssueWorkspace.54649eaeab', '+ Assignee')}
-            {pendingField === 'assignee' ? <LoaderCircle className="size-3 animate-spin" /> : null}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="popover-scroll-content scrollbar-sleek w-56 p-1" align="start">
-          <button
-            type="button"
-            onClick={() =>
-              void mutateIssue('assignee', { assigneeAccountId: null }, { assignee: undefined })
-            }
-            className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
-          >
-            {translate('auto.components.JiraIssueWorkspace.0b6b5646ed', 'Unassigned')}
-          </button>
-          <JiraUserOptionList
-            users={users}
-            onSelect={(user) =>
-              void mutateIssue(
-                'assignee',
-                { assigneeAccountId: user.accountId },
-                { assignee: user }
-              )
-            }
-          />
-        </PopoverContent>
-      </Popover>
+      <JiraIssueAssigneeControl
+        issue={displayed}
+        disabled={pendingField !== null}
+        sourceContext={sourceContext}
+        owner={owner}
+        runtimeContextKey={runtimeContextKey}
+        mutateIssue={mutateIssue}
+      />
     </div>
   )
 }

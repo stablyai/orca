@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
@@ -6,24 +7,25 @@ import {
 
 export function formatUsagePercentageLabel(
   usedPercent: number,
-  display: UsagePercentageDisplay
+  display: UsagePercentageDisplay,
+  t: Translate = translate
 ): string {
   const percentage = getDisplayedUsagePercentage(usedPercent, display)
   return display === 'used'
-    ? translate('auto.components.status.bar.usagePercentageLabel.used', '{{value0}}% used', {
+    ? t('auto.components.status.bar.usagePercentageLabel.used', '{{value0}}% used', {
         value0: String(percentage)
       })
-    : translate('auto.components.status.bar.usagePercentageLabel.remaining', '{{value0}}% left', {
+    : t('auto.components.status.bar.usagePercentageLabel.remaining', '{{value0}}% left', {
         value0: String(percentage)
       })
 }
 
-/** Percentage without the used/left word, for rows that state the unit once. */
 export function formatBareUsagePercentage(
   usedPercent: number,
-  display: UsagePercentageDisplay
+  display: UsagePercentageDisplay,
+  t: Translate = translate
 ): string {
-  return translate('auto.components.status.bar.usagePercentageLabel.bare', '{{value0}}%', {
+  return t('auto.components.status.bar.usagePercentageLabel.bare', '{{value0}}%', {
     value0: String(getDisplayedUsagePercentage(usedPercent, display))
   })
 }

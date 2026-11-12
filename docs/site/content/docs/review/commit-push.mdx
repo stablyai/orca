@@ -48,6 +48,8 @@ The sidebar **Source Control** panel exposes the same actions without leaving yo
 
 The branch context row at the top shows the current branch (or detached HEAD) stacked above the compare base (`branch → base`) so Create PR and remote actions never hide which branch you're on. When the branch has a usable merge base, a compact chip shows total lines added and removed against that fork point (one ranged diff, not a sum of staged/unstaged areas). Hover the chip for a **Code breakdown** when the host publishes splits: **Source**, **Tests**, and **Generated** (generated only when non-zero) — path heuristics only, not content analysis. Long branch names truncate so they do not cover the chip.
 
+**Committed on Branch** shows changes since the common ancestor with the selected base. Changes made only on the base branch are excluded. If an untracked file overlaps a file deleted or renamed from that ancestor, the line-total chip clears any previously shown number until an exact total is available again. Staging the file restores an exact total.
+
 Right-click a changed file for **Copy Path** / **Copy Relative Path** (relative to the worktree root).
 
 The panel's primary button at the bottom shifts with state so the next useful action is always one click away: **Stage Files** when there are unstaged changes, then **Commit**, then **Push** / **Pull** / **Sync** depending on how the branch sits against its upstream.

@@ -1,6 +1,4 @@
-import { closeSftpDirectoryHandle } from './ssh-sftp-directory-close'
-import type { FileEntryWithStats, SFTPWrapper, Stats } from 'ssh2'
-import type { FileStat } from './types'
+import type { SFTPWrapper } from 'ssh2'
 
 const ABORTED_SFTP_OPERATION_GRACE_MS = 5_000
 
@@ -43,8 +41,7 @@ function waitForSftpCallback<T>(
       if (!signal || settled) {
         return
       }
-      // Why: the folder owner closes SFTP on abort; wait for its callback so
-      // Windows local handles quiesce before the temporary tree is removed.
+      // Abort closes SFTP; await its callback so Windows handles quiesce before temporary-tree removal.
       abortTimer = setTimeout(() => settle(abortReason(signal)), ABORTED_SFTP_OPERATION_GRACE_MS)
     }
     signal?.addEventListener('abort', onAbort, { once: true })
@@ -53,34 +50,6 @@ function waitForSftpCallback<T>(
     } catch (error) {
       settle(error instanceof Error ? error : new Error(String(error)))
     }
-  })
-}
-
-export function fileStatFromSftpStats(stats: Stats): FileStat {
-  let type: FileStat['type'] = 'file'
-  if (stats.isDirectory()) {
-    type = 'directory'
-  } else if (stats.isSymbolicLink()) {
-    type = 'symlink'
-  }
-  const maybeNlink = (stats as Stats & { nlink?: unknown }).nlink
-  return {
-    size: stats.size,
-    type,
-    mtime: stats.mtime * 1000,
-    ...(typeof maybeNlink === 'number' ? { nlink: maybeNlink } : {})
-  }
-}
-
-export function lstatViaSftp(sftp: SFTPWrapper, filePath: string): Promise<FileStat> {
-  return new Promise((resolve, reject) => {
-    sftp.lstat(filePath, (err, stats) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve(fileStatFromSftpStats(stats))
-    })
   })
 }
 
@@ -94,73 +63,4 @@ export function fastGetViaSftp(
     (callback) => sftp.fastGet(sourcePath, destinationPath, callback),
     options
   )
-}
-
-export async function* readDirectoryEntriesViaSftp(
-  sftp: SFTPWrapper,
-  dirPath: string,
-  options?: { signal?: AbortSignal }
-): AsyncGenerator<FileEntryWithStats> {
-  // Keep the late handle visible to finally when cancellation races opendir.
-  options?.signal?.throwIfAborted()
-  const handle = await waitForSftpCallback<Buffer>(
-    (callback) =>
-      sftp.opendir(dirPath, (error, value) => {
-        if (!error && options?.signal?.aborted) {
-          void closeSftpDirectoryHandle(sftp, value)
-          callback(new Error('Download canceled'))
-          return
-        }
-        callback(error, value)
-      }),
-    options
-  )
-  let reachedEof = false
-  let closeError: Error | undefined
-  try {
-    options?.signal?.throwIfAborted()
-    while (true) {
-      let chunk: FileEntryWithStats[] | false
-      try {
-        chunk = await waitForSftpCallback<FileEntryWithStats[] | false>(
-          (callback) => sftp.readdir(handle, callback),
-          options
-        )
-      } catch (error) {
-        options?.signal?.throwIfAborted()
-        if (error instanceof Error && 'code' in error && error.code === 1) {
-          reachedEof = true
-          break
-        }
-        throw error
-      }
-      if (chunk === false) {
-        reachedEof = true
-        break
-      }
-      for (const entry of chunk) {
-        options?.signal?.throwIfAborted()
-        if (entry.filename !== '.' && entry.filename !== '..') {
-          yield entry
-        }
-      }
-    }
-  } finally {
-    closeError = await closeSftpDirectoryHandle(sftp, handle)
-  }
-  // Consumer failures enter finally via return(); do not replace their reason.
-  if (reachedEof) {
-    options?.signal?.throwIfAborted()
-    if (closeError) {
-      throw closeError
-    }
-  }
-}
-
-export function statViaSftp(
-  sftp: SFTPWrapper,
-  filePath: string,
-  options?: { signal?: AbortSignal }
-): Promise<Stats> {
-  return waitForSftpCallback<Stats>((callback) => sftp.stat(filePath, callback), options)
 }

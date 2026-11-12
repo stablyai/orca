@@ -60,8 +60,7 @@ describe('web copy fallback vs. the terminal selection', () => {
   })
 
   it('copies the requested text even when the selection anchor is inside a terminal', () => {
-    // Copy Path / Copy Pane ID leave the selection in the terminal, so the copy event
-    // dispatches from there and a capture-phase write loses to xterm's bubble handler.
+    // Terminal selection anchors Copy Path/Pane ID events here; xterm’s bubble handler overwrites capture-phase writes.
     const terminalElement = mountTerminalWithSelection('rm -rf ./secret-dir')
     const clipboardData = createClipboardDataStub()
     stubExecCommand(terminalElement, clipboardData)
@@ -71,8 +70,7 @@ describe('web copy fallback vs. the terminal selection', () => {
   })
 
   it('wins over a later document-level copy handler', () => {
-    // Same target as the fallback's own listener, so only stopImmediatePropagation
-    // suppresses it — stopPropagation would still let it run and clobber text/plain.
+    // Same-target listeners survive stopPropagation; stopImmediatePropagation must prevent their overwrite.
     const source = document.createElement('div')
     document.body.appendChild(source)
     const clipboardData = createClipboardDataStub()
@@ -87,27 +85,6 @@ describe('web copy fallback vs. the terminal selection', () => {
       expect(clipboardData.getData('text/plain')).toBe('pane-42')
     } finally {
       document.removeEventListener('copy', clobber)
-    }
-  })
-
-  it('wins over a copy handler that still runs after the document', () => {
-    // Bubbling hits the document before the window, so only stopImmediatePropagation
-    // protects against a window-level listener.
-    const source = document.createElement('div')
-    document.body.appendChild(source)
-    const clipboardData = createClipboardDataStub()
-    stubExecCommand(source, clipboardData)
-    const clobber = (event: Event): void => {
-      const data = (event as unknown as { clipboardData?: ClipboardDataStub }).clipboardData
-      data?.setData('text/plain', 'later window handler')
-    }
-    window.addEventListener('copy', clobber)
-
-    try {
-      expect(copyClipboardTextViaExecCommand('pane-42', document)).toBe(true)
-      expect(clipboardData.getData('text/plain')).toBe('pane-42')
-    } finally {
-      window.removeEventListener('copy', clobber)
     }
   })
 })

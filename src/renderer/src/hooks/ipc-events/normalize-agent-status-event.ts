@@ -1,9 +1,9 @@
-import type { AgentStatusMetadata } from '../../store/slices/agent-status-contract'
+import type { AgentStatusMetadata } from '../../store/slices/agent-status/agent-status-contract'
 import {
   normalizeAgentStatusPayload,
-  type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 export function normalizeAgentStatusEvent(
   data: AgentStatusIpcPayload
@@ -31,12 +31,20 @@ export function normalizeAgentStatusMetadata(
   data: AgentStatusIpcPayload,
   authorityRestartId?: string
 ): AgentStatusMetadata | undefined {
-  if (!data.providerSession && !data.launchToken && !authorityRestartId) {
+  if (
+    !data.providerSession &&
+    !data.launchToken &&
+    data.launchConfig === undefined &&
+    !authorityRestartId &&
+    !data.paneOwner
+  ) {
     return undefined
   }
   return {
     ...(authorityRestartId ? { authorityRestartId } : {}),
     ...(data.providerSession ? { providerSession: data.providerSession } : {}),
-    ...(data.launchToken ? { launchToken: data.launchToken } : {})
+    ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+    ...(data.launchConfig !== undefined ? { launchConfig: data.launchConfig } : {}),
+    ...(data.paneOwner ? { paneOwner: data.paneOwner } : {})
   }
 }

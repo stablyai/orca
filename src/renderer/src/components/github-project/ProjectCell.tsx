@@ -1,4 +1,9 @@
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import React from 'react'
+import {
+  projectContentField,
+  projectContentFieldLabel
+} from '../../../../shared/github/project-content-field'
 import { TYPE_FIELD_DATA_TYPE } from './columns'
 import type {
   GitHubIssueType,
@@ -6,8 +11,7 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
 } from '../../../../shared/github/project-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ProjectTitleCell, ProjectTypeCell } from './ProjectCellIdentity'
 import { ProjectAssigneesCell, ProjectLabelsCell } from './ProjectCellRepositoryEditors'
 import { ProjectIterationCell, ProjectSingleSelectCell } from './ProjectCellSelectionEditors'
@@ -28,7 +32,7 @@ type Props = {
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
   onOpenDialog?: () => void
   sourceHost?: string
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
 }
 
 export default function ProjectCell({
@@ -41,8 +45,10 @@ export default function ProjectCell({
   onEditIssueType,
   onOpenDialog,
   sourceHost,
-  sourceSettings
+  sourceTarget
 }: Props): React.JSX.Element {
+  const t = useTranslate()
+  const contentValue = projectContentField(row.content, field.dataType)
   const value = row.fieldValuesByFieldId[field.id]
   const editableValue = editable && row.itemType !== 'REDACTED'
   if (field.dataType === 'TITLE') {
@@ -54,7 +60,7 @@ export default function ProjectCell({
         row={row}
         editable={editableValue && row.itemType === 'ISSUE'}
         sourceHost={sourceHost}
-        sourceSettings={sourceSettings}
+        sourceTarget={sourceTarget}
         onEditIssueType={onEditIssueType}
       />
     )
@@ -65,7 +71,7 @@ export default function ProjectCell({
         row={row}
         editable={editableValue && row.itemType !== 'DRAFT_ISSUE'}
         sourceHost={sourceHost}
-        sourceSettings={sourceSettings}
+        sourceTarget={sourceTarget}
         onEditAssignees={onEditAssignees}
       />
     )
@@ -76,20 +82,59 @@ export default function ProjectCell({
         row={row}
         editable={editableValue && row.itemType !== 'DRAFT_ISSUE'}
         sourceHost={sourceHost}
-        sourceSettings={sourceSettings}
+        sourceTarget={sourceTarget}
         onEditLabels={onEditLabels}
       />
     )
   }
   if (field.dataType === 'REPOSITORY') {
     return (
-      <span className="truncate text-xs text-muted-foreground">{row.content.repository ?? ''}</span>
+      <span className="min-w-0 self-center truncate text-xs text-muted-foreground">
+        {contentValue ? projectContentFieldLabel(contentValue) : ''}
+      </span>
     )
   }
   if (field.dataType === 'PARENT_ISSUE') {
     return (
-      <span className="truncate text-xs text-muted-foreground">
-        {row.content.parentIssue ? `#${row.content.parentIssue.number}` : ''}
+      <span className="min-w-0 self-center truncate text-xs text-muted-foreground">
+        {contentValue ? projectContentFieldLabel(contentValue) : ''}
+      </span>
+    )
+  }
+  if (field.dataType === 'LINKED_PULL_REQUESTS') {
+    const linked = contentValue?.kind === 'linked' ? contentValue.linked : null
+    if (!linked) {
+      return <span className="text-xs text-muted-foreground" />
+    }
+    const overflow = linked.totalCount - linked.pullRequests.length
+    // Only the numbers truncate, so "+N more" stays visible in narrow columns.
+    return (
+      <span className="flex min-w-0 items-center gap-1 self-center text-xs text-muted-foreground">
+        <span className="truncate">
+          {contentValue ? projectContentFieldLabel(contentValue) : ''}
+        </span>
+        {overflow > 0 ? (
+          <>
+            {' '}
+            <span className="shrink-0">
+              {t(
+                'auto.components.github.project.ProjectCell.linkedPullRequestsOverflow',
+                '+{{count}} more',
+                { count: overflow }
+              )}
+            </span>
+          </>
+        ) : null}
+      </span>
+    )
+  }
+  if (field.dataType === 'SUB_ISSUES_PROGRESS') {
+    if (!contentValue) {
+      return <span className="text-xs text-muted-foreground" />
+    }
+    return (
+      <span className="min-w-0 self-center truncate text-xs text-muted-foreground">
+        {projectContentFieldLabel(contentValue)}
       </span>
     )
   }
@@ -119,7 +164,7 @@ export default function ProjectCell({
       <ProjectTextCell
         value={text}
         editable={editableValue}
-        placeholder={translate('auto.components.github.project.ProjectCell.9cb1a0c984', 'Add text')}
+        placeholder={t('auto.components.github.project.ProjectCell.9cb1a0c984', 'Add text')}
         onCommit={(next) =>
           onEditField?.(field.id, next === '' ? null : { kind: 'text', text: next })
         }
@@ -133,10 +178,7 @@ export default function ProjectCell({
         value={number}
         editable={editableValue}
         numeric
-        placeholder={translate(
-          'auto.components.github.project.ProjectCell.bb7ebc11e3',
-          'Add number'
-        )}
+        placeholder={t('auto.components.github.project.ProjectCell.bb7ebc11e3', 'Add number')}
         onCommit={(next) => commitNumber(field.id, next, onEditField)}
       />
     )

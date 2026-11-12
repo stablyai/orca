@@ -1,30 +1,34 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import {
-  getComposerEligibleRepos,
-  resolveComposerActiveRepoId
-} from '@/lib/new-workspace-composer-repo'
-import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-workspace-dialog-repo'
+import { resolveComposerActiveRepoId } from '@/lib/workspace/creation/new-workspace-composer-repo'
+import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { ComposerDecisions } from './composer-decisions'
+import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectAllKnownWorkspaceStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
 
 export type ComposerStateInput = {
   initialRepoId?: string
   initialEphemeralVmRecipeId?: string
   initialProjectGroupId?: string
   initialName?: string
+  initialNote?: string
   initialPrompt?: string
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
   initialGitHubWorkItem?: GitHubWorkItem | null
   initialTaskSourceContext?: TaskSourceContext | null
+  initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus?: WorkspaceStatus
   initialBaseBranch?: string
+  initialParentWorktreeId?: string
   persistDraft: boolean
   onCreated?: () => void
   isSubmissionCancelled?: () => boolean
@@ -42,11 +46,14 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialEphemeralVmRecipeId,
     initialName = '',
     initialPrompt = '',
+    initialNote = '',
     initialLinkedWorkItem = null,
     initialGitHubWorkItem = null,
     initialTaskSourceContext = null,
+    initialWorkspaceTarget = null,
     initialWorkspaceStatus,
     initialBaseBranch,
+    initialParentWorktreeId,
     persistDraft,
     onCreated,
     isSubmissionCancelled = NEVER_CANCEL_COMPOSER_SUBMIT,
@@ -101,11 +108,12 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const newWorkspaceDraft = useAppStore((s) => s.newWorkspaceDraft)
 
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
 
   const sparsePresetsByRepo = useAppStore((s) => s.sparsePresetsByRepo)
 
-  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
+  // Every paired host's columns too, so a host-only lane's + keeps its status; submit scopes it to the target.
+  const workspaceStatuses = useAppStore(useShallow(selectAllKnownWorkspaceStatuses))
 
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
 
@@ -119,7 +127,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
 
-  const eligibleRepos = useMemo(() => getComposerEligibleRepos(repos), [repos])
+  const eligibleRepos = useMemo(() => getNewWorkspaceDialogEligibleRepos(repos), [repos])
 
   const hostOptions = useMemo(
     () =>
@@ -149,8 +157,8 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
   )
 
   const seedActiveRepoId = useMemo(
-    () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId),
-    [repos, eligibleRepos, activeRepoId]
+    () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId, runtimeEnvironments),
+    [repos, eligibleRepos, activeRepoId, runtimeEnvironments]
   )
 
   return {
@@ -158,11 +166,14 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialEphemeralVmRecipeId,
     initialName,
     initialPrompt,
+    initialNote,
     initialLinkedWorkItem,
     initialGitHubWorkItem,
     initialTaskSourceContext,
+    initialWorkspaceTarget,
     initialWorkspaceStatus,
     initialBaseBranch,
+    initialParentWorktreeId,
     persistDraft,
     onCreated,
     isSubmissionCancelled,

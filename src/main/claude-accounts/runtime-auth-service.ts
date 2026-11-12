@@ -2,33 +2,41 @@ import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { toWindowsWslPath } from '../../shared/wsl-paths'
 import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
-import type { Store } from '../persistence'
-import { getDefaultWslDistro, getWslHome } from '../wsl'
-import { ClaudeProfileRouter } from './claude-profile-router'
-import { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
+import type { Store } from '../persistence/loading-store/store'
+import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
+import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
+import { ClaudeProfileRouter } from './profiles/routing/claude-profile-router'
+import { ClaudeWslProfileRouter } from './profiles/wsl/claude-profile-wsl-router'
 import {
+  installClaudeObservedConfigDirs,
   installClaudeProfileRouter,
   installClaudeWslProfileRouter
-} from './claude-profile-installed-router'
-import type { ClaudeAccountSelectionTarget } from './runtime-selection'
+} from './profiles/routing/claude-profile-installed-router'
+import { ClaudeObservedConfigDirs } from './profiles/routing/claude-observed-config-dirs'
+import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
 
-export type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
-
-/** `configDir` is the CLAUDE_CONFIG_DIR value; `readPath` is where this host reads it (UNC for WSL). */
+/** `readPath` exposes a guest configDir to the host through UNC on WSL. */
 export type ClaudeAccountFolder = { configDir: string; readPath: string }
 
-/** Routes Claude launches on this host and its WSL distros to the selected account folder. */
 export class ClaudeRuntimeAuthService {
   readonly router: ClaudeProfileRouter
   private readonly wslRouter?: ClaudeWslProfileRouter
   private readonly dataRoot = getAppEnvironment().getPath('userData')
   private mutationQueue: Promise<unknown> = Promise.resolve()
 
-  constructor(private readonly store: Pick<Store, 'getSettings'>) {
+  constructor(
+    private readonly store: Pick<Store, 'getSettings'>,
+    private readonly isDistroRunning: (distro: string) => Promise<boolean> = isWslDistroRunning
+  ) {
     const args = { getSettings: () => store.getSettings(), dataRoot: this.dataRoot }
     this.router = new ClaudeProfileRouter(args)
     installClaudeProfileRouter(this.router)
+    installClaudeObservedConfigDirs(
+      new ClaudeObservedConfigDirs(join(this.dataRoot, 'claude-observed-config-dirs.json'), () =>
+        store.getSettings()
+      )
+    )
     this.wslRouter = process.platform === 'win32' ? new ClaudeWslProfileRouter(args) : undefined
     installClaudeWslProfileRouter(this.wslRouter)
     void this.publishAll().catch((error: unknown) => {
@@ -47,10 +55,19 @@ export class ClaudeRuntimeAuthService {
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const wsl = this.wslRouteFor(target)
+    // Background quota polls must not boot stopped distros.
+    if (wsl && !(await this.isDistroRunning(wsl.distro))) {
+      return {
+        configDir: '',
+        envPatch: {},
+        provenance: 'profile:unavailable',
+        usageError: `WSL distro ${wsl.distro} is not running.`
+      }
+    }
     try {
       return await (wsl ? wsl.router.preparation(wsl.distro) : this.router.preparation())
     } catch (error) {
-      // Why not thrown: one usage cycle polls every provider, so one account must not stop it.
+      // An unavailable account must not interrupt polling other providers.
       return {
         configDir: '',
         envPatch: {},
@@ -60,7 +77,6 @@ export class ClaudeRuntimeAuthService {
     }
   }
 
-  /** Rewrites the which-account file for `target` after its selection changed. */
   async syncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
     await this.serializeMutation(async () => {
       const wsl = this.wslRouteFor(target)
@@ -72,7 +88,7 @@ export class ClaudeRuntimeAuthService {
     })
   }
 
-  /** Startup and rollback republish only running distros: neither may boot a stopped one. */
+  /** Startup and rollback must not boot stopped distros. */
   async publishAll(): Promise<void> {
     await this.serializeMutation(async () => {
       this.router.publish()
@@ -84,7 +100,6 @@ export class ClaudeRuntimeAuthService {
     })
   }
 
-  /** Creates and sets up an account's folder so Claude can sign in to it. */
   async prepareAccountFolder(
     accountId: string,
     target: ClaudeAccountSelectionTarget
@@ -107,7 +122,7 @@ export class ClaudeRuntimeAuthService {
       await this.router.removeAccount(accountId)
       return
     }
-    // Why never thrown: a deleted distro must not block removing its accounts.
+    // Deleted distros must not block account removal.
     await wsl.router.removeAccount(wsl.distro, accountId).catch((error: unknown) => {
       console.warn(
         `[claude-profile] Could not delete the Claude account folder in WSL ${wsl.distro}:`,
@@ -116,7 +131,7 @@ export class ClaudeRuntimeAuthService {
     })
   }
 
-  /** System default's folder: skills and plugins install there and are linked into accounts. */
+  /** Install skills and plugins in System default so accounts can share them. */
   getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
     const effective = this.resolveTarget(target)
     const home =
@@ -124,15 +139,13 @@ export class ClaudeRuntimeAuthService {
     return home ? join(home, '.claude') : this.router.systemDefaultHome()
   }
 
-  // Why never thrown: a guest Orca cannot reach also cannot run a pane, and a deleted distro must
-  // not block removing its accounts. The next select, or a start while it runs, rewrites it.
+  // Guest failures must not block account removal; a later selection or startup retries publication.
   private async publishWsl(router: ClaudeWslProfileRouter, distro: string): Promise<void> {
     await router.publish(distro).catch((error: unknown) => {
       console.warn(`[claude-profile] Could not update the Claude account in WSL ${distro}:`, error)
     })
   }
 
-  /** Null when the target is not a WSL distro this host can route. */
   private wslRouteFor(
     target?: ClaudeAccountSelectionTarget
   ): { router: ClaudeWslProfileRouter; distro: string } | null {
@@ -141,11 +154,11 @@ export class ClaudeRuntimeAuthService {
     return this.wslRouter && distro ? { router: this.wslRouter, distro } : null
   }
 
-  /** A WSL target that names no distro means the default distro, as Claude launches it there. */
+  /** An unspecified WSL distro uses the default, matching Claude launches. */
   private resolveTarget(target?: ClaudeAccountSelectionTarget): ClaudeAccountSelectionTarget {
     const effective =
       target ??
-      // Why: stale cross-platform WSL pins must stay on the host off Windows.
+      // Ignore stale cross-platform WSL pins outside Windows.
       (process.platform === 'win32'
         ? resolveLocalAccountRuntimeTarget(this.store.getSettings())
         : { runtime: 'host' as const })

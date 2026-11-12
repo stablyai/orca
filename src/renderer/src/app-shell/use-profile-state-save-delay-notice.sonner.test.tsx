@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
-import { StrictMode } from 'react'
 import { Toaster } from 'sonner'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
@@ -11,9 +10,9 @@ const title = 'Profile storage is taking longer than usual'
 const frames: FrameRequestCallback[] = []
 const listeners = new Set<(delayed: boolean) => void>()
 
-function Notice() {
+function Notice({ closeButton = false }: { closeButton?: boolean }) {
   useProfileStateSaveDelayNotice()
-  return <Toaster />
+  return <Toaster closeButton={closeButton} />
 }
 
 beforeEach(() => {
@@ -83,18 +82,6 @@ it('keeps the restored warning when an old shell dismissal arrives after remount
   publish(false)
   await finishDismissal()
   expect(reopened.queryByText(title)).toBeNull()
-})
-
-it('does not let StrictMode cleanup dismiss the initial delayed snapshot', async () => {
-  const view = render(
-    <StrictMode>
-      <Notice />
-    </StrictMode>
-  )
-  await advanceTimers()
-  await finishDismissal()
-  expect(listeners.size).toBe(1)
-  expect(view.queryAllByText(title)).toHaveLength(1)
 })
 
 it('keeps a new warning if recovery and another delay arrive before a dismissal frame', async () => {

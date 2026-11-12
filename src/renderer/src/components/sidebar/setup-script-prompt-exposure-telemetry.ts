@@ -1,5 +1,5 @@
-import { track } from '@/lib/telemetry'
-import { buildSetupScriptPromptTelemetry } from '../../../../shared/setup-script-telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { buildSetupScriptPromptTelemetry } from '../../../../shared/workspace-setup/setup-script-telemetry'
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 
 export function trackSetupScriptPromptExposure(input: {
@@ -22,8 +22,7 @@ export function trackSetupScriptPromptExposure(input: {
     candidate: promptState.candidate,
     hasSharedHooks: promptState.hasSharedHooks
   })
-  // Why: React may re-render the sidebar often; this event should represent
-  // a distinct prompt exposure for this repo/source, not render churn.
+  // Record distinct repo/source exposures rather than sidebar render churn.
   const promptKey = [
     repoHostIdentity,
     telemetry.mode,

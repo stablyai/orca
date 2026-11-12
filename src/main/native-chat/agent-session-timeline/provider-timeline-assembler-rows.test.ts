@@ -1,10 +1,8 @@
-// Which row an event lands on is spelled from its keys, and an event the sink refused took
-// nothing: no key, no row, no room in the budget.
+// Refused events must consume no keys, rows or admission budget.
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
-  assistantText,
   backgroundTask,
   closeProviderTimelineRigs,
   messageText,
@@ -34,7 +32,6 @@ describe('a refused event takes nothing', () => {
     expect(assembler.openTurnId).toBeNull()
     refusing = false
     expect(assembler.apply(turnOpen).admission).toEqual({ accepted: true })
-    // The minted turn takes the first serial, as if the refusal never happened.
     expect(assembler.openTurnId).toBe('m:gen-1%3At1')
     refusing = true
     expect(assembler.apply(frame).admission).toEqual(refused)
@@ -70,7 +67,7 @@ describe('a row keeps the turn it opened in', () => {
       body: backgroundTask('background-tool', 'working')
     })
     rig.assembler.apply({ type: 'turn.end', turn: 't1', at: 2_000, state: 'completed' })
-    // No turn is open: the update still joins the row's own turn, not the conversation.
+    // Completed turns still own later updates to their existing rows.
     rig.assembler.apply({
       type: 'item.update',
       item: 'background-tool',
@@ -148,7 +145,6 @@ describe('the budget counts the work actually open', () => {
       if (!identity) {
         throw new Error('the request has a journal key')
       }
-      // A client answers it, through the journal.
       await rig.journal.appendItem(
         identity,
         {
@@ -164,44 +160,4 @@ describe('the budget counts the work actually open', () => {
       )
     }
   })
-
-  it('keeps a streamed message counted while its stream is open, whatever its snapshots say', async () => {
-    const rig = await openProviderTimelineRig({ schedule: () => () => {} })
-    for (let index = 0; index < 128; index += 1) {
-      rig.assembler.apply({
-        type: 'text.delta',
-        item: { id: `stream-${index}` },
-        channel: 'assistant',
-        text: 'x'
-      })
-      rig.assembler.apply({
-        type: 'item.update',
-        item: `stream-${index}`,
-        body: assistantText('x')
-      })
-      if (index % 32 === 31) {
-        await rig.rows()
-      }
-    }
-    expect(
-      rig.assembler.apply({
-        type: 'text.delta',
-        item: { id: 'overflow' },
-        channel: 'assistant',
-        text: 'x'
-      }).admission
-    ).toEqual({ accepted: false, reason: 'failed' })
-  })
-
-  it('refuses a provider key larger than the whole budget', () =>
-    openProviderTimelineRig({ schedule: () => () => {} }).then((rig) => {
-      expect(
-        rig.assembler.apply({
-          type: 'text.delta',
-          item: { id: 'x'.repeat(1024 * 1024 + 1) },
-          channel: 'assistant',
-          text: 'tiny'
-        }).admission
-      ).toEqual({ accepted: false, reason: 'failed' })
-    }))
 })

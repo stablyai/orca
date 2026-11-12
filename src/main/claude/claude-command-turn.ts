@@ -1,35 +1,35 @@
-// A conversation command Claude runs as the session's open turn. The turn is the host's record, and
-// the command's own result ends it. Everything Claude writes for the command meanwhile — the
-// summary it continues from, the command's echo, a "Compaction canceled." — is the command's
-// output, never a reply, so none of it draws.
+// Command output stays off the reply timeline; only the command's result ends its turn.
 
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { providerDiagnostic, type ProviderDiagnostic } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
-import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { structuredCompactionOutcome } from '../native-chat/agent-session-wire/structured-conversation-command-outcome'
-import { claudeText } from './claude-structured-item-translation'
-import { claudeResultFailure } from './claude-structured-provider-fallback'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  providerDiagnostic,
+  type ProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/agent-launch/catalog/tui-agent-display-names'
+import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { structuredCompactionOutcome } from '../native-chat/agent-session-wire/operations/structured-conversation-command-outcome'
+import { claudeText } from './structured/journal/claude-structured-item-translation'
+import { claudeResultFailure } from './structured/launch/claude-structured-provider-fallback'
 import type { ClaudeCurrentTurn, ClaudeTurnEnd } from './claude-turn-lifecycle-item'
 import { isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { ClaudeUsageLimits } from './claude-usage-limits'
+import type { ClaudeAssistantFailures } from './claude-assistant-failures'
 
 export type ClaudeCommandTurn = {
   identity: AgentJournalItemIdentity
   resultIdentity: AgentJournalItemIdentity
-  /** The command input's uuid, which the result answering it names. */
   sentUuid: string
   compacted: boolean
-  /** Orca asked Claude to stop the command. */
   interruptRequested: boolean
-  /** Claude reported the compaction failed, with its words for a person when it gave any. */
   failed: { detail?: ProviderDiagnostic } | null
+  /** Limits that rejected this command while it ran; older account rejections cannot explain it. */
+  rejections: Set<string>
+  /** The hidden reply's sign-in notice, written only if the command's failure selects it. */
+  notice: AgentJournalItemBody | null
 }
 
 export type ClaudeCommandStart = StructuredAgentSessionCommandRun & {
@@ -51,13 +51,14 @@ export function claudeCommandCurrentTurn(start: ClaudeCommandStart): ClaudeCurre
       sentUuid: start.sentUuid,
       compacted: false,
       interruptRequested: false,
-      failed: null
+      failed: null,
+      rejections: new Set(),
+      notice: null
     }
   }
 }
 
-/** Reads a running command's evidence off a frame. True for the command's own output, which
- *  draws nothing. */
+/** Return true for command output that must stay off the reply timeline. */
 export function observeClaudeCommandFrame(
   command: ClaudeCommandTurn | null,
   message: Record<string, unknown>
@@ -66,7 +67,7 @@ export function observeClaudeCommandFrame(
     return false
   }
   if (message.type === 'system') {
-    // Only the boundary says the history was replaced; `compact_result: 'success'` precedes it.
+    // A success status precedes compaction; only the boundary confirms history replacement.
     if (message.subtype === 'compact_boundary') {
       command.compacted = true
     } else if (message.compact_result === 'failed') {
@@ -82,19 +83,48 @@ export function observeClaudeCommandFrame(
   )
 }
 
-/** The command's end from a root result, and the one row that reports it; null when the result
- *  names another input. */
+/** Hidden command replies still carry this attempt's provider failure cause. */
+export function absorbClaudeCommandFrame(
+  {
+    turn,
+    usageLimits,
+    assistantFailures
+  }: {
+    turn: ClaudeOpenTurn
+    usageLimits: Pick<ClaudeUsageLimits, 'assistant'>
+    assistantFailures: Pick<ClaudeAssistantFailures, 'notice'>
+  },
+  message: Record<string, unknown>
+): boolean {
+  const { command } = turn
+  if (!observeClaudeCommandFrame(command, message)) {
+    return false
+  }
+  if (command && claudeCommandAnswers(command, message)) {
+    usageLimits.assistant(message, turn)
+    command.notice ??= assistantFailures.notice(message)
+  }
+  return true
+}
+
+/** Frames without an input UUID predate correlation; one naming another input is not this command's. */
+function claudeCommandAnswers(
+  command: ClaudeCommandTurn,
+  message: Record<string, unknown>
+): boolean {
+  const answers = claudeText(message.user_message_uuid)
+  return answers === null || answers === command.sentUuid
+}
+
 export function claudeCommandEnd(
   command: ClaudeCommandTurn,
   message: Record<string, unknown>,
   completedAt: number
 ): { end: ClaudeTurnEnd; row: AgentJournalItemBody | null } | null {
-  const answers = claudeText(message.user_message_uuid)
-  if (answers !== null && answers !== command.sentUuid) {
+  if (!claudeCommandAnswers(command, message)) {
     return null
   }
-  // A stopped `/compact` ends in the same success result as a finished one: only the provider's
-  // report of the compaction tells them apart.
+  // Stopped and finished compactions can both return success; use compaction evidence.
   const shown = claudeResultFailure(message)
   const verdict = structuredCompactionOutcome({
     compacted: command.compacted,
@@ -113,7 +143,7 @@ export function claudeCommandEnd(
   if (verdict.outcome === 'success') {
     return { end, row: { kind: 'status', text: 'Context compacted', presentation: 'compaction' } }
   }
-  // An error result already draws its own row through the provider fallback.
+  // Provider fallback already renders error results.
   return verdict.failure && !shown
     ? {
         end,
@@ -127,27 +157,4 @@ export function claudeCommandEnd(
         }
       }
     : { end, row: null }
-}
-
-/** A root result, when a command is the open turn: the command's end, with its one result row
- *  already written; `another-input` for a result that answers something else; null when no
- *  command is open. */
-export function claudeCommandResultEnd(
-  turn: Pick<ClaudeOpenTurn, 'command' | 'turnScope'>,
-  sink: Pick<StructuredAgentSessionEventSink, 'appendItem'>,
-  message: Record<string, unknown>,
-  completedAt: number
-): ClaudeTurnEnd | 'another-input' | null {
-  const { command } = turn
-  if (!command) {
-    return null
-  }
-  const ended = claudeCommandEnd(command, message, completedAt)
-  if (!ended) {
-    return 'another-input'
-  }
-  if (ended.row) {
-    sink.appendItem(command.resultIdentity, ended.row, { turnScope: turn.turnScope })
-  }
-  return ended.end
 }

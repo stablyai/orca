@@ -1,10 +1,4 @@
-/**
- * E2E coverage for coordinate pointer input (browser.mouseMove/Down/Up/Wheel).
- *
- * Drives the exact RPC sequences BrowserPane sends, measures their cost, and checks the
- * gestures they must produce: click, double-click, right-click, drag-selection, and a
- * wheel that scrolls the element under the cursor.
- */
+// Drive BrowserPane’s real pointer RPC gestures and measure dispatch cost alongside click/drag/wheel fidelity.
 
 import { createServer, type Server } from 'node:http'
 import type { Page } from '@stablyai/playwright-test'
@@ -141,9 +135,7 @@ const DOUBLE_CLICK_INTERVAL_MS = 500
 
 type RpcStep = [string, Record<string, unknown>]
 
-// Why: one Playwright round-trip for the whole gesture. Driving each RPC from Node instead
-// puts ~750ms of harness IPC between events on a loaded CI runner, which pushes a click
-// pair outside the 500ms double-click interval and makes the harness the thing under test.
+// Batch gesture RPCs inside one renderer round-trip so harness IPC cannot exceed Chromium’s double-click interval.
 async function driveRpcSequence(page: Page, pageId: string, steps: RpcStep[]): Promise<void> {
   const failure = await page.evaluate(
     async ({ targetPage, sequence }) => {
@@ -181,8 +173,7 @@ function clickSteps(x: number, y: number, button = 'left'): RpcStep[] {
 test('dispatches coordinate pointer input fast enough for real gestures @headful', async ({
   orcaPage
 }) => {
-  // Why: the measurement loop plus the gesture checks drive a few hundred serialized RPCs;
-  // a loaded CI runner needs more than the default budget even when each one is fast.
+  // Allow loaded-CI time for hundreds of serialized RPCs, not just one fast call.
   test.setTimeout(240_000)
   const server = await startProbeServer()
   try {
@@ -196,11 +187,7 @@ test('dispatches coordinate pointer input fast enough for real gestures @headful
       .poll(() => evaluateInPage(orcaPage, pageId, 'document.title'), { timeout: 20_000 })
       .toBe('Pointer input probe')
 
-    // ── Latency ──
-
-    // Why: every sample runs inside the renderer, so it times the RPC the pane awaits
-    // rather than the Playwright round-trip. The renderer's performance.now() is coarsened
-    // to ~16.6ms, so each operation is timed in bulk and averaged instead of per call.
+    // Time bulk RPCs inside the renderer to amortize its ~16.6ms clock and exclude Playwright IPC.
     const latency = await orcaPage.evaluate(async (targetPage) => {
       const call = async (method: string, params: Record<string, unknown>): Promise<void> => {
         const response: unknown = await window.api.runtime.call({
@@ -214,8 +201,7 @@ test('dispatches coordinate pointer input fast enough for real gestures @headful
           throw new Error(`${method} failed: ${JSON.stringify(response)}`)
         }
       }
-      // Why: enough to amortize the renderer's ~16.6ms clock coarsening (<1.4ms error
-      // against a floor of tens of ms) without spending a CI runner's whole test budget.
+      // Use enough samples to amortize clock coarsening without consuming the whole test budget.
       const REPEATS = 12
       const meanMs = async (run: (index: number) => Promise<void>): Promise<number> => {
         await run(0)
@@ -242,8 +228,7 @@ test('dispatches coordinate pointer input fast enough for real gestures @headful
     }, pageId)
     const latencyReport = JSON.stringify(latency)
     console.log(`POINTER_LATENCY ${latencyReport}`)
-    // Why: Playwright does not surface a passing test's stdout in the CI job log, so the
-    // numbers ride along in the annotation where the failure artifact will carry them.
+    // Attach metrics because Playwright hides passing stdout in CI logs.
     test.info().annotations.push({ type: 'pointer-latency', description: latencyReport })
 
     // CDP pointer dispatch waits for a frame; fast evaluation can finish far below one.
@@ -251,8 +236,6 @@ test('dispatches coordinate pointer input fast enough for real gestures @headful
     expect(latency.mouseMove, latencyReport).toBeLessThan(dispatchControlMs * 3)
     expect(latency.mouseWheel, latencyReport).toBeLessThan(dispatchControlMs * 3)
     expect(latency.click, latencyReport).toBeLessThan(dispatchControlMs * 10)
-
-    // ── Gesture fidelity ──
 
     await evaluateInPage(orcaPage, pageId, 'window.__events = []; true')
     const clickPairStarted = Date.now()
@@ -286,11 +269,7 @@ test('dispatches coordinate pointer input fast enough for real gestures @headful
     console.log(`POINTER_CLICKS ${clickEvents}`)
     expect(eventsOfType('click'), cadenceReport).toHaveLength(2)
 
-    // Why: dblclick needs both presses inside Chromium's 500ms interval, which is a
-    // property of how fast the host can serve five RPCs, not of the dispatch path. A
-    // runner too slow to express a double-click at all reports that as unverified rather
-    // than as a missing dblclick — the clickCount cadence itself is covered deterministically
-    // by agent-browser-bridge-pointer-input.test.ts under fake timers.
+    // Report double-click unverified when runner RPC cadence cannot express it; fake-timer tests pin clickCount deterministically.
     if (pressGapMs >= DOUBLE_CLICK_INTERVAL_MS) {
       test.info().annotations.push({
         type: 'pointer-dblclick-unverified',
@@ -300,8 +279,6 @@ test('dispatches coordinate pointer input fast enough for real gestures @headful
       expect(eventsOfType('dblclick'), cadenceReport).toHaveLength(1)
       expect(readProperty(eventsOfType('dblclick')[0], 'detail'), cadenceReport).toBe(2)
     }
-
-    // ── Right click ──
 
     await evaluateInPage(orcaPage, pageId, 'window.__events = []; true')
     await driveRpcSequence(orcaPage, pageId, [
@@ -315,8 +292,6 @@ test('dispatches coordinate pointer input fast enough for real gestures @headful
       )
       .toBe('true')
 
-    // ── Drag selection ──
-
     await evaluateInPage(orcaPage, pageId, 'window.getSelection().removeAllRanges(); true')
     await driveRpcSequence(orcaPage, pageId, [
       ['browser.mouseMove', { x: 42, y: 155 }],
@@ -327,8 +302,6 @@ test('dispatches coordinate pointer input fast enough for real gestures @headful
     await expect
       .poll(() => evaluateInPage(orcaPage, pageId, 'String(window.getSelection())'))
       .toContain('alpha')
-
-    // ── Wheel targets the element under the cursor ──
 
     await evaluateInPage(
       orcaPage,

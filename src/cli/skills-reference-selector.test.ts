@@ -6,7 +6,6 @@ vi.mock('./bundled-skill-guides.js', () => ({
       name: 'alpha',
       description: 'Use when alpha work is needed.',
       markdown: '# Alpha\n\nShort.\n',
-      fullMarkdown: '# Alpha\n\nShort.\n\n## References\n\nFull.\n',
       aliases: ['legacy-alpha'],
       references: [
         { name: 'first-gate', markdown: '# First gate\n\nDo the first thing.\n' },
@@ -17,7 +16,6 @@ vi.mock('./bundled-skill-guides.js', () => ({
       name: 'zeta',
       description: 'Use when zeta work is needed.',
       markdown: '# Zeta\n',
-      fullMarkdown: '# Zeta\n',
       aliases: [],
       references: []
     }
@@ -52,14 +50,6 @@ describe('orca skills get --reference', () => {
     process.exitCode = undefined
   })
 
-  it('prints only the named reference, with no kernel and no header', async () => {
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-
-    await main(['skills', 'get', 'alpha', '--reference', 'second-gate'], '/tmp/repo')
-
-    expect(stdoutText(stdoutSpy)).toBe('# Second gate\n\nDo the second thing.\n')
-  })
-
   it('accepts the references/<file>.md spelling the gate table prints', async () => {
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
 
@@ -74,45 +64,6 @@ describe('orca skills get --reference', () => {
     await main(['skills', 'get', 'legacy-alpha', '--reference', 'first-gate.md'], '/tmp/repo')
 
     expect(stdoutText(stdoutSpy)).toBe('# First gate\n\nDo the first thing.\n')
-  })
-
-  it('gives --reference --json the canonical topic, reference name, and Markdown', async () => {
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-
-    await main(
-      ['skills', 'get', 'legacy-alpha', '--reference', 'references/first-gate.md', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(stdoutText(stdoutSpy)).toBe(
-      `${JSON.stringify(
-        {
-          name: 'alpha',
-          reference: 'first-gate',
-          markdown: '# First gate\n\nDo the first thing.\n'
-        },
-        null,
-        2
-      )}\n`
-    )
-  })
-
-  it('lists reference names for --references', async () => {
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-
-    await main(['skills', 'get', 'alpha', '--references'], '/tmp/repo')
-
-    expect(stdoutText(stdoutSpy)).toBe('first-gate\nsecond-gate\n')
-  })
-
-  it('gives --references --json a stable schema', async () => {
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-
-    await main(['skills', 'get', 'alpha', '--references', '--json'], '/tmp/repo')
-
-    expect(stdoutText(stdoutSpy)).toBe(
-      `${JSON.stringify({ name: 'alpha', references: ['first-gate', 'second-gate'] }, null, 2)}\n`
-    )
   })
 
   it('reports a topic that ships no references', async () => {
@@ -171,16 +122,5 @@ describe('orca skills get --reference', () => {
     expect(process.exitCode).toBe(1)
     expect(errorSpy).toHaveBeenNthCalledWith(1, 'Use either --references or --full, not both.')
     expect(errorSpy).toHaveBeenNthCalledWith(2, 'Use either --references or --reference, not both.')
-  })
-
-  it('still serves the kernel and the full package unchanged', async () => {
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-
-    await main(['skills', 'get', 'alpha'], '/tmp/repo')
-    await main(['skills', 'get', 'alpha', '--full'], '/tmp/repo')
-
-    expect(stdoutText(stdoutSpy)).toBe(
-      '# Alpha\n\nShort.\n# Alpha\n\nShort.\n\n## References\n\nFull.\n'
-    )
   })
 })

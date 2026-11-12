@@ -1,5 +1,5 @@
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentJournalApprovalSubject } from '../../shared/agent-session-journal-types'
+import type { AgentJournalApprovalSubject } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
@@ -29,6 +29,9 @@ export function claudePermissionPresentation(
   const matchedSource = presentationText(options.matchedAskRule?.source)
   const matchedToolName = presentationText(options.matchedAskRule?.toolName)
   const matchedRuleContent = presentationText(options.matchedAskRule?.ruleContent)
+  // The SDK passes it at runtime without declaring it: one-tap answers must not be offered.
+  const personOnly =
+    'requiresUserInteraction' in options && options.requiresUserInteraction === true
   return {
     ...(title ? { title } : {}),
     ...(displayName ? { displayName } : {}),
@@ -43,7 +46,8 @@ export function claudePermissionPresentation(
             ...(matchedRuleContent ? { ruleContent: matchedRuleContent } : {})
           }
         }
-      : {})
+      : {}),
+    ...(personOnly ? { personOnly: true } : {})
   }
 }
 

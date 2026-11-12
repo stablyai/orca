@@ -31,8 +31,7 @@ otherwise observable through a server subscription, because stream ids are uniqu
 `screenMount` mounts a component rather than a hook, and `projectMountedScreen` reads back what it
 rendered: the inert primitives it chose, the copy it put on them, the labels it gave them, and the
 crash instead if a reply took it down. A screen that throws is a recording, not a suite failure —
-several reply partitions do exactly that, and refusing to record them would leave the shapes that
-break a screen the only ones this oracle cannot see. The boundary also reports the crash to the
+the boundary records a thrown render so a scenario can observe it. The boundary also reports the crash to the
 effect sink, so a hook mount, whose projection is the hook's own value and never a crash, still
 carries it into a golden: an effect forces a cleanup checkpoint even when no adapter looks.
 
@@ -42,8 +41,6 @@ inert. It renders its children and keeps its props where a projection can read t
 nothing else: no callback it is handed is ever invoked, nothing is measured and no navigation
 happens. `renderedElementProps` is the consequence — an inert list never calls `renderItem`, so the
 data it was handed is the only record of what the screen would have drawn.
-`screen-native-substitutes.test.ts` is the census; it renders every element with a callback prop and
-a render callback as children and fails if either is called.
 
 Nothing is listed ahead of a reader, and that is a rule rather than an oversight. A member
 provisioned before any recording reads it converts a refusal that would have forced a decision into
@@ -102,12 +99,7 @@ non-streaming one names the scenario that has stopped matching.
 
 A listener that throws on a frame is recorded as a `stream-listener-crash` effect rather than
 failing the suite, the same rule the crash boundary holds for a screen and the unhandled-rejection
-window holds for a detached effect. Only three listeners check the payload is an object before
-reading its `type` — the two `runtime.clientEvents` ones and the structured agent session's, which
-guards with `isSubscribeEvent` in `use-mobile-structured-agent-state.ts` — so without this every
-other subscribing family died on the matrix's `result-absent` and `result-null` partitions — the
-two shapes a stream listener is most likely to be wrong about were the only ones the oracle could
-not record. The scenario's own faults
+window holds for a detached effect. The scenario's own faults
 stay loud: a missing subscribe payload, a params mismatch and a closed stream are all raised before
 or after the listener runs, and none of them is caught.
 
@@ -118,7 +110,7 @@ so the projection has a temporal dimension instead of relying on where a checkpo
 Any transition the product schedules for itself is recorded at the time it actually fires: change a
 request deadline or the search debounce by any amount, in either direction, and a recorded number
 moves. Granularity is exact milliseconds, because the fake timers fire at their scheduled time and
-never coalesce; `recording-runner.test.ts` pins a 5 ms deadline settling at exactly `settledAt: 5`.
+never coalesce.
 
 A checkpoint's own clock is not recorded. It is always the sum of the scripted `advance` steps, so
 it is a function of the scenario rather than of the code under test; `run-recording.ts` asserts that
@@ -175,21 +167,13 @@ write, or ahead of a subscribe, moves no list and no golden notices. A subscribe
 of the two, because it publishes synchronously while a request first waits for connected: swapping
 `client.subscribe` and the first `sendRequest` in `use-live-worktree-name.ts` leaves the payload
 order byte-identical and moves only the ordinals.
-Scheduling the journal write in `codex-reset-attempt-journal.ts` on a timer instead of awaiting it
-moved none of the 520 goldens before the ordinal existed and moves two now,
-`codex-reset-credit-consumed` and its reply matrix. A request takes its ordinal at the logical
-`sendRequest` call, not when the physical payload is published, so the two stamps differ whenever
-the send waited for connected. What the ordinal cannot see is a defer shorter than the product's own
-await chain: dropping that `await`, or deferring the write by one microtask, still lands it before
-the send, because resolving the journal's promise chain costs more microtask ticks than the defer
-saved.
 
 `ordinal` replaced `sent`, a count of the requests sent at write time. A request count orders
 payloads and effects against sends, never against each other, so it saw nothing at all in a family
 that sends no requests: `host-worktree-refresh` sends none, every `sent` in its goldens was `0`
 across all eight checkpoints, and moving that file's two initial snapshot reads from after
-`client.subscribe` to before it moved no golden. Under the shared ordinal the same reorder fails
-five — the family's own golden and its four matrix variants. Sender args have three
+`client.subscribe` to before it moved no golden. Under the shared ordinal the same reorder changes
+the family's pilot golden. Sender args have three
 positional slots; absent, undefined and null are distinct `$rpc` tags. Literal objects containing
 `$rpc` are escaped. Only object keys are sorted; array/effect order, options, budgets, settlement
 times and errors stay observable. Errors contain category, message and `isRpcDeliveryUnknown`, never
@@ -233,8 +217,7 @@ old formats.
 A generated variant declares the index where its distinguishing input lands. Checkpoints before
 that index observe steps identical to the base, so `hoistPreludeCheckpoints` records them once in
 a `<base>.prelude` scenario and starts each variant at its own divergence; it asserts each
-variant's pre-divergence prefix matches the base. Reply matrices, interruption schedules and
-lifecycle schedules use it. Checkpoints that merely happen to be equal are never merged: reaching
+variant's pre-divergence prefix matches the base. Interruption and lifecycle schedules use it. Checkpoints that merely happen to be equal are never merged: reaching
 the same state through different inputs is evidence. Sibling schedules already drop their shared
 prefix, so they are unchanged.
 
@@ -244,69 +227,16 @@ so changing the prelude fails the golden it belongs to. The value pool does not 
 per-file and content-addressed, so a prelude entry a later checkpoint re-states is stored once
 and any change to it moves the hash in every checkpoint that reads it.
 
-Family matrices and schedule recordings retain both boundaries. Matrices execute
-raw reply partitions at the scripted sender port; they do not claim malformed-frame coverage
-through direct/relay frame validation. Caches
-are tested by follow-up requests; no private cache maps are inspected.
+## Owned family schedules
 
-Every family runs the eleven partitions in `reply-matrix.ts` at **every reply its base scenario
-scripts**, one golden per site, and nothing is crossed against consumed fields. A frame is a reply
-too, so a subscription's `ready` and each event it carries are sites like any completion — named by
-payload and occurrence, because one subscribe carries many frames and the name alone repeats. Nine
-of the eleven partitions apply at a frame: the two transport rejections are the shapes a _request
-promise_ fails with, and a subscription holds no promise for them to fail. Every success shape is
-stamped `streaming: true`, since that flag is what routes a response to the open stream rather than
-to a retired request id — without it `normal` would be a different shape from the frame
-it replays, and no longer a control. Until frames were sites, `reply-matrix.ts` read only
-`'complete' in step`, so a frame was never varied and a family that only subscribes threw
-`No scripted reply to drive a matrix over`. The partitions are the reply shapes a host can send: a
-normal result, an absent result, `null`, an inner `{ok: false}`
-envelope with a string or object error, an inner envelope missing `ok`, an outer refusal with and
-without a message, `method_not_found`, and a transport rejection with and without a message. Shapes
-that were recorded before and are gone were unreachable: `successResponse` always sets `result`, so
-JSON carries no explicit-undefined slot, and no mounted method's handler returns a number, a string,
-an array, a bare `{}`, or a boolean. `null` stays because `linear.getIssue` returns it for a missing
-issue and the b2 seed is a null result accepted as success.
+`family-recordings.test.ts` runs the selected sibling, interruption and lifecycle schedules in
+`derived-goldens.ts`. These exercise completion order, pending peers and stale owners through the
+actual mounted operations. Blur variants are omitted where the adapter's blur action does nothing.
 
-The message-less refusal and rejection are what separate the two failure paths a migrated call site
-must keep apart: a refusal with no message falls back to the screen's copy, a transport drop with no
-message surfaces its empty message verbatim. With only the message-carrying shapes both produce the
-same text, so collapsing the two catches is invisible. Every source-control family used to carry a
-hand-written `*-empty-message` scenario for exactly that; the partition carries it now.
-
-### Which request a matrix drives
-
-All of them. Selecting one per family was a hardcoded prefix list, and it silently `continue`d past
-any family it did not name — ten of twenty-three, every family the source-control migration added,
-which is why that migration's mutation evidence came down to single hand-written scenarios.
-`replyMatrixSites` takes every completion step in the family's base scenario instead: no judgement
-about which request is the "real" one, and no edit when a domain is added. A family that scripts no
-reply at all throws, and a repeated request name throws, because the divergence would be ambiguous.
-
-A variant answers its own site differently, so the replies scripted after it may never be asked
-for. Those steps are marked `optional` and are answered only if the request is outstanding; the
-sender list in each checkpoint records which ones the operation actually sent.
-
-The `normal` partition replays a result the family already records for that request — the first
-fulfilled reply in scenario order, base first — so no migrator invents a plausible payload per
-domain. `null` and absent do not count, because each is already a partition of its own and
-replaying one would leave the site with no success control. A site whose family records no other
-success fails the suite until it is given a fulfilled scenario or a line in
-`REPLY_MATRIX_NORMAL_RESULT_INVENTORY`, which carries the reply and the reason; an entry whose
-family has since recorded a success fails too, so the list only shrinks. Four sites are on it: both
-legs of the b3 seed, whose single scenario exists to record the defect; the b2 seed, whose only
-recorded success is the null result; and `settings.update`, a best-effort write whose reply
-body no call site reads.
-
-Detached unhandled rejections are captured as effects in a sequential process-scoped window,
-with prior process listeners restored afterward. The known main bug it first recorded is fixed on
-both legs: `new-workspace-runtime-context-null-results-degrade-to-absent` now records a null or
-absent `settings.get` or `ui.get` result degrading the way a reply missing that member does, so
-neither matrix golden carries a property-read TypeError effect any more. That leaves no golden
-recording an unhandled rejection at all, so `unhandled-recording.test.ts` is what pins the capture,
-both the helper and its wiring through `runRecording` into a checkpoint and the cleanup checkpoint:
-without it a refactor could stop emitting the effect and every golden would still compare clean.
-Task-model projections record setter invocations and resulting model values, not native UI.
+The automatic per-reply-site shape matrices have been removed. Their per-caller refusal, malformed
+reply, transport failure and error propagation snapshots are intentionally no longer certified by
+this driver. The surviving pilots and temporal schedules make no equivalent coverage claim.
+Caches are observed through follow-up requests, without reading private cache maps.
 
 ## Commands
 
@@ -323,8 +253,7 @@ only the uncommitted ones.
 
 Recording is deterministic and carries no header, so an unchanged behaviour re-records to the same
 bytes on any machine: recording everything is always safe, and `git diff` shows only what moved.
-Without `--prune`, a golden the manifest stopped deriving is listed and the census test
-(`derived-goldens.test.ts`) keeps failing on it; deleting coverage is always explicit.
+Without `--prune`, a golden the manifest stopped deriving is listed and remains on disk.
 
 Mutants are the defect evidence. `mutants/operation-mutations.ts` holds one anchored source edit
 per adapter family, and every family's recording must change visible state when its mutant is
@@ -431,31 +360,29 @@ What is still not covered: what the count-based raw-port inventory covers instea
 reach `sendRequest`, and how often), native storage, transport skew, and the mutations listed under
 _Known-open holes_ below.
 
-Which subscriptions are covered is no longer stated here. It is held as data in
-`mobile/src/transport/rpc-subscription-inventory.ts`, where every product `client.subscribe` is
-classified as recorded, an unwritten scenario, or walled with the wall named, and
-`rpc-subscription-boundary.test.ts` fails on a new site, a stale entry, a wrong method and a
-`recorded` entry naming a family this manifest does not have. This paragraph is why: it said nine
-sites when there were ten — the count was taken over `mobile/src`, and the host screen's
-`accounts.subscribe` lives under `app/`. A count in prose cannot fail. Today four of the ten are
-recorded, two are unwritten scenarios and four are walled, and the list is what says so.
+Subscription coverage requires a scenario that drives the real consumer. The manifest includes
+notifications, live worktree names, native chat, and host worktree refresh. Structured transcript,
+structured status, and session tab streams still need scenarios. Account streams need native UI
+or multi-host support; terminal and browser streams need device effects the recorder cannot model.
+`rpc-client-ready-stream-release.test.ts` checks release before and after `ready` through both
+direct and relay transports.
 
 The frame plumbing is method-agnostic, so what stops a site is its consumer rather than the runner.
 Blur is unrecorded across all ten subscribing sites: `useFocusEffect` is substituted as `useEffect`,
 so a route's focus cleanup is recorded at unmount and an unsubscribe only a blur would reach is not
-— driving focus needs a substitute, and no recording reads one yet. Four of the nine probes pin
+— driving focus needs a substitute, and no recording reads one yet. Three of the eight probes pin
 behaviour with no demonstrated mutation — the two mixed reject/refusal new-tab orders
-and the home-providers and resume-metadata refresh refusals; they are frozen observations, not
+and the resume-metadata refresh refusal; they are frozen observations, not
 proven defect detectors. `settings.resume-metadata` projects `{}` as its state, so its probe
 observes only sender calls and settlements.
 
 ### Recorded finding: a refused refresh is not handled the same way twice
 
-The five refuse-after-data probes record a `settings.get` read refusing a _refresh_ after a
-success: home providers and task hydration read through `settingsRead`, workspace context, resume
-metadata and repo metadata through `optionalSettingsRead`. Which one a site uses does not change
+The four refuse-after-data probes record a `settings.get` read refusing a _refresh_ after a
+success: task hydration reads through `settingsRead`, workspace context, resume metadata and repo
+metadata through `optionalSettingsRead`. Which one a site uses does not change
 what these probes record — the two share an acceptance and differ only in how they read a null
-result, and a refusal never reaches the reader. Four call sites retain what they had.
+result, and a refusal never reaches the reader. Three call sites retain what they had.
 `use-mobile-tasks-runtime-hydration.tsx` does not: it publishes `{}`, so a refused refresh wipes
 the runtime task settings. That divergence is recorded, not repaired —
 `settings-task-hydration-refuse-after-data.json` is the observation, and changing the behaviour is
@@ -534,7 +461,7 @@ list is the count; a number in this paragraph would be one more thing that canno
   for a session that is already live. Closing it needs an adapter that can attach a terminal
   mid-scenario.
 
-The original settings slice coverage maps nine host-RPC callers in
+The original settings slice coverage maps eight host-RPC callers in
 `settings-recording-coverage.json`; device-preference entries are excluded by coordinator
 instruction. Later manifest additions require new scenarios and remain uncovered until
 those recordings land. This runner does not certify native storage or transport skew.
@@ -553,11 +480,8 @@ the drop happened under, and records a non-empty report as a `reply-salvage` eff
 operation, the method, the decoded variant, the dropped paths and the count. Nothing in the product
 tree changes: the report was already being built and thrown away.
 
-44 of the goldens carried one when this was written, and every other checked read in the corpus decodes its reply
-whole (`grep -l reply-salvage mobile/rpc-foundation/goldens/*.json | wc -l`). The matrix varies the
-envelope a host sends rather than the shape of a row inside a result, so on most families this
-observation pins an absence rather than a recorded drop. What it buys is the next tightening: an element or member schema narrowed so a recorded row stops parsing moves the
-golden even where nothing downstream reads the row. `salvage-observation.test.ts` is what keeps the
+A narrowed element or member schema changes a golden when a recorded row stops parsing, even
+where nothing downstream reads the row. `salvage-observation.test.ts` is what keeps the
 observation itself honest, driving a malformed row and a malformed optional through the real
 `git.status` reply schema, because a refactor that stopped reporting would otherwise leave every
 golden comparing clean.
@@ -599,13 +523,10 @@ deleting its cleanup's `unsubscribeStream()` used to fail one golden, the cutove
 for it, and this observation made it fail seven, so the next builder-less method needs no scenario
 of its own.
 
-An empty set is not recorded, so the corpus stays quiet and a family that starts leaking gains a
-checkpoint. Five goldens report a non-empty set today, and all five are the same non-leak: the two
-`runtime.clientEvents.subscribe` matrices and the `notifications.subscribe` matrix, on every
-partition whose subscribe reply is not a well-formed `ready`. With no `subscriptionId` to unsubscribe with, `disposeServerSubscription` marks
-the record cancelled and keeps it until the id arrives — the retention the per-session registry
-paragraph above describes. `cancelled` is in the observation so those are legible as what they are:
-a product cleanup that never ran records `cancelled: false`, and because the drain precedes the
-read, a cleanup that deferred its close to a timer already due records nothing at all. `flush()`
+An empty set is not recorded. A subscription whose `ready` reply has not arrived has no
+`subscriptionId` to unsubscribe with: `disposeServerSubscription` marks it cancelled and keeps it
+until the id arrives. A product cleanup that never ran records `cancelled: false`. Because the
+drain precedes the read, a cleanup that deferred its close to a timer already due records nothing
+at all. `flush()`
 only runs work due at the current virtual time, so a close parked on a later timer is still
 registered at the read and records `cancelled: false` like any other.

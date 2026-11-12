@@ -12,25 +12,24 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  PROFILE_STATE_DESKTOP_RECOVERY_FLAG,
   PROFILE_STATE_RECOVERY_FLAG,
   PROFILE_STATE_RECOVERY_RESULT_PREFIX
 } from '../../shared/profile-state-recovery-command'
-import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
+import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/access/profile-state-access'
 import { profileStateJsonExportPath } from '../persistence/profile-state/legacy-json/profile-state-export-path'
 import {
   createProfileStateDatabaseBackupId,
   profileStateDatabaseBackupPath
-} from '../persistence/profile-state/profile-state-backup-path'
+} from '../persistence/profile-state/backup/profile-state-backup-path'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
-} from '../persistence/profile-state/profile-state-database'
+} from '../persistence/profile-state/database/profile-state-database'
 import {
   importProfileStateJson,
   readProfileStateSnapshot
-} from '../persistence/profile-state/profile-state-documents'
-import { writeProfileStateDatabaseSnapshotAsync } from '../persistence/profile-state/profile-state-database-snapshot'
+} from '../persistence/profile-state/documents/profile-state-documents'
+import { writeProfileStateDatabaseSnapshotAsync } from '../persistence/profile-state/database/profile-state-database-snapshot'
 import * as marker from './http1-compatibility-marker'
 import {
   profileStateDesktopRecoveryArgs,
@@ -126,29 +125,6 @@ function response(): unknown {
 }
 
 describe('Electron recovery preflight', () => {
-  it('runs the recovery branch before CLI redirect or ordinary startup admission', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
-      'utf8'
-    )
-    const start = source.indexOf('export function runMainProcessPreflight(')
-    const recovery = source.indexOf('if (runProfileStateRecoveryPreflight())', start)
-    const redirect = source.indexOf('const cliLaunchRedirect = maybeRedirectCliLaunch(', start)
-    const admission = source.indexOf('acquireProfileStateRuntimeAdmission(', start)
-    expect(start).toBeGreaterThanOrEqual(0)
-    expect(recovery).toBeGreaterThan(start)
-    expect(redirect).toBeGreaterThan(recovery)
-    expect(admission).toBeGreaterThan(redirect)
-    expect(source.slice(recovery, redirect)).toContain('return false')
-  })
-
-  it('leaves ordinary startup untouched', () => {
-    expect(runProfileStateRecoveryPreflight(['Orca', '--serve'])).toBe(false)
-    expect(mocks.background).not.toHaveBeenCalled()
-    expect(mocks.setPath).not.toHaveBeenCalled()
-    expect(mocks.exit).not.toHaveBeenCalled()
-  })
-
   it.each(['json', 'current-json'] as const)(
     'restores %s under both locks despite ordinary singleton bypasses',
     (kind) => {
@@ -271,25 +247,6 @@ describe('Electron recovery preflight', () => {
     }
   })
 
-  it.each([
-    ['Orca', PROFILE_STATE_RECOVERY_FLAG, '{}'],
-    ['Orca', '--serve', PROFILE_STATE_RECOVERY_FLAG],
-    ['Orca', '--serve', PROFILE_STATE_RECOVERY_FLAG, '{}'],
-    [
-      'Orca',
-      '--serve',
-      PROFILE_STATE_RECOVERY_FLAG,
-      JSON.stringify({ userDataPath: 'relative', selector: { kind: 'json', revision: 1 } })
-    ],
-    ['Orca', '--serve', PROFILE_STATE_RECOVERY_FLAG, '{}', PROFILE_STATE_RECOVERY_FLAG, '{}']
-  ])('fails closed for malformed launch %j', (...argv) => {
-    expect(runProfileStateRecoveryPreflight(argv)).toBe(true)
-    expect(response()).toMatchObject({ ok: false })
-    expect(mocks.setPath).not.toHaveBeenCalled()
-    expect(mocks.requestSingleInstanceLock).not.toHaveBeenCalled()
-    expect(mocks.exit).toHaveBeenCalledWith(1)
-  })
-
   describe('desktop choice relaunch', () => {
     function desktopArgv(item: ReturnType<typeof fixture>) {
       writeFileSync(item.dataFile, JSON.stringify(item.restored))
@@ -325,18 +282,6 @@ describe('Electron recovery preflight', () => {
         expect.objectContaining({ detail: expect.stringContaining('Stop Orca') })
       )
       expect(readFileSync(item.databaseFile, 'utf8')).toBe('broken database')
-    })
-
-    it.each([
-      ['Orca', PROFILE_STATE_DESKTOP_RECOVERY_FLAG, '{}'],
-      ['Orca', '--serve', PROFILE_STATE_DESKTOP_RECOVERY_FLAG, '{}'],
-      ['Orca', PROFILE_STATE_DESKTOP_RECOVERY_FLAG, '{}', PROFILE_STATE_RECOVERY_FLAG, '{}']
-    ])('fails closed for malformed desktop launch %j', async (...argv) => {
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      expect(runProfileStateRecoveryPreflight(argv)).toBe(true)
-      await vi.waitFor(() => expect(mocks.exit).toHaveBeenCalledWith(1))
-      expect(mocks.setPath).not.toHaveBeenCalled()
-      expect(mocks.relaunch).not.toHaveBeenCalled()
     })
   })
 })

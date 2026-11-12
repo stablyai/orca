@@ -1,29 +1,33 @@
-// Claude JSONL line → NativeChatMessage decoder.
-
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
   type NativeChatEditPatch,
   type NativeChatEditPatchHunk,
   type NativeChatMessage
-} from '../../shared/native-chat-types'
+} from '../../shared/native-chat/native-chat-types'
 import {
   asRecord,
   extractString,
   parseJsonObject,
   timestampMs
 } from '../ai-vault/session-scanner-values'
-import { imageSourcePathFromText } from '../../shared/native-chat-image-transcript-markers'
+import { imageSourcePathFromText } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { claudeContentBlocks } from './transcript-record-blocks'
+import { isKnownRasterImageMimeType } from '../../shared/file-preview/raster-image-preview-limits'
 import { unwrapClaudePastedContentBlock } from '../../shared/claude-pasted-content'
+import { unwrapClaudeBashInputBlock } from '../../shared/claude-bash-input'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
+import { claudeStopHookFeedbackRow } from '../claude/claude-stop-hook-feedback'
+import { structuredAgentSessionStatusBlock } from '../../shared/agent-session/view/structured-agent-session-status-block'
+import {
+  claudeMessageWithoutSyntheticText,
+  isClaudeInjectedUserMessage
+} from '../claude/claude-internal-message-content'
 
 const MAX_EDIT_PATCH_HUNKS = 40
 const MAX_EDIT_PATCH_HUNK_LINES = 400
 
-/** Claude reports an edit as a snippet pair on the call, which cannot locate the
- *  change in the file. The result record carries the hunks it resolved against
- *  the real file, so keep them for the renderer's line-number gutter. */
+/** Render resolved result hunks; call-side snippet pairs cannot supply real file line numbers. */
 function claudeEditPatch(record: Record<string, unknown>): NativeChatEditPatch | null {
   const result = asRecord(record.toolUseResult)
   const raw = result?.structuredPatch
@@ -58,8 +62,6 @@ function claudeEditPatch(record: Record<string, unknown>): NativeChatEditPatch |
   return { ...(filePath ? { filePath } : {}), hunks }
 }
 
-/** Attaches the resolved hunks to the record's tool result, which is the only
- *  block in a Claude result turn. */
 function withEditPatch(blocks: NativeChatBlock[], patch: NativeChatEditPatch): NativeChatBlock[] {
   let attached = false
   return blocks.map((block) => {
@@ -75,7 +77,11 @@ export function decodeClaudeTranscriptLine(
   line: string,
   fallbackId: string
 ): NativeChatMessage | null {
-  const record = parseJsonObject(line)
+  const parsed = parseJsonObject(line)
+  if (!parsed) {
+    return null
+  }
+  const record = claudeMessageWithoutSyntheticText(claudeQueuedPromptAsUserRecord(parsed) ?? parsed)
   if (!record) {
     return null
   }
@@ -85,12 +91,11 @@ export function decodeClaudeTranscriptLine(
   }
   const timestamp = parseTimestamp(record.timestamp)
   const recordMessageId = extractString(record.uuid) ?? fallbackId
-  // Why: the row link pairs a local command's reply with its command row.
+  // parentUuid pairs local command output with its command row.
   const parentUuid = extractString(record.parentUuid)
   const parent = parentUuid ? { parentId: parentUuid } : {}
   if (claudeInterruptedMessageId(record)) {
-    // Why: keep Claude's injected boilerplate out of the user-bubble path while
-    // preserving the interruption as a quiet, replayable conversation status.
+    // Render injected interruption text as quiet status rather than a user bubble.
     return {
       id: recordMessageId,
       role: 'system',
@@ -107,16 +112,13 @@ export function decodeClaudeTranscriptLine(
   if (decodedBlocks.length === 0) {
     return null
   }
-  // Why: Claude structurally marks injected turns, but tool-result records are
-  // genuine output and must remain visible even when the containing turn is meta.
-  const isInjectedUserTurn =
-    role === 'user' &&
-    (record.isMeta === true || record.isSynthetic === true || record.isCompactSummary === true)
-  // Why image-source text survives the filter: Claude records a pasted image as a
-  // companion turn marked `isMeta`, holding one `[Image: source: <path>]` block per
-  // image. Dropping it left the prompt turn with no trace of its attachments — the
-  // base64 blocks on the prompt itself carry no url/path and are dropped too — so a
-  // turn with images rendered with no images at all.
+  // Meta user turns may still contain genuine tool output.
+  const isInjectedUserTurn = isClaudeInjectedUserMessage(record)
+  const stopHookFeedback = isInjectedUserTurn ? claudeStopHookFeedbackMessage(decodedBlocks) : null
+  if (stopHookFeedback) {
+    return { id: recordMessageId, timestamp, source: 'transcript', ...stopHookFeedback, ...parent }
+  }
+  // Keep image-source companions despite isMeta: prompt base64 has no path and cannot render attachments.
   const blocks = isInjectedUserTurn
     ? isImageSourceRecord(decodedBlocks)
       ? decodedBlocks
@@ -128,16 +130,69 @@ export function decodeClaudeTranscriptLine(
   const messageId = extractString(record.uuid) ?? extractString(message?.id)
   return {
     id: messageId ?? fallbackId,
-    role: claudeMessageRole(role, blocks),
-    blocks: role === 'user' ? blocks.map(unwrapClaudePastedContentBlock) : blocks,
+    role: claudeMessageRole(role, blocks, message?.content),
+    // Decode ! command echoes so harness filtering cannot hide them and strand the local echo.
+    blocks:
+      role === 'user'
+        ? blocks.map((block) => unwrapClaudeBashInputBlock(unwrapClaudePastedContentBlock(block)))
+        : blocks,
     timestamp,
     source: 'transcript',
     ...parent
   }
 }
 
-// Keep only genuine image companion records; a marker mixed with prose must
-// remain an injected turn (or be dropped), never become an image-source turn.
+/** Mid-turn human prompts exist only as queued_command attachments; decode them to reconcile local echoes. */
+function claudeQueuedPromptAsUserRecord(
+  record: Record<string, unknown>
+): Record<string, unknown> | null {
+  if (record.type !== 'attachment') {
+    return null
+  }
+  const attachment = asRecord(record.attachment)
+  if (attachment?.type !== 'queued_command' || attachment.commandMode !== 'prompt') {
+    return null
+  }
+  // Legacy prompt-mode queue entries omit origin and are human-authored.
+  const originKind = asRecord(attachment.origin)?.kind
+  if (originKind !== undefined && originKind !== 'human') {
+    return null
+  }
+  const prompt = attachment.prompt
+  if (typeof prompt !== 'string' && !Array.isArray(prompt)) {
+    return null
+  }
+  const content = Array.isArray(prompt) ? prompt.map(queuedPromptImageAsDataUrl) : prompt
+  return { ...record, type: 'user', message: { role: 'user', content } }
+}
+
+// Queued prompts get no image-source companion row; their inline base64 is the only image record.
+function queuedPromptImageAsDataUrl(item: unknown): unknown {
+  const record = asRecord(item)
+  const source = asRecord(record?.source)
+  const mediaType = extractString(source?.media_type) ?? undefined
+  const data = extractString(source?.data)
+  if (
+    record?.type !== 'image' ||
+    source?.type !== 'base64' ||
+    !data ||
+    !isKnownRasterImageMimeType(mediaType)
+  ) {
+    return item
+  }
+  return { ...record, source: { url: `data:${mediaType};base64,${data}` } }
+}
+
+function claudeStopHookFeedbackMessage(
+  blocks: NativeChatBlock[]
+): Pick<NativeChatMessage, 'role' | 'blocks'> | null {
+  const [block] = blocks
+  const row =
+    blocks.length === 1 && block?.type === 'text' ? claudeStopHookFeedbackRow(block.text) : null
+  return row ? { role: 'system', blocks: [structuredAgentSessionStatusBlock(row)] } : null
+}
+
+// Mixed prose/markers are injected turns, never image-source companions.
 function isImageSourceRecord(blocks: NativeChatBlock[]): boolean {
   return (
     blocks.length > 0 &&
@@ -145,20 +200,54 @@ function isImageSourceRecord(blocks: NativeChatBlock[]): boolean {
   )
 }
 
-// Claude marks reasoning via `thinking` content blocks; when a message is made
-// up solely of reasoning, surface it as a reasoning-role message.
 function claudeMessageRole(
   role: 'user' | 'assistant',
-  blocks: NativeChatBlock[]
+  blocks: NativeChatBlock[],
+  content: unknown
 ): NativeChatMessage['role'] {
   if (role === 'user') {
     const onlyToolResults = blocks.every((block) => block.type === 'tool-result')
     return onlyToolResults && blocks.length > 0 ? 'tool' : 'user'
   }
-  return role
+  return isThinkingOnlyContent(content) ? 'reasoning' : role
+}
+
+// Decoded thinking becomes a text block, so classify from the raw content parts.
+function isThinkingOnlyContent(content: unknown): boolean {
+  return (
+    Array.isArray(content) &&
+    content.length > 0 &&
+    content.every((part) => {
+      const type = asRecord(part)?.type
+      return type === 'thinking' || type === 'redacted_thinking'
+    })
+  )
 }
 
 function parseTimestamp(value: unknown): number | null {
   const parsed = timestampMs(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+/** Anything but a typed record with no message, or a user record Claude flags as meta, may be a
+ *  turn: what a transcript nothing was sent in lacks. */
+export function mayBeClaudeConversationRecord(line: string): boolean {
+  let record: unknown
+  try {
+    record = JSON.parse(line)
+  } catch {
+    return true
+  }
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    return true
+  }
+  // A local command's caveat or output; the decoder still keeps any meta record it can show.
+  if ('isMeta' in record && record.isMeta === true && 'type' in record && record.type === 'user') {
+    return false
+  }
+  if ('message' in record) {
+    return true
+  }
+  const type = 'type' in record ? record.type : undefined
+  return typeof type !== 'string' || !type.trim() || type === 'user' || type === 'assistant'
 }

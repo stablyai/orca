@@ -12,14 +12,9 @@ import { useSourceControlFileProjection } from './use-file-projection'
 import { useSourceControlRowOpening } from './use-row-opening'
 import type { SourceControlWorktreeContext } from './use-worktree-context'
 
-/**
- * Projects git status and branch compare into the rows the panel renders, and layers the
- * interactions that operate on those rows: submodule expansion, diff opening, selection, bulk
- * staging and the git history feed.
- */
 export function useSourceControlFileListing({
   activeRemoteActionSequence,
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   branchEntries,
   branchName,
@@ -44,7 +39,7 @@ export function useSourceControlFileListing({
   worktreePath
 }: {
   activeRemoteActionSequence: number | null
-  activeRepoSettings: SourceControlWorktreeContext['activeRepoSettings']
+  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktreeId: string | null
   branchEntries: SourceControlWorktreeContext['branchEntries']
   branchName: string
@@ -72,7 +67,7 @@ export function useSourceControlFileListing({
     useSourceControlSubmoduleStatus({
       activeWorktreeId,
       worktreePath,
-      activeRepoSettings,
+      activeRepoTarget,
       entries
     })
   const {
@@ -80,7 +75,6 @@ export function useSourceControlFileListing({
     fileFilterState,
     normalizedFilter,
     isGitHistoryVisible,
-    filteredGrouped,
     displaySections,
     unfilteredDisplaySectionsById,
     filteredBranchEntries,
@@ -103,9 +97,10 @@ export function useSourceControlFileListing({
     collapsedSections
   })
   const { gitHistoryState, refreshGitHistory, refreshGitHistoryRef } = useSourceControlGitHistory({
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     worktreePath,
+    branchName,
     compareBaseRef,
     isFolder,
     isBranchVisible,
@@ -114,13 +109,23 @@ export function useSourceControlFileListing({
     worktreeMap
   })
 
-  // Why: modifier-click keeps the current pane intact by opening the file in a fresh split to the right.
+  const visibleBranchRowKeys = useMemo(() => {
+    if (collapsedSections.has('branch')) {
+      return []
+    }
+    return sourceControlViewMode === 'tree'
+      ? visibleBranchTreeRows.filter((node) => node.type === 'file').map((node) => node.key)
+      : filteredBranchEntries.map((entry) => `branch::${entry.path}`)
+  }, [collapsedSections, sourceControlViewMode, visibleBranchTreeRows, filteredBranchEntries])
+
+  // Modifier-click opens a right split to preserve the current pane.
   const { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff } =
     useSourceControlRowOpening({
       isMac,
       activeWorktreeId,
       worktreePath,
       visibleSelectionEntries,
+      visibleBranchRowKeys,
       branchSummary
     })
 
@@ -136,12 +141,10 @@ export function useSourceControlFileListing({
       containerRef: sourceControlRef
     })
 
-  // clear selection on list/tree presentation change
   useEffect(() => {
     clearSelection()
   }, [sourceControlViewMode, clearSelection])
 
-  // Clear selection on worktree or tab change
   useEffect(() => {
     clearSelection()
   }, [activeWorktreeId, rightSidebarTab, clearSelection])
@@ -166,7 +169,7 @@ export function useSourceControlFileListing({
   } = useSourceControlBulkActions({
     selectedKeys,
     flatEntriesByKey,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     worktreePath,
     grouped,
@@ -205,7 +208,6 @@ export function useSourceControlFileListing({
     expandedSubmoduleKeys,
     fileFilterState,
     filteredBranchEntries,
-    filteredGrouped,
     flatEntriesByKey,
     gitHistoryState,
     grouped,

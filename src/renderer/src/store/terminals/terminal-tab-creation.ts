@@ -1,105 +1,112 @@
-import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/zcode-missing-tui-notice'
-import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { isValidHostTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { getNextTerminalOrdinal } from '../../../../shared/workspace-layout/terminal-tab-ordinal'
-import { emptyLayoutSnapshot, singlePaneLayoutSnapshot } from '../slices/terminal-helpers'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { resolveTerminalCreatedShell } from './terminal-created-shell'
+import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/provider-notices/zcode-capability/zcode-missing-tui-notice'
+import { clearWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
-  buildOrphanTerminalCleanupPatch,
+  isValidHostTerminalTabId,
+  isValidMirroredHostTerminalTabId
+} from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
+import { getNextTerminalOrdinal } from '../../../../shared/workspace-layout/terminal-topology/terminal-tab-ordinal'
+import { singlePaneLayoutSnapshot } from './terminal-single-pane-layout'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
+import {
+  buildOrphanTerminalCompanionCleanupPatch,
   getOrphanTerminalIds
-} from '../slices/terminal-orphan-helpers'
+} from './terminal-orphan-cleanup'
 import {
-  ensureGroup,
+  ensureWorktreeGroup,
   findTabByEntityInGroup,
-  pushRecentTabId,
-  sanitizeRecentTabIds,
   updateGroup
-} from '../slices/tab-group-state'
-import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { ownsGlobalSelection } from '../global-selection-owner'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+} from '../slices/tabs/tab-group-state'
+import { pushRecentTabId, sanitizeRecentTabIds } from '../slices/tabs/tab-selection-history'
+import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-groups/tab-order'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { emptySplitGroup, splitGroupEntries } from '../slices/tabs/tabs-group-actions'
+import { ownsGlobalSelection } from '../workspaces/selection/global-selection-owner'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
-  getRemoteConnectionIdForWorktree,
-  resolveCreatedTabShellOverride,
-  worktreeUsesWslPath
-} from './terminal-workspace-routing'
-type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
-
-function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupCommand {
-  // Why: launchToken is only meaningful for tracked launch-config reuse; plain startup commands must not mint a synthetic token.
-  const launchToken = startup.launchConfig
-    ? (startup.launchToken ?? createBrowserUuid())
-    : undefined
-  return {
-    ...startup,
-    ...(launchToken ? { launchToken } : {})
-  }
-}
+  recordCreatedTerminalTabInLayoutOwner,
+  terminalTabCreateCommand,
+  withMainTerminalFacts
+} from './terminal-tab-create-through-layout-owner'
+import { normalizeTabStartupCommand } from './terminal-startup-queues'
+import { replaceRecordEntries, replaceTabBuckets } from '../keyed-record-transitions'
+import { applyRecordOperations } from './terminal-companion-record-operations'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import type { AppState } from '../types'
 
 export function createTerminalTabCreationActions(
   set: TerminalStoreSet,
-  get: TerminalStoreGet
+  get: TerminalStoreGet,
+  subscribe: (listener: (state: AppState) => void) => () => void
 ): Pick<TerminalSlice, 'createTab'> {
   return {
     createTab: (worktreeId, targetGroupId, shellOverride, options) => {
       let tab!: TerminalTab
-      set((s) => {
+      const split = options?.split
+      const splitGroupId = split ? createBrowserUuid() : undefined
+      set((current) => {
+        const s = current
+        // The split's per-worktree group, layout and focus; each record is built once in the patch below.
+        const splitEntries =
+          split && splitGroupId
+            ? splitGroupEntries(
+                current,
+                worktreeId,
+                split,
+                emptySplitGroup(worktreeId, splitGroupId)
+              )
+            : null
+        const worktreeGroups = splitEntries?.groups ?? current.groupsByWorktree[worktreeId]
+        const worktreeActiveGroupId =
+          splitEntries?.activeGroupId ?? current.activeGroupIdByWorktree[worktreeId]
+        const worktreeLayout = splitEntries?.layout ?? current.layoutByWorktree[worktreeId]
+        const requestedGroupId = splitGroupId ?? targetGroupId
         const orphanTerminalIds = getOrphanTerminalIds(s, worktreeId)
-        const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(s, worktreeId, orphanTerminalIds)
+        // Seam records are built once below from the orphan IDs; this cleans only the orphans' caches.
+        const orphanCleanupPatch = buildOrphanTerminalCompanionCleanupPatch(
+          s,
+          worktreeId,
+          orphanTerminalIds
+        )
         const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
           (entry) => !orphanTerminalIds.has(entry.id)
         )
-        // Why: honor a caller-supplied tab id but mint on collision — aliasing two PTYs to one id corrupts agent-status routing. See docs/cli-terminal-hook-pane-key.md.
-        // Why: only honor a non-empty trimmed hint; useIpcEvents spreads `id` whenever tabId !== undefined, so a stray '' would break paneKey routing.
+        // Trim ID hints: IPC can include empty IDs, which break pane-key routing.
         const trimmedHint = typeof options?.id === 'string' ? options.id.trim() : ''
-        const hintedId =
-          trimmedHint.length > 0 && isValidHostTerminalTabId(trimmedHint) ? trimmedHint : undefined
-        const idCollides =
+        // Why: `web-terminal-` ids are reserved for mirrored host tabs, so an IPC-spread hint must not take one.
+        const hintIsValid = options?.mirroredHostTab
+          ? isValidMirroredHostTerminalTabId(trimmedHint)
+          : isValidHostTerminalTabId(trimmedHint)
+        const hintedId = trimmedHint.length > 0 && hintIsValid ? trimmedHint : undefined
+        // Why: the caller's PTY routes agent status by this id, so a fresh id would orphan it and aliasing would corrupt another tab's.
+        if (
           hintedId !== undefined &&
           Object.values(s.tabsByWorktree).some((tabs) =>
             tabs.some((entry) => entry.id === hintedId)
           )
-        if (idCollides) {
-          console.warn(
-            `[createTab] tabId hint ${hintedId} already exists; minting a fresh id (hook attribution will degrade for this terminal)`
-          )
+        ) {
+          throw new Error(`Terminal tab ${hintedId} already exists`)
         }
-        const id = hintedId !== undefined && !idCollides ? hintedId : createBrowserUuid()
+        const id = hintedId ?? createBrowserUuid()
         const requestedInitialLeafId =
           options?.initialLeafId && isTerminalLeafId(options.initialLeafId)
             ? options.initialLeafId
             : undefined
-        // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
-        // Why a bare leaf id too: a host launch lays out its pane before the process it attaches to exists.
-        const initialLeafId =
-          options?.initialPtyId || options?.pendingStartup || requestedInitialLeafId
-            ? (requestedInitialLeafId ?? createBrowserUuid())
-            : undefined
+        // Why: name the first pane at creation so the saved layout is never empty; the pane mounts and spawns into this leaf.
+        const initialLeafId = requestedInitialLeafId ?? createBrowserUuid()
         const shouldActivate = options?.activate !== false
         const nextOrdinal = getNextTerminalOrdinal(existing)
         const defaultTitle = `Terminal ${nextOrdinal}`
         const quickCommandLabel = options?.quickCommandLabel?.trim()
         const startupCwd = options?.startupCwd
-        const remoteConnectionId = getRemoteConnectionIdForWorktree(s, worktreeId)
-        const isRemoteWorktree = Boolean(remoteConnectionId)
-        const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
-        const createdShellOverride = resolveCreatedTabShellOverride(
+        const facts = options?.executionFacts
+        const { folder, createdShellOverride } = resolveTerminalCreatedShell(
+          s,
+          worktreeId,
           shellOverride,
-          s.settings?.terminalWindowsShell,
-          // Why: SSH PTYs ignore local Windows shell selection; a local shell icon would mislabel a remote terminal.
-          isRemoteWorktree,
-          remoteConnectionId
-            ? ((s.sshConnectionStates.get(remoteConnectionId)
-                ?.remotePlatform as NodeJS.Platform | null) ?? null)
-            : null,
-          // Why: new terminals enter the worktree's repo-scoped WSL distro even when the global Windows shell is PowerShell/cmd.exe.
-          isWslWorktree,
-          isRemoteWorktree || options?.forceHostRuntime
-            ? undefined
-            : getLocalProjectExecutionRuntimeContext(s, worktreeId)
+          options,
+          facts
         )
         tab = {
           id,
@@ -119,8 +126,12 @@ export function createTerminalTabCreationActions(
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
           ...(options?.agentLaunchPane ? { agentLaunchPane: options.agentLaunchPane } : {}),
-          // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
+          // Tag click-driven spawn so bind cannot reorder Recent/Smart via activity/sortEpoch.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
+        }
+        // Switch point: a tab main already made is drawn with main's creation facts.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          tab = withMainTerminalFacts(tab)
         }
         if (options?.launchAgent === 'zcode') {
           // Why here: this is where a ZCode launch is first known, and it runs before the
@@ -128,20 +139,21 @@ export function createTerminalTabCreationActions(
           void warnIfZCodeCannotOpenSession()
         }
         const validTargetGroupId =
-          targetGroupId &&
-          s.groupsByWorktree[worktreeId]?.some((group) => group.id === targetGroupId)
-            ? targetGroupId
+          requestedGroupId && worktreeGroups?.some((group) => group.id === requestedGroupId)
+            ? requestedGroupId
             : undefined
-        const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
-          s.groupsByWorktree,
-          s.activeGroupIdByWorktree,
+        // Per-worktree group result; the records are built once in the patch below.
+        const { group, created: createdGroup } = ensureWorktreeGroup(
+          worktreeGroups,
           worktreeId,
-          validTargetGroupId ?? s.activeGroupIdByWorktree[worktreeId]
+          validTargetGroupId ?? worktreeActiveGroupId
         )
-        const nextActiveGroupIdByWorktree =
+        const nextActiveGroupId =
           shouldActivate && validTargetGroupId
-            ? { ...activeGroupIdByWorktree, [worktreeId]: validTargetGroupId }
-            : activeGroupIdByWorktree
+            ? validTargetGroupId
+            : createdGroup
+              ? group.id
+              : worktreeActiveGroupId
         const existingUnifiedTabs = s.unifiedTabsByWorktree[worktreeId] ?? []
         const existingTerminalTab = findTabByEntityInGroup(
           s.unifiedTabsByWorktree,
@@ -150,7 +162,7 @@ export function createTerminalTabCreationActions(
           id,
           'terminal'
         )
-        const groupsForWorktree = groupsByWorktree[worktreeId] ?? []
+        const groupsForWorktree = createdGroup ? [group] : (worktreeGroups ?? [])
         const cleanedGroups =
           orphanTerminalIds.size === 0
             ? groupsForWorktree
@@ -185,6 +197,7 @@ export function createTerminalTabCreationActions(
           groupId: group.id,
           worktreeId,
           contentType: 'terminal' as const,
+          ...(facts || folder ? { executionHostId: facts?.hostId ?? folder?.hostId } : {}),
           label: tab.title,
           ...(tab.quickCommandLabel?.trim()
             ? { quickCommandLabel: tab.quickCommandLabel.trim() }
@@ -208,35 +221,39 @@ export function createTerminalTabCreationActions(
         const nextActiveTabIdForWorktree = shouldActivate
           ? tab.id
           : (cleanedActiveTabIdForWorktree ?? cleanedGroupActiveTabId ?? tab.id)
+        // Against the updater's state: the orphan cleanup's per-tab deletes, in its order, then the created tab.
+        const orphanDeletes = [...orphanTerminalIds].map((orphanId) => [orphanId, null] as const)
         return {
           ...orphanCleanupPatch,
-          tabsByWorktree: {
-            ...orphanCleanupPatch.tabsByWorktree,
-            [worktreeId]: [...existing, tab]
-          },
+          tabsByWorktree: replaceTabBuckets(current.tabsByWorktree, [
+            [worktreeId, [...existing, tab]]
+          ]),
           // Why: publish the unified tab atomically with the runtime tab so a transient legacy mount can't race the split host.
-          unifiedTabsByWorktree: {
-            ...s.unifiedTabsByWorktree,
-            [worktreeId]: existingTerminalTab
-              ? existingUnifiedTabs
-              : [...existingUnifiedTabs, unifiedTab]
-          },
-          groupsByWorktree: {
-            ...groupsByWorktree,
-            [worktreeId]: updateGroup(cleanedGroups, {
-              ...cleanedTargetGroup,
-              activeTabId: shouldActivate
-                ? unifiedTab.id
-                : (cleanedGroupActiveTabId ?? unifiedTab.id),
-              tabOrder: nextGroupOrder,
-              recentTabIds: nextRecent
-            })
-          },
-          activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-          layoutByWorktree: {
-            ...s.layoutByWorktree,
-            [worktreeId]: s.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
-          },
+          unifiedTabsByWorktree: replaceTabBuckets(current.unifiedTabsByWorktree, [
+            [
+              worktreeId,
+              existingTerminalTab ? existingUnifiedTabs : [...existingUnifiedTabs, unifiedTab]
+            ]
+          ]),
+          groupsByWorktree: replaceRecordEntries(current.groupsByWorktree, [
+            [
+              worktreeId,
+              updateGroup(cleanedGroups, {
+                ...cleanedTargetGroup,
+                activeTabId: shouldActivate
+                  ? unifiedTab.id
+                  : (cleanedGroupActiveTabId ?? unifiedTab.id),
+                tabOrder: nextGroupOrder,
+                recentTabIds: nextRecent
+              })
+            ]
+          ]),
+          activeGroupIdByWorktree: applyRecordOperations(current.activeGroupIdByWorktree, [
+            [worktreeId, nextActiveGroupId ?? null]
+          ]),
+          layoutByWorktree: replaceRecordEntries(current.layoutByWorktree, [
+            [worktreeId, worktreeLayout ?? { type: 'leaf', groupId: group.id }]
+          ]),
           activeTabId:
             shouldActivate && ownsGlobalSelection(s, worktreeId)
               ? tab.id
@@ -245,30 +262,39 @@ export function createTerminalTabCreationActions(
             ...orphanCleanupPatch.activeTabIdByWorktree,
             [worktreeId]: nextActiveTabIdForWorktree
           },
-          ptyIdsByTabId: {
-            ...orphanCleanupPatch.ptyIdsByTabId,
-            [tab.id]: options?.initialPtyId ? [options.initialPtyId] : []
-          },
-          pendingStartupByTabId: options?.pendingStartup
-            ? {
-                ...orphanCleanupPatch.pendingStartupByTabId,
-                [tab.id]: normalizeTabStartupCommand(options.pendingStartup)
-              }
-            : orphanCleanupPatch.pendingStartupByTabId,
+          ptyIdsByTabId: applyRecordOperations(current.ptyIdsByTabId, [
+            ...orphanDeletes,
+            [tab.id, options?.initialPtyId ? [options.initialPtyId] : []]
+          ]),
+          runtimePaneTitlesByTabId: applyRecordOperations(
+            current.runtimePaneTitlesByTabId,
+            orphanDeletes
+          ),
+          pendingStartupByTabId: applyRecordOperations(current.pendingStartupByTabId, [
+            ...orphanDeletes,
+            ...(options?.pendingStartup
+              ? [[tab.id, normalizeTabStartupCommand(options.pendingStartup)] as const]
+              : [])
+          ]),
           automaticAgentResumeClaimsByTabId: options?.automaticResumeClaim
             ? {
                 ...orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
                 [tab.id]: options.automaticResumeClaim
               }
             : orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
-          terminalLayoutsByTabId: {
-            ...orphanCleanupPatch.terminalLayoutsByTabId,
-            [tab.id]: initialLeafId
-              ? singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)
-              : emptyLayoutSnapshot()
-          }
+          terminalLayoutsByTabId: applyRecordOperations(current.terminalLayoutsByTabId, [
+            ...orphanDeletes,
+            [tab.id, singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)]
+          ])
         }
       })
+      // Switch point: main writes the tab under these ids before any later command names it.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        recordCreatedTerminalTabInLayoutOwner(get(), terminalTabCreateCommand(get(), tab), {
+          tab,
+          store: { getState: get, setState: (patch) => set(patch), subscribe }
+        })
+      }
       if (options?.initialPtyId) {
         // Why: a tab born with a live PTY (CLI/runtime create) wakes the workspace like any other bind.
         clearWorktreeSleepIntent(worktreeId)
@@ -277,6 +303,9 @@ export function createTerminalTabCreationActions(
         options?.recordInteraction ?? (!options?.pendingActivationSpawn && !options?.initialPtyId)
       if (shouldRecordInteraction) {
         get().recordFeatureInteraction?.('terminal-tabs')
+      }
+      if (splitGroupId) {
+        get().recordFeatureInteraction?.('terminal-panes')
       }
       return tab
     }

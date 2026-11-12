@@ -1,8 +1,9 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-board-status-label'
 import type { DashboardCard, DashboardFilterOption } from '../../../../shared/dashboard-snapshot'
 import type { DashboardReviewFilter } from './agent-board-filtering'
 
-/** Option rows and labels for the shared dashboard filter menu. */
 export type FilterOption = { id: string; label: string; count: number; color?: string }
 
 function countBy(
@@ -35,12 +36,19 @@ export function workspaceStatusOptions(
     }
     options.set(card.workspaceStatusId, {
       id: card.workspaceStatusId,
-      label: card.workspaceStatusLabel ?? card.workspaceStatusId,
+      label: dashboardWorkspaceStatusLabel(card),
       color: card.workspaceStatusColor,
       count: counts.get(card.workspaceStatusId) ?? 0
     })
   }
   return [...options.values()]
+}
+
+export function dashboardWorkspaceStatusLabel(
+  card: Pick<DashboardCard, 'workspaceStatusId' | 'workspaceStatusLabel'>
+): string {
+  const id = card.workspaceStatusId ?? ''
+  return translateWorkspaceBoardStatusLabel({ id, label: card.workspaceStatusLabel ?? id })
 }
 
 export function projectOptions(
@@ -79,17 +87,17 @@ export const REVIEW_OPTIONS: readonly DashboardReviewFilter[] = [
   'none'
 ]
 
-export function reviewStateLabel(state: DashboardReviewFilter): string {
+export function reviewStateLabel(state: DashboardReviewFilter, t: Translate = translate): string {
   switch (state) {
     case 'open':
-      return translate('dashboardPopout.filters.review.open', 'Open')
+      return t('dashboardPopout.filters.review.open', 'Open')
     case 'draft':
-      return translate('dashboardPopout.filters.review.draft', 'Draft')
+      return t('dashboardPopout.filters.review.draft', 'Draft')
     case 'merged':
-      return translate('dashboardPopout.filters.review.merged', 'Merged')
+      return t('dashboardPopout.filters.review.merged', 'Merged')
     case 'closed':
-      return translate('dashboardPopout.filters.review.closed', 'Closed')
+      return t('dashboardPopout.filters.review.closed', 'Closed')
     case 'none':
-      return translate('dashboardPopout.filters.review.none', 'No review')
+      return t('dashboardPopout.filters.review.none', 'No review')
   }
 }

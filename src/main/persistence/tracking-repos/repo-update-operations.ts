@@ -1,38 +1,32 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/external-worktree-visibility'
-import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
+import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
+import { normalizeRepoWorkspaceCleanupPolicy } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility-sources'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { invalidateGhAccountTokenCache } from '../../github/gh-account-token'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
+import { isFolderRepo } from '../../../shared/repo-kind'
+import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'
 
 export type RepoUpdateMutationOperations = {
-  state: Pick<PersistedState, 'repos' | 'projectGroups'>
+  state: Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'>
   bumpLocalWorktreeScanGeneration: (repoId: string) => void
   syncProjectHostSetupCompatibilityState: () => void
   scheduleSave: () => void
   hydrateRepo: (repo: Repo) => Repo
 }
 
-/**
- * Resolve the row a host-scoped write may touch, and report the one failure the `Repo | null` return
- * cannot express: the row exists, but under a different host stamp.
- *
- * `hostId` is the row's own `executionHostId`, never the host a caller probed or a user selected. A
- * caller that passes anything else gets the same `null` as a deleted row, so its write is discarded
- * with no error and no failing test — how #22421 shipped an enrichment pass that never persisted.
- */
+/** Use the stored row's host stamp; distinguish host mismatch from missing rows so enrichment cannot silently disappear (#22421). */
 export function findRepoRowForHostScopedWrite(
   repos: readonly Repo[],
   id: string,
-  hostId: ExecutionHostId | undefined
+  hostId: ExecutionHostId
 ): Repo | undefined {
-  if (!hostId) {
-    return repos.find((candidate) => candidate.id === id)
-  }
   const matched = repos.find(
     (candidate) => candidate.id === id && getRepoExecutionHostId(candidate) === hostId
   )
@@ -50,10 +44,27 @@ export function findRepoRowForHostScopedWrite(
   return undefined
 }
 
+/** Switching to git-only listing must not hide folder workspaces and trigger saved-tab purging. */
+function assertKindChangeKeepsFolderWorkspaces(
+  repo: Repo,
+  nextKind: Repo['kind'] | undefined,
+  worktreeMeta: PersistedState['worktreeMeta']
+): void {
+  if (nextKind !== 'git' || !isFolderRepo(repo)) {
+    return
+  }
+  const count = findExtraFolderWorkspaceIds(repo, worktreeMeta).length
+  if (count > 0) {
+    throw new Error(
+      `This folder project has ${count} other workspace${count === 1 ? '' : 's'} that a Git project can't show, so its type was not changed. Delete ${count === 1 ? 'that workspace' : 'those workspaces'} first, or keep it as a folder project.`
+    )
+  }
+}
+
 export class RepoUpdatePersistenceOperations {
   constructor(private readonly operations: RepoUpdateMutationOperations) {}
 
-  private get state(): Pick<PersistedState, 'repos' | 'projectGroups'> {
+  private get state(): Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'> {
     return this.operations.state
   }
 
@@ -74,7 +85,7 @@ export class RepoUpdatePersistenceOperations {
   }
 
   updateRepo(
-    id: string,
+    target: RepoHostTarget,
     updates: Partial<
       Pick<
         Repo,
@@ -84,36 +95,45 @@ export class RepoUpdatePersistenceOperations {
         | 'upstream'
         | 'gitRemoteIdentity'
         | 'hookSettings'
+        | 'editorFormatter'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
         | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'
+        | 'dictationTerms'
         | 'issueSourcePreference'
+        | 'defaultJiraProject'
         | 'forkSyncMode'
+        | 'agentWorkspaceTrust'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
-        | 'projectGroupOrder'
         | 'projectHostSetupMethod'
       >
     > & {
+      projectGroupOrder?: number | null
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
+      workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
-    },
-    hostId?: ExecutionHostId
+    }
   ): Repo | null {
-    const repo = findRepoRowForHostScopedWrite(this.state.repos, id, hostId)
+    const repo = findRepoRowForHostScopedWrite(
+      this.state.repos,
+      target.id,
+      getRepoExecutionHostId(target)
+    )
     if (!repo) {
       return null
     }
+    assertKindChangeKeepsFolderWorkspaces(repo, updates.kind, this.state.worktreeMeta)
     const previousGhAccount = repo.ghAccount
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
     if (
@@ -129,8 +149,7 @@ export class RepoUpdatePersistenceOperations {
       (sanitizedUpdates.agentWorktreeVisibility === 'hide' ||
         sanitizedUpdates.agentWorktreeVisibility === 'show')
     ) {
-      // Why normalize: the stored value is spread in as-is, so a legacy/corrupt custom map would be
-      // written straight back without passing the same validation as a renderer-supplied patch.
+      // Validate merged legacy preferences too or corrupt stored maps bypass patch validation.
       const preferences = normalizeWorktreeVisibilitySourcePreferences({
         ...repo.worktreeVisibilitySourcePreferences,
         builtIn: {
@@ -152,7 +171,10 @@ export class RepoUpdatePersistenceOperations {
         sanitizedUpdates.projectGroupId = null
       }
     }
-    if (
+    if (sanitizedUpdates.projectGroupOrder === null) {
+      delete repo.projectGroupOrder
+      delete sanitizedUpdates.projectGroupOrder
+    } else if (
       'projectGroupOrder' in sanitizedUpdates &&
       (typeof sanitizedUpdates.projectGroupOrder !== 'number' ||
         !Number.isFinite(sanitizedUpdates.projectGroupOrder))
@@ -164,7 +186,7 @@ export class RepoUpdatePersistenceOperations {
       repo.externalWorktreeVisibilityLegacy === undefined
         ? isLegacyRepoForExternalWorktreeVisibility(repo)
         : undefined
-    // Why: selected repo fields use `undefined` as an explicit clear signal, so delete them before assigning the patch.
+    // Delete explicit-undefined clear fields before assigning the sanitized patch.
     if (
       'issueSourcePreference' in sanitizedUpdates &&
       sanitizedUpdates.issueSourcePreference === undefined
@@ -200,7 +222,7 @@ export class RepoUpdatePersistenceOperations {
       'externalWorktreeVisibility' in sanitizedUpdates &&
       repo.externalWorktreeVisibilityLegacy === undefined
     ) {
-      // Why: old persisted repos have no marker; stamp it on first visibility change so later hide/show keeps legacy safety.
+      // Stamp legacy visibility safety once so later toggles retain it.
       repo.externalWorktreeVisibilityLegacy = externalWorktreeVisibilityLegacy
     }
     if (
@@ -227,15 +249,32 @@ export class RepoUpdatePersistenceOperations {
         sanitizedUpdates.sourceControlAi = normalizedSourceControlAi
       }
     }
+    if (
+      'workspaceCleanupPolicy' in sanitizedUpdates &&
+      (sanitizedUpdates.workspaceCleanupPolicy === undefined ||
+        sanitizedUpdates.workspaceCleanupPolicy === null)
+    ) {
+      delete repo.workspaceCleanupPolicy
+      delete sanitizedUpdates.workspaceCleanupPolicy
+    } else if ('workspaceCleanupPolicy' in sanitizedUpdates) {
+      const workspaceCleanupPolicy = normalizeRepoWorkspaceCleanupPolicy(
+        sanitizedUpdates.workspaceCleanupPolicy
+      )
+      if (workspaceCleanupPolicy === undefined) {
+        delete sanitizedUpdates.workspaceCleanupPolicy
+      } else {
+        sanitizedUpdates.workspaceCleanupPolicy = workspaceCleanupPolicy
+      }
+    }
     if ('ghAccount' in updates) {
-      // Why: a rebind or unbind must not reuse a token cached for the previous login.
+      // Rebind/unbind must invalidate credentials cached for the old account.
       invalidateGhAccountTokenCache(previousGhAccount)
       if (sanitizedUpdates.ghAccount) {
         invalidateGhAccountTokenCache(sanitizedUpdates.ghAccount)
       }
     }
     Object.assign(repo, sanitizedUpdates)
-    this.bumpLocalWorktreeScanGeneration(id)
+    this.bumpLocalWorktreeScanGeneration(repo.id)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return this.hydrateRepo(repo)

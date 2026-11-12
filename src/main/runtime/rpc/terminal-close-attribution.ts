@@ -1,5 +1,5 @@
 import { withSpan } from '../../observability/tracer'
-import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
+import type { RuntimeTerminalClose } from '../../../shared/runtime-terminal-contracts'
 import type { RpcContext } from './core'
 
 type TerminalCloseMethod = 'terminal.close' | 'terminal.closeTab'

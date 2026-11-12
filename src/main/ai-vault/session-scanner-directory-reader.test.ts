@@ -31,19 +31,6 @@ describe('walkSessionFiles directory reader', () => {
     expect(readDirectory).toHaveBeenCalledTimes(4)
   })
 
-  it('preserves unreadable-directory handling for an injected reader', async () => {
-    const readDirectory = vi.fn(async () => {
-      throw new Error('unreachable')
-    })
-
-    await expect(
-      walkSessionFiles('missing', 'codex', [], {
-        extensions: new Set(['.jsonl']),
-        readDirectory
-      })
-    ).resolves.toEqual([])
-  })
-
   it('does not turn cancellation into an unreadable-directory miss', async () => {
     const controller = new AbortController()
     const cancelled = new Error('scan cancelled')

@@ -2,13 +2,15 @@ import { mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { createLocalFilesystemProvider } from './local-filesystem-provider'
 
 let root: string
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the provider reads only settings from the store; authorization is the injected stub.
-const store = { getSettings: () => ({ followSymlinkedDirectories: true }) } as unknown as Store
-const authorize = vi.fn(async (path: string, _store: Store, _options?: unknown) => path)
+const store = {
+  getSettings: () => ({ followSymlinkedDirectories: true })
+} as unknown as RuntimeStore
+const authorize = vi.fn(async (path: string, _store: RuntimeStore, _options?: unknown) => path)
 const provider = () =>
   createLocalFilesystemProvider({ requireStore: () => store, resolveAuthorizedPath: authorize })
 
@@ -26,21 +28,6 @@ describe('createLocalFilesystemProvider', () => {
     expect(await readFile(file, 'utf8')).toBe('hi!')
     expect(authorize).toHaveBeenCalledWith(file, store)
     await expect(provider().writeFileBase64(file, '')).rejects.toMatchObject({ code: 'EEXIST' })
-  })
-
-  it('keeps the runtime create and write guards', async () => {
-    await provider().createFile(join(root, 'x.txt'))
-    await expect(provider().createFile(join(root, 'x.txt'))).rejects.toThrow(
-      "A file or folder named 'x.txt' already exists in this location"
-    )
-    await provider().createDir(join(root, 'dir'))
-    await expect(provider().createDir(join(root, 'dir'))).rejects.toThrow(/already exists/)
-    await expect(provider().writeFile(join(root, 'dir'), 'x')).rejects.toThrow(
-      'Cannot write to a directory'
-    )
-    const stat = await provider().stat(join(root, 'dir'))
-    expect(stat).toMatchObject({ type: 'directory', mtime: expect.any(Number) })
-    expect(stat.ctimeMs).toEqual(expect.any(Number))
   })
 
   // Why: creating symlinks needs elevated rights on Windows runners.

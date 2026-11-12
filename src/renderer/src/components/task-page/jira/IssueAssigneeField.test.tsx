@@ -5,7 +5,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { TaskPageJiraIssueAssigneeField } from './IssueAssigneeField'
 
 const search = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/runtime-jira-client', () => ({ jiraListAssignableUsersForProject: search }))
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForProject: search
+}))
 afterEach(cleanup)
 
 it('drops old provider candidates before another host with identical project IDs can select them', async () => {
@@ -31,7 +33,12 @@ it('drops old provider candidates before another host with identical project IDs
   fireEvent.click(screen.getByRole('button', { name: 'Assignee' }))
   await screen.findByRole('button', { name: 'Local user' })
   expect(screen.getByRole('button', { name: 'Assign to me (Local me)' })).toBeTruthy()
-  expect(search).toHaveBeenCalledWith(null, 'PRJ', '', 'same-site')
+  expect(search).toHaveBeenCalledWith(
+    { kind: 'default-scope', settings: null },
+    'PRJ',
+    '',
+    'same-site'
+  )
 
   search.mockReturnValueOnce(new Promise(() => {}))
   rerender(

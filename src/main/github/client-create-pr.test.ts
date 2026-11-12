@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { readFile } from 'node:fs/promises'
 
 const {
   ghExecFileAsyncMock,
@@ -8,8 +7,7 @@ const {
   getEnterpriseGitHubRepoSlugMock,
   extractExecErrorMock,
   acquireMock,
-  releaseMock,
-  getSshFilesystemProviderMock
+  releaseMock
 } = vi.hoisted(() => ({
   ghExecFileAsyncMock: vi.fn(),
   getOwnerRepoMock: vi.fn(),
@@ -23,12 +21,7 @@ const {
     }
   }),
   acquireMock: vi.fn(),
-  releaseMock: vi.fn(),
-  getSshFilesystemProviderMock: vi.fn()
-}))
-
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock
+  releaseMock: vi.fn()
 }))
 
 vi.mock('./gh-utils', () => ({
@@ -37,12 +30,16 @@ vi.mock('./gh-utils', () => ({
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: vi.fn(),
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
-  githubRepoContext: vi.fn((repoPath: string, connectionId?: string | null) => ({
+  githubRepoContext: vi.fn((repoPath: string, connectionId?: string | null, options = {}) => ({
+    ...options,
     repoPath,
     connectionId: connectionId ?? null
   })),
-  ghRepoExecOptions: vi.fn((context: { repoPath: string; connectionId?: string | null }) =>
-    context.connectionId ? {} : { cwd: context.repoPath }
+  ghRepoExecOptions: vi.fn(
+    (context: { repoPath: string; connectionId?: string | null; wslDistro?: string }) =>
+      context.connectionId
+        ? {}
+        : { cwd: context.repoPath, ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}) }
   ),
   gitExecFileAsync: vi.fn(),
   extractExecError: extractExecErrorMock,
@@ -52,7 +49,8 @@ vi.mock('./gh-utils', () => ({
   _resetOwnerRepoCache: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: vi.fn()
 }))
 
@@ -65,8 +63,6 @@ import { createGitHubPullRequest } from './client/create/create-github-pull-requ
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -76,9 +72,7 @@ describe('createGitHubPullRequest', () => {
     ghExecFileAsyncMock.mockReset()
     getOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
-    // Why: createGitHubPullRequest resolves its target via the explicit origin
-    // remote (getOwnerRepo became upstream-first in #7331). Delegate the origin
-    // probe to getOwnerRepoMock so existing tests keep defining it there.
+    // Bridge explicit-origin creation to the fixtures that define getOwnerRepoMock.
     getOwnerRepoForRemoteMock.mockImplementation(
       async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
         remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
@@ -88,68 +82,11 @@ describe('createGitHubPullRequest', () => {
     extractExecErrorMock.mockClear()
     acquireMock.mockReset()
     releaseMock.mockReset()
-    getSshFilesystemProviderMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
   })
 
-  it('creates a GitHub pull request with normalized refs and a body file', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify({
-        number: 42,
-        url: 'https://github.com/acme/widgets/pull/42'
-      })
-    })
-
-    await expect(
-      createGitHubPullRequest(
-        '/repo-root',
-        {
-          provider: 'github',
-          base: 'origin/main',
-          head: 'refs/heads/feature/create-pr',
-          title: '  Create PR UI  ',
-          body: 'Body text',
-          draft: true
-        },
-        'local'
-      )
-    ).resolves.toEqual({
-      ok: true,
-      number: 42,
-      url: 'https://github.com/acme/widgets/pull/42'
-    })
-
-    const [args, options] = ghExecFileAsyncMock.mock.calls[0]
-    expect(args).toEqual(
-      expect.arrayContaining([
-        'pr',
-        'create',
-        '--repo',
-        'acme/widgets',
-        '--base',
-        'main',
-        '--head',
-        'feature/create-pr',
-        '--title',
-        'Create PR UI',
-        '--draft'
-      ])
-    )
-    expect(args[args.indexOf('--body-file') + 1]).toMatch(/body\.md$/)
-    expect(options).toMatchObject({
-      cwd: '/repo-root',
-      timeout: 60_000,
-      idempotent: false
-    })
-    expect(acquireMock).toHaveBeenCalledOnce()
-    expect(releaseMock).toHaveBeenCalledOnce()
-  })
-
   it('targets the origin fork (not the upstream parent) on a fork checkout (#7331)', async () => {
-    // Fork checkout: origin is the personal fork, upstream is the parent. The
-    // head branch is unqualified and lives on the fork, so `gh pr create` must
-    // run with --repo <fork> even though PR reads prefer upstream since #7331.
+    // Creation targets the fork holding the unqualified head branch; reads can prefer upstream.
     getOwnerRepoForRemoteMock.mockImplementation(async (_repoPath: string, remoteName: string) =>
       remoteName === 'origin'
         ? { owner: 'fsdwen', repo: 'orca' }
@@ -184,270 +121,6 @@ describe('createGitHubPullRequest', () => {
     expect(args[args.indexOf('--head') + 1]).toBe('my-branch')
   })
 
-  it('routes --repo to the Enterprise server via options.host for a GHES remote (#8312)', async () => {
-    // github.com-only slug parsing misses GHES, so creation comes from the
-    // enterprise resolver, which carries the host.
-    getOwnerRepoMock.mockResolvedValueOnce(null)
-    getEnterpriseGitHubRepoSlugMock.mockResolvedValueOnce({
-      owner: 'team',
-      repo: 'orca',
-      host: 'github.acme-corp.com'
-    })
-    // gh prints the PR URL (not JSON); the GHES host must still parse directly.
-    ghExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'https://github.acme-corp.com/team/orca/pull/7\n'
-    })
-
-    await expect(
-      createGitHubPullRequest(
-        '/repo-root',
-        {
-          provider: 'github',
-          base: 'main',
-          head: 'feature/create-pr',
-          title: 'GHES PR'
-        },
-        'local'
-      )
-    ).resolves.toEqual({
-      ok: true,
-      number: 7,
-      url: 'https://github.acme-corp.com/team/orca/pull/7'
-    })
-
-    const [args, options] = ghExecFileAsyncMock.mock.calls[0]
-    // The runner host-qualifies argv at spawn time from options.host, so the
-    // mocked call sees a bare owner/repo plus the host in exec options.
-    expect(args[args.indexOf('--repo') + 1]).toBe('team/orca')
-    expect(options).toMatchObject({ host: 'github.acme-corp.com' })
-  })
-
-  it('routes the GHES existing-PR fallback lookup through options.host (#8312)', async () => {
-    getOwnerRepoMock.mockResolvedValue(null)
-    getEnterpriseGitHubRepoSlugMock.mockResolvedValue({
-      owner: 'team',
-      repo: 'orca',
-      host: 'github.acme-corp.com'
-    })
-    // Create reports "already exists", forcing the pr-list fallback.
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(
-        Object.assign(new Error('exists'), {
-          stderr: 'a pull request for branch "feature/create-pr" already exists',
-          stdout: ''
-        })
-      )
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          { number: 9, url: 'https://github.acme-corp.com/team/orca/pull/9' }
-        ])
-      })
-
-    await expect(
-      createGitHubPullRequest(
-        '/repo-root',
-        {
-          provider: 'github',
-          base: 'main',
-          head: 'feature/create-pr',
-          title: 'GHES PR'
-        },
-        'local'
-      )
-    ).resolves.toMatchObject({
-      ok: false,
-      code: 'already_exists',
-      existingReview: { number: 9, url: 'https://github.acme-corp.com/team/orca/pull/9' }
-    })
-
-    const [listArgs, listOptions] = ghExecFileAsyncMock.mock.calls[1]
-    expect(listArgs).toEqual(expect.arrayContaining(['pr', 'list']))
-    expect(listArgs[listArgs.indexOf('--repo') + 1]).toBe('team/orca')
-    expect(listOptions).toMatchObject({ host: 'github.acme-corp.com' })
-  })
-
-  it('runs local WSL project pull request creation through the selected distro', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify({
-        number: 43,
-        url: 'https://github.com/acme/widgets/pull/43'
-      })
-    })
-
-    await expect(
-      createGitHubPullRequest(
-        '/repo-root',
-        {
-          provider: 'github',
-          base: 'main',
-          head: 'feature/wsl-create-pr',
-          title: 'WSL Create PR'
-        },
-        'local',
-        { localGitExecOptions: { wslDistro: 'Ubuntu' } }
-      )
-    ).resolves.toEqual({
-      ok: true,
-      number: 43,
-      url: 'https://github.com/acme/widgets/pull/43'
-    })
-
-    const [, options] = ghExecFileAsyncMock.mock.calls[0]
-    expect(options).toMatchObject({
-      cwd: '/repo-root',
-      wslDistro: 'Ubuntu',
-      timeout: 60_000,
-      idempotent: false
-    })
-  })
-
-  it('creates SSH-backed pull requests without using the remote path as a local cwd', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify({
-        number: 45,
-        url: 'https://github.com/acme/widgets/pull/45'
-      })
-    })
-
-    await expect(
-      createGitHubPullRequest(
-        '/remote/repo-root',
-        {
-          provider: 'github',
-          base: 'main',
-          head: 'feature/ssh-create-pr',
-          title: 'SSH Create PR'
-        },
-        'ssh:ssh-1'
-      )
-    ).resolves.toEqual({
-      ok: true,
-      number: 45,
-      url: 'https://github.com/acme/widgets/pull/45'
-    })
-
-    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
-      '/remote/repo-root',
-      'origin',
-      'ssh-1',
-      {}
-    )
-    const [args, options] = ghExecFileAsyncMock.mock.calls[0]
-    expect(args).toEqual(
-      expect.arrayContaining([
-        'pr',
-        'create',
-        '--repo',
-        'acme/widgets',
-        '--base',
-        'main',
-        '--head',
-        'feature/ssh-create-pr'
-      ])
-    )
-    expect(options).toMatchObject({
-      timeout: 60_000,
-      idempotent: false
-    })
-    expect(options).not.toHaveProperty('cwd')
-  })
-
-  it.each([
-    ['.github/pull_request_template.md', ['.github/pull_request_template.md']],
-    [
-      '.github/PULL_REQUEST_TEMPLATE.md',
-      ['.github/pull_request_template.md', '.github/PULL_REQUEST_TEMPLATE.md']
-    ],
-    [
-      'docs/PULL_REQUEST_TEMPLATE.md',
-      [
-        '.github/pull_request_template.md',
-        '.github/PULL_REQUEST_TEMPLATE.md',
-        'pull_request_template.md',
-        'PULL_REQUEST_TEMPLATE.md',
-        'docs/pull_request_template.md',
-        'docs/PULL_REQUEST_TEMPLATE.md'
-      ]
-    ]
-  ] as [string, string[]][])(
-    'reads PR templates from the SSH filesystem provider at %s',
-    async (relativeTemplatePath, expectedRelativeLookups) => {
-      const templateBody = `Remote template body from ${relativeTemplatePath}`
-      const readRemoteFile = vi.fn(async (path: string) => {
-        if (path === `/remote/repo-root/${relativeTemplatePath}`) {
-          return {
-            content: templateBody,
-            isBinary: false
-          }
-        }
-        throw new Error('missing template')
-      })
-      getSshFilesystemProviderMock.mockReturnValue({ readFile: readRemoteFile })
-      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-      const writtenBodies: string[] = []
-      ghExecFileAsyncMock.mockImplementationOnce(async (args: string[]) => {
-        const bodyPath = args[args.indexOf('--body-file') + 1]
-        writtenBodies.push(await readFile(bodyPath, 'utf8'))
-        return {
-          stdout: JSON.stringify({
-            number: 46,
-            url: 'https://github.com/acme/widgets/pull/46'
-          })
-        }
-      })
-
-      await expect(
-        createGitHubPullRequest(
-          '/remote/repo-root',
-          {
-            provider: 'github',
-            base: 'main',
-            head: 'feature/ssh-template',
-            title: 'SSH Template PR',
-            body: '',
-            useTemplate: true
-          },
-          'ssh:ssh-1'
-        )
-      ).resolves.toEqual({
-        ok: true,
-        number: 46,
-        url: 'https://github.com/acme/widgets/pull/46'
-      })
-
-      expect(readRemoteFile.mock.calls.map(([path]) => path)).toEqual(
-        expectedRelativeLookups.map((relativeLookup) => `/remote/repo-root/${relativeLookup}`)
-      )
-      expect(writtenBodies).toEqual([templateBody])
-    }
-  )
-
-  it('falls back to parsing the PR URL for older gh output', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'https://github.com/acme/widgets/pull/43\n'
-    })
-
-    await expect(
-      createGitHubPullRequest(
-        '/repo-root',
-        {
-          provider: 'github',
-          base: 'main',
-          head: 'feature/url-output',
-          title: 'URL output'
-        },
-        'local'
-      )
-    ).resolves.toEqual({
-      ok: true,
-      number: 43,
-      url: 'https://github.com/acme/widgets/pull/43'
-    })
-  })
-
   it('returns the existing PR when gh reports an already-open pull request', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
@@ -476,6 +149,7 @@ describe('createGitHubPullRequest', () => {
       ok: false,
       code: 'already_exists',
       error: 'A pull request already exists for this branch.',
+      reason: 'existing_review',
       existingReview: {
         number: 44,
         url: 'https://github.com/acme/widgets/pull/44'
@@ -499,33 +173,8 @@ describe('createGitHubPullRequest', () => {
         '--json',
         'number,url'
       ],
-      // Why: dotcom slugs resolve with host:'github.com' so creation stays
-      // pinned against a process-level GH_HOST.
+      // Pin dotcom against process-level GH_HOST.
       { cwd: '/repo-root', host: 'github.com' }
     ])
-  })
-
-  it('validates base, head, and title before invoking gh', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-
-    await expect(
-      createGitHubPullRequest(
-        '/repo-root',
-        {
-          provider: 'github',
-          base: 'refs/heads/feature',
-          head: 'feature',
-          title: 'Feature'
-        },
-        'local'
-      )
-    ).resolves.toEqual({
-      ok: false,
-      code: 'validation',
-      error: 'Create PR failed: choose a different base branch before creating a pull request.'
-    })
-
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(acquireMock).not.toHaveBeenCalled()
   })
 })

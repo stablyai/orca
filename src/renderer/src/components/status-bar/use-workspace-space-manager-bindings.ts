@@ -1,12 +1,14 @@
 import { useRef, useState } from 'react'
-import type { GitStatusResult } from '../../../../shared/git-status-types'
+import type { GitStatusResult } from '../../../../shared/git/status/git-status-types'
 import { useAppStore } from '../../store'
-import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/selectors'
+import { getIndexedRepoMap } from '../../store/repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '../../store/slices/worktrees/listing/worktree-catalog-index'
 import type {
   WorkspaceSpaceSortDirection,
   WorkspaceSpaceSortKey
 } from './workspace-space-presentation'
 import type { WorkspaceGitRefreshState } from './workspace-space-manager-state-types'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function useWorkspaceSpaceManagerBindings() {
   const analysis = useAppStore((state) => state.workspaceSpaceAnalysis)
@@ -18,9 +20,10 @@ export function useWorkspaceSpaceManagerBindings() {
   const removeWorkspaceSpaceWorktrees = useAppStore((state) => state.removeWorkspaceSpaceWorktrees)
   const removeWorktree = useAppStore((state) => state.removeWorktree)
   const deleteStateByWorktreeId = useAppStore((state) => state.deleteStateByWorktreeId)
-  const repoMap = useAppStore((state) => getRepoMapFromState(state))
+  const repoMap = useAppStore((state) => getIndexedRepoMap(state.repos))
   const repos = useAppStore((state) => state.repos)
-  const worktreeMap = useAppStore((state) => getWorktreeMapFromState(state))
+  const worktreeMap = useAppStore((state) => getIndexedWorktreeMap(selectWorktreesByRepo(state)))
+  const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
   const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((state) => state.ptyIdsByTabId)
   const agentStatusByPaneKey = useAppStore((state) => state.agentStatusByPaneKey)
@@ -75,6 +78,7 @@ export function useWorkspaceSpaceManagerBindings() {
     repoMap,
     repos,
     worktreeMap,
+    worktreesByRepo,
     tabsByWorktree,
     ptyIdsByTabId,
     agentStatusByPaneKey,

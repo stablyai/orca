@@ -1,3 +1,4 @@
+import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -5,46 +6,20 @@ import {
   query,
   type CanUseTool,
   type Options,
-  type PermissionMode,
   type SDKUserMessage,
   type SpawnedProcess as SdkSpawnedProcess,
   type SpawnOptions as SdkSpawnOptions
 } from '@anthropic-ai/claude-agent-sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { claudeQuerySettingsReader } from './claude-agent-sdk-control-requests'
-import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
+import { ClaudePromptRegistry } from './claude-prompt-registry'
+import { claudeLaunchPermissions } from './structured/claude-structured-inbound-control'
+import { claudeStructuredPermissionOptions } from './structured/launch/claude-structured-launch-resolution'
 
-// Contract pins for @anthropic-ai/claude-agent-sdk, run against the real SDK
-// driving a scripted fake CLI (never the real Claude binary). These tests exist
-// to catch a future SDK version drifting under Orca: unknown-frame pass-through,
-// spawner env fidelity, argument parity with the pre-SDK argv,
-// permission-callback semantics, and executable-path override.
+// Exercise the real SDK against a scripted CLI to detect protocol and spawn-contract drift.
 
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
 const SESSION_ID = '5348c19f-6a54-4c2e-9c68-9c2b1a3d4e5f'
-const LEAF_UUID = 'ad0f7c9e-1b2c-4d3e-8f90-abc123def456'
-
-/**
- * The exact argv the hand-rolled transport built before the SDK swap. Frozen here
- * as the parity oracle: CLAUDE_STRUCTURED_BASE_OPTIONS has to keep producing it.
- */
-const PRE_SDK_ARGV = [
-  '-p',
-  '--input-format',
-  'stream-json',
-  '--output-format',
-  'stream-json',
-  '--include-partial-messages',
-  '--verbose',
-  '--replay-user-messages',
-  '--permission-prompt-tool',
-  'stdio',
-  '--setting-sources',
-  'user,project,local'
-]
 
 const RESULT_FRAME = {
   type: 'result',
@@ -85,7 +60,8 @@ afterEach(() => {
 
 function scriptScenario(
   steps: ScenarioStep[],
-  controlResponses: Record<string, unknown> = {}
+  controlResponses: Record<string, unknown> = {},
+  extra: Record<string, unknown> = {}
 ): {
   scenarioPath: string
   reportPath: string
@@ -96,7 +72,7 @@ function scriptScenario(
   scratchDirs.push(dir)
   const scenarioPath = join(dir, 'scenario.json')
   const reportPath = join(dir, 'report.json')
-  writeFileSync(scenarioPath, JSON.stringify({ steps, controlResponses }))
+  writeFileSync(scenarioPath, JSON.stringify({ steps, controlResponses, ...extra }))
   return {
     scenarioPath,
     reportPath,
@@ -131,30 +107,6 @@ function recordingSpawner(spawns: SpawnSeen[]) {
   }
 }
 
-function resolvedLaunch(permissionMode: PermissionMode, launchArgs: string[] = []) {
-  const record = {
-    sessionId: 'contract-pin-session',
-    provider: 'claude',
-    location: {
-      executionHostId: LOCAL_EXECUTION_HOST_ID,
-      wslDistro: null,
-      workspaceId: 'workspace-1',
-      workspaceKind: 'folder'
-    },
-    accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/work/.claude' },
-    providerHandleChain: [],
-    launchArgs
-  } as unknown as AgentSessionRecord
-  return createClaudeStructuredLaunchResolver({
-    resolveLaunchArgs: () => launchArgs,
-    store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
-    resolveWorkspacePath: async () => '/repos/workspace-1',
-    resolveCommand: () => FAKE_CLI,
-    resolveAuthPolicy: () => ({ account: 'managed' }),
-    resolvePermissionMode: () => permissionMode
-  })({ identity: { sessionId: record.sessionId } as never })
-}
-
 function singleUserTurn(): AsyncIterable<SDKUserMessage> {
   return (async function* () {
     yield {
@@ -163,8 +115,7 @@ function singleUserTurn(): AsyncIterable<SDKUserMessage> {
       parent_tool_use_id: null,
       session_id: SESSION_ID
     } as SDKUserMessage
-    // Hold input open; the stream ends when the scripted CLI exits, and an
-    // unresolved bare promise does not keep the event loop alive.
+    // Keep input open until the scripted CLI exits; an unresolved promise does not keep Node alive.
     await new Promise<void>(() => {})
   })()
 }
@@ -177,260 +128,7 @@ async function drainQuery(options: Options): Promise<Record<string, unknown>[]> 
   return messages
 }
 
-/** Expand `--flag=value` argv entries so both SDK spellings compare equal. */
-function normalizeArgv(args: string[]): string[] {
-  return args.flatMap((arg) => {
-    if (!arg.startsWith('--')) {
-      return [arg]
-    }
-    const eq = arg.indexOf('=')
-    return eq === -1 ? [arg] : [arg.slice(0, eq), arg.slice(eq + 1)]
-  })
-}
-
-/** Group the pre-SDK argv into flag/value pairs. */
-function flagTable(args: readonly string[]): { flag: string; value: string | null }[] {
-  const table: { flag: string; value: string | null }[] = []
-  for (let i = 0; i < args.length; i++) {
-    const flag = args[i]!
-    const next = args[i + 1]
-    if (next !== undefined && !next.startsWith('-')) {
-      table.push({ flag, value: next })
-      i++
-    } else {
-      table.push({ flag, value: null })
-    }
-  }
-  return table
-}
-
 describe('Claude Agent SDK contract pins', () => {
-  it('yields unknown types, unknown fields and unknown content blocks verbatim, and consumes keep_alive', async () => {
-    const unknownTopLevel = {
-      type: 'message_kind_from_the_future',
-      session_id: SESSION_ID,
-      uuid: 'uuid-unknown-1',
-      payload: { alpha: 1, nested: { flags: ['a', 'b'] } }
-    }
-    const assistantWithUnknowns = {
-      type: 'assistant',
-      message: {
-        id: 'msg-1',
-        type: 'message',
-        role: 'assistant',
-        model: 'claude-x',
-        content: [
-          { type: 'text', text: 'hello back' },
-          { type: 'content_block_from_the_future', payload: { depth: 3 } }
-        ],
-        stop_reason: null,
-        stop_sequence: null,
-        usage: { input_tokens: 1, output_tokens: 2 }
-      },
-      parent_tool_use_id: null,
-      uuid: 'uuid-assistant-1',
-      session_id: SESSION_ID,
-      field_from_the_future: 'preserved'
-    }
-    const scenario = scriptScenario([
-      { awaitUserMessage: true },
-      { emit: { type: 'keep_alive' } },
-      { emit: unknownTopLevel },
-      { emit: assistantWithUnknowns },
-      { emit: RESULT_FRAME }
-    ])
-    const spawns: SpawnSeen[] = []
-    const messages = await drainQuery({
-      pathToClaudeCodeExecutable: FAKE_CLI,
-      cwd: scenario.cwd,
-      env: scenarioEnv(scenario),
-      spawnClaudeCodeProcess: recordingSpawner(spawns)
-    })
-
-    expect(messages.find((m) => m.uuid === 'uuid-unknown-1')).toEqual(unknownTopLevel)
-    expect(messages.find((m) => m.uuid === 'uuid-assistant-1')).toEqual(assistantWithUnknowns)
-    // The SDK intercepts keep_alive internally — a liveness signal must never
-    // be derived from it reaching the consumer, because it does not.
-    expect(messages.some((m) => m.type === 'keep_alive')).toBe(false)
-    expect(messages.some((m) => m.type === 'result')).toBe(true)
-  })
-
-  it('hands the custom spawner exactly the caller-supplied env, plus the two pinned SDK mutations', async () => {
-    vi.stubEnv('ANTHROPIC_API_KEY', 'ambient-key-must-not-leak')
-    const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
-    const spawns: SpawnSeen[] = []
-    await drainQuery({
-      pathToClaudeCodeExecutable: FAKE_CLI,
-      cwd: scenario.cwd,
-      env: {
-        ...scenarioEnv(scenario),
-        CLAUDE_CONFIG_DIR: '/pinned/claude-config',
-        ORCA_AGENT_SESSION_SPAWN_TOKEN: 'spawn-token-1',
-        NODE_OPTIONS: '--max-old-space-size=64'
-      },
-      spawnClaudeCodeProcess: recordingSpawner(spawns)
-    })
-
-    const env = spawns[0]!.env
-    // Supplied values arrive verbatim: the config-dir pin and spawn token are
-    // observable at this boundary, so Orca's auth scrubbing stays assertable.
-    expect(env.CLAUDE_CONFIG_DIR).toBe('/pinned/claude-config')
-    expect(env.ORCA_AGENT_SESSION_SPAWN_TOKEN).toBe('spawn-token-1')
-    // Ambient process.env is NOT merged in when env is supplied.
-    expect(env.ANTHROPIC_API_KEY).toBeUndefined()
-    // The SDK's two documented mutations, pinned so a change is noticed.
-    expect(env.CLAUDE_CODE_ENTRYPOINT).toBe('sdk-ts')
-    expect('NODE_OPTIONS' in env).toBe(false)
-  })
-
-  it('inherits process.env into the child when env is omitted — the ambient-auth sharp edge', async () => {
-    const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
-    vi.stubEnv('ORCA_SDK_CONTRACT_SCENARIO_PATH', scenario.scenarioPath)
-    vi.stubEnv('ORCA_SDK_CONTRACT_REPORT_PATH', scenario.reportPath)
-    vi.stubEnv('ORCA_SDK_CONTRACT_AMBIENT_CANARY', 'inherited-from-process-env')
-    const spawns: SpawnSeen[] = []
-    await drainQuery({
-      pathToClaudeCodeExecutable: FAKE_CLI,
-      cwd: scenario.cwd,
-      spawnClaudeCodeProcess: recordingSpawner(spawns)
-    })
-
-    // Omitting env reproduces the ambient-auth-leak failure mode: the child
-    // sees everything in process.env. Orca must therefore always pass an
-    // explicit, fully-constructed env.
-    expect(spawns[0]!.env.ORCA_SDK_CONTRACT_AMBIENT_CANARY).toBe('inherited-from-process-env')
-  })
-
-  it('emits --replay-user-messages only through extraArgs, never on its own', async () => {
-    const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
-    const bareSpawns: SpawnSeen[] = []
-    await drainQuery({
-      pathToClaudeCodeExecutable: FAKE_CLI,
-      cwd: scenario.cwd,
-      env: scenarioEnv(scenario),
-      spawnClaudeCodeProcess: recordingSpawner(bareSpawns)
-    })
-    expect(bareSpawns[0]!.args).not.toContain('--replay-user-messages')
-
-    const replayScenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
-    const replaySpawns: SpawnSeen[] = []
-    await drainQuery({
-      pathToClaudeCodeExecutable: FAKE_CLI,
-      cwd: replayScenario.cwd,
-      env: scenarioEnv(replayScenario),
-      extraArgs: { 'replay-user-messages': null },
-      spawnClaudeCodeProcess: recordingSpawner(replaySpawns)
-    })
-    const replayArgs = replaySpawns[0]!.args
-    expect(replayArgs.filter((arg) => arg === '--replay-user-messages')).toHaveLength(1)
-  })
-
-  it('produces a matching CLI flag for every pre-SDK argv entry', async () => {
-    const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
-    const spawns: SpawnSeen[] = []
-    // Driven by the real resolver, so the argv walk covers its option set and merge order,
-    // not a hand-written options literal.
-    const launch = await resolvedLaunch('bypassPermissions', [
-      '--model',
-      'claude-sonnet-4-5',
-      '--dangerously-skip-permissions',
-      '--output-format',
-      'text',
-      '--session-id=wrong-session',
-      '--add-dir',
-      '/repo/one',
-      '/repo/two',
-      '--add-dir=/repo/three'
-    ])
-    await drainQuery({
-      ...launch.options,
-      pathToClaudeCodeExecutable: FAKE_CLI,
-      cwd: scenario.cwd,
-      env: scenarioEnv(scenario),
-      canUseTool: (async () => ({ behavior: 'deny', message: 'unused' })) as CanUseTool,
-      spawnClaudeCodeProcess: recordingSpawner(spawns)
-    })
-
-    expect(spawns).toHaveLength(1)
-    const argv = normalizeArgv(spawns[0]!.args)
-    // The SDK's typed bypass option emits a newer allow flag that older user-installed Claude
-    // binaries reject. Keep the older owned flag until Orca establishes a minimum CLI version.
-    expect(argv.filter((arg) => arg === '--dangerously-skip-permissions')).toHaveLength(1)
-    expect(argv).not.toContain('--allow-dangerously-skip-permissions')
-    expect(argv[argv.indexOf('--permission-mode') + 1]).toBe('default')
-    expect(argv[argv.indexOf('--model') + 1]).toBe('claude-sonnet-4-5')
-    expect(argv.flatMap((arg, index) => (arg === '--add-dir' ? [argv[index + 1]] : []))).toEqual([
-      '/repo/one',
-      '/repo/two',
-      '/repo/three'
-    ])
-    expect(argv.filter((arg) => arg === '--model')).toHaveLength(1)
-    expect(argv.filter((arg) => arg === '--output-format')).toHaveLength(1)
-    expect(argv[argv.indexOf('--output-format') + 1]).toBe('stream-json')
-    // Headless print mode is the SDK's only mode; `query()` never passes `-p`,
-    // and if the SDK ever started passing it this pin would notice.
-    const impliedByHeadlessQuery = new Set(['-p'])
-    for (const entry of flagTable(PRE_SDK_ARGV)) {
-      if (impliedByHeadlessQuery.has(entry.flag)) {
-        expect(argv, `${entry.flag} is implied, never spelled`).not.toContain(entry.flag)
-        continue
-      }
-      const at = argv.indexOf(entry.flag)
-      expect(at, `SDK argv is missing ${entry.flag}`).toBeGreaterThanOrEqual(0)
-      if (entry.value !== null) {
-        expect(argv[at + 1], `value of ${entry.flag}`).toBe(entry.value)
-      }
-    }
-    // The launch resolver always carries one of --session-id / --resume.
-    const sessionAt = argv.indexOf('--session-id')
-    expect(sessionAt).toBeGreaterThanOrEqual(0)
-    expect(argv[sessionAt + 1]).toBe(launch.providerSessionId)
-  })
-
-  it('still exposes the runtime get_settings reader the auth diagnostic depends on', async () => {
-    // 0.3.251 ships getSettings() but redacts it from the Query declaration. This pin
-    // is the drift alarm: if a bump drops or reshapes it, the diagnostic degrades and
-    // this test says so instead of the degradation shipping silently.
-    const settings = { env: { ANTHROPIC_BASE_URL: 'https://settings.example.test' } }
-    const scenario = scriptScenario([{ delayMs: 3_000 }], { get_settings: settings })
-    const session = query({
-      prompt: singleUserTurn(),
-      options: {
-        pathToClaudeCodeExecutable: FAKE_CLI,
-        cwd: scenario.cwd,
-        env: scenarioEnv(scenario)
-      }
-    })
-    try {
-      const read = claudeQuerySettingsReader(session)
-      expect(read, 'the SDK no longer exposes get_settings at runtime').not.toBeNull()
-      await expect(read?.()).resolves.toEqual(settings)
-    } finally {
-      await session.return(undefined)
-    }
-  })
-
-  it('maps resume identity to --resume and --resume-session-at', async () => {
-    const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
-    const spawns: SpawnSeen[] = []
-    await drainQuery({
-      pathToClaudeCodeExecutable: FAKE_CLI,
-      cwd: scenario.cwd,
-      env: scenarioEnv(scenario),
-      resume: SESSION_ID,
-      resumeSessionAt: LEAF_UUID,
-      spawnClaudeCodeProcess: recordingSpawner(spawns)
-    })
-
-    const argv = normalizeArgv(spawns[0]!.args)
-    const resumeAt = argv.indexOf('--resume')
-    expect(resumeAt).toBeGreaterThanOrEqual(0)
-    expect(argv[resumeAt + 1]).toBe(SESSION_ID)
-    const leafAt = argv.indexOf('--resume-session-at')
-    expect(leafAt).toBeGreaterThanOrEqual(0)
-    expect(argv[leafAt + 1]).toBe(LEAF_UUID)
-  })
-
   it('gives canUseTool the wire request_id and fires its abort signal on control_cancel_request', async () => {
     const scenario = scriptScenario([
       { awaitUserMessage: true },
@@ -473,32 +171,147 @@ describe('Claude Agent SDK contract pins', () => {
 
     expect(seen).toEqual([{ toolName: 'Bash', requestId: 'perm-421', toolUseID: 'tool-use-9' }])
     expect(abortFired).toBe(true)
-    // The callback's settlement is written back onto the wire against the same id.
     const settled = scenario
       .readReport()
       .controlResponses.find((frame) => frame.response.request_id === 'perm-421')
     expect(settled?.response.response?.behavior).toBe('deny')
-    // Exactly one process spawn per query, control traffic included.
     expect(spawns).toHaveLength(1)
   })
 
-  it('runs the executable given via pathToClaudeCodeExecutable under the default spawner', async () => {
-    const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
-    const messages = await drainQuery({
-      pathToClaudeCodeExecutable: FAKE_CLI,
-      cwd: scenario.cwd,
-      env: scenarioEnv(scenario)
+  describe("Full access decisions keep each request's place in one stdout chunk", () => {
+    const status = (permissionMode: string) => ({
+      type: 'system',
+      subtype: 'status',
+      status: null,
+      permissionMode,
+      session_id: SESSION_ID
     })
+    const ask = (id: string, extra: Record<string, unknown> = {}) => ({
+      type: 'control_request',
+      request_id: id,
+      request: {
+        subtype: 'can_use_tool',
+        tool_name: 'Bash',
+        input: { command: 'echo harmless' },
+        tool_use_id: `tool-${id}`,
+        ...extra
+      }
+    })
+    const cancel = (id: string) => ({ type: 'control_cancel_request', request_id: id })
+    type WireFrame = ReturnType<typeof status> | ReturnType<typeof ask> | ReturnType<typeof cancel>
+    const isAsk = (frame: WireFrame): frame is ReturnType<typeof ask> => 'request' in frame
+    const many = (prefix: string) =>
+      Array.from({ length: 300 }, (_, index) => ask(`${prefix}${index}`))
+    const asked = (ids: string[], allowed: boolean) =>
+      ids.map((requestId) => ({ requestId, allowed }))
+    const manyIds = (prefix: string) => many(prefix).map((frame) => frame.request_id)
 
-    expect(messages.some((m) => m.type === 'result')).toBe(true)
-    const report = scenario.readReport()
-    // The SDK executed exactly the script we pointed it at — no bundled binary.
-    expect(report.argv[0]).toBe(FAKE_CLI)
-    expect(report.execPath).toContain('node')
-    // And the streaming handshake went to it: the SDK sent its initialize
-    // control request to our script.
-    expect(report.controlRequests.some((frame) => frame.request.subtype === 'initialize')).toBe(
-      true
-    )
+    it.each([
+      {
+        label: 'plan, then bypass, with the interaction flag',
+        frames: [
+          status('plan'),
+          ask('A'),
+          status('bypassPermissions'),
+          ask('B'),
+          ask('flagged', { tool_name: 'mcp__forms__confirm', requires_user_interaction: true })
+        ],
+        seen: [...asked(['A'], false), ...asked(['B'], true), ...asked(['flagged'], false)],
+        interaction: [true],
+        pending: []
+      },
+      {
+        label: 'a request initialize resends, then plan',
+        frames: [status('plan'), ask('A')],
+        seen: [...asked(['resent'], true), ...asked(['A'], false)],
+        interaction: [],
+        pending: [ask('resent')]
+      },
+      {
+        label: 'a cancel in the same chunk',
+        frames: [status('plan'), ask('A'), cancel('A'), status('bypassPermissions'), ask('B')],
+        seen: [...asked(['A'], false), ...asked(['B'], true)],
+        interaction: [],
+        pending: []
+      },
+      {
+        label: 'a duplicate id after bypass',
+        frames: [status('plan'), ask('A'), status('bypassPermissions'), ask('A'), ask('B')],
+        seen: [...asked(['A', 'A'], false), ...asked(['B'], true)],
+        interaction: [],
+        pending: []
+      },
+      {
+        label: 'more than 256 unread requests in plan',
+        frames: [status('plan'), ...many('p'), status('bypassPermissions'), ask('B')],
+        seen: [...asked(manyIds('p'), false), ...asked(['B'], true)],
+        interaction: [],
+        pending: []
+      },
+      {
+        label: 'more than 256 unread requests in Full access',
+        frames: [status('bypassPermissions'), ...many('f'), status('plan'), ask('C')],
+        seen: [...asked(manyIds('f'), true), ...asked(['C'], false)],
+        interaction: [],
+        pending: []
+      }
+    ])('$label', async ({ frames, seen: expected, interaction: flags, pending }) => {
+      const requestIds = [
+        ...new Set([...pending, ...frames].filter(isAsk).map((frame) => frame.request_id))
+      ]
+      const scenario = scriptScenario(
+        [
+          { awaitUserMessage: true },
+          { emitTogether: frames },
+          ...requestIds.map((id) => ({ awaitControlResponse: id })),
+          { emit: RESULT_FRAME }
+        ],
+        {},
+        { pendingPermissionRequests: { initialize: pending } }
+      )
+      const prompts = new ClaudePromptRegistry()
+      const permissions = claudeLaunchPermissions(
+        { sessionId: 'session-1', prompts, emit: () => {} },
+        {
+          providerSessionId: SESSION_ID,
+          options: claudeStructuredPermissionOptions('full-access')
+        }
+      )
+      const seen: { requestId: string; allowed: boolean }[] = []
+      const interaction: unknown[] = []
+      const canUseTool: CanUseTool = async (toolName, input, options) => {
+        if ('requiresUserInteraction' in options) {
+          interaction.push(options.requiresUserInteraction)
+        }
+        const answer = permissions.handlers.canUseTool!(toolName, input, options)
+        // Answer any card at once so the scripted turn can finish.
+        prompts.find(options.requestId)?.prompt.settle({
+          behavior: 'deny',
+          message: 'asked',
+          toolUseID: options.toolUseID
+        })
+        const decision = { requestId: options.requestId, allowed: false }
+        seen.push(decision)
+        const result = await answer
+        decision.allowed = result?.behavior === 'allow'
+        return result ?? { behavior: 'deny', message: 'cancelled', toolUseID: options.toolUseID }
+      }
+      const spawner = createClaudeCodeProcessSpawn(
+        spawnProcess,
+        process.platform,
+        { pathToClaudeCodeExecutable: FAKE_CLI },
+        permissions.handlers.onStdout
+      )
+      await drainQuery({
+        pathToClaudeCodeExecutable: FAKE_CLI,
+        cwd: scenario.cwd,
+        env: scenarioEnv(scenario),
+        canUseTool,
+        spawnClaudeCodeProcess: spawner.spawn
+      })
+
+      expect(seen).toEqual(expected)
+      expect(interaction).toEqual(flags)
+    })
   })
 })

@@ -1,8 +1,11 @@
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
+import { CLAUDE_BACKGROUND_TASK_SILENT_REFRESH_SUBTYPES } from './claude-background-task-frames'
+import type { ClaudeTaskInvocations } from './claude-task-invocations'
+import { claudeBackgroundTaskToolUseId } from './claude-background-task-row-lifecycle'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeBackgroundTaskRow } from './claude-background-task-row-lifecycle'
 import {
   ClaudeBackgroundTaskIdentityResolver,
@@ -92,5 +95,38 @@ export class ClaudeBackgroundTaskRowWriter {
   dispose(): void {
     this.pending.clear()
     this.identities.clear()
+  }
+}
+
+export function createClaudeBackgroundTaskTurnOpener(
+  openOutputTurn: ((frame: Record<string, unknown>, observedAt: number) => void) | undefined,
+  invocations: ClaudeTaskInvocations
+) {
+  return (
+    journaling: { frame: Record<string, unknown>; observedAt: number } | null,
+    open: boolean,
+    id: string | null,
+    row?: ClaudeBackgroundTaskRow
+  ): (() => void) => {
+    const frame = journaling?.frame
+    const invocation =
+      row?.invocation ??
+      (frame && id !== null
+        ? (invocations.selection(frame, id)?.invocation ??
+          invocations.get(id, claudeBackgroundTaskToolUseId(frame)))
+        : undefined)
+    return () => {
+      // Task inventory from a known child cannot assert execution of the root.
+      const subtype = frame?.subtype
+      if (
+        journaling &&
+        open &&
+        invocation?.parentTaskId === undefined &&
+        (typeof subtype !== 'string' ||
+          !CLAUDE_BACKGROUND_TASK_SILENT_REFRESH_SUBTYPES.has(subtype))
+      ) {
+        openOutputTurn?.(journaling.frame, journaling.observedAt)
+      }
+    }
   }
 }

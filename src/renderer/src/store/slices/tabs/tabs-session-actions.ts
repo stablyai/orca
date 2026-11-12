@@ -1,33 +1,39 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace-session-hydration-keys'
+import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import {
   buildValidWorktreeIdsForSessionHydration,
   collectPersistedWorktreeIdsForSessionHydration
-} from '../degraded-repo-worktree-validity'
-import { buildHydratedTabState } from '../tabs-hydration'
+} from '../../../../../shared/worktree/degraded-repo-worktree-validity'
+import { buildHydratedTabState } from './tabs-hydration'
 import { projectWorktreeTabModelReconciliation } from './tabs-reconciliation'
-import { createWorktreeTabModelReconciliationBatch } from './tabs-reconciliation-batch'
+import {
+  createWorktreeTabModelReconciliationBatch,
+  finishReconciliationDrafts
+} from './tabs-reconciliation-batch'
 import type { AppState } from '../../types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
+import { markFullResync } from '../../keyed-record-transitions'
+import { markPatchFullResync } from '../../seam-record-fields'
 
-function replaceWorkspaceRecordKeys<T>(
-  current: Record<string, T>,
-  hydrated: Record<string, T>,
+// Cold path: scoped hydration rebuilds the selected workspaces' entries from the session snapshot.
+function replaceWorkspaceRecordKeys<V>(
+  current: Record<string, V>,
+  hydrated: Record<string, V>,
   workspaceKeys: ReadonlySet<string>
-): Record<string, T> {
-  return {
-    ...Object.fromEntries(Object.entries(current).filter(([key]) => !workspaceKeys.has(key))),
-    ...Object.fromEntries(Object.entries(hydrated).filter(([key]) => workspaceKeys.has(key)))
-  }
+): Record<string, V> {
+  return markFullResync(
+    {
+      ...Object.fromEntries(Object.entries(current).filter(([key]) => !workspaceKeys.has(key))),
+      ...Object.fromEntries(Object.entries(hydrated).filter(([key]) => workspaceKeys.has(key)))
+    },
+    'hydration'
+  )
 }
 
-/**
- * Folds every workspace's reconciliation into one patch. Equivalent to
- * applying each patch with its own `set()`: each projection reads the state
- * left by its predecessors (they share `unreadTerminalTabs` and the orphan
- * cleanup maps), only the store write and subscriber fanout are deferred.
- */
+/** Fold in workspace order so shared unread/orphan maps see prior patches; defer only the store write and subscriber notifications. */
 function projectWorktreeTabModelReconciliations(
   state: AppState,
   worktreeIds: readonly string[]
@@ -44,7 +50,8 @@ function projectWorktreeTabModelReconciliations(
     Object.assign(merged, patch)
     Object.assign(working, patch)
   }
-  return merged
+  // The fold's drafts finish once, after every workspace has written its entries.
+  return Object.assign(merged, finishReconciliationDrafts(batch.drafts, batch.writtenDraftFields))
 }
 
 export function createTabsSessionActions(
@@ -59,6 +66,10 @@ export function createTabsSessionActions(
       if (worktreeIds.length === 0) {
         return
       }
+      // Switch point: main's frames draw the tab bar, so reconcile writes no structure of its own.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        return
+      }
       const patch = projectWorktreeTabModelReconciliations(get(), worktreeIds)
       if (Object.keys(patch).length > 0) {
         set(patch)
@@ -67,7 +78,8 @@ export function createTabsSessionActions(
 
     reconcileWorktreeTabModel: (worktreeId) => {
       const reconciliation = projectWorktreeTabModelReconciliation(get(), worktreeId)
-      if (Object.keys(reconciliation.patch).length > 0) {
+      // Switch point: the counts only; main's frames draw the tab bar.
+      if (!ORCA_LAYOUT_OWNER_IS_MAIN && Object.keys(reconciliation.patch).length > 0) {
         set(reconciliation.patch)
       }
       return {
@@ -81,13 +93,19 @@ export function createTabsSessionActions(
       const persistedWorktreeIds = collectPersistedWorktreeIdsForSessionHydration(session)
       const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(state, persistedWorktreeIds)
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
-      for (const workspace of state.folderWorkspaces) {
+      for (const workspace of selectFolderWorkspaces(state)) {
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
       addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
-      const hydrated = buildHydratedTabState(session, validWorktreeIds)
+      const hydrated = buildHydratedTabState(
+        session,
+        validWorktreeIds,
+        undefined,
+        new Set(options?.wslMovedChatWorkspaceKeys)
+      )
       if (!options?.replaceWorkspaceKeys) {
-        set(hydrated)
+        // Cold path: a full session hydration rebuilds every workspace's tab state.
+        set(markPatchFullResync(hydrated, 'hydration'))
         return
       }
       const replaceWorkspaceKeys = new Set(options.replaceWorkspaceKeys)

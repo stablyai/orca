@@ -1,31 +1,39 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
-import { getGitCloneFailureMessage } from '../../../shared/git-clone-failure-message'
-import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../../git/runner'
-import { reuseSavedCloneTarget } from '../../git/saved-clone-target'
-import { getRepoName } from '../../git/repo'
-import type { ClaimedCloneTarget } from '../../git/repo-clone-path'
+import { getGitCloneFailureMessage } from '../../../shared/git/remotes/git-clone-failure-message'
+import { gitSpawnAfterWindowsEnvironmentReady } from '../../git/command-runner/git-spawn'
+import { promptGuardGitEnv } from '../../git/command-runner/git-environment/git-process-env'
+import { reuseSavedCloneTarget } from '../../git/repositories/cloning/saved-clone-target'
+import { checkCloneTarget } from '../../git/repositories/cloning/clone-target-check'
+import type { CloneTargetArgs } from '../../../shared/git/clone/clone-target-check'
+import { getRepoName } from '../../git/repositories/repository-name'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
+
 import {
+  type ClaimedCloneTarget,
   cleanupClaimedCloneTarget,
   claimCloneTarget,
   deriveValidatedClonePath,
-  getClonePathComparisonKey
-} from '../../git/repo-clone-path'
+  getClonePathComparisonKey,
+  getSavedProjectPathKeys
+} from '../../git/repositories/cloning/repo-clone-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { runWithClonePathLock } from './clone-path-lock'
-import { abortActiveRemoteClone, cloneRemoteRepo } from './remote-repo-clone'
+import { emitCloneProgressFromText } from './repo-clone-progress'
+import { resolveClonedFolderConversion } from '../../workspaces/catalog/folder-repo-git-conversion'
+import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'
+import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
 
 type ActiveCloneMetadata = {
   path: string
@@ -38,24 +46,12 @@ type ActiveCloneMetadata = {
   resolvePendingAbortCleanup: (() => void) | null
 }
 
-// Why: module-scoped so the abort handle survives macOS window re-creation, when registerRepoHandlers re-runs.
+// Module scope preserves cancellation across macOS window recreation.
 let activeClone: ActiveCloneMetadata | null = null
 const pendingLocalCloneControllers = new Set<AbortController>()
 let nextCloneGeneration = 1
 const latestCloneGenerationByPath = new Map<string, number>()
 const pendingAbortCleanupByPath = new Map<string, Promise<void>>()
-
-function emitCloneProgressFromText(mainWindow: BrowserWindow, text: string): void {
-  for (const line of text.split(/[\r\n]+/)) {
-    const match = line.match(/^([\w\s]+):\s+(\d+)%/)
-    if (match && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('repos:clone-progress', {
-        phase: match[1].trim(),
-        percent: Number.parseInt(match[2], 10)
-      })
-    }
-  }
-}
 
 async function cleanupOwnedCloneTarget(metadata: ActiveCloneMetadata): Promise<void> {
   if (!metadata.claimedTarget.canCleanup || !metadata.claimedTarget.ownedDirectoryIdentity) {
@@ -64,7 +60,7 @@ async function cleanupOwnedCloneTarget(metadata: ActiveCloneMetadata): Promise<v
   if (latestCloneGenerationByPath.get(metadata.pathKey) !== metadata.generation) {
     return
   }
-  // Why: a fast retry may attach a newer process before the aborted one closes; the old close handler must not delete it.
+  // An aborted clone must not delete a newer retry targeting the same path.
   if (
     activeClone &&
     activeClone.process !== metadata.process &&
@@ -98,7 +94,11 @@ function settleCloneAbortCleanup(metadata: ActiveCloneMetadata): void {
   metadata.resolvePendingAbortCleanup = null
 }
 
-export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerRepoCloneHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
+): void {
   ipcMain.handle('repos:cloneAbort', async () => {
     for (const controller of pendingLocalCloneControllers) {
       controller.abort()
@@ -111,214 +111,221 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
       clone.process.kill()
       activeClone = null
     }
-    abortActiveRemoteClone()
   })
 
-  ipcMain.handle(
-    'repos:clone',
-    async (_event, args: { url: string; destination: string }): Promise<Repo> => {
-      // Why: derive the repo folder name from the URL's last segment, matching default git clone behavior.
-      const clonePath = deriveValidatedClonePath(args)
-      const clonePathKey = getClonePathComparisonKey(clonePath)
-      // Remote projects can share this path string without belonging to this clone host.
-      const findSaved = (): Repo | undefined =>
-        store
-          .getRepos()
-          .find(
-            (r) =>
-              getClonePathComparisonKey(r.path) === clonePathKey &&
-              getRepoExecutionHostId(r) === LOCAL_EXECUTION_HOST_ID
-          )
-      return runWithClonePathLock(clonePathKey, async () => {
-        await pendingAbortCleanupByPath.get(clonePathKey)
-        const cloneMetadataRef: { current: ActiveCloneMetadata | null } = { current: null }
-        let claimedTarget: ClaimedCloneTarget
-        let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
-        // Why: registered before the saved-project check so Cancel also stops that git read.
-        const pendingController = new AbortController()
-        pendingLocalCloneControllers.add(pendingController)
-        try {
-          const reused = await reuseSavedCloneTarget(
-            findSaved,
-            args.url,
-            LOCAL_EXECUTION_HOST_ID,
-            pendingController.signal
-          )
-          if (reused) {
-            // Why: clone_url always produces a git repo.
-            emitRepoAdded('clone_url', true, true)
-            return reused
-          }
-          // Why: gitSpawn cwd is args.destination, so it must exist before spawn (fresh installs may lack the defaulted parent).
-          await mkdir(args.destination, { recursive: true })
-          claimedTarget = await claimCloneTarget(clonePath)
-          // Why: spawn (not execFile) avoids the maxBuffer limit — clone progress on stderr can exceed Node's 1 MB default.
-          // Why: --progress forces git to emit progress even when stderr isn't a TTY.
-          try {
-            // Why: use the parent destination as cwd so the runner detects a WSL path and routes through wsl.exe.
-            // Why: '--' isolates the URL so a malicious URL can't be read as git flags (command injection).
-            proc = await gitSpawnAfterWindowsEnvironmentReady(
-              ['clone', '--progress', '--', args.url, clonePath],
-              {
-                cwd: args.destination,
-                admissionTier: 'interactive',
-                // Why: without this, an auth-needing clone pops Git Credential Manager's OAuth window on Windows, unclosable in a restricted env (issue #7652).
-                env: promptGuardGitEnv(),
-                signal: pendingController.signal,
-                stdio: ['ignore', 'ignore', 'pipe']
-              }
-            )
-          } catch (err) {
-            await cleanupClaimedCloneTarget(clonePath, claimedTarget)
-            const message = err instanceof Error ? err.message : String(err)
-            throw new Error(`Clone failed: ${message}`)
-          }
-        } finally {
-          pendingLocalCloneControllers.delete(pendingController)
+  // Remote projects can share this path string without belonging to this clone host.
+  const findLocalSaved = (pathKeys: string[]): Repo | undefined =>
+    store
+      .getRepos()
+      .find(
+        (r) =>
+          pathKeys.includes(getClonePathComparisonKey(r.path)) &&
+          getRepoExecutionHostId(r) === LOCAL_EXECUTION_HOST_ID
+      )
+
+  ipcMain.handle('repos:checkCloneTarget', (_event, args: CloneTargetArgs) =>
+    checkCloneTarget(args, findLocalSaved, LOCAL_EXECUTION_HOST_ID)
+  )
+
+  ipcMain.handle('repos:clone', async (_event, args: CloneTargetArgs): Promise<Repo> => {
+    const clonePath = deriveValidatedClonePath(args)
+    const clonePathKey = getClonePathComparisonKey(clonePath)
+    let savedPathKeys: string[] = []
+    const findSaved = (): Repo | undefined => findLocalSaved(savedPathKeys)
+    const repo = await runWithClonePathLock(clonePathKey, async () => {
+      await pendingAbortCleanupByPath.get(clonePathKey)
+      // Read after the lock so lookup sees what a queued clone of this path registered.
+      savedPathKeys = await getSavedProjectPathKeys(clonePath)
+      const cloneMetadataRef: { current: ActiveCloneMetadata | null } = { current: null }
+      let claimedTarget: ClaimedCloneTarget
+      let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
+      // Register before saved-project reads so Cancel can abort those Git calls too.
+      const pendingController = new AbortController()
+      pendingLocalCloneControllers.add(pendingController)
+      try {
+        const reused = await reuseSavedCloneTarget(
+          findSaved,
+          args.url,
+          LOCAL_EXECUTION_HOST_ID,
+          pendingController.signal
+        )
+        if (reused) {
+          emitRepoAdded('clone_url', true, true)
+          return reused
         }
-        await new Promise<void>((resolve, reject) => {
-          const generation = nextCloneGeneration++
-          latestCloneGenerationByPath.set(clonePathKey, generation)
-          const metadata: ActiveCloneMetadata = {
-            path: clonePath,
-            pathKey: clonePathKey,
-            claimedTarget,
-            process: proc,
-            abortRequested: false,
-            generation,
-            pendingAbortCleanup: null,
-            resolvePendingAbortCleanup: null
-          }
-          cloneMetadataRef.current = metadata
-          activeClone = metadata
-
-          let stderrTail = ''
-          let settled = false
-          proc.stderr!.on('data', (chunk: Buffer) => {
-            const text = chunk.toString()
-            stderrTail = (stderrTail + text).slice(-4096)
-
-            // Why: git progress lines use \r to overwrite in-place; parse fragments the same as SSH clone.
-            emitCloneProgressFromText(mainWindow, text)
-          })
-
-          const finishClone = async (
-            code: number | null,
-            signal: NodeJS.Signals | null,
-            err?: Error
-          ) => {
-            if (settled) {
-              return
+        // Fresh installs may lack the destination used as the clone process cwd.
+        await mkdir(args.destination, { recursive: true })
+        claimedTarget = await claimCloneTarget(clonePath)
+        // Stream progress to avoid execFile buffer limits; --progress also works without a TTY.
+        try {
+          // Destination cwd enables WSL routing; '--' prevents URL content from becoming Git flags.
+          proc = await gitSpawnAfterWindowsEnvironmentReady(
+            ['clone', '--progress', '--', args.url, clonePath],
+            {
+              cwd: args.destination,
+              // Host Git on purpose: the clone makes a new repo no project owns, even inside one.
+              hostGit: true,
+              admissionTier: 'interactive',
+              // Suppress Windows Git Credential Manager OAuth windows during noninteractive cloning (#7652).
+              env: promptGuardGitEnv(),
+              signal: pendingController.signal,
+              stdio: ['ignore', 'ignore', 'pipe']
             }
-            settled = true
-            // Why: only null activeClone if it still points to this proc; abort-and-retry may have reassigned it, stranding the new clone.
-            if (activeClone?.process === proc) {
-              activeClone = null
-            }
+          )
+        } catch (err) {
+          await cleanupClaimedCloneTarget(clonePath, claimedTarget)
+          const message = err instanceof Error ? err.message : String(err)
+          throw new Error(`Clone failed: ${message}`)
+        }
+      } finally {
+        pendingLocalCloneControllers.delete(pendingController)
+      }
+      await new Promise<void>((resolve, reject) => {
+        const generation = nextCloneGeneration++
+        latestCloneGenerationByPath.set(clonePathKey, generation)
+        const metadata: ActiveCloneMetadata = {
+          path: clonePath,
+          pathKey: clonePathKey,
+          claimedTarget,
+          process: proc,
+          abortRequested: false,
+          generation,
+          pendingAbortCleanup: null,
+          resolvePendingAbortCleanup: null
+        }
+        cloneMetadataRef.current = metadata
+        activeClone = metadata
 
-            const cloneSucceeded = !err && code === 0 && !signal
-            if (!cloneSucceeded) {
-              // Why: only the process that created this target may remove it, and only after git reports failure.
-              await cleanupOwnedCloneTarget(metadata)
-            }
-            if (metadata.abortRequested && !cloneSucceeded) {
-              settleCloneAbortCleanup(metadata)
-            }
-            if (latestCloneGenerationByPath.get(metadata.pathKey) === metadata.generation) {
-              latestCloneGenerationByPath.delete(metadata.pathKey)
-            }
+        let stderrTail = ''
+        let settled = false
+        proc.stderr!.on('data', (chunk: Buffer) => {
+          const text = chunk.toString()
+          stderrTail = (stderrTail + text).slice(-4096)
 
-            if (err) {
-              reject(new Error(`Clone failed: ${err.message}`))
-            } else if (signal === 'SIGTERM') {
-              reject(new Error('Clone aborted'))
-            } else if (code === 0) {
-              resolve()
-            } else {
-              reject(
-                new Error(`Clone failed: ${getGitCloneFailureMessage(stderrTail, { clonePath })}`)
-              )
-            }
-          }
-
-          proc.on('error', (err) => {
-            void finishClone(null, null, err)
-          })
-
-          proc.on('close', (code, signal) => {
-            void finishClone(code, signal)
-          })
+          // Git progress uses carriage-return fragments, matching the SSH clone parser.
+          emitCloneProgressFromText(mainWindow, text)
         })
 
-        try {
-          // Why: check after clone (path didn't exist before); reuse+upgrade a folder repo clone landed into instead of duplicating.
-          const existing = findSaved()
-          if (existing) {
-            if (isFolderRepo(existing)) {
-              const updated = store.updateRepo(existing.id, {
-                kind: 'git',
-                projectHostSetupMethod: 'cloned'
-              })
-              if (updated) {
-                await prepareLocalWorktreeRootForRepo(store, updated)
-                invalidateAuthorizedRootsCache()
-                notifyReposChanged(mainWindow)
-                // Why: folder→git upgrade is a real new git repo provisioning event.
-                emitRepoAdded('clone_url', false, true)
-                return updated
-              }
+        const finishClone = async (
+          code: number | null,
+          signal: NodeJS.Signals | null,
+          err?: Error
+        ) => {
+          if (settled) {
+            return
+          }
+          settled = true
+          // Abort-and-retry may already have replaced the active process.
+          if (activeClone?.process === proc) {
+            activeClone = null
+          }
+
+          const cloneSucceeded = !err && code === 0 && !signal
+          if (!cloneSucceeded) {
+            // Failed-clone cleanup belongs only to the process that created this target.
+            await cleanupOwnedCloneTarget(metadata)
+          }
+          if (metadata.abortRequested && !cloneSucceeded) {
+            settleCloneAbortCleanup(metadata)
+          }
+          if (latestCloneGenerationByPath.get(metadata.pathKey) === metadata.generation) {
+            latestCloneGenerationByPath.delete(metadata.pathKey)
+          }
+
+          if (err) {
+            reject(new Error(`Clone failed: ${err.message}`))
+          } else if (signal === 'SIGTERM') {
+            reject(new Error('Clone aborted'))
+          } else if (code === 0) {
+            resolve()
+          } else {
+            reject(
+              new Error(`Clone failed: ${getGitCloneFailureMessage(stderrTail, { clonePath })}`)
+            )
+          }
+        }
+
+        proc.on('error', (err) => {
+          void finishClone(null, null, err)
+        })
+
+        proc.on('close', (code, signal) => {
+          void finishClone(code, signal)
+        })
+      })
+
+      try {
+        // Clone may land in an existing folder project; upgrade it instead of duplicating registration.
+        savedPathKeys = await getSavedProjectPathKeys(clonePath)
+        const existing = findSaved()
+        if (existing) {
+          const conversion = await resolveClonedFolderConversion(store, existing)
+          const current = findSaved()
+          if (
+            current &&
+            conversion &&
+            findExtraFolderWorkspaceIds(current, store.getAllWorktreeMeta()).length === 0 &&
+            current.path === existing.path &&
+            isFolderRepo(current) &&
+            getRepoExecutionHostId(current) === getRepoExecutionHostId(existing)
+          ) {
+            const updated = store.updateRepo(current, {
+              kind: 'git',
+              ...conversion,
+              projectHostSetupMethod: 'cloned'
+            })
+            if (updated) {
+              await prepareLocalWorktreeRootForRepo(store, updated)
+              invalidateAuthorizedRootsCache()
+              notifyReposChanged(mainWindow)
+              // Folder-to-Git conversion counts as new Git provisioning.
+              emitRepoAdded('clone_url', false, true)
+              return updated
             }
-            // Why: git re-created this project's folder, so its worktree root is gone with it and
-            // the authorized-roots cache still holds the answers from before the folder came back.
-            await prepareLocalWorktreeRootForRepo(store, existing)
+          }
+          // Recreating the folder loses its worktree root and invalidates cached authorization.
+          if (current) {
+            await prepareLocalWorktreeRootForRepo(store, current)
             invalidateAuthorizedRootsCache()
             notifyReposChanged(mainWindow)
             emitRepoAdded('clone_url', true, true)
-            return existing
-          }
-
-          const detected = await detectRepoIconAndUpstream({
-            repoPath: clonePath,
-            kind: 'git',
-            executionHostId: LOCAL_EXECUTION_HOST_ID
-          })
-          const repo: Repo = {
-            id: randomUUID(),
-            path: clonePath,
-            displayName: getRepoName(clonePath),
-            badgeColor: DEFAULT_REPO_BADGE_COLOR,
-            ...detected,
-            addedAt: Date.now(),
-            kind: 'git',
-            externalWorktreeVisibilityLegacy: false,
-            projectHostSetupMethod: 'cloned'
-          }
-
-          store.addRepo(repo)
-          await prepareLocalWorktreeRootForRepo(store, repo)
-          invalidateAuthorizedRootsCache()
-          notifyReposChanged(mainWindow)
-          emitRepoAdded('clone_url', false, true)
-          return repo
-        } finally {
-          const metadata = cloneMetadataRef.current
-          if (metadata?.abortRequested) {
-            settleCloneAbortCleanup(metadata)
+            return current
           }
         }
-      })
-    }
-  )
 
-  ipcMain.handle(
-    'repos:cloneRemote',
-    async (
-      _event,
-      args: { connectionId: string; url: string; destination: string }
-    ): Promise<Repo> => {
-      const repo = await cloneRemoteRepo(store, mainWindow, args)
-      notifyReposChanged(mainWindow)
-      return repo
-    }
-  )
+        // Register Git's checkout path so the clone stays its own selected checkout.
+        const repoPath = (await inspectGitRepoForRegistrationAsync(clonePath)).rootPath
+        const detected = await detectRepoLocalMetadata({
+          repoPath,
+          kind: 'git',
+          executionHostId: LOCAL_EXECUTION_HOST_ID
+        })
+        const repo: Repo = {
+          id: randomUUID(),
+          path: repoPath,
+          displayName: getRepoName(clonePath),
+          badgeColor: DEFAULT_REPO_BADGE_COLOR,
+          ...detected,
+          addedAt: Date.now(),
+          kind: 'git',
+          externalWorktreeVisibilityLegacy: false,
+          projectHostSetupMethod: 'cloned'
+        }
+
+        store.addRepo(repo)
+        await prepareLocalWorktreeRootForRepo(store, repo)
+        invalidateAuthorizedRootsCache()
+        notifyReposChanged(mainWindow)
+        emitRepoAdded('clone_url', false, true)
+        return repo
+      } finally {
+        const metadata = cloneMetadataRef.current
+        if (metadata?.abortRequested) {
+          settleCloneAbortCleanup(metadata)
+        }
+      }
+    })
+    enqueueMetadata([repo])
+    return repo
+  })
 }

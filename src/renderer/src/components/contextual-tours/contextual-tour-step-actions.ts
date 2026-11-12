@@ -14,6 +14,7 @@ export function performContextualTourStepAction(args: {
   openClientHostedBrowserSettings: () => void
   openWorkspaceComposer: () => void
   dispatchTerminalPaneSplit: (detail: RequestActiveTerminalPaneSplitDetail) => void
+  splitActiveChat: () => void
   schedule: (callback: () => void) => void
 }): void {
   const advanceOrFinish = (): void => {
@@ -36,10 +37,11 @@ export function performContextualTourStepAction(args: {
         args.dispatchTerminalPaneSplit({ tabId: args.activeTabId, direction: 'vertical' })
       }
       return
+    case 'split-chat-pane':
+      args.splitActiveChat()
+      return
     case 'create-worktree':
-      // Why: opening the composer cancels this tour (it isn't allowed over the
-      // modal) and hands off to the workspace-creation tour. Detach first so the
-      // terminal source's unmount cleanup can't record a stray suppression.
+      // Detach before composer handoff; the tour cancels over modals and source unmount must not record stray suppression.
       args.detachContextualTourSource()
       args.setSidebarOpen(true)
       args.openWorkspaceComposer()
@@ -49,8 +51,7 @@ export function performContextualTourStepAction(args: {
       advanceOrFinish()
       return
     case 'open-tasks':
-      // Why: the auto tour starts from the terminal, but this CTA intentionally
-      // navigates to Tasks before the final setup-guide step.
+      // Detach the terminal source before the CTA navigates to Tasks for the final guide step.
       args.detachContextualTourSource()
       args.openTaskPage()
       advanceOrFinish()

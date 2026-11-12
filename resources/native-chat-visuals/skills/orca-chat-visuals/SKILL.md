@@ -2,7 +2,7 @@
 name: orca-chat-visuals
 description: Show a chart, diagram, table, report or mockup inline in this Orca chat as an HTML
   page. Use when a visual would help the user understand your answer. Only available when the
-  ORCA_CHAT_VISUALS_DIR environment variable is set.
+  ORCA_CHAT_SCRATCH_DIR environment variable is set.
 user-invocable: false
 ---
 
@@ -13,16 +13,29 @@ clearer.
 
 ## Writing the page
 
-- Save it in the folder named by `ORCA_CHAT_VISUALS_DIR` (`printenv ORCA_CHAT_VISUALS_DIR`; in
-  PowerShell `$env:ORCA_CHAT_VISUALS_DIR`). If it's unset or you can't write there, skip the visual.
+- Save it in the folder named by `ORCA_CHAT_SCRATCH_DIR` (`printenv ORCA_CHAT_SCRATCH_DIR`; in
+  PowerShell `$env:ORCA_CHAT_SCRATCH_DIR`). If it's unset or you can't write there, skip the visual.
+  This folder belongs to this chat and is kept as long as the chat. Save files meant for the
+  project in the workspace.
 - One complete HTML file per visual, directly in that folder, under 512 KB, with a new file name
   each time (e.g. `latency-by-region-7c1e.html`): letters, digits, `.`, `_`, `-`, ending in `.html`.
 - Inline your styles, scripts and data. Libraries and fonts may load only from cdn.jsdelivr.net,
   unpkg.com, cdnjs.cloudflare.com, esm.sh, fonts.googleapis.com and fonts.gstatic.com. The page
   can't make network requests; use inline SVG or `data:` URLs for images.
 - Don't size anything to the viewport height (`100vh`); Orca fits the frame to your content.
-- Optional: Orca's theme colors are available as CSS variables (`--background`, `--foreground`,
-  `--muted-foreground`, `--border`, `--primary`, `--chart-1` to `--chart-5`).
+- Use Orca's theme variables for surfaces, text, and controls; pair hover `--accent` with
+  `--accent-foreground`. Scope fixed-palette CSS to its mockup. Orca updates tokens and
+  `color-scheme` live. Charts use `--chart-1` to `--chart-5`.
+- Make the saved HTML readable in an ordinary browser too: use paired fallback values such as
+  `background:var(--background,#fff);color:var(--foreground,#171717)` for every theme-token use.
+  Scripts reading chart colors need a fallback too: `getComputedStyle(document.documentElement)
+  .getPropertyValue('--chart-1').trim() || '#2563eb'`. Never redefine Orca's tokens on `:root`:
+  those declarations would override the viewer's live theme. Use separate names for local colors.
+- Exposed tokens: `--background`, `--foreground`, `--card`, `--card-foreground`, `--popover`,
+  `--popover-foreground`, `--primary`, `--primary-foreground`, `--secondary`,
+  `--secondary-foreground`, `--muted`, `--muted-foreground`, `--accent`, `--accent-foreground`,
+  `--destructive`, `--destructive-foreground`, `--border`, `--input`, `--ring`, `--radius`,
+  `--font-sans`, `--font-mono`, and `--chart-1` through `--chart-5`.
 
 ## Showing it
 

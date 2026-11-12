@@ -1,10 +1,10 @@
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type {
   ProviderCheckSummary,
-  GitHubOwnerRepo,
-  RpcClient,
-  HostedReviewDecision,
-  LinearMobileIssue
-} from './mobile-tasks-dependencies'
+  GitHubOwnerRepo
+} from '../../../src/shared/github/pull-request-types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { HostedReviewDecision } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 
 export type RepoSummary = {
   id: string
@@ -13,8 +13,8 @@ export type RepoSummary = {
   badgeColor?: string
   kind?: 'git' | 'folder'
   connectionId?: string | null
+  executionHostId?: ExecutionHostId | null
   issueSourcePreference?: IssueSourcePreference
-  /** Fork parent resolved by the host; drives upstream Project row matching. */
   upstream?: { owner: string; repo: string; host?: string } | null
 }
 
@@ -32,12 +32,14 @@ export type GitHubWorkItem = {
   author: string | null
   branchName?: string
   baseRefName?: string
+  headSha?: string
   isCrossRepository?: boolean
   additions?: number
   deletions?: number
   changedFiles?: number
   repoId: string
   repoName: string
+  prRepo?: GitHubOwnerRepo
   reviewDecision?: string | null
   reviewRequests?: GitHubAssignableUser[]
   latestReviews?: GitHubPRReviewSummary[]
@@ -104,11 +106,7 @@ export type GitLabWorkItem = {
   repoName: string
 }
 
-/**
- * A to-do as the reader proves it, not as the host declares it: the five members the screen reads
- * with no guard are required, and the rest are optional because a guard already stands in front of
- * each one. See `gitlabTodoSchema` in task-list-reply-schema.ts.
- */
+// Require only unguarded reader fields; optional host fields retain consumer fallbacks.
 export type GitLabTodo = {
   id: number
   actionName: string
@@ -156,8 +154,6 @@ export type LinearIssueChild = {
   url: string
 }
 
-export type LinearIssue = LinearMobileIssue
-
 export type LinearState = {
   id: string
   name: string
@@ -179,16 +175,12 @@ export type DetailComment = {
   authorAvatarUrl?: string
   user?: { displayName?: string }
   isBot?: boolean
+  // True when the host's gh/glab account wrote it; older hosts send it only for GitHub GraphQL reads.
+  viewerDidAuthor?: boolean
   body: string
   createdAt?: string
   url?: string
-  /**
-   * `content` is whatever the provider called the reaction — GitHub's `GitHubReactionContent`
-   * (`'+1'`, `'-1'`, `laugh`, ...) and absent on GitLab, whose rows are `{ name, count }`. It was
-   * declared as an eight-arm mobile vocabulary no producer sends; `COMMENT_REACTION_EMOJI` is
-   * keyed by that same vocabulary and so resolves no glyph for a real reaction, which is a
-   * separate defect this type must not hide.
-   */
+  // Preserve provider tokens: GitHub sends +1/-1/etc.; GitLab may omit content. The legacy emoji map is not the wire vocabulary.
   reactions?: Array<{
     content?: string
     count: number
@@ -200,10 +192,7 @@ export type DetailComment = {
   isResolved?: boolean
 }
 
-/** `viewerViewedState` is `string`, not `GitHubPRFileViewedState`'s three arms: the reader forwards
- *  whatever arrives so an arm this build predates reaches the `=== 'VIEWED'` tests as itself.
- *  `status` keeps the host's seven arms because its only consumer sends it back as a
- *  `github.prFileContents` param, which the host validates against that same set. */
+// Unknown viewed states must reach equality checks unchanged; status stays closed because it round-trips to host validation.
 export type GitHubDetailFile = {
   path: string
   oldPath?: string
@@ -221,10 +210,7 @@ export type GitHubDetailCheck = {
   url?: string | null
 }
 
-/** Optional throughout because nothing reads a member unguarded: the review panels reach each flag
- *  through `?.`, and `splitContentLines` (github-pr-file-diff.ts:21) takes `string | undefined`
- *  behind a falsy guard. The host sets the two too-large flags only when it skipped a side for size
- *  (pull-request-file-contents.ts:54), so they are absent on an ordinary reply. */
+// Consumers guard every field; too-large flags are absent when a side was not skipped.
 export type GitHubPRFileContents = {
   original?: string
   modified?: string
@@ -237,6 +223,7 @@ export type GitHubPRFileContents = {
 export type DetailPayload =
   | {
       provider: 'github'
+      targetKey?: string
       body: string
       comments: DetailComment[]
       labels: string[]
@@ -256,14 +243,15 @@ export type DetailPayload =
       comments: DetailComment[]
       labels: string[]
       assignees: string[]
-      pipelineJobs: Array<{
+      pipelineJobs: {
         id?: number
         name: string
         stage: string
         status: string
+        allowFailure?: boolean
         webUrl?: string | null
         duration?: number | null
-      }>
+      }[]
     }
   | {
       provider: 'linear'
@@ -274,3 +262,19 @@ export type DetailPayload =
       project?: LinearProject
       children: LinearIssueChild[]
     }
+  | {
+      provider: 'jira'
+      description: string
+      comments: DetailComment[]
+      labels: string[]
+      assignee?: string
+      projectName: string
+      issueTypeName: string
+      priorityName?: string
+    }
+
+export function detailPayloadBody(payload: DetailPayload): string {
+  return payload.provider === 'linear' || payload.provider === 'jira'
+    ? payload.description
+    : payload.body
+}

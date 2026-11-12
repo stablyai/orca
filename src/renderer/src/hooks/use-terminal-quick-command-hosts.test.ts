@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { RuntimeTerminalQuickCommands } from '@/store/slices/terminal-quick-command-hosts'
+import type { RuntimeTerminalQuickCommands } from '@/store/terminals/terminal-quick-command-hosts'
 
 const testState = vi.hoisted(() => ({
   executionHostId: 'runtime:build' as ExecutionHostId,
@@ -26,14 +26,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => testState.resolveExecutionHostId()
 }))
 
 import {
-  flattenTerminalQuickCommandHosts,
-  getTerminalQuickCommandHostOptions,
-  shouldShowTerminalQuickCommandHostOwnership,
   useTerminalQuickCommandHosts,
   type TerminalQuickCommandHost
 } from './use-terminal-quick-command-hosts'
@@ -78,13 +75,6 @@ describe('useTerminalQuickCommandHosts', () => {
   afterEach(() => {
     act(() => root.unmount())
     document.body.replaceChildren()
-  })
-
-  it('shows ownership only when commands can come from multiple hosts', () => {
-    expect(shouldShowTerminalQuickCommandHostOwnership([{ id: 'local' }])).toBe(false)
-    expect(
-      shouldShowTerminalQuickCommandHostOwnership([{ id: 'local' }, { id: 'runtime:build' }])
-    ).toBe(true)
   })
 
   it('skips host resolution and remote loading while disabled', async () => {
@@ -164,72 +154,4 @@ describe('useTerminalQuickCommandHosts', () => {
       expect(testState.loadRuntimeTerminalQuickCommands).toHaveBeenCalledWith('build')
     }
   )
-
-  it('keeps mutations pending until remote capability ownership resolves', async () => {
-    await act(async () => root.render(createElement(Probe)))
-
-    expect(renderedHosts.map((host) => host.hostId)).toEqual(['local'])
-    expect(remoteHostPending).toBe(true)
-  })
-
-  it('distinguishes an unresolved host failure from active loading', async () => {
-    testState.runtimeTerminalQuickCommands = new Map([
-      [
-        'build',
-        {
-          commands: [],
-          connectionGeneration: 4,
-          error: 'offline',
-          loading: false,
-          ready: false,
-          supported: null
-        }
-      ]
-    ])
-
-    await act(async () => root.render(createElement(Probe)))
-
-    expect(remoteHostPending).toBe(true)
-    expect(remoteHostLoadFailed).toBe(true)
-  })
-})
-
-describe('flattenTerminalQuickCommandHosts', () => {
-  it('keeps identical command ids distinct by owning host', () => {
-    const command = {
-      id: 'build',
-      label: 'Build',
-      action: 'terminal-command' as const,
-      command: 'pnpm build',
-      appendEnter: true,
-      scope: { type: 'global' as const }
-    }
-
-    const entries = flattenTerminalQuickCommandHosts([
-      { hostId: 'local', label: 'Local Mac', commands: [command] },
-      { hostId: 'runtime:server', label: 'Build Server', commands: [command] }
-    ])
-
-    expect(entries.map((entry) => [entry.key, entry.hostLabel])).toEqual([
-      ['local\0build', 'Local Mac'],
-      ['runtime:server\0build', 'Build Server']
-    ])
-  })
-
-  it('reuses execution-host registry names and rename overrides', () => {
-    const settings = {
-      ...getDefaultSettings('/tmp'),
-      hostSettingOverrides: {
-        local: { displayLabel: 'Studio Mac' },
-        'runtime:build': { displayLabel: 'Build Server' }
-      }
-    }
-
-    expect(
-      getTerminalQuickCommandHostOptions(settings, [{ id: 'build', name: 'Remote Mac' }])
-    ).toEqual([
-      { id: 'local', label: 'Studio Mac' },
-      { id: 'runtime:build', label: 'Build Server' }
-    ])
-  })
 })

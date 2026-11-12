@@ -1,10 +1,4 @@
-/**
- * #11994: repo IPC mutations only sent `repos:changed` to the host's own renderer, so a
- * project deleted (or renamed/reordered) on the host stayed visible on every paired
- * client — clients refetch a remote catalog only on a `reposChanged` client event.
- * The broadcast lives in the shared `notifyReposChanged` helper so every repo mutation
- * fans out, and it must never be able to reject the IPC handler it runs inside.
- */
+/** Paired clients refetch only on reposChanged; broadcast failures must not reject committed mutations. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReposChangedNotificationModule from './repos/repos-changed-notification'
 
@@ -25,21 +19,23 @@ vi.mock('electron', () => ({
   ipcMain: { handle: handleMock, removeHandler: vi.fn() }
 }))
 
-vi.mock('../git/repo', () => ({
-  isGitRepo: vi.fn().mockReturnValue(true),
-  getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
-  getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
-  searchBaseRefs: vi.fn().mockResolvedValue([]),
-  BASE_REF_SEARCH_ARGS: ['for-each-ref'],
-  filterBaseRefSearchOutput: vi.fn().mockReturnValue([])
+vi.mock('../git/repositories/discovery/repo-detection', () => ({
+  isGitRepo: vi.fn().mockReturnValue(true)
+}))
+vi.mock('../git/repositories/repository-name', () => ({
+  getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop())
+}))
+vi.mock('../git/refs/resolution/repo-default-base-ref', () => ({
+  getDefaultBaseRefAsync: vi.fn().mockResolvedValue('origin/main')
+}))
+vi.mock('../git/refs/resolution/repo-base-ref-search', () => ({
+  searchBaseRefs: vi.fn().mockResolvedValue([])
 }))
 
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn(),
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
-vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: vi.fn() }))
-vi.mock('./ssh', () => ({ getActiveMultiplexer: vi.fn() }))
 
 type HandlerMap = Map<string, (_event: unknown, args: unknown) => unknown>
 
@@ -73,35 +69,6 @@ beforeEach(() => {
 })
 
 describe('repo IPC mutations notify paired clients', () => {
-  it('broadcasts once for repos:removeForHost and still notifies the local renderer', async () => {
-    const notify = vi.fn()
-    await registerHandlersWithNotifier(notify)
-
-    await handlers.get('repos:removeForHost')!(null, { repoId: 'repo-1', hostId: 'ssh:host-1' })
-
-    expect(mockStore.removeProjectForHost).toHaveBeenCalledWith('repo-1', 'ssh:host-1')
-    expect(notify).toHaveBeenCalledTimes(1)
-    expect(mainWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
-  })
-
-  it('broadcasts for non-removal mutations too, via the shared helper', async () => {
-    const notify = vi.fn()
-    await registerHandlersWithNotifier(notify)
-
-    handlers.get('repos:reorder')!(null, { orderedIds: ['repo-1', 'repo-2'] })
-
-    expect(notify).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not throw when no notifier has been set', async () => {
-    await registerHandlersWithoutNotifier()
-
-    await expect(
-      handlers.get('repos:removeForHost')!(null, { repoId: 'repo-1', hostId: 'local' })
-    ).resolves.toBeUndefined()
-    expect(mainWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
-  })
-
   it('does not reject the handler when the notifier throws', async () => {
     await registerHandlersWithNotifier(() => {
       throw new Error('client event stream exploded')

@@ -34,6 +34,23 @@ export type AntigravityMacOSCredentialTarget = {
 }
 const nativeTarget: AntigravityMacOSCredentialTarget = { service: 'gemini', account: 'antigravity' }
 
+/** Whether agy's keychain item exists, read from its attributes so macOS asks for no access. */
+export async function hasAntigravityMacOSCredential(target = nativeTarget): Promise<boolean> {
+  requireMacOS()
+  const result = await runSecurity([
+    'find-generic-password',
+    '-s',
+    target.service,
+    '-a',
+    target.account,
+    ...(target.keychainPath ? [target.keychainPath] : [])
+  ])
+  if (!result.timedOut && !result.signal && (result.code === 0 || result.code === 44)) {
+    return result.code === 0
+  }
+  throw new Error('The Antigravity macOS credential store could not be read.')
+}
+
 export async function readAntigravityMacOSCredential(
   target = nativeTarget
 ): Promise<AntigravityNativeCredential | null> {
@@ -71,7 +88,7 @@ export async function writeAntigravityMacOSCredential(
   }
   const keychain = target.keychainPath ? ` "${target.keychainPath}"` : ''
   const input = `add-generic-password -U -s "${target.service}" -a "${target.account}" -w ${encoded}${keychain}\n`
-  // security's interactive command buffer is limited; never risk a truncated credential write.
+  // Avoid truncating credentials in security’s limited interactive command buffer.
   if (Buffer.byteLength(input) > 4096) {
     throw new Error('Antigravity credentials exceed the macOS credential command limit.')
   }

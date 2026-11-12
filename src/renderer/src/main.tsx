@@ -1,36 +1,44 @@
-// Why first, and why the import-free shim: react-dom reads
-// __REACT_DEVTOOLS_GLOBAL_HOOK__ once at module evaluation, so the global has to
-// exist before it. The observer below only wraps a property react-dom re-reads
-// per commit, so its own import graph can evaluate whenever it likes.
-import './lib/react-devtools-commit-hook-shim'
-import './lib/react-commit-cascade-observer'
+// Install the import-free hook before react-dom reads it during evaluation; the observer below wraps a per-commit property and can load later.
+import './diagnostics/react-commits/react-devtools-commit-hook-shim'
+import './diagnostics/react-commits/react-commit-cascade-observer'
 import './assets/main.css'
 
 import { StrictMode } from 'react'
 import { useTranslation } from 'react-i18next'
 import App from './App'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
+import { installRendererCrashDiagnostics } from './diagnostics/crash-reporting/crash-diagnostics'
+import { recordRendererCrashBreadcrumb } from './diagnostics/crash-reporting/crash-breadcrumb-recorder'
+import { installAutomationHostDiagnostic } from './components/automations/hosts/automation-host-diagnostics'
 import {
-  installRendererCrashDiagnostics,
-  recordRendererCrashBreadcrumb
-} from './lib/crash-diagnostics'
-import { installAutomationHostDiagnostic } from './components/automations/automation-host-diagnostics'
-import { applyDocumentTheme } from './lib/document-theme'
-import { installTypingLatencyDiagnostic } from './lib/typing-latency/diagnostic'
-import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
+  applyCachedPluginAppTheme,
+  applyDocumentTheme,
+  readCachedPluginAppTheme
+} from './app-shell/appearance/document-theme'
+import { installTypingLatencyDiagnostic } from './diagnostics/typing-latency/diagnostic'
+import { installAppKeyboardRouter } from './lib/keyboard/app-keyboard-router'
+import { shouldEnableReactGrab } from './diagnostics/react-commits/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
-import { translate } from './i18n/i18n'
-import { getOrCreateRendererRoot } from './lib/react-renderer-root'
-import { primeTerminalWebglAddon } from './lib/pane-manager/pane-webgl-renderer'
-import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPreviewLauncher'
+import { useTranslate } from './i18n/use-translate'
+import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root'
+import './lib/pane-manager/terminal-rendering/pane-webgl-renderer'
+import { primeTerminalWebglAddon } from './lib/pane-manager/terminal-rendering/terminal-webgl-addon-loader'
+import { SkillWarningPreviewLauncher } from './components/skills/installation/preview/SkillWarningPreviewLauncher'
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
-import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
+import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/browser-client-page-retained-elements'
+import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/browser-page-window-close'
+import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
+import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
+import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
+const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
+import.meta.hot?.dispose(disposeBodyOverlayAttributes)
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()
+installAppKeyboardRouter()
 installAutomationHostDiagnostic()
 
 if (
@@ -44,7 +52,13 @@ if (
   void import('react-grab/styles.css')
 }
 
-applyDocumentTheme('system', { disableTransitions: false })
+applyWindowMaterialToDocument()
+const cachedPluginTheme = readCachedPluginAppTheme()
+applyDocumentTheme(cachedPluginTheme?.base ?? 'system', { disableTransitions: false })
+if (cachedPluginTheme) {
+  applyCachedPluginAppTheme(cachedPluginTheme)
+}
+registerBrowserClientPageGuestMessageHandler(handleGuestWindowCloseMessage)
 const browserClientPageRenderer = installBrowserClientPageRenderer()
 import.meta.hot?.dispose(() => browserClientPageRenderer?.dispose())
 
@@ -55,13 +69,14 @@ if (!rootElement) {
 }
 
 function RendererRoot(): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="app.root"
       surface="app-root"
-      title={translate('app.recoverableError.rootTitle', 'Orca hit a renderer error.')}
-      description={translate(
+      title={t('app.recoverableError.rootTitle', 'Orca hit a renderer error.')}
+      description={t(
         'app.recoverableError.rootDescription',
         'The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.'
       )}
@@ -81,8 +96,5 @@ getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
 )
 recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')
 
-// Why here: the xterm WebGL addon is 243 KB, is only ever constructed once a
-// terminal attaches (many frames away), and is needed by nothing during boot.
-// Starting the load after the first render keeps it off the boot graph while
-// leaving it resolved long before any pane can attach.
+// Defer the 243KB WebGL addon until first render; panes need it only much later, keeping it off boot’s import graph.
 void primeTerminalWebglAddon()

@@ -1,11 +1,9 @@
-/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 6 work-item-search specs, not shipped code, and it falls outside
-   the *.test / *.spec / tests glob set. One consumer lives in tests/e2e, where the relative mock ids ('../git/...') resolve to
-   different modules, so moving these calls into the specs would silently stop mocking there. */
-import { afterEach, beforeEach, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { afterEach, beforeEach, vi, type Mock } from 'vitest'
+
 import { randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
 import type * as GithubApiRepositoryModule from './github-api-repository'
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { WorkItemSearchApi } from './__fixtures__/work-item-search-api'
 
 const {
@@ -18,10 +16,11 @@ const {
   capture: vi.fn<WorkItemSearchApi['capture']>(),
   sourceContext: { host: 'github.com', available: true }
 }))
-vi.mock('../git/command-runner/exec-file-capture', () => ({
+const gitExecFileAsync = vi.hoisted(() => vi.fn())
+vi.mock('../git/command-runner/process-capture/exec-file-capture', () => ({
   execFileCaptureToTermination: capture
 }))
-vi.mock('../git/command-runner/wsl-command-resolution', () => ({
+vi.mock('../git/command-runner/host-routing/wsl-command-resolution', () => ({
   resolveCommand: (binary: string, args: string[], cwd?: string, distro?: string) => ({
     binary,
     args,
@@ -31,9 +30,10 @@ vi.mock('../git/command-runner/wsl-command-resolution', () => ({
   }),
   resolveDefaultWslCli: () => null
 }))
-vi.mock('../git/runner', async () => ({
-  ghExecFileAsync: (await import('../git/command-runner/gh-exec-file')).ghExecFileAsync,
-  gitExecFileAsync: vi.fn()
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
+  gitExecFileAsync
 }))
 vi.mock('./github-api-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof GithubApiRepositoryModule>()
@@ -53,7 +53,10 @@ vi.mock('./github-api-repository', async (importOriginal) => {
 })
 
 import { _resetRateLimitCache } from './rate-limit'
-import { clearGhRateLimitBlock, ghRateLimitScopeKey } from '../git/gh-rate-limit-breaker'
+import {
+  clearGhRateLimitBlock,
+  ghRateLimitScopeKey
+} from '../git/command-runner/hosted-cli/gh-rate-limit-breaker'
 export let api: WorkItemSearchApi
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })

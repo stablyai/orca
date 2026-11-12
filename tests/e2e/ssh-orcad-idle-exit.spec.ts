@@ -1,14 +1,6 @@
-/**
- * A managed orcad that stops is started again by the client, on a real host:
- *
- * 1. Idle: quit the client, the server exits and records an idle stop; a relaunched client
- *    reconnects and the server is running again with that record consumed.
- * 2. Killed, then a reboot: a killed server comes back on the next call and adopts the daemon
- *    that kept its terminal; once both are gone, the next connect starts fresh.
- *
- * Docker only. `ORCA_E2E_ORCAD_CONVERT_TEMPLATE` names the linux-x64-glibc orcad build, and the
- * client forwards a short test-only quiet period to the server it launches.
- */
+// Recover real managed orcad after idle exit, kill/reboot and stale active-slot records on a fresh desktop (#27284).
+// Reuse surviving daemon PTYs after kill; start fresh after reboot and consume idle-stop records.
+// Docker only: ORCA_E2E_ORCAD_CONVERT_TEMPLATE must be linux-x64-glibc; forward a short test quiet period.
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
@@ -16,12 +8,12 @@ import { createRestartSession } from './helpers/orca-restart'
 import { reconnect } from './helpers/orcad-convert-flow'
 import { ORCAD_CONVERT_HOST_ENV } from './helpers/orcad-convert-host'
 import {
-  cleanupDockerSshRelayTarget,
-  DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
-  execDockerSshRelayTargetCommand,
-  startDockerSshRelayTarget,
-  type DockerSshRelayTarget
-} from './helpers/docker-ssh-relay-target'
+  cleanupDockerSshHostTarget,
+  DOCKER_SSH_HOST_REMOTE_REPO_PATH,
+  execDockerSshHostTargetCommand,
+  startDockerSshHostTarget,
+  type DockerSshHostTarget
+} from './helpers/docker-ssh-host-target'
 import { ORCAD_E2E_IDLE_TIMEOUT_ENV } from '../../src/shared/orcad-idle-exit'
 
 const HOST = process.env[ORCAD_CONVERT_HOST_ENV]
@@ -31,8 +23,8 @@ const IDLE_TIMEOUT_MS = 15_000
 const RECORD = '/root/.orca/orcad-idle-stop.json'
 
 /** PIDs of running orcad slots; empty once every slot has exited. */
-function runningOrcadPids(target: DockerSshRelayTarget): string[] {
-  return execDockerSshRelayTargetCommand(
+function runningOrcadPids(target: DockerSshHostTarget): string[] {
+  return execDockerSshHostTargetCommand(
     target,
     'for f in /root/.orca-remote/orcad-*/.orcad-pid; do pid=$(cat "$f" 2>/dev/null) && ' +
       'kill -0 "$pid" 2>/dev/null && echo "$pid"; done; true'
@@ -42,8 +34,8 @@ function runningOrcadPids(target: DockerSshRelayTarget): string[] {
     .filter(Boolean)
 }
 
-function readIdleStopRecord(target: DockerSshRelayTarget): unknown {
-  const raw = execDockerSshRelayTargetCommand(target, `cat ${RECORD} 2>/dev/null || true`).trim()
+function readIdleStopRecord(target: DockerSshHostTarget): unknown {
+  const raw = execDockerSshHostTargetCommand(target, `cat ${RECORD} 2>/dev/null || true`).trim()
   return raw ? JSON.parse(raw) : null
 }
 
@@ -54,7 +46,7 @@ test('a managed orcad stops after idling and starts again on the next connect', 
     `Set ${ORCAD_CONVERT_HOST_ENV}=docker and ORCA_E2E_ORCAD_CONVERT_TEMPLATE`
   )
   test.setTimeout(15 * 60_000)
-  const target = startDockerSshRelayTarget(testInfo)
+  const target = startDockerSshHostTarget(testInfo)
   const session = createRestartSession(testInfo, {
     ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE!,
     [ORCAD_E2E_IDLE_TIMEOUT_ENV]: String(IDLE_TIMEOUT_MS)
@@ -80,7 +72,7 @@ test('a managed orcad stops after idling and starts again on the next connect', 
       .catch((error: unknown) => {
         // The server logs what kept it up; without it a timeout explains nothing.
         console.error(
-          execDockerSshRelayTargetCommand(target, 'tail -n 40 /root/.orca-remote/orcad-*/orcad.log')
+          execDockerSshHostTargetCommand(target, 'tail -n 40 /root/.orca-remote/orcad-*/orcad.log')
         )
         throw error
       })
@@ -111,13 +103,13 @@ test('a managed orcad stops after idling and starts again on the next connect', 
       await session.close(app)
     }
     await session.dispose()
-    cleanupDockerSshRelayTarget(target)
+    cleanupDockerSshHostTarget(target)
   }
 })
 
 async function connectManagedHost(
   page: Page,
-  target: DockerSshRelayTarget
+  target: DockerSshHostTarget
 ): Promise<{ targetId: string; environmentId: string }> {
   const connected = await page.evaluate(
     async (input) => {
@@ -157,8 +149,8 @@ async function callEnvironment(page: Page, environmentId: string, method: string
 }
 
 /** The bracket keeps pgrep from matching the shell that runs it. */
-function processAlive(target: DockerSshRelayTarget, marker: string): boolean {
-  const found = execDockerSshRelayTargetCommand(
+function processAlive(target: DockerSshHostTarget, marker: string): boolean {
+  const found = execDockerSshHostTargetCommand(
     target,
     `pgrep -f '[s]leep ${marker}' >/dev/null && echo yes || true`
   )
@@ -172,7 +164,7 @@ test('a live managed process that does not answer remains unverifiable', async (
     'Requires the owned Docker SSH host and template'
   )
   test.setTimeout(5 * 60_000)
-  const target = startDockerSshRelayTarget(testInfo)
+  const target = startDockerSshHostTarget(testInfo)
   const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
   let app: ElectronApplication | null = null
   let pausedPid: string | null = null
@@ -187,7 +179,7 @@ test('a live managed process that does not answer remains unverifiable', async (
     expect(pids).toHaveLength(1)
     const pid = pids[0]
     expect(pid).toMatch(/^\d+$/)
-    execDockerSshRelayTargetCommand(target, `kill -STOP ${pid}`)
+    execDockerSshHostTargetCommand(target, `kill -STOP ${pid}`)
     pausedPid = pid
     const held = await page.evaluate((targetId) => window.api.ssh.connect({ targetId }), targetId)
     console.log(
@@ -200,7 +192,7 @@ test('a live managed process that does not answer remains unverifiable', async (
       environmentId,
       serving: { state: 'unverifiable' }
     })
-    execDockerSshRelayTargetCommand(target, `kill -CONT ${pid}`)
+    execDockerSshHostTargetCommand(target, `kill -CONT ${pid}`)
     pausedPid = null
     const recovered = JSON.parse(await reconnect(page, targetId))
     console.log(
@@ -215,13 +207,13 @@ test('a live managed process that does not answer remains unverifiable', async (
     expect(runningOrcadPids(target)).toEqual([pid])
   } finally {
     if (pausedPid) {
-      execDockerSshRelayTargetCommand(target, `kill -CONT ${pausedPid}`)
+      execDockerSshHostTargetCommand(target, `kill -CONT ${pausedPid}`)
     }
     if (app) {
       await session.close(app)
     }
     await session.dispose()
-    cleanupDockerSshRelayTarget(target)
+    cleanupDockerSshHostTarget(target)
   }
 })
 
@@ -232,7 +224,7 @@ test('a killed managed orcad comes back with its terminal, and starts fresh afte
     `Set ${ORCAD_CONVERT_HOST_ENV}=docker and ORCA_E2E_ORCAD_CONVERT_TEMPLATE`
   )
   test.setTimeout(15 * 60_000)
-  const target = startDockerSshRelayTarget(testInfo)
+  const target = startDockerSshHostTarget(testInfo)
   const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
   let app: ElectronApplication | null = null
   try {
@@ -245,19 +237,19 @@ test('a killed managed orcad comes back with its terminal, and starts fresh afte
     const marker = String(800_000 + Math.floor(Math.random() * 100_000))
     expect(
       await callEnvironment(page, environmentId, 'repo.add', {
-        path: DOCKER_SSH_RELAY_REMOTE_REPO_PATH
+        path: DOCKER_SSH_HOST_REMOTE_REPO_PATH
       })
     ).toMatchObject({ ok: true })
     expect(
       await callEnvironment(page, environmentId, 'terminal.create', {
-        worktree: `path:${DOCKER_SSH_RELAY_REMOTE_REPO_PATH}`,
+        worktree: `path:${DOCKER_SSH_HOST_REMOTE_REPO_PATH}`,
         command: `exec sleep ${marker}`
       })
     ).toMatchObject({ ok: true })
     await expect.poll(() => processAlive(target, marker), { timeout: 60_000 }).toBe(true)
 
     // Killed: the daemon keeps the terminal, and the next call starts orcad, which adopts it.
-    execDockerSshRelayTargetCommand(
+    execDockerSshHostTargetCommand(
       target,
       'kill -TERM $(cat /root/.orca-remote/orcad-*/.orcad-pid)'
     )
@@ -272,8 +264,8 @@ test('a killed managed orcad comes back with its terminal, and starts fresh afte
     expect(processAlive(target, marker)).toBe(true)
 
     // A reboot takes orcad, the daemon and its terminal; the next connect starts both fresh.
-    execDockerSshRelayTargetCommand(target, "pkill -KILL -f '/root/[.]orca-remote/' || true")
-    execDockerSshRelayTargetCommand(target, `pkill -KILL -f '[s]leep ${marker}' || true`)
+    execDockerSshHostTargetCommand(target, "pkill -KILL -f '/root/[.]orca-remote/' || true")
+    execDockerSshHostTargetCommand(target, `pkill -KILL -f '[s]leep ${marker}' || true`)
     await expect.poll(() => runningOrcadPids(target), { timeout: 60_000 }).toEqual([])
     const connected = JSON.parse(await reconnect(page, targetId))
     expect(connected).toMatchObject({ kind: 'managed', environmentId })
@@ -288,6 +280,99 @@ test('a killed managed orcad comes back with its terminal, and starts fresh afte
       await session.close(app)
     }
     await session.dispose()
-    cleanupDockerSshRelayTarget(target)
+    cleanupDockerSshHostTarget(target)
+  }
+})
+
+// Slim images ship no ps, and after a reboot the slot's recorded PID often names a new process (#34149).
+test('after a reboot on a host without ps, a recycled server PID does not keep the server down', async (// oxlint-disable-next-line no-empty-pattern -- This test owns its isolated app and host.
+{}, testInfo) => {
+  test.skip(
+    HOST !== 'docker' || !TEMPLATE_SOURCE,
+    `Set ${ORCAD_CONVERT_HOST_ENV}=docker and ORCA_E2E_ORCAD_CONVERT_TEMPLATE`
+  )
+  // Deploys a real server, then reconnects after a simulated reboot.
+  test.setTimeout(10 * 60_000)
+  const target = startDockerSshHostTarget(testInfo)
+  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
+  let app: ElectronApplication | null = null
+  try {
+    const launched = await session.launch()
+    app = launched.app
+    const page = launched.page
+    await waitForSessionReady(page)
+    const { targetId, environmentId } = await connectManagedHost(page, target)
+    await page.evaluate((targetId) => window.api.ssh.disconnect({ targetId }), targetId)
+
+    execDockerSshHostTargetCommand(target, "pkill -KILL -f '/root/[.]orca-remote/' || true")
+    await expect.poll(() => runningOrcadPids(target), { timeout: 60_000 }).toEqual([])
+    const marker = String(800_000 + Math.floor(Math.random() * 100_000))
+    // The stale pid file now names a live process of the same user that is not orcad.
+    execDockerSshHostTargetCommand(
+      target,
+      `setsid sleep ${marker} </dev/null >/dev/null 2>&1 & ` +
+        'for f in /root/.orca-remote/orcad-*/.orcad-pid; do echo $! > "$f"; done; ' +
+        'mv "$(command -v ps)" /usr/local/ps-hidden'
+    )
+    await expect.poll(() => processAlive(target, marker), { timeout: 10_000 }).toBe(true)
+
+    const connected = JSON.parse(await reconnect(page, targetId))
+    expect(connected).toMatchObject({ kind: 'managed', environmentId })
+    expect(connected).not.toHaveProperty('serving')
+    expect(await callEnvironment(page, environmentId, 'terminal.list', {})).toMatchObject({
+      ok: true
+    })
+    expect(processAlive(target, marker)).toBe(true)
+  } finally {
+    if (app) {
+      await session.close(app)
+    }
+    await session.dispose()
+    cleanupDockerSshHostTarget(target)
+  }
+})
+
+test('a new desktop on the same build starts a server that was killed with its daemon', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
+{}, testInfo) => {
+  test.skip(
+    HOST !== 'docker' || !TEMPLATE_SOURCE,
+    `Set ${ORCAD_CONVERT_HOST_ENV}=docker and ORCA_E2E_ORCAD_CONVERT_TEMPLATE`
+  )
+  test.setTimeout(10 * 60_000)
+  const target = startDockerSshHostTarget(testInfo)
+  const env = { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! }
+  const deployer = createRestartSession(testInfo, env)
+  // Its own profile: it has never registered this host, so its connect runs the deploy.
+  const newcomer = createRestartSession(testInfo, env)
+  let app: ElectronApplication | null = null
+  let appSession = deployer
+  try {
+    const first = await deployer.launch()
+    app = first.app
+    await waitForSessionReady(first.page)
+    await connectManagedHost(first.page, target)
+    await deployer.close(app)
+    app = null
+
+    // Killed outside Orca, as after a reboot: the activation record still names the slot.
+    execDockerSshHostTargetCommand(target, "pkill -KILL -f '/root/[.]orca-remote/' || true")
+    await expect.poll(() => runningOrcadPids(target), { timeout: 60_000 }).toEqual([])
+
+    appSession = newcomer
+    const second = await newcomer.launch()
+    app = second.app
+    await waitForSessionReady(second.page)
+    const { environmentId } = await connectManagedHost(second.page, target)
+    expect(runningOrcadPids(target)).toHaveLength(1)
+    expect(await callEnvironment(second.page, environmentId, 'terminal.list', {})).toMatchObject({
+      ok: true
+    })
+  } finally {
+    if (app) {
+      await appSession.close(app)
+    }
+    await deployer.dispose()
+    await newcomer.dispose()
+    cleanupDockerSshHostTarget(target)
   }
 })

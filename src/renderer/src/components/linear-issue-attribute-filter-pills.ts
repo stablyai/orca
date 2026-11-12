@@ -1,11 +1,12 @@
-// Why: the pills are the only place an applied Linear facet filter is visible once the
-// popover closes, so they carry the same coverage truth the picker shows inline.
+// Keep coverage visible on pills after the picker’s detailed notice closes.
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import {
   canonicalizeLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
 } from '../../../shared/linear/issue-attribute-filter'
-import { getLinearPriorityLabel } from './task-page-localized-options'
+import { getLinearPriorityLabel } from './task-page/task-page-localized-options'
 import { isLinearMetadataGroupSelectionPartial } from './linear-issue-attribute-filter-team-ids'
 import type {
   LinearIssueFilterGroupedOption,
@@ -51,23 +52,26 @@ export type LinearIssueFilterPill = {
   partial: boolean
 }
 
-export function linearIssueAttributeFilterPillLabels(options: {
-  value: LinearIssueAttributeFilter
-  stateNamesById: Map<string, string>
-  memberNamesById: Map<string, string>
-  labelNamesById: Map<string, string>
-  statusOptions: readonly LinearIssueFilterGroupedOption[]
-  labelOptions: readonly LinearIssueFilterGroupedOption[]
-  /** Recorded where the cap ran, not inferred from the ids it left behind (STA-5996). */
-  statusTruncated: boolean
-  labelsTruncated: boolean
-}): LinearIssueFilterPill[] {
+export function linearIssueAttributeFilterPillLabels(
+  options: {
+    value: LinearIssueAttributeFilter
+    stateNamesById: Map<string, string>
+    memberNamesById: Map<string, string>
+    labelNamesById: Map<string, string>
+    statusOptions: readonly LinearIssueFilterGroupedOption[]
+    labelOptions: readonly LinearIssueFilterGroupedOption[]
+    /** Recorded where the cap ran, not inferred from the ids it left behind (STA-5996). */
+    statusTruncated: boolean
+    labelsTruncated: boolean
+  },
+  t: Translate = translate
+): LinearIssueFilterPill[] {
   const canonical = canonicalizeLinearIssueAttributeFilter(options.value)
   const pills: LinearIssueFilterPill[] = []
   if (canonical.stateIds.length > 0) {
     pills.push({
       key: 'status',
-      label: translate('auto.components.linear-issue-attribute-filter-sections.status', 'Status'),
+      label: t('auto.components.linear-issue-attribute-filter-sections.status', 'Status'),
       value: distinctFacetNames(canonical.stateIds, options.stateNamesById).join(', '),
       partial: isLinearMetadataGroupSelectionPartial(
         options.statusOptions,
@@ -79,10 +83,7 @@ export function linearIssueAttributeFilterPillLabels(options: {
   if (canonical.priorities.length > 0) {
     pills.push({
       key: 'priority',
-      label: translate(
-        'auto.components.linear-issue-attribute-filter-sections.priority',
-        'Priority'
-      ),
+      label: t('auto.components.linear-issue-attribute-filter-sections.priority', 'Priority'),
       value: canonical.priorities.map((p) => getLinearPriorityLabel(p)).join(', '),
       partial: false
     })
@@ -90,23 +91,14 @@ export function linearIssueAttributeFilterPillLabels(options: {
   if (canonical.assignee?.kind === 'unassigned') {
     pills.push({
       key: 'assignee',
-      label: translate(
-        'auto.components.linear-issue-attribute-filter-sections.assignee',
-        'Assignee'
-      ),
-      value: translate(
-        'auto.components.linear-issue-attribute-filter-sections.unassigned',
-        'Unassigned'
-      ),
+      label: t('auto.components.linear-issue-attribute-filter-sections.assignee', 'Assignee'),
+      value: translateUnassignedLabel(),
       partial: false
     })
   } else if (canonical.assignee?.kind === 'user') {
     pills.push({
       key: 'assignee',
-      label: translate(
-        'auto.components.linear-issue-attribute-filter-sections.assignee',
-        'Assignee'
-      ),
+      label: t('auto.components.linear-issue-attribute-filter-sections.assignee', 'Assignee'),
       value: options.memberNamesById.get(canonical.assignee.id) ?? canonical.assignee.id,
       partial: false
     })
@@ -114,7 +106,7 @@ export function linearIssueAttributeFilterPillLabels(options: {
   if (canonical.labelIds.length > 0) {
     pills.push({
       key: 'labels',
-      label: translate('auto.components.linear-issue-attribute-filter-sections.labels', 'Labels'),
+      label: t('auto.components.linear-issue-attribute-filter-sections.labels', 'Labels'),
       value: distinctFacetNames(canonical.labelIds, options.labelNamesById).join(', '),
       partial: isLinearMetadataGroupSelectionPartial(
         options.labelOptions,

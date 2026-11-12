@@ -2,18 +2,21 @@ import type {
   OrchestrationWorkerReadFallbackReason,
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
-} from '../../../../../../shared/orchestration-worker-output'
-import type { RuntimeTerminalState } from '../../../../../../shared/runtime-types'
+} from '../../../../../../shared/orchestration/workers/orchestration-worker-output'
+import type { RuntimeTerminalState } from '../../../../../../shared/runtime-terminal-contracts'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
   createWorkerOutputSourceIdentity,
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
-} from '../../../../orchestration/worker-output-cursor'
-import { redactWorkerTerminalLines } from '../../../../orchestration/worker-transcript-payload'
-import { readWorkerTranscript } from '../../../../orchestration/worker-transcript-read'
-import { getSshFilesystemProvider } from '../../../../../providers/ssh-filesystem-dispatch'
+} from '../../../../orchestration/workers/transcripts/worker-output-cursor'
+import { redactWorkerTerminalView } from '../../../../orchestration/terminal-authority/views/worker-terminal-redaction'
+import {
+  readWorkerTranscript,
+  type WorkerTranscriptReadSuccess
+} from '../../../../orchestration/workers/transcripts/worker-transcript-read'
+import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { isWslHookRelayConnectionId } from '../../../../../../shared/wsl-hook-relay-contract'
 
 export async function readExactWorkerOutput(args: {
@@ -48,11 +51,8 @@ export async function readExactWorkerOutput(args: {
   if (isWslSession && !session.wslDistro) {
     return fallbackOrThrow(args, 'remote_capability_unavailable')
   }
-  const remoteFilesystemProvider =
-    session.connectionId && !isWslSession
-      ? getSshFilesystemProvider(session.connectionId)
-      : undefined
-  if (session.connectionId && !isWslSession && !remoteFilesystemProvider) {
+  // Why: this process serves no SSH filesystem, so an SSH worker's transcript is unreachable.
+  if (session.connectionId && !isWslSession) {
     return fallbackOrThrow(args, 'remote_capability_unavailable')
   }
   if (cursor?.source === 'transcript' && !cursor.boundaryCheckpoint) {
@@ -66,8 +66,7 @@ export async function readExactWorkerOutput(args: {
     offset: cursor?.source === 'transcript' ? cursor.position : undefined,
     expectedBoundaryCheckpoint:
       cursor?.source === 'transcript' ? (cursor.boundaryCheckpoint ?? undefined) : undefined,
-    limit: args.limit,
-    filesystemProvider: remoteFilesystemProvider
+    limit: args.limit
   })
   if (!transcript.ok) {
     if (transcript.reason === 'source_changed') {
@@ -107,18 +106,40 @@ export async function readExactWorkerOutput(args: {
   ) {
     throw sourceChanged()
   }
+  return workerTranscriptReadResult({
+    dispatchId: args.dispatchId,
+    sourceIdentity,
+    agent: session.agent,
+    transcript,
+    status: {
+      worker: args.workerState,
+      terminal: args.terminalStatus,
+      ...(args.terminalLiveness ? { liveness: args.terminalLiveness } : {})
+    }
+  })
+}
+
+/** A transcript page in the shape worker-read serves, with a cursor pinned to its source. */
+export function workerTranscriptReadResult(args: {
+  dispatchId: string
+  sourceIdentity: string
+  agent: AgentType
+  transcript: WorkerTranscriptReadSuccess
+  status: OrchestrationWorkerReadResult['status']
+}): OrchestrationWorkerReadResult {
+  const { transcript } = args
   const nextCursor = encodeWorkerOutputCursor(
     args.dispatchId,
     'transcript',
-    sourceIdentity,
+    args.sourceIdentity,
     transcript.nextOffset,
     transcript.boundaryCheckpoint
   )
   return {
     dispatchId: args.dispatchId,
     source: 'transcript',
-    sourceIdentity,
-    provider: session.agent,
+    sourceIdentity: args.sourceIdentity,
+    provider: args.agent,
     transcript: {
       messages: transcript.messages,
       nextCursor,
@@ -126,11 +147,7 @@ export async function readExactWorkerOutput(args: {
       returnedMessageCount: transcript.messages.length
     },
     cursor: nextCursor,
-    status: {
-      worker: args.workerState,
-      terminal: args.terminalStatus,
-      ...(args.terminalLiveness ? { liveness: args.terminalLiveness } : {})
-    },
+    status: args.status,
     fallbackReason: null,
     warnings: transcript.warnings,
     sourceExact: true,
@@ -163,12 +180,7 @@ async function readTerminalOutput(
     cursor: cursor?.source === 'terminal' ? cursor.position : undefined,
     limit: args.limit
   })
-  const redactedTerminal = redactWorkerTerminalLines([
-    ...terminal.tail,
-    ...(terminal.draft ? [terminal.draft] : [])
-  ])
-  const redactedTail = redactedTerminal.lines.slice(0, terminal.tail.length)
-  const redactedDraft = terminal.draft ? redactedTerminal.lines.at(-1) : undefined
+  const redactedTerminal = redactWorkerTerminalView(terminal)
   const position =
     terminal.nextCursor !== null && /^\d+$/.test(terminal.nextCursor)
       ? Number.parseInt(terminal.nextCursor, 10)
@@ -183,8 +195,8 @@ async function readTerminalOutput(
     sourceIdentity,
     terminal: {
       ...terminal,
-      tail: redactedTail,
-      ...(redactedDraft ? { draft: redactedDraft } : {})
+      tail: redactedTerminal.tail,
+      ...(redactedTerminal.draft ? { draft: redactedTerminal.draft } : {})
     },
     cursor: nextCursor,
     status: {
@@ -241,7 +253,7 @@ export function orchestrationTimestampToMs(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function sourceChanged(): OrchestrationError {
+export function sourceChanged(): OrchestrationError {
   return new OrchestrationError(
     'source_changed',
     'The worker output source changed. Start a fresh worker-read without the old cursor.'

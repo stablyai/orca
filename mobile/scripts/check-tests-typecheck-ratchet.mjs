@@ -1,47 +1,22 @@
-import { spawnSync } from 'node:child_process'
+import { runProcessSync } from '@orca/process-host'
 import fs from 'node:fs'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { resolveMobileTypecheckCommand } from './mobile-typecheck-compiler.mjs'
+import { printNodeTestsFailure, runNodeTestsTypecheck } from './check-node-tests-typecheck.mjs'
 
-// Ratchet gate for the mobile test typecheck.
-//
-// mobile/tsconfig.json excludes *.test.ts so Metro never compiles tests into the release bundle,
-// and vitest transpiles without typechecking. Nothing checked a mobile test until tsconfig.test.json
-// existed, so 144 of the 632 test files had accumulated type errors — overwhelmingly one seam, the
-// react-test-renderer / mocked-react-native pair, whose fix is a test-support typing decision rather
-// than 587 local edits. This check freezes that set and fails when a test file that typechecks today
-// stops doing so. The baseline may only shrink.
+// Mobile release tsconfig excludes tests and Vitest does not typecheck; separate test program freezes existing errors with a shrink-only baseline.
 
 const BASELINE_PATH = 'tests-typecheck-baseline.txt'
 const PROJECT = 'tsconfig.test.json'
 const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 
-// The only test files allowed to sit outside the program, and why. Everything else on disk must be
-// in it: the error diff below sees a file only once it errors, so an excluded or shadowed test
-// disappears from this gate silently.
-export const TESTS_OUTSIDE_PROGRAM = new Map([
-  [
-    'src/tasks/agent-launch-mobile-replay.test.ts',
-    'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
-  ],
-  [
-    'src/tasks/mobile-agent-launch-architecture.test.ts',
-    'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
-  ],
-  [
-    'src/test-support/rpc-recording/recorded-request-params.test.ts',
-    'Node-side: imports the desktop RPC dispatcher, checked against @types/node rather than RN libs'
-  ],
-  [
-    'src/transport/mobile-relay-browser-cancel-budget.test.ts',
-    'Node-side: imports @orca/process-host, checked against @types/node rather than RN libs'
-  ]
-])
+// Tests outside the RN program. Checked transfers are the roots of tsconfig.test.node.json and must pass
+// that strict program; the rest are legacy runtime-only allowances whose bodies nothing typechecks.
+export const TESTS_OUTSIDE_PROGRAM = new Map([])
 
-// tsc prints the host's own separator; the baseline stores POSIX, so a Windows run would otherwise
-// read every entry as both stale and added.
+// Normalize tsc’s host separators to POSIX baseline paths or Windows reports every entry stale and added.
 const toPosix = (filePath) => filePath.replaceAll('\\', '/')
 
 export function parseFailingFiles(tscOutput) {
@@ -74,9 +49,7 @@ export function collectTestFilesOnDisk(root = process.cwd()) {
   return found.sort()
 }
 
-// --listFiles prints one absolute real path per line into the same stream as the diagnostics; a
-// diagnostic carries `(line,col): error` and a path relative to cwd, so neither filter can take the
-// other's lines.
+// Separate absolute --listFiles rows from relative (line,col):error diagnostics in their shared stream.
 export function parseProgramTestFiles(tscOutput, realRoot) {
   const prefix = `${toPosix(realRoot).replace(/\/$/, '')}/`
   return [
@@ -126,6 +99,31 @@ export function diffCensus(onDisk, inProgram, allowed = TESTS_OUTSIDE_PROGRAM) {
   }
 }
 
+// A reason string never satisfies a transfer: its strict program must have passed with the body in it.
+export function checkTransfers(result, allowed = TESTS_OUTSIDE_PROGRAM, nocheck = []) {
+  const problems = []
+  if (!result.ok) {
+    problems.push('the phone/host contract program did not pass')
+  }
+  for (const [file, reason] of allowed) {
+    if (reason.startsWith('Checked transfer:') && !result.expected.includes(file)) {
+      problems.push(`checked transfer is absent from tsconfig.test.node.json: ${file}`)
+    }
+  }
+  for (const file of result.expected) {
+    if (!allowed.has(file)) {
+      problems.push(`checked transfer is not excluded from the RN program: ${file}`)
+    }
+    if (!result.programTestFiles.includes(file)) {
+      problems.push(`checked transfer is absent from its program: ${file}`)
+    }
+    if (nocheck.includes(file)) {
+      problems.push(`checked transfer opts out with @ts-nocheck: ${file}`)
+    }
+  }
+  return problems
+}
+
 export function parseBaseline(text) {
   return new Set(
     text
@@ -144,29 +142,20 @@ export function diffBaseline(current, baseline) {
   }
 }
 
-// Run tsc's JS entry on this Node rather than the node_modules/.bin shim, which is a POSIX shell
-// script: on Windows the shim is tsc.CMD and an extensionless path gets .exe appended.
-function runTsc(root, args) {
-  const entry = createRequire(import.meta.url).resolve('typescript/lib/tsc.js')
-  const result = spawnSync(process.execPath, [entry, ...args], {
-    cwd: root,
-    encoding: 'utf8',
-    shell: false,
-    maxBuffer: 64 * 1024 * 1024
-  })
-  if (result.error) {
-    throw result.error
-  }
-  return result
-}
-
-// tsc exits non-zero on type errors, which is the expected state here, so only a crash is fatal.
-// One pass answers both questions: --listFiles names the program, the diagnostics name the failures.
+// Type errors are expected; only compiler crash is fatal. One pass collects both program files and diagnostics.
 export function collectTypecheckPass(root = process.cwd()) {
-  const result = runTsc(root, ['--noEmit', '--listFiles', '-p', PROJECT])
+  const command = resolveMobileTypecheckCommand(PROJECT, root)
+  const result = runProcessSync({
+    program: command.program,
+    args: [...command.args, '--listFiles'],
+    cwd: command.cwd,
+    timeoutMs: null,
+    maxOutputBytes: 64 * 1024 * 1024
+  })
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
   return {
     failing: parseFailingFiles(output),
+    diagnostics: output.split('\n').filter((line) => ERROR_LINE.test(line)),
     programTestFiles: parseProgramTestFiles(output, fs.realpathSync(root))
   }
 }
@@ -269,7 +258,7 @@ function printCensusFailure(missing, staleAllowance, nocheck = []) {
   }
 }
 
-export function main(root = process.cwd()) {
+export function main(root = process.cwd(), runNodeTests = () => runNodeTestsTypecheck()) {
   const baselineFile = path.join(root, BASELINE_PATH)
   if (!fs.existsSync(baselineFile)) {
     console.error(
@@ -288,9 +277,25 @@ export function main(root = process.cwd()) {
   const baseline = parseBaseline(fs.readFileSync(baselineFile, 'utf8'))
   const current = pass.failing
   const { added, stale } = diffBaseline(current, baseline)
+  // The RN baseline does not apply here: transferred bodies and their declaration producers must be clean.
+  const node = runNodeTests()
+  const transferProblems = checkTransfers(
+    node,
+    TESTS_OUTSIDE_PROGRAM,
+    findTsNocheckFiles(root, node.expected)
+  )
+  if (transferProblems.length > 0) {
+    printNodeTestsFailure(node)
+    for (const problem of transferProblems) {
+      console.error(`::error::${problem}`)
+    }
+  }
 
   if (added.length > 0) {
     printAddedFailure(added)
+    for (const diagnostic of pass.diagnostics) {
+      console.error(diagnostic)
+    }
     if (stale.length > 0) {
       printStaleFailure(stale)
     }
@@ -300,8 +305,12 @@ export function main(root = process.cwd()) {
     printStaleFailure(stale)
     return 1
   }
+  if (transferProblems.length > 0) {
+    return 1
+  }
+  const legacy = TESTS_OUTSIDE_PROGRAM.size - node.expected.length
   console.log(
-    `mobile tests typecheck ratchet OK — ${pass.programTestFiles.length} test file(s) in the program (${TESTS_OUTSIDE_PROGRAM.size} excluded on purpose, none @ts-nocheck), ${current.length} grandfathered file(s), every other test file checks.`
+    `mobile tests typecheck ratchet OK — ${pass.programTestFiles.length} test file(s) checked in the RN program (${current.length} grandfathered), ${node.expected.length} checked in the phone/host contract program, ${legacy} legacy runtime-only allowance(s) whose bodies are not typechecked; none @ts-nocheck.`
   )
   return 0
 }

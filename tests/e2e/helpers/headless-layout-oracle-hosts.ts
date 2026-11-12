@@ -1,8 +1,4 @@
-/**
- * The two headless `orca serve` hosts the layout oracle drives with no window: orcad (plain Node)
- * and Electron serve. Both keep their pairing port across restarts so paired clients reconnect,
- * and a headless runtime's saved profile is the runtime layout the oracle checks.
- */
+// Keep profile and pairing port stable across Node-orcad/Electron-serve restarts so existing client streams reconnect.
 
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
@@ -12,16 +8,13 @@ import { RuntimeClient } from '../../../src/cli/runtime/client'
 import { resolveBundledOrcadRuntime } from '../../../src/main/orcad/orcad-bundled-runtime'
 import { runProcess } from '@orca/process-host'
 import { NODE_RUNTIME_PIN } from '../../../src/shared/node-runtime-pin'
-import type { WorkspaceSessionState } from '../../../src/shared/workspace-session-state-types'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { cleanupE2EDaemons } from './electron-process-shutdown'
 import { launchHeadlessPairedRuntimeHost } from './headless-paired-runtime-host'
 import { cliServeProfile, spawnUntilReady, type ReadyProcess } from './orca-serve-cli-host'
-import { readPersistedProfileState } from './persisted-profile-state'
-import { partitionsFromProfileRoot } from './workspace-layout-oracle-views'
-import type { WorkspaceLayoutPartition } from './workspace-layout-oracle-model'
 
 export type HeadlessHostKind = 'orcad' | 'electron'
+
+type RestartOptions = { cold?: boolean; whileStopped?: () => void | Promise<void> }
 
 export type HeadlessOracleHost = {
   kind: HeadlessHostKind
@@ -31,8 +24,11 @@ export type HeadlessOracleHost = {
   pairingUrl: string
   /** Run by `dispose`, after the host stops. */
   cleanups: (() => void)[]
-  /** Stops serve and starts it again on the same profile and port; `cold` also kills the PTY daemon. */
-  restart: (options?: { cold?: boolean }) => Promise<void>
+  /**
+   * Stops serve and starts it again on the same profile and port; `cold` also kills the PTY daemon.
+   * `whileStopped` runs with no serve process alive, the only safe time to edit the profile.
+   */
+  restart: (options?: RestartOptions) => Promise<void>
   dispose: () => Promise<void>
 }
 
@@ -117,13 +113,14 @@ async function startOrcadHost(scratch: string, node: string): Promise<StartedHos
     userDataDir: profile.userDataDir,
     scratch,
     pairingUrl: serve.ready.pairingUrl,
-    restart: async ({ cold } = {}) => {
+    restart: async ({ cold, whileStopped } = {}) => {
       // SIGTERM is orcad's graceful stop and leaves the PTY daemon running.
       await serve?.stop()
       serve = null
       if (cold) {
         await cleanupE2EDaemons(profile.userDataDir)
       }
+      await whileStopped?.()
       serve = await launch()
     },
     dispose: async () => {
@@ -145,10 +142,15 @@ async function startElectronHost(scratch: string): Promise<StartedHost> {
     userDataDir: host.userDataDir,
     scratch,
     pairingUrl: host.offer.pairingUrl,
-    restart: ({ cold } = {}) =>
-      host.restartServeProcess(
-        cold ? { betweenProcesses: () => cleanupE2EDaemons(host.userDataDir) } : {}
-      ),
+    restart: ({ cold, whileStopped } = {}) =>
+      host.restartServeProcess({
+        betweenProcesses: async () => {
+          if (cold) {
+            await cleanupE2EDaemons(host.userDataDir)
+          }
+          await whileStopped?.()
+        }
+      }),
     dispose: async () => {
       await host.dispose()
       rmSync(scratch, PROFILE_REMOVAL)
@@ -200,16 +202,6 @@ export function pairedClient(host: HeadlessOracleHost, name: string): RuntimeCli
   const dir = path.join(host.scratch, `client-${name}`)
   mkdirSync(dir, { recursive: true })
   return new RuntimeClient(dir, 30_000, host.pairingUrl, null)
-}
-
-/** The runtime's layout: a headless runtime has no window, so its saved session is the state. */
-export function readHeadlessPartitions(userDataDir: string): WorkspaceLayoutPartition[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: committed profile documents are read verbatim; the oracle's rules judge their shape rather than a parser salvaging it.
-  const root = readPersistedProfileState(userDataDir) as {
-    workspaceSession?: WorkspaceSessionState
-    workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
-  }
-  return partitionsFromProfileRoot(root)
 }
 
 async function git(cwd: string, args: string[]): Promise<void> {

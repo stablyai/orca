@@ -1,6 +1,6 @@
 import React from 'react'
 import { ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { LocalPortRow } from './local-port-row'
 
@@ -23,7 +23,7 @@ export function LocalPortSection({
   onToggle: () => void
   onStopPort: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
-  onOpenInBrowser: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
+  onOpenInBrowser?: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element | null {
   if (ports.length === 0 && !emptyText) {
     return null

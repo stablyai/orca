@@ -1,0 +1,155 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type { SFTPWrapper } from 'ssh2'
+import type * as SmolToml from 'smol-toml'
+import type * as RemoteHooksJson from '../../../agent-hooks/installation/configuration/hooks-json-remote'
+import type * as RemoteHookTextFiles from '../../../agent-hooks/installation/remote/hook-text-files-remote'
+import type * as ManagedScriptWriteRemote from '../../../agent-hooks/installation/scripts/managed-script-write-remote'
+
+const mocks = vi.hoisted(() => {
+  const state: {
+    // Force parser failures to verify that removal and enabled-flag writes are also checked.
+    rejectParse: ((content: string) => boolean) | null
+    remoteFiles: Map<string, string>
+  } = { rejectParse: null, remoteFiles: new Map() }
+  return state
+})
+
+vi.mock('smol-toml', async (importOriginal) => {
+  const actual = await importOriginal<typeof SmolToml>()
+  return {
+    ...actual,
+    parse: (content: string) => {
+      if (mocks.rejectParse?.(content)) {
+        throw new Error('simulated unloadable TOML')
+      }
+      return actual.parse(content)
+    }
+  }
+})
+
+vi.mock(
+  '../../../agent-hooks/installation/configuration/hooks-json-remote',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof RemoteHooksJson>()
+    return {
+      ...actual,
+      readHooksJsonRemote: async (_sftp: SFTPWrapper, path: string) =>
+        JSON.parse(mocks.remoteFiles.get(path) ?? '{}'),
+      writeHooksJsonRemote: async (_sftp: SFTPWrapper, path: string, config: unknown) => {
+        mocks.remoteFiles.set(path, JSON.stringify(config))
+      }
+    }
+  }
+)
+
+vi.mock(
+  '../../../agent-hooks/installation/remote/hook-text-files-remote',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof RemoteHookTextFiles>()
+    return {
+      ...actual,
+      readTextFileRemote: async (_sftp: SFTPWrapper, path: string) =>
+        mocks.remoteFiles.get(path) ?? null,
+      writeTextFileRemoteAtomic: async (_sftp: SFTPWrapper, path: string, content: string) => {
+        mocks.remoteFiles.set(path, content)
+      }
+    }
+  }
+)
+
+vi.mock(
+  '../../../agent-hooks/installation/scripts/managed-script-write-remote',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof ManagedScriptWriteRemote>()
+    return {
+      ...actual,
+      writeManagedScriptRemote: async () => {}
+    }
+  }
+)
+
+import {
+  isCodexConfigTomlRefusedError,
+  moveHookTrustEntries,
+  upsertHookTrustEntries,
+  type CodexTrustEntry
+} from './config-toml-trust'
+import { computeCodexTrustKey as computeTrustKey } from '../identity/codex-trust-identity'
+import { escapeTomlBasicString as escapeTomlString } from '../../configuration/toml/config-toml-syntax'
+import '../../hooks/installation/codex-hook-remote-install'
+
+let dir: string
+let tomlPath: string
+let hooksPath: string
+
+function stopEntry(groupIndex = 0): CodexTrustEntry {
+  return {
+    sourcePath: hooksPath,
+    eventLabel: 'stop',
+    groupIndex,
+    handlerIndex: 0,
+    command: 'orca-hook.sh'
+  }
+}
+
+function tomlKey(entry: CodexTrustEntry): string {
+  return escapeTomlString(computeTrustKey(entry))
+}
+
+function expectRefusal(write: () => void): void {
+  let thrown: unknown
+  try {
+    write()
+  } catch (error) {
+    thrown = error
+  }
+  expect(isCodexConfigTomlRefusedError(thrown)).toBe(true)
+}
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'orca-codex-toml-loadability-'))
+  tomlPath = join(dir, 'config.toml')
+  hooksPath = join(dir, 'hooks.json')
+  mocks.rejectParse = null
+  mocks.remoteFiles.clear()
+})
+
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+})
+
+describe('hook approval writes never break a config.toml Codex can load', () => {
+  it.each([
+    ['an inline hooks.state table', '[hooks]\nstate = { "x:stop:0:0" = { trusted_hash = "u" } }\n'],
+    ['an inline hooks table', 'hooks = { state = {} }\n'],
+    [
+      "a dotted approval for Orca's own key",
+      (): string => `hooks.state."${tomlKey(stopEntry())}".trusted_hash = "sha256:user"\n`
+    ]
+  ])('upsert refuses and leaves the file byte-identical: %s', (_case, content) => {
+    const original = `model = "m"\n${typeof content === 'string' ? content : content()}`
+    writeFileSync(tomlPath, original)
+
+    expectRefusal(() => upsertHookTrustEntries(tomlPath, [stopEntry()]))
+
+    expect(readFileSync(tomlPath, 'utf-8')).toBe(original)
+  })
+
+  it('a move refuses to land on a key the user approved as dotted keys', () => {
+    const original =
+      `hooks.state."${tomlKey(stopEntry(0))}".trusted_hash = "sha256:user"\n\n` +
+      `[hooks.state."${tomlKey(stopEntry(1))}"]\ntrusted_hash = "sha256:moved"\n`
+    writeFileSync(tomlPath, original)
+
+    expectRefusal(() =>
+      moveHookTrustEntries(tomlPath, [
+        { oldKey: computeTrustKey(stopEntry(1)), newKey: computeTrustKey(stopEntry(0)) }
+      ])
+    )
+
+    expect(readFileSync(tomlPath, 'utf-8')).toBe(original)
+  })
+})

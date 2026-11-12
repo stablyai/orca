@@ -1,4 +1,3 @@
-// Type-only, so this erases at compile time and creates no import cycle.
 import type { CrashReportDetailValue } from './crash-reporting'
 import {
   CRASH_REPORT_ATTRIBUTION_DETAIL_KEY,

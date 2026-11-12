@@ -1,7 +1,7 @@
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
+} from '../../agent-status/contracts/agent-status-types'
 import { clearPaneTurnCacheState, type HookListenerState } from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
@@ -43,8 +43,6 @@ export function normalizeDroidEvent(
     stateName = 'working'
   } else if (eventName === 'Stop') {
     stateName = 'done'
-  } else if (eventName === 'PermissionRequest') {
-    stateName = 'waiting'
   } else if (eventName === 'Notification' && isDroidPermissionNotification(notificationMessage)) {
     stateName = 'waiting'
   } else if (eventName === 'Notification' && isDroidIdleNotification(notificationMessage)) {

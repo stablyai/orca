@@ -2,11 +2,7 @@ import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { formatPermissionNotice } from './navigate/browser-notices'
 
-/**
- * A client-hosted page has no chrome banner to carry the local pane's resource notices, so a denied
- * permission would otherwise leave the site silently broken. One toast per page and permission,
- * worded exactly as the local pane words it.
- */
+/** Mirror local permission-denial wording in toasts because client-hosted chrome has no resource banner. */
 export function useBrowserClientHostedPermissionNotices(browserPageId: string): void {
   useEffect(() => {
     return window.api.browser.onPermissionDenied((event) => {

@@ -3,8 +3,8 @@ import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useNow } from '@/hooks/use-now'
-import { cn } from '@/lib/utils'
-import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { cn } from '@/lib/class-names'
+import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -14,21 +14,23 @@ import {
   threadAgentStateLabel
 } from './activity-thread-presentation'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export { ActivityThreadOptionsMenu } from './activity-thread-options-menu'
 
 export function EventTime({
   timestamp,
-  compact = false
+  compact = false,
+  className
 }: {
   timestamp: number
   compact?: boolean
+  className?: string
 }): React.JSX.Element {
-  // Why: rows reuse their identity across store writes, so this label can't rely on
-  // incidental re-renders to stay honest; the shared visibility-gated clock re-renders
-  // only this leaf (memo'd rows stay bailed out). 30s cadence matches WorktreeCardAgents.
+  const intlLocale = useIntlLocale()
+  // Memoized rows ignore unrelated writes; refresh this leaf from the visibility-gated 30s clock, matching WorktreeCardAgents.
   const now = useNow(30_000)
-  const absolute = formatAbsoluteDate(timestamp)
+  const absolute = formatAbsoluteDate(timestamp, intlLocale)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -36,12 +38,15 @@ export function EventTime({
           type="button"
           className={cn(
             'rounded text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
-            compact ? 'px-0 py-0 text-[11px] tabular-nums' : 'px-1 py-0.5 text-xs'
+            compact ? 'px-0 py-0 text-2xs tabular-nums' : 'px-1 py-0.5 text-xs',
+            className
           )}
           aria-label={absolute}
           onClick={(event) => event.stopPropagation()}
         >
-          {compact ? formatShortTimeAgo(timestamp, now) : formatRelativeTime(timestamp, now)}
+          {compact
+            ? formatShortTimeAgo(timestamp, now)
+            : formatRelativeTime(timestamp, now, intlLocale)}
         </button>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={6}>
@@ -70,8 +75,9 @@ export function ThreadAgentStateIndicator({
 }: {
   thread: AgentPaneThread
 }): React.JSX.Element {
+  const t = useTranslate()
   const state = activityThreadStatusId(thread)
-  const label = threadAgentStateLabel(thread)
+  const label = threadAgentStateLabel(thread, t)
   return (
     <Tooltip>
       <TooltipTrigger asChild>

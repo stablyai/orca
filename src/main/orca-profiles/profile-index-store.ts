@@ -8,7 +8,10 @@ import {
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
-import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../shared/secure-file'
+import {
+  bestEffortFsyncDirectorySync,
+  fsyncFileSync
+} from '../../shared/secure-storage/secure-file'
 import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -28,21 +31,10 @@ import {
   hasOrcaProfileStateDatabase,
   getProfileUserDataPath
 } from './profile-storage-paths'
-import { copyLegacyStateToProfile } from './profile-legacy-state-import'
+import { copyLegacyStateToProfile } from './storage/profile-legacy-state-import'
 import { profileStateJsonExportPaths } from '../persistence/profile-state/legacy-json/profile-state-export-path'
-import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/profile-state-authority-marker'
-import { profileStateDatabaseBackups } from '../persistence/profile-state/profile-state-backup-path'
-
-export {
-  getOrcaProfileBrowserSessionMetaFile,
-  getOrcaProfileDataFile,
-  getOrcaProfileDirectory,
-  getOrcaProfileIndexPath,
-  getOrcaProfileStateDatabaseFile,
-  hasOrcaProfileStateDatabase,
-  getOrcaProfilesDirectory,
-  initOrcaProfilePaths
-} from './profile-storage-paths'
+import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/database/profile-state-authority-marker'
+import { profileStateDatabaseBackups } from '../persistence/profile-state/backup/profile-state-backup-path'
 
 export type ActiveOrcaProfileState = {
   index: OrcaProfileIndex
@@ -64,8 +56,7 @@ function isProfileSummary(value: unknown): value is OrcaProfileSummary {
   const cloud = value.cloud
   return (
     typeof value.id === 'string' &&
-    // Why: IDs from the on-disk index become filesystem path segments; a
-    // tampered index must not be able to escape the profiles directory.
+    // Index IDs become path segments; reject traversal outside the profile directory.
     /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value.id) &&
     typeof value.name === 'string' &&
     value.name.length > 0 &&
@@ -115,8 +106,7 @@ function readProfileIndexFile(indexPath: string): OrcaProfileIndex | null {
 }
 
 export function readProfileIndex(indexPath: string): OrcaProfileIndex | null {
-  // Why: a torn/corrupt index must not silently reset the app to a single
-  // default profile — that would orphan every other profile's data directory.
+  // Recover from backup rather than orphan other profiles by resetting a corrupt index.
   return readProfileIndexFile(indexPath) ?? readProfileIndexFile(`${indexPath}.bak`)
 }
 
@@ -130,13 +120,12 @@ function readExistingProfileIndex(indexPath: string): OrcaProfileIndex | null {
 
 export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): void {
   mkdirSync(dirname(indexPath), { recursive: true })
-  // Why: only a still-parseable current index may refresh the backup;
-  // copying a corrupt file over the backup would destroy the recovery copy.
+  // Never replace the recovery backup with a corrupt primary index.
   if (existsSync(indexPath) && readProfileIndexFile(indexPath)) {
     try {
       copyFileSync(indexPath, `${indexPath}.bak`)
     } catch {
-      // Best-effort backup; the primary write below still proceeds.
+      // Backup failure must not block the primary write.
     }
   }
   const tmpPath = `${indexPath}.tmp`
@@ -145,8 +134,6 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   renameSync(tmpPath, indexPath)
   bestEffortFsyncDirectorySync(dirname(indexPath))
 }
-
-export { seedNewOrcaProfileTelemetryConsent } from './profile-telemetry-consent-seed'
 
 function createInitialProfileIndex(now = Date.now()): OrcaProfileIndex {
   const profile = createDefaultLocalOrcaProfile(now)

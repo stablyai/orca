@@ -1,9 +1,5 @@
-/**
- * GH #10205: a manual sleep keeps the tab's session id as a wake hint, so a later
- * remount of its still-mounted pane reattaches that dead id and the daemon spawns
- * a fresh shell. Production parking timings are deliberate: a shrunk park delay
- * unmounts the slept panes and hides the behavior.
- */
+// #10205: a slept pane’s dead wake-hint id must not reattach/spawn on incidental remount.
+// Keep production park timing because shortened delays unmount the target and hide the regression.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { getAllWorktreeIds, waitForSessionReady } from './helpers/store'
@@ -60,8 +56,7 @@ test('remounting a slept hidden pane does not respawn its PTY', async ({ orcaPag
   const sample = await readWorkspaceSample(orcaPage, slept)
   const sleptTabId = sample.tabIds[0]
   expect(sleptTabId, 'slept workspace must retain a tab').toBeTruthy()
-  // Presence preconditions: the pane is still mounted and still carries its wake hint,
-  // otherwise a remount has nothing to reattach and the oracle passes vacuously.
+  // Require mounted pane and wake hint or remount has nothing to reattach.
   expect(sample.mountedTabIds, 'slept pane was parked before the remount').toContain(sleptTabId)
   expect(sample.tabPtyHints[0], 'sleep must keep the session id as a wake hint').toBeTruthy()
 
@@ -72,8 +67,7 @@ test('remounting a slept hidden pane does not respawn its PTY', async ({ orcaPag
   expect(remounted, 'remountTerminalTabForRecovery did not find the slept tab').toBe(true)
   await assertStaysCold(orcaPage, slept)
 
-  // Non-vacuity: a deliberate click must still wake it, and exactly once — the
-  // waiting pane and its remounted successor must not both reattach.
+  // Positive control: explicit selection must wake exactly once across the remount.
   await activateWorkspaceByClick(orcaPage, slept)
   await expect
     .poll(async () => (await readWorkspaceSample(orcaPage, slept)).livePtyCount, {

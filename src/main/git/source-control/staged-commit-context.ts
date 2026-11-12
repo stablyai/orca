@@ -1,8 +1,14 @@
-import type { CommitMessageDraftContext } from '../../../shared/commit-message-generation'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync } from '../runner'
-import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from '../max-buffer-overflow'
+import type { CommitMessageDraftContext } from '../../../shared/source-control/ai/generation/commit-message-generation'
+
+import {
+  type GitRuntimeOptions,
+  gitOptionsForWorktree
+} from '../command-runner/git-runtime-options'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
+import {
+  describeMaxBufferOverflowError,
+  isMaxBufferOverflowError
+} from '../command-runner/process-capture/max-buffer-overflow'
 import { MAX_STAGED_COMMIT_CONTEXT_BYTES } from './git-show-max-bytes'
 
 export async function getStagedCommitContext(
@@ -37,7 +43,7 @@ export async function getStagedCommitContext(
     if (!isMaxBufferOverflowError(error)) {
       throw error
     }
-    // Why: staged patch is optional context (truncated later anyway); degrade to file-name summary rather than fail.
+    // Oversized patches are optional context; retain the file summary instead of failing.
     console.warn(
       '[git] Staged patch too large to read; using file summary only:',
       describeMaxBufferOverflowError(error)

@@ -9,24 +9,20 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { searchRepos } from '@/lib/repo-search'
-import { cn } from '@/lib/utils'
+import { searchRepos } from '@/lib/workspace/catalog/repo-search'
+import { cn } from '@/lib/class-names'
 import type { Repo } from '../../../../shared/repo-types'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type RepoMultiComboboxProps = {
   repos: readonly Repo[]
-  /** Currently selected repo ids. The component enforces `selected.size >= 1`
-   *  by disabling the last-selected checkbox. */
+  /** Keep at least one repo selected by disabling its last checkbox. */
   selected: ReadonlySet<string>
-  /** Called with the next full selection set whenever the user changes it.
-   *  `null` is never emitted here — persistence of "sticky-all" (selection
-   *  equals every eligible repo) is the caller's responsibility. */
+  /** Emit a full selection, never null; the caller persists sticky-all as null. */
   onChange: (next: ReadonlySet<string>) => void
-  /** Clicking the sticky "All projects" row emits a full-set selection AND this
-   *  signal, so the caller can persist `null` (sticky-all) rather than a
-   *  frozen snapshot that would exclude repos added later. */
+  /** Signal explicit All selection so persistence includes future repos rather than freezing this snapshot. */
   onSelectAll: () => void
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
   triggerClassName?: string
@@ -34,19 +30,20 @@ type RepoMultiComboboxProps = {
 
 function renderTriggerLabel(
   repos: readonly Repo[],
-  selected: ReadonlySet<string>
+  selected: ReadonlySet<string>,
+  t: Translate = translate
 ): React.JSX.Element {
   if (repos.length === 0) {
     return (
       <span className="text-muted-foreground">
-        {translate('auto.components.ui.repo.multi.combobox.65a3dae41d', 'No projects')}
+        {t('auto.components.ui.repo.multi.combobox.65a3dae41d', 'No projects')}
       </span>
     )
   }
   if (selected.size === repos.length) {
     return (
       <span className="inline-flex min-w-0 items-center gap-1.5">
-        {translate('auto.components.ui.repo.multi.combobox.bfd8ce21c6', 'All projects')}
+        {t('auto.components.ui.repo.multi.combobox.bfd8ce21c6', 'All projects')}
       </span>
     )
   }
@@ -80,6 +77,7 @@ export default function RepoMultiCombobox({
   getRepoHostLabel,
   triggerClassName
 }: RepoMultiComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState('')
@@ -98,9 +96,7 @@ export default function RepoMultiCombobox({
     (repoId: string) => {
       const next = new Set(selected)
       if (next.has(repoId)) {
-        // Why: the empty selection is unreachable by design — fetch effects
-        // assume at least one repo is selected, so block the click instead of
-        // silently allowing a no-op state.
+        // Fetch effects require a nonempty selection; block the click rather than enter a no-op state.
         if (next.size <= 1) {
           return
         }
@@ -115,10 +111,7 @@ export default function RepoMultiCombobox({
 
   const handleSelectAll = useCallback(() => {
     if (allSelected) {
-      // Why: toggle — clicking "All projects" while everything is selected
-      // collapses to a single repo. The fetch effect requires at least one
-      // selection, so we keep the first eligible repo instead of emitting
-      // an empty set.
+      // Toggle All to the first eligible repo when already selected; never emit an empty set.
       const first = repos[0]
       if (!first) {
         return
@@ -139,14 +132,11 @@ export default function RepoMultiCombobox({
           aria-expanded={open}
           className={cn('h-8 w-full justify-between px-3 text-xs font-normal', triggerClassName)}
         >
-          {renderTriggerLabel(repos, selected)}
+          {renderTriggerLabel(repos, selected, t)}
           <ChevronsUpDown className="size-3.5 opacity-50" />
         </Button>
       </PopoverTrigger>
-      {/* Why: trigger width can be as narrow as the "All projects" label, but the
-          popover hosts a search input and repo rows with paths. Use the
-          trigger as a minimum width and let the content expand to a readable
-          size so the search field and repo names aren't truncated. */}
+      {/* Use trigger width as a minimum, allowing search and repo paths to fit even when the trigger is short. */}
       <PopoverContent
         align="start"
         className="w-[min(320px,calc(100vw-1rem))] min-w-[var(--radix-popover-trigger-width)] p-0"
@@ -154,7 +144,7 @@ export default function RepoMultiCombobox({
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus
-            placeholder={translate(
+            placeholder={t(
               'auto.components.ui.repo.multi.combobox.a58a0cd100',
               'Search projects...'
             )}
@@ -162,10 +152,7 @@ export default function RepoMultiCombobox({
             onValueChange={setQuery}
             className="text-xs"
           />
-          {/* Why: sticky "All projects" row sits above the CommandList so it
-              stays visible while the user scrolls a long repo list. Selecting
-              it emits `onSelectAll` (not a snapshot via onChange) so the
-              caller can persist sticky-all semantics. */}
+          {/* Keep All above the scroller and signal sticky-all intent instead of emitting a frozen selection snapshot. */}
           <div className="border-b border-border">
             <button
               type="button"
@@ -183,14 +170,12 @@ export default function RepoMultiCombobox({
                   allSelected ? 'opacity-70' : 'opacity-0'
                 )}
               />
-              <span>
-                {translate('auto.components.ui.repo.multi.combobox.bfd8ce21c6', 'All projects')}
-              </span>
+              <span>{t('auto.components.ui.repo.multi.combobox.bfd8ce21c6', 'All projects')}</span>
             </button>
           </div>
           <CommandList>
             <CommandEmpty>
-              {translate(
+              {t(
                 'auto.components.ui.repo.multi.combobox.4471d4a1c0',
                 'No projects match your search.'
               )}

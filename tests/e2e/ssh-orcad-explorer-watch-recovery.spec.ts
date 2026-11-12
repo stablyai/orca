@@ -1,16 +1,16 @@
-import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { createRestartSession } from './helpers/orca-restart'
-import { startOrcadConvertHost } from './helpers/orcad-convert-host'
-import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
-import { convertAndRetain, serverCall } from './helpers/orcad-convert-flow'
-import { waitForSessionReady, waitForStartupWorktreeRefresh } from './helpers/store'
-import { dismissTransientAnnouncement } from './helpers/ssh-config-host-picker'
-import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
+import { serverCall } from './helpers/orcad-convert-flow'
+import {
+  activateManagedWorkspace,
+  launchConvertedProfile,
+  relaunchManagedApp,
+  skipUnlessManagedDockerHost,
+  withManagedHost
+} from './helpers/orcad-managed-workspace'
 import { folderWorkspaceKey } from '../../src/shared/workspace-scope'
 
-const TEMPLATE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
-test.skip(!TEMPLATE || process.env.ORCA_E2E_SSH_DOCKER !== '1', 'Needs Docker and server template')
+skipUnlessManagedDockerHost()
 
 function captureRendererMessages(page: Page): void {
   page.on('console', (message) => {
@@ -28,44 +28,19 @@ for (const workspace of ['worktree', 'folder'] as const) {
   test(`remote ${workspace} explorer receives host-created files after server restart`, async (// oxlint-disable-next-line no-empty-pattern -- This exercise owns its app launch.
   {}, testInfo) => {
     test.setTimeout(5 * 60_000)
-    const host = startOrcadConvertHost('docker', testInfo)
-    const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
-    let app: ElectronApplication | null = null
-    try {
+    await withManagedHost(testInfo, async (fixture) => {
+      const { host } = fixture
       if (!host.exec) {
         throw new Error('Docker controls are unavailable')
       }
       const execute = host.exec
-      const first = await session.launch()
-      app = first.app
-      await waitForSessionReady(first.page)
-      await session.close(app)
-      app = null
       const folderPath = '/tmp/orca-explorer-folder'
       execute(`mkdir -p '${folderPath}'`)
-      const seeded = seedRelayEraProfile(session.userDataDir, host.input, {
-        repoPath: host.remoteRepoPath,
-        folderPath
+      const { seeded, environmentId } = await launchConvertedProfile(fixture, {
+        folderPath,
+        onLaunch: captureRendererMessages
       })
-      const launched = await session.launch()
-      app = launched.app
-      captureRendererMessages(launched.page)
-      await waitForSessionReady(launched.page)
-      await convertAndRetain(launched.page, session.userDataDir, seeded)
-      const environment = (
-        await launched.page.evaluate(() => window.api.runtimeEnvironments.list())
-      ).find((entry) => entry.orcadDeployment?.sshTargetId === seeded.targetId)
-      if (!environment) {
-        throw new Error('Missing managed environment')
-      }
-      await session.close(app)
-      app = null
-      const restarted = await session.launch()
-      app = restarted.app
-      const page = restarted.page
-      captureRendererMessages(page)
-      await waitForSessionReady(page)
-      await waitForStartupWorktreeRefresh(page)
+      const page = await relaunchManagedApp(fixture, captureRendererMessages)
       const folderId = await page.evaluate(
         (path) =>
           window.__store?.getState().folderWorkspaces.find((folder) => folder.folderPath === path)
@@ -77,11 +52,7 @@ for (const workspace of ['worktree', 'folder'] as const) {
       }
       const worktreeId = workspace === 'folder' ? folderWorkspaceKey(folderId) : seeded.worktreeId
       const rootPath = workspace === 'folder' ? folderPath : host.remoteRepoPath
-      await page.evaluate(
-        ({ id, hostId }) => window.__store?.getState().setActiveWorktree(id, hostId),
-        { id: worktreeId, hostId: toRuntimeExecutionHostId(environment.id) }
-      )
-      await dismissTransientAnnouncement(page)
+      await activateManagedWorkspace(page, worktreeId, environmentId)
       await page.evaluate(() => {
         window.addEventListener('orca:worktree-file-change', (event) => {
           if (event instanceof CustomEvent) {
@@ -121,7 +92,7 @@ for (const workspace of ['worktree', 'folder'] as const) {
                 })
                 return response.ok ? JSON.stringify(response.result) : ''
               },
-              { id: environment.id, worktreeId }
+              { id: environmentId, worktreeId }
             ),
           { timeout: 180_000 }
         )
@@ -137,7 +108,7 @@ for (const workspace of ['worktree', 'folder'] as const) {
         timeout: 30_000
       })
       execute(`printf 'watcher recovered\n' > '${rootPath}/WATCH_RECOVERED.txt'`)
-      const created = await serverCall(page, environment.id, 'files.read', {
+      const created = await serverCall(page, environmentId, 'files.read', {
         worktree: `id:${worktreeId}`,
         relativePath: 'WATCH_RECOVERED.txt'
       })
@@ -153,12 +124,6 @@ for (const workspace of ['worktree', 'folder'] as const) {
         timeout: 10_000
       })
       await page.screenshot({ path: testInfo.outputPath('remote-explorer-refreshed.png') })
-    } finally {
-      if (app) {
-        await session.close(app)
-      }
-      await session.dispose()
-      host.cleanup()
-    }
+    })
   })
 }

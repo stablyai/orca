@@ -1,16 +1,6 @@
-// Why: both the server reply path (e2ee-channel) and the client send path
-// (remote-runtime-client) write to a ws with no backpressure handling. A fast
-// producer over a slow link balloons ws.bufferedAmount / RSS without bound, or
-// (binary path) silently drops frames. This queue holds outbound frames in
-// order while bufferedAmount is over a soft cap and flushes as it drains, so no
-// frame is dropped or reordered. It only signals overflow when a hard byte
-// bound is exceeded (the link is effectively dead), letting the caller force a
-// clean reconnect/resync instead of growing memory without limit.
-//
-// Generic over the frame type so it serves both the text reply path (encrypted
-// base64 strings) and the binary send path (Uint8Array frames).
+// Share FIFO backpressure for text replies and binary client frames. Bound retained memory; overflow asks the caller to reconnect/resync instead of silently dropping frames.
 
-/** Which hard bound tripped, plus the backlog held when it did. */
+/** Failure reason and retained backlog before cleanup. */
 export type WsOutboundOverflowEvidence = {
   cap: 'maxQueuedBytes' | 'maxQueuedFrames' | 'maxFrameBytes' | 'claimQueuedBytes' | 'sendFailed'
   queuedBytes: number
@@ -21,7 +11,7 @@ export type WsOutboundOverflowEvidence = {
 }
 
 export type WsOutboundBackpressureQueueOptions<TFrame> = {
-  /** Send a frame on the wire. Called only when under the soft cap. */
+  /** Send only while the wire is at or below the soft cap. */
   send: (frame: TFrame) => void
   /** Serialized byte length of a frame, for cap accounting. */
   byteLengthOf: (frame: TFrame) => number
@@ -31,14 +21,9 @@ export type WsOutboundBackpressureQueueOptions<TFrame> = {
   isWritable: () => boolean
   /** Optional process-wide native-buffer admission check. */
   canSend?: (frameBytes: number, alreadyRetained: boolean) => boolean
-  /**
-   * Called once when queued bytes exceed maxQueuedBytes — the link is wedged.
-   * The caller should tear the connection down so a fresh subscription can
-   * replay an authoritative snapshot. The queue drops its backlog afterward.
-   * Receives the backlog measured before that drop, so callers can report it.
-   */
+  /** Called once on limit/admission/send failure, after backlog cleanup; evidence retains pre-drop counts. Reconnect and replay an authoritative snapshot. */
   onOverflow: (evidence: WsOutboundOverflowEvidence) => void
-  /** Soft cap: stop draining onto the wire while bufferedAmount is above this. */
+  /** Park draining while bufferedAmount exceeds this threshold. */
   softCapBytes?: number
   /** Hard cap on bytes held in this queue before onOverflow fires. */
   maxQueuedBytes?: number
@@ -46,7 +31,6 @@ export type WsOutboundBackpressureQueueOptions<TFrame> = {
   maxFrameBytes?: number
   /** Hard cap on frames so zero/tiny-frame floods cannot bypass the byte cap. */
   maxQueuedFrames?: number
-  /** Poll interval used to re-check bufferedAmount while parked. */
   drainPollMs?: number
   /** Maximum frames handed to the native socket in one event-loop turn. */
   maxDrainFramesPerTurn?: number
@@ -62,6 +46,8 @@ export type WsOutboundBackpressureQueue<TFrame> = {
   enqueue: (frame: TFrame) => boolean
   /** Queue-or-send a frame and allow its owner to cancel it before wire delivery. */
   enqueueCancelable: (frame: TFrame) => WsOutboundEnqueueResult
+  /** True when nothing is parked and the wire has room, so enqueue would send this size directly. */
+  isIdle: (frameBytes: number) => boolean
   /** Bytes currently held (not yet handed to the wire). */
   queuedBytes: () => number
   evidence: () => { queuedBytes: number; queuedFrames: number; storageSlots: number }
@@ -76,8 +62,7 @@ export type WsOutboundEnqueueResult = {
 }
 
 const DEFAULT_SOFT_CAP_BYTES = 8 * 1024 * 1024
-// Why: tolerate a large transient burst (e.g. a build log spike) before
-// declaring the link dead; 64 MiB is ~8x the soft cap yet still bounds RSS.
+// Allow transient build-log bursts while bounding retained memory to eight times the default soft cap.
 const DEFAULT_MAX_QUEUED_BYTES = 64 * 1024 * 1024
 const DEFAULT_MAX_QUEUED_FRAMES = 4_096
 const DEFAULT_DRAIN_POLL_MS = 25
@@ -101,8 +86,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
   const setTimer = options.setTimer ?? ((cb, ms) => setTimeout(cb, ms))
   const clearTimer = options.clearTimer ?? ((timer) => clearTimeout(timer))
 
-  // Why: a ws without a numeric bufferedAmount (some mocks/transports) must not
-  // strand frames in the queue forever; treat unknown backpressure as "clear".
+  // Treat unknown/non-finite backpressure as clear so mocks/other transports cannot strand frames.
   const bufferedAmount = (): number => {
     const value = options.getBufferedAmount()
     return Number.isFinite(value) ? value : 0
@@ -213,8 +197,6 @@ export function createWsOutboundBackpressureQueue<TFrame>(
     return true
   }
 
-  // Drain as many queued frames as the wire will take without crossing the
-  // soft cap; re-arm the poll timer if frames remain.
   const drain = (): void => {
     timer = null
     if (disposed || overflowed) {
@@ -251,11 +233,16 @@ export function createWsOutboundBackpressureQueue<TFrame>(
       const nextDrainDelay = drainedFrames >= maxDrainFramesPerTurn ? 0 : drainPollMs
       timer = setTimer(drain, nextDrainDelay)
     } else {
-      // Why: resetting the drained array keeps enqueue/drain O(1) per frame;
-      // repeated Array.shift() would make recovery from a large backlog O(n²).
+      // Use a head index rather than repeated shifts to avoid quadratic backlog recovery.
       resetDrainedQueue()
     }
   }
+
+  const isIdle = (bytes: number): boolean =>
+    queuedFrames === 0 &&
+    options.isWritable() &&
+    bufferedAmount() <= softCapBytes &&
+    (options.canSend?.(bytes, false) ?? true)
 
   const enqueueCancelable = (frame: TFrame): WsOutboundEnqueueResult => {
     if (disposed || overflowed) {
@@ -266,13 +253,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
       failOverflow('maxFrameBytes')
       return { accepted: false, queued: false, cancel: () => false }
     }
-    // Fast path: nothing parked and the wire is under the cap — send directly.
-    if (
-      queuedFrames === 0 &&
-      options.isWritable() &&
-      bufferedAmount() <= softCapBytes &&
-      (options.canSend?.(bytes, false) ?? true)
-    ) {
+    if (isIdle(bytes)) {
       return {
         accepted: sendFrame(frame),
         queued: false,
@@ -312,6 +293,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
       return enqueueCancelable(frame).accepted
     },
     enqueueCancelable,
+    isIdle,
     queuedBytes: () => queued,
     evidence: () => ({
       queuedBytes: queued,

@@ -2,21 +2,16 @@ import type { GitHubPRMergeMethod, GitHubPRMergeMethodSettings } from './pull-re
 
 export const GITHUB_PR_MERGE_METHODS = ['squash', 'merge', 'rebase'] as const
 
-export const GITHUB_PR_MERGE_METHOD_LABELS: Record<GitHubPRMergeMethod, string> = {
-  squash: 'Squash and merge',
-  merge: 'Create merge commit',
-  rebase: 'Rebase and merge'
-}
-
-export type GitHubPRMergeMethodOption = {
-  method: GitHubPRMergeMethod
-  label: string
-}
+// Shared by the mobile hosted-review surfaces, whose catalogs carry these keys.
+export const GITHUB_PR_MERGE_METHOD_I18N_KEYS = {
+  squash: 'pullRequest.prActionsState.methodSquash',
+  merge: 'pullRequest.prActionsState.methodMerge',
+  rebase: 'pullRequest.prActionsState.methodRebase'
+} as const
 
 export type GitHubPRMergeMethodPresentation = {
   defaultMethod: GitHubPRMergeMethod
-  defaultLabel: string
-  methods: GitHubPRMergeMethodOption[]
+  methods: GitHubPRMergeMethod[]
 }
 
 function allMethodsAllowed(): Record<GitHubPRMergeMethod, boolean> {
@@ -79,15 +74,8 @@ export function resolveGitHubPRMergeMethods(
     defaultMethod,
     ...GITHUB_PR_MERGE_METHODS.filter((method) => method !== defaultMethod)
   ].filter((method) => allowedMethods[method])
-  const methods = (orderedMethods.length > 0 ? orderedMethods : GITHUB_PR_MERGE_METHODS).map(
-    (method) => ({
-      method,
-      label: GITHUB_PR_MERGE_METHOD_LABELS[method]
-    })
-  )
   return {
     defaultMethod,
-    defaultLabel: GITHUB_PR_MERGE_METHOD_LABELS[defaultMethod],
-    methods
+    methods: orderedMethods.length > 0 ? orderedMethods : [...GITHUB_PR_MERGE_METHODS]
   }
 }

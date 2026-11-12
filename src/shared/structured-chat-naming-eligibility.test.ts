@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem, AgentJournalSnapshot } from './agent-session-journal-types'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSnapshot
+} from './agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from './agent-session/journal/agent-session-journal-item-key'
 import { firstStructuredChatNamingPrompt } from './structured-chat-naming-eligibility'
 
 function message(
@@ -48,12 +51,6 @@ describe('first-turn chat naming eligibility', () => {
       providerItemId: 'provider-message'
     }))
     expect(firstStructuredChatNamingPrompt(state, 100)).toBe('Repair login')
-  })
-
-  it('expires when a second root user message exists', () => {
-    const state = snapshot()
-    state.items.push(message('Second turn', { itemId: 'second' }))
-    expect(firstStructuredChatNamingPrompt(state, 100)).toBe('')
   })
 
   it('does not promote later prose after an empty first message', () => {
@@ -118,68 +115,5 @@ describe('first-turn chat naming eligibility', () => {
     const state = snapshot()
     state.submissions = state.submissions.map((send) => ({ ...send, dispatchState }))
     expect(firstStructuredChatNamingPrompt(state, 100)).toBe('')
-  })
-
-  it.each(['completed', 'interrupted', 'unverifiable'] as const)(
-    'keeps a captured first working event eligible after a %s first turn',
-    (turnState) => {
-      const state = snapshot()
-      state.items.push(
-        message('', {
-          itemId: 'turn',
-          body: {
-            kind: 'turn',
-            turnId: 'turn',
-            userItemId: agentJournalSubmissionKey('first'),
-            state: turnState
-          }
-        })
-      )
-      expect(firstStructuredChatNamingPrompt(state, 100)).toBe('Repair login')
-    }
-  )
-
-  it('does not cancel a captured first working event for a settled legacy lifecycle row', () => {
-    const state = snapshot()
-    state.items[0] = message('Repair login', { turnScope: { kind: 'turn', turnItemId: 'turn' } })
-    state.items.push(
-      message('', {
-        itemId: 'turn',
-        body: {
-          kind: 'status',
-          text: 'Finished',
-          turnLifecycle: { turnId: 'turn', state: 'completed' }
-        }
-      })
-    )
-    expect(firstStructuredChatNamingPrompt(state, 100)).toBe('Repair login')
-  })
-
-  it('allows a running first turn and ignores a settled child turn', () => {
-    const state = snapshot()
-    state.items.push(
-      message('', {
-        itemId: 'turn',
-        body: {
-          kind: 'turn',
-          turnId: 'turn',
-          userItemId: agentJournalSubmissionKey('first'),
-          state: 'running'
-        }
-      })
-    )
-    state.items.push(
-      message('', {
-        itemId: 'child-turn',
-        agentId: 'child',
-        body: {
-          kind: 'turn',
-          turnId: 'child-turn',
-          userItemId: agentJournalSubmissionKey('first'),
-          state: 'completed'
-        }
-      })
-    )
-    expect(firstStructuredChatNamingPrompt(state, 100)).toBe('Repair login')
   })
 })

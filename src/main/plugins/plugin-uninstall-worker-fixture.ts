@@ -2,9 +2,9 @@ import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import {
   createPluginWorkerRuntime,
-  type PluginWorkerOrcaApi,
   type PluginWorkerRuntime
-} from './plugin-host-runtime'
+} from './workers/child-runtime/plugin-host-runtime'
+import type { PluginWorkerOrcaApi } from '../../shared/plugins/workers/plugin-worker-orca-api'
 
 export class UninstallWorkerPort extends EventEmitter {
   connected = true

@@ -1,19 +1,18 @@
 import { createHash, createHmac } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
 import { createServer as createNetServer } from 'node:net'
-import { buildHostProofMacInput, HOST_CHALLENGE_PLAINTEXT_DOMAIN } from '@orca-cloud/relay-contract'
+import { buildHostProofMacInput, HOST_CHALLENGE_PLAINTEXT_DOMAIN } from '@orca-cloud/relay-contract/host-proof-transcript'
 import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 import nacl from 'tweetnacl'
 import WebSocket from 'ws'
 import type { RawData } from 'ws'
-import { CELL_FLAG_DEFAULTS, type CellFlags } from '../cell-flags.js'
+import { CELL_FLAG_DEFAULTS, type CellFlags } from '../cell/control-flags/cell-flags.js'
 import type { RelayConfig } from '../config.js'
-import type { RelayDatabase } from '../database.js'
-import type { AppliedControlFlags } from '../relay-control-flag-channel.js'
+import type { RelayDatabase } from '../database/database.js'
+import type { AppliedControlFlags } from '../cell/control-flags/relay-control-flag-channel.js'
 import { createRelayServer } from '../relay-server.js'
 
-// One reserve-mode cell over a real database, with desktops that complete the host proof.
-// For the flip-back tests (E-mix), on SQLite and on a latency-injected PostgreSQL.
+// Real reserve-cell host proof for SQLite and latency-injected PostgreSQL flip-back tests (E-mix).
 
 export const RESERVE_MODE_CELL_ID = 'production-gce-c3'
 
@@ -28,7 +27,7 @@ async function unusedPort(): Promise<number> {
   return address.port
 }
 
-function nextMessage(socket: WebSocket): Promise<Record<string, unknown>> {
+export function nextMessage(socket: WebSocket): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     socket.once('message', (data: RawData) => {
       try {
@@ -42,12 +41,26 @@ function nextMessage(socket: WebSocket): Promise<Record<string, unknown>> {
   })
 }
 
+export function nextFrame(socket: WebSocket, type: string): Promise<Record<string, unknown>> {
+  return new Promise((resolve) => {
+    const onMessage = (data: RawData) => {
+      const frame: unknown = JSON.parse(data.toString())
+      if (!frame || typeof frame !== 'object' || !('type' in frame) || frame.type !== type) return
+      socket.off('message', onMessage)
+      resolve(Object.fromEntries(Object.entries(frame)))
+    }
+    socket.on('message', onMessage)
+  })
+}
+
 export async function startReserveModeCell(input: {
   database: RelayDatabase
   dataDir: string
   cleanup: Array<() => Promise<void> | void>
   databasePoolMax?: number
   now?: () => number
+  // Booted, no flag object read yet (generation 0, defaults).
+  flagsUnread?: boolean
 }) {
   const keys = await generateKeyPair('ES256')
   const publicJwk = await exportJWK(keys.publicKey)
@@ -90,10 +103,9 @@ export async function startReserveModeCell(input: {
     publicAssignmentRetryAfterSeconds: 5,
     dataDir: input.dataDir
   } satisfies RelayConfig
-  let applied: AppliedControlFlags<CellFlags> = {
-    generation: 1,
-    flags: { ...CELL_FLAG_DEFAULTS, admitMode: 'reserve' }
-  }
+  let applied: AppliedControlFlags<CellFlags> = input.flagsUnread
+    ? { generation: 0, flags: CELL_FLAG_DEFAULTS }
+    : { generation: 1, flags: { ...CELL_FLAG_DEFAULTS, admitMode: 'reserve' } }
   const relay = createRelayServer(config, input.database, {
     cellFlags: () => applied,
     ...(input.now ? { now: input.now } : {})
@@ -117,7 +129,6 @@ export async function startReserveModeCell(input: {
     return { keyPair, hostId, token }
   }
 
-  // The first control frame after the proof, and the socket's close code once it closes.
   const connect = async (identity: Awaited<ReturnType<typeof host>>, epoch: number) => {
     const socket = new WebSocket(`ws://127.0.0.1:${port}/v1/host/control`, {
       headers: { authorization: `Bearer ${identity.token}` },
@@ -198,11 +209,74 @@ export async function startReserveModeCell(input: {
     return { identity, ...reply }
   }
 
+  const installDevice = async (
+    relayHostId: string,
+    resumeToken: string,
+    options: { expiresAt?: number; revokedAt?: number; relayDeviceId?: string } = {}
+  ) =>
+    await input.database.query(
+      `INSERT INTO relay_devices
+       (user_id, relay_host_id, relay_device_id, current_hash, current_version,
+        current_expires_at, revoked_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'user-1', relayHostId, options.relayDeviceId ?? 'device-1',
+        createHash('sha256').update(resumeToken).digest('base64url'), 1,
+        options.expiresAt ?? Date.now() + 20 * 24 * 60 * 60 * 1000, options.revokedAt ?? null, Date.now()
+      ]
+    )
+
+  let phoneSource = 0
+  const dialPhone = async (relayHostId: string, credential: string) => {
+    phoneSource += 1
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/v1/connect/${relayHostId}`, {
+      headers: { 'x-forwarded-for': `spoofed, 192.0.2.${phoneSource}, 35.191.0.1` },
+      perMessageDeflate: false
+    })
+    await new Promise<void>((resolve, reject) => {
+      socket.once('open', () => resolve())
+      socket.once('error', reject)
+    })
+    input.cleanup.push(() => socket.terminate())
+    const closed = new Promise<{ code: number; reason: string }>((resolve) =>
+      socket.once('close', (code, reason) => resolve({ code, reason: reason.toString() }))
+    )
+    const hello = nextMessage(socket)
+    socket.send(JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential }))
+    return { socket, hello, closed }
+  }
+
+  const attachData = async (connOpen: Record<string, unknown>, generation: unknown) => {
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/v1/host/data/${String(connOpen.connId)}`, {
+      perMessageDeflate: false
+    })
+    await new Promise<void>((resolve, reject) => {
+      socket.once('open', () => resolve())
+      socket.once('error', reject)
+    })
+    input.cleanup.push(() => socket.terminate())
+    socket.send(JSON.stringify({ type: 'host-data-auth', v: 1, connTicket: connOpen.connTicket, generation }))
+    return socket
+  }
+
+  const activityLeases = async () =>
+    await input.database.query(
+      `SELECT activity_id, activity_kind FROM relay_assignment_activity_leases ORDER BY activity_id`
+    )
+
   const controlLeases = async () =>
     await input.database.query(
       `SELECT relay_host_id, cell_id, activity_id FROM relay_assignment_activity_leases
        WHERE activity_kind = 'control' ORDER BY relay_host_id`
     )
+
+  const admitEffectiveRow = async () =>
+    (
+      await input.database.query(
+        `SELECT cell_incarnation, mode, updated_at FROM relay_cell_admit_effective WHERE cell_id = ?`,
+        [config.cellId]
+      )
+    )[0]
 
   return {
     relay,
@@ -212,6 +286,11 @@ export async function startReserveModeCell(input: {
     insertRow,
     bookedHost,
     controlLeases,
+    activityLeases,
+    installDevice,
+    dialPhone,
+    attachData,
+    admitEffectiveRow,
     setAdmitMode: (admitMode: 'db' | 'reserve', flags: Partial<CellFlags> = {}) => {
       applied = { generation: applied.generation + 1, flags: { ...CELL_FLAG_DEFAULTS, ...flags, admitMode } }
     }

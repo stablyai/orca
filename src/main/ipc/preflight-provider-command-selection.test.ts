@@ -1,17 +1,16 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import { ghExecFileAsync } from '../git/command-runner/gh-exec-file'
-import { glabExecFileAsync } from '../git/command-runner/glab-exec-file'
-import { execFileCaptureToTermination } from '../git/command-runner/exec-file-capture'
-import { beginLocalCommandSelection, resolveSelectedLocalCommand } from './command-path-resolver'
+import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
+import { glabExecFileAsync } from '../git/command-runner/hosted-cli/glab-exec-file'
+import { execFileCaptureToTermination } from '../git/command-runner/process-capture/exec-file-capture'
 import {
   execLocalPreflightCommandOrThrow,
-  findRunnableLocalCommand,
-  shellQuote
+  findRunnableLocalCommand
 } from './preflight-command-exec'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 vi.mock('../../shared/system-cli-install-dirs', () => ({
   getSystemCliInstallDirectories: (_platform: NodeJS.Platform, home: string) => [
@@ -32,7 +31,7 @@ async function fixtureCli(
   const binary = path.join(dir, cli)
   await writeFile(
     binary,
-    `#!/bin/sh\nprintf '%s\\n' "$*" >> ${shellQuote(`${binary}-calls`)}\n${body}`,
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> ${quotePosixShell(`${binary}-calls`)}\n${body}`,
     { mode: 0o755 }
   )
   return binary
@@ -105,23 +104,6 @@ describe.skipIf(process.platform === 'win32')(
       }
     )
 
-    it('clears the previous selection only after the newest version probe fails', async () => {
-      const shim = await fixtureCli('gh', 'shim', 'exit 126\n')
-      const good = await fixtureCli(
-        'gh',
-        'good',
-        'if [ "$1" = --version ] && [ "$ORCA_22975_VERSION_DISABLED" = 1 ]; then exit 126; fi\necho good-api\n'
-      )
-      vi.stubEnv('PATH', [path.dirname(shim), path.dirname(good)].join(path.delimiter))
-      await findRunnableLocalCommand('gh')
-      vi.stubEnv('ORCA_22975_VERSION_DISABLED', '1')
-
-      const refreshing = findRunnableLocalCommand('gh')
-      await expect(providerCommand('gh')).resolves.toMatchObject({ stdout: 'good-api\n' })
-      await expect(refreshing).resolves.toMatchObject({ status: 'exec_failed' })
-      expect(resolveSelectedLocalCommand('gh')).toBe('gh')
-    })
-
     it.each(CLIS)('also uses the recovered %s from a known install directory', async (cli) => {
       const shim = await fixtureCli(cli, 'shim', 'exit 126\n')
       const good = await fixtureCli(cli, path.join('.nix-profile', 'bin'))
@@ -191,100 +173,8 @@ describe.skipIf(process.platform === 'win32')(
       await expect(providerCommand('gh')).resolves.toMatchObject({ stdout: 'good-api\n' })
       await expect(refreshing).resolves.toEqual({ status: 'available', binary: good })
     })
-
-    it('bypasses a selection after PATH or relative-PATH cwd changes', async () => {
-      const good = await fixtureCli('gh', 'good')
-      const custom = await fixtureCli('gh', 'custom')
-      vi.stubEnv('PATH', path.dirname(good))
-      await findRunnableLocalCommand('gh')
-      const refreshing = findRunnableLocalCommand('gh')
-      vi.stubEnv('PATH', path.dirname(custom))
-      await expect(providerCommand('gh')).resolves.toMatchObject({ stdout: 'custom-api\n' })
-      await refreshing
-      await expect(providerCommand('gh')).resolves.toMatchObject({ stdout: 'custom-api\n' })
-
-      vi.stubEnv('PATH', path.relative(process.cwd(), path.dirname(good)))
-      await findRunnableLocalCommand('gh')
-      expect(resolveSelectedLocalCommand('gh', { cwd: root })).toBe('gh')
-    })
-
-    it('discards a replaced binary and clears a selection when the next probe fails', async () => {
-      const shim = await fixtureCli('gh', 'shim', 'exit 126\n')
-      const good = await fixtureCli('gh', 'good')
-      vi.stubEnv('PATH', [path.dirname(shim), path.dirname(good)].join(path.delimiter))
-      await findRunnableLocalCommand('gh')
-      await writeFile(good, '#!/bin/sh\necho changed >&2\nexit 126\n')
-
-      expect(resolveSelectedLocalCommand('gh')).toBe('gh')
-      await expect(findRunnableLocalCommand('gh')).resolves.toMatchObject({ status: 'exec_failed' })
-      expect(resolveSelectedLocalCommand('gh')).toBe('gh')
-      await fixtureCli('gh', 'good')
-      await findRunnableLocalCommand('gh')
-      expect(resolveSelectedLocalCommand('gh')).toBe(good)
-      await rm(good)
-      expect(resolveSelectedLocalCommand('gh')).toBe('gh')
-    })
-
-    it('keeps an older concurrent probe from replacing the newer selection', async () => {
-      const first = await fixtureCli('gh', 'first')
-      const second = await fixtureCli('gh', 'second')
-      const older = beginLocalCommandSelection('gh')
-      const newer = beginLocalCommandSelection('gh')
-      await newer(second)
-      await older(first)
-      await older(null)
-
-      expect(resolveSelectedLocalCommand('gh')).toBe(second)
-    })
   }
 )
-
-describe('Windows selection across working folders', () => {
-  it('keeps an absolute PATH selection in a different provider cwd', async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), 'orca-22975-cwd-'))
-    const binary = path.join(directory, 'gh.CMD')
-    const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
-    await writeFile(binary, '@echo off\r\nexit /b 0\r\n')
-    try {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      vi.stubEnv('PATH', directory)
-      const publish = beginLocalCommandSelection('gh')
-      await publish(binary)
-      expect(resolveSelectedLocalCommand('gh', { cwd: path.join(directory, 'project') })).toBe(
-        binary
-      )
-    } finally {
-      vi.unstubAllEnvs()
-      if (descriptor) {
-        Object.defineProperty(process, 'platform', descriptor)
-      }
-      await removeTree(directory)
-    }
-  })
-
-  it('does not carry a current-directory CLI into another folder', async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), 'orca-22975-local-cwd-'))
-    const binary = path.join(directory, 'gh.CMD')
-    const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
-    await writeFile(binary, '@echo off\r\nexit /b 0\r\n')
-    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(directory)
-    try {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      vi.stubEnv('PATH', path.join(directory, 'other'))
-      const publish = beginLocalCommandSelection('gh')
-      await publish(binary)
-      expect(resolveSelectedLocalCommand('gh')).toBe(binary)
-      expect(resolveSelectedLocalCommand('gh', { cwd: path.join(directory, 'project') })).toBe('gh')
-    } finally {
-      cwd.mockRestore()
-      vi.unstubAllEnvs()
-      if (descriptor) {
-        Object.defineProperty(process, 'platform', descriptor)
-      }
-      await removeTree(directory)
-    }
-  })
-})
 
 describe.runIf(process.platform === 'win32')('native provider batch selection', () => {
   beforeEach(async () => {

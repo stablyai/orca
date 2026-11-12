@@ -1,5 +1,3 @@
-/** Terminal layout journeys shared by the layout parity scenarios and the layout oracle. */
-
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -58,7 +56,7 @@ export async function addFolderWorkspace(page: Page): Promise<FolderWorkspaceSet
     .poll(async () => {
       worktreeId = await page.evaluate(async (id) => {
         const store = window.__store!
-        await store.getState().fetchRepos()
+        await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
         await store.getState().fetchWorktrees(id)
         const worktree = store.getState().worktreesByRepo[id]?.[0]
         if (worktree) {
@@ -74,10 +72,7 @@ export async function addFolderWorkspace(page: Page): Promise<FolderWorkspaceSet
   return { worktreeId: worktreeId!, pathLabels: { [folderPath]: '<folder>' }, cleanup }
 }
 
-/**
- * The user's close-pane chord, so the close reaches main through the real commit path; driving
- * PaneManager.closePane directly leaves main to learn of it from the PTY exit, which races quit.
- */
+// Use the close chord to commit through main; direct PaneManager.closePane races quit against PTY-exit discovery.
 export async function closeActivePaneFromKeyboard(page: Page, paneCount: number): Promise<void> {
   await focusActiveTerminalInput(page)
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+w' : 'Control+w')
@@ -96,11 +91,11 @@ export async function closeActivePaneFromKeyboard(page: Page, paneCount: number)
     .toBe(paneCount - 1)
 }
 
-/** A real pointer drag of a pane's handle onto the tab strip, past the last tab, as a user drags a pane out. */
 export async function dragPaneOutToTabStrip(
   page: Page,
   worktreeId: string,
-  leafId: string
+  leafId: string,
+  position: 'end' | 'start' = 'end'
 ): Promise<void> {
   const handle = page.locator(`.pane[data-leaf-id="${leafId}"] .pane-drag-handle`)
   const strip = page.locator(`[data-tab-group-strip-id][data-worktree-id="${worktreeId}"]`).first()
@@ -108,13 +103,16 @@ export async function dragPaneOutToTabStrip(
   const handleBox = await handle.boundingBox()
   const stripBox = await strip.boundingBox()
   const lastTabBox = await lastTab.boundingBox()
-  if (!handleBox || !stripBox || !lastTabBox) {
+  const firstTabBox = await strip.locator(SORTABLE_TAB).first().boundingBox()
+  if (!handleBox || !stripBox || !lastTabBox || !firstTabBox) {
     throw new Error('Pane drag handle or tab strip is not laid out')
   }
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + 4)
   await page.mouse.down()
   await page.mouse.move(
-    Math.min(lastTabBox.x + lastTabBox.width + 24, stripBox.x + stripBox.width - 4),
+    position === 'start'
+      ? firstTabBox.x + 4
+      : Math.min(lastTabBox.x + lastTabBox.width + 24, stripBox.x + stripBox.width - 4),
     stripBox.y + stripBox.height / 2,
     { steps: 20 }
   )

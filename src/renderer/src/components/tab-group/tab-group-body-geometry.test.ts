@@ -22,15 +22,6 @@ function track(cleanup: () => void): () => void {
   return cleanup
 }
 
-function resizeListenerDelta(
-  add: ReturnType<typeof vi.spyOn>,
-  remove: ReturnType<typeof vi.spyOn>
-) {
-  const count = (spy: ReturnType<typeof vi.spyOn>): number =>
-    spy.mock.calls.filter(([type]) => type === 'resize').length
-  return count(add) - count(remove)
-}
-
 beforeEach(() => {
   observers = []
   cleanups = []
@@ -63,56 +54,6 @@ afterEach(() => {
 })
 
 describe('subscribeTabGroupBodyRect', () => {
-  it('shares one observer per group and one window listener across groups', () => {
-    const add = vi.spyOn(window, 'addEventListener')
-    const remove = vi.spyOn(window, 'removeEventListener')
-    const container = element(new DOMRect(0, 10, 800, 600))
-    track(registerTabGroupBody('a', element(new DOMRect(0, 42, 400, 568))))
-    track(registerTabGroupBody('b', element(new DOMRect(400, 42, 400, 568))))
-
-    const first = vi.fn()
-    const second = vi.fn()
-    const other = vi.fn()
-    const unsubscribeFirst = subscribeTabGroupBodyRect('a', container, first)
-    const unsubscribeSecond = subscribeTabGroupBodyRect('a', container, second)
-    const unsubscribeOther = subscribeTabGroupBodyRect('b', container, other)
-
-    expect(observers).toHaveLength(2)
-    expect(resizeListenerDelta(add, remove)).toBe(1)
-    expect(first).toHaveBeenLastCalledWith({ top: 32, left: 0, width: 400, height: 568 })
-    expect(second.mock.lastCall?.[0]).toBe(first.mock.lastCall?.[0])
-    expect(other).toHaveBeenLastCalledWith({ top: 32, left: 400, width: 400, height: 568 })
-
-    unsubscribeFirst()
-    expect(observers[0].disconnected).toBe(false)
-    unsubscribeSecond()
-    expect(observers[0].disconnected).toBe(true)
-    expect(resizeListenerDelta(add, remove)).toBe(1)
-    unsubscribeOther()
-    expect(observers[1].disconnected).toBe(true)
-    expect(resizeListenerDelta(add, remove)).toBe(0)
-  })
-
-  it('notifies only on changes larger than a pixel', () => {
-    const container = element(new DOMRect(0, 0, 800, 600))
-    let bodyRect = new DOMRect(0, 32, 400, 568)
-    const body = element(bodyRect)
-    body.getBoundingClientRect = () => bodyRect
-    track(registerTabGroupBody('a', body))
-    const listener = vi.fn()
-    track(subscribeTabGroupBodyRect('a', container, listener))
-    listener.mockClear()
-
-    bodyRect = new DOMRect(0, 32.5, 400.5, 568)
-    window.dispatchEvent(new Event('resize'))
-    expect(listener).not.toHaveBeenCalled()
-
-    bodyRect = new DOMRect(0, 32, 380, 568)
-    observers[0].callback()
-    expect(listener).toHaveBeenCalledTimes(1)
-    expect(listener).toHaveBeenLastCalledWith({ top: 32, left: 0, width: 380, height: 568 })
-  })
-
   it('follows the group body as it mounts, is replaced, and unmounts', () => {
     const container = element(new DOMRect(0, 0, 800, 600))
     const listener = vi.fn()

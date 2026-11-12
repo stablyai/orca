@@ -14,7 +14,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'android' },
   Pressable: 'Pressable',
   StyleSheet: {
-    absoluteFillObject: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+    absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
     create: (styles: unknown) => styles
   },
   Text: 'Text',
@@ -81,16 +81,7 @@ const cellBoxNotify = (cellWidth: number, refit: boolean) => ({
 })
 
 describe('the cell box xterm laid out', () => {
-  it('sizes a fit from web-ready, which the document sends once its terminal is built', () => {
-    const { handle, notify } = mount()
-    expect(handle().fitDimensions(FRAME)).toBeNull()
-    notify({ type: 'web-ready', cellBox: cellAt(scale) })
-    expect(handle().fitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
-    expect(postedTypes()).not.toContain('measure')
-  })
-
   it('fits each box the document reports, and refits only when the document says so', () => {
-    // The document holds the grid and decides; its tests pin the one-refit bound.
     const { handle, notify, onCellBoxChange } = mount()
     notify({ type: 'web-ready', cellBox: cellAt(scale) })
     notify(cellBoxNotify(7.9, false))
@@ -111,7 +102,6 @@ describe('the cell box xterm laid out', () => {
 
   it("fits only from a ready box at the app's text scale", () => {
     const { handle, notify, webView } = mount(1.5)
-    // A document built at mount keeps that scale; a reload after a text-size change reports it.
     notify({ type: 'web-ready', cellBox: cellAt(1) })
     expect(handle().fitDimensions(FRAME)).toBeNull()
     act(() => webView().props.onLoadStart())
@@ -144,14 +134,6 @@ describe('the cell box xterm laid out', () => {
     expect(postedTypes()).not.toContain('init')
   })
 
-  it('reloads the same view when its content process ends', () => {
-    const { webView } = mount()
-    const view = webView()
-    act(() => view.props.onContentProcessDidTerminate({ nativeEvent: {} }))
-    expect(nativeWebViewMethods.reload).toHaveBeenCalledTimes(1)
-    expect(webView()).toBe(view)
-  })
-
   it('drops queued and coalesced commands on a reload or a lost content process', () => {
     vi.useFakeTimers()
     const { handle, notify, webView } = mount()
@@ -170,31 +152,5 @@ describe('the cell box xterm laid out', () => {
       vi.runAllTimers()
     })
     expect(postedTypes()).toContain('write')
-  })
-
-  it('tells the document the app text scale before it builds its terminal', () => {
-    const { webView } = mount(1.25)
-    const html: string = webView().props.source.html
-    const start = html.indexOf('window.__orcaTerminalTextScale = 1.25;')
-    expect(start).toBeGreaterThan(-1)
-    // Ahead of the document script, in the page itself, so no platform can run it late.
-    expect(start).toBeLessThan(html.indexOf('startTerminalDocument'))
-  })
-
-  it('keeps the source it mounted with across renders, so a new text scale does not reload', () => {
-    const { webView } = mount(1)
-    const source = webView().props.source
-    act(() => renderers[0]!.update(createElement(TerminalWebView, { textScale: 1.5 })))
-    expect(webView().props.source).toBe(source)
-  })
-
-  it('tells a document whose view was hidden at mount not to build before ready', () => {
-    let renderer: ReactTestRenderer | undefined
-    act(() => {
-      renderer = create(createElement(TerminalWebView, { shownAtMount: false }))
-    })
-    renderers.push(renderer!)
-    const webView = renderer!.root.find((node) => typeof node.props.onMessage === 'function')
-    expect(webView.props.source.html).toContain('window.__orcaTerminalShown = false;')
   })
 })

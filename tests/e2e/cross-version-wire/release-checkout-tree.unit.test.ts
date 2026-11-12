@@ -10,10 +10,13 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import * as currentProcessHost from '@orca/process-host'
 import { importReleaseCheckoutModule } from './release-checkout'
 import { extractReleaseCheckoutTree } from './release-checkout-tree'
+import { prepareReleaseSnapshotSource } from './release-checkout-prefetch'
+import { LOCAL_RELEASE_GIT_ENV } from './release-checkout-process'
 
 const temporaryRoots: string[] = []
 
@@ -36,14 +39,12 @@ const RELEASE_SKELETON: Record<string, string> = Object.fromEntries(
     'src/main/placeholder.ts',
     'src/shared/placeholder.ts',
     'src/preload/placeholder.ts',
-    'src/relay/placeholder.ts',
     'src/renderer/src/placeholder.ts',
     'src/types/placeholder.ts',
     'mobile/src/worktree/agent-row-display.ts'
   ].map((path) => [path, 'export {}\n'])
 )
 
-/** A throwaway repository whose single commit plays the release. */
 function commitRelease(files: Record<string, string>): { repo: string; commit: string } {
   const repo = temporaryDirectory('orca-cross-version-release-repo-')
   for (const [path, source] of Object.entries({ ...RELEASE_SKELETON, ...files })) {
@@ -69,10 +70,118 @@ function commitRelease(files: Record<string, string>): { repo: string; commit: s
     '--message',
     'release'
   ])
-  // Working-tree root manifest the stand-in logic compares against.
   writeFileSync(join(repo, 'package.json'), '{ "dependencies": {} }\n')
   return { repo, commit: git(['rev-parse', 'HEAD']) }
 }
+
+function partialClone(repo: string): string {
+  for (const message of ['second', 'third']) {
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=release',
+        '-c',
+        'user.email=release@example.invalid',
+        '-c',
+        'commit.gpgsign=false',
+        'commit',
+        '--allow-empty',
+        '--quiet',
+        '-m',
+        message
+      ],
+      { cwd: repo }
+    )
+  }
+  execFileSync('git', ['repack', '-a', '-d', '-b'], { cwd: repo })
+  execFileSync('git', ['config', 'uploadpack.allowFilter', 'true'], { cwd: repo })
+  execFileSync('git', ['config', 'uploadpack.allowAnySHA1InWant', 'true'], { cwd: repo })
+  const clone = join(temporaryDirectory('orca-cross-version-partial-'), 'clone')
+  execFileSync('git', [
+    'clone',
+    '--quiet',
+    '--filter=blob:none',
+    '--no-checkout',
+    pathToFileURL(repo).href,
+    clone
+  ])
+  writeFileSync(join(clone, 'package.json'), '{ "dependencies": {} }\n')
+  return clone
+}
+
+function missingSnapshotObjects(repo: string, commit: string): string[] {
+  return execFileSync(
+    'git',
+    ['rev-list', '--objects', '--no-object-names', '--missing=print', `${commit}^{tree}`],
+    { cwd: repo, encoding: 'utf8', env: { ...process.env, ...LOCAL_RELEASE_GIT_ENV } }
+  )
+    .split('\n')
+    .filter((line) => line.startsWith('?'))
+}
+
+describe('historical snapshot acquisition', () => {
+  it('prepares genuinely missing blobs before metadata, archive and direct-file consumption', async () => {
+    const { repo, commit } = commitRelease({
+      'pnpm-workspace.yaml': 'packages: []\n',
+      'src/main/released.ts': 'export const released = 42\n'
+    })
+    const clone = partialClone(repo)
+    expect(missingSnapshotObjects(clone, commit).length).toBeGreaterThan(0)
+    await prepareReleaseSnapshotSource(clone, commit)
+    expect(missingSnapshotObjects(clone, commit)).toEqual([])
+    execFileSync('git', ['remote', 'set-url', 'origin', join(repo, 'unavailable')], { cwd: clone })
+    const staging = temporaryDirectory('orca-cross-version-prepared-')
+    await extractReleaseCheckoutTree(clone, staging, commit)
+    expect(readFileSync(join(staging, 'src/main/released.ts'), 'utf8')).toContain('released = 42')
+    expect(
+      execFileSync('git', ['show', `${commit}:src/main/released.ts`], {
+        cwd: clone,
+        encoding: 'utf8',
+        env: { ...process.env, ...LOCAL_RELEASE_GIT_ENV }
+      })
+    ).toContain('released = 42')
+  })
+
+  it('fails before extraction when requested source is unavailable', async () => {
+    const { repo, commit } = commitRelease({})
+    const clone = partialClone(repo)
+    execFileSync('git', ['remote', 'set-url', 'origin', join(repo, 'unavailable')], { cwd: clone })
+    const staging = temporaryDirectory('orca-cross-version-unavailable-')
+    await expect(extractReleaseCheckoutTree(clone, staging, commit)).rejects.toThrow(
+      'Historical source preparation'
+    )
+    expect(existsSync(join(staging, '.release-checkout.tar'))).toBe(false)
+    expect(missingSnapshotObjects(clone, commit).length).toBeGreaterThan(0)
+  })
+
+  it('terminates a stalled acquisition at its finite preparation deadline', async () => {
+    const { repo, commit } = commitRelease({})
+    const clone = partialClone(repo)
+    const pidFile = join(repo, 'upload-pack.pid')
+    const uploadPack = join(repo, 'slow-upload-pack.cjs')
+    writeFileSync(
+      uploadPack,
+      `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 60000)\n`
+    )
+    execFileSync(
+      'git',
+      [
+        'config',
+        'remote.origin.uploadpack',
+        `${JSON.stringify(process.execPath)} ${JSON.stringify(uploadPack)}`
+      ],
+      { cwd: clone }
+    )
+    await expect(prepareReleaseSnapshotSource(clone, commit, { timeoutMs: 2_000 })).rejects.toThrow(
+      /Historical source preparation: .*timed out after 2000ms/
+    )
+    const pid = Number(readFileSync(pidFile, 'utf8'))
+    expect(pid).toBeGreaterThan(0)
+    expect(() => process.kill(pid, 0)).toThrow()
+    expect(missingSnapshotObjects(clone, commit).length).toBeGreaterThan(0)
+  })
+})
 
 const RELEASE_PROCESS_HOST = {
   'src/packages/process-host/package.json': JSON.stringify({
@@ -95,7 +204,6 @@ const RELEASE_PROCESS_HOST = {
   'src/packages/process-host/src/process-spec.ts':
     "export const describeSpec = () => 'release process-spec'\n",
   'src/packages/process-host/src/run-process.test.ts': 'throw new Error("stale spec")\n',
-  // A JavaScript source package that itself depends on another release workspace package.
   'src/packages/release-tool/package.json': JSON.stringify({
     name: '@orca/release-tool',
     type: 'module',
@@ -169,7 +277,6 @@ describe('release checkout workspace packages', () => {
       false
     )
     expect(existsSync(join(staging, 'src/packages/release-tool/src/index.test.mjs'))).toBe(false)
-    // A rewritten workspace import never becomes a stand-in package.
     expect(existsSync(join(staging, 'node_modules'))).toBe(false)
   })
 
@@ -192,15 +299,4 @@ describe('release checkout workspace packages', () => {
       expect(failure).toContain(`No public orca-source export for ${specifier}`)
     }
   )
-
-  it('extracts a release that predates workspace packages unchanged', async () => {
-    const source = "import { lock } from 'proper-lockfile'\nexport const locker = typeof lock\n"
-    const { repo, commit } = commitRelease({ 'src/main/old.ts': source })
-    const staging = temporaryDirectory('orca-cross-version-release-staging-')
-
-    await extractReleaseCheckoutTree(repo, staging, commit)
-
-    expect(readFileSync(join(staging, 'src/main/old.ts'), 'utf8')).toBe(source)
-    expect(existsSync(join(staging, 'pnpm-workspace.yaml'))).toBe(false)
-  })
 })

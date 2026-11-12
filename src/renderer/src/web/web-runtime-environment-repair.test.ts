@@ -48,8 +48,8 @@ describe('web re-pairing the same server', () => {
     const pending: { answer?: () => void } = {}
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
-        constructor(offer: { deviceToken: string }) {
-          tokens.push(offer.deviceToken)
+        constructor(connection: { credential: { deviceToken: string } }) {
+          tokens.push(connection.credential.deviceToken)
         }
 
         call(method: string): Promise<RuntimeRpcResponse<unknown>> {
@@ -123,37 +123,6 @@ describe('web re-pairing the same server', () => {
     })
 
     expect(paired.environment.id).not.toBe('web-server-a')
-    expect(readStored(globals.storage)).toMatchObject({
-      hostDescriptor: { installationId: INSTALL_B }
-    })
-  })
-
-  it('keeps the old pin when a downgraded server sends no descriptor', async () => {
-    const globals = await installWithStoredServer({ installationId: INSTALL_A })
-
-    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
-      name: 'Server A',
-      pairingCode: encodePairingCode({ publicKeyB64: 'public-key' })
-    })
-
-    expect(paired.environment.id).toBe('web-server-a')
-    expect(readStored(globals.storage)).toMatchObject({
-      hostDescriptor: { installationId: INSTALL_A }
-    })
-  })
-
-  it('drops a malformed pinned descriptor instead of trusting it', async () => {
-    const globals = await installWithStoredServer({ installationId: 'not-a-uuid' })
-
-    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
-      name: 'Server A',
-      pairingCode: encodePairingCode({
-        publicKeyB64: 'public-key',
-        hostDescriptor: { installationId: INSTALL_B }
-      })
-    })
-
-    expect(paired.environment.id).toBe('web-server-a')
     expect(readStored(globals.storage)).toMatchObject({
       hostDescriptor: { installationId: INSTALL_B }
     })

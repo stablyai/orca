@@ -1,35 +1,48 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { RefreshCw, Server } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
-import { cn } from '@/lib/utils'
-import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useAppStore } from '@/store/index'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { cn } from '@/lib/class-names'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
   publishWorkspacePortScanForHost,
   refreshWorkspacePortScanAfterStop,
-  resolvePortOpenInOrcaBrowser,
   scanWorkspacePortsForTarget,
   workspacePortRuntimeTargetKey
-} from '@/lib/workspace-port-actions'
-import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
+} from '@/lib/workspace-ports/workspace-port-actions'
+import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-ports/workspace-port-browser-open'
+import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getLocalWorkspacePortSections,
   shouldShowLocalWorkspacePortSections
 } from './local-workspace-port-sections'
 import { LocalPortSection } from './local-port-section'
 import { LocalPortDetailsDialog } from './local-port-details-dialog'
+import { SshForwardedPortsSection } from './ssh-forwarded-ports-section'
 
-/** Right-sidebar Ports panel scoped to the active workspace's owner host. */
-export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.JSX.Element {
+export function LocalWorkspacePortsPanel({
+  isVisible,
+  runtimeTarget,
+  sshForwardTargetId = null
+}: {
+  isVisible: boolean
+  /** The endpoint that owns the active workspace, even if the sidebar is focused elsewhere. */
+  runtimeTarget: RuntimeClientTarget | null
+  /** A managed server's SSH host, whose connection carries this client's forwards. */
+  sshForwardTargetId?: string | null
+}): React.JSX.Element {
+  const t = useTranslate()
   const activeWorktree = useActiveWorktree()
-  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  // Use workspace repoId directly because folder workspaces have only a synthetic ID, not a repo row.
+  const activeRepoId = activeWorktree?.repoId ?? null
   const settings = useAppStore((s) => s.settings)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
@@ -43,13 +56,10 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
     external: true
   })
 
-  // Why: the Ports panel acts on the active workspace; use that workspace's
-  // host owner even if the sidebar is focused elsewhere.
-  const runtimeTarget = useWorktreeRuntimeTarget(activeWorktree?.id)
   const scanKey = runtimeTarget ? `${workspacePortRuntimeTargetKey(runtimeTarget)}:all` : null
 
   const refresh = useCallback(() => {
-    if (!activeRepo || !runtimeTarget || !scanKey) {
+    if (!activeRepoId || !runtimeTarget || !scanKey) {
       return Promise.resolve()
     }
     setWorkspacePortScanRefreshing(true)
@@ -84,15 +94,14 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
       })
     return promise
   }, [
-    activeRepo,
+    activeRepoId,
     runtimeTarget,
     scanKey,
     replaceWorkspacePortScans,
     setWorkspacePortScanRefreshing
   ])
 
-  // Why: WorkspacePortScanner already owns the 30s all-worktree poll. The
-  // panel scopes that shared result instead of starting a second scan loop.
+  // Scope WorkspacePortScanner's shared 30s results instead of starting another poll loop.
   const displayScan = isVisible && scanKey ? (scansByKey[scanKey] ?? null) : null
 
   const toggleSection = useCallback((sectionId: string) => {
@@ -101,11 +110,11 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
 
   const handleStopPort = useCallback(
     async (port: WorkspacePort) => {
-      if (!activeRepo || !port.pid) {
+      if (!activeRepoId || !port.pid) {
         return
       }
       const result = await killWorkspacePortForTarget(runtimeTarget, {
-        repoId: activeRepo.id,
+        repoId: activeRepoId,
         pid: port.pid,
         port: port.port
       })
@@ -138,7 +147,7 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
         )
       }
     },
-    [activeRepo, runtimeTarget, replaceWorkspacePortScans, setWorkspacePortScanRefreshing]
+    [activeRepoId, runtimeTarget, replaceWorkspacePortScans, setWorkspacePortScanRefreshing]
   )
 
   const handleOpenPortInBrowser = useCallback(
@@ -170,8 +179,8 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
   )
 
   const { activePorts, otherWorkspacePorts, externalPorts } = useMemo(
-    () => getLocalWorkspacePortSections(displayScan, activeRepo?.id, activeWorktree?.id),
-    [activeRepo?.id, activeWorktree?.id, displayScan]
+    () => getLocalWorkspacePortSections(displayScan, activeRepoId, activeWorktree?.id),
+    [activeRepoId, activeWorktree?.id, displayScan]
   )
 
   const showPortSections = shouldShowLocalWorkspacePortSections(displayScan, {
@@ -180,15 +189,12 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
     externalPorts
   })
 
-  if (!activeRepo) {
+  if (!activeRepoId) {
     return (
       <div className="flex flex-col items-center justify-center h-full px-4 text-center text-muted-foreground">
         <Server size={32} className="mb-3 opacity-50" />
         <p className="text-sm">
-          {translate(
-            'auto.components.right.sidebar.PortsPanel.c1b115c375',
-            'No workspace selected'
-          )}
+          {t('auto.components.right.sidebar.PortsPanel.c1b115c375', 'No workspace selected')}
         </p>
       </div>
     )
@@ -198,7 +204,7 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
     <div className="flex flex-col h-full overflow-y-auto scrollbar-sleek">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {translate('auto.components.right.sidebar.PortsPanel.6bc058dbe1', 'Ports')}
+          {t('auto.components.right.sidebar.PortsPanel.6bc058dbe1', 'Ports')}
         </span>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -209,23 +215,22 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
               className="text-muted-foreground hover:text-foreground"
               onClick={() => void refresh()}
               disabled={refreshing || !runtimeTarget}
-              aria-label={translate(
-                'auto.components.right.sidebar.PortsPanel.7822e3edc6',
-                'Refresh Ports'
-              )}
+              aria-label={t('auto.components.right.sidebar.PortsPanel.7822e3edc6', 'Refresh Ports')}
             >
               <RefreshCw size={14} className={cn(refreshing && 'animate-spin')} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate('auto.components.right.sidebar.PortsPanel.7822e3edc6', 'Refresh Ports')}
+            {t('auto.components.right.sidebar.PortsPanel.7822e3edc6', 'Refresh Ports')}
           </TooltipContent>
         </Tooltip>
       </div>
 
+      {sshForwardTargetId && <SshForwardedPortsSection connectionId={sshForwardTargetId} />}
+
       {displayScan?.unavailableReason && (
         <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border">
-          {translate(
+          {t(
             'auto.components.right.sidebar.PortsPanel.f59c783b7a',
             'Port scan unavailable on {{value0}}: {{value1}}',
             {
@@ -240,18 +245,12 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
         <>
           <LocalPortSection
             id="active"
-            title={translate(
-              'auto.components.right.sidebar.PortsPanel.935dda7718',
-              'Active Workspace'
-            )}
+            title={t('auto.components.right.sidebar.PortsPanel.935dda7718', 'Active Workspace')}
             ports={activePorts}
             emptyText={
               refreshing && !displayScan
-                ? translate('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
-                : translate(
-                    'auto.components.right.sidebar.PortsPanel.38b16cfbef',
-                    'No ports detected'
-                  )
+                ? t('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
+                : t('auto.components.right.sidebar.PortsPanel.38b16cfbef', 'No ports detected')
             }
             collapsed={collapsedSections.active ?? false}
             onToggle={() => toggleSection('active')}
@@ -261,10 +260,7 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
           />
           <LocalPortSection
             id="other"
-            title={translate(
-              'auto.components.right.sidebar.PortsPanel.4db4b5e435',
-              'Other Workspaces'
-            )}
+            title={t('auto.components.right.sidebar.PortsPanel.4db4b5e435', 'Other Workspaces')}
             ports={otherWorkspacePorts}
             collapsed={collapsedSections.other ?? false}
             onToggle={() => toggleSection('other')}
@@ -274,7 +270,7 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
           />
           <LocalPortSection
             id="external"
-            title={translate('auto.components.right.sidebar.PortsPanel.d32820d3e2', 'External')}
+            title={t('auto.components.right.sidebar.PortsPanel.d32820d3e2', 'External')}
             ports={externalPorts}
             collapsed={collapsedSections.external ?? false}
             onToggle={() => toggleSection('external')}
@@ -293,10 +289,7 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
           <div className="flex flex-col items-center justify-center flex-1 px-4 text-center text-muted-foreground">
             <Server size={32} className="mb-3 opacity-50" />
             <p className="text-sm">
-              {translate(
-                'auto.components.right.sidebar.PortsPanel.a2a9fc6899',
-                'No local ports detected'
-              )}
+              {t('auto.components.right.sidebar.PortsPanel.a2a9fc6899', 'No local ports detected')}
             </p>
           </div>
         )}

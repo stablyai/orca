@@ -1,12 +1,13 @@
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { getLinkedWorkItemProvider } from '@/lib/linked-work-item-provider'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import type { SmartGitHubSubmitResolution } from '@/lib/smart-github-submit'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
+import type { SmartGitHubSubmitResolution } from '@/lib/work-items/github/smart-github-submit'
 import {
   resolveGitHubWorkItemIdentity,
   type GitHubWorkItemIdentity
-} from '@/lib/github-work-item-identity'
+} from '../../../../shared/new-workspace/github-work-item-identity'
 
 export type PendingSmartGitHubSubmitResolution =
   | { kind: 'none' }
@@ -20,15 +21,21 @@ export type PendingSmartGitHubSubmitResolution =
     })
 
 export type SmartGitHubPrStartPointSelection = {
+  kind: 'github-pr'
   repoId: string
   item: GitHubWorkItem
   resolved?: GitHubPrStartPoint
 }
 
+export type SmartSourceSelection =
+  | SmartGitHubPrStartPointSelection
+  | { kind: 'gitlab-mr'; repoId: string; item: GitLabWorkItem }
+  | { kind: 'github-submit-lookup'; query: string }
+
 export function getGitHubLinkedWorkItemIdentity(
   item: LinkedWorkItemSummary | null | undefined
 ): GitHubWorkItemIdentity | null {
-  if (!item || getLinkedWorkItemProvider(item) !== 'github') {
+  if (!item || getWorkspaceSourceProvider(item) !== 'github') {
     return null
   }
   return resolveGitHubWorkItemIdentity({
@@ -41,7 +48,7 @@ export function getGitHubLinkedWorkItemIdentity(
 export function normalizeGitHubLinkedWorkItem(
   item: LinkedWorkItemSummary | null | undefined
 ): LinkedWorkItemSummary | null {
-  if (!item || getLinkedWorkItemProvider(item) !== 'github') {
+  if (!item || getWorkspaceSourceProvider(item) !== 'github') {
     return item ?? null
   }
   const identity = getGitHubLinkedWorkItemIdentity(item)

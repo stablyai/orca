@@ -10,7 +10,14 @@ describe('managed orcad SSH fence', () => {
     expect(getManagedOrcadFenceEnvironmentId({ orcadFence: { environmentId: 'env-1' } })).toBe(
       'env-1'
     )
-    expect(getManagedOrcadFenceEnvironmentId({})).toBeNull()
+    const legacyOnly = {
+      orcadFence: undefined,
+      owner: { type: 'on-demand-runtime' as const, runtimeId: 'managed-orcad:old' }
+    }
+    expect(getManagedOrcadFenceEnvironmentId({ ...legacyOnly })).toBeNull()
+    expect(
+      getManagedOrcadFenceEnvironmentId({ ...legacyOnly, orcadFence: { environmentId: 'env-2' } })
+    ).toBe('env-2')
     expect(getManagedOrcadFenceEnvironmentId(undefined)).toBeNull()
   })
 

@@ -1,5 +1,13 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
+import { printOrchestrationResult } from './agent-view'
+import { remoteHost, WORKER_LIST_VIEW, type WorkerListResult } from './worker-agent-views'
+import {
+  formatHelperStops,
+  WORKER_RELEASE_VIEW,
+  workerStopFailure
+} from './worker-release-agent-view'
+import type { WorkerStopReceipt } from '../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -7,12 +15,15 @@ import {
 } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { callOrchestrationMutation } from './mutation-request'
+import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 import { formatWorkerRelease, type WorkerReleaseReceipt } from './worker-output'
-import {
-  formatWorkerListScope,
-  resolveWorkerListRunScope,
-  type WorkerListRunScope
-} from './worker-list-run-scope'
+import { formatWorkerListScope, resolveWorkerListRunScope } from './worker-list-run-scope'
+
+type WorkerApprovalAnswerView = {
+  approvalId: string
+  option: string
+  reasonMessageId: string | null
+}
 
 const WORKER_TERMINAL_LIST_STATES = [
   'active',
@@ -23,25 +34,81 @@ const WORKER_TERMINAL_LIST_STATES = [
   'released'
 ] as const
 
-export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandler> = {
-  'orchestration worker-stop': async ({ flags, client, json }) => {
-    const result = await callOrchestrationMutation<{
-      dispatchId: string
-      state: string
-      processAction: string
-      lastError?: string
-      warning?: string
-    }>(client, flags, 'orchestration.workerStop', {
-      dispatch: getRequiredStringFlag(flags, 'dispatch')
+const keepWorkerOpen: CommandHandler = async ({ flags, client, json }) => {
+  const result = await callOrchestrationMutation<WorkerReleaseReceipt>(
+    client,
+    flags,
+    'orchestration.workerRetain',
+    { dispatch: getRequiredStringFlag(flags, 'dispatch') }
+  )
+  if (!flags.has('full')) {
+    printOrchestrationResult(result, json, WORKER_RELEASE_VIEW)
+    return
+  }
+  if (result.result.state === 'release_unknown') {
+    process.exitCode = 1
+  }
+  printResult(result, json, formatWorkerRelease)
+}
+
+function approvalAnswerHandler(decision: 'allow' | 'deny'): CommandHandler {
+  return async ({ flags, client, cwd, json }) => {
+    const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const reason = getRequiredStringFlag(flags, 'reason')
+    const result = await callOrchestrationMutation<WorkerApprovalAnswerView>(
+      client,
+      flags,
+      'orchestration.approvalAnswer',
+      {
+        dispatch: getRequiredStringFlag(flags, 'dispatch'),
+        prompt: getRequiredStringFlag(flags, 'prompt'),
+        decision,
+        reason,
+        from
+      }
+    )
+    printOrchestrationResult(result, json, {
+      fields: (value) => ({
+        approvalId: value.approvalId,
+        [decision === 'allow' ? 'allowed' : 'denied']: value.option,
+        reason:
+          decision === 'allow'
+            ? reason
+            : value.reasonMessageId
+              ? `sent to the worker as message ${value.reasonMessageId}`
+              : undefined
+      })
     })
-    if (result.result.state === 'stop_unknown') {
+  }
+}
+
+export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandler> = {
+  'orchestration approve': approvalAnswerHandler('allow'),
+  'orchestration deny': approvalAnswerHandler('deny'),
+  'orchestration worker-stop': async ({ flags, client, json }) => {
+    const result = await callOrchestrationMutation<WorkerStopReceipt>(
+      client,
+      flags,
+      'orchestration.workerStop',
+      {
+        dispatch: getRequiredStringFlag(flags, 'dispatch')
+      }
+    )
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (value) => value,
+        failure: workerStopFailure
+      })
+      return
+    }
+    if (workerStopFailure(result.result)) {
       process.exitCode = 1
     }
     printResult(
       result,
       json,
       (value) =>
-        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}`
+        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}${formatHelperStops(value.helpers)}${value.helperStopError ? `\n${value.helperStopError}` : ''}`
     )
   },
 
@@ -53,6 +120,10 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     }>(client, flags, 'orchestration.workerAbandon', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, { fields: (value) => value })
+      return
+    }
     printResult(
       result,
       json,
@@ -67,25 +138,19 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       'orchestration.workerRelease',
       { dispatch: getRequiredStringFlag(flags, 'dispatch') }
     )
-    // Why: only an unprovable close is a failure; retained/pending/already-released are settled answers.
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, WORKER_RELEASE_VIEW)
+      return
+    }
+    // Retained, pending, and already-released are settled outcomes; only release_unknown fails.
     if (result.result.state === 'release_unknown') {
       process.exitCode = 1
     }
     printResult(result, json, formatWorkerRelease)
   },
 
-  'orchestration worker-retain': async ({ flags, client, json }) => {
-    const result = await callOrchestrationMutation<WorkerReleaseReceipt>(
-      client,
-      flags,
-      'orchestration.workerRetain',
-      { dispatch: getRequiredStringFlag(flags, 'dispatch') }
-    )
-    if (result.result.state === 'release_unknown') {
-      process.exitCode = 1
-    }
-    printResult(result, json, formatWorkerRelease)
-  },
+  'orchestration worker-keep-open': keepWorkerOpen,
+  'orchestration worker-retain': keepWorkerOpen,
 
   'orchestration worker-list': async ({ flags, client, cwd, json }) => {
     const terminalState = getOptionalStringFlag(flags, 'terminal-state')
@@ -103,41 +168,12 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     const scope = await resolveWorkerListRunScope(flags, cwd, client)
     const requiresCurrentListSemantics =
       flags.has('include-remote') || flags.has('cursor') || flags.has('limit')
-    const result = await client.call<{
-      workers: {
-        dispatchId: string
-        taskId: string
-        runId: string
-        workerState: string
-        dispatchStatus: string
-        agentTerminalHandle: string | null
-        terminalState: string | null
-        resource: unknown
-        projection?: {
-          provider: { id: string; model: string | null } | null
-          host: { id: string }
-          workspace: { id: string } | null
-          stage: { activity: string }
-          liveness: { verdict: string }
-          nextAction: { argv: string[] }
-          attention?: { categories: string[] }
-        }
-      }[]
-      counts: Record<string, number>
-      scope?: WorkerListRunScope
-      page?: { hasMore: boolean; nextCursor: string | null; total: number }
-      warnings?: string[]
-      partialHostErrors?: {
-        environmentId: string
-        name: string
-        code: string
-        dispatchIds: string[]
-      }[]
-    }>('orchestration.workerList', {
+    const result = await client.call<WorkerListResult>('orchestration.workerList', {
       paginate: true,
       run: scope.run,
       terminalState,
       ...(flags.has('include-remote') ? { includeRemote: true } : {}),
+      on: getOptionalStringFlag(flags, 'on'),
       cursor: getOptionalStringFlag(flags, 'cursor'),
       limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })
@@ -146,6 +182,14 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
         'incompatible_runtime',
         'The connected Orca runtime did not prove support for the requested worker-list flags, so no inventory was printed. Update the connected Orca runtime and retry.'
       )
+    }
+    if (!flags.has('full')) {
+      printOrchestrationResult(
+        { ...result, result: { ...result.result, scope } },
+        json,
+        WORKER_LIST_VIEW
+      )
+      return
     }
     printResult({ ...result, result: { ...result.result, scope } }, json, (value) => {
       const rows =
@@ -163,12 +207,19 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                 const attention = projection?.attention?.categories.join(',') || 'none'
                 const details = projection
                   ? `/${stage}] attention=${attention} liveness=${liveness} provider=${provider} host=${projection.host.id} workspace=${workspace}`
-                  : `]`
-                // Why: the enumerating command owes the literal argv the guides tell callers to run.
+                  : worker.server
+                    ? `] host=${remoteHost(worker.server)} asOf=${worker.server.asOf}`
+                    : `]`
                 const next = projection
                   ? ` next=${projection.nextAction.argv.join(' ') || 'none'}`
                   : ''
-                return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${next}`
+                const autoRelease = projection?.autoReleaseAt
+                  ? ` auto-release=${projection.autoReleaseAt}`
+                  : ''
+                const coordinatedFrom = worker.coordinatedFrom
+                  ? ` coordinated from ${worker.coordinatedFrom}`
+                  : ''
+                return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${autoRelease}${next}${coordinatedFrom}`
               })
               .join('\n')
       const counts = Object.entries(value.counts)

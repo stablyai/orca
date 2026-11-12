@@ -1,7 +1,7 @@
 import type {
   BrowserGrabPayload,
   BrowserPageAnnotation
-} from '../../../../../shared/browser-grab-types'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { browserAnnotationMatchesPageUrl } from './browser-annotation-page-url'
 
 // Guest-rendered badges track scrolling without a renderer message per frame.
@@ -44,6 +44,7 @@ export function syncGuestAnnotationViewportBridge({
       emitViewport: pendingPayload !== null,
       enabled: surfaceActive && (pendingPayload !== null || markers.length > 0),
       markers,
+      selectionId: pendingPayload?.page.capturedAt,
       token
     })
     .catch(() => {

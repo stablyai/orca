@@ -1,9 +1,14 @@
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { callRuntimeRpc, type RuntimeClientTarget } from '../../runtime/runtime-rpc-client'
-import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
-import { getRuntimeTargetHostId } from '../runtime-target-host'
-import { projectGroupWithFetchedOwner } from './project-group-owner-stamping'
-import { mergeByIdentity, unchangedMergeSource } from '../catalog-identity'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { catalogOwnsHost } from './project-group-owner-routing'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
+import {
+  mergeByIdentity,
+  unchangedMergeSource
+} from '../../lib/catalog-reconciliation/catalog-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type FetchedProjectGroupCatalog = {
@@ -12,7 +17,7 @@ export type FetchedProjectGroupCatalog = {
 }
 
 function getProjectGroupHostIdentity(group: ProjectGroup): string {
-  return JSON.stringify([getProjectGroupHostId(group), group.id])
+  return JSON.stringify([getRepoExecutionHostId(group), group.id])
 }
 
 function mergeFetchedProjectGroupsForHost(
@@ -22,7 +27,7 @@ function mergeFetchedProjectGroupsForHost(
 ): readonly ProjectGroup[] {
   const fetchedIdentities = new Set(fetched.map(getProjectGroupHostIdentity))
   const preserved = previous.filter((group) => {
-    const existingHostId = getProjectGroupHostId(group)
+    const existingHostId = getRepoExecutionHostId(group)
     return (
       !catalogOwnsHost(hostId, existingHostId) ||
       fetchedIdentities.has(getProjectGroupHostIdentity(group))
@@ -48,7 +53,9 @@ export async function fetchProjectGroupCatalogForTarget(
           })
         ).groups
   return {
-    projectGroups: fetchedGroups.map((group) => projectGroupWithFetchedOwner(group, target)),
+    projectGroups: fetchedGroups.map((group) =>
+      adoptFromEndpoint(target, { kind: 'projectGroup', row: group })
+    ),
     hostId: getRuntimeTargetHostId(target)
   }
 }

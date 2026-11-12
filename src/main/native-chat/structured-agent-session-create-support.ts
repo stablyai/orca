@@ -1,16 +1,17 @@
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 export type StructuredAgentSessionCreateSupport = {
   supported: boolean
-  reason?: 'agent' | 'remote' | 'wsl'
+  reason?: 'agent' | 'remote' | 'wsl' | 'windows'
 }
 
-/** The create-support verdict: the adapter's location answer, with the reason a refusal names. */
 export function resolveStructuredAgentSessionCreateSupport(input: {
   location: AgentSessionExecutionLocation
   adapterSupportsCreate: boolean
+  /** The agent has no chat on this host's OS, so no install or update can help. */
+  unavailableOnPlatform?: boolean
 }): StructuredAgentSessionCreateSupport {
   if (!input.adapterSupportsCreate) {
     return {
@@ -20,18 +21,17 @@ export function resolveStructuredAgentSessionCreateSupport(input: {
           ? 'remote'
           : input.location.wslDistro
             ? 'wsl'
-            : 'agent'
+            : input.unavailableOnPlatform
+              ? 'windows'
+              : 'agent'
     }
   }
   return { supported: true }
 }
 
-/** Which create-support check said no: where the chat would run, or the installed agent (its
- *  binary and version on this host). */
 export type StructuredAgentSessionCreateSupportCheck = 'location' | 'installed-agent'
 
-/** One main-log line per create-support verdict that sends a launch to the terminal; names the
- *  check and never a path or environment value. */
+/** Log the failing check once per terminal fallback; omit paths and environment values. */
 export function warnStructuredAgentSessionCreateUnsupported(
   agent: StructuredAgentId,
   support: StructuredAgentSessionCreateSupport,

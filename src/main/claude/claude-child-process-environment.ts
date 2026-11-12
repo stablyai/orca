@@ -1,11 +1,12 @@
-import { CLAUDE_AUTH_ENV_VARS, applyClaudeEnvPatch } from '../claude-accounts/environment'
-import { NATIVE_CHAT_VISUALS_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
-
-const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
-  'CLAUDE_CODE_CHILD_SESSION',
-  'CLAUDE_CODE_SESSION_ID',
-  'CLAUDE_CODE_BRIDGE_SESSION_ID'
-] as const
+import {
+  CLAUDE_AUTH_ENV_VARS,
+  applyClaudeEnvPatch
+} from '../claude-accounts/runtime-auth/environment'
+import { stripInheritedAgentSessionEnv } from '../../shared/agent-launch/startup/parent-agent-session-env'
+import {
+  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
+  NATIVE_CHAT_SCRATCH_DIR_ENV
+} from '../native-chat/native-chat-visuals-delivery'
 
 function cloneProcessEnv(source: NodeJS.ProcessEnv): Record<string, string> {
   const env: Record<string, string> = {}
@@ -32,19 +33,11 @@ function stripEnvKeys(
   return env
 }
 
-function stripClaudeChildSessionStamps(
-  env: Record<string, string>,
-  platform: NodeJS.Platform
-): Record<string, string> {
-  return stripEnvKeys(env, CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS, platform)
-}
-
 export function buildClaudeChildProcessEnv(
   configuredEnv: Record<string, string> = {},
   options: {
     inheritedEnv?: NodeJS.ProcessEnv
     platform?: NodeJS.Platform
-    scrubConfiguredChildSessionStamps?: boolean
   } = {}
 ): Record<string, string> {
   const inheritedEnv = options.inheritedEnv ?? process.env
@@ -70,11 +63,16 @@ export function buildClaudeChildProcessEnv(
       }
     }
   }
-  // Only the launch names a chat's visuals folder: an inherited one belongs to another chat.
-  stripEnvKeys(env, [NATIVE_CHAT_VISUALS_DIR_ENV], platform)
-  if (options.scrubConfiguredChildSessionStamps) {
-    return stripClaudeChildSessionStamps({ ...env, ...configuredEnv }, platform)
+  // Only the launch names a chat's scratch folder: an inherited one belongs to another chat.
+  stripEnvKeys(env, [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV], platform)
+  // Windows env names are case-insensitive, so a launch key replaces a differently cased inherited twin.
+  if (platform === 'win32') {
+    stripEnvKeys(
+      env,
+      Object.keys(configuredEnv).map((key) => key.toUpperCase()),
+      platform
+    )
   }
-  stripClaudeChildSessionStamps(env, platform)
+  stripInheritedAgentSessionEnv(env, { platform })
   return { ...env, ...configuredEnv }
 }

@@ -1,4 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
+import type * as BrowserRequest from '../../../browser/page-interaction/use-mobile-browser-request'
+import type * as BrowserCommands from '../../../browser/page-interaction/use-mobile-browser-commands'
 import type { MountAdapter } from '../recording-scenario'
 import { hookMount, performHookAction } from '../hook-mount'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -8,29 +10,24 @@ const PAGE_ID = 'page-1'
 const LAYOUT = { width: 390, height: 700, pageX: 0, pageY: 0 }
 const FRAME_METADATA = { deviceWidth: 390, deviceHeight: 700, pageScaleFactor: 1 }
 
-/**
- * The hosted browser's pointer, keyboard and dialog commands, mounted over the real page-request
- * hook rather than a stand-in: the commands hook takes its sender as an argument, so supplying one
- * here would leave the send the migration moves outside the recording.
- */
+// Mount the real request hook too; injecting a sender would leave the migrated send outside recording coverage.
 export function browserMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'browser.page-commands': ({ client, effect }) => {
-      const useRequest = modules.load<typeof import('../../../browser/use-mobile-browser-request')>(
-        'mobile/src/browser/use-mobile-browser-request.ts'
+      const useRequest = modules.load<typeof BrowserRequest>(
+        'mobile/src/browser/page-interaction/use-mobile-browser-request.ts'
       ).useMobileBrowserRequest
-      const useCommands = modules.load<
-        typeof import('../../../browser/use-mobile-browser-commands')
-      >('mobile/src/browser/use-mobile-browser-commands.ts').useMobileBrowserCommands
+      const useCommands = modules.load<typeof BrowserCommands>(
+        'mobile/src/browser/page-interaction/use-mobile-browser-commands.ts'
+      ).useMobileBrowserCommands
       const busyRef = { current: false }
       let busy = false
       let error: string | null = null
       let dialog: { dialogType: string; message: string } | null = null
       let keyboardValue = 'hello'
       let pointerModifiers: string[] = []
-      // React's own setter shape, so the recorder reads an updater the way the hook writes one.
       const setter =
         <T>(read: () => T, write: (value: T) => void): Dispatch<SetStateAction<T>> =>
         (next) =>
@@ -104,13 +101,6 @@ export function browserMountAdapters(
           }
           if (name === 'keypress') {
             return performHookAction(() => commands.sendKeypress(String(args.key ?? 'Enter')))
-          }
-          if (name === 'dialog') {
-            return performHookAction(() =>
-              commands.sendDialogCommand(
-                args.accept === false ? 'browser.dialogDismiss' : 'browser.dialogAccept'
-              )
-            )
           }
           if (name === 'wheel') {
             return performHookAction(() => commands.sendWheel({ x: 40, y: 80 }, 0, 120, 1))

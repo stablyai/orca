@@ -1,8 +1,8 @@
 import { useRef } from 'react'
 import type { JSX } from 'react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
 import {
   WorkbenchAgentTerminalPane,
@@ -42,8 +42,7 @@ export function WorkbenchAnimatedVisual(props: {
   const variant = props.variant ?? 'tour'
   const splitRightShortcutLabel = useShortcutLabel('terminal.splitRight')
   const splitDownShortcutLabel = useShortcutLabel('terminal.splitDown')
-  // Why: branch on the state source, not the element type, so a reducedMotion
-  // toggle re-renders the storyboard in place instead of remounting it.
+  // Keep component identity stable when reduced motion toggles so the storyboard does not remount.
   const animatedState = useWorkbenchTerminalStoryboard(variant, props.reducedMotion)
 
   return (
@@ -64,6 +63,7 @@ function WorkbenchTerminalVisualFrame(props: {
   splitDownShortcutLabel: string
   state: WorkbenchTerminalVisualState
 }): JSX.Element {
+  const t = useTranslate()
   const panelRef = useRef<HTMLDivElement | null>(null)
   const leftPaneRef = useRef<HTMLDivElement | null>(null)
   const splitRowRef = useRef<HTMLDivElement | null>(null)
@@ -153,20 +153,11 @@ function WorkbenchTerminalVisualFrame(props: {
 
       {isTwoAgentsChecklist ? null : (
         <div className="border-t border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
-          {translate(
-            'auto.components.feature.wall.WorkbenchAnimatedVisual.0bc9ad0cd1',
-            'Same pane:'
-          )}
+          {t('auto.components.feature.wall.WorkbenchAnimatedVisual.0bc9ad0cd1', 'Same pane:')}
           <kbd className={KBD_CLASS}>{props.splitRightShortcutLabel}</kbd>{' '}
-          {translate(
-            'auto.components.feature.wall.WorkbenchAnimatedVisual.a2b114dad0',
-            'splits right ·'
-          )}{' '}
+          {t('auto.components.feature.wall.WorkbenchAnimatedVisual.a2b114dad0', 'splits right ·')}{' '}
           <kbd className={KBD_CLASS}>{props.splitDownShortcutLabel}</kbd>{' '}
-          {translate(
-            'auto.components.feature.wall.WorkbenchAnimatedVisual.16877e038d',
-            'splits down'
-          )}
+          {t('auto.components.feature.wall.WorkbenchAnimatedVisual.16877e038d', 'splits down')}
         </div>
       )}
     </div>

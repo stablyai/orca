@@ -3,8 +3,8 @@ import {
   clearOpenCodeGoApiKey,
   hasOpenCodeGoApiKey,
   saveOpenCodeGoApiKey
-} from '../opencode/opencode-go-api-key-store'
-import type { RateLimitService } from '../rate-limits/service'
+} from '../opencode/accounts/opencode-go-api-key-store'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import { refreshAfterCredentialChange } from './credential-change-rate-limit-refresh'
 
 type CredentialRateLimits = Pick<

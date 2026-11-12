@@ -1,7 +1,7 @@
 import type {
   BrowserClientPageRendererOutcome,
   BrowserClientPageRendererRequest
-} from '../../../../shared/browser-client-page-renderer-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import {
   BrowserClientPageRetainedRegistry,
   type BrowserClientPageRendererMemoryProfile,

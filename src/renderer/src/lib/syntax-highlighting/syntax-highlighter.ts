@@ -1,13 +1,16 @@
-import type { Grammar, HighlighterCore, RegexEngine } from 'shiki/core'
-import type * as ShikiTextmate from 'shiki/textmate'
+import type { Grammar } from 'shiki/core'
 import type { StateStack } from 'shiki/textmate'
 import { BoundedMap } from '../../../../shared/bounded-map'
-import { loadOniguruma, type Oniguruma } from './oniguruma'
+import {
+  COLD_GRAMMAR_LINE_ATTEMPTS,
+  createTextMateCore,
+  tokenizeLineWithinLimits,
+  type TextMateCore
+} from './textmate-core'
 import { withVueTemplateInjections } from './vue-template-injections'
 
 export type SyntaxToken = {
   content: string
-  /** Position in the highlighted text; unique within a line. */
   offset: number
   /** Undefined where the theme uses its default text color, so the surface's own color shows. */
   light: string | undefined
@@ -17,7 +20,6 @@ export type SyntaxToken = {
   darkFontStyle: number
 }
 
-/** TextMate's font style bits. */
 export const SYNTAX_FONT_STYLE = { italic: 1, bold: 2, underline: 4, strikethrough: 8 } as const
 
 /**
@@ -36,11 +38,7 @@ export type SyntaxHighlightResult = {
   outcome: SyntaxHighlightOutcome
 }
 
-/**
- * Colors `code` (one or more lines) in VS Code's Light+ and Dark+ themes,
- * continuing from `state` when that is what the call for the text just before
- * `code` returned.
- */
+/** Continue code after state’s previous text, producing both VS Code Light+/Dark+ token styles. */
 export type SyntaxHighlighter = (
   code: string,
   state?: SyntaxHighlightState
@@ -50,11 +48,6 @@ export type SyntaxHighlighter = (
 export type SyntaxLanguageStatus = 'ready' | 'unsupported' | 'failed'
 
 const THEMES = { light: 'light-plus', dark: 'dark-plus' } as const
-// Why: one dense line cannot be interrupted, and its cost grows faster than its length.
-const MAX_HIGHLIGHTED_LINE_LENGTH = 1000
-// Why: TextMate checks this between regex scans, so a pathological line ends instead of freezing chat.
-const LINE_TIME_LIMIT_MS = 50
-const LINE_ATTEMPTS = 3
 const MAX_LOAD_ATTEMPTS = 3
 const LOAD_RETRY_DELAY_MS = 2000
 // Arbitrary fence labels must not grow the table without limit.
@@ -72,8 +65,6 @@ class ResumeState {
 
 const DEGRADED = new ResumeState(null, null)
 
-type Highlighter = { core: HighlighterCore; textmate: typeof ShikiTextmate }
-
 type PendingLanguage =
   | { status: 'loading'; promise: Promise<SyntaxLanguageStatus>; attempts: number }
   | { status: 'unsupported' }
@@ -84,46 +75,14 @@ const readyLanguages = new Map<string, SyntaxHighlighter>()
 const pendingLanguages = new BoundedMap<string, PendingLanguage>({
   maxEntries: MAX_PENDING_LANGUAGES
 })
-let highlighterPromise: Promise<Highlighter> | undefined
+let highlighterPromise: Promise<TextMateCore> | undefined
 let loadFailureLogged = false
 
-function onigurumaEngine(oniguruma: Oniguruma): RegexEngine {
-  return {
-    createScanner: (patterns) => {
-      const scanner = oniguruma.createOnigScanner(
-        patterns.map((pattern) => (typeof pattern === 'string' ? pattern : pattern.source))
-      )
-      return {
-        // Why: Shiki's TextMate always passes no find options, so none are forwarded.
-        findNextMatchSync: (text, startPosition) =>
-          scanner.findNextMatchSync(
-            typeof text === 'string' || text instanceof oniguruma.OnigString ? text : text.content,
-            startPosition
-          ),
-        dispose: () => scanner.dispose()
-      }
-    },
-    createString: (text) => oniguruma.createOnigString(text)
-  }
-}
-
-function loadHighlighter(): Promise<Highlighter> {
-  highlighterPromise ??= (async () => {
-    const [{ createHighlighterCore }, textmate, oniguruma, light, dark] = await Promise.all([
-      import('shiki/core'),
-      import('shiki/textmate'),
-      loadOniguruma(),
-      import('shiki/themes/light-plus.mjs'),
-      import('shiki/themes/dark-plus.mjs')
-    ])
-    const core = await createHighlighterCore({
-      themes: [light.default, dark.default],
-      langs: [],
-      // Why: Orca already ships this regex engine for the editor; a second WASM copy would add ~150 KB.
-      engine: onigurumaEngine(oniguruma)
-    })
-    return { core, textmate }
-  })().catch((error: unknown) => {
+function loadHighlighter(): Promise<TextMateCore> {
+  highlighterPromise ??= createTextMateCore([
+    import('shiki/themes/light-plus.mjs'),
+    import('shiki/themes/dark-plus.mjs')
+  ]).catch((error: unknown) => {
     highlighterPromise = undefined
     throw error
   })
@@ -145,7 +104,6 @@ function plainLine(line: string, offset: number): SyntaxToken[] {
     : []
 }
 
-/** Lines split like Shiki splits them, each with its offset in `code`. */
 function splitLines(code: string): { line: string; offset: number }[] {
   let offset = 0
   return code.split(/\r?\n/).map((line) => {
@@ -165,9 +123,11 @@ function plainResult(code: string, outcome: SyntaxHighlightOutcome): SyntaxHighl
 
 type ThemeTokens = { starts: number[]; colors: (string | undefined)[]; styles: number[] }
 
+const warmGrammars = new WeakSet<Grammar>()
+
 /** Tokenizes in one theme up to the first line that is too long or too slow. */
 function tokenizeWithTheme(
-  { core, textmate }: Highlighter,
+  { core, textmate }: TextMateCore,
   grammar: Grammar,
   theme: string,
   lines: string[],
@@ -179,17 +139,15 @@ function tokenizeWithTheme(
   const tokens: ThemeTokens[] = []
   let stack = initial
   for (const line of lines) {
-    if (line.length > MAX_HIGHLIGHTED_LINE_LENGTH) {
+    const result = tokenizeLineWithinLimits(
+      line,
+      (text, timeLimitMs) => grammar.tokenizeLine2(text, stack, timeLimitMs),
+      warmGrammars.has(grammar) ? undefined : COLD_GRAMMAR_LINE_ATTEMPTS
+    )
+    if (!result) {
       break
     }
-    let result = grammar.tokenizeLine2(line, stack, LINE_TIME_LIMIT_MS)
-    // Why: the first lines through a grammar also compile its regexes, which happens only once.
-    for (let attempt = 1; result.stoppedEarly && attempt < LINE_ATTEMPTS; attempt += 1) {
-      result = grammar.tokenizeLine2(line, stack, LINE_TIME_LIMIT_MS)
-    }
-    if (result.stoppedEarly) {
-      break
-    }
+    warmGrammars.add(grammar)
     const lineTokens: ThemeTokens = { starts: [], colors: [], styles: [] }
     for (let index = 0; index < result.tokens.length; index += 2) {
       const metadata = result.tokens[index + 1]
@@ -240,14 +198,17 @@ function mergeThemeTokens(
   return tokens
 }
 
-function createSyntaxHighlighter(highlighter: Highlighter, grammarName: string): SyntaxHighlighter {
+function createSyntaxHighlighter(
+  highlighter: TextMateCore,
+  grammarName: string
+): SyntaxHighlighter {
   return (code, state) => {
     if (state && !state.stacks) {
       return plainResult(code, 'degraded')
     }
     try {
       const grammar = highlighter.core.getLanguage(grammarName)
-      // Why: loading a language another grammar embeds reloads that grammar, which cannot read old states.
+      // Loading embedded languages rebuilds parent grammars, invalidating their old states.
       if (state && state.grammar !== grammar) {
         return plainResult(code, 'degraded')
       }
@@ -324,10 +285,7 @@ function languageKey(language: string): string {
   return language.trim().toLowerCase()
 }
 
-/**
- * Loads `language`'s grammar for `loadedSyntaxHighlighter`. A failed load is
- * retried by a later call, a few times at most.
- */
+/** Load a language for synchronous loadedSyntaxHighlighter access; later calls retry failures up to the cap. */
 export function loadSyntaxLanguage(language: string): Promise<SyntaxLanguageStatus> {
   const key = languageKey(language)
   if (readyLanguages.has(key)) {

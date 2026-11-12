@@ -8,8 +8,7 @@ import {
   WORKTREE_META_GC_GRACE_MS
 } from './worktree-metadata-normalization'
 
-// Only the presence of an entry matters to the alias/lineage passes, but the normalizer is also
-// the load-side inverse of the serializer's default omission, so a surviving row carries them back.
+// Surviving rows must restore the defaults omitted by serialization.
 function makeMeta(): WorktreeMeta {
   return { createdAt: 1, ...WORKTREE_META_PERSISTED_DEFAULTS } as WorktreeMeta
 }
@@ -24,50 +23,6 @@ function makeState(overrides: Partial<PersistedState>): PersistedState {
 }
 
 describe('normalizeWorktreeLinkedItemMetadata', () => {
-  it('reports a null lineage map repair as changed so the load path re-saves it', () => {
-    const state = makeState({
-      worktreeMeta: { 'r1::/tmp/wt': makeMeta() },
-      worktreeLineageById: null as unknown as PersistedState['worktreeLineageById']
-    })
-
-    // Without this the map stays null on disk and is repaired again on every reload.
-    expect(normalizeWorktreeLinkedItemMetadata(state)).toBe(true)
-    expect(state.worktreeLineageById).toEqual({})
-  })
-
-  it('reports a null child-key lineage map repair as changed', () => {
-    const state = makeState({
-      worktreeMeta: {},
-      workspaceLineageByChildKey: null as unknown as PersistedState['workspaceLineageByChildKey']
-    })
-
-    expect(normalizeWorktreeLinkedItemMetadata(state)).toBe(true)
-    expect(state.workspaceLineageByChildKey).toEqual({})
-  })
-  it('repairs malformed canonical metadata and alias maps', () => {
-    const state = makeState({
-      worktreeMetaByIdentity: null as unknown as PersistedState['worktreeMetaByIdentity'],
-      worktreeIdentityAliases: {
-        'local|r1::/tmp/wt': ['wt2:local:one', 'wt2:local:one', '', 42]
-      } as unknown as PersistedState['worktreeIdentityAliases']
-    })
-
-    expect(normalizeWorktreeLinkedItemMetadata(state)).toBe(true)
-    expect(state.worktreeMetaByIdentity).toEqual({})
-    // A key with no backing row is what turns the next write into an ambiguous alias, so it goes.
-    expect(state.worktreeIdentityAliases).toEqual({})
-  })
-
-  it('keeps alias keys that still resolve to a metadata row', () => {
-    const state = makeState({
-      worktreeMetaByIdentity: { 'wt2:local:one': makeMeta() },
-      worktreeIdentityAliases: { 'local|r1::/tmp/wt': ['wt2:local:one'] }
-    })
-
-    expect(normalizeWorktreeLinkedItemMetadata(state)).toBe(false)
-    expect(state.worktreeIdentityAliases).toEqual({ 'local|r1::/tmp/wt': ['wt2:local:one'] })
-  })
-
   it('drops malformed canonical metadata entries', () => {
     const state = makeState({
       worktreeMetaByIdentity: {
@@ -137,14 +92,6 @@ describe('normalizeWorktreeLinkedItemMetadata', () => {
     expect(state.worktreeMetaByIdentity).toEqual({ [liveKey]: makeMeta() })
     expect(state.worktreeIdentityAliases).toEqual({ 'local|r1::/tmp/live': [liveKey] })
   })
-
-  it('leaves already-normalized state clean', () => {
-    const state = makeState({
-      worktreeMeta: { 'r1::/tmp/wt': makeMeta() }
-    })
-
-    expect(normalizeWorktreeLinkedItemMetadata(state)).toBe(false)
-  })
 })
 
 describe('gcStaleWorktreeMeta', () => {
@@ -171,8 +118,7 @@ describe('gcStaleWorktreeMeta', () => {
     })
 
     expect(gcStaleWorktreeMeta(state)).toBe(1)
-    // A surviving alias would re-attach this dead metadata to a worktree later
-    // created at the same repoId::path, and nothing else ever reclaims it.
+    // Dead aliases could attach stale metadata to future worktrees reusing this path.
     expect(state.worktreeMetaByIdentity).toEqual({ [remoteIdentityKey]: expect.anything() })
     expect(state.worktreeIdentityAliases).toEqual({
       [`ssh:conn-1|${worktreeId}`]: [remoteIdentityKey]

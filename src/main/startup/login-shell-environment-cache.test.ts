@@ -6,65 +6,38 @@ import {
 
 afterEach(resetLoginShellEnvironmentCacheForTests)
 
-it('shares concurrent probes only within the same shell and environment', async () => {
-  const release = Promise.withResolvers<void>()
-  const spawner = vi.fn(async (_shell: string, env: NodeJS.ProcessEnv) => {
-    await release.promise
-    return { PI_CONFIG_DIR: env.PROFILE_ROOT }
-  })
-  const first = { HOME: '/host/a', PROFILE_ROOT: '.first' }
-  const second = { HOME: '/host/a', PROFILE_ROOT: '.second' }
-  const pending = [
-    resolveLoginShellEnvironment({ shellOverride: '/bin/bash', env: first, spawner }),
-    resolveLoginShellEnvironment({ shellOverride: '/bin/bash', env: second, spawner }),
-    ...Array.from({ length: 20 }, () =>
-      resolveLoginShellEnvironment({
-        shellOverride: '/bin/bash',
-        env: { PROFILE_ROOT: '.first', HOME: '/host/a' },
-        spawner
-      })
-    )
-  ]
-  expect(spawner).toHaveBeenCalledTimes(2)
-  release.resolve()
-  const values = await Promise.all(pending)
-  expect(values[0]?.PI_CONFIG_DIR).toBe('.first')
-  expect(values[1]?.PI_CONFIG_DIR).toBe('.second')
-  expect(values.slice(2).every((value) => value.PI_CONFIG_DIR === '.first')).toBe(true)
-  await resolveLoginShellEnvironment({ shellOverride: '/bin/zsh', env: first, spawner })
-  expect(spawner).toHaveBeenCalledTimes(3)
-})
+type Spawner = (shell: string, env: NodeJS.ProcessEnv) => Promise<NodeJS.ProcessEnv | null>
 
-it('falls back to the supplied execution environment when its shell probe fails', async () => {
-  const env = { HOME: '/execution-host', PI_CONFIG_DIR: '.execution-root' }
-  const spawner = vi.fn(async () => {
-    throw new Error('probe failed')
-  })
-  await expect(
-    resolveLoginShellEnvironment({ shellOverride: '/bin/bash', env, spawner })
-  ).resolves.toEqual(env)
-})
-
-it('bounds retained environments and supports explicit refresh', async () => {
-  const spawner = vi.fn(async (_shell: string, env: NodeJS.ProcessEnv) => env)
-  for (let index = 0; index < 10; index++) {
-    await resolveLoginShellEnvironment({
-      shellOverride: '/bin/bash',
-      env: { HOME: `/host/${index}` },
-      spawner
-    })
+it('answers a lookup only with a run that started no earlier, so a run predating an install never counts', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  try {
+    const predatesInstall = Promise.withResolvers<NodeJS.ProcessEnv | null>()
+    const spawner = vi
+      .fn<Spawner>()
+      .mockResolvedValueOnce({ PATH: '/old' })
+      .mockReturnValueOnce(predatesInstall.promise)
+      .mockResolvedValueOnce({ PATH: '/installed' })
+    const options = { shellOverride: '/bin/bash', env: { HOME: '/host' }, spawner }
+    await resolveLoginShellEnvironment(options)
+    // A background rerun that read the shell before the agent was installed is still going.
+    vi.advanceTimersByTime(10_000)
+    await resolveLoginShellEnvironment({ ...options, refreshAfterMs: 10_000 })
+    expect(spawner).toHaveBeenCalledTimes(2)
+    vi.advanceTimersByTime(1)
+    const askedAt = Date.now()
+    const lookups = [
+      resolveLoginShellEnvironment({ ...options, startedAfter: askedAt }),
+      resolveLoginShellEnvironment({ ...options, startedAfter: askedAt })
+    ]
+    expect(spawner).toHaveBeenCalledTimes(3)
+    await expect(Promise.all(lookups)).resolves.toEqual([
+      { PATH: '/installed' },
+      { PATH: '/installed' }
+    ])
+    predatesInstall.resolve({ PATH: '/old' })
+    await new Promise((resolve) => setImmediate(resolve))
+    await expect(resolveLoginShellEnvironment(options)).resolves.toEqual({ PATH: '/installed' })
+  } finally {
+    vi.useRealTimers()
   }
-  await resolveLoginShellEnvironment({
-    shellOverride: '/bin/bash',
-    env: { HOME: '/host/0' },
-    spawner
-  })
-  expect(spawner).toHaveBeenCalledTimes(11)
-  await resolveLoginShellEnvironment({
-    shellOverride: '/bin/bash',
-    env: { HOME: '/host/0' },
-    spawner,
-    force: true
-  })
-  expect(spawner).toHaveBeenCalledTimes(12)
 })

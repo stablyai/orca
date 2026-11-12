@@ -3,12 +3,13 @@ import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeTerminalRead } from '../../src/shared/runtime-types'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient
 } from './helpers/paired-electron-client'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-lossy-snapshot-'))
 const fixturePath = path.join(scratch, 'lossy-snapshot-terminal.mjs')
@@ -29,15 +30,11 @@ test.use({
   orcaAppExtraEnv: { ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED: '1' }
 })
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function fixtureCommand(marker: string): string {
   const command = [process.execPath, fixturePath, marker]
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
-    : command.map(shellQuote).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 async function callRuntime<TResult>(

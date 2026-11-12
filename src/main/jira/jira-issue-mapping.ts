@@ -8,12 +8,13 @@ import type {
   JiraSite,
   JiraStatus,
   JiraUser
-} from '../../shared/jira-types'
+} from '../../shared/jira/jira-types'
 import { adfToMarkdownText, textToAdf, type AdfToMarkdownOptions } from './adf-markdown'
 import {
   asRecord,
   asString,
   asStringArray,
+  asFiniteNumber,
   type JiraPagedResponse,
   type JiraRecord
 } from './jira-record-pages'
@@ -29,17 +30,18 @@ export const ISSUE_FIELDS = [
   'priority',
   'labels',
   'created',
-  'updated'
+  'updated',
+  'parent',
+  'timeoriginalestimate',
+  'timeestimate'
 ]
 
-// Why: list/typeahead only need identity + metadata; description ADF parse is the hot-path cost.
+// Lists need metadata without expensive description parsing.
 export const ISSUE_LIST_FIELDS = ISSUE_FIELDS.filter((field) => field !== 'description')
 
-// Why: detail reads need attachment metadata so inline ADF media can be resolved
-// to downloadable image content; list/search omit this for payload size.
+// Only detail reads need attachment metadata for inline media.
 export const ISSUE_DETAIL_FIELDS = [...ISSUE_FIELDS, 'attachment']
-// `created`/`updated` are required: mapJiraIssue falls back to "now" when they're absent,
-// which would silently report the lookup time as the issue's timestamps.
+// Omitted timestamps would make mapJiraIssue report lookup time as creation/update time.
 export const ISSUE_SUMMARY_FIELDS = [
   'summary',
   'project',
@@ -126,6 +128,7 @@ export function mapCreateField(value: unknown, fallbackKey = ''): JiraCreateFiel
     schema: {
       type: asString(schema.type) || undefined,
       items: asString(schema.items) || undefined,
+      system: asString(schema.system) || undefined,
       custom: asString(schema.custom) || undefined
     },
     allowedValues
@@ -182,10 +185,53 @@ export function toBodyText(site: JiraSite, text: string): unknown {
   return site.authType === 'server' ? text : textToAdf(text)
 }
 
+/** Site-specific custom field ids for agile data; discovered per site, see jira-agile-fields.ts. */
+export type JiraAgileFieldIds = {
+  sprint?: string
+  storyPoints?: string[]
+}
+
+function mapParent(value: unknown): JiraIssue['parent'] {
+  const parent = asRecord(value)
+  const key = asString(parent.key)
+  if (!key) {
+    return undefined
+  }
+  const fields = asRecord(parent.fields)
+  return {
+    key,
+    title: asString(fields.summary, key),
+    issueTypeName: asString(asRecord(fields.issuetype).name) || undefined
+  }
+}
+
+// Cloud returns sprint objects; Server/DC returns "…Sprint@…[id=1,…,name=Sprint 3,…]" strings.
+function sprintName(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return /name=(.*?)(?:,(?:startDate|endDate|completeDate|sequence|goal)=|\]$)/.exec(value)?.[1]
+  }
+  return asString(asRecord(value).name) || undefined
+}
+
+function sprintState(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return /state=([^,\]]+)/.exec(value)?.[1]
+  }
+  return asString(asRecord(value).state) || undefined
+}
+
+// Sprints are ordered by ID; the last entry may be closed.
+export function mapSprint(value: unknown): string | undefined {
+  const sprints = Array.isArray(value) ? value : value ? [value] : []
+  const active = sprints.find((sprint) => sprintState(sprint)?.toLowerCase() === 'active')
+  return sprintName(active ?? sprints.at(-1))
+}
+
 export function mapJiraIssue(
   site: JiraSite,
   raw: JiraRecord,
-  adfOptions?: AdfToMarkdownOptions
+  adfOptions?: AdfToMarkdownOptions,
+  agileFields: JiraAgileFieldIds = {}
 ): JiraIssue {
   const fields = asRecord(raw.fields)
   const key = asString(raw.key)
@@ -204,6 +250,14 @@ export function mapJiraIssue(
     assignee: mapUser(fields.assignee),
     reporter: mapUser(fields.reporter),
     priority: mapPriority(fields.priority),
+    parent: mapParent(fields.parent),
+    sprint: agileFields.sprint ? mapSprint(fields[agileFields.sprint]) : undefined,
+    storyPoints:
+      agileFields.storyPoints
+        ?.map((id) => asFiniteNumber(fields[id]))
+        .find((value) => value !== null) ?? undefined,
+    originalEstimateSeconds: asFiniteNumber(fields.timeoriginalestimate) ?? undefined,
+    remainingEstimateSeconds: asFiniteNumber(fields.timeestimate) ?? undefined,
     createdAt: asString(fields.created, new Date().toISOString()),
     updatedAt: asString(fields.updated, new Date().toISOString())
   }

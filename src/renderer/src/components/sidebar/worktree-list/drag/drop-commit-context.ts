@@ -1,13 +1,15 @@
+import type { WorktreeReorderDropPoint } from './worktree-lineage-drag-drop'
 import type React from 'react'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../../../shared/worktree/types'
-import type { WorktreeDragGroup } from '../../worktree-manual-order'
-import type { WorktreeDragUnitGroup } from '../../worktree-drag-units'
-import type { WorktreeSidebarDropPreview } from '../../worktree-sidebar-drop-preview'
+import type { WorktreeDragGroup } from './worktree-manual-order'
+import type { WorktreeDragUnitGroup } from './worktree-drag-units'
+import type { WorktreeSidebarDropPreview } from './worktree-sidebar-drop-preview'
 import type { WorktreeStatusDropRequest } from './use-session'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
+import type { DraggedWorktreeCopies } from './dragged-worktree-copies'
 
 export const NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK = (): void => {}
 
@@ -16,9 +18,24 @@ export type WorktreeStatusDropAtIndexArgs = {
   status: WorkspaceStatus
   dropIndex: number
   groups: readonly WorktreeDragGroup[]
+  draggedCopies?: DraggedWorktreeCopies
 }
 
-// The shared surface every drop path (pointer, native drag, document capture) commits through.
+export type ShouldShowWorkspaceBoardDropIndicator = (
+  worktreeIds: readonly string[],
+  status: WorkspaceStatus,
+  draggedCopies?: DraggedWorktreeCopies
+) => boolean
+
+export type WorktreeReorderArgs = {
+  groups: readonly WorktreeDragGroup[]
+  sourceGroupKey: string
+  /** Host identities, as the sidebar's drag groups key their members. */
+  draggedKeys: readonly string[]
+  dropIndex: number
+  draggedCopies?: DraggedWorktreeCopies
+}
+
 export type WorktreeDropCommitContext = {
   scrollRef: React.RefObject<HTMLDivElement | null>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -31,21 +48,27 @@ export type WorktreeDropCommitContext = {
   refreshWorktreeDragSession: () => boolean
   getEligibleLineageDropTarget: (
     target: WorktreeSidebarLineageDropTarget,
-    draggedIds: readonly string[]
+    pickedCopies: DraggedWorktreeCopies
   ) => WorktreeSidebarLineageDropTarget
-  commitWorktreeLineageParentDrop: (draggedIds: readonly string[], parentId: string) => boolean
+  commitWorktreeLineageParentDrop: (
+    pickedCopies: DraggedWorktreeCopies,
+    parentIdentity: string
+  ) => boolean
   clearReorderedWorktreeParents: (args: {
     draggedIds: readonly string[]
     sourceGroupKey: string
+    /** Host-qualified, so a folder workspace's child unnests on its own machine. */
+    pickedCopies?: DraggedWorktreeCopies
+    /** Where it dropped: a folder's child dropped inside its folder's card reorders, not unnests. */
+    dropPoint?: WorktreeReorderDropPoint
   }) => void
   clearWorktreeDrag: () => void
-  onMoveWorktreesToStatus: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
+  onMoveWorktreesToStatus: (
+    worktreeIds: readonly string[],
+    status: WorkspaceStatus,
+    draggedCopies?: DraggedWorktreeCopies
+  ) => void
   onMoveWorktreesToStatusAtIndex: (args: WorktreeStatusDropAtIndexArgs) => void
-  onReorderWorktrees: (args: {
-    groups: readonly WorktreeDragGroup[]
-    sourceGroupKey: string
-    draggedIds: readonly string[]
-    dropIndex: number
-  }) => void
-  onPinWorktrees: (worktreeIds: readonly string[]) => void
+  onReorderWorktrees: (args: WorktreeReorderArgs) => void
+  onPinWorktrees: (worktreeIds: readonly string[], draggedCopies?: DraggedWorktreeCopies) => void
 }

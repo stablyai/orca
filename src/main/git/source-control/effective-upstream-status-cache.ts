@@ -1,5 +1,5 @@
-import type { GitUpstreamStatus } from '../../../shared/git-status-types'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitUpstreamStatus } from '../../../shared/git/status/git-status-types'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
 import { resolvedUpstreamNameCache } from './resolved-upstream-name-cache'
 
@@ -19,7 +19,6 @@ export const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
 let writeGenerationSequence = 0
 let evictedWriteGeneration = 0
 
-// Why: tests reuse this hook, so every memoization layer resets together despite the upstream-only name.
 export function clearEffectiveUpstreamStatusCacheForTests(): void {
   effectiveUpstreamStatusCache.clear()
   effectiveUpstreamStatusInFlight.clear()
@@ -133,7 +132,7 @@ export function rememberEffectiveUpstreamStatus(
   probedSameNameOriginRef: boolean,
   writeGeneration: number
 ): void {
-  // Why: hasConfiguredPushTarget gates a write action; re-probe each poll rather than cache a stale positive.
+  // Positive state gates writes; probe each poll instead of caching stale permission to push.
   if (status.hasUpstream || status.hasConfiguredPushTarget) {
     effectiveUpstreamStatusCache.delete(cacheKey)
     effectiveUpstreamStatusWriteGeneration.set(cacheKey, ++writeGenerationSequence)
@@ -149,7 +148,7 @@ export function rememberEffectiveUpstreamStatus(
   if (!probedSameNameOriginRef) {
     return
   }
-  // Why: cache the negative so a stable no-upstream branch doesn't re-probe every poll (TTL lets push/fetch refs appear).
+  // Cache negative state briefly to avoid repeated probes while allowing new refs to appear.
   effectiveUpstreamStatusCache.set(cacheKey, {
     status,
     expiresAt: now + EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS

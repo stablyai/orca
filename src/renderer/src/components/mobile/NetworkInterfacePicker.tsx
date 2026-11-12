@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
-import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 
 function formatCustomAddressLabel(address: string): string {
   return translate(
@@ -13,7 +14,7 @@ function formatCustomAddressLabel(address: string): string {
 }
 
 export type NetworkInterfacePickerProps = {
-  networkInterfaces: readonly MobileNetworkInterface[]
+  networkInterfaces: readonly PairingNetworkInterface[]
   customAddresses: readonly string[]
   selectedAddress: string | undefined
   selectedAddressIsCustom: boolean
@@ -39,6 +40,7 @@ export function NetworkInterfacePicker({
   className,
   id
 }: NetworkInterfacePickerProps): React.JSX.Element {
+  const t = useTranslate()
   const options = useMemo<AddressOption[]>(
     () =>
       networkInterfaces.map((iface) => ({
@@ -55,15 +57,14 @@ export function NetworkInterfacePicker({
       })),
     [customAddresses]
   )
-  // Why: a host whose only interfaces are container bridges advertises no address by default, but the
-  // bridges are still listed here — "No interfaces found" would contradict the options right below it.
+  // Bridge-only hosts have selectable options but no default address; do not label that list empty.
   const placeholder =
     options.length > 0 || customOptions.length > 0
-      ? translate(
+      ? t(
           'auto.components.mobile.NetworkInterfacePicker.no-address-selected',
           'No address selected'
         )
-      : translate(
+      : t(
           'auto.components.settings.MobileNetworkInterfaceSection.b2c384cfd6',
           'No interfaces found'
         )
@@ -82,23 +83,21 @@ export function NetworkInterfacePicker({
       className={className}
       id={id}
       formatCustomLabel={formatCustomAddressLabel}
-      customSectionLabel={translate(
+      customSectionLabel={t(
         'auto.components.mobile.NetworkInterfacePicker.custom-section',
         'Custom'
       )}
       removeCustomLabel={(address) =>
-        translate(
-          'auto.components.mobile.NetworkInterfacePicker.remove-custom',
-          'Remove {{address}}',
-          { address }
-        )
+        t('auto.components.mobile.NetworkInterfacePicker.remove-custom', 'Remove {{address}}', {
+          address
+        })
       }
-      addCustomLabel={translate(
+      addCustomLabel={t(
         'auto.components.mobile.NetworkInterfacePicker.add-custom',
         'Add custom address…'
       )}
       placeholder={placeholder}
-      triggerAriaLabel={translate(
+      triggerAriaLabel={t(
         'auto.components.mobile.NetworkInterfacePicker.trigger-label',
         'Network address to advertise'
       )}
@@ -108,26 +107,26 @@ export function NetworkInterfacePicker({
         return parsed.ok ? { ok: true, value: parsed.address } : { ok: false }
       }}
       customDialogCopy={{
-        title: translate(
+        title: t(
           'auto.components.mobile.CustomNetworkAddressDialog.title',
           'Custom network address'
         ),
-        description: translate(
+        description: t(
           'auto.components.mobile.CustomNetworkAddressDialog.description',
           'Advertise an address your phone can reach — for example a Tailscale hostname, IP address, or reverse-proxy URL.'
         ),
-        inputLabel: translate('auto.components.mobile.CustomNetworkAddressDialog.label', 'Address'),
-        placeholder: translate(
+        inputLabel: t('auto.components.mobile.CustomNetworkAddressDialog.label', 'Address'),
+        placeholder: t(
           'auto.components.mobile.CustomNetworkAddressDialog.placeholder',
           'home.example.com:8443 or https://example.com/orca'
         ),
-        hint: translate(
+        hint: t(
           'auto.components.mobile.CustomNetworkAddressDialog.hint',
           'Enter an IPv4/IPv6 address, hostname, or full HTTP(S)/WebSocket URL. Ports are optional.'
         ),
-        cancel: translate('auto.components.mobile.CustomNetworkAddressDialog.cancel', 'Cancel'),
-        confirm: translate('auto.components.mobile.CustomNetworkAddressDialog.use', 'Use address'),
-        confirmationError: translate(
+        cancel: t('auto.components.mobile.CustomNetworkAddressDialog.cancel', 'Cancel'),
+        confirm: t('auto.components.mobile.CustomNetworkAddressDialog.use', 'Use address'),
+        confirmationError: t(
           'auto.components.mobile.CustomNetworkAddressDialog.confirmationError',
           'This address could not produce a scannable pairing code. Check the address and try again.'
         )

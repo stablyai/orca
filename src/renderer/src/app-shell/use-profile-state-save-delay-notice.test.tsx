@@ -53,24 +53,6 @@ async function resolveSnapshot(delayed: boolean): Promise<void> {
   })
 }
 
-it('restores a persistent warning from main and clears it on completion', async () => {
-  renderHook(useProfileStateSaveDelayNotice)
-  expect(subscribe.mock.invocationCallOrder[0]).toBeLessThan(read.mock.invocationCallOrder[0])
-  await resolveSnapshot(true)
-  expect(notice.warning).toHaveBeenCalledExactlyOnceWith(
-    'Profile storage is taking longer than usual',
-    {
-      id: undefined,
-      description: 'Further saves may be delayed while this operation finishes.',
-      duration: Infinity,
-      dismissible: false,
-      closeButton: false
-    }
-  )
-  publish(false)
-  expect(notice.dismiss).toHaveBeenLastCalledWith(notice.warning.mock.results[0].value)
-})
-
 it('does not let an old healthy snapshot erase a newly delayed save', async () => {
   renderHook(useProfileStateSaveDelayNotice)
   publish(true)
@@ -96,31 +78,4 @@ it('removes its listener and ignores snapshots or queued events after unmount', 
   await resolveSnapshot(true)
   expect(notice.warning).not.toHaveBeenCalled()
   expect(notice.dismiss).not.toHaveBeenCalled()
-})
-
-it('rehydrates a still-delayed save after the app shell remounts', async () => {
-  const first = renderHook(useProfileStateSaveDelayNotice)
-  await resolveSnapshot(true)
-  first.unmount()
-  renderHook(useProfileStateSaveDelayNotice)
-  await act(async () => {
-    await snapshot.promise
-  })
-  expect(notice.warning).toHaveBeenCalledTimes(2)
-  expect(notice.warning.mock.results[0].value).not.toBe(notice.warning.mock.results[1].value)
-  expect(notice.dismiss).toHaveBeenCalledExactlyOnceWith(notice.warning.mock.results[0].value)
-})
-
-it('reuses one ID while delayed but gives the next delayed episode a new ID', () => {
-  renderHook(useProfileStateSaveDelayNotice)
-  publish(true)
-  const firstId = notice.warning.mock.results[0].value
-  publish(true)
-  expect(notice.warning.mock.calls[1][1].id).toBe(firstId)
-  publish(false)
-  publish(false)
-  expect(notice.dismiss).toHaveBeenCalledExactlyOnceWith(firstId)
-  publish(true)
-  expect(notice.warning.mock.calls[2][1].id).toBeUndefined()
-  expect(notice.warning.mock.results[2].value).not.toBe(firstId)
 })

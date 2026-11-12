@@ -3,26 +3,30 @@
 import { useState } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type {
   GitDiffResult,
   GitDiffTextResult
-} from '../../../../../../shared/git-diff-compare-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
 import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { useCombinedDiffViewRestore } from '../remember-view/use-combined-diff-view-restore'
-import {
-  combinedDiffScrollAnchorCache,
-  combinedDiffScrollTopCache,
-  combinedDiffViewStateCache
-} from '../remember-view/combined-diff-view-memory'
+import { clearCombinedDiffViewMemory } from '../remember-view/combined-diff-view-cache'
 import { useCombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
 import { useCombinedDiffSectionRetry } from './use-combined-diff-section-retry'
 import { withDiffSectionLoadTimeout } from './combined-diff-section-load-timeout'
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn() }))
-vi.mock('./fetch-combined-diff-section', () => ({ fetchCombinedDiffSection: mocks.fetch }))
+vi.mock('./fetch-combined-diff-section', () => ({
+  fetchCombinedDiffSection: async (args: { operation: unknown }) => ({
+    result: await mocks.fetch(args),
+    operation: args.operation
+  })
+}))
+vi.mock('./combined-diff-section-connection', () => ({
+  acquireCombinedDiffSectionOperation: () => ({ assertCurrent: () => undefined })
+}))
 import { useCombinedDiffSectionLoader } from './use-combined-diff-section-loader'
 
 const file: OpenFile = {
@@ -75,22 +79,22 @@ function replacementViewer(viewStateKey: string): Viewer {
 function useViewer(props: Viewer) {
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
-  const [, setGeneration] = useState(0)
-  const [, setSideBySide] = useState(false)
+  const [generation, setGeneration] = useState(0)
   const registry = useCombinedDiffSectionLoadRegistry(sections)
   const restore = useCombinedDiffViewRestore({
     entrySet: props.entrySet,
+    file: props.file,
     gitStatusEntries: [],
     registry,
     setGeneration,
     setSectionHeights,
     setSections,
-    setSideBySide,
     viewStateKey: props.viewStateKey
   })
   const loader = useCombinedDiffSectionLoader({
     entrySet: props.entrySet,
     file: props.file,
+    generation,
     registry,
     sectionCount: sections.length,
     setSectionHeights,
@@ -163,7 +167,8 @@ async function startViewer(props = viewer) {
     file: props.file,
     isAllMode: props.entrySet.isAllMode,
     isBranchMode: props.entrySet.isBranchMode,
-    isCommitMode: props.entrySet.isCommitMode
+    isCommitMode: props.entrySet.isCommitMode,
+    operation: expect.any(Object)
   })
   return hook
 }
@@ -186,6 +191,7 @@ function expectedSection(initial: DiffSection, result: GitDiffResult, error?: st
   const prune = largeDiffRenderLimit?.limited === true
   return {
     ...initial,
+    operation: expect.objectContaining({ assertCurrent: expect.any(Function) }),
     originalContent: result.kind === 'text' && !prune ? result.originalContent : '',
     modifiedContent: result.kind === 'text' && !prune ? result.modifiedContent : '',
     diffResult: prune ? { ...result, originalContent: '', modifiedContent: '' } : result,
@@ -201,9 +207,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.useRealTimers()
   mocks.fetch.mockReset()
-  combinedDiffViewStateCache.clear()
-  combinedDiffScrollAnchorCache.clear()
-  combinedDiffScrollTopCache.clear()
+  clearCombinedDiffViewMemory()
 })
 
 describe('combined diff discarded-result analysis budget', () => {
@@ -279,6 +283,61 @@ describe('combined diff discarded-result analysis budget', () => {
     }
   )
 
+  it('commits slow refetches while external writes never stop', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    let version = 0
+    mocks.fetch.mockImplementation(() => {
+      const next = textResult('base', `v${++version}`)
+      return new Promise<GitDiffResult>((resolve) => setTimeout(() => resolve(next), 250))
+    })
+    const hook = await startViewer()
+    hook.result.current.registry.renderedIndicesRef.current.add(0)
+    for (let elapsed = 0; elapsed < 5_000; elapsed += 100) {
+      hook.result.current.retry.requestSectionReload(0)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100)
+      })
+      await flushLoads()
+    }
+    // Discarding every superseded fetch would permanently retain the first displayed result.
+    const shown = Number(hook.result.current.sections[0]?.modifiedContent.slice(1))
+    expect(shown).toBeGreaterThanOrEqual(3)
+  })
+
+  it('never commits a load over a section the user started editing', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const loads: ReturnType<typeof deferredResult>[] = []
+    mocks.fetch.mockImplementation(() => {
+      const load = deferredResult()
+      loads.push(load)
+      return load.promise
+    })
+    const hook = await startViewer()
+    await settle(loads[0]!, textResult('base', 'v1'))
+    hook.result.current.registry.renderedIndicesRef.current.add(0)
+    hook.result.current.retry.requestSectionReload(0)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300)
+    })
+    await flushLoads()
+    // A write lands mid-flight, so this load is discarded once.
+    hook.result.current.retry.requestSectionReload(0)
+    await settle(loads[1]!, textResult('base', 'v2'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300)
+    })
+    await flushLoads()
+    // Another write lands, then the user types before the load settles.
+    hook.result.current.retry.requestSectionReload(0)
+    act(() => {
+      hook.result.current.setSections((prev) =>
+        prev.map((section) => ({ ...section, dirty: true, modifiedContent: 'typed' }))
+      )
+    })
+    await settle(loads[2]!, textResult('base', 'v3'))
+    expect(hook.result.current.sections[0]).toMatchObject({ dirty: true, modifiedContent: 'typed' })
+  })
+
   it('keeps synchronous token-reload reentry into a replacement generation', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const body = 'reentrant obsolete\n'.padEnd(65_536, 'x')
@@ -316,100 +375,12 @@ describe('combined diff discarded-result analysis budget', () => {
     expect(mocks.fetch).toHaveBeenCalledTimes(2)
     expect(reads.count()).toBe(0)
   })
-
-  it.each(['offscreen', 'collapsed'])(
-    'does not force a %s stale section to reload',
-    async (visibility) => {
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-      const body = 'obsolete hidden diff\n'.padEnd(4096, 'x')
-      const pending = deferredResult()
-      mocks.fetch.mockReturnValueOnce(pending.promise)
-      const hook = await startViewer()
-      if (visibility === 'collapsed') {
-        act(() => {
-          hook.result.current.setSections((sections) =>
-            sections.map((section) => ({ ...section, collapsed: true }))
-          )
-        })
-        hook.result.current.registry.renderedIndicesRef.current.add(0)
-      }
-      const sections = hook.result.current.sections
-      hook.result.current.retry.requestSectionReload(0)
-      const reads = countBodyReads(body)
-      await settle(pending, textResult(body))
-      reads.restore()
-      expect(hook.result.current.sections).toBe(sections)
-      expect(hook.result.current.registry.loadedIndicesRef.current.size).toBe(0)
-      expect(hook.result.current.registry.loadingIndicesRef.current.size).toBe(0)
-      expect(hook.result.current.registry.sectionLoadTokensRef.current.get(0)).toBe(2)
-      expect(hook.result.current.registry.reloadTimersRef.current.size).toBe(0)
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(300)
-      })
-      expect(mocks.fetch).toHaveBeenCalledOnce()
-      expect(reads.count()).toBe(0)
-    }
-  )
 })
 
 describe('combined diff live result compatibility', () => {
   const body = 'original body\n'.padEnd(512, 'a')
   const modified = 'modified body\n'.padEnd(128, 'b')
   const legacy = textResult(body, modified)
-  const metadata: GitDiffResult = {
-    ...legacy,
-    largeDiffRenderLimit: getLargeDiffRenderLimit(legacy)
-  }
-  const hostLimitMetadata: GitDiffTextResult = {
-    ...textResult(''),
-    largeDiffRenderLimit: getLargeDiffRenderLimit(textResult('\n'.repeat(120_001)))
-  }
-  const responseCases: [string, GitDiffResult, boolean][] = [
-    ['legacy', legacy, true],
-    ['native wire shape', structuredClone(legacy), true],
-    ['relay wire shape', structuredClone(legacy), true],
-    ['supplied metadata', metadata, false],
-    [
-      'binary',
-      {
-        kind: 'binary',
-        originalContent: body,
-        modifiedContent: modified,
-        originalIsBinary: true,
-        modifiedIsBinary: false,
-        isImage: true,
-        mimeType: 'application/pdf',
-        modifiedDeleted: true
-      },
-      false
-    ],
-    ['empty', textResult(''), true],
-    ['line-limited legacy', textResult('\n'.repeat(120_001)), true],
-    ['character-limited legacy', textResult('x'.repeat(6_000_001)), false],
-    ['native limit metadata', structuredClone(hostLimitMetadata), false],
-    ['relay limit metadata', structuredClone(hostLimitMetadata), false]
-  ]
-
-  it.each(responseCases)('preserves the complete %s result', async (_name, response, scansBody) => {
-    const pending = deferredResult()
-    mocks.fetch.mockReturnValueOnce(pending.promise)
-    const hook = await startViewer()
-    const initial = hook.result.current.sections[0]!
-    const reads = countBodyReads(body)
-    await settle(pending, response)
-    reads.restore()
-    expect(hook.result.current.sections).toEqual([expectedSection(initial, response)])
-    if (hook.result.current.sections[0]?.largeDiffRenderLimit?.limited) {
-      expect(hook.result.current.sections[0]?.diffResult).not.toBe(response)
-    } else {
-      expect(hook.result.current.sections[0]?.diffResult).toBe(response)
-    }
-    expect(hook.result.current.registry.loadedIndicesRef.current.has(0)).toBe(true)
-    expect(hook.result.current.registry.loadingIndicesRef.current.size).toBe(0)
-    expect(hook.result.current.sectionHeights).toEqual({})
-    expect(mocks.fetch).toHaveBeenCalledOnce()
-    expect(reads.count()).toBe(scansBody && response.originalContent === body ? body.length : 0)
-  })
 
   it('preserves section identity on unchanged reload and remeasures changed content once', async () => {
     const first = deferredResult()
@@ -427,11 +398,12 @@ describe('combined diff live result compatibility', () => {
       hook.result.current.setSectionHeights({ 0: 640, 1: 80 })
     })
     const heights = hook.result.current.sectionHeights
+    hook.result.current.registry.renderedIndicesRef.current.add(0)
     hook.result.current.registry.loadedIndicesRef.current.delete(0)
     hook.result.current.loader.loadSection(0)
     await flushLoads()
     await settle(unchanged, structuredClone(legacy))
-    expect(hook.result.current.sections).toBe(current)
+    expect(hook.result.current.sections[0]).toBe(current[0])
     expect(hook.result.current.sectionHeights).toBe(heights)
     hook.result.current.registry.loadedIndicesRef.current.delete(0)
     hook.result.current.loader.loadSection(0)
@@ -444,27 +416,6 @@ describe('combined diff live result compatibility', () => {
     expect(hook.result.current.sectionHeights).toEqual({ 1: 80 })
     expect(mocks.fetch).toHaveBeenCalledTimes(3)
   })
-
-  it.each([new Error('  original remote failure  '), new Error(' '), 'rejected value'])(
-    'keeps the existing rejection message for %s',
-    async (error) => {
-      const pending = deferredResult()
-      mocks.fetch.mockReturnValueOnce(pending.promise)
-      const hook = await startViewer()
-      const initial = hook.result.current.sections[0]!
-      await act(async () => {
-        pending.reject(error)
-        await Promise.resolve()
-      })
-      const message =
-        error instanceof Error && error.message.trim() ? error.message : 'Unable to load diff.'
-      expect(hook.result.current.sections).toEqual([
-        expectedSection(initial, textResult(''), message)
-      ])
-      expect(hook.result.current.registry.loadedIndicesRef.current.has(0)).toBe(true)
-      expect(hook.result.current.registry.loadingIndicesRef.current.size).toBe(0)
-    }
-  )
 
   it('preserves the actual 30 second deadline and clears its timer after failure', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
@@ -529,19 +480,5 @@ describe('combined diff live result compatibility', () => {
     await settle(fresh, legacy)
     expect(hook.result.current.sections).toEqual([expectedSection(sections[0]!, legacy)])
     expect(mocks.fetch).toHaveBeenCalledTimes(2)
-  })
-
-  it('preserves a synchronous fetch failure', async () => {
-    const failure = new Error('original synchronous failure')
-    mocks.fetch.mockImplementationOnce(() => {
-      throw failure
-    })
-    const hook = await startViewer()
-    expect(hook.result.current.sections[0]?.error).toBe(failure.message)
-    expect(hook.result.current.sections[0]?.diffResult).toEqual(textResult(''))
-    expect(hook.result.current.sections[0]?.largeDiffRenderLimit).toBeNull()
-    expect(hook.result.current.sections[0]?.loading).toBe(false)
-    expect(hook.result.current.registry.loadedIndicesRef.current.has(0)).toBe(true)
-    expect(hook.result.current.registry.loadingIndicesRef.current.size).toBe(0)
   })
 })

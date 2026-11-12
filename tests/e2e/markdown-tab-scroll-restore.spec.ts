@@ -83,7 +83,7 @@ test('restores the Markdown viewport when an image gains height after a tab swit
     .filter({ hasText: path.basename(filePath) })
     .click()
   await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(4000)
-  await pendingImage.evaluate((element) => element.remove())
+  await pendingImage.evaluate((element) => element.parentNode?.removeChild(element))
   await expect
     .poll(() => image.evaluate((element) => element.getBoundingClientRect().height))
     .toBeGreaterThan(500)

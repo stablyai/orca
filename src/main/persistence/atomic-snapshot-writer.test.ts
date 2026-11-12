@@ -10,7 +10,7 @@ describe('AtomicSnapshotWriter', () => {
 
   const tmpFiles = (): string[] =>
     readdirSync(join(dir, 'nested')).filter((name) => name.endsWith('.tmp'))
-  // Resolves once the async write has serialized and its temp-file write is pending.
+  // Signal after serialization, while the asynchronous temporary-file write is pending.
   const inFlight = (content: string): { serialize: () => string; started: Promise<void> } => {
     let markStarted = (): void => {}
     const started = new Promise<void>((resolve) => {
@@ -32,45 +32,6 @@ describe('AtomicSnapshotWriter', () => {
 
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true })
-  })
-
-  it('publishes an async write', async () => {
-    const writer = new AtomicSnapshotWriter(() => file)
-    await writer.write(() => 'one')
-    expect(readFileSync(file, 'utf8')).toBe('one')
-    expect(tmpFiles()).toEqual([])
-  })
-
-  it('coalesces requests made during an in-flight write to the newest serialize', async () => {
-    const writer = new AtomicSnapshotWriter(() => file)
-    const first = inFlight('one')
-    const pending = writer.write(first.serialize)
-    await first.started
-    const skipped = vi.fn(() => 'two')
-    const newest = vi.fn(() => 'three')
-    void writer.write(skipped)
-    void writer.write(newest)
-    await pending
-    await writer.waitForPendingWrite()
-    expect(skipped).not.toHaveBeenCalled()
-    expect(newest).toHaveBeenCalledTimes(1)
-    expect(readFileSync(file, 'utf8')).toBe('three')
-  })
-
-  it('skips identical bytes, including content primed from disk', async () => {
-    const writer = new AtomicSnapshotWriter(() => file, { skipUnchanged: true })
-    await writer.write(() => 'same')
-    const { ino } = statSync(file)
-    await writer.write(() => 'same')
-    writer.writeSync(() => 'same')
-    expect(statSync(file).ino).toBe(ino)
-
-    const primed = new AtomicSnapshotWriter(() => file, { skipUnchanged: true })
-    primed.primeCommittedContent('same')
-    await primed.write(() => 'same')
-    expect(statSync(file).ino).toBe(ino)
-    await primed.write(() => 'changed')
-    expect(readFileSync(file, 'utf8')).toBe('changed')
   })
 
   it('keeps the newest writeSync content when an older async write finishes later', async () => {

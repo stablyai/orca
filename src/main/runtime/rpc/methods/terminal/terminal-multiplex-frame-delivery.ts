@@ -4,8 +4,14 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { appendAckPendingOutput } from './terminal-stream-replay'
+import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
+import {
+  markYieldedQueriesDiscardedInFrames,
+  settleDeliveredYieldedQueries,
+  settleReplayedYieldedQuery
+} from './terminal-multiplex-yielded-queries'
 import {
   isMultiplexStreamAttached,
   type TerminalMultiplexConnection
@@ -13,6 +19,13 @@ import {
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
 import type { TerminalStreamInputOutcome } from './terminal-input-delivery'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import {
+  ackPendingOutputBudgetBytes,
+  ackWindowAdmits,
+  chargeAckWindow,
+  noteAckGatedSend
+} from './terminal-multiplex-ack-window'
+import type { RpcBinarySendResult } from '../../rpc-binary-sender'
 
 export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection): void {
   const { sendBinary, emit } = state
@@ -20,27 +33,28 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     streamId: number,
     opcode: TerminalStreamOpcode,
     payload: Uint8Array<ArrayBufferLike> = new Uint8Array(),
-    seq?: number,
-    onRejected?: () => void
+    seq?: number
   ): boolean => {
     if (state.closed) {
-      onRejected?.()
       return false
     }
-    // Why: a seq-less Output chunk must carry sentinel 0, not the control-frame state.cursor, or it poisons the client's frame-drop tracker.
+    // Seq-less Output uses sentinel zero; a control cursor would corrupt client drop tracking.
     const resolvedSeq =
       typeof seq === 'number' ? seq : opcode === TerminalStreamOpcode.Output ? 0 : state.cursor++
-    let sent: boolean | void
+    let sent: RpcBinarySendResult
     try {
-      sent = sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: resolvedSeq, payload }))
+      sent = sendBinary(
+        encodeTerminalStreamFrame({ opcode, streamId, seq: resolvedSeq, payload }),
+        {
+          compressible: true
+        }
+      )
     } catch {
-      onRejected?.()
       state.closeMultiplex()
       return false
     }
     if (sent === false) {
-      onRejected?.()
-      // Why: false means the transport discarded this frame; reconnect is the only available retry boundary with an authoritative snapshot.
+      // False means transport discarded the frame; only reconnect supplies an authoritative retry snapshot.
       state.closeMultiplex()
       return false
     }
@@ -64,7 +78,7 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     state.sendFrame(stream.streamId, TerminalStreamOpcode.WriteUnavailable)
   }
   state.sendInputAck = (stream, appliedSeq, kind): void => {
-    // Why: a detached stream's client already resends on its successor, which acks again.
+    // Detached-stream clients resend on successors, which acknowledge again.
     if (!isMultiplexStreamAttached(state, stream) || stream.inputSessionId === null) {
       return
     }
@@ -96,48 +110,37 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     if (!stream.ackOutput) {
       return true
     }
-    return (
-      stream.ackInFlightBytes + bytes <= stream.ackWindowBytes &&
-      state.ackTotalInFlightBytes + bytes <= state.ackTotalWindowBytes &&
-      (!stream.ackOutputSourceRanges || stream.sourceRangeLedger?.canAccept(bytes) === true)
-    )
+    return ackWindowAdmits(state, stream, bytes)
   }
   state.sendAckGatedOutput = (
     stream: TerminalMultiplexStream,
-    chunk: TerminalOutputFrameChunk
+    chunk: TerminalOutputFrameChunk,
+    fromBacklog = false
   ): boolean => {
-    const prepared = stream.ackOutputSourceRanges
-      ? stream.sourceRangeLedger?.prepareAccept(
-          chunk.bytes.byteLength,
-          chunk.displayLength,
-          chunk.sourceRanges ?? [],
-          chunk.seq
-        )
-      : undefined
-    if (stream.ackOutputSourceRanges && prepared?.status !== 'ready') {
-      if (prepared?.status !== 'capacity') {
-        state.detachStream(stream.streamId, 'unverifiable')
-      }
-      return false
-    }
-    const admission = prepared?.status === 'ready' ? prepared.admission : undefined
     const sent = state.sendFrame(
       stream.streamId,
       chunk.opcode ?? TerminalStreamOpcode.Output,
       chunk.bytes,
-      chunk.seq,
-      admission?.rollback
+      chunk.seq
     )
     if (!sent) {
       return false
     }
-    if (admission && !admission.commit()) {
-      state.detachStream(stream.streamId, 'unverifiable')
-      return false
+    if (chunk.replayedQuery) {
+      settleReplayedYieldedQuery(stream, chunk.replayedQuery)
+    } else {
+      settleDeliveredYieldedQueries(stream, chunk.seq)
     }
     if (stream.ackOutput) {
-      stream.ackInFlightBytes += chunk.bytes.byteLength
-      state.ackTotalInFlightBytes += chunk.bytes.byteLength
+      if (state.linkEstimate.enabled) {
+        noteAckGatedSend(
+          state,
+          stream,
+          chunk.bytes.byteLength,
+          fromBacklog || stream.ackOutputWaited
+        )
+      }
+      chargeAckWindow(state, stream, chunk.bytes.byteLength)
     }
     return true
   }
@@ -145,7 +148,11 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     stream: TerminalMultiplexStream,
     chunk: TerminalOutputFrameChunk
   ): void => {
-    if (!isMultiplexStreamAttached(state, stream) || stream.outputPaused) {
+    if (!isMultiplexStreamAttached(state, stream)) {
+      return
+    }
+    if (stream.outputPaused) {
+      notePausedOutputDropped(state, stream)
       return
     }
     if (
@@ -153,7 +160,11 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
       stream.ackPendingOutput.length > 0 ||
       !state.canSendAckGatedOutput(stream, chunk.bytes.byteLength)
     ) {
-      appendAckPendingOutput(stream, chunk)
+      stream.ackOutputWaited = true
+      markYieldedQueriesDiscardedInFrames(
+        stream,
+        appendAckPendingOutput(stream, chunk, ackPendingOutputBudgetBytes(state, stream))
+      )
       return
     }
     state.sendAckGatedOutput(stream, chunk)

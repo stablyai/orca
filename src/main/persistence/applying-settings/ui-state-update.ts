@@ -1,4 +1,5 @@
-import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-explorer-display-root'
+import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
+import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   getDefaultUIState,
@@ -12,23 +13,26 @@ import {
 } from '../../../shared/workspace-statuses'
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
+import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar-usage-format'
 import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
 import {
+  normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostOrder
 } from '../../../shared/execution-host'
+import { workspaceHostScopeForVisibleHosts } from '../../../shared/workspace-view/workspace-host-visibility'
 import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
 import { normalizeBrowserPageZoomLevel } from '../../../shared/browser-page-zoom'
 import { normalizeFeatureTipIds } from '../../../shared/feature-tips'
 import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
 import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'
-import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup-ui-state'
+import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
 import { persistedUIValuesEqual } from '../../../shared/persisted-ui-equality'
 import {
   PROTECTED_SECRET_SLOT,
   type ProtectedSecretPersistence
-} from '../../protected-secret-persistence'
+} from '../../credentials/protected-secret-persistence'
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
@@ -55,7 +59,6 @@ export type UIUpdateOperations = {
   notifyUIChanged: () => void
 }
 
-/** Applies a sanitized partial update while keeping active-view persistence separate from durable UI fields. */
 export function updatePersistedUI(
   operations: UIUpdateOperations,
   updates: Partial<PersistedState['ui']>
@@ -80,8 +83,7 @@ export function updatePersistedUI(
   }
   const previousUI = {
     ...operations.getUI(),
-    // Why: the legacy field stays unchanged as a migration/downgrade
-    // fallback; the profile sidecar is authoritative in current builds.
+    // Keep the legacy activeView for downgrade compatibility; the profile sidecar is authoritative.
     activeView: currentUI.activeView
   }
   const nextRightSidebarTab =
@@ -100,6 +102,11 @@ export function updatePersistedUI(
             operations.state.ui?.rightSidebarExplorerView,
             nextRightSidebarTab
           )
+  const nextVisibleWorkspaceHostIds = normalizeVisibleExecutionHostIds(
+    sanitizedUpdates.visibleWorkspaceHostIds !== undefined
+      ? sanitizedUpdates.visibleWorkspaceHostIds
+      : operations.state.ui?.visibleWorkspaceHostIds
+  )
   const nextUI = {
     ...currentUI,
     ...durableUpdates,
@@ -147,16 +154,26 @@ export function updatePersistedUI(
     statusBarUsageMode: normalizeStatusBarUsageMode(
       sanitizedUpdates.statusBarUsageMode ?? operations.state.ui?.statusBarUsageMode
     ),
+    statusBarUsageFormat: normalizeStatusBarUsageFormat(
+      sanitizedUpdates.statusBarUsageFormat ?? operations.state.ui?.statusBarUsageFormat
+    ),
     markdownTocPanelWidth: clampMarkdownTocPanelWidth(
       sanitizedUpdates.markdownTocPanelWidth ?? operations.state.ui?.markdownTocPanelWidth
     ),
     combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
       sanitizedUpdates.combinedDiffFileTreeWidth ?? operations.state.ui?.combinedDiffFileTreeWidth
     ),
-    visibleWorkspaceHostIds:
-      sanitizedUpdates.visibleWorkspaceHostIds !== undefined
-        ? normalizeVisibleExecutionHostIds(sanitizedUpdates.visibleWorkspaceHostIds)
-        : normalizeVisibleExecutionHostIds(operations.state.ui?.visibleWorkspaceHostIds),
+    visibleWorkspaceHostIds: nextVisibleWorkspaceHostIds,
+    // Paired clients may write only visible hosts; derive scope so all-hosts cannot override them.
+    ...(sanitizedUpdates.visibleWorkspaceHostIds !== undefined &&
+    sanitizedUpdates.workspaceHostScope === undefined
+      ? {
+          workspaceHostScope: workspaceHostScopeForVisibleHosts(
+            nextVisibleWorkspaceHostIds,
+            normalizeExecutionHostScope(currentUI.workspaceHostScope)
+          )
+        }
+      : {}),
     agentsVisibleHostIds:
       sanitizedUpdates.agentsVisibleHostIds !== undefined
         ? normalizeVisibleExecutionHostIds(sanitizedUpdates.agentsVisibleHostIds)
@@ -178,11 +195,15 @@ export function updatePersistedUI(
         : normalizeExplorerDisplayRootByWorktree(
             operations.state.ui?.explorerDisplayRootByWorktree
           ),
+    gitGraphFiltersByWorktree:
+      sanitizedUpdates.gitGraphFiltersByWorktree !== undefined
+        ? normalizeGitGraphFilters(sanitizedUpdates.gitGraphFiltersByWorktree)
+        : operations.state.ui?.gitGraphFiltersByWorktree,
     showDotfilesByWorktree:
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)
         : normalizeShowDotfilesByWorktree(operations.state.ui?.showDotfilesByWorktree),
-    // Why: a stale renderer or paired client must not erase a dismissal, or a one-time tip replays.
+    // Union dismissals so stale clients cannot revive one-time tips.
     featureTipsSeenIds:
       sanitizedUpdates.featureTipsSeenIds !== undefined
         ? mergeFeatureTipSeenIds(
@@ -190,7 +211,7 @@ export function updatePersistedUI(
             sanitizedUpdates.featureTipsSeenIds
           )
         : normalizeFeatureTipIds(operations.state.ui?.featureTipsSeenIds),
-    // Why: renderer and paired clients can mark different tours seen from stale snapshots; union so completed tours stay suppressed.
+    // Union seen tours across stale renderer and paired-client snapshots.
     contextualToursSeenIds:
       sanitizedUpdates.contextualToursSeenIds !== undefined
         ? mergeContextualTourSeenIds(
@@ -198,7 +219,7 @@ export function updatePersistedUI(
             sanitizedUpdates.contextualToursSeenIds
           )
         : normalizeContextualTourIds(operations.state.ui?.contextualToursSeenIds),
-    // Why: runtime RPCs and the renderer both record education state; merge so a stale renderer snapshot can't erase runtime-only interactions.
+    // Merge runtime interactions so stale renderer saves cannot erase them.
     featureInteractions:
       sanitizedUpdates.featureInteractions !== undefined
         ? mergeFeatureInteractions(

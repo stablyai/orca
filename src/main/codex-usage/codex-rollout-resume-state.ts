@@ -4,9 +4,12 @@ import {
   buildJsonlFileCheckpoint,
   resolveJsonlFileCheckpoint,
   type JsonlFileReader
-} from '../usage/jsonl-file-checkpoint'
+} from '../usage/source-input/jsonl/jsonl-file-checkpoint'
 
-export { MIN_RESUMABLE_PREFIX_BYTES, isResumablePrefixLength } from '../usage/jsonl-file-checkpoint'
+export {
+  MIN_RESUMABLE_PREFIX_BYTES,
+  isResumablePrefixLength
+} from '../usage/source-input/jsonl/jsonl-file-checkpoint'
 
 export async function buildCodexRolloutResumeState(
   filePath: string,
@@ -29,6 +32,7 @@ export async function buildCodexRolloutResumeState(
         sessionCwd: context.sessionCwd,
         currentCwd: context.currentCwd,
         currentModel: context.currentModel,
+        currentTurnId: context.currentTurnId,
         previousTotals: context.previousTotals
       }
 }

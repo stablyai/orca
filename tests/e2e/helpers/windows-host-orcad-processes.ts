@@ -1,7 +1,4 @@
-/**
- * The managed server's processes on a Windows host-cell account, observed from the runner that
- * provisioned it: the lane's sshd listens on 127.0.0.1, so the account's processes are local here.
- */
+// Observe the Windows host-cell account locally: the runner provisioned it and its sshd listens on loopback.
 import path from 'node:path'
 import { runProcess } from '@orca/process-host'
 
@@ -54,7 +51,7 @@ export async function listHostOrcadProcesses(home: string): Promise<HostProcess[
 /** The orcad server itself, without the terminal daemon and workers it forks from the same slot. */
 export async function listHostOrcadServerProcesses(home: string): Promise<HostProcess[]> {
   return (await listHostOrcadProcesses(home)).filter((entry) =>
-    /[\\/]orcad\.js(?=["\s]|$)/iu.test(entry.commandLine)
+    /[\\/]orcad(?:-server)?\.js(?=["\s]|$)/iu.test(entry.commandLine)
   )
 }
 

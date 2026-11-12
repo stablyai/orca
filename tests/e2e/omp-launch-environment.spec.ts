@@ -1,7 +1,7 @@
 import { chmod, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, delimiter, join } from 'node:path'
 import { test as base, expect } from './helpers/orca-app'
-import { buildShellCommandFromArgv } from '../../src/shared/tui-agent-startup-shell'
+import { buildShellCommandFromArgv } from '../../src/shared/agent-launch/startup/tui-agent-startup-shell'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,

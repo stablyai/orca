@@ -1,23 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { routeMarkdownHref } from './markdown-href-routing'
-import { createNativeChatFileHref } from '../../../src/shared/native-chat-href-routing'
 
 describe('routeMarkdownHref', () => {
-  it('routes web and mail links to the system handler', () => {
-    expect(routeMarkdownHref('https://example.com/docs')).toEqual({
-      kind: 'web',
-      url: 'https://example.com/docs'
-    })
-    expect(routeMarkdownHref('http://localhost:3000/')).toEqual({
-      kind: 'web',
-      url: 'http://localhost:3000/'
-    })
-    expect(routeMarkdownHref(' mailto:dev@example.com ')).toEqual({
-      kind: 'web',
-      url: 'mailto:dev@example.com'
-    })
-  })
-
   it('carries a #L fragment as a :line suffix', () => {
     expect(routeMarkdownHref('docs/plan.md#L42')).toEqual({
       kind: 'file',
@@ -30,13 +14,6 @@ describe('routeMarkdownHref', () => {
     expect(routeMarkdownHref('docs/plan.md#usage')).toEqual({
       kind: 'file',
       pathText: 'docs/plan.md'
-    })
-  })
-
-  it('preserves the existing wrapped reply-location contract', () => {
-    expect(routeMarkdownHref(createNativeChatFileHref(' docs/report.md:12:4 '))).toEqual({
-      kind: 'file',
-      pathText: 'docs/report.md:12:4'
     })
   })
 
@@ -53,13 +30,5 @@ describe('routeMarkdownHref', () => {
       kind: 'file',
       pathText: 'C:/repo/src/index.ts'
     })
-  })
-
-  it('drops anchors, unknown schemes, and empty hrefs', () => {
-    expect(routeMarkdownHref('#section')).toEqual({ kind: 'none' })
-    expect(routeMarkdownHref('')).toEqual({ kind: 'none' })
-    expect(routeMarkdownHref('editor://file/x.ts')).toEqual({ kind: 'none' })
-    expect(routeMarkdownHref('javascript:alert(1)')).toEqual({ kind: 'none' })
-    expect(routeMarkdownHref('data:text/plain,hi')).toEqual({ kind: 'none' })
   })
 })

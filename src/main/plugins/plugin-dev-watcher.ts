@@ -1,13 +1,13 @@
 import { realpathSync, statSync, type BigIntStats } from 'node:fs'
 import { realpath, stat } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
-import {
-  subscribeViaWatcherProcess,
-  type WatcherProcessSubscribeOptions,
-  type WatcherProcessSubscription
-} from '../ipc/parcel-watcher-process'
-import { resolveWatcherRootPaths } from '../ipc/watcher-event-root-path-rewrite'
-import { watcherDirectoryIdentity } from '../ipc/watcher-directory-identity'
+import { subscribeViaWatcherProcess } from '../ipc/filesystem/watcher-process/parcel-watcher-process'
+import type { WatcherProcessSubscribeOptions } from '../ipc/filesystem/watcher-process/parcel-watcher-process-protocol'
+import type { WatcherProcessSubscription } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
+import { resolveWatcherRootPaths } from '../ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite'
+import { watcherDirectoryIdentity } from '../ipc/filesystem/watcher-process/root-paths/watcher-directory-identity'
+import { bumpPluginDevRevision, recordPluginDevEdit } from './plugin-dev-revision'
+import { isIgnoredPluginDevPath, pluginDevWatchIgnoreOptions } from './plugin-dev-watcher-ignore'
 
 // Deleted roots can reject unsubscribe after the native stream has stopped.
 function releaseSubscription(subscription: WatcherProcessSubscription): void {
@@ -22,6 +22,8 @@ function addPluginRootParent(parentNames: Map<string, Set<string>>, root: string
 }
 
 type PluginRootBinding = { physicalRoot: string; identity: string | null }
+type PluginDevWatcherRecovery = 'interruption' | 'overflow' | 'root'
+type PluginDevWatcherError = (retry?: boolean, recovery?: PluginDevWatcherRecovery) => void
 
 function pluginRootBinding(physicalRoot: string, entry: BigIntStats): PluginRootBinding | null {
   return entry.isDirectory() ? { physicalRoot, identity: watcherDirectoryIdentity(entry) } : null
@@ -44,7 +46,6 @@ async function readPluginRootBinding(requestedRoot: string): Promise<PluginRootB
   }
 }
 
-/** Owns debounced manifest/panel refresh watchers for mutable dev plugins. */
 export class PluginDevWatcher {
   private readonly subscriptions: WatcherProcessSubscription[] = []
   private readonly physicalRoots = new Map<string, string>()
@@ -57,7 +58,7 @@ export class PluginDevWatcher {
   start(
     devPaths: readonly string[],
     refresh: () => void,
-    onWatcherError?: (retry?: boolean) => void
+    onWatcherError?: PluginDevWatcherError
   ): void {
     this.stopSubscriptions()
     const requestedRoots = new Set(devPaths.map((path) => resolve(path)))
@@ -86,7 +87,10 @@ export class PluginDevWatcher {
       }
       this.subscribe(
         requestedRoot,
-        process.platform === 'win32' ? { backend: 'windows' } : {},
+        {
+          ...(process.platform === 'win32' ? { backend: 'windows' } : {}),
+          ...pluginDevWatchIgnoreOptions()
+        },
         false,
         refresh,
         onWatcherError
@@ -160,7 +164,7 @@ export class PluginDevWatcher {
     options: WatcherProcessSubscribeOptions,
     parent: boolean,
     refresh: () => void,
-    onWatcherError?: (retry?: boolean) => void
+    onWatcherError?: PluginDevWatcherError
   ): void {
     const generation = this.generation
     const retrySetupFailure = parent
@@ -169,17 +173,17 @@ export class PluginDevWatcher {
     let subscription: WatcherProcessSubscription | null = null
     let closed = false
     const isActive = (): boolean => generation === this.generation && !closed
-    const requestRetry = (): void => {
+    const requestRetry = (recovery?: PluginDevWatcherRecovery): void => {
       if (isActive()) {
-        onWatcherError?.()
+        onWatcherError?.(true, recovery)
         this.scheduleRefresh(refresh)
       }
     }
-    const fail = (): void => {
+    const fail = (recovery?: PluginDevWatcherRecovery): void => {
       if (!isActive()) {
         return
       }
-      requestRetry()
+      requestRetry(recovery)
       closed = true
       if (subscription) {
         this.removeSubscription(subscription)
@@ -192,17 +196,38 @@ export class PluginDevWatcher {
         if (!isActive()) {
           return
         }
-        if (error || events.some((event) => event.type === 'delete' && event.path === path)) {
+        // Why: a refresh remounts panels, so churn in folders that never ship must not cause one.
+        if (
+          !error &&
+          !parent &&
+          events.length > 0 &&
+          events.every((event) => isIgnoredPluginDevPath(path, event.path))
+        ) {
+          return
+        }
+        if (error) {
           fail()
+        } else if (events.some((event) => event.type === 'delete' && event.path === path)) {
+          fail('root')
         } else if (parent) {
           // Root replacement stops recursive watching without reporting an error.
-          requestRetry()
+          requestRetry('root')
         } else {
+          // Open guests of this dev plugin remount on their next entry read.
+          recordPluginDevEdit(
+            path,
+            new Set(events.filter((e) => !isIgnoredPluginDevPath(path, e.path)).map((e) => e.path))
+              .size
+          )
           this.scheduleRefresh(refresh)
         }
       },
       options,
-      { onInterruption: requestRetry, onOverflow: requestRetry, onTerminalError: fail }
+      {
+        onInterruption: () => requestRetry('interruption'),
+        onOverflow: () => requestRetry('overflow'),
+        onTerminalError: () => fail()
+      }
     )
       .then((created) => {
         subscription = created
@@ -211,6 +236,11 @@ export class PluginDevWatcher {
           return
         }
         this.subscriptions.push(created)
+        // Catch edits between discovery and the native subscription becoming live.
+        if (!parent) {
+          bumpPluginDevRevision(path)
+          this.scheduleRefresh(refresh)
+        }
       })
       .catch(() => {
         if (isActive()) {

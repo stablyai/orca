@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { GitHubPRRefreshReason } from '../github/pull-request-refresh-types'
-import { RepoSelector, SlugRepo } from './github-repo-target-params'
+import { OptionalGhAccountExpectation, RepoSelector, SlugRepo } from './github-repo-target-params'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 
 export const OptionalPRRefreshReason = z
@@ -19,6 +19,7 @@ export const OptionalPRRefreshReason = z
 export const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),
   reason: OptionalPRRefreshReason,
+  userRefresh: z.boolean().optional(),
   linkedPRNumber: z.number().int().positive().nullable().optional(),
   fallbackPRNumber: z.number().int().positive().nullable().optional(),
   acceptMergedFallbackPR: z.boolean().optional(),
@@ -39,7 +40,8 @@ export const PRCommentReaction = RepoSelector.extend({
 })
 
 export const PullRequestChecks = PullRequest.extend({
-  headSha: OptionalString
+  headSha: OptionalString,
+  userRefresh: z.boolean().optional()
 })
 
 export const PullRequestCheckDetails = RepoSelector.extend({
@@ -66,6 +68,7 @@ export const PullRequestFileContents = RepoSelector.extend({
 })
 
 export const PullRequestFileViewed = RepoSelector.extend({
+  expectedGhAccount: OptionalGhAccountExpectation,
   prRepo: SlugRepo.nullable().optional(),
   pullRequestId: requiredString('Missing pull request ID'),
   path: requiredString('Missing file path'),

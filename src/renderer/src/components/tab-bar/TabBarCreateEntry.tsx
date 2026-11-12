@@ -6,25 +6,31 @@ import {
   getTabEntryOptions,
   isTabEntryAbsolutePathLike
 } from './tab-create-entry-action'
-import { findMatchingTabAgentLaunchOptions } from './tab-agent-launch-options'
+import {
+  agentResultSetupOption,
+  matchingAgentLaunchOptions,
+  tabAgentLaunchOptionDisabled
+} from './tab-agent-launch-options'
 import { findMatchingTabCreateMenuOptions } from './tab-create-menu-options'
 import { getActiveOptionId, type ActiveOption } from './tab-create-entry-active-option'
 import {
   EntryActionRow,
+  useEntrySetupSubmenu,
   EntryStatusRow,
   RESULT_LISTBOX_ID,
   resultOptionDomId
 } from './TabBarCreateEntryRow'
 import { dropFileEntriesCoveredByTabResults } from './open-tab-entry-dedupe'
-import { insertHistoryRowsBelowFileMatches } from './tab-create-entry-history-placement'
+import { placeHistoryRowsInEntryOptions } from './tab-create-entry-history-placement'
 import { useOmniboxBrowserHistory } from './use-omnibox-browser-history'
 import { useTabEntryMenuReturnFocus } from './use-tab-entry-menu-return-focus'
 import { activateOpenTabSearchResult } from './open-tab-selection-routing'
 import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-results'
 import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser-url'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { useAppStore } from '@/store'
-import { isQuickOpenQueryTooLarge } from '../quick-open-search'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { useAppStore } from '@/store/index'
+import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { isQuickOpenQueryTooLarge } from '../../../../shared/quick-open/quick-open-path-search'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
 import { useNetworkSafeTabEntrySelection } from './tab-create-entry-network-selection'
 import { focusTabEntryMenuItemAtEdge } from './tab-create-entry-keyboard-focus'
@@ -35,6 +41,7 @@ import {
 import { EMPTY_AGENT_OPTIONS, EMPTY_MENU_OPTIONS } from './tab-create-entry-empty-options'
 import type { TabEntryActionClassification } from './tab-create-entry-classifier'
 import type { TabBarCreateEntryProps } from './tab-create-entry-props'
+import { useTranslate } from '@/i18n/use-translate'
 
 export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.JSX.Element {
   return <TabBarCreateEntrySession key={String(props.menuOpen)} {...props} />
@@ -42,18 +49,22 @@ export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.
 
 function TabBarCreateEntrySession({
   agentOptions = EMPTY_AGENT_OPTIONS,
+  agentPickerEntries,
   groupId,
   menuOpen,
   menuOptions = EMPTY_MENU_OPTIONS,
   onDidOpenEntry,
   onLaunchAgent,
+  onLaunchAgentOption,
   onOpenDefaultTerminal,
   onOpenEntry,
   onQueryChange,
   onQueueSwitchFocus,
   onSelectMenuOption,
+  terminalPending,
   worktreeId
 }: TabBarCreateEntryProps): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -61,6 +72,7 @@ function TabBarCreateEntrySession({
   const [selectionGuidance, setSelectionGuidance] = useState<string | null>(null)
   // null = follow ranking (deferred tabs can prepend); set on arrow keys only.
   const [pinnedOptionId, setPinnedOptionId] = useState<string | null>(null)
+  const setupSubmenu = useEntrySetupSubmenu()
   const inputRef = useRef<HTMLInputElement>(null)
   const submissionIdRef = useRef(0)
   useEffect(
@@ -89,11 +101,8 @@ function TabBarCreateEntrySession({
     [shouldResolveAbsolutePaths, worktreeId]
   )
   const allowAbsolutePaths = useAppStore(allowAbsolutePathsSelector)
-  // Why the worktree path: editor↔file dedupe folds case by the worktree's
-  // filesystem, which a Windows client's own platform does not describe.
-  const worktreePath = useAppStore((state) =>
-    menuOpen ? (state.getKnownWorktreeById(worktreeId)?.path ?? null) : null
-  )
+  // Deduplicate using the workspace filesystem; the client platform cannot establish path case sensitivity.
+  const worktreePath = useFileListWorktree(menuOpen ? worktreeId : null)?.path ?? null
   const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'
   const searchEngine = useAppStore(
     (state) => state.browserDefaultSearchEngine ?? DEFAULT_SEARCH_ENGINE
@@ -148,8 +157,8 @@ function TabBarCreateEntrySession({
     () =>
       terminalQueryMode
         ? EMPTY_AGENT_OPTIONS
-        : findMatchingTabAgentLaunchOptions(query, agentOptions),
-    [agentOptions, query, terminalQueryMode]
+        : matchingAgentLaunchOptions(agentPickerEntries, agentOptions, query, terminalPending),
+    [agentOptions, agentPickerEntries, query, terminalPending, terminalQueryMode]
   )
 
   const disabled = !onOpenEntry
@@ -167,7 +176,7 @@ function TabBarCreateEntrySession({
       kind: 'agent' as const,
       option
     })),
-    ...insertHistoryRowsBelowFileMatches(options, historyRows)
+    ...placeHistoryRowsInEntryOptions(options, historyRows)
   ]
   const { activeSelectedIndex, selectedActiveOption } = useNetworkSafeTabEntrySelection({
     activeOptions,
@@ -185,11 +194,11 @@ function TabBarCreateEntrySession({
     statusOption != null &&
     (statusOption.classification.kind === 'empty' || statusOption.classification.kind === 'blocked')
       ? statusOption.classification.message
-      : getTabEntryOmniboxPlaceholder()
+      : getTabEntryOmniboxPlaceholder(t)
 
   const submitOption = (option?: ActiveOption) => {
     if (disabled || pending) {
-      return
+      return false
     }
     const selectedOption = option ?? selectedActiveOption ?? null
     if (!selectedOption) {
@@ -202,8 +211,7 @@ function TabBarCreateEntrySession({
         setSelectionGuidance(getTabEntryChooseActionMessage())
         return
       }
-      // Why: an 'empty' status is the placeholder prompt, not a failure — showing
-      // it as an error turns a bare "?" into a red row that reads like a bug.
+      // Empty status is guidance rather than failure; do not turn a bare query marker into an error.
       if (statusOption?.classification.kind !== 'empty') {
         setError(statusMessage)
       }
@@ -211,6 +219,9 @@ function TabBarCreateEntrySession({
     }
     if (selectedOption.kind === 'tab') {
       const outcome = activateOpenTabSearchResult(selectedOption.option)
+      if (outcome.status === 'blocked') {
+        return
+      }
       if (outcome.status === 'failed') {
         setSwitchError(outcome.message)
         return
@@ -227,12 +238,18 @@ function TabBarCreateEntrySession({
       return
     }
     if (selectedOption.kind === 'agent') {
-      onLaunchAgent?.(selectedOption.option.agent)
-      onDidOpenEntry?.()
-      return
+      if (tabAgentLaunchOptionDisabled(selectedOption.option)) {
+        return false
+      }
+      const accepted = onLaunchAgentOption
+        ? onLaunchAgentOption(selectedOption.option)
+        : onLaunchAgent?.(selectedOption.option.agent)
+      if (accepted !== false) {
+        onDidOpenEntry?.()
+      }
+      return accepted
     }
-    // A history row is a navigation, so it rides the entry-open path the typed-URL
-    // row already uses — routing, worktree targeting and SSH resolution included.
+    // Route history through typed-URL navigation to preserve workspace targeting and SSH resolution.
     const classification: TabEntryActionClassification =
       selectedOption.kind === 'history'
         ? { kind: 'explicit-url', url: selectedOption.option.entry.url }
@@ -281,9 +298,7 @@ function TabBarCreateEntrySession({
             setSelectionGuidance(null)
             return
           }
-          // Why: with no result rows the static create/agent items render below;
-          // move focus into that Radix menu list so it stays keyboard-navigable
-          // from the search box instead of trapping focus in the input.
+          // With no search results, transfer arrow navigation to static Radix items so the input cannot trap focus.
           if (
             focusTabEntryMenuItemAtEdge(
               event.currentTarget,
@@ -301,14 +316,13 @@ function TabBarCreateEntrySession({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="-mx-1 flex items-center px-3">
+      <div className="tab-entry-omnibox relative -mx-1 flex items-center px-3 text-xs text-foreground">
         <Input
           ref={inputRef}
           value={query}
           onChange={(event) => {
             const nextQuery = event.target.value
-            // Why: the parent query only changes in response to typing, so publish
-            // it in this event rather than a later effect after the render commits.
+            // Publish query changes in the typing event instead of waiting for a post-commit effect.
             setQuery(nextQuery)
             onQueryChange?.(nextQuery)
             setPinnedOptionId(null)
@@ -316,8 +330,7 @@ function TabBarCreateEntrySession({
             setSwitchError(null)
             setSelectionGuidance(null)
           }}
-          // Why: disabling the focused input would hand focus to the body and
-          // break arrow/Escape navigation until the submission settles.
+          // Keep pending input focus with readOnly; disabling it breaks arrow/Escape navigation.
           disabled={disabled}
           readOnly={pending}
           aria-busy={pending || undefined}
@@ -330,16 +343,14 @@ function TabBarCreateEntrySession({
               ? resultOptionDomId(activeSelectedIndex)
               : undefined
           }
-          aria-label={getTabEntryOmniboxPlaceholder()}
+          aria-label={getTabEntryOmniboxPlaceholder(t)}
           aria-invalid={error ? true : undefined}
           aria-errormessage={error ? 'tab-create-entry-error' : undefined}
-          placeholder={getTabEntryOmniboxPlaceholder()}
+          placeholder={getTabEntryOmniboxPlaceholder(t)}
           className="h-9 rounded-none border-0 bg-transparent px-0 text-xs font-normal text-foreground shadow-none placeholder:font-normal placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0 aria-invalid:border-0 aria-invalid:ring-0 md:text-xs dark:bg-transparent"
         />
       </div>
-      {/* Above the list, not instead of it: a stale switch target must not wipe
-          the rows the user can still act on. The live region stays mounted so a
-          screen reader announces the failure instead of missing the insertion. */}
+      {/* Keep a mounted live region above usable rows so stale-target failures announce without removing other choices. */}
       <div role="status">
         {error ? (
           <div className="mt-1 px-1" id="tab-create-entry-error">
@@ -375,6 +386,16 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
+                setupOpen={setupSubmenu.openId === getActiveOptionId(option)}
+                onSetupOpenChange={(open) => setupSubmenu.change(getActiveOptionId(option), open)}
+                onHover={() => setupSubmenu.hover(getActiveOptionId(option))}
+                onUseAgent={
+                  option.kind === 'agent' && option.option.pickerEntry
+                    ? (draft) =>
+                        submitOption(agentResultSetupOption(option, draft, terminalPending))
+                    : undefined
+                }
+                terminalPending={terminalPending}
                 disabled={disabled || pending}
                 loading={pending && index === activeSelectedIndex}
                 onClick={() => {

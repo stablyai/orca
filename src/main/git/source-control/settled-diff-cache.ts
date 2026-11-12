@@ -1,26 +1,15 @@
 import { BoundedMap } from '../../../shared/bounded-map'
-import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
+import type { GitLineStats } from '../../../shared/git/status/git-uncommitted-line-stats'
 import {
   canProveUnchangedByStamp,
   isDiffStampClockSkewed,
   type WorktreeDiffStamp
 } from './worktree-diff-stamp'
 
-/**
- * Diff results that survive their read, guarded by a stamp of the git state they
- * were built from.
- *
- * Why this is not a TTL: nothing here expires on a clock, so no window exists in
- * which a stale diff can be served. An entry is returned only when a freshly
- * taken stamp equals the one captured *before* the read that produced it, which
- * means no input moved from then until now. Everything else — an unprovable
- * stamp, a write too recent for its mtime to be conclusive, a read that failed
- * partway, a mutation that ran while the read was in flight — declines to cache
- * rather than risk it.
- */
+/** Reuse diffs only with matching input stamps; decline unknown, recent, failed or mutation-overlapped reads. */
 
-// A diff result carries whole file contents on both sides, so an entry count alone bounds
-// nothing: the real budget is characters, and one entry can legitimately be huge.
+// Bound retained characters as well as entries: each diff can contain two entire files.
 export const MAX_SETTLED_DIFF_CACHE_ENTRIES = 32
 export const MAX_SETTLED_DIFF_CACHE_RESULT_CHARACTERS = 1_000_000
 export const MAX_SETTLED_DIFF_CACHE_TOTAL_CHARACTERS = 8_000_000
@@ -34,11 +23,7 @@ export type SettledDiffCacheStats = {
   stores: number
   /** Store declined because a write was too recent for its mtime to be conclusive. */
   racyWrites: number
-  /**
-   * Subset of `racyWrites` where a component's mtime was in this host's future, so
-   * the clocks disagree and the refusal will persist until they converge. A nonzero
-   * count here means the cache is off for a reason no amount of idling will fix.
-   */
+  /** Future mtimes also increment racyWrites; count them separately to expose clock skew. */
   clockSkewedWrites: number
   /** Store declined because a mutation invalidated the cache while the read ran. */
   invalidatedDuringRead: number
@@ -46,15 +31,40 @@ export type SettledDiffCacheStats = {
   retainedCharacters: number
 }
 
-type CacheEntry = { stamp: string; result: GitDiffResult; characters: number }
+export type SettledDiffCacheLimits<T> = {
+  maxEntries: number
+  maxCharacters: number
+  maxEntryCharacters: number
+  characterCount: (result: T) => number
+}
 
-export class SettledDiffCache {
-  private readonly entries = new BoundedMap<string, CacheEntry>({
-    maxEntries: MAX_SETTLED_DIFF_CACHE_ENTRIES,
-    maxBytes: MAX_SETTLED_DIFF_CACHE_TOTAL_CHARACTERS,
-    maxEntryBytes: MAX_SETTLED_DIFF_CACHE_RESULT_CHARACTERS,
-    sizeOf: (entry) => entry.characters
-  })
+export const FILE_DIFF_CACHE_LIMITS: SettledDiffCacheLimits<GitDiffResult> = {
+  maxEntries: MAX_SETTLED_DIFF_CACHE_ENTRIES,
+  maxCharacters: MAX_SETTLED_DIFF_CACHE_TOTAL_CHARACTERS,
+  maxEntryCharacters: MAX_SETTLED_DIFF_CACHE_RESULT_CHARACTERS,
+  characterCount: (result) => result.originalContent.length + result.modifiedContent.length
+}
+
+/** Status numstat passes: two per worktree, each a path-keyed count map. */
+export const NUMSTAT_CACHE_LIMITS: SettledDiffCacheLimits<Map<string, GitLineStats>> = {
+  maxEntries: 256,
+  maxCharacters: 8_000_000,
+  maxEntryCharacters: 1_000_000,
+  // Paths dominate; the counts are a few digits each.
+  characterCount: (stats) => {
+    let characters = 0
+    for (const filePath of stats.keys()) {
+      characters += filePath.length + 16
+    }
+    return characters
+  }
+}
+
+type CacheEntry<T> = { stamp: string; result: T; characters: number }
+
+export class SettledDiffCache<T> {
+  private readonly entries: BoundedMap<string, CacheEntry<T>>
+  private readonly characterCount: (result: T) => number
   private generation = 0
   private hits = 0
   private misses = 0
@@ -64,21 +74,31 @@ export class SettledDiffCache {
   private clockSkewedWrites = 0
   private invalidatedDuringRead = 0
 
-  /**
-   * Take before starting a read; hand back to `set`. A mutation that lands while
-   * the read is in flight bumps the generation, and the store is refused — the
-   * result describes pre-mutation state and must not outlive it.
-   */
+  constructor(limits: SettledDiffCacheLimits<T>) {
+    this.characterCount = limits.characterCount
+    this.entries = new BoundedMap<string, CacheEntry<T>>({
+      maxEntries: limits.maxEntries,
+      maxBytes: limits.maxCharacters,
+      maxEntryBytes: limits.maxEntryCharacters,
+      sizeOf: (entry) => entry.characters
+    })
+  }
+
+  /** Capture before reading; a generation change prevents publishing across a mutation. */
   beginRead(): number {
     return this.generation
   }
 
-  get(key: string, stamp: WorktreeDiffStamp | null): GitDiffResult | undefined {
+  /** For results whose stamp inputs are derived from the result itself; skips stats and LRU order. */
+  peek(key: string): T | undefined {
+    return this.entries.peek(key)?.result
+  }
+
+  get(key: string, stamp: WorktreeDiffStamp | null): T | undefined {
     if (!stamp) {
       this.unprovable += 1
       return undefined
     }
-    // BoundedMap.get() already refreshes the LRU position.
     const entry = this.entries.get(key)
     if (!entry || entry.stamp !== stamp.value) {
       this.misses += 1
@@ -88,12 +108,7 @@ export class SettledDiffCache {
     return entry.result
   }
 
-  set(
-    key: string,
-    stamp: WorktreeDiffStamp | null,
-    result: GitDiffResult,
-    readGeneration: number
-  ): void {
+  set(key: string, stamp: WorktreeDiffStamp | null, result: T, readGeneration: number): void {
     if (!stamp) {
       return
     }
@@ -108,7 +123,7 @@ export class SettledDiffCache {
       }
       return
     }
-    const characters = resultCharacterCount(result)
+    const characters = this.characterCount(result)
     if (this.entries.set(key, { stamp: stamp.value, result, characters })) {
       this.stores += 1
     }
@@ -116,15 +131,11 @@ export class SettledDiffCache {
 
   clear(): void {
     this.entries.clear()
-    // Why: bump so a read that started pre-mutation can't repopulate the invalidated cache.
+    // Prevent pre-mutation reads from repopulating the cleared cache.
     this.generation += 1
   }
 
-  /**
-   * Why exposed: a stamp that can never match — an inode or mtime the filesystem
-   * reports unstably — looks exactly like having no cache at all. These counters
-   * are what tells a miss storm apart from a cold start.
-   */
+  /** Expose counters to distinguish unstable stamps and miss storms from cold starts. */
   stats(): SettledDiffCacheStats {
     return {
       hits: this.hits,
@@ -148,8 +159,4 @@ export class SettledDiffCache {
     this.clockSkewedWrites = 0
     this.invalidatedDuringRead = 0
   }
-}
-
-function resultCharacterCount(result: GitDiffResult): number {
-  return result.originalContent.length + result.modifiedContent.length
 }

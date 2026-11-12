@@ -1,5 +1,9 @@
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import type { WorkspaceCleanupGitState } from '../../../../shared/workspace-cleanup-filter-model'
+import {
+  isWorkspaceCleanupHeadLanded,
+  type WorkspaceCleanupCandidate
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import type { WorkspaceCleanupGitState } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
+import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
 import type {
   WorkspaceCleanupContextFilter,
   WorkspaceCleanupFilters,
@@ -44,7 +48,7 @@ export function getWorkspaceCleanupSearchText(
     candidate.path,
     reviewInfo.label,
     reviewInfo.title,
-    getWorkspaceCleanupGitLabel(candidate),
+    getWorkspaceCleanupGitChipLabel(getWorkspaceCleanupGitState(candidate)),
     hasWorkspaceCleanupLocalContext(candidate) ? 'has context' : 'no context'
   ]
     .filter(Boolean)
@@ -93,17 +97,6 @@ export function sortWorkspaceCleanupCandidates(
       left.displayName.localeCompare(right.displayName)
     )
   })
-}
-
-const GIT_STATE_LABELS: Record<WorkspaceCleanupGitState, string> = {
-  unpushed: 'Unpushed',
-  unknown: 'Unknown',
-  clean: 'Clean',
-  dirty: 'Dirty'
-}
-
-export function getWorkspaceCleanupGitLabel(candidate: WorkspaceCleanupCandidate): string {
-  return GIT_STATE_LABELS[getWorkspaceCleanupGitState(candidate)]
 }
 
 /** Unpushed outranks unknown: a lost commit is worse than an unreadable status. */
@@ -251,6 +244,10 @@ function getGitSortRank(candidate: WorkspaceCleanupCandidate): number {
 }
 
 function hasUnpushedCommits(candidate: WorkspaceCleanupCandidate): boolean {
+  // Commits ahead of an upstream can already be in the base after a squash.
+  if (isWorkspaceCleanupHeadLanded(candidate.git.merge)) {
+    return false
+  }
   return (candidate.git.upstreamAhead ?? 0) > 0 || candidate.blockers.includes('unpushed-commits')
 }
 

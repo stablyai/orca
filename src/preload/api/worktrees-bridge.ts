@@ -1,17 +1,17 @@
 import { ipcRenderer } from 'electron'
 import type {
-  HostLineageSnapshot,
-  ListDesktopLineageForHostArgs
-} from '../../shared/host-lineage-contract'
-import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
 } from '../../shared/worktree/base-ref-drift-types'
-import type { WorktreeHeadIdentity } from '../../shared/worktree/types'
+import type { CreateWorktreeProgressEvent } from '../../shared/worktree/create-types'
+import type {
+  GitStatusMetadataChangedEvent,
+  WorktreeHeadIdentity
+} from '../../shared/worktree/types'
 import type { PreloadApi } from '../api-types'
+import type { WorkspaceMetadataSet } from '../../shared/worktree/workspace-metadata-set'
 
 export const worktreesApi = {
-  list: (args) => ipcRenderer.invoke('worktrees:list', args),
   listRetiredNames: (args) => ipcRenderer.invoke('worktrees:listRetiredNames', args),
 
   listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
@@ -24,19 +24,17 @@ export const worktreesApi = {
 
   cancelListDetected: (args) => ipcRenderer.invoke('worktrees:cancelListDetected', args),
 
-  listAll: () => ipcRenderer.invoke('worktrees:listAll'),
+  scanStartingWslDistro: (args) => ipcRenderer.invoke('worktrees:scanStartingWslDistro', args),
 
   create: (args) => ipcRenderer.invoke('worktrees:create', args),
 
   adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),
 
-  onCreateProgress: (
-    callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { creationId?: string; phase: 'fetching' | 'creating' }
-    ) => callback(data)
+  runApprovedSetup: (args) => ipcRenderer.invoke('worktrees:runApprovedSetup', args),
+
+  onCreateProgress: (callback: (data: CreateWorktreeProgressEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: CreateWorktreeProgressEvent) =>
+      callback(data)
     ipcRenderer.on('createWorktree:progress', listener)
     return () => ipcRenderer.removeListener('createWorktree:progress', listener)
   },
@@ -49,6 +47,13 @@ export const worktreesApi = {
 
   previewNestedRemoval: (args) => ipcRenderer.invoke('worktrees:previewNestedRemoval', args),
 
+  sleep: (request) => ipcRenderer.invoke('worktrees:sleep', request),
+  sleepReopened: (worktreeId) => ipcRenderer.invoke('worktrees:sleepReopened', worktreeId),
+  resumeSleptPane: (pane, automatic) =>
+    ipcRenderer.invoke('worktrees:resumeSleptPane', pane, automatic),
+  retireStrandedSleepRecord: (args) =>
+    ipcRenderer.invoke('worktrees:retireStrandedSleepRecord', args),
+
   remove: (args) => ipcRenderer.invoke('worktrees:remove', args),
 
   forgetLocal: (args) => ipcRenderer.invoke('worktrees:forgetLocal', args),
@@ -59,9 +64,6 @@ export const worktreesApi = {
   updateMeta: (args) => ipcRenderer.invoke('worktrees:updateMeta', args),
 
   listLineage: () => ipcRenderer.invoke('worktrees:listLineage'),
-
-  listLineageForHost: (args: ListDesktopLineageForHostArgs): Promise<HostLineageSnapshot> =>
-    ipcRenderer.invoke('worktrees:listLineageForHost', args),
 
   updateLineage: (args) => ipcRenderer.invoke('worktrees:updateLineage', args),
 
@@ -84,8 +86,11 @@ export const worktreesApi = {
     return () => ipcRenderer.removeListener('worktrees:changed', listener)
   },
 
-  onGitStatusMetadataChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) => callback(data)
+  onGitStatusMetadataChanged: (
+    callback: (data: GitStatusMetadataChangedEvent) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: GitStatusMetadataChangedEvent) =>
+      callback(data)
     ipcRenderer.on('worktrees:gitStatusMetadataChanged', listener)
     return () => ipcRenderer.removeListener('worktrees:gitStatusMetadataChanged', listener)
   },
@@ -99,6 +104,12 @@ export const worktreesApi = {
     ) => callback(data)
     ipcRenderer.on('worktrees:headIdentitiesChanged', listener)
     return () => ipcRenderer.removeListener('worktrees:headIdentitiesChanged', listener)
+  },
+
+  onMetadataSet: (callback: (set: WorkspaceMetadataSet) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, set: WorkspaceMetadataSet) => callback(set)
+    ipcRenderer.on('worktrees:metadataSet', listener)
+    return () => ipcRenderer.removeListener('worktrees:metadataSet', listener)
   },
 
   onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void): (() => void) => {

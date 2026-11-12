@@ -1,23 +1,12 @@
-import {
-  AssignmentRequestSchema,
-  IdleRegionalRehomeRequestSchema,
-  type IdleRegionalRehomeRequest,
-  type IdleRegionalRehomeResult,
-  type RegionCorrectionResponse,
-  isRelayCellConnectionHardCap,
-  RELAY_ADMISSION_BUDGETS,
-  RELAY_DEFAULT_REGION,
-  RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND,
-  RELAY_PROTOCOL_LIMITS,
-  RelayRegionSchema,
-  ResolveRequestSchema,
-  cellPlacementCeiling,
-  relayCellAdmissionBounds,
-  type RelayCellConnectionHardCap,
-  type RelayRegion
-} from '@orca-cloud/relay-contract'
+import { AssignmentRequestSchema, ResolveRequestSchema } from '@orca-cloud/relay-contract/director-messages'
+import { IdleRegionalRehomeRequestSchema, type IdleRegionalRehomeRequest, type IdleRegionalRehomeResult } from '@orca-cloud/relay-contract/idle-regional-rehome'
+import type { RegionCorrectionResponse } from '@orca-cloud/relay-contract/region-correction'
+import { isRelayCellConnectionHardCap, RELAY_ADMISSION_BUDGETS, RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND, cellPlacementCeiling, relayCellAdmissionBounds, type RelayCellConnectionHardCap } from '@orca-cloud/relay-contract/admission-budgets'
+import { RELAY_DEFAULT_REGION, RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
+import { RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract/protocol-limits'
 import { Hono, type Context } from 'hono'
-import { SignJWT, type createRemoteJWKSet } from 'jose'
+import { bodyLimit } from 'hono/body-limit'
+import { SignJWT } from 'jose'
 import { z } from 'zod'
 import {
   createAdminTokenVerifier,
@@ -26,59 +15,78 @@ import {
   createRegionalRehomeRuntimeTokenVerifier,
   createRegionalRehomeTokenVerifier,
   createRuntimeTokenVerifier
-} from './admin-token-verifier.js'
+} from './authentication/admin-token-verifier.js'
 import {
   RelayAssignmentRowBusyError,
+  RelayCellInReserveModeError,
   RelayHomeCellUnavailableError,
+  type AssignedRelayAssignment,
+  type AssignOptions,
   type CellFenceAttemptEvidence,
   type RelayAssignment,
   type RelayAssignmentStore,
   type ResolvedRelayAssignment
-} from './assignment-store.js'
-import { ASSIGNMENT_LEASE_AUDIENCE, assignmentLeaseKeyId } from './assignment-lease.js'
-import { AssignmentRejectionLogWindow } from './assignment-rejection-log-window.js'
-import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
-import { registerCellSeatFeedRoute } from './cell-seat-feed-route.js'
-import { ReservePaceError, type ReserveAssignment, type ReservePlan } from './reserve-assignment.js'
-import { registerCellReserveRoutes } from './cell-reserve-routes.js'
-import type { DemoteRequest, ReserveOutcome, ReserveRequest } from './cell-reserve-contract.js'
-import type { CellSeatFeedPage } from './cell-seat-log.js'
-import { type CellFlags, supportedCellFlags } from './cell-flags.js'
-import type { AppliedControlFlags } from './relay-control-flag-channel.js'
+} from './assignment/assignment-store.js'
+import { ASSIGNMENT_LEASE_AUDIENCE, assignmentLeaseKeyId } from './assignment/assignment-lease.js'
+import { AssignmentRejectionLogWindow } from './assignment/assignment-rejection-log-window.js'
+import { CELL_ADMISSION_STATES } from './cell/admission/cell-admission-selector.js'
+import { registerCellSeatFeedRoute } from './cell/seats/cell-seat-feed-route.js'
+import { ReservePaceError, type ReserveAssignment, type ReservePlan } from './assignment/reserve-placement/reserve-assignment.js'
+import { CELL_RESERVE_ROUTE_PATHS, registerCellReserveRoutes } from './cell/reservations/cell-reserve-routes.js'
+import type { DemoteRequest, ReserveOutcome, ReserveRequest } from './cell/reservations/cell-reserve-contract.js'
+import type { CellSeatFeedPage } from './cell/seats/cell-seat-log.js'
+import { type CellFlags, supportedCellFlags } from './cell/control-flags/cell-flags.js'
+import type { AppliedControlFlags } from './cell/control-flags/relay-control-flag-channel.js'
 import { RELAY_MAX_CELL_CAPACITY_REQUESTS, type RelayConfig } from './config.js'
-import type { RelayCredentialStore } from './credential-store.js'
-import { isRelayDatabaseTransientError } from './database.js'
+import type { RelayCredentialStore } from './credentials/credential-store.js'
+import { isRelayDatabaseTransientError } from './database/database.js'
+import {
+  EDGE_CELL_ID,
+  EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS,
+  EdgeMoveDeferredError,
+  EdgeMoveBusyError,
+  inEdgeCohort,
+  mayBeOnEdge,
+  mapEpochFloor,
+  type EdgeAssignments
+} from './edge-relay.js'
 import {
   DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS,
   RelayDrainReturnAdmission
-} from './drain-return-admission.js'
-import { googleMetadataIdentityToken } from './google-metadata-identity-token.js'
+} from './assignment/public-admission/drain-return-admission.js'
+import { googleMetadataIdentityToken } from './authentication/google-metadata-identity-token.js'
 import {
   RelayPublicAssignmentAdmission,
   type AssignmentAdmissionRejection
-} from './public-assignment-admission.js'
-import { relayHostLogDigest } from './relay-host-log-digest.js'
-import type { RelayLocalReadinessVerdict } from './relay-local-readiness.js'
+} from './assignment/public-admission/public-assignment-admission.js'
+import { relayHostLogDigest } from './observability/relay-host-log-digest.js'
+import type { RelayLocalReadinessVerdict } from './process-lifecycle/relay-local-readiness.js'
 import {
   classifyShadowSeat,
   type ShadowCompareDatabaseAnswer,
   type ShadowCompareRoute
-} from './shadow-directory-compare.js'
-import type { ShadowSeatDirectory } from './shadow-seat-directory.js'
-import type { RelayReadinessDependency } from './relay-readiness.js'
+} from './cell/seats/shadow-directory-compare.js'
+import type { ShadowSeatDirectory } from './cell/seats/shadow-seat-directory.js'
+import type { RelayReadinessDependency } from './process-lifecycle/relay-readiness.js'
 import type {
   AssignmentAdmissionLane,
   AssignmentAdmissionOutcome,
   AssignmentUnavailableCause,
   RegionalRehomeSafetySnapshot,
   RelayRuntimeCounts
-} from './relay-observability.js'
+} from './observability/relay-observability.js'
 import {
   isRegionalRehomeTrustProbe,
   probeRegionalRehomeTrust
-} from './regional-rehome-trust-probe.js'
-import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
-import { stagingAsiaProofMembership } from './staging-asia-proof-admission.js'
+} from './assignment/regional-rehome/regional-rehome-trust-probe.js'
+import { createRelayTokenVerifier, readBearer } from './authentication/relay-token-verifier.js'
+import type { RelayJWKSet } from './authentication/stale-if-error-jwks.js'
+import { stagingAsiaProofMembership } from './cell/admission/staging-asia-proof-admission.js'
+import {
+  runInStickySlot,
+  StickySlotStatements,
+  type StickySlotSample
+} from './database/sticky-slot-statements.js'
 
 const RelayCellConnectionHardCapSchema = z.custom<RelayCellConnectionHardCap>(
   isRelayCellConnectionHardCap
@@ -88,8 +96,7 @@ const ASSIGNMENT_REJECTION_LOG_WINDOW_MS = 10_000
 // A release holds the row for about one lock timeout, so one second is enough.
 const ASSIGNMENT_ROW_BUSY_RETRY_AFTER_SECONDS = 1
 const REGION_CATALOG_CACHE_MS = 30_000
-// A drain that outlives the roll step it belongs to is an outage, not a pacing win. The roll
-// step's timeout scales with the window, up to the same-cap wave's slowest pace.
+// Drain pace must fit the roll-step timeout, including its slowest same-cap wave.
 const DRAIN_PACE_WINDOW_MAX_MS = 20 * 60 * 1_000
 
 type AdmissionRejectionLogEntry = {
@@ -131,10 +138,14 @@ export function createRelayApp(
     cellFlags?: () => AppliedControlFlags<CellFlags>
     // Step 5 on directors; absent keeps today's path for every request.
     reservePlacement?: ReserveAssignment
+    // Relay edge on directors; absent (no edge URL) keeps today's path for every request.
+    edgeAssignments?: EdgeAssignments
     cellReserve?: (request: ReserveRequest) => ReserveOutcome[]
     cellDemote?: (request: DemoteRequest) => string
     cellReserverPoll?: () => void
     cellAdmitModeEffective?: () => 'db' | 'reserve'
+    cellAdmitModeRaw?: () => 'db' | 'reserve'
+    cellPhonePathEffective?: () => 'db' | 'memory'
     cellReserveCounts?: () => {
       bookings: number
       intake: { perSec: number; burst: number; tokens: number }
@@ -148,7 +159,7 @@ export function createRelayApp(
     // Both only on cells; the switch is the per-cell `readinessLocal` flag, off by default.
     readinessLocal?: () => boolean
     localReadiness?: () => RelayLocalReadinessVerdict
-    relayJwks?: ReturnType<typeof createRemoteJWKSet>
+    relayJwks?: RelayJWKSet
     recordAssignmentAdmission?: (outcome: AssignmentAdmissionOutcome) => void
     recordAssignmentRejectionReason?: (
       lane: AssignmentAdmissionLane,
@@ -156,6 +167,7 @@ export function createRelayApp(
     ) => void
     recordDrainReturnRetryAfter?: (seconds: number) => void
     recordAdmissionServiceMs?: (lane: 'sticky' | 'drain-return', durationMs: number) => void
+    recordStickySlot?: (sample: StickySlotSample) => void
     recordAssignmentUnavailable?: (cause: AssignmentUnavailableCause) => void
     recordRegionRequest?: (region: RelayRegion | undefined) => void
     // Step 3 shadow directory; absent unless the director polls seat feeds.
@@ -250,9 +262,7 @@ export function createRelayApp(
     context.header('Retry-After', String(config.publicAssignmentRetryAfterSeconds))
     return context.json({ error: 'assignments_temporarily_unavailable' }, 503)
   }
-  // Reconnecting hosts declare themselves and are verified against the durable
-  // assignment inside this bounded lane, so a placement backlog can never
-  // starve session recovery. Unhinted traffic never touches this lane.
+  // Verify hinted reconnects against durable assignments in a separate bounded lane so placement backlogs cannot starve recovery.
   const stickyRetryAfterSeconds = config.publicStickyRetryAfterSeconds ?? 2
   const stickyAssignmentAdmission = new RelayPublicAssignmentAdmission({
     maxConcurrent: config.publicStickyConcurrency ?? 1,
@@ -266,16 +276,25 @@ export function createRelayApp(
     return context.json({ error: 'assignments_temporarily_unavailable' }, 503)
   }
   // The slot's hold, not the request's latency: herd recovery is slots / this.
-  const timeStickySlot = (lease: { release(): void }): { release(): void } => {
+  const timeStickySlot = (
+    lease: { release(): void },
+    queueWaitMs: number
+  ): { release(): void; measure<T>(work: () => Promise<T>): Promise<T> } => {
     const startedAt = performance.now()
+    const statements = new StickySlotStatements()
     let released = false
     return {
       release: () => {
         if (released) return
         released = true
-        operations.recordAdmissionServiceMs?.('sticky', performance.now() - startedAt)
-        lease.release()
-      }
+        try {
+          operations.recordAdmissionServiceMs?.('sticky', performance.now() - startedAt)
+          operations.recordStickySlot?.({ queueWaitMs, ...statements.close() })
+        } finally {
+          lease.release()
+        }
+      },
+      measure: (work) => runInStickySlot(statements, work)
     }
   }
   // Classified server-side from the host's own assignment row, never from a
@@ -289,24 +308,21 @@ export function createRelayApp(
     context.header('Retry-After', String(retryAfterSeconds))
     return context.json({ error: 'assignments_temporarily_unavailable' }, 503)
   }
-  // An admin route that collapses every failure into one status cannot tell a
-  // real conflict from a database that was briefly out of reach, and the rollout
-  // tooling retries on 503 only. Transient failures get the answer the public
-  // routes already give; everything else keeps the route's own mapping.
+  // Rollout tooling retries only 503; classify transient admin DB failures like public routes while preserving other route mappings.
   const rejectAdminOperation = (
     context: Context,
     error: unknown,
     status: 404 | 409
   ): Response => {
-    if (!isRelayDatabaseTransientError(error)) {
+    // The reserve-mode set could not be read: retry, as for a database blip.
+    const unknownReserveSet = error instanceof RelayCellInReserveModeError && error.cellId === null
+    if (!isRelayDatabaseTransientError(error) && !unknownReserveSet) {
       return context.json({ error: operationError(error) }, status)
     }
     context.header('Retry-After', String(config.publicAssignmentRetryAfterSeconds))
     return context.json({ error: 'database_temporarily_unavailable' }, 503)
   }
-  // Aggregate counters cannot separate a handful of pathological hosts from a broad
-  // population, so every admission rejection names its host and reason. Keyed on
-  // route:lane:reason rather than host, the log stays bounded under load.
+  // Log host/reason to distinguish isolated failures; bound windows by route:lane:reason to stay bounded across hosts.
   const rejectionLogWindow = new AssignmentRejectionLogWindow<AdmissionRejectionLogEntry>({
     windowMs: ASSIGNMENT_REJECTION_LOG_WINDOW_MS,
     onWindowClosed: ({ suppressed, sample }) => logAssignmentRejection({ ...sample, suppressed })
@@ -324,6 +340,14 @@ export function createRelayApp(
     if (!rejectionLogWindow.admit(`${entry.route}:${entry.lane}:${entry.reason}`, entry)) return
     logAssignmentRejection(entry)
   }
+  // Content-Length checks alone miss chunked bodies, which req.json would buffer whole.
+  const limitBody = bodyLimit({
+    maxSize: RELAY_PROTOCOL_LIMITS.maxHttpBodyBytes,
+    onError: (context) => context.json({ error: 'request_too_large' }, 413)
+  })
+  app.use('*', (context, next) =>
+    CELL_RESERVE_ROUTE_PATHS.has(context.req.path) ? next() : limitBody(context, next)
+  )
   app.use('/v1/admin/*', async (context, next) => {
     if (
       context.req.path === '/v1/admin/cell-heartbeat' ||
@@ -350,6 +374,7 @@ export function createRelayApp(
     cellFlags: operations.cellFlags,
     onReserverPoll: operations.cellReserverPoll,
     admitModeEffective: operations.cellAdmitModeEffective,
+    admitModeRaw: operations.cellAdmitModeRaw,
     reserveCounts: operations.cellReserveCounts,
     placementCeiling: operations.cellPlacementCeiling
   })
@@ -359,13 +384,13 @@ export function createRelayApp(
     demote: operations.cellDemote
   })
 
-  // Not /healthz: Google Front End reserves that path before the container.
-  // The drain pace cap is read before a roll isolates a cell, so a slower pace than the cell
-  // accepts stops with the cell untouched.
+  // Google Front End reserves /healthz. Report drain cap before isolation so an unsupported pace refuses without touching the cell.
   app.get('/health', (context) =>
     context.json({
       ok: true,
       connectionCapacityProtocol: 2,
+      // Placement takes min(configured, cell-reported) cap, so a fleet raise may precede the rolls.
+      ...(config.role === 'cell' ? {} : { capacityReportedCapMin: true }),
       drainPaceWindowMaxMs: DRAIN_PACE_WINDOW_MAX_MS
     })
   )
@@ -422,7 +447,24 @@ export function createRelayApp(
         ? requestedRegion
         : RELAY_DEFAULT_REGION
     operations.recordRegionRequest?.(requestedRegion)
-    const signAssignment = async (assignment: RelayAssignment) =>
+    // Only an answer this call minted can be a fallback: a kept assignment was placed earlier.
+    const recordSelection = (assignment: RelayAssignment, placed: boolean) =>
+      operations.recordRegionSelection?.({
+        targetRegion,
+        selectedRegion: assignment.region,
+        fallback: placed && assignment.region !== targetRegion
+      })
+    // Set when this ask took the host's data back from the relay edge: the first answer elsewhere
+    // fences the edge (its phones then get WRONG_CELL).
+    let leftEdge = false
+    const signAssignment = async (assignment: RelayAssignment) => {
+      if (leftEdge && assignment.cellId !== EDGE_CELL_ID) {
+        leftEdge = false
+        await operations.edgeAssignments?.fenceAway(identity, assignment.cellId, assignment.assignmentEpoch)
+      }
+      return await signLease(assignment)
+    }
+    const signLease = async (assignment: RelayAssignment) =>
       await new SignJWT({
         purpose: 'cell-assignment',
         cellId: assignment.cellId,
@@ -437,21 +479,98 @@ export function createRelayApp(
         .setIssuedAt()
         .setExpirationTime('5m')
         .sign(config.assignmentSigningKey)
+    // Relay edge: a host in the cohort is moved (or kept) there before any other lane, since the
+    // sticky and reserve lanes would read the edge row as not live and re-place the host.
+    const edge = operations.edgeAssignments
+    const toEdge =
+      edge?.ready === true &&
+      body.data.regionCorrection?.action !== 'report' &&
+      inEdgeCohort(edge.config, claims.relayHostId, requestedRegion, claims.sub)
+    if (edge?.pushes && !toEdge && mayBeOnEdge(edge.config, claims.relayHostId, claims.sub)) {
+      // Any lane below may re-place a host whose row is on the edge; its devices come back first.
+      // Hosts that were never in a cohort skip this row read (most asks; the pool is small).
+      try {
+        leftEdge = await edge.leaveEdge(identity)
+      } catch (error) {
+        if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) {
+          throw error
+        }
+        logAssignmentRejection({
+          route: 'assign',
+          lane: 'none',
+          hinted: Boolean(body.data.reconnect),
+          relayHostId: claims.relayHostId,
+          reason: operationError(error)
+        })
+        context.header('Retry-After', String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
+        return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
+      }
+    }
+    if (edge && toEdge) {
+      let moved: RelayAssignment | null
+      try {
+        moved = await edge.moveToEdge(
+          identity,
+          Math.max(
+            mapEpochFloor(operations.shadowSeats, identity, Date.now()),
+            operations.reservePlacement?.rowEpochFloor(identity) ?? 0
+          ),
+          requestedRegion
+        )
+      } catch (error) {
+        if (error instanceof EdgeMoveDeferredError) {
+          // Nothing moved (old-cell units still held, or the edge did not take the push): today's
+          // path below keeps the host where it is, and a later ask moves it. Never a 503 loop.
+          console.warn(JSON.stringify({ event: 'orca_relay_edge_move_deferred', reason: error.message }))
+          moved = null
+        } else {
+          if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) {
+            throw error
+          }
+          logAssignmentRejection({
+            route: 'assign',
+            lane: 'none',
+            hinted: Boolean(body.data.reconnect),
+            relayHostId: claims.relayHostId,
+            reason: operationError(error)
+          })
+          context.header('Retry-After', String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
+          return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
+        }
+      }
+      if (moved) {
+        // Any later re-placement off the edge (rollback) mints above the edge epoch.
+        operations.reservePlacement?.raiseEpochFloor(identity, moved.assignmentEpoch)
+        return context.json({
+          v: 1,
+          cellUrl: moved.cellUrl,
+          assignmentEpoch: moved.assignmentEpoch,
+          lease: await signAssignment(moved)
+        })
+      }
+    }
     // Step 5: switched-on cells answer from the map; anything else keeps today's path below.
-    let step5: { epochFloor?: number; placeFresh?: () => Promise<RelayAssignment | null> } = {}
-    if (operations.reservePlacement && !body.data.regionCorrection) {
+    let step5: Pick<AssignOptions, 'epochFloor' | 'placeFresh' | 'regionReserve' | 'reserveSpill'> = {}
+    if (operations.reservePlacement && body.data.regionCorrection?.action !== 'report') {
       let plan: ReservePlan
       try {
         plan = await operations.reservePlacement.plan(identity, {
           reconnect: Boolean(body.data.reconnect),
-          region: targetRegion
+          region: targetRegion,
+          regionCorrection: body.data.regionCorrection !== undefined,
+          preferred: config.regionalPlacementEnabled !== false && requestedRegion !== undefined
         })
       } catch (error) {
         if (!(error instanceof ReservePaceError)) throw error
-        plan = { kind: 'retry', retryAfterSeconds: error.retryAfterSeconds, reason: 'paced' }
+        plan = {
+          kind: 'retry',
+          retryAfterSeconds: error.retryAfterSeconds,
+          reason: error.drained ? 'paced-drained' : 'paced'
+        }
       }
       if (plan.kind === 'answer') {
         operations.recordAssignmentAdmission?.(plan.lane === 'sticky' ? 'sticky' : 'placement')
+        recordSelection(plan.assignment, plan.lane !== 'sticky')
         return context.json({
           v: 1,
           cellUrl: plan.assignment.cellUrl,
@@ -460,22 +579,25 @@ export function createRelayApp(
         })
       }
       if (plan.kind === 'retry') {
-        operations.recordAssignmentUnavailable?.(
-          plan.reason === 'map-incomplete'
-            ? 'reserve-map-incomplete'
-            : plan.reason === 'database'
-              ? 'reserve-database'
-              : 'reserve-paced'
-        )
+        operations.recordRegionSelection?.({ targetRegion, fallback: false })
+        operations.recordAssignmentUnavailable?.(RESERVE_RETRY_CAUSE[plan.reason])
         context.header('Retry-After', String(plan.retryAfterSeconds))
         return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
       }
-      step5 = { epochFloor: plan.epochFloor, placeFresh: plan.placeFresh }
+      step5 = {
+        epochFloor: plan.epochFloor,
+        placeFresh: plan.placeFresh,
+        regionReserve: plan.regionReserve,
+        reserveSpill: plan.reserveSpill
+      }
     }
     let admission: { release(): void } | null = null
     let lane: AssignmentAdmissionLane = 'placement'
+    // Charges the sticky slot's SQL to its request; any other lane runs work as is.
+    let measureHeld = <T>(work: () => Promise<T>): Promise<T> => work()
     if (body.data.reconnect) {
       let rejection: AssignmentAdmissionRejection | undefined
+      const queuedAt = performance.now()
       const stickySlot = await stickyAssignmentAdmission.acquire(claims.relayHostId, (reason) => {
         rejection = reason
       })
@@ -491,12 +613,12 @@ export function createRelayApp(
         })
         return rejectStickyAssignment(context)
       }
-      const fastLane = timeStickySlot(stickySlot)
+      const fastLane = timeStickySlot(stickySlot, performance.now() - queuedAt)
       let verified: ResolvedRelayAssignment | null = null
       try {
-        verified = await operations.assignments.resolve(identity, {
-          classifyHomeRollIsolation: true
-        })
+        verified = await fastLane.measure(() =>
+          operations.assignments.resolve(identity, { classifyHomeRollIsolation: true })
+        )
       } catch (error) {
         fastLane.release()
         operations.recordAssignmentAdmission?.('sticky-rejected')
@@ -540,6 +662,7 @@ export function createRelayApp(
       } else if (verified) {
         lane = 'sticky'
         admission = fastLane
+        measureHeld = fastLane.measure
         operations.recordAssignmentAdmission?.('sticky')
       } else {
         // An unverified hint joins the placement lane with today's semantics.
@@ -564,34 +687,31 @@ export function createRelayApp(
         return rejectPublicAssignment(context)
       }
     }
-    let assignment: RelayAssignment
+    let assignment: AssignedRelayAssignment
     let regionCorrection: RegionCorrectionResponse | undefined
     try {
       if (body.data.regionCorrection?.action === 'report') {
-        const current = await operations.assignments.resolve(identity)
+        const current = await measureHeld(() => operations.assignments.resolve(identity))
         if (!current) return context.json({ error: 'assignment_not_found' }, 409)
         assignment = current
       } else {
-        // Without step 5 the call is exactly today's.
-        const step5Active = step5.epochFloor !== undefined || step5.placeFresh !== undefined
-        assignment = step5Active
-          ? await operations.assignments.assign(
-              identity,
-              requestedRegion,
-              requestedRegion ? targetRegion : undefined,
-              undefined,
-              step5
-            )
-          : requestedRegion
-            ? await operations.assignments.assign(identity, requestedRegion, targetRegion)
-            : await operations.assignments.assign(identity)
+        // The host asked: it may leave a reserve cell the director proves dead.
+        assignment = await measureHeld(() =>
+          operations.assignments.assign(
+            identity,
+            requestedRegion,
+            requestedRegion ? targetRegion : undefined,
+            undefined,
+            { ...step5, hostRequested: true }
+          )
+        )
       }
       if (body.data.regionCorrection) {
         try {
-          regionCorrection = await operations.assignments.exchangeRegionCorrection(
-            identity,
-            body.data.regionCorrection,
-            assignment.assignmentEpoch
+          const correction = body.data.regionCorrection
+          const epoch = assignment.assignmentEpoch
+          regionCorrection = await measureHeld(() =>
+            operations.assignments.exchangeRegionCorrection(identity, correction, epoch)
           )
         } catch (error) {
           if (body.data.regionCorrection.action === 'report') throw error
@@ -601,7 +721,8 @@ export function createRelayApp(
       }
     } catch (error) {
       if (error instanceof ReservePaceError) {
-        operations.recordAssignmentUnavailable?.('reserve-paced')
+        operations.recordRegionSelection?.({ targetRegion, fallback: false })
+        operations.recordAssignmentUnavailable?.(error.drained ? 'reserve-paced-drained' : 'reserve-paced')
         context.header('Retry-After', String(error.retryAfterSeconds))
         return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
       }
@@ -646,15 +767,8 @@ export function createRelayApp(
     } finally {
       admission.release()
     }
-    operations.recordRegionSelection?.({
-      targetRegion,
-      selectedRegion: assignment.region,
-      fallback: lane === 'placement' && assignment.region !== targetRegion
-    })
-    // Grant-side counterpart of the rejection log: reconnect grants are rare
-    // enough to log and make "which cell is this host on" answerable. The
-    // placement-lane ones matter most — they are the only record that a host
-    // whose sticky lane failed verification landed anywhere at all.
+    recordSelection(assignment, assignment.placed === true)
+    // Reconnect grant logs locate hosts; placement-lane grants prove where failed sticky verifications eventually landed.
     if (body.data.reconnect) {
       console.warn(
         `[orca-relay] assignment granted lane=${lane} hinted=true` +
@@ -706,6 +820,20 @@ export function createRelayApp(
       const identity = {
         userId: resolved.userId,
         relayHostId: body.data.relayHostId
+      }
+      // A host on the relay edge: the liveness rule below would read its row as no answer.
+      const edgeAssignments = operations.edgeAssignments
+      const onEdge =
+        edgeAssignments && mayBeOnEdge(edgeAssignments.config, identity.relayHostId, identity.userId)
+          ? await edgeAssignments.edgeAssignment(identity)
+          : null
+      if (onEdge) {
+        return context.json({
+          v: 1,
+          cellUrl: onEdge.cellUrl,
+          assignmentEpoch: onEdge.assignmentEpoch,
+          leaseExpiresAt: onEdge.leaseExpiresAt
+        })
       }
       // This also migrates credentials created by the staging-only combined service.
       const resolvedAssignment = await operations.assignments.resolve(identity)
@@ -869,6 +997,9 @@ export function createRelayApp(
       ...(operations.cellAdmitModeEffective
         ? { admitModeEffective: operations.cellAdmitModeEffective() }
         : {}),
+      ...(operations.cellPhonePathEffective
+        ? { phonePathEffective: operations.cellPhonePathEffective() }
+        : {}),
       // Placement as built, not as configured: `on` only when this director books reserve cells.
       ...(config.role === 'director'
         ? { reservePlacement: operations.reservePlacement?.placementMode ?? 'off' }
@@ -984,7 +1115,8 @@ export function createRelayApp(
       return context.json({ error: 'regional_rehome_trust_not_configured' }, 409)
     }
     try {
-      const source = await operations.assignments.cellDeploymentStatus(
+      // Runtime rows only, which a reserve-mode cell heartbeats as a database one does.
+      const { status: source } = await operations.assignments.reserveAwareCellDeploymentStatus(
         body.data.sourceCellId
       )
       // Any cell that can be drained can be a rehome source, in either
@@ -1218,6 +1350,43 @@ export function createRelayApp(
           : 'existing-only'
       )
       return context.json({ ok: true })
+    } catch (error) {
+      return rejectAdminOperation(context, error, 409)
+    }
+  })
+  // Read without admitMode; writes feed every sweep and refuse reserve during open drain/migration/rehome flows.
+  app.post('/v1/admin/cell-admit-mode', async (context) => {
+    const bearer = readBearer(context.req.header('authorization'))
+    if (config.role !== 'director') return context.json({ error: 'director_only' }, 404)
+    if (!bearer || !(await verifyAdminToken(bearer))) {
+      return context.json({ error: 'invalid_token' }, 401)
+    }
+    if (requestTooLarge(context.req.header('content-length'))) {
+      return context.json({ error: 'request_too_large' }, 413)
+    }
+    const body = AdminCellAdmitModeSchema.safeParse(await context.req.json().catch(() => null))
+    if (!body.success) return context.json({ error: 'invalid_request' }, 400)
+    try {
+      if (body.data.admitMode) {
+        const before = await operations.assignments.cellAdmitMode(body.data.cellId)
+        await operations.assignments.setCellAdmitMode(body.data.cellId, body.data.admitMode)
+        // The sweeps' switch: every write is on the record, the break-glass flip included.
+        console.warn(
+          JSON.stringify({
+            event: 'orca_relay_cell_admit_mode_recorded',
+            cellId: body.data.cellId,
+            from: before.admitMode,
+            to: body.data.admitMode
+          })
+        )
+      }
+      return context.json({
+        v: 1,
+        cellId: body.data.cellId,
+        ...(await operations.assignments.cellAdmitMode(body.data.cellId)),
+        // The break-glass flip refuses a cell that is still heartbeating.
+        heartbeatFresh: await operations.assignments.cellHeartbeatFresh(body.data.cellId)
+      })
     } catch (error) {
       return rejectAdminOperation(context, error, 409)
     }
@@ -1713,14 +1882,36 @@ export function createRelayApp(
     const body = AdminCellStatusSchema.safeParse(await context.req.json().catch(() => null))
     if (!body.success) return context.json({ error: 'invalid_request' }, 400)
     try {
-      const status = await operations.assignments.cellDeploymentStatus(body.data.cellId)
-      return context.json({ v: 1, status })
+      // Without the opt-in a reserve-mode cell stays a 404, so an older script never reads its
+      // mirror rows as host counts.
+      if (body.data.view !== 'reserve-aware') {
+        const status = await operations.assignments.cellDeploymentStatus(body.data.cellId)
+        return context.json({ v: 1, status })
+      }
+      const result = await operations.assignments.reserveAwareCellDeploymentStatus(body.data.cellId)
+      if (result.admitMode === 'db') return context.json({ v: 1, status: { ...result.status, reserve: null } })
+      const view = operations.reservePlacement?.cellStatus(
+        body.data.cellId,
+        result.status.runtime?.cellIncarnation
+      ) ?? { ok: false, reason: 'placement-off' }
+      if (!view.ok) {
+        context.header('Retry-After', String(config.publicAssignmentRetryAfterSeconds))
+        return context.json({ error: 'reserve_status_unavailable', reason: view.reason }, 503)
+      }
+      return context.json({ v: 1, status: { ...result.status, perHost: null, reserve: view.reserve } })
     } catch (error) {
       return rejectAdminOperation(context, error, 404)
     }
   })
   return app
 }
+
+const RESERVE_RETRY_CAUSE = {
+  'map-incomplete': 'reserve-map-incomplete',
+  database: 'reserve-database',
+  paced: 'reserve-paced',
+  'paced-drained': 'reserve-paced-drained'
+} as const satisfies Record<(ReservePlan & { kind: 'retry' })['reason'], AssignmentUnavailableCause>
 
 const AdminHostWhereaboutsSchema = z
   .object({
@@ -1754,9 +1945,7 @@ const RegionalRehomeSafetySchema = z
     databasePoolWaiting: z.number().int().nonnegative().max(100),
     databasePoolWaitersMax: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     databasePoolWaitMsMax: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    // Cells spread the full pool-pressure counts into the payload; rejecting
-    // the extra gauges 400'd every rehome-status heartbeat since 2026-08-15,
-    // so no cell ever recorded rehome protocol 1.
+    // Accept cell pool gauges or strict validation rejects every rehome-status heartbeat, preventing protocol-1 registration.
     databasePoolTotal: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     databasePoolIdle: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     databasePoolOldestWaitMs: z
@@ -1969,13 +2158,7 @@ const AdminAdmissionSelectorApplySchema = z
     expectedGeneration: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     expectedMembershipSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     membership: AdmissionSelectorMembershipSchema,
-    // Optional, so an older caller reaching an updated director is unchanged:
-    // the cell goes unmarked and its hosts stay pinned, today's behaviour. The
-    // other direction is NOT ignored — the schema below is .strict(), so an
-    // updated caller reaching an older director is a 400. That fails closed,
-    // before the isolate step sets MUTATION_STARTED and before anything is
-    // written, but it is a deploy ordering constraint: the director ships
-    // first, then any workflow run that uses the updated script.
+    // Deploy director before callers: old callers omit this safely, but old strict directors reject it with 400 before isolation/MUTATION_STARTED, leaving hosts pinned.
     rollIsolatedCells: z.array(CellIdSchema).max(256).optional()
   })
   .strict()
@@ -2043,6 +2226,10 @@ const AdminAdmissionSelectorAddMigrationCellsSchema = z
       new Set(cells.map(({ cellId }) => cellId)).size === cells.length &&
       new Set(cells.map(({ cellUrl }) => cellUrl)).size === cells.length
   )
+
+const AdminCellAdmitModeSchema = z
+  .object({ v: z.literal(1), cellId: CellIdSchema, admitMode: z.enum(['db', 'reserve']).optional() })
+  .strict()
 
 const AdminCellStateSchema = z.union([
   z.object({ v: z.literal(1), cellId: CellIdSchema, enabled: z.boolean() }).strict(),
@@ -2274,7 +2461,12 @@ const RegionalHostDrainSchema = z
   .strict()
 
 const AdminCellStatusSchema = z
-  .object({ v: z.literal(1), cellId: z.string().min(1).max(128) })
+  .object({
+    v: z.literal(1),
+    cellId: z.string().min(1).max(128),
+    // Opt-in: a director without it answers 400, which tells a script to keep today's refusal.
+    view: z.literal('reserve-aware').optional()
+  })
   .strict()
 
 function cellFenceAttemptEvidence(
@@ -2305,10 +2497,8 @@ function operationError(error: unknown): string {
   return error instanceof Error ? error.message : 'operation_failed'
 }
 
-export { relayHostLogDigest }
 
-// `suppressed` is present only on a window-closing line, and counts the rejections
-// that line stands for beyond the one already logged when the window opened.
+// Only window-close logs carry suppressed, excluding the rejection already logged at window open.
 function logAssignmentRejection(input: {
   route: 'assign' | 'assign-verify' | 'resolve'
   lane: AssignmentAdmissionLane | 'none'

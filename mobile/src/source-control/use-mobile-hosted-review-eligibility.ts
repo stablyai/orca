@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import {
   fetchMobileHostedReviewEligibility,
   type MobileHostedReviewEligibilityInput
@@ -177,10 +177,7 @@ export function useMobileHostedReviewEligibility(
     worktreeId
   ])
 
-  // Why: gate on shouldFetch so a disconnect/client-loss hides a stale `ready`
-  // snapshot in the same render, before the effect posts `idle` — otherwise the
-  // Create PR button could stay enabled for one paint after the worktree is
-  // no longer fetchable.
+  // Hide stale eligibility on disconnect in this render; an effect would leave Create enabled for one paint.
   return renderedMobileHostedReviewEligibilityState({
     snapshot,
     key,

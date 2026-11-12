@@ -1,10 +1,6 @@
-// Text events: streams admitted like every other event.
-
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
-import type { ProviderTimelineHold } from './provider-timeline-budget'
-import { PROVIDER_TIMELINE_OVER_BUDGET } from './provider-timeline-budget'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import type { ProviderTimelineDropRule } from './provider-timeline-decision'
 import type { ProviderTimelineEvent } from './provider-timeline-event'
 import { ProviderTimelinePlan, type ProviderTimelineSink } from './provider-timeline-plan'
@@ -13,18 +9,16 @@ import type { ProviderTimelineState } from './provider-timeline-state'
 import type { ProviderTimelineTextStreams } from './provider-timeline-text-streams'
 
 export type ProviderTimelineApplyResult = {
-  /** The sink's answer for the event's writes; refused means nothing changed. */
+  /** Refused admission changes nothing. */
   admission: StructuredAgentSessionSinkAdmission
   dropped?: ProviderTimelineDropRule
 }
 
-/** What the text appliers share with the assembler that owns them. */
 export type ProviderTimelineTextHost = {
   sink: ProviderTimelineSink
   state: ProviderTimelineState
   streams: ProviderTimelineTextStreams
   journal: StructuredAgentSessionTransitionJournal | null
-  admits(hold: ProviderTimelineHold): boolean
 }
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
@@ -44,7 +38,7 @@ export function applyProviderTimelineTextDelta(
     if (stream.named) {
       return { admission: ADMITTED, dropped: 'stream-mismatch' }
     }
-    // The anonymous stream's next message: what the last one owes lands first.
+    // Flush the previous anonymous message before beginning another.
     streams.planFlush(plan)
     const ended = stream
     streams.planRelease(plan, (each) => each === ended)
@@ -66,18 +60,14 @@ export function applyProviderTimelineTextDelta(
       state,
       serial: serials.next()
     })
-    if (!host.admits({ key: stream.key, bytes: stream.bytes })) {
-      return { admission: PROVIDER_TIMELINE_OVER_BUDGET }
-    }
     plan.onAdmitted(serials.commit)
   }
   streams.planAppend(plan, stream, event.text)
   return { admission: plan.submit(host.sink) }
 }
 
-/** A named delta for an item this run closed, or one the journal holds in a settled turn. */
 function settledNamedItem(host: ProviderTimelineTextHost, key: string): boolean {
-  if (host.state.items.get(key)?.closed) {
+  if (host.state.closedItems.has(key)) {
     return true
   }
   const held = host.journal?.item(key)
@@ -109,7 +99,7 @@ export function applyProviderTimelineTextClose(
   streams.planFlush(plan, stream)
   streams.planClose(plan, stream, event.text)
   if (stream.named) {
-    // The close settles the item for full snapshots too.
+    // Text close also settles full-snapshot writes for this item.
     plan.onAdmitted(() => state.close(stream.key, turnOf(stream.scope)))
   }
   return { admission: plan.submit(host.sink) }

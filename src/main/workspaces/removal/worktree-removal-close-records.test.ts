@@ -1,0 +1,144 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  testState
+} from '../../persistence/persistence-test-harness'
+import { Store as CanonicalStore } from '../../persistence/loading-store/store'
+import { initDataPath as initCanonicalDataPath } from '../../persistence/loading-store/user-data-path'
+import { resetRetirementCollisionKeyCacheForTests } from './retirement/worktree-name-retirement'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { toSshExecutionHostId } from '../../../shared/execution-host'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
+
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+
+let hasCreatedStoreInCase = false
+
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
+  loadUserSshConfig: vi.fn(),
+  sshConfigHostsToTargets: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: () => testState.dir
+  },
+  safeStorage: {
+    isEncryptionAvailable: () => false,
+    encryptString: (plaintext: string) => Buffer.from(plaintext, 'utf-8'),
+    decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8')
+  }
+}))
+
+vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: vi.fn().mockReturnValue({})
+}))
+
+async function createStore() {
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    initCanonicalDataPath()
+    return createSqliteTestStore(CanonicalStore, {
+      dataFile: join(testState.dir, 'orca-data.json')
+    })
+  }
+  vi.resetModules()
+  const { Store } = await import('../../persistence/loading-store/store')
+  const { initDataPath } = await import('../../persistence/loading-store/user-data-path')
+  initDataPath()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
+}
+
+const REMOVED = 'repo-a::/workspace/removed'
+const KEPT = 'repo-a::/workspace/kept'
+const SSH_HOST = toSshExecutionHostId('target-1')
+
+function records(
+  entries: [tabId: string, worktreeId: string][],
+  now = Date.now()
+): ClosedTerminalTabTombstonesByTabId {
+  return Object.fromEntries(
+    entries.map(([tabId, worktreeId]) => [
+      tabId,
+      { closedAt: now, worktreeId, reason: 'user' as const }
+    ])
+  )
+}
+
+function sessionWithRecords(map: ClosedTerminalTabTombstonesByTabId) {
+  return {
+    ...getDefaultWorkspaceSession(),
+    tabsByWorktree: { [REMOVED]: [], [KEPT]: [] },
+    closedTerminalTabTombstonesByTabId: map
+  }
+}
+
+describe('close records on workspace removal', () => {
+  beforeEach(() => {
+    hasCreatedStoreInCase = false
+    resetRetirementCollisionKeyCacheForTests()
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(async () => {
+    await closeTestStores()
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('keeps a same-id worktree’s records on another host when one host’s copy is removed', async () => {
+    const store = await createStore()
+    const repo = { id: 'repo-a', displayName: 'A', badgeColor: 'gray', addedAt: 1 }
+    store.addRepo({ ...repo, path: '/workspace/repo-a' })
+    store.addRepo({
+      ...repo,
+      path: '/remote/repo-a',
+      connectionId: 'target-1',
+      executionHostId: SSH_HOST
+    })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: REMOVED, hostId: SSH_HOST }), {
+      hostId: SSH_HOST
+    })
+    store.setWorkspaceSession(sessionWithRecords(records([['local-tab', REMOVED]])))
+    store.setWorkspaceSession(sessionWithRecords(records([['ssh-tab', REMOVED]])), SSH_HOST)
+
+    store.removeWorktreeMeta(hostWorktreeTarget({ id: REMOVED, hostId: SSH_HOST }))
+
+    expect(
+      Object.keys(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId ?? {})
+    ).toEqual(['local-tab'])
+    expect(store.getWorkspaceSession(SSH_HOST).closedTerminalTabTombstonesByTabId).toEqual({})
+  })
+
+  it('drops a removed folder workspace’s records from every partition', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const folder = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Scratch' })
+    const folderKey = folderWorkspaceKey(folder.id)
+    store.setWorkspaceSession(
+      sessionWithRecords(
+        records([
+          ['closed-folder', folderKey],
+          ['closed-kept', KEPT]
+        ])
+      )
+    )
+    store.setWorkspaceSession(sessionWithRecords(records([['ssh-folder', folderKey]])), SSH_HOST)
+
+    expect(store.removeFolderWorkspace(folder.id)).toBe(true)
+
+    expect(
+      Object.keys(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId ?? {})
+    ).toEqual(['closed-kept'])
+    expect(store.getWorkspaceSession(SSH_HOST).closedTerminalTabTombstonesByTabId).toEqual({})
+  })
+})

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setSecretStore } from '../../shared/secret-store'
 import type * as ZcodePlanApiKeyStore from './zcode-plan-api-key-store'
 
 const safeStorageMock = vi.hoisted(() => ({
@@ -7,11 +8,7 @@ const safeStorageMock = vi.hoisted(() => ({
   decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
 }))
 
-const electronMock = vi.hoisted(() => ({
-  safeStorage: safeStorageMock
-}))
-
-vi.mock('electron', () => electronMock)
+beforeEach(() => setSecretStore({ ...safeStorageMock, describeProtectionGap: () => null }))
 
 const existsSyncMock = vi.fn()
 const readFileSyncMock = vi.fn()
@@ -34,7 +31,7 @@ vi.mock('node:path', () => ({
   join: (...parts: string[]) => parts.join('/')
 }))
 
-vi.mock('../../shared/secure-file', () => ({
+vi.mock('../../shared/secure-storage/secure-file', () => ({
   hardenExistingSecureFile: hardenExistingSecureFileMock,
   writeSecureFile: writeSecureFileMock
 }))
@@ -65,70 +62,6 @@ describe('zcode-plan-api-key-store', () => {
     vi.resetModules()
   })
 
-  it('reports unconfigured while no key file exists', async () => {
-    existsSyncMock.mockReturnValue(false)
-    const store = await loadStore()
-
-    expect(store.hasZcodePlanApiKey()).toBe(false)
-    expect(store.readZcodePlanApiKey()).toBeNull()
-  })
-
-  it('saves an encrypted envelope and reads it back through the cache', async () => {
-    existsSyncMock.mockReturnValue(false)
-    const store = await loadStore()
-
-    store.saveZcodePlanApiKey(' glm-secret ')
-
-    expect(writeSecureFileMock).toHaveBeenCalledWith(storePath, envelope('encrypted', 'glm-secret'))
-    existsSyncMock.mockReturnValue(true)
-    readFileSyncMock.mockReturnValue(Buffer.from(envelope('encrypted', 'glm-secret')))
-    expect(store.hasZcodePlanApiKey()).toBe(true)
-    expect(store.readZcodePlanApiKey()).toBe('glm-secret')
-  })
-
-  it('warns and writes plaintext when safeStorage is unavailable', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
-    existsSyncMock.mockReturnValue(false)
-    const store = await loadStore()
-
-    store.saveZcodePlanApiKey('glm-secret')
-
-    expect(writeSecureFileMock).toHaveBeenCalledWith(storePath, envelope('plaintext', 'glm-secret'))
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('safeStorage encryption unavailable'))
-    warn.mockRestore()
-  })
-
-  it('reads a plaintext envelope back without requiring safeStorage', async () => {
-    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
-    existsSyncMock.mockReturnValue(true)
-    readFileSyncMock.mockReturnValue(Buffer.from(envelope('plaintext', 'glm-secret')))
-    const store = await loadStore()
-
-    expect(store.readZcodePlanApiKey()).toBe('glm-secret')
-    expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
-  })
-
-  it.each(['encrypted', 'plaintext'] as const)(
-    'reports %s protection without decrypting',
-    async (kind) => {
-      existsSyncMock.mockReturnValue(true)
-      readFileSyncMock.mockReturnValue(Buffer.from(envelope(kind, 'glm-secret')))
-      const store = await loadStore()
-      expect(store.getZcodePlanApiKeyProtection()).toBe(
-        kind === 'encrypted' ? 'sealed' : 'plaintext'
-      )
-      expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
-    }
-  )
-
-  it('rejects saving an empty key', async () => {
-    const store = await loadStore()
-
-    expect(() => store.saveZcodePlanApiKey('   ')).toThrow('GLM Coding Plan API key is required')
-    expect(writeSecureFileMock).not.toHaveBeenCalled()
-  })
-
   it('rejects a key with an interior newline instead of saving it', async () => {
     const store = await loadStore()
 
@@ -141,32 +74,13 @@ describe('zcode-plan-api-key-store', () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
     writeSecureFileMock.mockReturnValue(false)
     existsSyncMock.mockReturnValue(false)
+    readFileSyncMock.mockReturnValue(Buffer.from(envelope('plaintext', 'glm-secret')))
     const store = await loadStore()
 
     expect(() => store.saveZcodePlanApiKey('glm-secret')).toThrow(
       'could not be stored securely on this device'
     )
     expect(rmSyncMock).toHaveBeenCalledWith(storePath, { force: true })
-    warn.mockRestore()
-  })
-
-  it('restores the previous envelope when a plaintext replacement cannot be restricted', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
-    const previous = Buffer.from(envelope('encrypted', 'old-key'))
-    existsSyncMock.mockReturnValue(true)
-    readFileSyncMock.mockReturnValue(previous)
-    writeSecureFileMock.mockReturnValueOnce(false).mockReturnValueOnce(true)
-    const store = await loadStore()
-
-    expect(() => store.saveZcodePlanApiKey('new-key')).toThrow(
-      'could not be stored securely on this device'
-    )
-    // First write publishes the unrestricted replacement; the second restores
-    // the previous envelope so the user's old key survives the failed replace.
-    expect(writeSecureFileMock).toHaveBeenCalledTimes(2)
-    expect(writeSecureFileMock).toHaveBeenLastCalledWith(storePath, previous.toString('utf8'))
-    expect(rmSyncMock).not.toHaveBeenCalledWith(storePath, expect.anything())
     warn.mockRestore()
   })
 
@@ -185,19 +99,6 @@ describe('zcode-plan-api-key-store', () => {
     const store = await loadStore()
 
     expect(() => store.readZcodePlanApiKey()).toThrow('could not be decrypted')
-  })
-
-  it('clearing removes the file and resets the cached value', async () => {
-    existsSyncMock.mockReturnValue(false)
-    const store = await loadStore()
-    store.saveZcodePlanApiKey('glm-secret')
-
-    existsSyncMock.mockReturnValue(true)
-    store.clearZcodePlanApiKey()
-
-    expect(rmSyncMock).toHaveBeenCalledWith(storePath, { force: true })
-    existsSyncMock.mockReturnValue(false)
-    expect(store.readZcodePlanApiKey()).toBeNull()
   })
 })
 

@@ -1,4 +1,6 @@
-import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { withOrcaClaudeChatEntrypoint } from '../../shared/agent-launch/startup/claude-chat-entrypoint'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
 import {
@@ -8,15 +10,11 @@ import {
 import { claudeChildClosePolicy, claudeChildCloseProven } from './claude-child-exit-proof-ladder'
 
 export type ClaudeCodeProcessSpawn = {
-  /** Pass as the SDK's `spawnClaudeCodeProcess`; the SDK never learns the pid because it never owns it. */
-  spawn: (options: ClaudeAgentSdkSpawnOptions) => PipedChildProcess
-  /** The retained child, so Orca keeps its own tree-kill and exit-proof ladder. Null until the SDK spawns. */
-  readonly child: PipedChildProcess | null
+  /** SDK spawn hook; Orca retains process ownership. */
+  spawn: (options: ClaudeAgentSdkSpawnOptions) => ChildProcessWithoutNullStreams
+  readonly child: ChildProcessWithoutNullStreams | null
   readonly managed: ManagedProviderProcess | null
-  /**
-   * Ownership proof: the durable lease adjudicates on this pid plus start time plus the spawn
-   * token. On POSIX it is the provider supervisor's, which outlives Claude by construction.
-   */
+  /** Supervisor pid on POSIX; lease ownership also requires start time and spawn token. */
   readonly pid: number | undefined
   /** The spawn spec's verdict, so the close ladder never re-decides it. False until the SDK spawns. */
   readonly supervised: boolean
@@ -32,41 +30,56 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
   return next
 }
 
-/**
- * Orca supplies the Claude Code child rather than letting the SDK spawn it.
- *
- * Two independent reasons: the SDK's `SpawnedProcess` has no pid, and Orca's
- * spawner is the only path that encodes `.cmd` arguments safely on Windows.
- *
- * On POSIX Claude runs under the provider supervisor, so an Orca that dies stops
- * it instead of leaving it to finish its turn, tools and edits included, with
- * nobody watching. Windows has no supervisor and spawns Claude directly.
- */
+/** Subscribes alongside the SDK's reader: an earlier listener would drain output it never sees. */
+function observeStdoutWithReader(
+  stdout: ChildProcessWithoutNullStreams['stdout'],
+  onStdout: (chunk: Buffer | string) => void
+): void {
+  const onSubscribe = (event: string | symbol): void => {
+    if (event !== 'data' && event !== 'readable') {
+      return
+    }
+    stdout.removeListener('newListener', onSubscribe)
+    // Same tick as the reader, so no chunk can be emitted to one and not the other.
+    stdout.on('data', onStdout)
+  }
+  stdout.on('newListener', onSubscribe)
+}
+
+// Orca owns the child for PID-based exit proof and Windows .cmd quoting.
+// POSIX supervisors stop Claude if Orca dies; Windows spawns Claude directly.
 export function createClaudeCodeProcessSpawn(
   spawnImpl: PipedProcessSpawner = spawnProcess,
   platform: NodeJS.Platform = process.platform,
-  onOutput?: () => void
+  launch?: { pathToClaudeCodeExecutable: string; prefixArgs?: readonly string[] },
+  onStdout?: (chunk: Buffer | string) => void
 ): ClaudeCodeProcessSpawn {
   let managed: ManagedProviderProcess | null = null
   return {
     spawn: (options) => {
+      const args = [...options.args]
+      // The SDK runs script programs through a runtime, keeping the script at argv[0].
+      const script = launch && /\.(?:js|mjs|ts|tsx|jsx)$/.test(launch.pathToClaudeCodeExecutable)
+      args.splice(script ? 1 : 0, 0, ...(launch?.prefixArgs ?? []))
       // SDK abort would kill the child outside Orca's ladder, losing observed exit proof.
       managed = spawnManagedProviderProcess(
         {
           command: options.command,
-          args: [...options.args],
+          args,
           ...(options.cwd === undefined ? {} : { cwd: options.cwd })
         },
         {
           spawnImpl,
           platform,
-          inheritedEnv: definedEnv(options.env),
+          inheritedEnv: withOrcaClaudeChatEntrypoint(definedEnv(options.env), platform),
           site: 'claude-stream-json-teardown',
           policy: (supervised) => claudeChildClosePolicy(supervised, platform),
-          acceptClose: claudeChildCloseProven,
-          ...(onOutput ? { onOutput } : {})
+          acceptClose: claudeChildCloseProven
         }
       )
+      if (onStdout) {
+        observeStdoutWithReader(managed.child.stdout, onStdout)
+      }
       // The SDK drains stderr only for its own local spawn; the managed process drains it here.
       return managed.child
     },

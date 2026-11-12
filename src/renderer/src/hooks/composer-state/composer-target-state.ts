@@ -1,7 +1,7 @@
 import type { ComposerDecisions } from './composer-decisions'
 import type { ComposerTargetState } from './composer-target-state-contract'
-import type { ComposerStateInput } from './composer-target-store'
-import { useComposerTargetStore } from './composer-target-store'
+
+import { type ComposerStateInput, useComposerTargetStore } from './composer-target-store'
 import { useComposerInitialTargetState } from './initial-target-state'
 import { useComposerRuntimeTargetSelection } from './runtime-target-selection'
 import { useComposerSourceContextState } from './source-context-state'
@@ -10,19 +10,21 @@ import { useComposerAsyncState } from './async-composer-state'
 import { useComposerProviderRuntimeSync } from './provider-runtime-sync'
 import { useDerivedComposerState } from './derived-composer-state'
 import { useDraftTargetSync } from './draft-target-sync'
+import { needsVisibleRunTargetHost } from '@/lib/workspace/creation/run-target-host-visibility'
 
 export function useComposerTargetState(
   options: ComposerStateInput,
   decisions: ComposerDecisions
 ): ComposerTargetState {
   const composerTargetStore = useComposerTargetStore(options, decisions)
-  const initialTargetState = useComposerInitialTargetState({
+  const initialTargetSeedState = useComposerInitialTargetState({
     actionableHostIds: composerTargetStore.actionableHostIds,
     decisions: composerTargetStore.decisions,
     eligibleRepos: composerTargetStore.eligibleRepos,
     initialProjectGroupId: composerTargetStore.initialProjectGroupId,
     initialRepoId: composerTargetStore.initialRepoId,
     initialTaskSourceContext: composerTargetStore.initialTaskSourceContext,
+    initialWorkspaceTarget: composerTargetStore.initialWorkspaceTarget,
     initialWorkspaceStatus: composerTargetStore.initialWorkspaceStatus,
     newWorkspaceDraft: composerTargetStore.newWorkspaceDraft,
     persistDraft: composerTargetStore.persistDraft,
@@ -40,24 +42,32 @@ export function useComposerTargetState(
     eligibleRepos: composerTargetStore.eligibleRepos,
     hostOptions: composerTargetStore.hostOptions,
     initialEphemeralVmRecipeId: composerTargetStore.initialEphemeralVmRecipeId,
+    pendingInitialWorkspaceTarget: initialTargetSeedState.pendingInitialWorkspaceTarget,
     projectGroups: composerTargetStore.projectGroups,
     projectHostSetups: composerTargetStore.projectHostSetups,
     projects: composerTargetStore.projects,
-    repoId: initialTargetState.repoId,
+    repoId: initialTargetSeedState.repoId,
     repos: composerTargetStore.repos,
-    selectedProjectGroup: initialTargetState.selectedProjectGroup,
-    selectedProjectHostSetupOverrideId: initialTargetState.selectedProjectHostSetupOverrideId,
+    selectedProjectGroup: initialTargetSeedState.selectedProjectGroup,
+    selectedProjectHostSetupOverrideId: initialTargetSeedState.selectedProjectHostSetupOverrideId,
+    selectedProjectHostSetupOverrideHostId:
+      initialTargetSeedState.selectedProjectHostSetupOverrideHostId,
     settings: composerTargetStore.settings,
     sshConnectionStates: composerTargetStore.sshConnectionStates,
     workspaceHostScope: composerTargetStore.workspaceHostScope,
     worktreesByRepo: composerTargetStore.worktreesByRepo
   })
+  const initialTargetState = {
+    ...initialTargetSeedState,
+    repoId: runtimeTargetSelection.resolvedRepoId
+  }
   const sourceContextState = useComposerSourceContextState({
     folderSourceRepos: runtimeTargetSelection.folderSourceRepos,
     decisions: composerTargetStore.decisions,
     initialLinkedWorkItem: composerTargetStore.initialLinkedWorkItem,
     initialName: composerTargetStore.initialName,
     initialPrompt: composerTargetStore.initialPrompt,
+    initialNote: composerTargetStore.initialNote,
     initialTaskSourceContext: composerTargetStore.initialTaskSourceContext,
     isProjectGroupTarget: runtimeTargetSelection.isProjectGroupTarget,
     newWorkspaceDraft: composerTargetStore.newWorkspaceDraft,
@@ -71,10 +81,12 @@ export function useComposerTargetState(
     selectedRepo: runtimeTargetSelection.selectedRepo,
     selectedRepoIsGit: runtimeTargetSelection.selectedRepoIsGit,
     setInternalRepoId: initialTargetState.setInternalRepoId,
+    setPendingInitialWorkspaceTarget: initialTargetState.setPendingInitialWorkspaceTarget,
     selectedWorkspaceTarget: runtimeTargetSelection.selectedWorkspaceTarget
   })
   const workspaceIdentityState = useWorkspaceIdentityState({
     initialBaseBranch: composerTargetStore.initialBaseBranch,
+    initialParentWorktreeId: composerTargetStore.initialParentWorktreeId,
     initialLinearBranchName: sourceContextState.initialLinearBranchName,
     initialLinkedWorkItem: composerTargetStore.initialLinkedWorkItem,
     linkedWorkItem: sourceContextState.linkedWorkItem,
@@ -83,7 +95,7 @@ export function useComposerTargetState(
     newWorkspaceDraft: composerTargetStore.newWorkspaceDraft,
     persistDraft: composerTargetStore.persistDraft,
     selectedRepoConnectionId: runtimeTargetSelection.selectedRepoConnectionId,
-    selectedRepoSettings: runtimeTargetSelection.selectedRepoSettings,
+    selectedRepoRuntimeEnvironmentId: runtimeTargetSelection.selectedRepoRuntimeEnvironmentId,
     settings: composerTargetStore.settings
   })
   const asyncComposerState = useComposerAsyncState({
@@ -104,7 +116,6 @@ export function useComposerTargetState(
     selectedRepoConnectionId: runtimeTargetSelection.selectedRepoConnectionId,
     selectedRepoHookContextKey: runtimeTargetSelection.selectedRepoHookContextKey,
     selectedRepoIsGit: runtimeTargetSelection.selectedRepoIsGit,
-    selectedRepoSettings: runtimeTargetSelection.selectedRepoSettings,
     setName: sourceContextState.setName
   })
   const providerRuntimeSync = useComposerProviderRuntimeSync({
@@ -115,8 +126,7 @@ export function useComposerTargetState(
     selectedRepoHookContextKey: runtimeTargetSelection.selectedRepoHookContextKey,
     selectedRepoIsGit: runtimeTargetSelection.selectedRepoIsGit,
     selectedRepoPath: asyncComposerState.selectedRepoPath,
-    selectedRepoSettings: runtimeTargetSelection.selectedRepoSettings,
-    selectedRepoSettingsRef: asyncComposerState.selectedRepoSettingsRef,
+    selectedRepoTarget: runtimeTargetSelection.selectedRepoTarget,
     setCheckedHooksContextKey: asyncComposerState.setCheckedHooksContextKey,
     setSelectedRepoSlug: asyncComposerState.setSelectedRepoSlug,
     setSetupAgentStartupPolicy: asyncComposerState.setSetupAgentStartupPolicy,
@@ -171,6 +181,7 @@ export function useComposerTargetState(
     note: sourceContextState.note,
     persistDraft: composerTargetStore.persistDraft,
     repoId: initialTargetState.repoId,
+    pendingInitialWorkspaceTarget: initialTargetState.pendingInitialWorkspaceTarget,
     selectedProjectGroup: initialTargetState.selectedProjectGroup,
     selectedRepo: runtimeTargetSelection.selectedRepo,
     selectedRepoIsGit: runtimeTargetSelection.selectedRepoIsGit,
@@ -184,7 +195,17 @@ export function useComposerTargetState(
   return {
     composerTargetStore,
     initialTargetState,
-    runtimeTargetSelection,
+    runtimeTargetSelection: {
+      ...runtimeTargetSelection,
+      // Keep the active project selected; Create waits for a visible host (#38669).
+      selectedTargetNeedsVisibleHost:
+        !runtimeTargetSelection.isProjectGroupTarget &&
+        needsVisibleRunTargetHost(
+          runtimeTargetSelection.selectedWorkspaceTarget,
+          composerTargetStore.hostOptions,
+          runtimeTargetSelection.selectedEphemeralVmRecipeId
+        )
+    },
     sourceContextState,
     workspaceIdentityState,
     asyncComposerState,

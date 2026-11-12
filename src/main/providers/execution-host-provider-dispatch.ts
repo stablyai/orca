@@ -1,34 +1,4 @@
-/**
- * Host-keyed provider dispatch: one entry per execution host kind, with `local` among them.
- *
- * The incumbent spelling across main is `const c = repo.connectionId; c ? sshProvider(c) : local()`,
- * where `null` means *both* "resolved: this is local" and "could not resolve". Every path that
- * cannot determine the host therefore answers "local" and runs remote work on the client — the
- * #11163 defect class, which has produced a reproduced cross-host leak (an `ssh:` worktree
- * resolving to another target) and near-misses where a transcript that exists only on a remote host
- * would have been read locally. The shape also cannot express a `runtime:` host at all.
- *
- * This module removes that spelling. Its input is an `ExecutionHostId`, which is never null, and an
- * id that names no host throws instead of degrading. `getRepoExecutionHostId` /
- * `getWorktreeExecutionHostId` / `resolveWorktreeExecutionHost` are the resolution layer that feeds
- * it; the last one already answers `unresolved` as a distinct verdict rather than "local".
- *
- * Why a route union rather than a uniform `getGitProviderForHost(): IGitProvider`:
- *
- *   - `local` git and filesystem work takes per-worktree execution options (`wslDistro`,
- *     `sharedLinkPaths`, admission tier). A registered stateless provider would silently drop WSL
- *     routing, so the local git and filesystem routes carry a factory that is built per call.
- *   - `runtime:<env>` is never executed in this process; it is forwarded to that server, which
- *     treats it as its own `local`. A runtime repo's `connectionId` names the *server's* SSH target,
- *     so handing it to this client's SSH table would dial a same-named target on the wrong host.
- *
- * So each host kind is its own variant and callers switch exhaustively; `runtime` cannot collapse
- * into `local` by omission.
- *
- * Inside the `ssh` variant, `provider: null` means "remote and currently unreachable", never
- * "local" — loss of contact is never evidence of locality (the `live` / `unverifiable` / `exited`
- * rule in AGENTS.md).
- */
+/** Unknown/unserved hosts must fail closed; runtime SSH targets belong to their server, never this client. */
 
 import {
   parseExecutionHostId,
@@ -38,15 +8,8 @@ import {
 } from '../../shared/execution-host'
 import { createLocalFilesystemProvider } from './local-filesystem-provider'
 import { createLocalGitProvider } from './local-git-provider'
-import { getSshGitProvider, sshGitProviderMissingError } from './ssh-git-dispatch'
-import type { SshGitProvider } from './ssh-git-provider'
-import {
-  getSshFilesystemProvider,
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
-} from './ssh-filesystem-dispatch'
-import type { IFilesystemProvider, IGitProvider } from './types'
+import { SshHostNotServedError } from './ssh-host-not-served-error'
 
-/** An id that names no execution host. Never degrade to local — that is the whole defect class. */
 export class UnresolvableExecutionHostError extends Error {
   constructor(readonly hostId: string | null | undefined) {
     super(
@@ -57,7 +20,6 @@ export class UnresolvableExecutionHostError extends Error {
   }
 }
 
-/** Asking this process for a host it does not execute is a routing mistake, not a fallback. */
 export class ExecutionHostNotDispatchableError extends Error {
   constructor(readonly hostId: ExecutionHostId) {
     super(`Execution host ${hostId} is not dispatched by this process.`)
@@ -71,24 +33,12 @@ type LocalGitRoute = LocalRoute & { createProvider: typeof createLocalGitProvide
 /** Local file work authorizes against the caller's store, so the route carries a factory too. */
 type LocalFilesystemRoute = LocalRoute & { createProvider: typeof createLocalFilesystemProvider }
 type RuntimeRoute = { kind: 'runtime'; hostId: `runtime:${string}`; environmentId: string }
-type SshRoute<TProvider> = {
-  kind: 'ssh'
-  hostId: `ssh:${string}`
-  connectionId: string
-  /** `null` is "remote, currently unreachable" — never "local". */
-  provider: TProvider | null
-}
+type SshRoute = { kind: 'ssh'; hostId: `ssh:${string}`; connectionId: string }
 
-// The SSH table stores `SshGitProvider`; narrowing the route to `IGitProvider` would drop the
-// remote-only methods (commit-message plans, push-target materialization) that callers need.
-export type ExecutionHostGitRoute = LocalGitRoute | RuntimeRoute | SshRoute<SshGitProvider>
-export type ExecutionHostFilesystemRoute =
-  | LocalFilesystemRoute
-  | RuntimeRoute
-  | SshRoute<IFilesystemProvider>
+export type ExecutionHostGitRoute = LocalGitRoute | RuntimeRoute | SshRoute
+export type ExecutionHostFilesystemRoute = LocalFilesystemRoute | RuntimeRoute | SshRoute
 
-// Takes an unvalidated string rather than `ExecutionHostId`: validating is the point, and host
-// ids also arrive from persistence and IPC where the compiler cannot vouch for them.
+// Persistence/IPC supply unvalidated strings; the branded type cannot establish routing authority.
 function parseRoutableHost(hostId: string | null | undefined): ParsedExecutionHost {
   const parsed = parseExecutionHostId(hostId)
   if (!parsed) {
@@ -103,12 +53,7 @@ export function resolveGitRouteForHost(hostId: string | null | undefined): Execu
     case 'local':
       return { kind: 'local', hostId: parsed.id, createProvider: createLocalGitProvider }
     case 'ssh':
-      return {
-        kind: 'ssh',
-        hostId: parsed.id,
-        connectionId: parsed.targetId,
-        provider: getSshGitProvider(parsed.targetId) ?? null
-      }
+      return { kind: 'ssh', hostId: parsed.id, connectionId: parsed.targetId }
     case 'runtime':
       return { kind: 'runtime', hostId: parsed.id, environmentId: parsed.environmentId }
   }
@@ -122,73 +67,32 @@ export function resolveFilesystemRouteForHost(
     case 'local':
       return { kind: 'local', hostId: parsed.id, createProvider: createLocalFilesystemProvider }
     case 'ssh':
-      return {
-        kind: 'ssh',
-        hostId: parsed.id,
-        connectionId: parsed.targetId,
-        provider: getSshFilesystemProvider(parsed.targetId) ?? null
-      }
+      return { kind: 'ssh', hostId: parsed.id, connectionId: parsed.targetId }
     case 'runtime':
       return { kind: 'runtime', hostId: parsed.id, environmentId: parsed.environmentId }
   }
 }
 
-type ReachableSshRoute<TProvider> = SshRoute<TProvider> & { provider: TProvider }
-export type ReachableGitRoute = LocalGitRoute | ReachableSshRoute<SshGitProvider>
-export type ReachableFilesystemRoute = LocalFilesystemRoute | ReachableSshRoute<IFilesystemProvider>
-
-/** For work this process runs itself: `runtime:` and an unreachable SSH host throw, never run here. */
-export function requireReachableGitRoute(hostId: string | null | undefined): ReachableGitRoute {
-  const route = resolveGitRouteForHost(hostId)
-  switch (route.kind) {
-    case 'local':
-      return route
-    case 'ssh': {
-      const { provider } = route
-      if (!provider) {
-        throw sshGitProviderMissingError(route.connectionId)
-      }
-      return { ...route, provider }
-    }
-    case 'runtime':
-      throw new ExecutionHostNotDispatchableError(route.hostId)
-  }
+/** For work this process runs itself: `ssh:` and `runtime:` hosts throw, never run here. */
+export function requireReachableGitRoute(hostId: string | null | undefined): LocalGitRoute {
+  return requireLocalRoute(resolveGitRouteForHost(hostId))
 }
 
 export function requireReachableFilesystemRoute(
   hostId: string | null | undefined
-): ReachableFilesystemRoute {
-  const route = resolveFilesystemRouteForHost(hostId)
+): LocalFilesystemRoute {
+  return requireLocalRoute(resolveFilesystemRouteForHost(hostId))
+}
+
+function requireLocalRoute<TLocal extends LocalRoute>(
+  route: TLocal | RuntimeRoute | SshRoute
+): TLocal {
   switch (route.kind) {
     case 'local':
       return route
-    case 'ssh': {
-      const { provider } = route
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
-      return { ...route, provider }
-    }
+    case 'ssh':
+      throw new SshHostNotServedError(route.connectionId)
     case 'runtime':
       throw new ExecutionHostNotDispatchableError(route.hostId)
   }
-}
-
-/** For call sites that are structurally remote-only: local and runtime are both routing errors. */
-export function requireGitProviderForHost(hostId: string | null | undefined): IGitProvider {
-  const route = requireReachableGitRoute(hostId)
-  if (route.kind !== 'ssh') {
-    throw new ExecutionHostNotDispatchableError(route.hostId)
-  }
-  return route.provider
-}
-
-export function requireFilesystemProviderForHost(
-  hostId: string | null | undefined
-): IFilesystemProvider {
-  const route = requireReachableFilesystemRoute(hostId)
-  if (route.kind !== 'ssh') {
-    throw new ExecutionHostNotDispatchableError(route.hostId)
-  }
-  return route.provider
 }

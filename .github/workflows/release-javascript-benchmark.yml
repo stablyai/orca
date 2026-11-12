@@ -2,6 +2,7 @@ name: Release JavaScript comparison
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths: ['.github/workflows/release-javascript-benchmark.yml']
   workflow_dispatch:
 
@@ -20,6 +21,7 @@ env:
 
 jobs:
   bundle:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     uses: ./.github/workflows/release-javascript.yml
     with:
       ref: ${{ github.sha }}
@@ -67,7 +69,11 @@ jobs:
         run: |
           RELEASE_TAG="v$(node -p 'require("./package.json").version')"
           export RELEASE_TAG
-          echo "ORCA_BUILD_IDENTITY=$(node config/scripts/release-javascript-artifact.mjs identity)" >> "$GITHUB_ENV"
+          RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs'
+          if [ ! -f "$RELEASE_JAVASCRIPT_ARTIFACT" ]; then
+            RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release-javascript-artifact.mjs'
+          fi
+          echo "ORCA_BUILD_IDENTITY=$(node "$RELEASE_JAVASCRIPT_ARTIFACT" identity)" >> "$GITHUB_ENV"
       - name: Download shared JavaScript
         if: matrix.mode == 'shared'
         uses: actions/download-artifact@v8
@@ -79,7 +85,12 @@ jobs:
         env:
           MEASUREMENT_MODE: ${{ matrix.mode }}
           ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.bundle.outputs.source_sha }}
-        run: node config/scripts/release-javascript-benchmark.mjs "$MEASUREMENT_MODE"
+        run: |
+          RELEASE_JAVASCRIPT_BENCHMARK='config/scripts/release/javascript-artifacts/release-javascript-benchmark.mjs'
+          if [ ! -f "$RELEASE_JAVASCRIPT_BENCHMARK" ]; then
+            RELEASE_JAVASCRIPT_BENCHMARK='config/scripts/release-javascript-benchmark.mjs'
+          fi
+          node "$RELEASE_JAVASCRIPT_BENCHMARK" "$MEASUREMENT_MODE"
       - uses: actions/upload-artifact@v7
         with:
           name: release-javascript-measurement-${{ matrix.mode }}-${{ matrix.host.platform }}-${{ matrix.host.arch }}
@@ -89,6 +100,7 @@ jobs:
   comparison:
     needs: [bundle, measure]
     runs-on: ubuntu-slim
+    timeout-minutes: 180
     permissions:
       contents: read
       actions: read
@@ -100,6 +112,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
       - uses: ./.github/actions/install-node-dependencies
       - uses: actions/download-artifact@v8
         with:
@@ -110,7 +123,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" > .build/release-javascript-measurements/jobs.json
-          node config/scripts/release-javascript-benchmark.mjs summary
+          RELEASE_JAVASCRIPT_BENCHMARK='config/scripts/release/javascript-artifacts/release-javascript-benchmark.mjs'
+          if [ ! -f "$RELEASE_JAVASCRIPT_BENCHMARK" ]; then
+            RELEASE_JAVASCRIPT_BENCHMARK='config/scripts/release-javascript-benchmark.mjs'
+          fi
+          node "$RELEASE_JAVASCRIPT_BENCHMARK" summary
           cat .build/release-javascript-measurements/comparison.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         if: always()

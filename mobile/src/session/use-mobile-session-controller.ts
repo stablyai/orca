@@ -1,34 +1,38 @@
-import { useNotificationPaneNavigation } from './use-notification-pane-navigation'
+import { useLayoutEffect } from 'react'
+import { useMobileStructuredSessionOpening } from './use-mobile-structured-session-opening'
+import { useNotificationPaneNavigation } from './tabs/use-notification-pane-navigation'
 import { useMobileSessionFoundation } from './use-mobile-session-foundation'
 import { useMobileSessionScreenState } from './use-mobile-session-screen-state'
-import { useMobileSessionTerminalRuntime } from './use-mobile-session-terminal-runtime'
+import { useMobileSessionTerminalRuntime } from '../terminal/session/use-mobile-session-terminal-runtime'
 import { useMobileSessionFeedbackCapabilities } from './use-mobile-session-feedback-capabilities'
 import { useMobileSessionNativeChatDictation } from './use-mobile-session-native-chat-dictation'
-import { useMobileSessionTerminalSubscriptionFoundation } from './use-mobile-session-terminal-subscription-foundation'
-import { useMobileSessionTerminalSubscription } from './use-mobile-session-terminal-subscription'
-import { useMobileSessionTerminalStreamDisplay } from './use-mobile-session-terminal-stream-display'
-import { useMobileSessionTerminalList } from './use-mobile-session-terminal-list'
-import { useMobileSessionTabApplication } from './use-mobile-session-tab-application'
-import { useMobileSessionDocumentReaders } from './use-mobile-session-document-readers'
-import { useMobileSessionDiffComments } from './use-mobile-session-diff-comments'
-import { useMobileSessionMarkdownActions } from './use-mobile-session-markdown-actions'
-import { useMobileSessionTabReconciliation } from './use-mobile-session-tab-reconciliation'
+import { useMobileSessionTerminalSubscriptionFoundation } from '../terminal/session/use-mobile-session-terminal-subscription-foundation'
+import { useMobileSessionTerminalSubscription } from '../terminal/session/use-mobile-session-terminal-subscription'
+import { useMobileSessionTerminalStreamDisplay } from '../terminal/session/use-mobile-session-terminal-stream-display'
+import { useMobileSessionTerminalList } from '../terminal/session/use-mobile-session-terminal-list'
+import { useMobileSessionTabApplication } from './tabs/use-mobile-session-tab-application'
+import { useMobileSessionDocumentReaders } from '../files/session-documents/use-mobile-session-document-readers'
+import { useMobileSessionDiffComments } from '../source-control/review/use-mobile-session-diff-comments'
+import { useMobileSessionMarkdownActions } from '../files/session-documents/use-mobile-session-markdown-actions'
+import { useMobileSessionTabReconciliation } from './tabs/use-mobile-session-tab-reconciliation'
 import { useMobileSessionLifecycle } from './use-mobile-session-lifecycle'
-import { useMobileSessionKeyboardState } from './use-mobile-session-keyboard-state'
+import { useMobileSessionKeyboardState } from '../terminal/session/use-mobile-session-keyboard-state'
 import { useMobileSessionStartup } from './use-mobile-session-startup'
 import { useMobileSessionPreferenceFocus } from './use-mobile-session-preference-focus'
-import { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching'
-import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
-import { useMobileSessionTerminalSendActions } from './use-mobile-session-terminal-send-actions'
-import { useMobileSessionFileActions } from './use-mobile-session-file-actions'
-import { useMobileSessionTerminalInput } from './use-mobile-session-terminal-input'
-import { useMobileSessionAccessorySelection } from './use-mobile-session-accessory-selection'
-import { useMobileSessionAttachments } from './use-mobile-session-attachments'
-import { useMobileSessionTerminalCreateActions } from './use-mobile-session-terminal-create-actions'
+import { useMobileSessionTabSwitching } from './tabs/use-mobile-session-tab-switching'
+import { useMobileSessionTerminalWebview } from '../terminal/session/use-mobile-session-terminal-webview'
+import { useMobileSessionTerminalSendActions } from '../terminal/session/use-mobile-session-terminal-send-actions'
+import { useMobileSessionFileActions } from '../files/session-documents/use-mobile-session-file-actions'
+import { useMobileSessionTerminalInput } from '../terminal/session/use-mobile-session-terminal-input'
+import { useMobileSessionAccessorySelection } from '../terminal/session/use-mobile-session-accessory-selection'
+import { useTerminalDockKeys } from '../terminal/session/use-terminal-dock-keys'
+import { useMobileSessionAttachments } from '../files/attachments/use-mobile-session-attachments'
+import { useMobileSessionTerminalCreateActions } from '../terminal/session/use-mobile-session-terminal-create-actions'
 import { useMobileSessionContentCreateActions } from './use-mobile-session-content-create-actions'
-import { useMobileSessionCloseActions } from './use-mobile-session-close-actions'
-import { useMobileSessionBulkClose } from './use-mobile-session-bulk-close'
+import { useMobileSessionCloseActions } from './tabs/use-mobile-session-close-actions'
+import { useMobileSessionBulkClose } from './tabs/use-mobile-session-bulk-close'
 import { useMobileSessionPresentation } from './use-mobile-session-presentation'
+import { useMobileSessionStoredChatTab } from './use-mobile-session-stored-chat-tab'
 import { useMobileSessionPanelRouteActions } from './use-mobile-session-panel-route-actions'
 
 export function useMobileSessionController() {
@@ -45,6 +49,16 @@ export function useMobileSessionController() {
     feedbackCapabilities,
     useMobileSessionNativeChatDictation(feedbackCapabilities, sendLiveTerminalInput)
   )
+  // Chat covers a split, so only its own terminal stays visible; this is the ref's one writer per commit.
+  if (nativeChatDictation.showNativeChat) {
+    nativeChatDictation.visibleTerminalHandles = nativeChatDictation.activeHandle
+      ? [nativeChatDictation.activeHandle]
+      : []
+  }
+  const { visibleTerminalHandles, visibleTerminalHandlesRef } = nativeChatDictation
+  useLayoutEffect(() => {
+    visibleTerminalHandlesRef.current = visibleTerminalHandles
+  })
   const subscriptionFoundation = Object.assign(
     nativeChatDictation,
     useMobileSessionTerminalSubscriptionFoundation(nativeChatDictation)
@@ -81,9 +95,11 @@ export function useMobileSessionController() {
   const lifecycle = Object.assign(tabReconciliation, useMobileSessionLifecycle(tabReconciliation))
   const keyboardState = Object.assign(lifecycle, useMobileSessionKeyboardState(lifecycle))
   useMobileSessionStartup(keyboardState)
-  useMobileSessionPreferenceFocus(keyboardState)
+  useMobileSessionStoredChatTab(keyboardState)
+  const preferences = useMobileSessionPreferenceFocus(keyboardState)
   const tabSwitching = Object.assign(keyboardState, useMobileSessionTabSwitching(keyboardState))
-  useNotificationPaneNavigation(tabSwitching)
+  const openNativeSession = useMobileStructuredSessionOpening(tabSwitching)
+  useNotificationPaneNavigation({ ...tabSwitching, openNativeSession })
   const terminalWebview = Object.assign(tabSwitching, useMobileSessionTerminalWebview(tabSwitching))
   const terminalSendActions = Object.assign(
     terminalWebview,
@@ -98,10 +114,14 @@ export function useMobileSessionController() {
     terminalInput,
     useMobileSessionAccessorySelection(terminalInput)
   )
-  const attachments = Object.assign(
-    accessorySelection,
-    useMobileSessionAttachments(accessorySelection)
-  )
+  // The key row and the input fields share held ctrl/alt/shift, and the Duo rail renders the row apart from the fields.
+  const dockKeys = Object.assign(accessorySelection, {
+    dockKeys: useTerminalDockKeys({
+      activeHandle: accessorySelection.activeHandle,
+      sendInput: accessorySelection.handleAccessoryKey
+    })
+  })
+  const attachments = Object.assign(dockKeys, useMobileSessionAttachments(dockKeys))
   const terminalCreateActions = Object.assign(
     attachments,
     useMobileSessionTerminalCreateActions(attachments)
@@ -120,7 +140,8 @@ export function useMobileSessionController() {
     presentation,
     useMobileSessionPanelRouteActions(presentation)
   )
-  return panelRouteActions
+  // The one owner of opening an existing chat, so a fork's source link follows its selection rules.
+  return Object.assign(panelRouteActions, preferences, { openNativeSession })
 }
 
 export type MobileSessionController = ReturnType<typeof useMobileSessionController>
