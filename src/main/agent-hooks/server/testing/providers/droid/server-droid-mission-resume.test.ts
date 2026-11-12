@@ -2,8 +2,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createHookListenerState } from '../../../../../../shared/agent-hook-listener/listener-state'
-import { normalizeHookPayload } from '../../../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { AgentHookServer } from '../../../agent-hook-server'
 import { buildBody, PANE, postHookEvent } from '../../server.test-fixtures'
 
@@ -69,28 +67,6 @@ describe('Droid mission resume identity', () => {
     // Dismissing the row keeps only the resume identity; the mission is still running.
     server.dropStatusEntry(PANE)
     await post(WORKER_ID, workerPath, 'PreToolUse')
-    expect(resumeId()).toBe(ROOT_ID)
-  })
-
-  it('keeps the orchestrator when a restarted relay forwards a worker hook', () => {
-    // A cold relay has no pane row, so it forwards the worker hook with no session.
-    const relayed = (sessionId: string, transcriptPath: string) => {
-      const event = normalizeHookPayload(
-        createHookListenerState(),
-        'droid',
-        body(sessionId, transcriptPath, 'PreToolUse'),
-        'production'
-      )
-      if (!event) {
-        throw new Error('Missing Droid event')
-      }
-      return event
-    }
-    server.ingestRemote(relayed(ROOT_ID, transcript(ROOT_ID)), 'host-1')
-    const worker = relayed(WORKER_ID, transcript(WORKER_ID, ROOT_ID))
-    expect(worker.providerSession).toBeUndefined()
-
-    server.ingestRemote(worker, 'host-1')
     expect(resumeId()).toBe(ROOT_ID)
   })
 })

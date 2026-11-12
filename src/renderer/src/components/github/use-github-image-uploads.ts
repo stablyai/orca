@@ -15,19 +15,24 @@ export function useGitHubImageUploads(options: GitHubImageIntake) {
   const latest = useRef(options)
   const pending = useRef(0)
   const tail = useRef(Promise.resolve())
-  const mounted = useRef(true)
+  const lifetime = useRef<AbortController | null>(null)
   useLayoutEffect(() => {
     latest.current = options
   })
   useLayoutEffect(() => {
-    mounted.current = true
+    const controller = new AbortController()
+    lifetime.current = controller
     return () => {
-      mounted.current = false
+      controller.abort()
       latest.current.onPending?.(false)
     }
   }, [])
 
   const receive = (files: File[], insert: (file: File) => (url?: string) => void): boolean => {
+    const signal = lifetime.current?.signal
+    if (!signal || signal.aborted) {
+      return false
+    }
     const images = files.filter((file) => file.type.startsWith('image/'))
     if (!images.length || latest.current.enabled === false) {
       return false
@@ -45,15 +50,15 @@ export function useGitHubImageUploads(options: GitHubImageIntake) {
         tail.current = tail.current
           .then(async () => {
             try {
-              if (!mounted.current) {
+              if (signal.aborted) {
                 return
               }
-              const url = await upload(file)
-              if (mounted.current) {
+              const url = await upload(file, signal)
+              if (!signal.aborted) {
                 replace(url)
               }
             } catch (error) {
-              if (mounted.current) {
+              if (!signal.aborted) {
                 replace()
                 toast.error(
                   t('github.imageUploadFailed', 'Could not attach image: {{message}}', {
@@ -64,7 +69,7 @@ export function useGitHubImageUploads(options: GitHubImageIntake) {
               }
             } finally {
               pending.current--
-              if (mounted.current) {
+              if (!signal.aborted) {
                 latest.current.onPending?.(pending.current > 0)
               }
             }

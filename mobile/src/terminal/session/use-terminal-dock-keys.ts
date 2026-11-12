@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import type { TerminalShortcutModifier } from '../terminal-accessory-keys'
 import { createTerminalKeyChordInput } from '../terminal-key-chord-input'
 import type { TerminalLiveAccessoryInput } from '../terminal-live-accessory-input'
@@ -65,7 +65,7 @@ export function useTerminalDockKeys({ activeHandle, sendInput }: UseTerminalDock
   const interceptTypedCharacter = (
     previous: string,
     next: string,
-    field: RefObject<TextInput | null>
+    field: RefObject<TextInputInstance | null>
   ): boolean => {
     if (!hasStickyModifier(modifiers)) {
       return false

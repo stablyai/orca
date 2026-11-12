@@ -5,10 +5,7 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import TerminalSearch from '@/components/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
-import {
-  WORKSPACE_FILE_PATH_MIME,
-  WORKSPACE_FILE_PATHS_MIME
-} from '@/lib/files/drop/workspace-file-drag'
+import { hasWorkspaceFileDragType } from '@/lib/files/drop/workspace-file-drag'
 import CloseTerminalDialog from '../layout/close/CloseTerminalDialog'
 import TerminalContextMenu from '../context-menu/TerminalContextMenu'
 import TerminalPaneHeaderOverlay from '../titles/TerminalPaneHeaderOverlay'
@@ -159,19 +156,13 @@ export function TerminalPaneSurface({
         }}
         onAuxClickCapture={handlePrimarySelectionAuxClick}
         onDragOver={(event) => {
-          if (
-            event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
-            event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-          ) {
+          if (hasWorkspaceFileDragType(event.dataTransfer)) {
             event.preventDefault()
             event.dataTransfer.dropEffect = 'copy'
           }
         }}
         onDrop={(event) => {
-          if (
-            !event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) &&
-            !event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-          ) {
+          if (!hasWorkspaceFileDragType(event.dataTransfer)) {
             return
           }
           event.preventDefault()
@@ -220,11 +211,11 @@ export function TerminalPaneSurface({
         ? createPortal(
             <TerminalErrorToast
               error={visibleTerminalError.error}
-              resourceLimit={visibleTerminalError.resourceLimit}
               agentId={activeAgentId}
               paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
+              onRestoreTerminalFocus={() => activePane.terminal.focus()}
               onRetry={
                 isPaneOwnerRecoveryError(visibleTerminalError.error)
                   ? () =>
@@ -267,6 +258,7 @@ export function TerminalPaneSurface({
       <TerminalContextMenu
         open={contextMenu.open}
         onOpenChange={contextMenu.setOpen}
+        onRestoreTerminalFocus={contextMenu.onRestoreTerminalFocus}
         menuPoint={contextMenu.point}
         menuOpenedAtRef={contextMenu.menuOpenedAtRef}
         canClosePane={canCloseTerminalPane({

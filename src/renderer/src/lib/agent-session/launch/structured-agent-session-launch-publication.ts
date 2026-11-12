@@ -1,9 +1,11 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
-import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
+import {
+  deleteStructuredAgentLaunchRecord,
+  readStructuredAgentLaunchRecord
+} from './structured-agent-session-launch-persistence'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from './structured-agent-session-launch-registry'
 import {
-  getPersistedStructuredAgentLaunchRecord,
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners
 } from './structured-agent-session-launch-state-store'
@@ -31,7 +33,7 @@ export function markStructuredAgentSessionLaunchPublished(
 ): boolean {
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (!state) {
-    const persisted = getPersistedStructuredAgentLaunchRecord(sessionId)
+    const persisted = readStructuredAgentLaunchRecord(sessionId)
     if (persisted?.executionHostId !== executionHostId) {
       return false
     }

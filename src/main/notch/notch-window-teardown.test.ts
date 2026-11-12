@@ -111,7 +111,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../window/app-window-lookup', () => ({ registerChromeWindow: () => undefined }))
-vi.mock('../window/privileged-window-navigation', () => ({
+vi.mock('../window/security/privileged-window-navigation', () => ({
   installPrivilegedWindowNavigationPolicy: () => undefined
 }))
 vi.mock('./screen-geometry', () => ({ readScreenGeometry: () => Promise.resolve(new Map()) }))

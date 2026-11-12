@@ -22,7 +22,7 @@ import { deferred, setupFailed } from './ssh-host-server-setup-outcome'
 import {
   classifyOrcadHostUnavailable,
   ORCAD_TUNNEL_UNAVAILABLE_REASON
-} from '../../orcad/orcad-host-unavailable'
+} from '../../orcad/diagnostics/orcad-host-unavailable'
 import {
   decidedEvent,
   reportHostServerConversion,

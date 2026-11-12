@@ -228,6 +228,30 @@
       "existingTitle": "Add on the {{distro}} host (recommended)",
       "existingWhy": "{{distro}} already runs as a host, so Git, files and terminals run natively in Linux instead of across the Windows file share.",
       "existingAccept": "Add on host"
+    },
+    "hiddenProjects": {
+      "hidden": "{{name}} hidden",
+      "hiddenDescription": "Its terminals and agents keep running. Show it again from Hidden projects below the list.",
+      "undo": "Undo",
+      "hideFailed": "Couldn't hide {{name}}. Its host may need an Orca update.",
+      "showFailed": "Couldn't show {{name}} again.",
+      "listLabel": "Hidden projects",
+      "show": "Show",
+      "showAriaLabel": "Show {{name}} in the sidebar",
+      "settingsTitle": "Hide from sidebar",
+      "settingsDescription": "Hides this host's copy of the project from the sidebar, project pickers and the workspace switcher. Its terminals, agents and automations keep running. On a paired Orca server, this hides it for everyone connected to that server.",
+      "settingsToggleLabel": "Hide {{name}} from the sidebar",
+      "keywordHide": "hide",
+      "keywordHidden": "hidden",
+      "keywordSidebar": "sidebar",
+      "hideFromSidebar": "Hide from Sidebar",
+      "sectionTitle": "Hidden projects ({{count}})",
+      "allHidden": "Every project is hidden. Show one from Hidden projects below.",
+      "undoGone": "{{name}} was removed from Orca.",
+      "settingsGroup": "Sidebar",
+      "showOnHostAriaLabel": "Show {{name}} on {{host}} in the sidebar",
+      "keywordShow": "show",
+      "keywordUnhide": "unhide"
     }
   },
   "app": {
@@ -405,6 +429,7 @@
       "remove": "Remove…",
       "empty": "No extensions are on for this profile",
       "visitWebStore": "Visit Chrome Web Store",
+      "openWebStoreFailed": "Couldn't open the Chrome Web Store.",
       "manage": "Manage extensions"
     },
     "history": {
@@ -1008,8 +1033,6 @@
       "rowPermissionsLabel": "{{agent}} permissions",
       "customPermissions": "Custom arguments",
       "replaceWithPermissionMode": "Replace with {{mode}}",
-      "expandAgentSettings": "Expand agent settings",
-      "collapseAgentSettings": "Collapse agent settings",
       "permissionArgsTerminalOnly": "These arguments may control {{agent}}’s terminal permissions, so Orca adds no flag. Chats use the Permissions choice above.",
       "localSaveFailed": "Agent settings could not be saved. Try again.",
       "localSaveFailedAgent": "{{agent}} settings could not be saved. Try again.",
@@ -1065,7 +1088,10 @@
       "sameAsChoice": "Same as {{agent}} · {{choice}}",
       "modelListFallback": "Built-in list. Orca could not get a model list from this host.",
       "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
-      "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host."
+      "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
+      "agentActions": "{{agent}} actions",
+      "defaultAutoBadge": "Default · Auto",
+      "newAgentsTitle": "New agents"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -1760,7 +1786,7 @@
             "33290e88ed": "Failed to connect profile",
             "9fcb07a796": "Profile connected",
             "2f6c78a039": "Failed to refresh profile auth",
-            "a37b5e6d37": "Signed out of profile",
+            "a37b5e6d37": "Signed out of Orca",
             "83600521e7": "Failed to sign out",
             "76deec8f58": "Failed to switch organization",
             "7d4bc516ee": "Failed to switch profile",
@@ -2495,6 +2521,8 @@
         "folderWorkspaceCreateFailedTitle": "Folder workspace creation failed",
         "folderWorkspaceCreateFailedMessage": "The folder workspace could not be created. Check the error details above, then try again.",
         "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior.",
+        "githubLinkUnresolvedForProject": "Could not load {{repository}}#{{number}}. Check that it exists, that you can access it, and that it belongs to the origin or upstream repository of the selected project.",
+        "githubItemUnresolved": "Could not resolve the GitHub item before creating the workspace.",
         "5f3d2c8a1b": "Failed to resolve MR base.",
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
         "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached.",
@@ -3747,7 +3775,7 @@
       "Terminal": {
         "73768427cf": "Close",
         "f82e9f02df": "Cancel",
-        "7958465754": "There are terminals with running processes. Close the window anyway?",
+        "93c2e9d845": "There is running work in chats or terminals. Close the window anyway?",
         "b7c1f0a934": "A remote host could not be reached, so Orca cannot tell whether work is still running there. Close the window anyway?",
         "2fa9c69ff3": "Close Window?",
         "cd51e28d8b": "Save",
@@ -4373,6 +4401,8 @@
             "86ba852118": "{{value0}}, {{value1}} failed",
             "deleteButtonCount": "Delete {{value0}}",
             "archivedStatus": "Archived",
+            "mergedStatus": "Merged",
+            "unchangedStatus": "No new commits",
             "74f6c16279": "Back"
           },
           "backgroundRemoval": {
@@ -4409,7 +4439,6 @@
             "runningTerminalBlocker": "Running terminal process",
             "terminalLivenessUnknownBlocker": "Terminal liveness unknown",
             "dirtyEditorBufferBlocker": "Unsaved editor buffer",
-            "volatileLocalContextBlocker": "Volatile local context",
             "recentVisibleContextBlocker": "Recently visited tabs",
             "liveAgentBlocker": "Active agent",
             "sshDisconnectedBlocker": "Remote unavailable",
@@ -4592,7 +4621,9 @@
             "remoteTerminalClosed": "Remote terminal was closed.",
             "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",
             "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again.",
-            "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again."
+            "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again.",
+            "title": "Terminal issue",
+            "errorTitle": "Terminal error"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash console limit reached",
@@ -6472,7 +6503,9 @@
           "updateSkipped": "Update skipped: {{value0}}",
           "updateAvailable": "Update available",
           "repairAvailable": "Repair available",
-          "installAvailable": "Install available"
+          "installAvailable": "Install available",
+          "otherBuild": "Installed by another Orca version",
+          "otherBuildKept": "Kept: written by another Orca version"
         },
         "installResult": {
           "installed": "Installed and verified.",
@@ -8011,6 +8044,14 @@
         },
         "workspaceKanbanStatusLane": {
           "newWorkspaceInStatus": "New workspace in {{status}}"
+        },
+        "AddProjectMenu": {
+          "changeProjectHost": "Project host: {{host}}",
+          "projectHost": "Project host",
+          "addRemoteHost": "Add remote host…",
+          "browseFolder": "Browse folder…",
+          "cloneFromUrl": "Clone from URL…",
+          "createNewProject": "Create new project…"
         }
       },
       "shared": {
@@ -8284,14 +8325,11 @@
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
           "retryDetection": "Retry",
           "02e0143be5": "Installed",
-          "92033495ff": "Auto",
           "f9f127d664": "Override the binary path or name, and edit the default launch arguments or environment for this agent.",
           "f95b5c79b8": "Install",
           "fe4d630c94": "Docs",
-          "8dc0192e48": "Disabled",
           "5200dac9da": "Reset",
           "2e45ca29b6": "Command",
-          "d4d2a45d63": "Enabled",
           "1c9a9679ec": "{{value0}} availability",
           "0d9e293a02": "Refresh",
           "c9b33eb5c0": "Refreshing…",
@@ -8306,10 +8344,8 @@
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
           "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
-          "storedDefaultUndetected": "Saved as your default, but not detected right now",
           "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
-          "9f30095d49": "Agent permissions",
-          "3bddd54c9e": "Default agent"
+          "9f30095d49": "Agent permissions"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -9150,6 +9186,10 @@
           "workerAutoReleaseDescription": "Closes a worker's terminal or chat 2 minutes after it finishes, unless you choose Keep open. If it starts working again, the 2 minutes start over when it finishes.",
           "workerAutoReleaseKeywordClose": "close",
           "workerAutoReleaseKeywordRelease": "release",
+          "coordinatorApprovalsTitle": "Let coordinators approve worker permission prompts",
+          "coordinatorApprovalsDescription": "A coordinator agent can allow a worker's permission prompt, with a reason. You still see Allow and Deny, and the first answer wins. Applies to workers running on this computer.",
+          "coordinatorApprovalsKeywordApprove": "approve",
+          "coordinatorApprovalsKeywordPermission": "permission",
           "7bc082f4de": "Copy install command",
           "8a94078d05": "Agent orchestration"
         },
@@ -12779,7 +12819,8 @@
           "title": "Remove {{value0}}?",
           "description": "Its data is removed too.",
           "cancel": "Cancel",
-          "remove": "Remove"
+          "remove": "Remove",
+          "pausesAutomations": "Automations it created are paused, and stay paused if you install it again."
         },
         "PluginRollbackDialog": {
           "title": "Roll back {{value0}}?",
@@ -13174,7 +13215,7 @@
               "tokenHint": "Repository, project, and workspace access tokens are created from the matching Bitbucket settings page and need read access to pull requests.",
               "basicHint": "Create an Atlassian API token for your account, then pair it with the email address that owns it.",
               "scopesTitle": "Select these Bitbucket API token scopes:",
-              "scopeUser": "Verify your account",
+              "scopeUser": "Show your account name",
               "scopeRepository": "Read build statuses",
               "scopeReadPullRequest": "Read pull requests",
               "scopeWritePullRequest": "Create pull requests",
@@ -13925,7 +13966,8 @@
           "dataLoadFailed": "Couldn’t load its files"
         },
         "PluginSettingsOverview": {
-          "offTitle": "Plugins are off"
+          "offTitle": "Plugins are off",
+          "offAutomations": "Automations plugins created are paused, and stay paused when plugins are turned back on."
         },
         "PluginFilterPopover": {
           "kind": "Category",
@@ -14257,6 +14299,21 @@
             "buckets": "Gemini model buckets",
             "optional": "dropped when a placeholder inside is empty"
           }
+        },
+        "RepositoryRemoveProjectSection": {
+          "filesNoteVmRecipe": "VM recipes decide whether their environments and files are deleted.",
+          "filesNote": "Files stay on disk, so you can add it again later.",
+          "hostCount_one": "{{count}} host",
+          "hostCount_other": "{{count}} hosts",
+          "checkoutCount_one": "{{count}} checkout",
+          "checkoutCount_other": "{{count}} checkouts",
+          "removeButton": "Remove…",
+          "dialogTitle": "Remove {{name}}?",
+          "terminalWarning_one": "{{count}} open terminal in this project will be closed.",
+          "terminalWarning_other": "{{count}} open terminals in this project will be closed.",
+          "cancel": "Cancel",
+          "confirm": "Remove",
+          "unknownHost": "Unknown host"
         }
       },
       "right": {
@@ -18084,6 +18141,14 @@
                     "logins": {
                       "title": "Stay logged in",
                       "body": "Bring your existing logins into Orca to stay signed in immediately."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome extensions",
+                        "body": "Install from the Chrome Web Store and pin them next to the address bar.",
+                        "action": "Open Web Store",
+                        "secondaryAction": "Got it"
+                      }
                     }
                   },
                   "tasks": {
@@ -18448,17 +18513,17 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Show less",
-          "showMore": "Show more"
+          "showMore": "Show more",
+          "copied": "Copied",
+          "copyFailed": "Copy failed",
+          "copyPrompt": "Copy prompt"
         },
         "AutomationDetail": {
           "host": "Host",
-          "a1d52c2189": "Usage coverage",
-          "449fc83bf7": "Tokens",
           "401f40ae79": "Est. spend",
           "a7c312430d": "Last run",
           "2df8970cd5": "Agent",
           "e353ab9516": "Precheck",
-          "620b22145e": "Grace",
           "15ea446b93": "Session",
           "5405a09b1f": "Run location",
           "2f8baf5360": "Create from",
@@ -18468,7 +18533,6 @@
           "1f6026358e": "Delete automation",
           "d79452fb30": "Resume automation",
           "91a4155e95": "Pause automation",
-          "4b1ea02d2e": "Edit automation",
           "2fb1605beb": "Run Now",
           "221916d93c": "Create an automation to start scheduling agent work.",
           "b09b2384fd": "Paused",
@@ -18480,8 +18544,6 @@
           "graceMinutes_other": "{{count}} minutes",
           "graceHours_one": "{{count}} hour",
           "graceHours_other": "{{count}} hours",
-          "usageCoverageRuns_one": "{{known}}/{{count}} run",
-          "usageCoverageRuns_other": "{{known}}/{{count}} runs",
           "usageUnavailable": "Unavailable",
           "noRuns": "No runs",
           "projectDefault": "Project default",
@@ -18491,7 +18553,15 @@
           "precheckNone": "None",
           "migrate": "Migrate",
           "migrateNotice": "{{host}} was upgraded to a new remote host. Migrate this automation to keep it running.",
-          "needsMigration": "Needs migration"
+          "needsMigration": "Needs migration",
+          "repeats": "Repeats",
+          "missedRunGrace": "Missed-run grace",
+          "execution": "Execution",
+          "notRunYet": "Not run yet",
+          "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported",
+          "createdBy": "Created by",
+          "createdByPluginTitle": "Plugin {{plugin}}",
+          "createdByEnded": "Plugin removed or disabled; it must ask before changing this automation"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -19979,6 +20049,14 @@
         },
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
+        },
+        "PluginCatalogHighlights": {
+          "justNow": "just now",
+          "added": "Added {{value0}}",
+          "featured": "Featured",
+          "featuredDetail": "most installed, one per category",
+          "newlyAdded": "Newly added",
+          "newlyAddedDetail": "across your catalogs"
         }
       },
       "agent-workspace-trust-decision": {
@@ -19997,6 +20075,9 @@
           "pipelinePending": "Pipeline pending",
           "pipelineUnresolved": "Pipeline unresolved"
         }
+      },
+      "NewWorkspaceComposerFooter": {
+        "create": "Create"
       }
     },
     "i18n": {
@@ -20181,7 +20262,6 @@
           "browsePlugins": "Browse plugins",
           "browseThemePlugins": "Browse theme plugins",
           "colorMode": "Color mode",
-          "colorModeCaption": "Light, dark, or follow your OS.",
           "darkLook": "Dark look",
           "darkLooks": "Dark looks",
           "lightLook": "Light look",
@@ -20197,10 +20277,9 @@
           "slotLabel": "Look to edit",
           "sourceBuiltIn": "Built in",
           "sourceCommunity": "Terminal palette",
-          "themes": "Theme",
-          "themesCaption": "Optional. Go further with app themes and terminal palettes."
+          "themes": "Theme"
         },
-        "subtitle": "Choose light or dark, then optionally a theme. Change either any time in Settings."
+        "changeAnyTime": "Change any time in Settings."
       },
       "integrations": {
         "capabilities": {
@@ -20950,13 +21029,40 @@
         "deny": "Deny",
         "cancel": "Cancel",
         "reason": "Reason",
+        "reasonSentAsMessage": "Reason, sent as a message",
         "needsAccess": "Needs access to",
         "needsNewerOrca": "This request needs a newer version of Orca.",
+        "folderTrust": {
+          "title": "Trust this folder?",
+          "hint": "The agent asks before it can read, edit and run files in this folder.",
+          "trust": "Trust folder",
+          "exit": "Exit"
+        },
+        "startupMenu": {
+          "title": "{{value0}} is waiting for a choice in the terminal"
+        },
         "plan": {
           "file": "Plan file",
           "reviewTitle": "Review proposed plan",
           "refineHint": "Refine plan closes the review so you can send what to change."
-        }
+        },
+        "worker": "Worker · {{name}}",
+        "openWorker": "Open worker",
+        "answerFailed": "{{name}}: {{detail}}",
+        "answerNotApplied": "{{name}}: the answer did not reach this prompt",
+        "answerWorkerEnded": "{{name}} has ended, so this prompt is closed",
+        "countdown": "Claude denies it on its own in {{time}} if nobody answers.",
+        "allowedByYou": "Allowed by you",
+        "deniedByYou": "Denied by you",
+        "deniedByCoordinator": "Denied by coordinator",
+        "allowedByCoordinator": "Allowed by coordinator: {{reason}}",
+        "allowedInTerminal": "Allowed in the worker's terminal",
+        "deniedInTerminal": "Denied in the worker's terminal",
+        "answeredInChat": "Answered in the worker's chat",
+        "closedUnnamed": "Closed without a recorded answer",
+        "autoDenied": "Auto-denied by Claude after 2:00",
+        "workerEnded": "No longer open · worker ended",
+        "answerInTerminal": "Answer it in the worker's terminal"
       },
       "launchPromptNotDelivered": "Not delivered — check the terminal",
       "subagents": {
@@ -21031,6 +21137,8 @@
         "goToAgent": "Go to agent",
         "messageFromCoordinator": "Message from coordinator",
         "startedWorker": "Started worker",
+        "reopenedWorker": "Reopened worker",
+        "sentFollowUpToWorker": "Sent follow-up to worker",
         "handedOffToAgent": "Handed off to agent",
         "startedAgent": "Started agent",
         "taskFromCoordinator": "Task from coordinator",
@@ -21060,7 +21168,8 @@
       "fileLinks": {
         "notFound": "File not found: {{value0}}",
         "unverifiable": "Couldn't check {{value0}}: {{value1}}",
-        "unresolved": "Couldn't resolve {{value0}} in this workspace"
+        "unresolved": "Couldn't resolve {{value0}} in this workspace",
+        "folderUnavailable": "This computer can't open the folder {{value0}}"
       },
       "contextUsage": {
         "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
@@ -21143,6 +21252,7 @@
         "reconnect": "Reconnect",
         "stopped": "{{distro}} is stopped",
         "start": "Start",
+        "connecting": "Connecting to {{distro}}…",
         "startFailed": "Couldn’t start {{distro}}. Check it in Settings → Remote Orca Servers.",
         "unverifiable": "Orca couldn't check whether {{distro}} is running",
         "startToSend": "Start {{distro}} to send.",
@@ -21691,7 +21801,10 @@
             "dirty": "Dirty",
             "unpushed": "Unpushed",
             "unknown": "Unknown"
-          }
+          },
+          "ignoredFilesBlocker": "Ignored local files",
+          "ignoredFilesNamed": "Ignored files: {{value0}}",
+          "ignoredFilesUnchecked": "Ignored files not fully checked"
         },
         "confirm": {
           "deletingTitle_one": "Deleting {{count}} workspace",
@@ -21725,7 +21838,13 @@
           "closedToast_other": "Closed {{count}} files with unsaved edits from {{workspace}}",
           "reopen": "Reopen",
           "reopenFailed": "Some files couldn't be reopened. Open a workspace and try Reopen again."
-        }
+        },
+        "ignoredFilesLost": "Ignored files will be lost: {{names}}",
+        "ignoredFilesUnchecked": "Ignored files could not be fully checked"
+      },
+      "atRiskLocalFiles": {
+        "namesWithCount": "{{names}} +{{value0}}",
+        "namesAndMore": "{{names}} and more"
       }
     },
     "agentSessionContinuation": {
@@ -22257,14 +22376,14 @@
         "chooseAgent": "Choose agent",
         "closePane": "Close pane",
         "files": "Files",
-        "keyboardHint": "↑↓ Enter to open · → agents · / to search",
         "markdown": "Markdown",
         "mobileEmulator": "Mobile emulator",
         "new": "New",
         "newAgent": "New Agent",
         "newNamedAgent": "New {{agent}} agent",
         "noMatches": "No matches",
-        "searchPlaceholder": "Open agent, terminal, or file…",
+        "searchAgentsAndFiles": "Search agents and files",
+        "searchShort": "Search",
         "terminal": "Terminal"
       }
     },
@@ -23214,7 +23333,6 @@
       "description": "Agents there use the distro's default Claude and Codex accounts until Orca in WSL is updated."
     },
     "antigravity": {
-      "chatTitle": "Antigravity chats",
       "chatSignIn": "Sign in",
       "chatChangeAccount": "Change account",
       "chatRetry": "Retry sign-in",
@@ -23232,23 +23350,14 @@
       "chatFailed": "Sign-in failed. Try again.",
       "chatOtherClient": "Sign-in is in progress in another client.",
       "chatReadFailed": "Could not check the sign-in on {{host}}.",
-      "signIn": "Start agy on this host and complete its browser sign-in, then save the current account. To add a different account, use /logout in agy and sign in again.",
-      "docs": "Sign-in instructions",
       "retry": "Retry",
-      "identityUnknown": "Signed-in identity unavailable",
-      "signedOut": "No native agy account is signed in.",
       "changed": "The native account changed. Select a saved account again before launching agy.",
-      "save": "Save current account",
       "refresh": "Refresh accounts",
       "usage": "Refresh usage",
-      "working": "Updating account",
+      "usageWithReading": "Refresh usage ({{reading}})",
       "usageReading": "Session: {{session}} · Weekly: {{weekly}}",
       "saved": "Saved Google account",
-      "nativeActive": "Native account",
-      "selected": "Selected",
-      "select": "Select",
       "remove": "Remove",
-      "sessions": "Selection applies to new agy sessions on this host. Existing sessions may keep their previous account.",
       "searchDescription": "Save and select native agy Google accounts on the execution host.",
       "title": "Antigravity",
       "keyword": {
@@ -23258,12 +23367,10 @@
         "accounts": "accounts"
       },
       "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
-      "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.",
       "authMethod": "Sign in with",
       "personal": "Google account",
       "enterprise": "Gemini Enterprise",
       "gcpProject": "Google Cloud project",
-      "gcpLocation": "Google Cloud location",
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
       "settingsIncomplete": "Choose an Antigravity account type and enter its Google Cloud project and location.",
@@ -23271,9 +23378,8 @@
       "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
       "lastReading": "{{reading}} · Read {{time}}",
       "noReading": "Usage unknown: not read yet",
-      "personalDescription": "Uses your personal Google AI plan.",
-      "enterpriseDescription": "Uses your organization's Gemini Enterprise license.",
       "chatSeparate": "Separate from your agy terminal account.",
+      "chatAccount": "Chat account",
       "chatBadgeSigningIn": "Signing in",
       "chatBadgeSignedIn": "Signed in",
       "chatBadgeSignedOut": "Not signed in",
@@ -23281,7 +23387,25 @@
       "chatPasteOpen": "Browser page didn't load?",
       "chatSwitchMethod": "Sign in again to switch to {{method}}.",
       "enterpriseFieldsNeeded": "Enter a Google Cloud project and location.",
-      "fd47b5a5dd": "Antigravity accounts"
+      "fd47b5a5dd": "Antigravity accounts",
+      "personalOption": "Your personal Google AI plan",
+      "enterpriseOption": "Your organization's license",
+      "location": "Location",
+      "enterpriseFieldsShort": "Enter a project and location.",
+      "chatUseMethod": "Sign in again to use {{method}}",
+      "terminalInfoWindows": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Selecting applies to the host default agy credential.",
+      "terminalInfo": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Applies to new agy sessions.",
+      "loadFailed": "Couldn't load agy accounts",
+      "loading": "Loading accounts…",
+      "notSignedIn": "Not signed in",
+      "runAgy": "Run agy on this host to sign in",
+      "signInHelp": "Sign-in help",
+      "currentLogin": "Current agy login",
+      "currentNotSaved": "Current agy login · not saved",
+      "noEmailNotSaved": "agy didn't report an email · not saved",
+      "saveShort": "Save",
+      "readAt": "Read {{time}}",
+      "active": "Active"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -24720,13 +24844,12 @@
     "setByArguments": "Set by your Arguments",
     "searchModels": "Search models",
     "noModels": "No models match your search.",
-    "legacyModels": "Legacy models",
     "toggleArguments": "Toggle Arguments",
     "argumentsTerminalHint": "Only applies to terminal (CLI) launches",
     "chatChoicesNote": "{{agent}} model or effort choices without a CLI flag apply to chats.",
     "composedChoicesNote": "{{agent}} effort and speed choices are included in the model argument.",
     "searchAgentModels": "Search {{agent}} models…",
-    "legacyModelCount": "{{total}} models",
+    "moreModelsWithCount": "More models ({{total}})",
     "use": "Use",
     "select": "Select agent",
     "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",
@@ -25138,6 +25261,20 @@
       "cancel": "Cancel",
       "message": "{{plugin}} wants to open {{host}}",
       "alwaysAllow": "Always allow {{host}} for this plugin"
+    },
+    "actionConfirmation": {
+      "cancel": "Cancel",
+      "deleteAutomation": "{{plugin}} wants to delete the automation “{{automation}}”",
+      "deleteAutomationDetail": "The plugin did not create it. Its schedule stops and it is removed from Automations.",
+      "delete": "Delete",
+      "changeAutomation": "{{plugin}} wants to change the automation “{{automation}}”",
+      "changeAutomationDetail": "The plugin did not create it. It would change: {{fields}}.",
+      "change": "Change",
+      "changeElevatedAutomationDetail": "It runs its agent with extra settings you chose (arguments, a permission mode or a precheck command). It would change: {{fields}}.",
+      "newPrompt": "New prompt: “{{prompt}}”",
+      "unknownProject": "an unknown project",
+      "automationNewWorkspaces": "Automation {{id}}: a new workspace of {{project}} each run, on {{schedule}}.",
+      "automationInWorkspace": "Automation {{id}}: in {{project}} / {{workspace}}, on {{schedule}}."
     }
   },
   "checks": {
@@ -25268,6 +25405,15 @@
       "notInScan": "Repository was not found in the nested repository scan result",
       "notGitRepository": "Not a valid Git repository",
       "importFailed": "Repository could not be imported"
+    }
+  },
+  "usage": {
+    "failure": {
+      "unavailable": "Usage is unavailable. Try Refresh to reconnect.",
+      "setting": "The tracking change could not be confirmed. Try changing it again.",
+      "refresh": "The previous Refresh could not be completed. Try Refresh again.",
+      "read": "Usage could not be loaded. Try Refresh again.",
+      "retry": "Refresh"
     }
   }
 }

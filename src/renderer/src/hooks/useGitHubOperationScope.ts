@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
+import { normalizeGhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { useShallow } from 'zustand/react/shallow'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { webRuntimeState } from '@/web/preload-api/web-runtime-session'

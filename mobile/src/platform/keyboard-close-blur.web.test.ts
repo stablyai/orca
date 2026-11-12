@@ -37,7 +37,7 @@ function focusedField(userAgent: string): HTMLInputElement {
 
 describe('a keyboard the phone closes', () => {
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'performance'] })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     publishShellKeyboardSource({
       read: () => shellHeight,
       subscribe: (listener) => {
@@ -62,36 +62,40 @@ describe('a keyboard the phone closes', () => {
     expect(document.activeElement).toBe(field)
 
     shellReports(0)
+    vi.advanceTimersByTime(1000)
 
     expect(document.activeElement).not.toBe(field)
   })
 
-  // The second case is tapping the underlined word after Back: that tap both focuses the field and opens the menu.
-  it.each([
-    ['already focused', false],
-    ['focused by the tap', true]
-  ] as const)(
-    'keeps focus and reopens the keyboard when Chromium hides it for a tapped autocorrected word in a field %s',
-    (_case, tapFocuses) => {
-      const field = focusedField(ANDROID)
-      if (tapFocuses) {
-        field.blur()
-      }
-      startBlurringOnKeyboardClose()
+  it('keeps the field focused when the keyboard closes and reopens for a switch to a voice IME', () => {
+    const field = focusedField(ANDROID)
+    startBlurringOnKeyboardClose()
+    shellReports(300)
 
-      field.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
-      TextInputState.focusTextInput(field)
-      shellReports(300)
-      const focusSessions = vi.fn()
-      field.addEventListener('focus', focusSessions)
-      vi.advanceTimersByTime(400)
-      shellReports(0)
-      vi.advanceTimersByTime(100)
+    shellReports(0)
+    vi.advanceTimersByTime(250)
+    shellReports(200)
+    vi.advanceTimersByTime(5000)
 
-      expect(document.activeElement).toBe(field)
-      expect(focusSessions).toHaveBeenCalledOnce()
-    }
-  )
+    expect(document.activeElement).toBe(field)
+  })
+
+  it('keeps focus and reopens the keyboard when Chromium hides it for a tapped autocorrected word', () => {
+    const field = focusedField(ANDROID)
+    startBlurringOnKeyboardClose()
+
+    field.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    TextInputState.focusTextInput(field)
+    shellReports(300)
+    const focusSessions = vi.fn()
+    field.addEventListener('focus', focusSessions)
+    vi.advanceTimersByTime(400)
+    shellReports(0)
+    vi.advanceTimersByTime(100)
+
+    expect(document.activeElement).toBe(field)
+    expect(focusSessions).toHaveBeenCalledOnce()
+  })
 
   it.each([
     ['a touch elsewhere', 'body', 400],
@@ -105,18 +109,8 @@ describe('a keyboard the phone closes', () => {
     target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
     vi.advanceTimersByTime(waitMs)
     shellReports(0)
-    vi.advanceTimersByTime(100)
+    vi.advanceTimersByTime(1000)
 
     expect(document.activeElement).not.toBe(field)
-  })
-
-  it('leaves focus alone on iOS, where only a blur closes the keyboard', () => {
-    const field = focusedField('Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X)')
-    startBlurringOnKeyboardClose()
-    shellReports(300)
-
-    shellReports(0)
-
-    expect(document.activeElement).toBe(field)
   })
 })

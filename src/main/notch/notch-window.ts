@@ -4,7 +4,7 @@ import { app, BrowserWindow, screen, type Display, type WebContents } from 'elec
 import { join } from 'node:path'
 import { deferAppKitSceneMutation } from '../window/desktop-integration/appkit-scene-mutation'
 import { registerChromeWindow } from '../window/app-window-lookup'
-import { installPrivilegedWindowNavigationPolicy } from '../window/privileged-window-navigation'
+import { installPrivilegedWindowNavigationPolicy } from '../window/security/privileged-window-navigation'
 import { buildCollapsedBarLayout } from '../../shared/notch/notch-bar-geometry'
 import {
   collapsedWindowRect,

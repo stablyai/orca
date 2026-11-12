@@ -17,8 +17,8 @@ import {
   setNotchExpanded
 } from '../notch/notch-window'
 import { findAppWindow } from '../window/app-window-lookup'
-import { safelyRevealWindow } from '../window/focus-existing-window'
-import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { safelyRevealWindow } from '../window/activation/focus-existing-window'
+import { isBackgroundLaunch } from '../window/activation/foreground-activation-policy'
 import {
   NOTCH_REVEAL_PANE_CHANNEL,
   type NotchFocusPaneRequest

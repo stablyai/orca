@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { syncMacMenuBarIcon } from './main-window-actions'
+import { syncMacMenuBarIcon } from './main-window/main-window-actions'
 import { syncNotchStatus } from './notch-status-wiring'
 
 /** The ready foundation's settings listener forwards every update here; the store owns the mutation. */
