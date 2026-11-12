@@ -10,6 +10,7 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import { workspaceSessionPartitionHostId } from '../../../../../shared/workspace-session/workspace-session-partition-owner'
+import { GLOBAL_WORKSPACE_SESSION_FIELDS } from '../../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import {
   parseWorkspaceKey,
   normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId
@@ -204,6 +205,14 @@ function splitWorkspaceSessionForWrite(
   state: HostPersistenceState,
   mode: HostSessionWriteMode
 ): HostSessionSlices {
+  if (
+    mode === 'patch' &&
+    Object.keys(payload).every((field) =>
+      GLOBAL_WORKSPACE_SESSION_FIELDS.some((globalField) => globalField === field)
+    )
+  ) {
+    return splitWorkspaceSessionByHost(payload, () => LOCAL_EXECUTION_HOST_ID)
+  }
   const routing = buildHostSessionRouting(state)
   const catalogRuntimeHostIds = new Set(state.repos.map((repo) => getRepoExecutionHostId(repo)))
   // A patch replaces fields fieldwise, so a host whose last entry went needs the emptied field. Only a
