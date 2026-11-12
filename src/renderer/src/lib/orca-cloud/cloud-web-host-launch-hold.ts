@@ -80,12 +80,17 @@ export async function createWithCloudAgentHold(
     decided: true
   })
   if (outcome === 'cancel') {
-    toast(
-      translate(
-        'agentSignInStrip.cancelledToast',
-        'The agent didn’t start. The shell is still open.'
+    // NOACCT-MISLABEL: the confirmation answers the person's own Cancel, while the shell is still
+    // there. A hold that ended because its tab or workspace went away (deleted, archived, closed)
+    // says nothing: there is no shell left, and nothing failed to start.
+    if (isTabOpen(args.worktreeId, tabId)) {
+      toast(
+        translate(
+          'agentSignInStrip.cancelledToast',
+          'The agent didn’t start. The shell is still open.'
+        )
       )
-    )
+    }
     return placeholder
   }
   // Started by the person's click in the held pane: bring the agent's tab forward so they see their
@@ -110,6 +115,11 @@ export async function createWithCloudAgentHold(
     }
   }
   return created
+}
+
+/** The held placeholder's tab is still in its workspace (not closed, deleted or archived away). */
+export function isTabOpen(worktreeId: string, tabId: string): boolean {
+  return (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
 }
 
 // The agent's tab can reach the store after the placeholder's close (a create's sync is slower).
