@@ -1,0 +1,143 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const callMock = vi.fn()
+
+vi.mock('../runtime/client', () => {
+  class RuntimeClient {
+    call = callMock
+    getCliStatus = vi.fn()
+    openOrca = vi.fn()
+  }
+
+  return { RuntimeClient }
+})
+
+import { main } from '../index'
+import { okFixture, queueFixtures } from '../test-fixtures'
+
+describe('orca computer get-app-state formatting', () => {
+  let screenshotDirectory: string
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    callMock.mockReset()
+    screenshotDirectory = mkdtempSync(join(tmpdir(), 'orca-computer-state-'))
+    vi.stubEnv('ORCA_COMPUTER_SCREENSHOT_TMPDIR', screenshotDirectory)
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    process.exitCode = undefined
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+    rmSync(screenshotDirectory, { recursive: true, force: true })
+  })
+
+  it('omits screenshot bytes from JSON output and writes a screenshot path', async () => {
+    queueFixtures(callMock, okFixture('req_state', sampleSnapshot()))
+
+    await main(
+      ['computer', 'get-app-state', '--session', 'manual', '--app', 'Finder', '--json'],
+      '/tmp/repo'
+    )
+
+    const output = vi.mocked(console.log).mock.calls[0][0]
+    expect(output).not.toContain('cG5nLWJ5dGVz')
+    const parsed = JSON.parse(output)
+    expect(parsed.result.screenshot).toMatchObject({
+      dataOmitted: true,
+      format: 'png',
+      expiresAt: expect.any(String)
+    })
+    expect(parsed.result.screenshot.path).toBe(
+      join(screenshotDirectory, 'req_state-screenshot.png')
+    )
+    expect(readFileSync(parsed.result.screenshot.path)).toEqual(Buffer.from('png-bytes'))
+  })
+
+  it('filters get-app-state to matching elements and their ancestors with --query', async () => {
+    const result = sampleSnapshot()
+    queueFixtures(
+      callMock,
+      okFixture('req_state', {
+        ...result,
+        snapshot: {
+          ...result.snapshot,
+          treeText: [
+            'App=com.apple.finder (pid 100)',
+            'Window: "Finder", App: Finder.',
+            '',
+            '0 standard window Finder',
+            '\t1 toolbar',
+            '\t\t2 button Back',
+            '\t\t3 text field (settable) Search',
+            '\t4 split group',
+            '\t\t5 outline Sidebar',
+            '\t\t\t6 row, Text: Downloads',
+            '\t\t\t7 row, Text: Documents',
+            '',
+            'No UI element is currently focused.'
+          ].join('\n')
+        }
+      })
+    )
+
+    await main(
+      [
+        'computer',
+        'get-app-state',
+        '--session',
+        'manual',
+        '--app',
+        'Finder',
+        '--query',
+        'DOWNLOADS',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    const parsed = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
+    expect(parsed.result.snapshot.treeText).toBe(
+      [
+        'App=com.apple.finder (pid 100)',
+        'Window: "Finder", App: Finder.',
+        '',
+        '1 of 8 elements match "DOWNLOADS"; showing them with their ancestors.',
+        '0 standard window Finder',
+        '\t4 split group',
+        '\t\t5 outline Sidebar',
+        '\t\t\t6 row, Text: Downloads',
+        '',
+        'No UI element is currently focused.'
+      ].join('\n')
+    )
+    expect(callMock.mock.lastCall?.[1]).not.toHaveProperty('query')
+  })
+})
+
+function sampleSnapshot() {
+  return {
+    snapshot: {
+      id: 'snap-test',
+      app: { name: 'Finder', bundleId: 'com.apple.finder', pid: 100 },
+      window: { title: 'Finder', width: 800, height: 600 },
+      coordinateSpace: 'window',
+      truncation: { truncated: false, maxNodes: 1200, maxDepth: 64, maxDepthReached: false },
+      treeText: 'App=com.apple.finder (pid 100)\n0 standard window Finder',
+      elementCount: 1,
+      focusedElementId: 0
+    },
+    screenshot: {
+      data: 'cG5nLWJ5dGVz',
+      format: 'png',
+      width: 800,
+      height: 600,
+      scale: 1
+    },
+    screenshotStatus: { state: 'captured' }
+  }
+}

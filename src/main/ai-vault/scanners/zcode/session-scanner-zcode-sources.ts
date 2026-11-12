@@ -5,9 +5,9 @@ import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-
 import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
 import { wslGatedAccess } from '../../../native-chat/wsl-transcript-fs-access'
 import { listZcodeSqliteSessionsViaWorker } from '../opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
-import { scanIssueTextFromError } from '../../session-scan-issues'
+import { scanIssueTextFromError } from '../../parsing/session-scan-issues'
 import type { AiVaultScanOptions, SessionFileDiscovery } from '../../session-scanner-types'
-import { scopeWalksAgentFiles } from '../../session-scope-cwd'
+import { scopeWalksAgentFiles } from '../../scope/session-scope-cwd'
 
 // Keep ZCode discovery separate so OpenCode cannot absorb its database rows.
 export function zcodeDiscoveries(

@@ -1,4 +1,4 @@
-import { extractFullFirstUserPromptText } from '../../session-scanner-first-user-prompt'
+import { extractFullFirstUserPromptText } from '../../prompts/session-scanner-first-user-prompt'
 import {
   remoteSessionContentLines,
   type RemoteSessionContent
@@ -22,13 +22,17 @@ import {
   sessionIdFromFileName,
   updateLatestLocation,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
-import { asRecord } from '../../session-scanner-record-value'
-import { claudeUsageTotal } from '../../session-scanner-token-values'
-import { extractMessageText, normalizeTitleText } from '../../session-scanner-text-normalization'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { claudeUsageTotal } from '../../parsing/session-scanner-token-values'
+import {
+  extractMessageText,
+  normalizeTitleText
+} from '../../parsing/session-scanner-text-normalization'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
 
 type ParserSessionOptions = {
   signal?: AbortSignal

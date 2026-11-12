@@ -162,7 +162,9 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca plugin disable <plugin-key> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'plugin'],
     positionalArgs: ['plugin'],
-    notes: ['Never needs approval.'],
+    notes: [
+      'Never needs approval. Pauses the automations the plugin created; enabling it again does not resume them.'
+    ],
     examples: ['orca plugin disable acme.notes']
   },
   {
@@ -182,7 +184,8 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca plugin system off [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
-      'Stops every plugin and keeps installs, approvals and development folders. Never needs approval.'
+      'Stops every plugin and keeps installs, approvals and development folders. Never needs approval.',
+      'Pauses the automations plugins created; they stay paused when plugins are turned back on.'
     ],
     examples: ['orca plugin system off']
   },

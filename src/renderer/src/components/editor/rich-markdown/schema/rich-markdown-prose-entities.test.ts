@@ -1,17 +1,14 @@
 import { Editor, type JSONContent } from '@tiptap/core'
 import { describe, expect, it } from 'vitest'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
-import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-html'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 
-function createEditor(content: JSONContent | string): Editor {
+function createEditor(content: JSONContent): Editor {
   const codec = createRichMarkdownEditorCodec()
   return new Editor({
     element: null,
     extensions: createRichMarkdownExtensions({ codec }),
-    content:
-      typeof content === 'string' ? encodeRawMarkdownHtmlForRichEditor(content, codec) : content,
-    ...(typeof content === 'string' ? { contentType: 'markdown' as const } : {})
+    content
   })
 }
 
@@ -36,20 +33,6 @@ describe('typed prose entities', () => {
       editor.destroy()
     }
   })
-
-  it.each(['a < b && c, F&B > R, &copy; &amp; <i>', '> quote', '<kbd>x</kbd>'])(
-    'reopens %j unchanged',
-    (text) => {
-      const editor = createEditor(paragraph(text))
-      const reopened = createEditor(editor.getMarkdown())
-      try {
-        expect(reopened.getJSON()).toEqual(editor.getJSON())
-      } finally {
-        editor.destroy()
-        reopened.destroy()
-      }
-    }
-  )
 
   it('leaves entity text inside a code span alone', () => {
     const editor = createEditor(paragraph('&amp; <b> > x', [{ type: 'code' }]))

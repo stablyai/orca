@@ -18,7 +18,7 @@ import type {
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
 
-import { withFullFirstUserPromptCapture } from '../../../session-scanner-first-user-prompt-capture'
+import { withFullFirstUserPromptCapture } from '../../../prompts/session-scanner-first-user-prompt-capture'
 
 export async function handleOpenCodeSqliteRequest(
   request: OpenCodeSqliteWorkerRequest

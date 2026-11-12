@@ -1,5 +1,5 @@
-import { AiVaultLocalScanError, listAiVaultSessions } from '../../ai-vault/cached-session-list'
-import { aiVaultScanIssueResult } from '../../ai-vault/session-list-results'
+import { AiVaultLocalScanError, listAiVaultSessions } from '../../ai-vault/listing/cached-session-list'
+import { aiVaultScanIssueResult } from '../../ai-vault/listing/session-list-results'
 import { classifyAiVaultScanError } from '../../../shared/ai-vault/scanning/ai-vault-scan-error-message'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import {

@@ -5,7 +5,7 @@ import {
   splitOpenCodeSqliteCandidate
 } from '../../../../shared/opencode-sqlite-session-path'
 import type { SessionFileCandidate } from '../../session-scanner-types'
-import { errorMessage } from '../../session-scanner-values'
+import { errorMessage } from '../../../../shared/error-message'
 import SyncDatabase from '../../../sqlite/sync-database'
 import { columnExists, tableExists } from '../../../opencode-usage/schema-helpers'
 import { scopedSessionRows } from '../session-scanner-sqlite-scope-rows'

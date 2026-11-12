@@ -2,11 +2,14 @@
 
 import type { RuntimeMobileSessionTabMove } from '../../runtime-session-contracts'
 import { isTerminalLeafId } from '../stable-pane-id'
-import { isValidHostTerminalTabId } from '../terminal-tab-id'
+import { isValidHostTerminalTabId } from '../terminal-surfaces/terminal-tab-id'
 import type { TerminalPaneSplitDirection } from '../terminal-tab-types'
 import { resolveSessionTabRow } from './old-client-session-tab-rows'
-import { tabOrderAnchor } from '../tab-order'
-import { collectLayoutLeafIdsInOrder, layoutContainsLeafId } from '../terminal-pane-tree'
+import { tabOrderAnchor } from '../tab-groups/tab-order'
+import {
+  collectLayoutLeafIdsInOrder,
+  layoutContainsLeafId
+} from '../terminal-topology/terminal-pane-tree'
 import type { ProjectedSessionTabs } from './old-client-session-tabs-projection'
 import type { LayoutCommand, LayoutRefusalCode } from '../workspace-layout-command-types'
 import {

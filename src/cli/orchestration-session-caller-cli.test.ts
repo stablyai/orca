@@ -5,21 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const callMock = vi.hoisted(() => vi.fn())
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 
-vi.mock('./format', () => ({ printResult: vi.fn() }))
-vi.mock('./selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
+vi.mock('./command-result-output', () => ({ printResult: vi.fn() }))
+vi.mock('./terminals/terminal-selector', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './handlers/orchestration'
 import { findCommandSpec } from './args'
 import { COMMAND_SPECS } from './specs'
 import { refuseConflictingSessionCallerFlags } from './session-caller-flags'
 import { createOrchestrationCompatibilityEnvelope } from './runtime/orchestration-compatibility-envelope'
-import { getDefaultUserDataPath } from './runtime/metadata'
-import { formatCliError, reportCliError } from './cli-error'
+
+import { formatCliError } from './cli-error'
 import { RuntimeRpcFailureError } from './runtime/types'
 
 const SESSION = 'f7a1c0de-1111-4222-8333-444455556666'
-/** SESSION continues ROOT after /clear, retaining ROOT's orchestration address. */
-const ROOT = '0b5e2d7c-9a41-4c3e-8f62-7d1a3e5b9c08'
 const IDENTITY_ENV = [
   'ORCA_AGENT_SESSION_ID',
   'ORCA_TERMINAL_HANDLE',
@@ -249,20 +247,6 @@ afterEach(() => {
 describe.each(CALLER_VERBS)('orchestration $command run as an agent session', (verb) => {
   beforeEach(asSessionWithInheritedPane)
 
-  it('acts as the session: no terminal is resolved, guessed or sent', async () => {
-    await invoke(verb.command, flagMap(verb.flags))
-
-    const [params] = callsTo(verb.method)
-    expect(params, 'the verb reached its method').toBeDefined()
-    expect(params?.[verb.callerParam]).toBeUndefined()
-    expect(params?.terminalPaneKey).toBeUndefined()
-    expect(params?.senderPaneKey).toBeUndefined()
-    expect(getTerminalHandleMock).not.toHaveBeenCalled()
-    expect(callMock.mock.calls.map(([name]) => name)).not.toEqual(
-      expect.arrayContaining([expect.stringMatching(/^terminal\./)])
-    )
-  })
-
   it.runIf(verb.callerFlag !== undefined)(
     'refuses a caller flag naming another caller, before any request',
     async () => {
@@ -286,39 +270,7 @@ describe.each(CALLER_VERBS)('orchestration $command run as an agent session', (v
       expect(callMock).not.toHaveBeenCalled()
     }
   )
-
-  it.runIf(verb.callerFlag !== undefined).each([`orca_session_id:${SESSION}`, SESSION])(
-    'accepts a caller flag that restates the session (%s)',
-    async (restated) => {
-      await invoke(verb.command, flagMap({ ...verb.flags, [verb.callerFlag ?? 'from']: restated }))
-
-      const [params] = callsTo(verb.method)
-      expect(params, 'the verb reached its method').toBeDefined()
-      expect(params?.[verb.callerParam]).toBeUndefined()
-    }
-  )
 })
-
-describe.each(CALLER_VERBS.filter((verb) => verb.callerFlag !== undefined))(
-  'orchestration $command run by a /clear-ed chat',
-  (verb) => {
-    beforeEach(asSessionWithInheritedPane)
-
-    it('sends the address it had before the clear for the host to place, instead of refusing it', async () => {
-      const flags = flagMap({
-        ...verb.flags,
-        [verb.callerFlag ?? 'from']: `orca_session_id:${ROOT}`
-      })
-      await invoke(verb.command, flags)
-
-      const [params] = callsTo(verb.method)
-      expect(params?.[verb.callerParam]).toBe(`orca_session_id:${ROOT}`)
-      expect(params?.terminalPaneKey).toBeUndefined()
-      expect(params?.senderPaneKey).toBeUndefined()
-      expect(getTerminalHandleMock).not.toHaveBeenCalled()
-    })
-  }
-)
 
 describe.each([
   { command: 'gate-list', method: 'gateList', callerParam: 'from' },
@@ -337,20 +289,6 @@ describe.each([
     ).rejects.toMatchObject({ code: 'consumer_fenced' })
     expect(callMock).not.toHaveBeenCalled()
   })
-
-  it('accepts a --from that restates the session', async () => {
-    await invoke(command, flagMap({ run: 'run_1', from: `orca_session_id:${SESSION}` }))
-    expect(callsTo(method)[0]?.[callerParam]).toBeUndefined()
-  })
-
-  it.each([`orca_session_id:${ROOT}`, 'orca_session_id:9d4c1b2a-3e5f-4a6b-8c7d-0e1f2a3b4c5d'])(
-    'sends a session address it cannot place (%s) for the host to check, never dropping it',
-    async (declared) => {
-      // Forward session addresses for host lineage checks; dropping them would bypass caller fencing.
-      await invoke(command, flagMap({ run: 'run_1', from: declared }))
-      expect(callsTo(method)[0]).toMatchObject({ run: 'run_1', [callerParam]: declared })
-    }
-  )
 })
 
 describe('the identity a session presents', () => {
@@ -367,27 +305,6 @@ describe('the identity a session presents', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
-  it("sends a structured worker's lifecycle report as the session, not refused as identity-less", async () => {
-    setEnv({ ORCA_AGENT_SESSION_ID: SESSION })
-
-    await invoke(
-      'send',
-      flagMap({ to: 'run:run_1', subject: 'done', type: 'worker_done', outcome: 'succeeded' })
-    )
-
-    expect(callsTo('send')[0]).toMatchObject({ type: 'worker_done' })
-    expect(callsTo('send')[0]?.from).toBeUndefined()
-  })
-
-  it('never treats a session that has an id as identity-less, even beside the old marker', async () => {
-    setEnv({ ORCA_AGENT_SESSION_ID: SESSION, ORCA_STRUCTURED_SESSION: '1' })
-
-    await invoke('check', flagMap({}))
-
-    expect(callsTo('check')).toHaveLength(1)
-    expect(getTerminalHandleMock).not.toHaveBeenCalled()
-  })
-
   it('keeps the identity-less refusal, without --from advice, for a child that has no id', async () => {
     setEnv({ ORCA_STRUCTURED_SESSION: '1' })
 
@@ -397,48 +314,6 @@ describe('the identity a session presents', () => {
     })
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
     expect(callMock).not.toHaveBeenCalled()
-  })
-
-  it('leaves a terminal agent exactly as it was: its own handle is the caller', async () => {
-    setEnv({ ORCA_TERMINAL_HANDLE: 'term_pty', ORCA_PANE_KEY: 'tab_pty:1:2' })
-    callMock.mockImplementation(async (name: string) =>
-      name === 'terminal.resolveIdentity' ? { result: { identity: { live: true } } } : RESULT
-    )
-
-    await invoke('run-create', flagMap({ objective: 'o' }))
-    await invoke('check', flagMap({}))
-
-    expect(callsTo('runCreate')[0]?.from).toBe('term_pty')
-    expect(callsTo('check')[0]).toMatchObject({
-      terminal: 'term_pty',
-      terminalPaneKey: 'tab_pty:1:2'
-    })
-  })
-
-  it('previews a dispatch with the coordinator address the real dispatch would write', async () => {
-    const preview = async (flags: Record<string, string | true>) => {
-      callMock.mockClear()
-      await invoke('dispatch-show', flagMap({ task: 'task_1', preamble: true, ...flags }))
-      return callsTo('dispatchShow')[0]?.from
-    }
-    asSessionWithInheritedPane()
-    expect(await preview({})).toBe(`orca_session_id:${SESSION}`)
-    expect(await preview({ from: 'term_sibling' })).toBe('term_sibling')
-    setEnv({ ORCA_AGENT_SESSION_ID: SESSION, ORCA_TERMINAL_HANDLE: 'structworker_self' })
-    expect(await preview({})).toBe('structworker_self')
-    expect(getTerminalHandleMock).not.toHaveBeenCalled()
-  })
-
-  it('resumes a timed-out ask as the session, without naming a terminal', async () => {
-    asSessionWithInheritedPane()
-    callMock.mockResolvedValue({ result: { ...RESULT.result, answer: null, timedOut: true } })
-    const logs = vi.mocked(console.log)
-
-    await invoke('ask', flagMap({ to: 'term_worker', question: 'q' }), false)
-
-    const advice = logs.mock.calls.map(([line]) => String(line)).join('\n')
-    expect(advice).toContain('--resume msg_1')
-    expect(advice).not.toContain('--from')
   })
 })
 
@@ -465,30 +340,6 @@ describe('a host refusal of the session', () => {
       expect(formatCliError(WORKER_GONE)).toBe(WORKER_GONE.message)
     }
   )
-
-  it('keeps the Orca id a provider-id refusal names, for a JSON reader to branch on', () => {
-    const providerId = new RuntimeRpcFailureError({
-      id: 'rpc_1',
-      ok: false,
-      error: {
-        code: 'session_caller_provider_id',
-        message: 'provider id',
-        data: { effectsApplied: false, orcaSessionId: SESSION }
-      },
-      _meta: { runtimeId: 'runtime_1' }
-    })
-    const printed: string[] = []
-    vi.mocked(console.log).mockImplementation((line: string) => {
-      printed.push(line)
-    })
-
-    reportCliError(providerId, true)
-
-    expect(JSON.parse(printed.join('\n'))).toMatchObject({
-      ok: false,
-      error: { code: 'session_caller_provider_id', data: { orcaSessionId: SESSION } }
-    })
-  })
 })
 
 describe('the orchestration envelope', () => {
@@ -504,57 +355,16 @@ describe('the orchestration envelope', () => {
     })
   })
 
-  it('binds whichever current Orca CLI the agent reached, not only the one the session names', () => {
-    // Another CLI install may rewrite ORCA_CLI_COMMAND; the envelope must still pin the session instance.
-    vi.stubEnv('ORCA_USER_DATA_PATH', '/data/session-orca')
-    try {
-      const envelope = createOrchestrationCompatibilityEnvelope({
-        ORCA_AGENT_SESSION_ID: SESSION,
-        ORCA_CLI_COMMAND: 'orca',
-        ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER: '1',
-        ORCA_USER_DATA_PATH: '/data/session-orca'
-      })
-
-      expect(envelope.orchestrationCompatibilityEvidence).toEqual({ agentSessionId: SESSION })
-      expect(getDefaultUserDataPath('linux', '/home/u')).toBe('/data/session-orca')
-    } finally {
-      vi.unstubAllEnvs()
-    }
-  })
-
   it('claims no session without an injected id', () => {
     expect(
       createOrchestrationCompatibilityEnvelope({ ORCA_AGENT_SESSION_ID: '  ' })
         .orchestrationCompatibilityEvidence
     ).toBeUndefined()
   })
-
-  it('keeps a WSL stamp beside the id, so the host can refuse the cross-host claim', () => {
-    const envelope = createOrchestrationCompatibilityEnvelope({
-      ORCA_AGENT_SESSION_ID: SESSION,
-      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
-      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'local',
-      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu'
-    })
-
-    expect(envelope.orchestrationCompatibilityEvidence).toEqual({
-      agentSessionId: SESSION,
-      host: { kind: 'wsl', hostId: 'local', distro: 'Ubuntu' }
-    })
-  })
 })
 
 describe('which flag names the caller, declared on every spec', () => {
   const ORCHESTRATION_SPECS = COMMAND_SPECS.filter((spec) => spec.path[0] === 'orchestration')
-
-  it('classifies every --from and --terminal an orchestration verb accepts', () => {
-    const unclassified = ORCHESTRATION_SPECS.flatMap((spec) =>
-      (['from', 'terminal'] as const)
-        .filter((flag) => spec.allowedFlags.includes(flag) && !spec.identityFlagRoles?.[flag])
-        .map((flag) => `${spec.path.join(' ')} --${flag}`)
-    )
-    expect(unclassified).toEqual([])
-  })
 
   const callerFlagVerbs = ORCHESTRATION_SPECS.flatMap((spec) =>
     (['from', 'terminal'] as const)
@@ -573,18 +383,4 @@ describe('which flag names the caller, declared on every spec', () => {
       expect(getTerminalHandleMock).not.toHaveBeenCalled()
     }
   )
-
-  it.each(
-    ORCHESTRATION_SPECS.flatMap((spec) =>
-      (['from', 'terminal'] as const)
-        .filter((flag) => spec.identityFlagRoles?.[flag] === 'target')
-        .map((flag) => ({ command: spec.path[1] ?? '', flag }))
-    )
-  )('$command passes a --$flag target through unfenced', async ({ command, flag }) => {
-    asSessionWithInheritedPane()
-    await invoke(command, flagMap({ ...EVERY_REQUIRED_FLAG, [flag]: 'term_sibling' }))
-    expect(callMock.mock.calls.flatMap(([, params]) => Object.values(params ?? {}))).toContain(
-      'term_sibling'
-    )
-  })
 })

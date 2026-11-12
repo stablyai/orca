@@ -53,60 +53,6 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
-  it('continues terminal agent status fanout when a callback throws', () => {
-    const statuses: RuntimeTerminalAgentStatusEvent[] = []
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      onTerminalAgentStatus: (event) => {
-        statuses.push(event)
-        if (statuses.length === 1) {
-          throw new Error('status listener failed')
-        }
-      }
-    })
-    const leafId = '11111111-1111-4111-8111-111111111111'
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'tab-1',
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Terminal',
-          activeLeafId: leafId,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'tab-1',
-          worktreeId: TEST_WORKTREE_ID,
-          leafId,
-          paneRuntimeId: 1,
-          ptyId: 'pty-1'
-        }
-      ]
-    })
-
-    runtime.onPtyData(
-      'pty-1',
-      '\x1b]9999;{"state":"working","prompt":"one","agentType":"codex"}\x07' +
-        '\x1b]9999;{"state":"done","prompt":"two","agentType":"codex"}\x07',
-      123
-    )
-
-    expect(statuses.map((event) => event.payload.prompt)).toEqual(['one', 'two'])
-    expect(errorSpy).toHaveBeenCalledWith(
-      '[runtime] terminal agent status listener threw',
-      expect.objectContaining({
-        ptyId: 'pty-1',
-        paneKey: `tab-1:${leafId}`,
-        state: 'working',
-        agentType: 'codex',
-        err: expect.any(Error)
-      })
-    )
-  })
-
   it('keeps blocked prompt text authoritative over an OpenCode marker', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

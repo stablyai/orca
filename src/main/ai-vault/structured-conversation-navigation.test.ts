@@ -11,10 +11,10 @@ import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import {
   OPENS_EVERY_STRUCTURED_CHAT,
   projectStructuredAiVaultSessions
-} from './structured-session-ownership'
-import { listResult } from './structured-session-ownership.test-support'
-import { parseAiVaultListResult } from './session-list-result-validation'
-import { restampAiVaultListResult } from './session-list-results'
+} from './structured-sessions/structured-session-ownership'
+import { listResult } from './structured-sessions/structured-session-ownership.test-support'
+import { parseAiVaultListResult } from './listing/session-list-result-validation'
+import { restampAiVaultListResult } from './listing/session-list-results'
 import { aiVaultOrchestrationChildSessionIds } from './structured-conversation-navigation'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'

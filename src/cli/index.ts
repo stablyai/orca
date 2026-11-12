@@ -13,8 +13,8 @@ import { dispatch } from './dispatch'
 import {
   resolveEnvironmentSelectorForStore,
   resolveHostFlagEnvironmentId
-} from './execution-host-flag'
-import { fetchSshTargetSummaries, listSshTargets } from './host-selector-alternatives'
+} from './hosts/execution-host-flag'
+import { fetchSshTargetSummaries, listSshTargets } from './hosts/host-selector-alternatives'
 import { reportCliError } from './cli-error'
 import { RuntimeClientError } from './runtime/types'
 import { cliErrorExitCode } from './cli-exit-code'
@@ -27,10 +27,9 @@ import { ignoresRemoteSelection } from './remote-selection-scope'
 import {
   isLocalEnvironmentSelector,
   refuseLocalManagementSelector
-} from './local-environment-selector'
+} from './hosts/local-environment-selector'
 
 export { COMMAND_SPECS } from './specs'
-export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
 
@@ -65,6 +64,10 @@ export async function main(
     return
   }
   if (argv[0] === 'claude-teams') {
+    if (argv.length === 2 && (argv[1] === '--help' || argv[1] === '-h')) {
+      printHelp(COMMAND_SPECS, ['claude-teams'])
+      return
+    }
     await runClaudeTeams(argv.slice(1), cwd)
     return
   }

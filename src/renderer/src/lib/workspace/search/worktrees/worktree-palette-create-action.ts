@@ -87,12 +87,15 @@ export function getNextWorktreePaletteSelection({
   queryChanged,
   selectableItemIds,
   showCreateAction,
+  defaultSelectableItemId = null,
   autoSelectCreateAction = false
 }: {
   currentSelectedItemId: string
   queryChanged: boolean
   selectableItemIds: readonly string[]
   showCreateAction: boolean
+  /** Lands here instead of the first row, e.g. below a section that leads without taking Enter. */
+  defaultSelectableItemId?: string | null
   /**
    * Only a recognized task URL may land on Create by default. Free text must
    * never arm Enter to create, no matter how empty the result list is.
@@ -100,9 +103,11 @@ export function getNextWorktreePaletteSelection({
   autoSelectCreateAction?: boolean
 }): string {
   const defaultSelectableId =
+    defaultSelectableItemId ??
     (autoSelectCreateAction
       ? selectableItemIds[0]
-      : selectableItemIds.find((id) => id !== CREATE_WORKTREE_ITEM_ID)) ?? null
+      : selectableItemIds.find((id) => id !== CREATE_WORKTREE_ITEM_ID)) ??
+    null
   const fallbackId =
     defaultSelectableId ??
     (showCreateAction && autoSelectCreateAction ? CREATE_WORKTREE_ITEM_ID : '')

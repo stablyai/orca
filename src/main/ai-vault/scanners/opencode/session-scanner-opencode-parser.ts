@@ -1,7 +1,10 @@
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { wslGatedReaddir, wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
@@ -10,17 +13,13 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent, addPreviewMessage } from '../../session-scanner-messages'
-import { asRecord } from '../../session-scanner-record-value'
-import {
-  extractString,
-  findOpenCodeStorageRoot,
-  timeObjectValue,
-  timestampMs
-} from '../../session-scanner-values'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
-import { tokenTotal } from '../../session-scanner-token-values'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent, addPreviewMessage } from '../../parsing/session-scanner-messages'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import { timeObjectValue, timestampMs } from '../../parsing/session-record-time'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
+import { tokenTotal } from '../../parsing/session-scanner-token-values'
 
 /** Scope discovery reads cwd without opening message files. */
 export function openCodeSessionCwd(record: Record<string, unknown>): string | null {
@@ -141,4 +140,13 @@ export async function consumeOpenCodeMessages(
       accumulator.totalTokens += tokenTotal(message.tokens)
     }
   }
+}
+
+function findOpenCodeStorageRoot(filePath: string): string | null {
+  const sessionDir = dirname(filePath)
+  const sessionRoot = dirname(sessionDir)
+  if (basename(sessionRoot) !== 'session') {
+    return null
+  }
+  return dirname(sessionRoot)
 }

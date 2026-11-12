@@ -1,7 +1,7 @@
 import type { AiVaultProjectionDependency } from './ai-vault-projection-dependency'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
-import { AiVaultScanCoordinator } from '../../ai-vault/ai-vault-scan-coordinator'
-import { aiVaultSessionListCacheGeneration } from '../../ai-vault/cached-session-list'
+import { AiVaultScanCoordinator } from '../../ai-vault/scan-lifecycle/ai-vault-scan-coordinator'
+import { aiVaultSessionListCacheGeneration } from '../../ai-vault/listing/cached-session-list'
 import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   aiVaultCachedDepthServes,

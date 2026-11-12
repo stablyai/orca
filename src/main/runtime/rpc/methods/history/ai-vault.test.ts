@@ -43,11 +43,11 @@ import { agentSessionRefusalError } from '../../../../../shared/agent-session/fa
 
 import { recordStructuredAgentSessionHostInstallRefusal } from '../../../agent-session/structured-agent-session-host-refusal'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { installOwnership } from '../../../../ai-vault/structured-session-ownership.test-support'
+import { installOwnership } from '../../../../ai-vault/structured-sessions/structured-session-ownership.test-support'
 import {
   listAiVaultSessions,
   resetAiVaultSessionListCacheForTests
-} from '../../../../ai-vault/cached-session-list'
+} from '../../../../ai-vault/listing/cached-session-list'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }

@@ -6,6 +6,8 @@ export type AgentJournalAgentStartItem = {
   dispatchId: string
   worker: AgentMessageSender
   task: string
+  /** A message to a finished worker continued it: the Dispatch it followed, and whether its conversation reopened. */
+  followUp?: { of: string; reopened: boolean }
 }
 
 /** Display-only creation fact for an agent this chat's agent launched on its own (`orca agent launch`),

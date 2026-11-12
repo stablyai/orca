@@ -3,7 +3,10 @@ import { createOpenCodeSqliteWorker } from './session-scanner-opencode-sqlite-wo
 export { resolveOpenCodeSqliteWorkerEntryPath } from './session-scanner-opencode-sqlite-worker-entry'
 import { selectedWslSqliteSessionId } from '../../../session-scanner-selection'
 import { aiVaultScopePathsForWslDistro } from '../../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
-import { recordSessionScanIssue, scanIssueTextFromError } from '../../../session-scan-issues'
+import {
+  recordSessionScanIssue,
+  scanIssueTextFromError
+} from '../../../parsing/session-scan-issues'
 import { throwIfSignalAborted } from '../../../../../shared/abort-signal-reason'
 import { openCodeTranscriptPageLimit } from '../../../../../shared/opencode-transcript-page-limit'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
@@ -19,7 +22,10 @@ import {
   openCodeWslPath
 } from './session-scanner-opencode-wsl-client'
 import { runOpenCodeSqliteScanRequest } from '../sqlite/session-scanner-opencode-sqlite-scan-scope'
-import { noteAiVaultScanDatabases, openAiVaultScanSource } from '../../../ai-vault-scan-progress'
+import {
+  noteAiVaultScanDatabases,
+  openAiVaultScanSource
+} from '../../../scan-lifecycle/ai-vault-scan-progress'
 
 let sharedClient: OpenCodeSqliteWorkerClient | null = null
 

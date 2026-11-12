@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from '../../session-scanner'
-import { isolatedScanRoots, writeAntigravityTranscript } from '../../session-scanner-test-fixtures'
+import {
+  isolatedScanRoots,
+  writeAntigravityTranscript
+} from '../../scanner-fixtures/session-scanner-test-fixtures'
 import { antigravitySessionOrigin } from '../../../../shared/antigravity-session-origin'
 import './session-scanner-antigravity-history'
 import './session-scanner-antigravity-metadata'

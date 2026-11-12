@@ -6,7 +6,7 @@ import {
   appendRetiredTerminalSurfaceProofs,
   dropRetirementProofsForLiveSurfaces,
   retirementProofKey
-} from '../../../../shared/workspace-layout/terminal-retirement-proof-ledger'
+} from '../../../../shared/workspace-layout/terminal-surfaces/terminal-retirement-proof-ledger'
 
 /** Carry durable host close proofs through renderer snapshots. Inherit worktreeInstanceId on identity-less host writes
  * so renderer(A) -> host -> renderer(B) cannot launder A's proofs into B. */

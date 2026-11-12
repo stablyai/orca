@@ -1,8 +1,9 @@
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import { isMissingTranscriptPathError } from './discovery/session-path-absence'
+export { isMissingTranscriptPathError } from './discovery/session-path-absence'
 import type { SessionSidecarObservation } from './parse-cache/session-sidecar-stat'
 import type { FileWithMtime } from './session-scanner-types'
-import { scanIssueTextFromError } from './session-scan-issues'
+import { scanIssueTextFromError } from './parsing/session-scan-issues'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 
 export type SessionFileObservation =
@@ -53,15 +54,4 @@ async function observeSessionSidecar(
   } catch (error) {
     return isMissingTranscriptPathError(error) ? 'none' : 'unknown'
   }
-}
-
-export function isMissingTranscriptPathError(error: unknown): boolean {
-  if (error instanceof WslTranscriptFsError) {
-    return false
-  }
-  const code =
-    error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
-      ? error.code
-      : null
-  return code === 'ENOENT' || code === 'ENOTDIR'
 }

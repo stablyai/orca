@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
-import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
+import { isolatedScanRoots, writeJsonlFile } from './scanner-fixtures/session-scanner-test-fixtures'
 
 it('retains one exact old selected transcript beyond 500 newer discoveries without widening history', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-selected-history-'))

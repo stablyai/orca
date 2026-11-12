@@ -8,7 +8,7 @@ import { createWorktreePreparationLockReason } from '../../../../shared/worktree
 import {
   clearGitCapabilityStateForTests,
   getLocalGitCapabilityCache
-} from '../../command-runner/git-capability-state'
+} from '../../command-runner/host-routing/git-capability-state'
 import * as runner from '../../command-runner/git-exec-file'
 import { prepareWorktreeCreateCheckout } from './worktree-create-preparation'
 import {

@@ -15,7 +15,7 @@ import {
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { structuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
-import type { StructuredChatOpener } from './structured-session-ownership'
+import type { StructuredChatOpener } from './structured-sessions/structured-session-ownership'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { z } from 'zod'
 import { clearedInto } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'

@@ -114,6 +114,7 @@ export async function getPRForBranchOutcome(
         options.currentHeadOid ?? null,
         options.checkPageLimit ?? null,
         options.exactRepository ?? null,
+        options.includeDerivedData !== false,
         scope.readScope
       ])
       return runCoalescedProbe(
@@ -140,7 +141,10 @@ export async function getPRForBranchOutcome(
           } finally {
             release()
           }
-          const narrowed = options.checkPageLimit !== undefined || options.exactRepository
+          const narrowed =
+            options.checkPageLimit !== undefined ||
+            options.exactRepository ||
+            options.includeDerivedData === false
           recordPRLastOutcome(lastOutcomeKey(repoPath, branchName, scope), {
             start,
             linkedPRNumber: linkedPRNumber ?? null,

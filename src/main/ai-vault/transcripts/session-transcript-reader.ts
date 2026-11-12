@@ -1,9 +1,12 @@
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { createHash } from 'node:crypto'
 import { readTranscriptSlice } from '../../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { parseAgentSessionFile } from '../session-scanner-agent-parser'
-import { consumeCompleteJsonlLines } from '../session-scanner-jsonl-reader'
+import { parseAgentSessionFile } from '../parsing/session-scanner-agent-parser'
+import { consumeCompleteJsonlLines } from '../parsing/session-scanner-jsonl-reader'
 import { isZstdTranscriptPath } from '../../native-chat/transcript-zstd-decompression'
 import type { ResumableSessionParseState, SessionFileCandidate } from '../session-scanner-types'
 import {

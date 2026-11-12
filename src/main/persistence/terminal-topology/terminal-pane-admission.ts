@@ -6,7 +6,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 import {
   leafIdsOf,
   locatePane
-} from '../../../shared/workspace-layout/workspace-layout-command-steps'
+} from '../../../shared/workspace-layout/commands/workspace-layout-command-steps'
 import type {
   CommandOf,
   LayoutApplyOutcome,
@@ -16,20 +16,20 @@ import type {
   LayoutRefusalCode
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
-import { loadWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load'
-import type { LoadedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load-types'
-import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
+import { loadWorkspaceLayout } from '../../../shared/workspace-layout/persistence/workspace-layout-load'
+import type { LoadedWorkspaceLayout } from '../../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import { nameBasedLoadContext } from '../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import {
   paneKeyOf,
   type WorkspaceLayoutModel
 } from '../../../shared/workspace-layout/workspace-layout-model'
-import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
-import { patchStoredSession } from '../../../shared/workspace-layout/workspace-layout-record-patch'
+import { saveWorkspaceLayout } from '../../../shared/workspace-layout/persistence/workspace-layout-save'
+import { patchStoredSession } from '../../../shared/workspace-layout/persistence/workspace-layout-record-patch'
 import {
   followRemoteSessionAfterPaneClose,
   followRemoteSessionAfterPaneDetach
 } from './pane-remote-session-follow'
-import { pruneClosedTerminalTabTombstones } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { pruneClosedTerminalTabTombstones } from '../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   editorViewsOfModel,
