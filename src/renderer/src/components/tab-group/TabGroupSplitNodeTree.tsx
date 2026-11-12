@@ -24,7 +24,6 @@ export function ResizeHandle({
   const isHorizontal = direction === 'horizontal'
   const [dragging, setDragging] = useState(false)
   const activeResizeCleanupRef = useRef<((updateDragging?: boolean) => void) | null>(null)
-  const activePointerIdRef = useRef<number | null>(null)
 
   useEffect(
     () => () => {
@@ -36,13 +35,9 @@ export function ResizeHandle({
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       event.preventDefault()
-      const active = activeResizeCleanupRef.current
-      if (active) {
-        // Why: a second pointer must not steal the gesture, but a new press of the same pointer proves the old release was missed.
-        if (activePointerIdRef.current !== event.pointerId) {
-          return
-        }
-        active()
+      // Why: a second pointer must not steal or finalize the active gesture.
+      if (activeResizeCleanupRef.current) {
+        return
       }
       const handle = event.currentTarget
       const container = handle.parentElement
@@ -115,6 +110,7 @@ export function ResizeHandle({
         handle.removeEventListener('lostpointercapture', onLostPointerCapture)
         window.removeEventListener('blur', onWindowBlur)
         document.removeEventListener('visibilitychange', onVisibilityChange)
+        window.removeEventListener('pointerdown', onNextPointerDown, true)
         if (activeResizeCleanupRef.current === cleanup) {
           activeResizeCleanupRef.current = null
         }
@@ -140,6 +136,12 @@ export function ResizeHandle({
 
       // Why: a release outside a blurred or hidden window may never arrive; end the gesture so guests take input again.
       const onWindowBlur = (): void => cleanup()
+      // Why: a new press of the same pointer anywhere proves the old release was missed; end it before the press is handled.
+      const onNextPointerDown = (downEvent: PointerEvent): void => {
+        if (downEvent.pointerId === event.pointerId) {
+          cleanup()
+        }
+      }
       const onVisibilityChange = (): void => {
         if (document.visibilityState === 'hidden') {
           cleanup()
@@ -152,8 +154,8 @@ export function ResizeHandle({
       handle.addEventListener('lostpointercapture', onLostPointerCapture)
       window.addEventListener('blur', onWindowBlur)
       document.addEventListener('visibilitychange', onVisibilityChange)
+      window.addEventListener('pointerdown', onNextPointerDown, true)
       activeResizeCleanupRef.current = cleanup
-      activePointerIdRef.current = event.pointerId
     },
     [isHorizontal, onRatioChange, onResizeStart, onResizeEnd]
   )

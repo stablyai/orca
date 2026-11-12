@@ -5,6 +5,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  acquireWebviewsDragPassthrough,
   isWebviewDragPassthroughActive,
   registerWebviewDragPassthroughSurface
 } from '../browser-pane/host-guest/webview-drag-passthrough'
@@ -35,9 +36,13 @@ describe('tab-group ResizeHandle gesture lifecycle', () => {
   let root: Root
   let handle: HTMLElement
   let firstPane: HTMLElement
+  let otherHandle: HTMLElement
+  let otherFirstPane: HTMLElement
+  let content: HTMLElement
   let surfaceCalls: boolean[][]
   let unregisterSurfaces: (() => void)[]
   const onRatioChange = vi.fn()
+  const onOtherRatioChange = vi.fn()
 
   const press = (init: { pointerId?: number } = {}) =>
     act(() => {
@@ -50,6 +55,7 @@ describe('tab-group ResizeHandle gesture lifecycle', () => {
 
   beforeEach(async () => {
     onRatioChange.mockClear()
+    onOtherRatioChange.mockClear()
     vi.stubGlobal(
       'ResizeObserver',
       class {
@@ -68,25 +74,43 @@ describe('tab-group ResizeHandle gesture lifecycle', () => {
     root = createRoot(host)
     await act(async () => {
       root.render(
-        <div data-split="">
-          <div />
-          <ResizeHandle
-            direction="horizontal"
-            onResizeStart={() => {}}
-            onRatioChange={onRatioChange}
-          />
-          <div />
-        </div>
+        <>
+          <div data-split="a">
+            <div />
+            <ResizeHandle
+              direction="horizontal"
+              onResizeStart={() => {}}
+              onRatioChange={onRatioChange}
+            />
+            <div />
+          </div>
+          <div data-split="b">
+            <div />
+            <ResizeHandle
+              direction="horizontal"
+              onResizeStart={() => {}}
+              onRatioChange={onOtherRatioChange}
+            />
+            <div />
+          </div>
+          <p data-content="">Pane content</p>
+        </>
       )
     })
-    const split = host.querySelector<HTMLElement>('[data-split]')!
-    split.getBoundingClientRect = () => new DOMRect(0, 0, 1000, 500)
-    handle = host.querySelector<HTMLElement>('.tab-group-split-resize-handle')!
-    firstPane = host.querySelector<HTMLElement>('[data-split] > div')!
-    handle.setPointerCapture = () => {}
-    handle.releasePointerCapture = () => {}
-    // Linux Chromium: capture never reports as held while moves keep arriving (#34287).
-    handle.hasPointerCapture = () => false
+    const handles = Array.from(host.querySelectorAll<HTMLElement>('[data-split]')).map((split) => {
+      split.getBoundingClientRect = () => new DOMRect(0, 0, 1000, 500)
+      const splitHandle = split.querySelector<HTMLElement>('.tab-group-split-resize-handle')!
+      splitHandle.setPointerCapture = () => {}
+      splitHandle.releasePointerCapture = () => {}
+      // Linux Chromium: capture never reports as held while moves keep arriving (#34287).
+      splitHandle.hasPointerCapture = () => false
+      return { splitHandle, pane: split.querySelector<HTMLElement>(':scope > div')! }
+    })
+    ;[
+      { splitHandle: handle, pane: firstPane },
+      { splitHandle: otherHandle, pane: otherFirstPane }
+    ] = handles
+    content = host.querySelector<HTMLElement>('[data-content]')!
   })
 
   afterEach(async () => {
@@ -162,9 +186,53 @@ describe('tab-group ResizeHandle gesture lifecycle', () => {
     expect(isWebviewDragPassthroughActive()).toBe(false)
   })
 
+  it('ends a lost gesture when the same pointer presses another divider', async () => {
+    await press()
+    await dispatch(window, pointer('pointermove', { clientX: 300 }))
+    await dispatch(otherHandle, pointer('pointerdown'))
+    await dispatch(window, pointer('pointermove', { clientX: 600 }))
+    await dispatch(window, pointer('pointerup', { clientX: 600 }))
+
+    expect(firstPane.style.flex).toBe('0.3 1 0%')
+    expect(otherFirstPane.style.flex).toBe('0.6 1 0%')
+    expect(onRatioChange.mock.calls).toEqual([[0.3]])
+    expect(onOtherRatioChange.mock.calls).toEqual([[0.6]])
+    expect(isWebviewDragPassthroughActive()).toBe(false)
+  })
+
+  it('ends a lost gesture when the same pointer presses ordinary content', async () => {
+    await press()
+    await dispatch(window, pointer('pointermove', { clientX: 300 }))
+    await dispatch(content, pointer('pointerdown'))
+    await dispatch(window, pointer('pointermove', { clientX: 600 }))
+    await dispatch(window, pointer('pointerup', { clientX: 600 }))
+
+    expect(firstPane.style.flex).toBe('0.3 1 0%')
+    expect(onRatioChange.mock.calls).toEqual([[0.3]])
+    expect(surfaceCalls).toEqual([
+      [true, false],
+      [true, false]
+    ])
+  })
+
+  it('keeps another drag owner click-through after the divider releases', async () => {
+    const releaseTabDrag = acquireWebviewsDragPassthrough()
+    await press()
+    await dispatch(window, pointer('pointerup', { clientX: 400 }))
+    expect(isWebviewDragPassthroughActive()).toBe(true)
+    expect(surfaceCalls.map((calls) => calls.at(-1))).toEqual([true, true])
+
+    releaseTabDrag()
+    expect(isWebviewDragPassthroughActive()).toBe(false)
+    expect(surfaceCalls.map((calls) => calls.at(-1))).toEqual([false, false])
+  })
+
   it('ignores a second pointer while the first one drags', async () => {
     await press({ pointerId: 1 })
     await press({ pointerId: 2 })
+    await dispatch(content, pointer('pointerdown', { pointerId: 2 }))
+    await dispatch(otherHandle, pointer('pointerdown', { pointerId: 2 }))
+    await dispatch(window, pointer('pointerup', { pointerId: 2 }))
     await dispatch(window, pointer('pointermove', { pointerId: 2, clientX: 700 }))
     await dispatch(window, pointer('pointermove', { pointerId: 1, clientX: 250 }))
     await dispatch(window, pointer('pointerup', { pointerId: 2 }))
