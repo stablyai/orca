@@ -25,6 +25,7 @@ export type AgentChoiceArgsInput = {
   retainedKeys?: ReadonlySet<string>
   permissionRanges?: readonly ChoiceOccurrence[]
   sourceEdit?: boolean
+  cutPurpose?: 'delete'
   publication?: AgentChoicePublicationContext
 }
 
@@ -204,7 +205,7 @@ export function reconcileAgentChoiceArgsDetailed(input: AgentChoiceArgsInput) {
   const cuts = input.permissionRanges
     ? [...selected.filter((entry) => entry.key !== 'permissionMode'), ...input.permissionRanges]
     : selected
-  const cut = analysis.cut(cuts)
+  const cut = analysis.cut(cuts, input.cutPurpose)
   const lifted =
     cut === null
       ? []

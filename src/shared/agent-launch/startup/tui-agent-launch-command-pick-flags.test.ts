@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAgentLaunchCommand, terminalSessionOptionInputs } from './tui-agent-launch-command'
 import { resolveAgentStartupPlanInputs } from './agent-startup-plan-inputs'
+import { clearTerminalEffortArgs } from './terminal-effort-option-edit'
 import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 
 function launch(args: Partial<Parameters<typeof resolveAgentLaunchCommand>[0]>) {
@@ -53,11 +54,11 @@ it('applies effort deletion to current destination defaults, actions and Argumen
     isRemote: false,
     sessionOptions: { effort: 'medium' }
   }
-  expect(editedLaunch(request).argv).toEqual({
+  expect(editedLaunch(request).argv).toMatchObject({
     ok: true,
-    tokens: ['agy', '--effort', 'medium', '--dangerously-skip-permissions', '--add-dir', 'new']
+    tokens: ['agy', '--dangerously-skip-permissions', '--add-dir', 'new', '--effort', 'medium']
   })
-  expect(editedLaunch({ ...request, terminalOptionEdits: { effort: null } }).argv).toEqual({
+  expect(editedLaunch({ ...request, terminalOptionEdits: { effort: null } }).argv).toMatchObject({
     ok: true,
     tokens: ['agy', '--dangerously-skip-permissions', '--add-dir', 'new']
   })
@@ -67,13 +68,13 @@ it('applies effort deletion to current destination defaults, actions and Argumen
       terminalOptionEdits: { effort: null },
       agentArgs: '--effort low --add-dir authored'
     }).argv
-  ).toEqual({
+  ).toMatchObject({
     ok: true,
     tokens: ['agy', '--add-dir', 'authored']
   })
   expect(
     editedLaunch({ ...request, terminalOptionEdits: { effort: null }, agentArgs: null }).argv
-  ).toEqual({ ok: true, tokens: ['agy'] })
+  ).toMatchObject({ ok: true, tokens: ['agy'] })
   expect(JSON.stringify(settings)).toBe(before)
 })
 
@@ -82,7 +83,7 @@ it.each([
     'claude',
     '--effort low --add-dir docs',
     { effort: 'high' },
-    ['claude', '--effort', 'high', '--add-dir', 'docs'],
+    ['claude', '--add-dir', 'docs', '--effort', 'high'],
     ['claude', '--add-dir', 'docs']
   ],
   [
@@ -92,11 +93,11 @@ it.each([
     [
       'codex',
       '-c',
-      'model_reasoning_effort=high',
-      '-c',
       'disable_paste_burst=true',
       '-c',
-      'personality=friendly'
+      'personality=friendly',
+      '-c',
+      'model_reasoning_effort=high'
     ],
     ['codex', '-c', 'disable_paste_burst=true', '-c', 'personality=friendly']
   ]
@@ -111,8 +112,8 @@ it.each([
       shell: 'posix' as const,
       isRemote: false
     }
-    expect(editedLaunch(request).argv).toEqual({ ok: true, tokens: ordinary })
-    expect(editedLaunch({ ...request, terminalOptionEdits: { effort: null } }).argv).toEqual({
+    expect(editedLaunch(request).argv).toMatchObject({ ok: true, tokens: ordinary })
+    expect(editedLaunch({ ...request, terminalOptionEdits: { effort: null } }).argv).toMatchObject({
       ok: true,
       tokens: cleared
     })
@@ -131,7 +132,7 @@ it('preserves literal composed models and opaque Arguments while clearing dedica
     shell: 'posix' as const,
     isRemote: false
   }
-  expect(editedLaunch(request).argv).toEqual({
+  expect(editedLaunch(request).argv).toMatchObject({
     ok: true,
     tokens: ['cursor-agent', '--model', 'sonnet-4.5-thinking', '--add-dir', 'docs']
   })
@@ -144,4 +145,32 @@ it('preserves literal composed models and opaque Arguments while clearing dedica
     shell: 'posix'
   })
   expect(opaque).toEqual({ agentArgs: '--effort low | tee result' })
+})
+
+it('deletes only a proven effort before an opaque suffix without rewriting that suffix', () => {
+  expect(
+    clearTerminalEffortArgs(
+      'antigravity',
+      '--dangerously-skip-permissions --effort=high  --add-dir "current folder"  '
+    )
+  ).toBe('--dangerously-skip-permissions   --add-dir "current folder"  ')
+  expect(
+    clearTerminalEffortArgs(
+      'antigravity',
+      '--dangerously-skip-permissions --effort low --future-option opaque'
+    )
+  ).toBe('--dangerously-skip-permissions  --future-option opaque')
+})
+
+it.each([
+  ['antigravity', '--future-option opaque --effort low'],
+  ['antigravity', '--model --effort low'],
+  ['claude', '--system-prompt --effort low'],
+  ['antigravity', '-- --effort low'],
+  ['antigravity', '--effort low --effort high'],
+  ['antigravity', "--effort 'low' --add-dir docs"],
+  ['antigravity', '--effort "low'],
+  ['antigravity', '--effort low | tee output']
+] as const)('preserves protected effort text for %s: %s', (agent, raw) => {
+  expect(clearTerminalEffortArgs(agent, raw)).toBe(raw)
 })

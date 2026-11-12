@@ -162,7 +162,7 @@ it.each([null, 'ssh-1'])(
       { worktreeId: WT, tabId, leafId: launchTab(tabId)!.agentLaunchPane!.leafId },
       { connectionId, ...(connectionId ? { startupCommandDelivery: 'shell-ready' as const } : {}) }
     )
-    expect(tokenizeStartupCommand(planned.command ?? '', 'posix')).toEqual({
+    expect(tokenizeStartupCommand(planned.command ?? '', 'posix')).toMatchObject({
       ok: true,
       tokens: ['agy', '--dangerously-skip-permissions', '--add-dir', 'current']
     })

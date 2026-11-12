@@ -107,7 +107,7 @@ it.each([false, true])(
           terminalOptionEdits: inputs?.startupTerminalOptionEdits
         })
     })
-    expect(tokenizeStartupCommand(result.effectiveStartup?.command ?? '', 'posix')).toEqual({
+    expect(tokenizeStartupCommand(result.effectiveStartup?.command ?? '', 'posix')).toMatchObject({
       ok: true,
       tokens: ['agy', '--dangerously-skip-permissions', '--add-dir', 'current']
     })

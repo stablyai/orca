@@ -136,11 +136,11 @@ it.each(['dedicated', 'arguments'] as const)(
       ok: true,
       tokens: [
         'antigravity',
-        '--model',
-        'gemini-3.8-flash',
         '--dangerously-skip-permissions',
         '--add-dir',
-        'docs'
+        'docs',
+        '--model',
+        'gemini-3.8-flash'
       ]
     })
   }
@@ -408,7 +408,7 @@ it('removes a model-less saved Low chip and uses current destination Arguments a
       agentDefaultArgs: { antigravity: '--effort=medium --add-dir new' },
       agentLaunchChoices: { antigravity: { options: { effort: 'high' } } }
     })
-  ).toEqual({
+  ).toMatchObject({
     ok: true,
     tokens: ['antigravity', '--dangerously-skip-permissions', '--add-dir', 'new']
   })

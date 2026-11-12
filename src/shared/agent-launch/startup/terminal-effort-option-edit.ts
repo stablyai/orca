@@ -18,6 +18,7 @@ export function clearTerminalEffortArgs(agent: TuiAgent, userArgs: string): stri
     mode: 'choice-edit',
     keys,
     patch: { options: { effort: null } },
-    sourceEdit: true
+    sourceEdit: true,
+    cutPurpose: 'delete'
   }).userArgs
 }
