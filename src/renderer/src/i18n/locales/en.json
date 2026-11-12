@@ -1404,8 +1404,7 @@
       "orcaCloud": "Orca Cloud"
     },
     "orcaAccount": {
-      "descriptionIdentity": "The Orca account you’re signed in with.",
-      "descriptionAccount": "Sign in to Orca and see which account and team you use."
+      "descriptionIdentity": "The Orca account you’re signed in with."
     },
     "agentAccounts": {
       "searchTitle": "Agent accounts",
@@ -1421,6 +1420,11 @@
       "selectedHost": "Selected host",
       "hostsTitle": "Hosts",
       "jumpLabel": "Parts of this page"
+    },
+    "accountBilling": {
+      "account": "Account",
+      "title": "Account + Billing",
+      "description": "Your Orca account, plan, sandbox hours and payment."
     }
   },
   "menu": {

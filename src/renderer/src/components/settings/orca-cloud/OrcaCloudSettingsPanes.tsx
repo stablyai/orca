@@ -6,7 +6,6 @@ import { useOrcaAccountKey } from '@/hooks/use-orca-account-key'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { PlanBillingSection } from '../../billing/PlanBillingSection'
 import { TeamPageBody } from '../../billing/team/TeamDialogHost'
 import {
   CloudEnvironmentSection,
@@ -103,10 +102,6 @@ function OrcaCloudAccountGate({
       })}
     </Fragment>
   )
-}
-
-export function OrcaCloudBillingPane(): React.JSX.Element {
-  return <OrcaCloudAccountGate>{() => <PlanBillingSection />}</OrcaCloudAccountGate>
 }
 
 export function OrcaCloudTeamPane(): React.JSX.Element {
