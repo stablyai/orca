@@ -14,6 +14,11 @@ import {
 const ANCHOR_LINES = 3
 const SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
 
+/** The wake divider ("── Slept 2:02–2:31 PM ──" in any of its forms, or a bare rule). */
+function isWakeDivider(line: string | undefined): boolean {
+  return /^──( .+ ──|─*)$/.test(plain(line))
+}
+
 function plain(line: string | undefined): string {
   return (line ?? '').replace(SGR, '').trimEnd()
 }
@@ -27,6 +32,16 @@ function plain(line: string | undefined): string {
 export function mergeDeeperHistory(paneCopy: string, replayHistory: string): string | null {
   const before = paneCopy.split('\r\n')
   const after = replayHistory.split('\r\n')
+  // V3-02: output from before a sleep lives only in this pane (sleep stopped the host's processes).
+  // A host replay never carries the wake divider, so everything up to it is kept, then the host's.
+  let dividerAt = before.length - 1
+  while (dividerAt >= 0 && !isWakeDivider(before[dividerAt])) {
+    dividerAt--
+  }
+  if (dividerAt !== -1 && !after.some(isWakeDivider)) {
+    const hostLines = after.length === 1 && plain(after[0]) === '' ? [] : after
+    return [...before.slice(0, dividerAt + 1), ...hostLines].join('\r\n')
+  }
   if (after.length < ANCHOR_LINES + 1 || before.length <= after.length) {
     return null
   }
