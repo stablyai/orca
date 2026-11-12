@@ -260,18 +260,28 @@ async function cloneFiles(
   await runClone(method, first.sources.slice(0, 1), first.targetDirectory, options)
   first.sources = first.sources.slice(1)
   let next = 0
+  let stopped = false
   const workers = Array.from({ length: Math.min(CLONE_CONCURRENCY, batches.length) }, async () => {
-    while (next < batches.length) {
-      options.signal?.throwIfAborted()
-      const batch = batches[next++]
-      if (batch.sources.length > 0) {
-        await mkdir(batch.targetDirectory, { recursive: true })
-        // A file missing or changed in the main checkout fails alone; Git rewrites it below.
-        await runClone(method, batch.sources, batch.targetDirectory, options).catch(() => {})
+    try {
+      while (!stopped && next < batches.length) {
+        options.signal?.throwIfAborted()
+        const batch = batches[next++]
+        if (batch.sources.length > 0) {
+          await mkdir(batch.targetDirectory, { recursive: true })
+          // A file missing or changed in the main checkout fails alone; Git rewrites it below.
+          await runClone(method, batch.sources, batch.targetDirectory, options).catch(() => {})
+        }
       }
+    } catch (error) {
+      stopped = true
+      throw error
     }
   })
-  await Promise.all(workers)
+  // Settle every worker, so no clone is still writing when the caller falls back to a checkout.
+  const failure = (await Promise.allSettled(workers)).find((result) => result.status === 'rejected')
+  if (failure?.status === 'rejected') {
+    throw failure.reason
+  }
 }
 
 /**
