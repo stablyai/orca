@@ -41,13 +41,35 @@ hold_for_member_setup() {
   fi
   exit 1
 }
+# A commit under the workspace identity (Orca Cloud's name) says once per session how to use your own
+# (design-squad). /dev/shm is per boot: a wake or restart says it again.
+nudge_once() {
+  [ "$sub" = commit ] || return 0
+  local mark="${ORCA_GIT_NUDGE_DIR:-/dev/shm}/orca-git-nudge-$(id -u)"
+  [ -e "$mark" ] && return 0
+  : >"$mark" 2>/dev/null || return 0
+  printf '%s\n' "orca: This commit uses Orca Cloud's name. Connect your GitHub in Settings › Account & billing to use yours." >&2
+}
+# orca-git-as's own fallback line is replaced by the nudge.
+fallback_filter() {
+  local line
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      'orca-git-as: no teammate identity'*) nudge_once ;;
+      *) printf '%s\n' "$line" ;;
+    esac
+  done
+}
+git_as="${ORCA_GIT_AS:-/opt/orca/bin/orca-git-as}"
 case "$sub" in
   commit | push | merge | rebase | cherry-pick | revert | am | pull | tag)
     hold_for_member_setup
     # Outside an agent turn (no attested sender) orca-git-as falls back to the workspace identity.
-    if [ -n "${ORCA_TERMINAL_HANDLE:-}${ORCA_AGENT_SESSION_ID:-}" ] && [ -x /opt/orca/bin/orca-git-as ]; then
-      PATH="/usr/bin:/bin:$PATH" exec /opt/orca/bin/orca-git-as "$@" 2> >(grep -v '^orca-git-as: no teammate identity' >&2)
+    if [ -n "${ORCA_TERMINAL_HANDLE:-}${ORCA_AGENT_SESSION_ID:-}" ] && [ -x "$git_as" ]; then
+      PATH="/usr/bin:/bin:$PATH" exec "$git_as" "$@" 2> >(fallback_filter >&2)
     fi
+    # No terminal or agent turn to attribute it to: the workspace identity.
+    nudge_once
     ;;
 esac
 exec "$real" "$@"
