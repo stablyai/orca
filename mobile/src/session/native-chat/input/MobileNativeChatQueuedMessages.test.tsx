@@ -390,6 +390,47 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(scrollTo).toHaveBeenCalledWith({ y: 100, animated: false })
   })
 
+  it('places a failed row by the current order after a reorder that lays nothing out', async () => {
+    vi.useFakeTimers()
+    try {
+      const scrollTo = vi.fn()
+      const mounted = create(createElement('View'), {
+        createNodeMock: (node) =>
+          node.type === 'ScrollView'
+            ? { scrollTo, scrollToEnd: vi.fn(), flashScrollIndicators: vi.fn() }
+            : null
+      })
+      renderer = mounted
+      const ids = (order: string) => [...order].map((messageId) => card({ messageId }))
+      await act(async () => mounted.update(element({ cards: ids('abcd') })))
+      const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+      await act(async () => {
+        scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } })
+        scroll.props.onContentSizeChange(0, 240)
+        rows(mounted).forEach((row) =>
+          row.props.onLayout({ nativeEvent: { layout: { height: 60 } } })
+        )
+      })
+      // Equal-height rows reordered by transform: no row lays out again.
+      await act(async () => mounted.update(element({ cards: ids('bcda') })))
+      scrollTo.mockClear()
+      await act(async () =>
+        mounted.update(
+          element({
+            cards: [...ids('bcd'), card({ messageId: 'a', needsAttention: true })]
+          })
+        )
+      )
+      await act(async () => {
+        vi.advanceTimersByTime(QUEUED_ROW_SHOW_SETTLE_MS)
+      })
+      // a is now last, spanning 180–240 of a 100pt list, not first.
+      expect(scrollTo).toHaveBeenCalledWith({ y: 140, animated: false })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('scrolls to a failure the list mounts open for, and settles when no row lays out again', async () => {
     vi.useFakeTimers()
     try {
