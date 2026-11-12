@@ -63,6 +63,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'pi':
     case 'omp':
     case 'prime-agent':
+    case 'gentle-shell':
       return eventName === 'before_agent_start'
     case 'droid':
       return eventName === 'UserPromptSubmit'
@@ -135,6 +136,7 @@ export function isTurnEndEvent(source: AgentHookSource, eventName: unknown): boo
     case 'pi':
     case 'omp':
     case 'prime-agent':
+    case 'gentle-shell':
       // Why: their done events are status snapshots or milestones that can repeat within one turn.
       return false
   }
@@ -245,6 +247,7 @@ export function extractToolFields(
     case 'pi':
     case 'omp':
     case 'prime-agent':
+    case 'gentle-shell':
       return extractPiToolFields(eventName, hookPayload, source)
     case 'droid':
       return extractDroidToolFields(eventName, hookPayload)

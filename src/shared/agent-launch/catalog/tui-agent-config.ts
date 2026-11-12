@@ -144,6 +144,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Prime Agent embeds Pi’s CSI-u reader.
     windowsShiftEnterEncoding: 'csi-u'
   },
+  // gentle-shell wraps Pi and shares its CSI-u reader.
+  // prettier-ignore
+  'gentle-shell': { detectCmd: 'gentle-shell', promptInjectionMode: 'argv', windowsShiftEnterEncoding: 'csi-u' },
   qoder: {
     detectCmd: 'qodercli',
     // The documented `qoder` dispatcher still launches the legacy CLI binary.

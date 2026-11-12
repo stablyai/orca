@@ -4,6 +4,7 @@ import { createContext, runInContext } from 'node:vm'
 import ts from 'typescript-api'
 import { vi } from 'vitest'
 
+import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 import { getPiAgentStatusExtensionSource } from './agent-status-extension-source'
 
 export type HookContext = {
@@ -100,7 +101,7 @@ function transpileExtensionSource(source: string): string {
 }
 
 export function createAgentStatusExtensionHarness(args: {
-  kind: 'pi' | 'omp' | 'prime-agent'
+  kind: PiAgentKind
   killImpl?: (pid: number, signal: number) => void
   env?: Record<string, string | undefined>
   pid?: number

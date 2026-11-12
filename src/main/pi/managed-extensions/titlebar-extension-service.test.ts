@@ -206,6 +206,25 @@ describe('PiTitlebarExtensionService', () => {
 
   // Windows symlinks need privileges; junction predicate tests cover ordering separately.
 
+  describe('gentle-shell status extension', () => {
+    it('materializes the status extension in userData and never creates the gentle-shell home', () => {
+      const fakeHome = mkdtempSync(join(tmpdir(), 'orca-gentle-shell-home-'))
+      homedirOverride.current = fakeHome
+      try {
+        const env = new PiTitlebarExtensionService().buildGentleShellEnv()
+
+        const extensionPath = env.ORCA_GENTLE_SHELL_STATUS_EXTENSION!
+        expect(extensionPath.startsWith(userDataDir)).toBe(true)
+        expect(readFileSync(extensionPath, 'utf8')).toContain('/hook/gentle-shell')
+        expect(existsSync(join(fakeHome, '.gentle-shell'))).toBe(false)
+        expect(existsSync(join(fakeHome, '.pi'))).toBe(false)
+      } finally {
+        homedirOverride.current = ''
+        rmSync(fakeHome, { recursive: true, force: true })
+      }
+    })
+  })
+
   describe('per-agent default source dir (no cross-agent fallback)', () => {
     it('bare-shell prep does not create missing ~/.pi or ~/.omp homes (#10196)', () => {
       const fakeHome = mkdtempSync(join(tmpdir(), 'orca-no-eager-agent-home-'))
