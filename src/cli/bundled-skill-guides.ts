@@ -724,6 +724,7 @@ const ORCA_CLI_BROWSER_REFERENCE_MARKDOWN = [
   "ORCA tab switch --index <n> --json",
   "ORCA tab close --index <n> --json",
   "ORCA cookie get --page <browserPageId> --json",
+  "ORCA cookie import --file cookies.json --json",
   "ORCA capture start --page <browserPageId> --json",
   "ORCA console --page <browserPageId> --limit 50 --json",
   "ORCA network --page <browserPageId> --limit 50 --json",
