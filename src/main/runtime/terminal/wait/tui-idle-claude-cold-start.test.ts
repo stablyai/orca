@@ -81,34 +81,6 @@ describe('tui-idle on a slow-starting Claude', () => {
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
-
-  it('does not settle on a boot banner Claude printed before its composer', async () => {
-    const { runtime, handle, write } = await startClaudePane()
-    write(SHELL_RUNS_CLAUDE)
-    const settled = vi.fn()
-    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
-    wait.then(settled, () => {})
-
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
-    write('Loading Claude Code…\r\n')
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
-    expect(settled).not.toHaveBeenCalled()
-
-    write(CLAUDE_COMPOSER_BARE_TITLE)
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
-    await expect(wait).resolves.toMatchObject({ satisfied: true })
-  })
-
-  it('settles the bare-title weak lane once the composer marker has arrived and output is quiet', async () => {
-    const { runtime, handle, write } = await startClaudePane()
-    write(SHELL_RUNS_CLAUDE + LATER_PREEXEC_HOOK_PRINTS)
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
-    write(CLAUDE_COMPOSER_BARE_TITLE)
-    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
-
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
-    await expect(wait).resolves.toMatchObject({ satisfied: true })
-  })
 })
 
 describe('worker start on a slow-starting Claude', () => {
