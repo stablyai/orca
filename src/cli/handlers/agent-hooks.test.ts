@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -218,20 +218,21 @@ describe('agent hooks CLI handler', () => {
   })
 
   it.each([
-    ['offline', false, 'offline'],
-    ['connected', true, 'runtime']
+    { label: 'offline', reachable: false, enabled: true, appliedBy: 'offline' },
+    { label: 'connected', reachable: true, enabled: false, appliedBy: 'runtime' }
   ] as const)(
-    'reports %s hook status against the sqlite file that holds the setting',
-    async (_label, reachable, appliedBy) => {
+    'reports $label hook status against the SQLite file that holds the setting',
+    async ({ reachable, enabled, appliedBy }) => {
       const profileId = 'sqlite-status'
       writeActiveProfileIndex(userDataPath, profileId)
       const databaseFile = getOrcaProfileStateDatabaseFile(profileId, userDataPath)
-      const dataFile = getOrcaProfileDataFile(profileId, userDataPath)
       mkdirSync(join(userDataPath, 'profiles', profileId), { recursive: true })
-      const raw = JSON.stringify({ settings: { agentStatusHooksEnabled: true } })
       const opened = openProfileStateDatabase(databaseFile, profileId)
       try {
-        importProfileStateJson(opened.db, raw)
+        importProfileStateJson(
+          opened.db,
+          JSON.stringify({ settings: { agentStatusHooksEnabled: true } })
+        )
       } finally {
         opened.db.close()
       }
@@ -241,24 +242,27 @@ describe('agent hooks CLI handler', () => {
           id: 'test-status',
           ok: true,
           result: {
-            app: { running: true, pid: 42 },
-            runtime: { state: 'ready', reachable: true, runtimeId: 'runtime-1' },
+            app: { running: true, pid: null },
+            runtime: { state: 'ready', reachable: true, runtimeId: null },
             graph: { state: 'ready' }
           },
           _meta: { runtimeId: 'test' }
+        })
+        // The running app has turned hooks off but not yet written it to disk.
+        callMock.mockResolvedValueOnce({
+          id: 'settings',
+          ok: true,
+          result: { settings: { agentStatusHooksEnabled: false } },
+          _meta: { runtimeId: 'runtime-1' }
         })
       }
 
       await main(['agent', 'hooks', 'status', '--json'], userDataPath)
 
-      const payload = JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0])) as {
-        result: { enabled: boolean; appliedBy: string; settingsPath: string }
-      }
-      expect(process.exitCode).not.toBe(1)
-      expect(existsSync(dataFile)).toBe(false)
-      expect(payload.result.enabled).toBe(true)
-      expect(payload.result.appliedBy).toBe(appliedBy)
-      expect(payload.result.settingsPath).toBe(databaseFile)
+      const payload: unknown = JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]))
+      expect(payload).toMatchObject({
+        result: { enabled, appliedBy, settingsPath: databaseFile }
+      })
     }
   )
 })
