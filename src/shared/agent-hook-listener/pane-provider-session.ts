@@ -270,10 +270,17 @@ export function retainHookRootContext(
       : undefined
   const providerSession =
     !incoming.providerSession && (previousRoot?.providerSession ?? returningProviderSession)
-  const model =
-    incoming.payload.agentType === 'codex' && !incoming.payload.model
-      ? previousRoot?.payload.model
-      : undefined
+  // Claude reports its model only on SessionStart, so a restart's next hook must keep the saved one.
+  const modelSource =
+    incoming.payload.agentType === 'codex'
+      ? previousRoot
+      : incoming.payload.agentType === 'claude' &&
+          fromHook &&
+          sameTerminalOwner &&
+          previous?.payload.agentType === 'claude'
+        ? previous
+        : undefined
+  const model = incoming.payload.model ? undefined : modelSource?.payload.model
   return providerSession || model
     ? {
         ...incoming,
