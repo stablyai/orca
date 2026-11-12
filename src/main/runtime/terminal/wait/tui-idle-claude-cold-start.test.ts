@@ -1,7 +1,11 @@
 /** STA-2380: a shell auto-title names Claude before it draws anything; quiet alone must not make it ready. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID,
+  type TranscriptPaneOptions
+} from './agent-transcript-pane-test-harness'
 import { waitForWorkerStartComposer } from './launched-agent-composer-readiness'
 import { sendAgentTurn } from '../../orchestration/turn-delivery/send-agent-turn'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
@@ -209,7 +213,7 @@ describe('tui-idle on a slow-starting Claude', () => {
   it('reads the quiet foreground again after a failed read, then settles on the pager (CodeRabbit)', async () => {
     // A failed read tells nothing about the foreground; keeping it for the quiet stretch would
     // hold the pager pane until the caller's timeout.
-    const pane = { paneTitle: 'Terminal', foregroundProcess: null as string | null, data: '' }
+    const pane: TranscriptPaneOptions = { paneTitle: 'Terminal', foregroundProcess: null, data: '' }
     const { runtime, handle } = await createTranscriptPane(pane)
     vi.useFakeTimers()
     runtime.onPtyData(
