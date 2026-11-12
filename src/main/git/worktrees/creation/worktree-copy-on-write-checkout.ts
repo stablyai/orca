@@ -5,6 +5,7 @@ import { canCloneWithApfs } from '../../../ipc/worktree-apfs-clone'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { gitExecOptions, type GitWorktreeExecOptions } from '../worktree-operation-options'
 import { readTreeIntoPlainIndex, transferCleanIndexStats } from './worktree-index-stat-transfer'
+import { canReflinkIntoDirectory } from './worktree-reflink-probe'
 
 /** `git config orca.copyOnWriteCheckout false` (repo or global) turns cloned checkouts off. */
 export const COPY_ON_WRITE_CHECKOUT_CONFIG_KEY = 'orca.copyOnWriteCheckout'
@@ -44,8 +45,7 @@ export async function resolveCopyOnWriteCheckout(
     return null
   }
   if (process.platform === 'linux') {
-    // `cp --reflink=always` fails instead of copying, so the first clone is the probe.
-    return 'reflink'
+    return (await canReflinkIntoDirectory(repoPath, dirname(worktreePath))) ? 'reflink' : null
   }
   return (await canCloneWithApfs(repoPath, dirname(worktreePath))) ? 'apfs' : null
 }
