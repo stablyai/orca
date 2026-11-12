@@ -94,12 +94,12 @@ export function cloudAgentSetupStripModel(args: {
     case 'browser':
       return {
         ...need,
-        status: 'busy',
-        // A refusal leads, so a narrow pane still reads it (its first sentence, from the same copy).
+        status: setup.code === 'rejected' ? 'warning' : 'busy',
+        // A refusal leads at every width; nothing is loading then, so the warning icon (design-squad).
         ...(setup.code === 'rejected'
           ? {
-              title: t('agentSignInStrip.setupCodeRejectedTitle', 'That code didn’t work'),
-              compactTitle: t('agentSignInStrip.setupCodeRejectedTitle', 'That code didn’t work')
+              title: t('agentSignInStrip.setupCodeRejectedTitle', 'Code didn’t work'),
+              compactTitle: t('agentSignInStrip.setupCodeRejectedTitle', 'Code didn’t work')
             }
           : {}),
         // A refused code stays the detail until the next paste or "Open again".
