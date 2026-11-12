@@ -49,17 +49,16 @@ function lifecycleRecorder(): {
 }
 
 describe('codex dispatch admission', () => {
-  it('releases acknowledged steers without an echo and still settles late receipts once', async () => {
+  it('releases acknowledged steers without an echo and retains each late receipt', async () => {
     const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
     startTurn(connection, 'turn-1')
     expect(await send(adapter, 'client-1')).toMatchObject({ state: 'admitted' })
-    expect([...adapter.heldSends('session-1')]).toEqual([])
+    expect(adapter.heldSends('session-1')).toEqual(new Set())
     expect(await send(adapter, 'client-2')).toMatchObject({ state: 'admitted' })
-    expect([...adapter.heldSends('session-1')]).toEqual([])
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'late-1', clientId: 'client-1' })
+    expect(adapter.heldSends('session-1')).toEqual(new Set())
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'late-1', clientId: 'client-1' })
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'late-2', clientId: 'client-2' })
     expect(settlements.map(({ clientMessageId }) => clientMessageId)).toEqual([
