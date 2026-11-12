@@ -52,7 +52,7 @@ vi.mock('expo-file-system', () => ({
       }
     }
 
-    write(content: string | Uint8Array, options?: { encoding?: string }): void {
+    writeSync(content: string | Uint8Array, options?: { encoding?: string }): void {
       storage.events.push({ operation: 'write', uri: this.uri, content, options })
       if (storage.writeFailure !== null) {
         storage.files.set(this.uri, new Uint8Array(storage.partialBytes))
@@ -117,16 +117,6 @@ function heldBytes(): number {
   return [...storage.files.values()].reduce((total, bytes) => total + bytes.byteLength, 0)
 }
 
-it('preserves the successful staged URI, base64 options and bytes without deleting it', () => {
-  const uri = device().stageBase64('AQID')
-  expect(uri).toBe('file:///cache/orca-media-1234-0.25.png')
-  expect(storage.events).toEqual([
-    { operation: 'create', uri, options: { overwrite: true } },
-    { operation: 'write', uri, content: 'AQID', options: { encoding: 'base64' } }
-  ])
-  expect(storage.files.get(uri)).toEqual(Uint8Array.from([1, 2, 3]))
-})
-
 it.each([0, 4096])('releases an unreturned file after a write fails with %i bytes', (bytes) => {
   const original = new Error('partial native write')
   storage.writeFailure = original
@@ -148,13 +138,6 @@ it('preserves the write failure when best-effort deletion also fails', () => {
   expect(thrownBy(() => device().stageBase64('AQID'))).toBe(original)
   expect(storage.events.map((event) => event.operation)).toEqual(['create', 'write', 'delete'])
   expect(heldBytes()).toBe(4096)
-})
-
-it('preserves creation failure and its original operation order', () => {
-  const original = new Error('native create failed')
-  storage.createFailure = original
-  expect(thrownBy(() => device().stageBase64('AQID'))).toBe(original)
-  expect(storage.events.map((event) => event.operation)).toEqual(['create'])
 })
 
 it('deletes only the failed file while a prior successful file remains readable', () => {

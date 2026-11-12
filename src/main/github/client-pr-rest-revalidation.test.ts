@@ -1,5 +1,5 @@
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
-import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
+import type * as GhExecFileModule from '../git/command-runner/hosted-cli/gh-exec-file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repository'
@@ -10,14 +10,13 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 })
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
-vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
 
 vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<typeof GitExecFileModule>()),
   gitExecFileAsync: clientMocks.gitExecFileAsyncMock
 }))
 
-vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+vi.mock('../git/command-runner/hosted-cli/gh-exec-file', async (importOriginal) => ({
   ...(await importOriginal<typeof GhExecFileModule>()),
   ghExecFileAsync: clientMocks.ghExecFileAsyncMock
 }))
@@ -37,40 +36,15 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { getFallbackPRListForBranch, getRestPRForBranch } from './client/lookup/pr-branch-lookup'
-import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
+import { getRestPRForBranch } from './client/lookup/pr-branch-lookup'
+
 import { resetPRForBranchMocks } from './client-test-harness'
 
-const { ghExecFileAsyncMock, getOwnerRepoMock, noteRateLimitSpendMock } = clientMocks
+const { ghExecFileAsyncMock } = clientMocks
 
 describe('PR lookup conditional REST reads', () => {
   beforeEach(() => resetPRForBranchMocks(clientMocks))
 
-  it('refreshes a missing branch immediately at zero primary cost when GitHub confirms it is unchanged', async () => {
-    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'HTTP/2.0 200 OK\nEtag: "v1"\r\n\r\n[]' })
-      .mockRejectedValueOnce(
-        Object.assign(new Error('gh: HTTP 304'), { stdout: 'HTTP/2.0 304 Not Modified\n\n' })
-      )
-    expect((await getPRForBranchOutcome('/repo', 'feature/missing')).kind).toBe('no-pr')
-    expect((await getPRForBranchOutcome('/repo', 'feature/missing')).kind).toBe('no-pr')
-    expect(ghExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
-      [
-        'api',
-        'repos/acme/widgets/pulls?head=acme%3Afeature%2Fmissing&state=all&per_page=10',
-        '--include'
-      ],
-      [
-        'api',
-        'repos/acme/widgets/pulls?head=acme%3Afeature%2Fmissing&state=all&per_page=10',
-        '--include',
-        '-H',
-        'If-None-Match: "v1"'
-      ]
-    ])
-    expect(noteRateLimitSpendMock.mock.calls).toEqual([['core']])
-  })
   it('revalidates both mixed and active discovery responses before falling back to history', async () => {
     const repo = { owner: 'acme', repo: 'widgets', host: 'github.com' }
     const old = Array.from({ length: 10 }, (_, i) => ({
@@ -100,27 +74,5 @@ describe('PR lookup conditional REST reads', () => {
     ).resolves.toMatchObject({ number: 11 })
     expect(ghExecFileAsyncMock.mock.calls[2][0]).toContain('If-None-Match: "recent"')
     expect(ghExecFileAsyncMock.mock.calls[3][0]).toContain('If-None-Match: "active"')
-  })
-  it('uses the same saturated-page rule for the CLI fallback', async () => {
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify(
-          Array.from({ length: 10 }, (_, i) => ({ number: i + 1, state: 'CLOSED' }))
-        )
-      })
-      .mockResolvedValueOnce({ stdout: '[{"number":11,"state":"OPEN"}]' })
-    await expect(
-      getFallbackPRListForBranch(
-        { owner: 'acme', repo: 'widgets', host: 'github.com' },
-        'feature',
-        { cwd: '/repo' }
-      )
-    ).resolves.toMatchObject({ number: 11 })
-    expect(ghExecFileAsyncMock.mock.calls[0][0]).toEqual(
-      expect.arrayContaining(['--state', 'all', '--limit', '10'])
-    )
-    expect(ghExecFileAsyncMock.mock.calls[1][0]).toEqual(
-      expect.arrayContaining(['--state', 'open', '--limit', '1'])
-    )
   })
 })

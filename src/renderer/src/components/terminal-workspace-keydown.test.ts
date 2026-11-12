@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 
-import '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import type * as WorktreeActivation from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../hooks/ipc-tab-switch'
 import '@/components/floating-terminal/floating-workspace-terminal-actions'
@@ -17,7 +19,7 @@ import {
 import '@/store/testing/app-store-test-fixture'
 import '@/store/repos/repo.test-fixture'
 import '@/store/slices/worktrees/worktree.test-fixture'
-import './use-terminal-keyboard-shortcuts'
+import { useTerminalKeyboardShortcuts } from './use-terminal-keyboard-shortcuts'
 import './tab-bar/agent-menu-shortcut-labels'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
@@ -55,6 +57,11 @@ vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
   admitStructuredAgentSession: (
     await import('@/store/slices/agent-status/structured-session-admission.test-fixture')
   ).admissionFromBusy(mocks.structuredSessionBusy)
+}))
+
+vi.mock('@/lib/workspace/activation/worktree-activation', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeActivation>()),
+  activateAndRevealWorkspace: vi.fn()
 }))
 
 vi.mock('../store/index', () => ({ useAppStore: { getState: () => mocks.state } }))
@@ -260,5 +267,37 @@ describe('Agents scope chords sharing a tab-switching chord', () => {
 
   it('keeps switching tabs when focus is elsewhere, including the /resume dialog', () => {
     expect(pressSharedChord(false).defaultPrevented).toBe(true)
+  })
+})
+
+describe('reopen closed tab from the welcome screen', () => {
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  it('restores the current history workspace with no active workspace', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Windows')
+    const reopenClosedTab = vi.fn(() => true)
+    const worktreeId = 'repo-1::/repo/last-workspace'
+    mocks.state = {
+      worktreeNavHistory: ['repo-1::/repo/older', worktreeId, 'repo-1::/repo/forward'],
+      worktreeNavHistoryIndex: 1,
+      reopenClosedTab
+    }
+    renderHook(() => useTerminalKeyboardShortcuts({ ...controller, activeWorktreeId: null }))
+    const event = new KeyboardEvent('keydown', {
+      key: 'T',
+      code: 'KeyT',
+      shiftKey: true,
+      ctrlKey: true,
+      cancelable: true
+    })
+    act(() => window.dispatchEvent(event))
+    expect(reopenClosedTab).toHaveBeenCalledExactlyOnceWith(worktreeId)
+    expect(activateAndRevealWorkspace).toHaveBeenCalledExactlyOnceWith(worktreeId, {
+      navigationIntent: 'user-open'
+    })
+    expect(event.defaultPrevented).toBe(true)
   })
 })

@@ -91,8 +91,8 @@ export function TerminalWorkspaceDialogs({
                     'A remote host could not be reached, so Orca cannot tell whether work is still running there. Close the window anyway?'
                   )
                 : t(
-                    'auto.components.Terminal.7958465754',
-                    'There are terminals with running processes. Close the window anyway?'
+                    'auto.components.Terminal.93c2e9d845',
+                    'There is running work in chats or terminals. Close the window anyway?'
                   )}
             </DialogDescription>
           </DialogHeader>

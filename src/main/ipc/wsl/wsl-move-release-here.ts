@@ -9,26 +9,26 @@ import {
   type WslMoveCutover
 } from '../../../shared/wsl-move/wsl-move-cutover'
 import type { WslMoveUseLocallyResult } from '../../../shared/wsl-move/wsl-moved-project'
-import { listWslMoveCutoverChain } from '../../persistence/moving-wsl-projects/wsl-move-cutover-journal'
-import type { WslMoveProjectRef } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { fenceHostSpawnsForWslMoveUndo } from '../../persistence/moving-wsl-projects/wsl-move-undo-spawn-fence'
+import { listWslMoveCutoverChain } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-cutover-journal'
+import type { WslMoveProjectRef } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { fenceHostSpawnsForWslMoveUndo } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-spawn-fence'
 import {
   findWslMovedProjectMove,
   releaseWslMove,
   wslMoveReleaseRefusal,
   wslMoveWorkspacesInScope
-} from '../../persistence/moving-wsl-projects/wsl-move-use-locally'
+} from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-use-locally'
 import {
   holdWslMoveWindowWrites,
   reloadWslMoveWindowWithWritesHeld
-} from '../../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
 import type { WslMoveUndoPorts } from './wsl-move-undo-wiring'
 import {
   wslMoveHostCopiesSlept,
   wslMoveHostCopyOutcome
-} from '../../persistence/moving-wsl-projects/wsl-move-host-copy-stop'
-import { beginWslMoveUndoRun } from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
-import { runWslMoveHostAutomationsExclusive } from '../../persistence/moving-wsl-projects/wsl-move-undo-host-automations'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-host-copy-stop'
+import { beginWslMoveUndoRun } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
+import { runWslMoveHostAutomationsExclusive } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-host-automations'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { wasWslHostKeptForPeers } from '../../wsl/host-lifecycle/wsl-host-kept-for-peers'
 

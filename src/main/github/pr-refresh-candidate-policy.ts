@@ -36,6 +36,7 @@ export function hostedReviewOptionArgs(
     options.acceptMergedFallbackPR = true
   }
   if (reason === 'watch') {
+    options.includeDerivedData = false
     options.checkPageLimit = PR_CHECK_PAGE_LIMIT
     // A watch knows its PR's repository; probing another remote by number could read another PR.
     const pr = requestOptions.watchPRKey ? parsePRKey(requestOptions.watchPRKey) : null

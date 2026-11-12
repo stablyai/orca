@@ -1,4 +1,4 @@
-import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
+import { claudeProfileHistoryDirs } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'

@@ -26,7 +26,8 @@ export const ROUTE_POPUP_WINDOW_OPTIONS = {
     allowRunningInsecureContent: false,
     contextIsolation: true,
     nodeIntegration: false,
-    nodeIntegrationInSubFrames: false,
+    // Sandboxed and without Node, this only runs the session's preloads (the passkey watch) in iframes.
+    nodeIntegrationInSubFrames: true,
     sandbox: true,
     webviewTag: false
   }

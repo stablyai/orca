@@ -1,7 +1,9 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import type { UsageStoreHost, UsageTelemetryHost } from '../usage-store-host'
+import { createTestUsageStoreHost } from '../usage-store-host-test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import { UsageProviderStoreLifecycle } from './usage-provider-store-lifecycle'
@@ -68,11 +70,25 @@ class TestUsageStore extends UsageProviderStoreLifecycle<
   TestState,
   'hasAnyTestData'
 > {
-  constructor(cacheFile: string, scan: TestScan, splitCacheFile: TestSplit) {
+  constructor(
+    cacheFile: string,
+    scan: TestScan,
+    splitCacheFile: TestSplit,
+    capture: ReturnType<typeof vi.fn<UsageTelemetryHost['capture']>>,
+    readCatalog?: UsageStoreHost['readCatalog'],
+    isEnabled?: UsageTelemetryHost['isEnabled'],
+    signal?: AbortSignal
+  ) {
     super(
       {
-        getRepos: () => [],
-        getAllWorktreeMeta: () => ({})
+        ...createTestUsageStoreHost({
+          userDataPath: dirname(cacheFile),
+          telemetryEnabled: true,
+          capture,
+          signal
+        }),
+        ...(readCatalog ? { readCatalog } : {}),
+        ...(isEnabled ? { telemetry: { isEnabled, capture } } : {})
       },
       {
         tokenUsage: {
@@ -97,6 +113,14 @@ class TestUsageStore extends UsageProviderStoreLifecycle<
       }
     )
   }
+
+  replaceState(state: TestState): void {
+    this.state = state
+  }
+
+  getState(): TestState {
+    return this.state
+  }
 }
 
 describe('UsageProviderStoreLifecycle', () => {
@@ -104,16 +128,10 @@ describe('UsageProviderStoreLifecycle', () => {
   let stores: TestUsageStore[]
   let scan: ReturnType<typeof vi.fn<TestScan>>
   let split: ReturnType<typeof vi.fn<TestSplit>>
-
-  function createStore(
-    cacheFile = join(tempDirectory, `usage-${stores.length}.json`)
-  ): TestUsageStore {
-    const store = new TestUsageStore(cacheFile, scan, split)
-    stores.push(store)
-    return store
-  }
+  let capture: ReturnType<typeof vi.fn<UsageTelemetryHost['capture']>>
 
   beforeEach(() => {
+    capture = vi.fn<UsageTelemetryHost['capture']>(async () => true)
     tempDirectory = mkdtempSync(join(tmpdir(), 'orca-usage-lifecycle-'))
     stores = []
     scan = vi.fn<TestScan>().mockResolvedValue(emptyScanResult())
@@ -128,28 +146,131 @@ describe('UsageProviderStoreLifecycle', () => {
     vi.restoreAllMocks()
   })
 
-  it('flush waits for queued analytics identity creation', async () => {
-    const store = createStore()
-    const identity = store.getAnalyticsSessionIds(['session'])
+  it('keeps a successful scan when the first async telemetry consent request rejects', async () => {
+    const cacheFile = join(tempDirectory, 'consent-rejection.json')
+    const consent = vi
+      .fn<UsageTelemetryHost['isEnabled']>()
+      .mockRejectedValue(new Error('No RPC credit'))
+    const store = new TestUsageStore(cacheFile, scan, split, capture, undefined, consent)
+    stores.push(store)
+    await store.setEnabled(true)
+    scan.mockResolvedValueOnce({
+      sessions: [{ id: 'fresh' }],
+      dailyAggregates: [{ day: '2026-04-10' }]
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(store.refresh(true)).resolves.toMatchObject({
+      isScanning: false,
+      lastScanCompletedAt: NOW,
+      lastScanError: null,
+      hasAnyTestData: true
+    })
     await store.flush()
-    const [id] = await identity
-    expect(
-      readFileSync(join(tempDirectory, 'usage-0-analytics-session-ids.json'), 'utf8')
-    ).toContain(id)
+    expect(store.getState().sessions).toEqual([{ id: 'fresh' }])
+    expect(JSON.parse(readFileSync(cacheFile, 'utf8'))).toMatchObject({
+      sessions: [{ id: 'fresh' }],
+      dailyAggregates: [{ day: '2026-04-10' }],
+      scanState: { lastScanCompletedAt: NOW, lastScanError: null }
+    })
+    expect(consent).toHaveBeenCalledTimes(1)
+    expect(capture).not.toHaveBeenCalled()
   })
 
-  it('keeps per-source records out of the report main writes', async () => {
-    const cacheFile = join(tempDirectory, 'provider.json')
-    const store = createStore(cacheFile)
+  it('stops admission without persisting a host catalog abort as a scan failure', async () => {
+    const cacheFile = join(tempDirectory, 'aborted-catalog.json')
+    const abort = new AbortController()
+    const readCatalog = vi.fn<UsageStoreHost['readCatalog']>().mockResolvedValue({
+      repoIds: ['repo-1'],
+      worktreesByRepo: [
+        ['repo-1', [{ worktreeId: 'repo-1::/workspace/a', path: '/workspace/a', displayName: 'A' }]]
+      ]
+    })
+    const store = new TestUsageStore(
+      cacheFile,
+      scan,
+      split,
+      capture,
+      readCatalog,
+      undefined,
+      abort.signal
+    )
+    stores.push(store)
     await store.setEnabled(true)
-    scan.mockResolvedValueOnce({ sessions: [{ id: 'session' }], dailyAggregates: [] })
-
+    scan.mockResolvedValueOnce({ sessions: [{ id: 'scan-result' }], dailyAggregates: [] })
+    await store.refresh(true)
+    expect(scan.mock.calls[0]?.[0]).toEqual([
+      {
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/a',
+        path: '/workspace/a',
+        displayName: 'A'
+      }
+    ])
+    const catalog = Promise.withResolvers<Awaited<ReturnType<UsageStoreHost['readCatalog']>>>()
+    readCatalog.mockReturnValueOnce(catalog.promise)
+    const refresh = store.refresh(true)
+    abort.abort(new Error('Backend stopping'))
+    catalog.resolve({ repoIds: [], worktreesByRepo: [] })
+    await expect(refresh).rejects.toThrow('Backend stopping')
+    store.stopScanAdmission()
     await store.refresh(true)
     await store.flush()
-
-    const persisted = readFileSync(cacheFile, 'utf-8')
-    expect(JSON.parse(persisted)).not.toHaveProperty('processedSources')
-    expect(JSON.parse(persisted).sessions).toEqual([{ id: 'session' }])
-    expect(persisted).not.toContain('\n')
+    expect(JSON.parse(readFileSync(cacheFile, 'utf8'))).toMatchObject({
+      sessions: [{ id: 'scan-result' }],
+      scanState: { enabled: true, lastScanError: null }
+    })
   })
+
+  it.each([
+    { waitingOn: 'catalog', sessions: [{ id: 'prior' }], completedAt: 12_000 },
+    { waitingOn: 'scanner', sessions: [{ id: 'fresh' }], completedAt: NOW }
+  ])(
+    'preserves disable while waiting on $waitingOn',
+    async ({ waitingOn, sessions, completedAt }) => {
+      const cacheFile = join(tempDirectory, `disable-${waitingOn}.json`)
+      const entered = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<void>()
+      const readCatalog = async () => {
+        if (waitingOn === 'catalog') {
+          entered.resolve()
+          await release.promise
+        }
+        return { repoIds: [], worktreesByRepo: [] }
+      }
+      scan.mockImplementationOnce(async () => {
+        if (waitingOn === 'scanner') {
+          entered.resolve()
+          await release.promise
+        }
+        return { sessions: [{ id: 'fresh' }], dailyAggregates: [] }
+      })
+      const store = new TestUsageStore(cacheFile, scan, split, capture, readCatalog)
+      stores.push(store)
+      await store.whenLoaded()
+      store.replaceState(
+        makeState({
+          sessions: [{ id: 'prior' }],
+          scanState: { enabled: true, lastScanCompletedAt: 12_000 }
+        })
+      )
+      const refresh = store.refresh(true)
+      await entered.promise
+      await store.setEnabled(false)
+      release.resolve()
+      await expect(refresh).resolves.toMatchObject({
+        enabled: false,
+        isScanning: false,
+        lastScanCompletedAt: completedAt,
+        lastScanError: null
+      })
+      expect(store.getState().sessions).toEqual(sessions)
+      await store.flush()
+      expect(JSON.parse(readFileSync(cacheFile, 'utf8'))).toMatchObject({
+        sessions,
+        scanState: { enabled: false, lastScanCompletedAt: completedAt, lastScanError: null }
+      })
+      expect(capture).not.toHaveBeenCalled()
+    }
+  )
 })
