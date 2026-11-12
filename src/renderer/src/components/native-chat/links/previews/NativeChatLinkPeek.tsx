@@ -14,7 +14,8 @@ export function NativeChatLinkPeek({
   href: string | undefined
   children: ReactNode
 }): ReactNode {
-  const { githubRepo, githubRoutingHostId, webPreviews } = useContext(NativeChatLinkPeekContext)
+  const { githubRepo, githubRoutingAuthorityKey, webPreviews } =
+    useContext(NativeChatLinkPeekContext)
   const body = useMemo(() => {
     const webUrl = webPreviews ? previewableWebUrl(href) : null
     const webBody = webUrl ? (
@@ -37,19 +38,19 @@ export function NativeChatLinkPeek({
     }
     // No chat repo on the link's host, as in a folder workspace: another repo on the chat's host
     // can still answer with its GitHub sign-in. A web page fetch can't read private repos.
-    const routed = href && githubRoutingHostId ? parseGitHubIssueOrPRLink(href) : null
-    if (routed && githubRoutingHostId) {
+    const routed = href && githubRoutingAuthorityKey ? parseGitHubIssueOrPRLink(href) : null
+    if (routed && githubRoutingAuthorityKey) {
       return (
         <NativeChatGitHubPeekBody
-          key={`routed:${githubRoutingHostId}:${href}`}
-          source={{ kind: 'routed', hostId: githubRoutingHostId }}
+          key={`routed:${githubRoutingAuthorityKey}:${href}`}
+          source={{ kind: 'routed', authorityKey: githubRoutingAuthorityKey }}
           link={routed}
           otherRepoFallback={webBody}
         />
       )
     }
     return webBody
-  }, [githubRepo, githubRoutingHostId, href, webPreviews])
+  }, [githubRepo, githubRoutingAuthorityKey, href, webPreviews])
   if (!body) {
     return children
   }

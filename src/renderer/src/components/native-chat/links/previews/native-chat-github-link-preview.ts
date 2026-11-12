@@ -1,29 +1,32 @@
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { useAppStore } from '@/store/index'
-import { readRepoSlugCache, repoSlugCacheKey } from '@/lib/workspace/catalog/repo-slug-cache'
 import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { githubRepoIdentityKey } from '../../../../../../shared/github/repositories/repository-identity-key'
 import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import type { HostAuthorityKey } from '../../../../../../shared/host-authority'
 import { createHoverPreviewCache } from './native-chat-hover-preview-cache'
 import {
   findGitHubPreviewRouteRepo,
-  githubPreviewRouteCandidates
+  githubPreviewRepoAuthorityKey,
+  githubPreviewRepoIdentity,
+  githubPreviewRouteCatalogKey,
+  readGitHubPreviewRouteRepo
 } from './native-chat-github-route-repo'
 
 const previews = createHoverPreviewCache<GitHubWorkItem>({ freshMs: 60_000, maxEntries: 200 })
 
 /** Repo ids repeat across hosts, and each host answers with its own GitHub account. */
 export function githubLinkPreviewKey(repo: Repo, link: GitHubIssueOrPRLink): string {
-  return `${getRepoExecutionHostId(repo)}:${repo.id}:${githubRepoIdentityKey(link.slug)}#${link.number}:${link.type}`
+  return `${githubPreviewRepoIdentity(repo)}:${githubRepoIdentityKey(link.slug)}#${link.number}:${link.type}`
 }
 
 async function lookup(
   repo: Repo,
   link: GitHubIssueOrPRLink,
-  type: 'issue' | 'pr'
+  type: 'issue' | 'pr',
+  accepts?: () => boolean
 ): Promise<GitHubWorkItem | null> {
   return lookupGitHubWorkItemByOwnerRepoForSource({
     repoPath: repo.path,
@@ -38,14 +41,19 @@ async function lookup(
     host: link.slug.host,
     number: link.number,
     type,
-    preview: true
+    preview: true,
+    accepts
   })
 }
 
-async function fetchPreview(repo: Repo, link: GitHubIssueOrPRLink): Promise<GitHubWorkItem | null> {
-  const item = await lookup(repo, link, link.type)
+async function fetchPreview(
+  repo: Repo,
+  link: GitHubIssueOrPRLink,
+  accepts?: () => boolean
+): Promise<GitHubWorkItem | null> {
+  const item = await lookup(repo, link, link.type, accepts)
   // Hosts without the preview lookup answer null for a PR asked for as an issue (bare #N links).
-  return item || link.type !== 'issue' ? item : lookup(repo, link, 'pr')
+  return item || link.type !== 'issue' ? item : lookup(repo, link, 'pr', accepts)
 }
 
 /** Lets a reopened card paint its last answer without a loading frame. */
@@ -60,7 +68,14 @@ export function loadGitHubLinkPreview(
   repo: Repo,
   link: GitHubIssueOrPRLink
 ): Promise<GitHubWorkItem | null> {
-  return previews.load(githubLinkPreviewKey(repo, link), () => fetchPreview(repo, link))
+  const authority = githubPreviewRepoAuthorityKey(repo)
+  if (!authority) {
+    return Promise.resolve(null)
+  }
+  const identity = githubPreviewRepoIdentity(repo)
+  const read = (repos: readonly Repo[]) =>
+    repos.find((row) => githubPreviewRepoIdentity(row) === identity) ?? null
+  return loadPreviewFromCatalog(authority, link, async (repos) => read(repos), read)
 }
 
 /** Asks again even while the last answer is fresh: the pull request may have just changed. */
@@ -72,43 +87,76 @@ export function reloadGitHubLinkPreview(
   return loadGitHubLinkPreview(repo, link)
 }
 
-/** Candidate changes must rerun route selection before reusing an answer from another repo/account. */
+/** The same selected route identity names synchronous reads, requests and cache commits. */
 export function routedGitHubLinkPreviewKey(
-  hostId: string,
+  routeAuthority: HostAuthorityKey,
   link: GitHubIssueOrPRLink,
   repos: readonly Repo[] = useAppStore.getState().repos
 ): string {
-  const routes = githubPreviewRouteCandidates(repos, hostId).map((repo) => {
-    const cacheKey = repoSlugCacheKey(repo)
-    const slug = cacheKey ? readRepoSlugCache(cacheKey) : null
-    return [
-      repo.id,
-      repo.path,
-      repo.connectionId ?? null,
-      repo.ghAccount?.host ?? null,
-      repo.ghAccount?.user ?? null,
-      repo.upstream ?? null,
-      repo.gitRemoteIdentity ?? null,
-      slug?.hit ? slug.value : null
-    ]
-  })
-  return `${hostId}:routed:${githubRepoIdentityKey(link.slug)}#${link.number}:${link.type}:${JSON.stringify(routes)}`
+  const repo = readGitHubPreviewRouteRepo(repos, routeAuthority, link)
+  return repo
+    ? githubLinkPreviewKey(repo, link)
+    : `${routeAuthority}:unrouted:${githubRepoIdentityKey(link.slug)}#${link.number}:${link.type}`
 }
 
 export function readCachedRoutedGitHubLinkPreview(
-  hostId: string,
+  routeAuthority: HostAuthorityKey,
   link: GitHubIssueOrPRLink
 ): GitHubWorkItem | null {
-  return previews.read(routedGitHubLinkPreviewKey(hostId, link))
+  return previews.read(routedGitHubLinkPreviewKey(routeAuthority, link))
 }
 
-export async function loadRoutedGitHubLinkPreview(
-  hostId: string,
+export function loadRoutedGitHubLinkPreview(
+  routeAuthority: HostAuthorityKey,
   link: GitHubIssueOrPRLink
 ): Promise<GitHubWorkItem | null> {
+  return loadPreviewFromCatalog(
+    routeAuthority,
+    link,
+    (repos) => findGitHubPreviewRouteRepo(repos, routeAuthority, link),
+    (repos) => readGitHubPreviewRouteRepo(repos, routeAuthority, link)
+  )
+}
+
+async function loadPreviewFromCatalog(
+  routeAuthority: HostAuthorityKey,
+  link: GitHubIssueOrPRLink,
+  select: (repos: readonly Repo[]) => Promise<Repo | null>,
+  read: (repos: readonly Repo[]) => Repo | null
+): Promise<GitHubWorkItem | null> {
   const repos = useAppStore.getState().repos
-  const repo = await findGitHubPreviewRouteRepo(repos, hostId, link)
-  return repo
-    ? previews.load(routedGitHubLinkPreviewKey(hostId, link, repos), () => fetchPreview(repo, link))
-    : null
+  const catalog = githubPreviewRouteCatalogKey(repos, routeAuthority)
+  let invalidated = false
+  const stop = useAppStore.subscribe((state) => {
+    // Remember transient changes too: Alice -> Bob -> Alice cannot revive an in-flight request.
+    invalidated ||= githubPreviewRouteCatalogKey(state.repos, routeAuthority) !== catalog
+  })
+  try {
+    const repo = await select(repos)
+    if (!repo || invalidated) {
+      return null
+    }
+    const identity = githubPreviewRepoIdentity(repo)
+    const accepts = () => {
+      const currentRepos = useAppStore.getState().repos
+      const currentRepo = read(currentRepos)
+      return (
+        !invalidated &&
+        githubPreviewRouteCatalogKey(currentRepos, routeAuthority) === catalog &&
+        currentRepo !== null &&
+        githubPreviewRepoIdentity(currentRepo) === identity
+      )
+    }
+    if (!accepts()) {
+      return null
+    }
+    const item = await previews.load(
+      githubLinkPreviewKey(repo, link),
+      () => fetchPreview(repo, link, accepts),
+      accepts
+    )
+    return accepts() ? item : null
+  } finally {
+    stop()
+  }
 }

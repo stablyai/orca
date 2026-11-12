@@ -3,13 +3,24 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import { clearRepoSlugCacheValues } from '@/lib/workspace/catalog/repo-slug-cache'
 
-const mocks = vi.hoisted(() => {
-  const repos: Repo[] = []
-  return { repos, slugs: new Map<string, string | null>(), lookup: vi.fn() }
+const mocks = await vi.hoisted(async () => {
+  const { createStore } = await import('zustand/vanilla')
+  const store = createStore<{ repos: Repo[] }>(() => ({ repos: [] }))
+  return {
+    store,
+    get repos() {
+      return store.getState().repos
+    },
+    set repos(repos: Repo[]) {
+      store.setState({ repos })
+    },
+    slugs: new Map<string, string | null>(),
+    lookup: vi.fn()
+  }
 })
 
 vi.mock('@/store/index', () => ({
-  useAppStore: { getState: () => ({ repos: mocks.repos }) }
+  useAppStore: mocks.store
 }))
 vi.mock('@/lib/workspace/catalog/repo-slug-index', async () => {
   const { rememberRepoSlug, repoSlugCacheKey } =
@@ -56,6 +67,20 @@ describe('GitHub preview routing for a chat without a repo of its own', () => {
     const all = [local, remote, runtime, folder]
     expect(githubPreviewRouteCandidates(all, 'local')).toEqual([local])
     expect(githubPreviewRouteCandidates(all, 'runtime:env')).toEqual([runtime])
+  })
+
+  it('separates endpoint-local repos from each nested SSH target on the same runtime', () => {
+    const local = repo('local')
+    const endpoint = repo('endpoint', { executionHostId: 'runtime:env' })
+    const targetT = repo('target-t', { executionHostId: 'runtime:env', connectionId: 'T' })
+    const targetU = repo('target-u', { executionHostId: 'runtime:env', connectionId: 'U' })
+    const directT = repo('direct-t', { connectionId: 'T' })
+    const candidates = [local, endpoint, targetT, targetU, directT]
+    expect(githubPreviewRouteCandidates(candidates, 'local')).toEqual([local])
+    expect(githubPreviewRouteCandidates(candidates, 'runtime:env')).toEqual([endpoint])
+    expect(githubPreviewRouteCandidates(candidates, 'nested:env/T')).toEqual([targetT])
+    expect(githubPreviewRouteCandidates(candidates, 'nested:env/U')).toEqual([targetU])
+    expect(githubPreviewRouteCandidates(candidates, 'ssh:T')).toEqual([directT])
   })
 
   it('prefers an exact clone before a fork upstream, then any repo on the GitHub host', () => {

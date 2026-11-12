@@ -1,7 +1,17 @@
 import { resolveRepoSlug } from '@/lib/workspace/catalog/repo-slug-index'
+import { readRepoSlugCache, repoSlugCacheKey } from '@/lib/workspace/catalog/repo-slug-cache'
 import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  toSshExecutionHostId
+} from '../../../../../../shared/execution-host'
+import {
+  authorityKey,
+  parseHostAuthorityKey,
+  type HostAuthorityKey
+} from '../../../../../../shared/host-authority'
 import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey,
@@ -10,10 +20,66 @@ import {
 
 export type RepoWithOriginKey = { repo: Repo; originKey: string | null }
 
+export function githubPreviewRepoAuthorityKey(repo: Repo): HostAuthorityKey | null {
+  const authority = parseHostAuthorityKey(getRepoExecutionHostId(repo))
+  if (!authority) {
+    return null
+  }
+  const connectionId = getRepoSshConnectionId(repo)
+  return authorityKey(
+    authority.endpoint.kind === 'environment' && connectionId
+      ? { ...authority, at: toSshExecutionHostId(connectionId) }
+      : authority
+  )
+}
+
+/** One registered route, including its endpoint, nested target and account binding. */
+export function githubPreviewRepoIdentity(repo: Repo): string {
+  return JSON.stringify([
+    githubPreviewRepoAuthorityKey(repo),
+    repo.id,
+    repo.path,
+    repo.kind ?? 'git',
+    repo.connectionId ?? null,
+    repo.ghAccount?.host ?? null,
+    repo.ghAccount?.user ?? null,
+    repo.upstream ?? null,
+    repo.gitRemoteIdentity ?? null
+  ])
+}
+
 /** Git repos on the chat's host; their remotes decide which GitHub sign-in a lookup may use. */
-export function githubPreviewRouteCandidates(repos: readonly Repo[], hostId: string): Repo[] {
+export function githubPreviewRouteCandidates(
+  repos: readonly Repo[],
+  routeAuthority: HostAuthorityKey
+): Repo[] {
   return repos.filter(
-    (repo) => (!repo.kind || repo.kind === 'git') && getRepoExecutionHostId(repo) === hostId
+    (repo) =>
+      (!repo.kind || repo.kind === 'git') && githubPreviewRepoAuthorityKey(repo) === routeAuthority
+  )
+}
+
+export function githubPreviewRouteCatalogKey(
+  repos: readonly Repo[],
+  routeAuthority: HostAuthorityKey
+): string {
+  return JSON.stringify(
+    githubPreviewRouteCandidates(repos, routeAuthority).map(githubPreviewRepoIdentity)
+  )
+}
+
+export function readGitHubPreviewRouteRepo(
+  repos: readonly Repo[],
+  routeAuthority: HostAuthorityKey,
+  link: GitHubIssueOrPRLink
+): Repo | null {
+  return pickGitHubPreviewRouteRepo(
+    githubPreviewRouteCandidates(repos, routeAuthority).map((repo) => {
+      const key = repoSlugCacheKey(repo)
+      const slug = key ? readRepoSlugCache(key) : null
+      return { repo, originKey: slug?.hit ? slug.value : null }
+    }),
+    link
   )
 }
 
@@ -40,12 +106,12 @@ export function pickGitHubPreviewRouteRepo(
 
 export async function findGitHubPreviewRouteRepo(
   repos: readonly Repo[],
-  hostId: string,
+  routeAuthority: HostAuthorityKey,
   link: GitHubIssueOrPRLink
 ): Promise<Repo | null> {
   // Slugs are cached per repo, and the sidebar's slug index has usually resolved them already.
   const candidates = await Promise.all(
-    githubPreviewRouteCandidates(repos, hostId).map(async (repo) => ({
+    githubPreviewRouteCandidates(repos, routeAuthority).map(async (repo) => ({
       repo,
       originKey: await resolveRepoSlug(repo)
     }))

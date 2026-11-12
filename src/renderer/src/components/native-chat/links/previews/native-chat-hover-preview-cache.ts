@@ -19,7 +19,7 @@ export function createHoverPreviewCache<T>({
   budget?: { maxBytes: number; sizeOf: (value: T) => number }
 }): {
   read: (key: string) => T | null
-  load: (key: string, fetch: () => Promise<T | null>) => Promise<T | null>
+  load: (key: string, fetch: () => Promise<T | null>, accepts?: () => boolean) => Promise<T | null>
   /** The next load asks again, even past one already under way; `read` keeps the old answer. */
   expire: (key: string) => void
 } {
@@ -48,7 +48,7 @@ export function createHoverPreviewCache<T>({
         entry.expired = true
       }
     },
-    load: (key, fetch) => {
+    load: (key, fetch, accepts) => {
       const cached = entries.get(key)
       if (
         cached &&
@@ -78,6 +78,10 @@ export function createHoverPreviewCache<T>({
       }
       entry.promise = fetch().then(
         (value) => {
+          if (accepts?.() === false) {
+            forget()
+            return null
+          }
           if (!value) {
             forget()
           } else if (entries.get(key) === entry) {

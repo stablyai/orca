@@ -17,7 +17,7 @@ vi.mock('@/store', () => ({
 }))
 
 function RoutingHost() {
-  return useContext(NativeChatLinkPeekContext).githubRoutingHostId
+  return useContext(NativeChatLinkPeekContext).githubRoutingAuthorityKey
 }
 
 it.each([
@@ -27,6 +27,16 @@ it.each([
     owner: { executionHostId: 'runtime:env' as const },
     runtimeEnvironmentId: 'env',
     expectedHost: 'runtime:env'
+  },
+  {
+    owner: { executionHostId: 'runtime:env' as const, connectionId: 'T' },
+    runtimeEnvironmentId: 'env',
+    expectedHost: 'nested:env/T'
+  },
+  {
+    owner: { executionHostId: 'runtime:env' as const, connectionId: 'U' },
+    runtimeEnvironmentId: 'env',
+    expectedHost: 'nested:env/U'
   }
 ])(
   'routes a folder chat preview through $expectedHost',

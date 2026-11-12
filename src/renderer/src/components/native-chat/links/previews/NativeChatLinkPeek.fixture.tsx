@@ -7,7 +7,7 @@ import { NativeChatLinkPeekContext } from './native-chat-link-peek-context'
 
 const previewContext = {
   githubRepo: null,
-  githubRoutingHostId: null,
+  githubRoutingAuthorityKey: null,
   webPreviews: { runtimeEnvironmentId: null }
 }
 
