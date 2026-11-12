@@ -5,6 +5,12 @@ import { useTranslate } from '@/i18n/use-translate'
 import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
 import { isNestedWorktreeRemovalError } from '../../../../../../shared/worktree/nested-removal'
+import {
+  CLOUD_DELETE_NOT_SENT_IN_USE,
+  CLOUD_DELETE_NOT_SENT_NO_DESTROY,
+  isCloudDeleteNotSentError
+} from '../../../../../../shared/recipe-host-removal'
+import { translate } from '@/i18n/i18n'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
@@ -26,6 +32,8 @@ type DeleteWorktreeFailureToastOptions = {
   onForceDelete: () => void
   onAlwaysForceDelete?: () => Promise<void>
   onDeleteAnyway: () => void
+  /** REG-12: a delete that failed before any sandbox delete was sent offers Try again. */
+  onRetry?: () => void
   worktreeId: string
   executionHostId?: ExecutionHostId | null
   worktreeName: string
@@ -52,6 +60,7 @@ function DeleteWorktreeFailureToastBody({
   onForceDelete,
   onAlwaysForceDelete,
   onDeleteAnyway,
+  onRetry,
   toastId,
   nestedRemovalTarget,
   worktreeName,
@@ -65,6 +74,7 @@ function DeleteWorktreeFailureToastBody({
   onForceDelete: () => void
   onAlwaysForceDelete?: () => Promise<void>
   onDeleteAnyway: () => void
+  onRetry?: () => void
   toastId: string
   nestedRemovalTarget?: WorktreeRemovalTarget
   worktreeName: string
@@ -78,6 +88,10 @@ function DeleteWorktreeFailureToastBody({
   const deleteAnyway = (): void => {
     toast.dismiss(toastId)
     onDeleteAnyway()
+  }
+  const retry = (): void => {
+    toast.dismiss(toastId)
+    onRetry?.()
   }
 
   return (
@@ -106,6 +120,11 @@ function DeleteWorktreeFailureToastBody({
             onAlwaysForceDelete={onAlwaysForceDelete}
           />
         ) : null}
+        {onRetry ? (
+          <Button type="button" variant="outline" size="sm" onClick={retry}>
+            {t('auto.components.sidebar.delete.worktree.failure.tryAgain', 'Try again')}
+          </Button>
+        ) : null}
         {canWaiveArchiveHook ? (
           <Button type="button" variant="destructive" size="sm" onClick={deleteAnyway}>
             {t('auto.components.sidebar.delete.worktree.failure.archive.waiver', 'Delete Anyway')}
@@ -114,6 +133,38 @@ function DeleteWorktreeFailureToastBody({
       </div>
     </div>
   )
+}
+
+/** REG-12: an Orca Cloud delete refused before anything was deleted, in design-squad's copy. */
+function cloudDeleteNotSentCopy(
+  worktreeName: string,
+  error: string
+): { title: string; description: string; isDestructive: boolean } {
+  const description = error.includes(CLOUD_DELETE_NOT_SENT_IN_USE)
+    ? translate(
+        'auto.components.sidebar.delete.worktree.failure.cloudInUse',
+        'Other workspaces still run in this sandbox, so nothing was deleted. Delete them first.'
+      )
+    : error.includes(CLOUD_DELETE_NOT_SENT_NO_DESTROY)
+      ? translate(
+          'auto.components.sidebar.delete.worktree.failure.cloudNoDestroy',
+          "The delete didn't go through, so nothing was deleted."
+        )
+      : translate(
+          'auto.components.sidebar.delete.worktree.failure.cloudUnchecked',
+          "Orca couldn't check the sandbox, so nothing was deleted."
+        )
+  return {
+    title: translate(
+      'auto.components.sidebar.delete.worktree.failure.cloudTitle',
+      "Couldn't delete {{name}}",
+      {
+        name: worktreeName
+      }
+    ),
+    description,
+    isDestructive: true
+  }
 }
 
 export function showDeleteWorktreeFailureToast({
@@ -127,24 +178,24 @@ export function showDeleteWorktreeFailureToast({
   onForceDelete,
   onAlwaysForceDelete,
   onDeleteAnyway,
+  onRetry,
   worktreeId,
   executionHostId,
   worktreeName,
   nestedRemovalTarget,
   onNestedDeleted
 }: DeleteWorktreeFailureToastOptions): void {
-  const toastCopy = getDeleteWorktreeToastCopy(
-    worktreeName,
-    forceDeleteReason,
-    error,
-    lockReason ?? null
-  )
+  const toastCopy = isCloudDeleteNotSentError(error)
+    ? cloudDeleteNotSentCopy(worktreeName, error)
+    : getDeleteWorktreeToastCopy(worktreeName, forceDeleteReason, error, lockReason ?? null)
   const showToast = toastCopy.isDestructive ? toast.error : toast.info
   const id = deleteWorktreeFailureToastId({
     id: worktreeId,
     executionHostId: executionHostId ?? null
   })
   const nestedTarget = isNestedWorktreeRemovalError(error) ? nestedRemovalTarget : undefined
+  // Only where nothing was destroyed yet: then trying again is safe (REG-12).
+  const retryable = onRetry && isCloudDeleteNotSentError(error) ? onRetry : undefined
 
   // Custom content gives multiline errors their own line instead of squeezing them into Sonner’s action/title row.
   showToast(toastCopy.title, {
@@ -164,6 +215,7 @@ export function showDeleteWorktreeFailureToast({
         onForceDelete={onForceDelete}
         onAlwaysForceDelete={onAlwaysForceDelete}
         onDeleteAnyway={onDeleteAnyway}
+        onRetry={retryable}
         toastId={id}
         nestedRemovalTarget={nestedTarget}
         worktreeName={worktreeName}
@@ -171,7 +223,10 @@ export function showDeleteWorktreeFailureToast({
       />
     ),
     // A toast offering a destructive choice must not expire before the user reads the reason.
-    duration: canForceDelete || canWaiveArchiveHook === true || nestedTarget ? Infinity : 10000,
+    duration:
+      canForceDelete || canWaiveArchiveHook === true || nestedTarget || retryable
+        ? Infinity
+        : 10000,
     dismissible: true
   })
 }
