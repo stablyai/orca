@@ -41,6 +41,10 @@ export type CloudStripModel = {
     refusal: string | null
     /** PC-3b: a setup-token is a secret: masked, with this label (default: the claude.ai code). */
     secretLabel?: string
+    /** The empty field's hint (the setup-code step has its own in `setupCode`). */
+    placeholder?: string
+    /** The submit button (the setup-code step has its own in `setupCode`; default "Continue"). */
+    submitLabel?: string
     /**
      * The code Claude's sign-in page shows, for the waiting setup-token (Set up once): masked, cleared
      * once sent, and sent on its own when a whole code is pasted.

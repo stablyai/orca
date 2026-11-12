@@ -169,7 +169,12 @@ export type OrcaCloudAgentSetup =
       expiresAt: number
     }
   /** Claude: paste a setup-token instead (capture failed, no CLI, or chosen). */
-  | { phase: 'paste'; reason: 'capture_failed' | 'no_cli' | 'chosen' }
+  | {
+      phase: 'paste'
+      reason: 'capture_failed' | 'no_cli' | 'chosen'
+      /** The last pasted token was refused; cleared by the next paste. */
+      token?: 'rejected'
+    }
   | { phase: 'saving' }
   /** Just stored; the renderer re-reads the credentials (and may ask the state-7 Source question). */
   | { phase: 'saved' }

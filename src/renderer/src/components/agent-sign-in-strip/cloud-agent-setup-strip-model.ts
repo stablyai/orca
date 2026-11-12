@@ -26,6 +26,11 @@ function base(agent: string, t: Translate): CloudStripModel {
   }
 }
 
+/** A detail with `inline code` marks, as one sentence for a screen reader. */
+function plainText(text: string): string {
+  return text.replaceAll('`', '')
+}
+
 export function setupCodePaste(
   agent: HostAgentSignInAgent,
   code: 'checking' | 'rejected' | undefined,
@@ -164,25 +169,39 @@ export function cloudAgentSetupStripModel(args: {
         code: setup.userCode,
         announcement: t('agentSignInStrip.deviceAnnounce', 'Enter the code on auth.openai.com.')
       }
-    case 'paste':
+    case 'paste': {
+      // The fallback when setup-token can't run here (no CLI, unreadable output) or the person chose
+      // it: same layout and voice as the paste-code step (design-squad). `…` marks inline code.
+      const rejected = setup.token === 'rejected'
+      const title = rejected
+        ? t('agentSignInStrip.pasteTokenRejectedTitle', 'Token didn’t work')
+        : t('agentSignInStrip.pasteAgentTokenTitle', 'Paste a {{agent}} token', { agent })
+      const detail = rejected
+        ? t(
+            'agentSignInStrip.pasteTokenRejectedDetail',
+            'Paste the full token from `claude setup-token`, or run it again.'
+          )
+        : t(
+            'agentSignInStrip.pasteAgentTokenDetail',
+            'Run `claude setup-token` in any terminal where {{agent}} is installed, then paste the token here. It’s saved to your Orca account, never to a sandbox.',
+            { agent }
+          )
       return {
         ...need,
-        title: t('agentSignInStrip.pasteTokenTitle', 'Paste the token from claude setup-token'),
-        detail: t(
-          'agentSignInStrip.pasteTokenDetail',
-          'It’s saved to your Orca account, never to a sandbox.'
-        ),
+        status: rejected ? 'warning' : need.status,
+        title,
+        detail,
         primary: null,
         paste: {
           submitting: false,
-          refusal: null,
-          secretLabel: t('agentSignInStrip.setupTokenLabel', 'Claude setup-token')
+          refusal: rejected ? plainText(detail) : null,
+          secretLabel: t('agentSignInStrip.setupTokenLabel', 'Claude setup-token'),
+          placeholder: t('agentSignInStrip.setupTokenPlaceholder', 'Paste token'),
+          submitLabel: t('agentSignInStrip.finishSetup', 'Finish setup')
         },
-        announcement: t(
-          'agentSignInStrip.pasteTokenTitle',
-          'Paste the token from claude setup-token'
-        )
+        announcement: rejected ? `${title}. ${plainText(detail)}` : title
       }
+    }
     case 'failed': {
       const copy = setupFailureCopy(args.agent, setup.error, t)
       return {

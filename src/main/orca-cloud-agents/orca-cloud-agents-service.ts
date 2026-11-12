@@ -298,7 +298,10 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
     /** The renderer sends the pasted value once; the reply never includes it. */
     pasteClaudeToken: async (raw: string): Promise<OrcaCloudAgentsResult<true>> => {
       const token = raw.trim()
+      const prior = setups.claude
+      const reason = prior?.phase === 'paste' ? prior.reason : 'chosen'
       if (!CLAUDE_SETUP_TOKEN_PATTERN.test(token)) {
+        update('claude', { phase: 'paste', reason, token: 'rejected' })
         return { ok: false, error: 'invalid_token' }
       }
       if (claudeSaving) {
@@ -308,8 +311,8 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
       // A pasted token may come from another account, so no label: the server names it.
       const result = await storeClaude(token, null, identity())
       if (!result.ok && result.error === 'invalid_token') {
-        // Keep the field open so the person can paste again.
-        update('claude', { phase: 'paste', reason: 'chosen' })
+        // Keep the field open so the person can paste again, saying the token didn't work.
+        update('claude', { phase: 'paste', reason, token: 'rejected' })
       }
       return result
     },
