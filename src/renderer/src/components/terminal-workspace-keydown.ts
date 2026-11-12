@@ -50,6 +50,10 @@ export function handleTerminalWorkspaceKeyDown(
     mobileEmulatorEnabled,
     terminalShortcutPolicy
   } = controller
+  // Let the focused Settings recorder capture shortcuts without executing them.
+  if (event.target instanceof Element && event.target.closest('[data-shortcut-recorder-active]')) {
+    return
+  }
   const context = getKeybindingContext(event.target)
   const floatingWorkspaceFocused =
     isEventTargetInsideFloatingWorkspacePanel(event.target) || isFloatingWorkspacePanelFocused()

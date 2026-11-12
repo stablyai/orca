@@ -12,7 +12,7 @@ export function reopenClosedWorkspaceTab(activeWorktreeId: string | null): void 
     return
   }
   if (!activeWorktreeId) {
-    // History entries may be folder workspace keys; this is the activator history replay uses.
-    activateAndRevealWorkspace(worktreeId)
+    // Same activation as history replay: entries may be folder workspace keys, and this is a user open.
+    activateAndRevealWorkspace(worktreeId, { navigationIntent: 'user-open' })
   }
 }

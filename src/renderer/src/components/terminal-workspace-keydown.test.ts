@@ -259,7 +259,9 @@ describe('reopen closed tab from the welcome screen', () => {
     })
     act(() => window.dispatchEvent(event))
     expect(reopenClosedTab).toHaveBeenCalledExactlyOnceWith(worktreeId)
-    expect(activateAndRevealWorkspace).toHaveBeenCalledExactlyOnceWith(worktreeId)
+    expect(activateAndRevealWorkspace).toHaveBeenCalledExactlyOnceWith(worktreeId, {
+      navigationIntent: 'user-open'
+    })
     expect(event.defaultPrevented).toBe(true)
   })
 })
