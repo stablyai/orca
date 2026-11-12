@@ -6,10 +6,14 @@ import { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
 import { createPreviousNativeHangReport } from './previous-native-hang-report'
 import {
   NativeHangCaptureStore,
+  nativeHangCaptureDirectory,
   readNativeHangCapture,
   readPreviousNativeHangCapture
 } from './native-hang-capture-store'
 import { sanitizeNativeHangReport, type NativeHangArtifact } from './native-hang-report'
+import { readPreviousNativeHangTelemetry } from './previous-native-hang-telemetry'
+import { mainThreadHangDetectedSchema } from '../../shared/telemetry-daemon-event-schemas'
+import { getLatestPendingReport } from '../ipc/crash-reporting/crash-reporting-sendable-reports'
 import { collectBundle } from '../observability/bundle'
 
 const sample = `Sampling process 123 for 1 second with 10 milliseconds of run time between samples
@@ -63,7 +67,7 @@ afterEach(async () => {
 
 it('retains every sampled thread and image identity while removing full spaced paths and credentials', async () => {
   const store = new NativeHangCaptureStore(directory)
-  await store.save(artifact(1), () => false)
+  await store.save(artifact(1))
   const capture = await readNativeHangCapture(directory)
   expect(capture?.artifact).toMatchObject({
     showMenuBarIcon: null,
@@ -101,7 +105,7 @@ it.each([
       'interrupted'
     )
     for (let time = 1; time <= count; time++) {
-      await store.save(artifact(time), () => false)
+      await store.save(artifact(time))
     }
     const names = await fs.readdir(directory)
     const retained: number[] = []
@@ -114,41 +118,27 @@ it.each([
   }
 )
 
-it('persists real recovery during publication and after completion without a startup notice', async () => {
-  const store = new NativeHangCaptureStore(directory)
-  let recovered = false
-  const pending = store.save(artifact(1), () => recovered)
-  recovered = true
-  await pending
-  await store.save(artifact(2), () => false)
-  await store.recover(artifact(2).captureId)
-  expect(await readPreviousNativeHangCapture(directory, 100)).toBeNull()
-  expect((await readNativeHangCapture(directory, artifact(1).captureId))?.state).toBe('.recovered')
-  expect((await readNativeHangCapture(directory, artifact(2).captureId))?.state).toBe('.recovered')
-})
-
-it('delivers one previous incident across concurrent windows and keeps it available for Help', async () => {
-  await new NativeHangCaptureStore(directory).save(artifact(1), () => false)
+it('keeps manual freeze reports silent and preserves identity and sent status across restarts', async () => {
+  await new NativeHangCaptureStore(directory).save(artifact(1))
   const store = new CrashReportStore(join(directory, 'reports.json'))
   const previous = createPreviousNativeHangReport({ store, directory, processStartedAt: 100 })
-  const reports = await Promise.all([
-    previous.getAutomatic(),
-    previous.getAutomatic(),
-    previous.getAutomatic()
-  ])
-  expect(reports.filter(Boolean)).toHaveLength(1)
-  expect((await store.listRecent())[0]).toMatchObject({
+  await Promise.all([previous.ensureImported(), previous.ensureImported()])
+  const report = (await store.listRecent())[0]!
+  expect(await getLatestPendingReport(store)).toBeNull()
+  expect(report).toMatchObject({
     status: 'dismissed',
     details: { captureId: artifact(1).captureId, showMenuBarIcon: null }
   })
-  expect((await readNativeHangCapture(directory, artifact(1).captureId))?.state).toBe('.seen')
-  const restarted = createPreviousNativeHangReport({ store, directory, processStartedAt: 200 })
-  expect(await restarted.getAutomatic()).toBeNull()
-  expect((await store.listRecent())[0]?.reason).toBe('main-thread-hang')
+  await store.markDismissedSent(report.id)
+  await createPreviousNativeHangReport({ store, directory, processStartedAt: 200 }).ensureImported()
+  expect(await store.listRecent()).toMatchObject([{ id: report.id, status: 'sent' }])
+  expect((await readPreviousNativeHangCapture(directory, 200))?.artifact.captureId).toBe(
+    artifact(1).captureId
+  )
 })
 
-it('preserves an existing pending crash and leaves the freeze eligible for a later launch', async () => {
-  await new NativeHangCaptureStore(directory).save(artifact(1), () => false)
+it('preserves an ordinary pending crash and imports freeze evidence on a later manual open', async () => {
+  await new NativeHangCaptureStore(directory).save(artifact(1))
   const store = new CrashReportStore(join(directory, 'reports.json'))
   const original = await store.record({
     source: 'renderer',
@@ -164,18 +154,47 @@ it('preserves an existing pending crash and leaves the freeze eligible for a lat
     details: {}
   })
   const previous = createPreviousNativeHangReport({ store, directory, processStartedAt: 100 })
-  expect(await previous.getAutomatic()).toBeNull()
-  expect((await store.getLatestPending())?.id).toBe(original.id)
-  await store.dismiss(original.id)
-  expect(await previous.getAutomatic()).toBeNull()
+  await previous.ensureImported()
+  expect((await getLatestPendingReport(store))?.id).toBe(original.id)
   expect(await store.listRecent()).toHaveLength(1)
-  expect((await readNativeHangCapture(directory, artifact(1).captureId))?.state).toBe('')
+  await store.dismiss(original.id)
+  await previous.ensureImported()
+  expect((await store.listRecent())[0]).toMatchObject({
+    reason: 'main-thread-hang',
+    status: 'dismissed',
+    details: { captureId: artifact(1).captureId }
+  })
+  expect(await getLatestPendingReport(store)).toBeNull()
+})
+
+it('enriches only the matching freeze event with captured safe frames, build and setting', async () => {
+  const captures = nativeHangCaptureDirectory(directory)
+  await new NativeHangCaptureStore(captures).save({ ...artifact(1), showMenuBarIcon: false })
+  await new NativeHangCaptureStore(captures).save({ ...artifact(2), showMenuBarIcon: true })
+  const marker = { detectedAt: 1, parentPid: 123, unresponsiveMs: 50000, selfRecovered: false }
+  const details = await readPreviousNativeHangTelemetry(directory, marker)
+  expect(details).toEqual({
+    native_top_frames: ['nativeWait [Orca]'],
+    macos_build: 'macOS 26.1 (25B78)',
+    menu_bar_icon: false
+  })
+  expect(
+    mainThreadHangDetectedSchema.safeParse({
+      unresponsive_ms: 50000,
+      self_recovered: false,
+      ...details
+    }).success
+  ).toBe(true)
+  expect(await readPreviousNativeHangTelemetry(directory, { ...marker, parentPid: 999 })).toEqual(
+    {}
+  )
+  expect(await readPreviousNativeHangTelemetry(directory, { ...marker, detectedAt: 3 })).toEqual({})
 })
 
 it('selects the reported incident and never replaces missing evidence with a newer capture', async () => {
   const store = new NativeHangCaptureStore(directory)
-  await store.save(artifact(1), () => false)
-  await store.save(artifact(2), () => false)
+  await store.save(artifact(1))
+  await store.save(artifact(2))
   expect((await readNativeHangCapture(directory, artifact(1).captureId))?.artifact.detectedAt).toBe(
     1
   )

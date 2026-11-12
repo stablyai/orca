@@ -1,9 +1,6 @@
-import { clipboard, ipcMain, shell } from 'electron'
+import { clipboard, ipcMain } from 'electron'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
-import {
-  nativeHangCaptureDirectory,
-  readNativeHangCapture
-} from '../../hang-watchdog/native-hang-capture-store'
+import { nativeHangCaptureDirectory } from '../../hang-watchdog/native-hang-capture-store'
 import { createPreviousNativeHangReport } from '../../hang-watchdog/previous-native-hang-report'
 import {
   type CrashReportCopyDiagnosticsArgs,
@@ -64,35 +61,12 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         })
       : null
   ipcMain.removeHandler('crashReports:getLatestPending')
-  ipcMain.handle(
-    'crashReports:getLatestPending',
-    async () => (await previousHang?.getAutomatic()) ?? getLatestPendingReport(store)
-  )
+  ipcMain.handle('crashReports:getLatestPending', () => getLatestPendingReport(store))
 
   ipcMain.removeHandler('crashReports:getLatestReport')
   ipcMain.handle('crashReports:getLatestReport', async () => {
     await previousHang?.ensureImported()
     return getLatestSendableReport(store)
-  })
-
-  ipcMain.removeHandler('crashReports:showFreezeCapture')
-  ipcMain.handle('crashReports:showFreezeCapture', async (_event, args: { reportId?: unknown }) => {
-    const report = typeof args?.reportId === 'string' ? await store.getById(args.reportId) : null
-    const capture =
-      process.platform === 'darwin' &&
-      report?.reason === 'main-thread-hang' &&
-      typeof report.details.captureId === 'string'
-        ? await readNativeHangCapture(directory, report.details.captureId)
-        : null
-    if (!capture) {
-      return {
-        ok: false,
-        error:
-          "Orca couldn't find the saved freeze report. You can still send recent diagnostic logs from Help."
-      }
-    }
-    shell.showItemInFolder(capture.path)
-    return { ok: true }
   })
 
   ipcMain.removeHandler('crashReports:dismiss')

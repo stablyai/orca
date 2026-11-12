@@ -18,7 +18,6 @@ export type CrashReportsApi = {
   getLatestPending: () => Promise<CrashReportRecord | null>
   getLatestReport: () => Promise<CrashReportRecord | null>
   dismiss: (args: { reportId: string }) => Promise<CrashReportRecord | null>
-  showFreezeCapture: (args: { reportId: string }) => Promise<{ ok: boolean; error?: string }>
   recordRendererError: (
     args: ReactErrorBoundaryReportArgs
   ) => Promise<ReactErrorBoundaryReportResult>

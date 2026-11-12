@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Clipboard, FolderOpen, Send } from 'lucide-react'
+import { AlertTriangle, Clipboard, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -67,25 +67,6 @@ export function CrashReportDialogSurface({
   )
   const copyCrashReportDetails = useCrashReportCopy(report, notes)
   const isFreezeReport = report?.reason === 'main-thread-hang'
-
-  const showFreezeCapture = async (): Promise<void> => {
-    if (!report) {
-      return
-    }
-    try {
-      const result = await window.api.crashReports.showFreezeCapture({ reportId: report.id })
-      if (!result.ok) {
-        toast.error(result.error)
-      }
-    } catch {
-      toast.error(
-        t(
-          'crashReport.freeze.showFailed',
-          "Orca couldn't open the saved freeze report. Try again from Help."
-        )
-      )
-    }
-  }
 
   const clearViewer = useCallback((): void => {
     viewerRequestIdRef.current += 1
@@ -326,18 +307,6 @@ export function CrashReportDialogSurface({
         </div>
 
         <DialogFooter className="gap-2">
-          {isFreezeReport && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void showFreezeCapture()}
-              disabled={loading}
-            >
-              <FolderOpen className="size-3.5" />
-              {t('crashReport.freeze.showFile', 'Show file')}
-            </Button>
-          )}
           <Button
             type="button"
             variant="outline"

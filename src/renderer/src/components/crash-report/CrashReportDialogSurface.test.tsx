@@ -14,7 +14,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it('reveals the selected incident and honors attachment consent when sending it', async () => {
+it('honors attachment consent when sending a manually opened freeze report', async () => {
   const report: CrashReportRecord = {
     id: 'freeze-report-1',
     createdAt: '2026-11-12T01:00:00.000Z',
@@ -31,13 +31,12 @@ it('reveals the selected incident and honors attachment consent when sending it'
     chromeVersion: '150',
     details: { captureId: 'incident-1', detectedAt: '2026-11-11T23:00:00.000Z' }
   }
-  const showFreezeCapture = vi.fn().mockResolvedValue({ ok: true })
   const submit = vi.fn().mockResolvedValue({ ok: true, report: { ...report, status: 'sent' } })
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
       gh: { viewer: () => Promise.resolve(null) },
-      crashReports: { showFreezeCapture, submit }
+      crashReports: { submit }
     }
   })
   const onOpenChange = vi.fn()
@@ -53,10 +52,6 @@ it('reveals the selected incident and honors attachment consent when sending it'
     )
   })
   expect(submit).not.toHaveBeenCalled()
-  await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Show file' }))
-  })
-  expect(showFreezeCapture).toHaveBeenCalledWith({ reportId: 'freeze-report-1' })
   fireEvent.click(screen.getByRole('checkbox'))
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send Report' }))

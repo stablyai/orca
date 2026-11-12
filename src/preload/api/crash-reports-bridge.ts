@@ -17,8 +17,6 @@ export const crashReportsApi = {
   getLatestPending: () => ipcRenderer.invoke('crashReports:getLatestPending'),
   getLatestReport: () => ipcRenderer.invoke('crashReports:getLatestReport'),
   dismiss: (args: { reportId: string }) => ipcRenderer.invoke('crashReports:dismiss', args),
-  showFreezeCapture: (args: { reportId: string }) =>
-    ipcRenderer.invoke('crashReports:showFreezeCapture', args),
   recordRendererError: (
     args: ReactErrorBoundaryReportArgs
   ): Promise<ReactErrorBoundaryReportResult> =>

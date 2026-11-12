@@ -26,7 +26,7 @@ export function formatSummary(report: CrashReportRecord, t: Translate = translat
 
 export function getDialogTitle(report: CrashReportRecord | null, t: Translate = translate): string {
   if (report?.reason === 'main-thread-hang') {
-    return t('crashReport.freeze.title', 'Orca froze last time')
+    return t('crashReport.freeze.title', 'Report a freeze')
   }
   if (!report) {
     return t('auto.components.crash.report.CrashReportDialogSurface.reportTitle', 'Report a crash')

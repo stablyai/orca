@@ -10,8 +10,8 @@ import {
 
 const CAPTURE_ID = /^hang-(\d{1,16})-[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/
 const CAPTURE_FILE = /^(hang-\d{1,16}-[\da-f-]{36})(\.(?:recovered|seen))?\.json$/
-type CaptureFile = { name: string; captureId: string; detectedAt: number; state: string }
-export type StoredNativeHangCapture = { artifact: NativeHangArtifact; path: string; state: string }
+type CaptureFile = { name: string; captureId: string; detectedAt: number }
+export type StoredNativeHangCapture = { artifact: NativeHangArtifact; path: string }
 
 export function nativeHangCaptureDirectory(userDataPath: string): string {
   return join(userDataPath, 'hang-captures')
@@ -24,9 +24,7 @@ export function createNativeHangCaptureId(detectedAt: number): string {
 function captureFile(name: string): CaptureFile | null {
   const match = CAPTURE_FILE.exec(name)
   const id = match && CAPTURE_ID.exec(match[1]!)
-  return match && id
-    ? { name, captureId: match[1]!, detectedAt: Number(id[1]), state: match[2] ?? '' }
-    : null
+  return match && id ? { name, captureId: match[1]!, detectedAt: Number(id[1]) } : null
 }
 
 async function entries(directory: string): Promise<string[] | null> {
@@ -82,7 +80,7 @@ async function readCaptureFile(
     return artifact &&
       artifact.captureId === file.captureId &&
       artifact.detectedAt === file.detectedAt
-      ? { artifact, path: filePath, state: file.state }
+      ? { artifact, path: filePath }
       : null
   } catch {
     return null
@@ -114,7 +112,7 @@ export async function readPreviousNativeHangCapture(
   processStartedAt: number
 ): Promise<StoredNativeHangCapture | null> {
   for (const file of await listNativeHangCaptures(directory)) {
-    if (!file.state && file.detectedAt < processStartedAt) {
+    if (file.detectedAt < processStartedAt) {
       const capture = await readCaptureFile(directory, file)
       if (capture) {
         return capture
@@ -124,35 +122,12 @@ export async function readPreviousNativeHangCapture(
   return null
 }
 
-export async function claimNativeHangCapture(
-  directory: string,
-  captureId: string,
-  processStartedAt: number
-): Promise<boolean> {
-  try {
-    const files = (await listNativeHangCaptures(directory)).filter(
-      (file) => !file.state && file.detectedAt < processStartedAt
-    )
-    if (!files.some((file) => file.captureId === captureId)) {
-      return false
-    }
-    // Claim the selected incident last so a failed older rename cannot consume its notice.
-    for (const file of files.toReversed().filter((file) => file.captureId !== captureId)) {
-      await fs.rename(join(directory, file.name), join(directory, `${file.captureId}.seen.json`))
-    }
-    await fs.rename(join(directory, `${captureId}.json`), join(directory, `${captureId}.seen.json`))
-    return true
-  } catch {
-    return false
-  }
-}
-
 export class NativeHangCaptureStore {
   private busy = false
 
   constructor(private readonly directory: string) {}
 
-  async save(artifact: NativeHangArtifact, recovered: () => boolean): Promise<void> {
+  async save(artifact: NativeHangArtifact): Promise<void> {
     if (this.busy || !CAPTURE_ID.test(artifact.captureId)) {
       return
     }
@@ -192,32 +167,12 @@ export class NativeHangCaptureStore {
         }
       }
       await fs.writeFile(temporary, payload, { mode: 0o600, flag: 'wx' })
-      const state = recovered() ? '.recovered' : ''
-      await fs.rename(temporary, join(this.directory, `${artifact.captureId}${state}.json`))
-      if (!state && recovered()) {
-        await this.renameRecovered(artifact.captureId)
-      }
+      await fs.rename(temporary, join(this.directory, `${artifact.captureId}.json`))
     } catch {
       // Optional full evidence must not interrupt marker capture or child cleanup.
     } finally {
       await fs.unlink(temporary).catch(() => {})
-      if (recovered()) {
-        await this.renameRecovered(artifact.captureId).catch(() => {})
-      }
       this.busy = false
     }
-  }
-
-  async recover(captureId: string): Promise<void> {
-    if (!this.busy && CAPTURE_ID.test(captureId)) {
-      await this.renameRecovered(captureId).catch(() => {})
-    }
-  }
-
-  private async renameRecovered(captureId: string): Promise<void> {
-    await fs.rename(
-      join(this.directory, `${captureId}.json`),
-      join(this.directory, `${captureId}.recovered.json`)
-    )
   }
 }

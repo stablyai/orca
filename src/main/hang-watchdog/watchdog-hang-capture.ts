@@ -23,7 +23,6 @@ export function createWatchdogHangCapture(options: {
   let stopped = false
   let jsOwner: CaptureOwner | null = null
   let nativeOwner: CaptureOwner | null = null
-  let episode: { id: string; captureId: string; recovered: boolean } | null = null
   const store = options.artifactDirectory
     ? new NativeHangCaptureStore(options.artifactDirectory)
     : null
@@ -44,12 +43,7 @@ export function createWatchdogHangCapture(options: {
     if (process.platform === 'darwin' && !nativeOwner) {
       const owner: CaptureOwner = { id: record.id }
       nativeOwner = owner
-      const incident = {
-        id: record.id,
-        captureId: createNativeHangCaptureId(record.detectedAt),
-        recovered: false
-      }
-      episode = incident
+      const captureId = createNativeHangCaptureId(record.detectedAt)
       const metadata = options.processMetadata
       nativeStarted = import('./native-hang-capture')
         .then((native) => {
@@ -58,19 +52,16 @@ export function createWatchdogHangCapture(options: {
             publish: (native) => options.publish(record.id, { native }),
             completeReport: (report) => {
               if (store && metadata) {
-                void store.save(
-                  {
-                    version: 1,
-                    captureId: incident.captureId,
-                    detectedAt: record.detectedAt,
-                    capturedAt: Date.now(),
-                    pid: options.parentPid,
-                    showMenuBarIcon,
-                    process: metadata,
-                    report
-                  },
-                  () => incident.recovered
-                )
+                void store.save({
+                  version: 1,
+                  captureId,
+                  detectedAt: record.detectedAt,
+                  capturedAt: Date.now(),
+                  pid: options.parentPid,
+                  showMenuBarIcon,
+                  process: metadata,
+                  report
+                })
               }
             }
           })
@@ -130,10 +121,6 @@ export function createWatchdogHangCapture(options: {
       if (jsOwner?.id === id) {
         jsOwner.reason ??= 'recovery'
         jsOwner.stop?.('recovery')
-      }
-      if (episode?.id === id) {
-        episode.recovered = true
-        void store?.recover(episode.captureId)
       }
     },
     shutdown: () => {

@@ -25341,10 +25341,8 @@
       "notes": "Optional: what were you doing before Orca froze?",
       "sent": "Freeze report sent.",
       "sentWithoutAttachments": "Details sent without the saved freeze report or diagnostic logs",
-      "showFailed": "Orca couldn't open the saved freeze report. Try again from Help.",
-      "showFile": "Show file",
       "summary": "Orca stopped responding",
-      "title": "Orca froze last time",
+      "title": "Report a freeze",
       "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
     }
   }

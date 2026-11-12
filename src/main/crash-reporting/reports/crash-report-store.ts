@@ -100,42 +100,25 @@ export class CrashReportStore {
     })
   }
 
-  async claimHangPrompt(options: {
-    existingReportId?: string
-    input?: CrashReportCreateInput
-    claim: () => Promise<boolean>
-  }): Promise<CrashReportRecord | null> {
+  async importHangReport(input: CrashReportCreateInput): Promise<CrashReportRecord | null> {
     return this.withWrite(async (reports) => {
-      const pendingCrash = reports.find(
-        (report) => report.status === 'pending' && report.reason !== 'main-thread-hang'
+      const existing = reports.find(
+        (report) =>
+          report.reason === 'main-thread-hang' &&
+          report.details.captureId === input.details.captureId
       )
-      if (pendingCrash) {
-        return { reports, result: pendingCrash }
+      if (existing) {
+        return { reports, result: existing }
       }
-      const existing = options.existingReportId
-        ? reports.find(
-            (report) =>
-              report.id === options.existingReportId &&
-              report.status === 'pending' &&
-              report.reason === 'main-thread-hang'
-          )
-        : null
-      if ((!existing && !options.input) || !(await options.claim())) {
+      if (
+        reports.some(
+          (report) => report.status === 'pending' && report.reason !== 'main-thread-hang'
+        )
+      ) {
         return { reports, result: null }
       }
-      const report: CrashReportRecord = {
-        ...(existing ?? this.createRecord(options.input!)),
-        status: 'dismissed'
-      }
-      const retained = reports.map((item) =>
-        item.reason === 'main-thread-hang' && item.status === 'pending'
-          ? { ...item, status: 'dismissed' as const }
-          : item
-      )
-      return {
-        reports: existing ? retained : [report, ...retained].slice(0, MAX_REPORTS),
-        result: report
-      }
+      const report: CrashReportRecord = { ...this.createRecord(input), status: 'dismissed' }
+      return { reports: [report, ...reports].slice(0, MAX_REPORTS), result: report }
     })
   }
 
