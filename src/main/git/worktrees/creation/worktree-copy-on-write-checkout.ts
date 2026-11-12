@@ -15,6 +15,8 @@ const CLONE_BATCH_SIZE = 256
 const CLONE_CONCURRENCY = 8
 const LIST_MAX_BUFFER = 512 * 1024 * 1024
 const REGULAR_FILE_MODES = new Set(['100644', '100755'])
+// A checkout runs these, so a fresh file can differ from main's bytes that clean to the same blob.
+const CHECKOUT_CONVERSION_ATTRIBUTES = ['filter', 'ident', 'working-tree-encoding']
 
 /** How this host can clone from the main checkout without silently copying, or null. */
 export async function resolveCopyOnWriteCheckout(
@@ -80,6 +82,32 @@ async function listCloneableFiles(
     return stage === '0' ? `${mode} ${oid}` : null
   })
   return [...wanted].filter(([path, key]) => checkedOut.get(path) === key).map(([path]) => path)
+}
+
+/** Drops files whose checkout applies a filter (e.g. Git LFS); Git writes those itself. */
+async function withoutCheckoutConversion(
+  worktreePath: string,
+  paths: string[],
+  options: GitWorktreeExecOptions
+): Promise<string[]> {
+  // --cached reads the attributes of the base commit that read-tree just staged.
+  const { stdout } = await gitExecFileAsync(
+    ['check-attr', '--cached', '-z', '--stdin', ...CHECKOUT_CONVERSION_ATTRIBUTES],
+    {
+      ...gitExecOptions(worktreePath, options),
+      maxBuffer: LIST_MAX_BUFFER,
+      stdin: paths.join('\0')
+    }
+  )
+  // -z output: "<path>\0<attribute>\0<value>\0" per path and attribute.
+  const converted = new Set<string>()
+  const fields = stdout.split('\0')
+  for (let i = 0; i + 2 < fields.length; i += 3) {
+    if (fields[i + 2] !== 'unspecified' && fields[i + 2] !== 'unset') {
+      converted.add(fields[i])
+    }
+  }
+  return paths.filter((path) => !converted.has(path))
 }
 
 async function runClone(
@@ -164,12 +192,16 @@ export async function cloneMainCheckoutIntoWorktree(
   options: GitWorktreeExecOptions = {}
 ): Promise<void> {
   try {
-    const paths = await listCloneableFiles(repoPath, worktreePath, commit, options)
+    const candidates = await listCloneableFiles(repoPath, worktreePath, commit, options)
+    if (candidates.length === 0) {
+      return
+    }
+    await readTreeIntoPlainIndex(worktreePath, commit, options)
+    const paths = await withoutCheckoutConversion(worktreePath, candidates, options)
     if (paths.length === 0) {
       return
     }
     await cloneFiles(method, repoPath, worktreePath, paths, options)
-    await readTreeIntoPlainIndex(worktreePath, commit, options)
     // Skips Git's re-read for clones of files it already knows are clean.
     await transferCleanIndexStats(repoPath, worktreePath, options).catch(() => 0)
     // Refresh compares content, so a clone that differs from its blob stays dirty and is rewritten.

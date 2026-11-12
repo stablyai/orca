@@ -86,4 +86,21 @@ describe.runIf(process.platform === 'darwin')('copy-on-write worktree checkout',
     await expectExactBaseCheckout(worktreePath)
     expect(await readFile(hookLog, 'utf8')).toBe('ran\n')
   })
+
+  it('lets Git write files that a checkout filter would change', async () => {
+    const { repoPath, root } = await createRepo()
+    git(repoPath, ['config', 'filter.tag.clean', "sed 's/^SMUDGE://'"])
+    git(repoPath, ['config', 'filter.tag.smudge', "sed 's/^/SMUDGE:/'"])
+    await writeFile(join(repoPath, '.gitattributes'), 'filtered.txt filter=tag\n')
+    // Main holds unsmudged bytes that still clean to the committed blob, like an LFS pointer.
+    await writeFile(join(repoPath, 'filtered.txt'), 'data\n')
+    git(repoPath, ['add', '.'])
+    git(repoPath, ['commit', '--quiet', '-m', 'filtered'])
+    const worktreePath = join(root, 'feature')
+
+    await addWorktreeWithCopyOnWriteCheckout(repoPath, worktreePath, 'feature', 'main', false)
+
+    expect(await readFile(join(worktreePath, 'filtered.txt'), 'utf8')).toBe('SMUDGE:data\n')
+    expect(hasCloneMarker(join(worktreePath, 'shared.txt'))).toBe(true)
+  })
 })
