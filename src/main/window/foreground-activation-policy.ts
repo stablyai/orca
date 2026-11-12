@@ -1,4 +1,4 @@
-import { app as electronApp, BrowserWindow, type BaseWindow } from 'electron'
+import { app as electronApp, BaseWindow } from 'electron'
 
 /** Automation must not steal OS foreground. Background/sidecar requests override E2E_FOREGROUND; the hosted-Xvfb benchmark may present explicitly after startup (tests/AGENTS.md), while automatic reveals stay suppressed. */
 
@@ -114,15 +114,26 @@ export function showWhenAppActive(window: BaseWindow, env: PolicyEnv = process.e
   if (window.isDestroyed() || isWindowlessLaunch(env)) {
     return
   }
-  if (BrowserWindow.getFocusedWindow()) {
+  // Any Orca window counts, including origin-bar popups (plain BaseWindows).
+  if (BaseWindow.getFocusedWindow()) {
     window.showInactive()
     return
   }
+  // macOS reports the app's return through any window; elsewhere only BrowserWindows report focus.
+  const events = ['browser-window-focus', 'did-become-active'] as const
   const reveal = (): void => {
+    stopWaiting()
     if (!window.isDestroyed()) {
       window.showInactive()
     }
   }
-  electronApp.once('browser-window-focus', reveal)
-  window.once('closed', () => electronApp.off('browser-window-focus', reveal))
+  const stopWaiting = (): void => {
+    for (const event of events) {
+      electronApp.off(event, reveal)
+    }
+  }
+  for (const event of events) {
+    electronApp.on(event, reveal)
+  }
+  window.once('closed', stopWaiting)
 }
