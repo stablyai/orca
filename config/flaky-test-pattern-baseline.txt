@@ -450,7 +450,7 @@
 3 test-no-wall-clock:src/main/claude/structured/claude-structured-real-cli-stop-task.test.ts
 10 test-no-wall-clock:src/main/claude/structured/claude-structured-real-cli.test.ts
 3 test-no-wall-clock:src/main/claude/structured/launch/claude-structured-real-cli-options.test.ts
-1 test-no-wall-clock:src/main/codex-accounts/legacy-wsl-runtime-auth-drain-rollback-script.test.ts
+1 test-no-wall-clock:src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-rollback-script.test.ts
 6 test-no-wall-clock:src/main/codex/app-server/codex-app-server-client.test.ts
 2 test-no-wall-clock:src/main/codex/structured/launch/codex-structured-real-cli-command-env.test.ts
 2 test-no-wall-clock:src/main/codex/trust/hooks/codex-hook-trust-derivation.test.ts
