@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useState } from 'react'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
   GITHUB_IDENTITY_PENDING_MAX_MS,
   GITHUB_IDENTITY_POLL_MS,
@@ -66,13 +67,17 @@ export function useGitHubIdentity(confirm: () => Promise<boolean>): GitHubIdenti
     if (!pending) {
       return
     }
-    const poll = setInterval(() => void refresh(), GITHUB_IDENTITY_POLL_MS)
+    // Light poll while the browser OAuth is open; paused while this window can't be seen.
+    const stopPolling = installWindowVisibilityInterval({
+      run: () => void refresh(),
+      intervalMs: GITHUB_IDENTITY_POLL_MS
+    })
     const expire = setTimeout(
       () => dispatch({ type: 'pendingExpired' }),
       GITHUB_IDENTITY_PENDING_MAX_MS
     )
     return () => {
-      clearInterval(poll)
+      stopPolling()
       clearTimeout(expire)
     }
   }, [pending, refresh])
