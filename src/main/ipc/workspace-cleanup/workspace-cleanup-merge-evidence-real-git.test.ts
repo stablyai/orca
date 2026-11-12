@@ -31,7 +31,7 @@ async function commitFile(cwd: string, name: string): Promise<void> {
   await git(['commit', '-qm', name], cwd)
 }
 
-async function readEvidence() {
+async function readEvidence(baseRef?: string) {
   const repo = { id: 'repo', path: clonePath, displayName: 'repo' } as Repo
   const worktree = {
     id: `repo::${worktreePath}`,
@@ -39,7 +39,8 @@ async function readEvidence() {
     path: worktreePath,
     branch: 'refs/heads/feature',
     head: await git(['rev-parse', 'HEAD'], worktreePath),
-    isMainWorktree: false
+    isMainWorktree: false,
+    ...(baseRef ? { baseRef } : {})
   } as Worktree
   const evidence = await readWorkspaceCleanupGitEvidence(
     worktree,
@@ -129,6 +130,12 @@ describe('workspace cleanup merge evidence against real Git', () => {
       merge: { headInDefaultBranch: false, aheadOfDefault: 1 },
       reasons: []
     })
+  })
+
+  it('ignores a base that is the reused branch itself', async () => {
+    await commitFile(worktreePath, 'a.txt')
+
+    expect((await readEvidence('feature')).blockers).toEqual(['unpushed-commits'])
   })
 
   it('keeps unpushed risk for local commits that never landed', async () => {

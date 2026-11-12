@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/git/branches/git-branch-cleanup'
 import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/host-routing/git-capability-state'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { routeLocalGitOptions } from '../../command-runner/host-routing/local-git-runtime-route'
 import { createLocalGitObjectQuarantine } from '../../objects/local-git-object-quarantine'
 import {
   gitExecOptions,
@@ -22,7 +23,9 @@ export async function localBranchHasNoUnmergedChanges(args: {
   refreshRemoteTargets: boolean
   options?: GitWorktreeExecOptions
 }): Promise<boolean> {
-  const { cwd, branchName, refreshRemoteTargets, options = {} } = args
+  const { cwd, branchName, refreshRemoteTargets } = args
+  // Settle the project's WSL route first so quarantine and capability caches match the Git that runs.
+  const options = routeLocalGitOptions({ ...args.options, cwd })
   const quarantine = createLocalGitObjectQuarantine(cwd, options)
   const runGit = (argv: string[], execOptions?: GitBranchCleanupExecOptions) => {
     const run = (env: NodeJS.ProcessEnv | undefined) =>

@@ -1,5 +1,5 @@
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
-import { getDefaultBaseRefAsync } from '../../git/refs/resolution/repo-default-base-ref'
+import { resolveDefaultBaseRefViaExec } from '../../../shared/git/refs/git-default-base-ref'
 import { localBranchHasNoUnmergedChanges } from '../../git/refs/resolution/local-branch-merge-proof'
 import type { PRInfo } from '../../../shared/github/pull-request-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -48,11 +48,13 @@ async function readMergeEvidence(
 ): Promise<WorkspaceCleanupMergeEvidence | undefined> {
   const git: CleanupGit = (argv) => gitExecFileAsync(argv, { cwd: worktree.path, signal })
   const baseOid = await resolveWorkspaceCleanupBaseOid(worktree, repo, git)
-  if (!baseOid) {
+  // Read HEAD now: the listing's head can predate an agent's newest commit.
+  const headOid = await resolveCommitOid(git, 'HEAD')
+  if (!baseOid || !headOid) {
     return undefined
   }
   const aheadOfDefault = Number.parseInt(
-    (await git(['rev-list', '--count', `${baseOid}..HEAD`])).stdout.trim(),
+    (await git(['rev-list', '--count', `${baseOid}..${headOid}`])).stdout.trim(),
     10
   )
   if (!Number.isFinite(aheadOfDefault)) {
@@ -71,7 +73,7 @@ async function readMergeEvidence(
         options: { signal }
       })))
   const review = readWorkspaceReviewPR(worktree, repo, prCache)
-  const head = worktree.head.trim().toLowerCase()
+  const head = headOid.toLowerCase()
   return {
     headInDefaultBranch,
     aheadOfDefault,
@@ -80,11 +82,9 @@ async function readMergeEvidence(
           mergedReview: {
             number: review.number,
             provider: 'github' as const,
-            containsHead:
-              head.length > 0 &&
-              [review.headSha, review.confirmedContainedHeadOid].some(
-                (oid) => oid?.trim().toLowerCase() === head
-              )
+            containsHead: [review.headSha, review.confirmedContainedHeadOid].some(
+              (oid) => oid?.trim().toLowerCase() === head
+            )
           }
         }
       : {})
@@ -97,9 +97,11 @@ async function resolveWorkspaceCleanupBaseOid(
   repo: Repo,
   git: CleanupGit
 ): Promise<string | null> {
+  const branchName = worktree.branch.replace(/^refs\/heads\//, '')
   for (const candidate of [worktree.baseRef, repo.worktreeBaseRef]) {
     const ref = candidate?.trim()
-    if (!ref || isFullGitCommitOid(ref)) {
+    // A reused branch records itself (or its remote copy) as base, which would make every commit look landed.
+    if (!ref || isFullGitCommitOid(ref) || namesBranch(ref, branchName)) {
       continue
     }
     const oid = await resolveCommitOid(git, ref)
@@ -107,8 +109,16 @@ async function resolveWorkspaceCleanupBaseOid(
       return oid
     }
   }
-  const defaultRef = await getDefaultBaseRefAsync(worktree.path)
+  const defaultRef = await resolveDefaultBaseRefViaExec(git)
   return defaultRef ? resolveCommitOid(git, defaultRef) : null
+}
+
+function namesBranch(ref: string, branchName: string): boolean {
+  if (!branchName) {
+    return false
+  }
+  const shortRef = ref.replace(/^refs\/(heads|remotes)\//, '')
+  return shortRef === branchName || shortRef.endsWith(`/${branchName}`)
 }
 
 async function resolveCommitOid(git: CleanupGit, ref: string): Promise<string | null> {
