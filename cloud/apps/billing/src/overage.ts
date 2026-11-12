@@ -9,7 +9,8 @@ import { z } from 'zod'
 import type { BillingCaller } from './auth'
 import { OPEN_STATUSES } from './checkout'
 import type { Env } from './env'
-import { planCatalog, planForPrice } from './plans'
+import { planForPrice } from './plans'
+import { accountTerms } from './entitlements'
 import type { StripeClient, StripeSubscription } from './stripe'
 import {
   accountSettings,
@@ -40,8 +41,8 @@ export async function updateOverage(
   if (!caller.canManage) {
     return { ok: false, status: 403, error: 'billing_admin_required' }
   }
-  const team = planCatalog(env).team
-  if (request.spendCapCents != null && request.spendCapCents > team.maxSpendCapCents) {
+  const terms = await accountTerms(env, caller.accountId, now)
+  if (request.spendCapCents != null && request.spendCapCents > terms.maxSpendCapCents) {
     return { ok: false, status: 400, error: 'spend_cap_too_high' }
   }
   const subscription = await currentSubscription(env.BILLING_DB, caller.accountId)

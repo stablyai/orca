@@ -10,9 +10,23 @@
 // - Metered through usage_events like plan usage (segments with no subscription count against the
 //   trial). No overage, 1 sandbox at a time. Any subscription row ends the trial for good.
 import type { Env } from './env'
+import { loadCatalog, planVersion, trialPlan } from './catalog'
+import { entitlementsMode } from './entitlements-mode'
 
+// Legacy terms (ENTITLEMENTS_MODE off/shadow). With 'on' the trial plan in the D1 catalog decides
+// (catalog/catalog.json "trial"), and a granted trial keeps the hours it was granted with.
 export const TRIAL_INCLUDED_SECONDS = 2 * 3600
 export const TRIAL_MAX_CONCURRENT_SANDBOXES = 1
+
+/** Seconds a trial granted now includes, or null when the catalog offers no trial. */
+export async function trialIncludedSeconds(env: Pick<Env, 'BILLING_DB' | 'ENTITLEMENTS_MODE'>, now: number): Promise<number | null> {
+  if (entitlementsMode(env) !== 'on') {
+    return TRIAL_INCLUDED_SECONDS
+  }
+  const plan = trialPlan(await loadCatalog(env.BILLING_DB, now))
+  const hours = plan ? planVersion(plan, plan.currentVersion).entitlements.sandbox_hours_lifetime?.value : undefined
+  return typeof hours === 'number' && hours > 0 ? Math.round(hours * 3600) : null
+}
 /** Trial grants allowed from one IP address per rolling day. */
 export const TRIAL_GRANTS_PER_IP_PER_DAY = 3
 const DAY_MS = 24 * 3600 * 1000
@@ -213,11 +227,15 @@ async function recentIpGrants(db: D1Database, ipHash: string, now: number): Prom
  * account (user:) is checked as the user who will get one once setup creates their team.
  */
 export async function trialOffer(
-  env: Pick<Env, 'BILLING_DB'>,
+  env: Pick<Env, 'BILLING_DB' | 'ENTITLEMENTS_MODE'>,
   input: TrialInput,
-  _now: number
+  now: number
 ): Promise<{ includedSeconds: number } | null> {
   const db = env.BILLING_DB
+  const offered = await trialIncludedSeconds(env, now)
+  if (offered === null) {
+    return null
+  }
   if ((await trialRow(db, input.accountId)) || (await everSubscribed(db, input.accountId))) {
     return null
   }
@@ -229,7 +247,7 @@ export async function trialOffer(
   if (await keyTaken(db, all, input.accountId)) {
     return null
   }
-  return { includedSeconds: TRIAL_INCLUDED_SECONDS }
+  return { includedSeconds: offered }
 }
 
 /**
@@ -237,7 +255,7 @@ export async function trialOffer(
  * already has a trial gets it back (granted: false). Refusals never say which key matched.
  */
 export async function grantTrial(
-  env: Pick<Env, 'BILLING_DB'>,
+  env: Pick<Env, 'BILLING_DB' | 'ENTITLEMENTS_MODE'>,
   input: TrialInput,
   now: number
 ): Promise<GrantOutcome> {
@@ -265,7 +283,10 @@ export async function grantTrial(
   if (ipHash && (await recentIpGrants(db, ipHash, now)) >= TRIAL_GRANTS_PER_IP_PER_DAY) {
     return { ok: false, reason: 'trial_unavailable' }
   }
-  const included = TRIAL_INCLUDED_SECONDS
+  const included = await trialIncludedSeconds(env, now)
+  if (included === null) {
+    return { ok: false, reason: 'trial_unavailable' }
+  }
   // One transaction: the trial row is inserted only if no key is taken and the account never
   // subscribed (re-checked inside the batch, so two concurrent grants can't share a key), then
   // every key is marked consumed for this account.

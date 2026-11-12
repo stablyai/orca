@@ -6,7 +6,7 @@ import {
   type OrcaBillingEntitlement,
   type OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
-import { usageAlertSentence } from '../../../../shared/orca-billing-usage-alerts'
+import { usageAlertLevels, usageAlertSentence } from '../../../../shared/orca-billing-usage-alerts'
 import {
   includedUsagePercent,
   sandboxHoursAmount,
@@ -15,8 +15,14 @@ import {
 } from './plan-billing-format'
 import { isActivePlan } from './team/team-seat-math'
 
-/** The included-hours bar turns to the warning tone from this share of the month's hours. */
-export const INCLUDED_HOURS_WARNING_PERCENT = 90
+/** The bar's warning tone without billing's alert levels (an older service). */
+const DEFAULT_WARNING_TONE_PERCENT = 90
+
+/** The included-hours bar turns to the warning tone at billing's last alert level below 100%. */
+export function includedHoursWarningPercent(entitlement: OrcaBillingEntitlement): number {
+  const below = (usageAlertLevels(entitlement) ?? []).filter((level) => level < 100)
+  return below.length > 0 ? Math.max(...below) : DEFAULT_WARNING_TONE_PERCENT
+}
 
 /** Hours left as a plural count (41.5, 78, 1): the one rounding every surface uses (JA-07). */
 export function sandboxHoursCount(seconds: number): number {
@@ -24,7 +30,9 @@ export function sandboxHoursCount(seconds: number): number {
 }
 
 export function includedUsageTone(entitlement: OrcaBillingEntitlement): 'default' | 'warning' {
-  return includedUsagePercent(entitlement) >= INCLUDED_HOURS_WARNING_PERCENT ? 'warning' : 'default'
+  return includedUsagePercent(entitlement) >= includedHoursWarningPercent(entitlement)
+    ? 'warning'
+    : 'default'
 }
 
 /** "78.5 sandbox hours left" / "1 sandbox hour left". */

@@ -6,6 +6,36 @@ const t: Translate = (_key, fallback, options) =>
   fallback.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(options?.[name] ?? ''))
 
 describe('cloudAgentSetupStripModel (PC-3b)', () => {
+  it('the setup-token fallback matches the paste-code step: placeholder, Finish setup, inline command', () => {
+    const model = cloudAgentSetupStripModel({
+      agent: 'claude',
+      setup: { phase: 'paste', reason: 'no_cli' },
+      ready: false,
+      t
+    })
+    expect(model.title).toBe('Paste a Claude token')
+    expect(model.detail).toContain('`claude setup-token` in any terminal where Claude is installed')
+    expect(model.paste).toMatchObject({
+      placeholder: 'Paste token',
+      submitLabel: 'Finish setup',
+      refusal: null
+    })
+  })
+
+  it('a refused token says so and keeps the field', () => {
+    const model = cloudAgentSetupStripModel({
+      agent: 'claude',
+      setup: { phase: 'paste', reason: 'chosen', token: 'rejected' },
+      ready: false,
+      t
+    })
+    expect(model).toMatchObject({ status: 'warning', title: 'Token didn’t work' })
+    expect(model.detail).toBe('Paste the full token from `claude setup-token`, or run it again.')
+    expect(model.paste?.refusal).toBe(
+      'Paste the full token from claude setup-token, or run it again.'
+    )
+  })
+
   it('asks to set up once while nothing is running', () => {
     const model = cloudAgentSetupStripModel({
       agent: 'claude',

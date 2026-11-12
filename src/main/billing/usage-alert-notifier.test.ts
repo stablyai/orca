@@ -40,7 +40,24 @@ const team = (patch: Partial<OrcaBillingEntitlement> = {}): OrcaBillingEntitleme
   canStartSandbox: true,
   reason: null,
   canManageBilling: true,
-  offers: null,
+  offers: {
+    team: {
+      label: 'Team',
+      monthlyPriceLabel: '',
+      annualPriceLabel: '',
+      monthlyPriceCentsPerSeat: null,
+      annualPriceCentsPerSeat: null,
+      largeMachineWeight: 1,
+      includedHoursPerSeat: 60,
+      concurrentSandboxesPerSeat: 3,
+      idleSleepMinutes: 15,
+      overageCentsPerHour: 100,
+      defaultSpendCapCents: 2500,
+      maxSpendCapCents: null,
+      warnAtPercent: [75, 90, 100]
+    },
+    enterprise: { label: 'Enterprise', priceLabel: '', contactUrl: 'https://example.test' }
+  },
   ...patch
 })
 
@@ -86,6 +103,23 @@ describe('decideUsageAlert', () => {
     expect(jump.notify?.level).toBe(90)
     expect(jump.ledger['u:o'].levels).toEqual([75, 90])
     expect(decideUsageAlert(jump.ledger, 'u:o', at(75, 110)).notify).toBeNull()
+  })
+
+  it('alerts at the levels billing names', () => {
+    const offers = team().offers!
+    const custom = { offers: { ...offers, team: { ...offers.team, warnAtPercent: [50, 100] } } }
+    expect(decideUsageAlert({}, 'u:o', at(50, 70, custom)).notify?.level).toBe(50)
+    // 92% is past 90, but 90 isn't one of this plan's levels.
+    expect(usageAlertLevel(at(50, 110, custom))).toBe(50)
+  })
+
+  it('alerts at each level billing reports when an older service names none', () => {
+    const old = { offers: null }
+    const first = decideUsageAlert({}, 'u:o', at(75, 92, old))
+    expect(first.notify?.level).toBe(75)
+    const second = decideUsageAlert(first.ledger, 'u:o', at(90, 110, old))
+    expect(second.notify?.level).toBe(90)
+    expect(decideUsageAlert(second.ledger, 'u:o', at(75, 110, old)).notify).toBeNull()
   })
 
   it('keeps accounts and teams apart', () => {

@@ -149,7 +149,7 @@ describe('orca cloud agents service', () => {
     service.usePaste()
     const reply = await service.pasteClaudeToken(TOKEN)
     expect(reply).toEqual({ ok: false, error: 'invalid_token' })
-    expect(service.setups().claude).toEqual({ phase: 'paste', reason: 'chosen' })
+    expect(service.setups().claude).toEqual({ phase: 'paste', reason: 'chosen', token: 'rejected' })
     expect(logged.length).toBeGreaterThan(0)
     expectNoToken(reply, broadcasts)
   })

@@ -5,7 +5,7 @@ import {
   getLastBillingStatus,
   refreshBillingSummary
 } from '@/components/billing/billing-summary-store'
-import { sandboxLimitFromBilling } from '@/components/worktree-creation/vm-build-failure-copy'
+import { sandboxLimitFromBilling } from '@/components/worktree-creation/vm-build-sandbox-limit'
 import { predictiveWakeServerVerdict } from './cloud-predictive-wake-preflight'
 import {
   claimPredictiveWake,

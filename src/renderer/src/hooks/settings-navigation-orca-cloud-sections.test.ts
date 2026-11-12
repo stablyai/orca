@@ -1,5 +1,6 @@
 import { Bot } from 'lucide-react'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles'
 import { describe, expect, it } from 'vitest'
 import { buildSetupSettingsSections } from './settings-navigation-capability-sections'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
@@ -7,6 +8,8 @@ import {
   buildOrcaCloudSettingsSections,
   gatherOrcaCloudSettingsGroup,
   resolveAccountBillingTarget,
+  labelAccountBilling,
+  hasOrcaBillingAccount,
   ACCOUNT_BILLING_PLAN_ANCHOR
 } from './settings-navigation-orca-cloud-sections'
 
@@ -102,7 +105,7 @@ describe('one Orca Cloud group (JA-16)', () => {
       'orca-cloud:cloud-team',
       'workflows:automations'
     ])
-    expect(out.find((section) => section.id === 'orca-account')?.title).toBe('Account + Billing')
+    expect(out.find((section) => section.id === 'orca-account')?.title).toBe('Account & billing')
   })
 
   it('moves Plan & billing search onto Account + Billing, landing on its billing part', () => {
@@ -118,8 +121,35 @@ describe('one Orca Cloud group (JA-16)', () => {
     )
     expect(account?.searchEntries).toEqual([
       { title: 'Orca account' },
-      { title: 'Plan & billing', keywords: ['invoice'], targetSectionId: ACCOUNT_BILLING_PLAN_ANCHOR }
+      {
+        title: 'Plan & billing',
+        keywords: ['invoice'],
+        targetSectionId: ACCOUNT_BILLING_PLAN_ANCHOR
+      }
     ])
+  })
+
+  it('is "Account" with no billing to show, and leaves the upstream account alone', () => {
+    const gathered = gatherOrcaCloudSettingsGroup(all, options({}))
+    const label = (sections: SettingsNavSection[]) =>
+      sections.find((section) => section.id === 'orca-account')?.title
+    expect(label(labelAccountBilling(gathered, true))).toBe('Account & billing')
+    expect(label(labelAccountBilling(gathered, false))).toBe('Account')
+    // Without Orca Cloud the account stays in Set Up with its own title.
+    expect(label(labelAccountBilling(all, false))).toBe('orca-account')
+  })
+
+  it('has billing only when signed in with the billing capability', () => {
+    const connected = (billing: boolean): OrcaProfileAuthStatus => ({
+      activeProfileId: 'p',
+      configured: true,
+      state: 'connected',
+      persistence: 'encrypted',
+      capabilities: { flags: { billing }, refreshedAt: 0 }
+    })
+    expect(hasOrcaBillingAccount({ orcaProfileAuthStatus: connected(true) })).toBe(true)
+    expect(hasOrcaBillingAccount({ orcaProfileAuthStatus: connected(false) })).toBe(false)
+    expect(hasOrcaBillingAccount({ orcaProfileAuthStatus: null })).toBe(false)
   })
 
   it('sends old Plan & billing links to Account + Billing at its billing part', () => {
@@ -130,7 +160,9 @@ describe('one Orca Cloud group (JA-16)', () => {
     expect(resolveAccountBillingTarget({ pane: 'cloud-billing' }, false)).toEqual({
       pane: 'cloud-billing'
     })
-    expect(resolveAccountBillingTarget({ pane: 'cloud-team' }, true)).toEqual({ pane: 'cloud-team' })
+    expect(resolveAccountBillingTarget({ pane: 'cloud-team' }, true)).toEqual({
+      pane: 'cloud-team'
+    })
   })
 
   it('leaves the upstream grouping alone without Orca Cloud', () => {

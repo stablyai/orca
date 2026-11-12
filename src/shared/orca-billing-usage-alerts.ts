@@ -2,8 +2,14 @@
 // from billing's usageWarningPercent, so they always agree on the level and the percent.
 import type { OrcaBillingEntitlement } from './orca-billing'
 
-/** The included-hours levels owners and admins are alerted at. */
-export const ORCA_USAGE_ALERT_LEVELS = [75, 90, 100] as const
+/**
+ * The included-hours levels owners and admins are alerted at, from billing's plan (ascending);
+ * null from older services, which then alert at each level billing reports.
+ */
+export function usageAlertLevels(entitlement: OrcaBillingEntitlement): number[] | null {
+  const levels = entitlement.offers?.team.warnAtPercent
+  return levels && levels.length > 0 ? [...levels].sort((a, b) => a - b) : null
+}
 
 /**
  * The share of included hours actually used, floored, for the warning sentence: never below the
@@ -23,6 +29,10 @@ export function usageAlertLevel(entitlement: OrcaBillingEntitlement): number | n
   if (entitlement.usageWarningPercent === null) {
     return null
   }
+  const levels = usageAlertLevels(entitlement)
+  if (!levels) {
+    return entitlement.usageWarningPercent
+  }
   const used = Math.max(
     entitlement.usageWarningPercent,
     entitlement.includedSeconds > 0
@@ -30,7 +40,7 @@ export function usageAlertLevel(entitlement: OrcaBillingEntitlement): number | n
       : 0
   )
   let reached: number | null = null
-  for (const level of ORCA_USAGE_ALERT_LEVELS) {
+  for (const level of levels) {
     if (used >= level) {
       reached = level
     }
@@ -74,10 +84,14 @@ export function decideUsageAlert(
   }
   const entry = ledger[accountKey]
   const notified = entry && entry.periodStart === periodStart ? entry.levels : []
-  if (notified.includes(level)) {
+  // At or below a level already sent this period (lower levels count as passed with it).
+  if (notified.some((sent) => sent >= level)) {
     return unchanged
   }
-  const levels = ORCA_USAGE_ALERT_LEVELS.filter((l) => l <= level || notified.includes(l))
+  const known = usageAlertLevels(entitlement)
+  const levels = known
+    ? known.filter((l) => l <= level || notified.includes(l))
+    : [...new Set([...notified, level])].sort((a, b) => a - b)
   return {
     notify: { level, percent: level >= 100 ? 100 : usageWarningUsedPercent(entitlement) },
     ledger: { ...ledger, [accountKey]: { periodStart, levels: [...levels] } }

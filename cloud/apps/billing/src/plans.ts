@@ -179,7 +179,7 @@ export function overageUnitAmountDecimal(centsPerHour: number): string {
 }
 
 /** What Stripe invoices for `seconds` of overage: whole minutes (rounded up) at the per-minute rate. */
-export function overageCents(team: TeamPlan, seconds: number): number {
+export function overageCents(team: Pick<TeamPlan, 'overageCentsPerHour'>, seconds: number): number {
   const minutes = Math.ceil(Math.max(0, seconds) / OVERAGE_SECONDS_PER_BILLED_UNIT)
   return Math.round(minutes * Number(overageUnitAmountDecimal(team.overageCentsPerHour)))
 }
@@ -188,7 +188,7 @@ export function overageCents(team: TeamPlan, seconds: number): number {
  * The spend cap expressed as overage seconds (what the meter counts): the whole minutes the cap
  * pays for, so the invoice never goes over the cap after Stripe rounds up to the minute.
  */
-export function capSeconds(team: TeamPlan, spendCapCents: number): number {
+export function capSeconds(team: Pick<TeamPlan, 'overageCentsPerHour'>, spendCapCents: number): number {
   const minutes = Math.floor((spendCapCents * (3600 / OVERAGE_SECONDS_PER_BILLED_UNIT)) / team.overageCentsPerHour)
   return minutes * OVERAGE_SECONDS_PER_BILLED_UNIT
 }

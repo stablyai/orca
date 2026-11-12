@@ -231,10 +231,23 @@ export const notSetUpCodexDevice = fixture({
   }
 })
 export const notSetUpPaste = fixture({ setUp: { setup: { phase: 'paste', reason: 'chosen' } } })
-/** The paste step at 900 px window width (a ~520 px pane): the detail moves to the title's tooltip. */
+/** The paste step at 900 px window width (a ~520 px pane): text on row 1, field and button on row 2. */
 export const notSetUpPasteTiny = fixture({
   setUp: { setup: { phase: 'paste', reason: 'chosen' } },
   width: 520
+})
+/** The setup-token fallback in a half-width split: stacks like the paste-code step. */
+export const notSetUpPasteNarrow = fixture({
+  setUp: { setup: { phase: 'paste', reason: 'no_cli' } },
+  width: 440
+})
+/** A pasted token was refused. */
+export const notSetUpPasteRejected = fixture({
+  setUp: { setup: { phase: 'paste', reason: 'chosen', token: 'rejected' } }
+})
+export const notSetUpPasteRejectedNarrow = fixture({
+  setUp: { setup: { phase: 'paste', reason: 'chosen', token: 'rejected' } },
+  width: 440
 })
 export const notSetUpFailed = fixture({ setUp: { setup: { phase: 'failed', error: 'denied' } } })
 /** Set up finished: Start {{agent}} releases the held launch. */
