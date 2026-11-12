@@ -1,7 +1,7 @@
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { OrcadFeatureReadiness } from '../runtime/rpc/orcad-feature-readiness'
+import type { OrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readiness'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 
 export async function installOrcadProfileRuntimeServices({

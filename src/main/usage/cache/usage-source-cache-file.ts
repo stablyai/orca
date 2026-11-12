@@ -62,7 +62,11 @@ export async function readUsageSourceCacheForScan<T>(ref: UsageSourceCacheRef): 
   accountAttributionAvailable: boolean
 }> {
   try {
-    const parsed = JSON.parse(await readFile(ref.path, 'utf-8'))
+    const parsed = await readUsageCacheJson<{
+      schemaVersion: number
+      worktreeFingerprint: string | null
+      sources: T[]
+    }>(ref.path)
     if (parsed?.schemaVersion !== ref.schemaVersion || !Array.isArray(parsed.sources)) {
       return { sources: [], reuseProjections: false, accountAttributionAvailable: false }
     }
