@@ -218,16 +218,13 @@ it.each([
     await fs.mkdir(join(repo, '.git'))
     let cwd = repo
     for (let index = 0; index < count; index++) {
-      if (index) {
-        cwd = join(cwd, 'd')
-        await fs.mkdir(cwd)
-      }
-      const contents =
-        shape === 'lines'
-          ? 'RULE\n'.repeat(10_000)
-          : shape === 'binary'
-            ? Buffer.concat([Buffer.alloc(23_999, 65), Buffer.from([0]), Buffer.alloc(1000, 65)])
-            : 'x'.repeat(25_000)
+      cwd = join(repo, ...Array.from({ length: index }, () => 'd'))
+      await fs.mkdir(cwd, { recursive: true })
+      const contents = {
+        lines: 'RULE\n'.repeat(10_000),
+        binary: Buffer.concat([Buffer.alloc(23_999, 65), Buffer.from([0]), Buffer.alloc(1000, 65)]),
+        unwrapped: 'x'.repeat(25_000)
+      }[shape]
       await fs.writeFile(join(cwd, 'GEMINI.md'), contents)
       await fs.writeFile(join(cwd, 'AGENTS.md'), contents)
       await fs.writeFile(join(cwd, 'unrelated.txt'), 'UNRELATED')
