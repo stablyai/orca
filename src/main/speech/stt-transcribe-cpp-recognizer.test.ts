@@ -156,7 +156,7 @@ describe('createTranscribeCppRecognizer', () => {
     ])
   })
 
-  // The running decode finishes; nothing after it decodes or commits, though 24 s of audio is past the 20 s commit.
+  // The running decode finishes; nothing after it decodes or commits, though the 26 s fed is past the 20 s commit.
   it.each<{ cancelDuring: string; expected: Transcript }>([
     { cancelDuring: 'One.', expected: [{ partial: 'One.' }] },
     { cancelDuring: 'Two.', expected: [{ partial: 'One.' }, { partial: 'One. Two.' }] }

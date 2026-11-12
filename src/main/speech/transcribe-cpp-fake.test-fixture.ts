@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { VadStream } from './stt-vad-pause-segmenter'
 
 export type FakeTranscribeEngine = {
   /** The speech model's native rate; the VAD takes the same rate. */
@@ -17,21 +18,30 @@ class OutputTruncated extends Error {
   partialResult?: { text: string }
 }
 
-function fakeVadSession(engine: FakeTranscribeEngine) {
+/** A Silero VAD stream scoring each frame with `speechProbability`. */
+export function fakeVadSession(
+  frameSamples: number,
+  speechProbability: (frame: Float32Array) => number
+): VadStream & { dispose: () => void } {
   let pending: number[] = []
+  let frames = 0
   const score = (flush: boolean) => {
-    const size = engine.vadFrameSamples
     const probs: number[] = []
-    while (pending.length >= size || (flush && pending.length > 0)) {
-      const frame = new Float32Array(size)
-      frame.set(pending.slice(0, size))
-      probs.push(engine.speechProbability(frame))
-      pending = pending.slice(size)
+    while (pending.length >= frameSamples || (flush && pending.length > 0)) {
+      const frame = new Float32Array(frameSamples)
+      frame.set(pending.slice(0, frameSamples))
+      probs.push(speechProbability(frame))
+      pending = pending.slice(frameSamples)
     }
-    return { probs, firstFrame: 0, segments: [] }
+    const firstFrame = frames
+    frames = flush ? 0 : frames + probs.length
+    return { probs, firstFrame, segments: [] }
   }
   return {
-    streamFeed: async (pcm: Float32Array) => {
+    streamFeed: async (pcm) => {
+      if (!(pcm instanceof Float32Array)) {
+        throw new Error('the segmenter feeds Float32Array')
+      }
       pending.push(...pcm)
       return score(false)
     },
@@ -47,10 +57,9 @@ function fakeModel(engine: FakeTranscribeEngine) {
     vadInfo: { sampleRate: engine.sampleRate, frameSamples: engine.vadFrameSamples },
     supports: () => false,
     createSession: () => ({
-      // Copied, as native code borrows the caller's buffer only until the run settles.
-      run: async (pcm: Float32Array) => ({ text: await engine.transcribe(pcm.slice()) })
+      run: async (pcm: Float32Array) => ({ text: await engine.transcribe(pcm) })
     }),
-    createVadSession: () => fakeVadSession(engine),
+    createVadSession: () => fakeVadSession(engine.vadFrameSamples, engine.speechProbability),
     dispose: () => {}
   }
 }
@@ -77,6 +86,7 @@ export function installFakeTranscribeCpp(engine: FakeTranscribeEngine): {
       load: async () => fakeModel(engine)
     }
   })
+  writeFileSync(join(speechModulesDir, 'transcribe-cpp', 'package.json'), '{"type":"module"}\n')
   writeFileSync(
     join(dist, 'index.js'),
     `const fake = globalThis[Symbol.for('orca.test.fakeTranscribeCpp')]
