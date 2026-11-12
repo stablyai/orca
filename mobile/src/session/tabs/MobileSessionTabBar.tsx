@@ -130,9 +130,14 @@ export function MobileSessionTabBar({
       const target = event.translationX > 0 ? previous : next
       offset.value = target ? event.translationX : event.translationX * EDGE_RESISTANCE
     })
-    .onEnd((event) => {
+    .onEnd((event, success) => {
       // oxlint-disable-next-line react/purity -- runs when the drag ends, never during render.
       dragEndedAtRef.current = Date.now()
+      // An interrupted drag (touch cancelled, another gesture took over) never switches tabs.
+      if (!success) {
+        offset.value = settle(0)
+        return
+      }
       const direction = event.translationX > 0 ? 1 : -1
       const flicked =
         Math.abs(event.velocityX) > FLICK_VELOCITY && Math.sign(event.velocityX) === direction
