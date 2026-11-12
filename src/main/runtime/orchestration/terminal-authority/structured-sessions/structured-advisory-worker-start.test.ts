@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
+import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import * as sessionCreate from '../../../rpc/methods/structured-sessions/creation/structured-agent-session-create'
 import { resultOf } from '../../../rpc/orchestration-session-caller-test-fixture'
 import {
@@ -17,7 +18,7 @@ import {
   runtime
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
-it.each(['unsupported', 'git-workspace', 'nonempty-folder', 'admitted'])(
+it.each(['unsupported', 'git-workspace', 'nonempty-folder', 'admitted', 'cold-host'])(
   'enforces %s consultation admission before actor launch',
   async (reason) => {
     await openChat(COORDINATOR)
@@ -29,8 +30,11 @@ it.each(['unsupported', 'git-workspace', 'nonempty-folder', 'admitted'])(
       await writeFile(join(path, 'CLAUDE.md'), 'Unadmitted context')
     }
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-    vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
-      supported: true
+    vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockImplementation(async () => {
+      if (reason === 'cold-host') {
+        setStructuredAgentSessionHost(null)
+      }
+      return { supported: true }
     })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture uses only the launch settings and the resolved workspace identity/path.
     vi.spyOn(runtime, 'requireStore').mockReturnValue({
@@ -52,6 +56,11 @@ it.each(['unsupported', 'git-workspace', 'nonempty-folder', 'admitted'])(
     const create = vi
       .spyOn(sessionCreate, 'createStructuredAgentSessionForWorktree')
       .mockRejectedValue(new Error('Unexpected actor creation.'))
+    if (reason === 'cold-host') {
+      vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockImplementation(async () => {
+        setStructuredAgentSessionHost(host)
+      })
+    }
     const response = await dispatcher.dispatch(
       request(
         'orchestration.workerStart',
@@ -80,7 +89,7 @@ it.each(['unsupported', 'git-workspace', 'nonempty-folder', 'admitted'])(
         { sessionId: COORDINATOR }
       )
     )
-    if (reason === 'admitted') {
+    if (reason === 'admitted' || reason === 'cold-host') {
       expect(response.ok).toBe(true)
       const receipt = resultOf(response)
       expect(receipt.state).toBe('failed')

@@ -26,14 +26,14 @@ export function createClaudeAdvisoryReportTool(
     'Submit one bounded finding to the owner. A recommendation needs evidence, uncertainty, and the next discriminating test.',
     agentSessionAdvisoryReportSchema.shape,
     async (input) => {
+      if (ended()) {
+        return refused()
+      }
       const parsed = agentSessionAdvisoryReportSchema.safeParse(input)
       const report = parsed.success ? parsed.data : { status: 'inconclusive' as const }
       const key = JSON.stringify(report)
       if (attempt) {
         return attempt.key === key ? attempt.result : refused()
-      }
-      if (ended()) {
-        return refused()
       }
       const result = Promise.resolve().then(async () => {
         if (ended()) {

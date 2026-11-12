@@ -6,6 +6,7 @@ import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchest
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { WorkerStartInput } from './worker-start-schema'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
 function refuse(): never {
   throw new OrchestrationError(
@@ -24,12 +25,18 @@ export function assertAdvisoryWorkerRequest(params: WorkerStartInput, followUp: 
 export async function assertAdvisoryWorkerPlacement(
   params: WorkerStartInput,
   workspace: (Pick<Worktree, 'id'> & Partial<Pick<Worktree, 'path' | 'hostId'>>) | undefined,
-  mode: AgentLaunchModeReceipt
+  mode: AgentLaunchModeReceipt,
+  runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>
 ) {
   if (!params.advisoryPolicy) {
     return
   }
   if (!workspace || !workspace.path) {
+    refuse()
+  }
+  try {
+    await runtime.ensureStructuredAgentSessionHost()
+  } catch {
     refuse()
   }
   const host = getStructuredAgentSessionHost()

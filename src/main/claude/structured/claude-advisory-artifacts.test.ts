@@ -40,6 +40,35 @@ async function connect(packet = policy(), publish?: (report: { status: string })
 }
 
 describe('bounded advisory artifact access', () => {
+  it('returns overlapping literal matches from the admitted snapshot', async () => {
+    const { client } = await connect({
+      ...policy(),
+      artifacts: [
+        {
+          path: 'overlap.txt',
+          text: 'aaa',
+          sha256: '9834876dcfb05cb167a5c24953eba58c4ac89b1adf57f28f2f9d09af107ee8f0'
+        }
+      ]
+    })
+    expect(
+      await client.callTool({ name: 'search_artifacts', arguments: { query: 'aa' } })
+    ).toMatchObject({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            matches: [
+              { path: 'overlap.txt', offset: 0, text: 'aaa' },
+              { path: 'overlap.txt', offset: 1, text: 'aaa' }
+            ],
+            truncated: false
+          })
+        }
+      ]
+    })
+  })
+
   it('commits one advisory report and replays concurrent identical submissions without another effect', async () => {
     const published: unknown[] = []
     const { client } = await connect(policy(), async (report) => {

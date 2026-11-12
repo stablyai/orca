@@ -4,6 +4,7 @@ import { forkTestSource } from './structured-agent-session-fork.test-fixture'
 import {
   createRestTestRig,
   REST_TEST_CALLER,
+  restTestSend,
   type RestTestRig
 } from '../../host/testing/structured-agent-session-rest-test-rig'
 import {
@@ -61,6 +62,33 @@ async function foundAdvisor(agent: 'claude' | 'codex' = 'codex') {
 }
 
 describe('advisory provider admission', () => {
+  it('refuses a nonfolder attach even when the adapter claims support', async () => {
+    await foundAdvisor()
+    const policy = rig!.store.getRecord(HOST_TEST_SESSION)!.advisoryPolicy
+    await rig!.restart({
+      adapter: {
+        ...rig!.host.deps.adapter,
+        supportsAdvisoryPolicy: () => true
+      }
+    })
+    const params = hostTestAttachParams(null, {
+      advisoryPolicy: policy,
+      providerHandle: undefined,
+      envelope: {
+        sessionId: 'fresh-advisor',
+        clientOperationId: hostTestOperationId(),
+        expectedRuntimeFence: null,
+        payloadFingerprint: '0'.repeat(64)
+      }
+    })
+    expect(await rig!.host.attach(REST_TEST_CALLER, params)).toMatchObject({
+      ok: false,
+      refusal: { details: { reason: 'hostUnsupported' } }
+    })
+    expect(rig!.store.getRecord('fresh-advisor')).toBeNull()
+    expect(rig!.adapter.acquire).not.toHaveBeenCalled()
+  })
+
   it.each(['claude', 'codex'] as const)(
     'refuses an unsupported %s adapter before acquisition',
     async (agent) => {
@@ -130,6 +158,30 @@ it('refuses advisory model changes without saving a new choice', async () => {
   })
   expect(rig!.store.getRecord(HOST_TEST_SESSION)?.options).toBeUndefined()
   expect(rig!.adapter.acquire).not.toHaveBeenCalled()
+})
+
+it('retains only the original advisory question across restart and permits its replay and Stop', async () => {
+  await foundAdvisor()
+  const original = restTestSend('Review this snapshot')
+  expect(await rig!.host.send(REST_TEST_CALLER, original)).toMatchObject({ ok: true })
+  await rig!.restart()
+  const second = restTestSend('Keep working')
+  expect(await rig!.host.send(REST_TEST_CALLER, second)).toMatchObject({
+    ok: false,
+    refusal: { details: { reason: 'advisoryOperationUnsupported' } }
+  })
+  expect(await rig!.host.send(REST_TEST_CALLER, original)).toMatchObject({
+    ok: true,
+    replayed: true
+  })
+  expect((await rig!.host.journalSnapshot(HOST_TEST_SESSION)).submissions).toMatchObject([
+    { clientMessageId: original.envelope.clientOperationId }
+  ])
+  expect(
+    await rig!.host.cancel(REST_TEST_CALLER, {
+      envelope: envelope('agentSession.cancel', {})
+    })
+  ).toMatchObject({ ok: true })
 })
 
 it('refuses advisory goals and rewinds before acquiring an agent', async () => {

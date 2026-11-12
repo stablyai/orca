@@ -137,7 +137,7 @@ export async function startLocalWorker(args: {
   })
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
-  await assertAdvisoryWorkerPlacement(params, resolvedWorktree, mode)
+  await assertAdvisoryWorkerPlacement(params, resolvedWorktree, mode, runtime)
 
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
   refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)

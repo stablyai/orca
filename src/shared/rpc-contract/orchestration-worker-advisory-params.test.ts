@@ -29,6 +29,21 @@ it('preserves the bounded policy on a new explicitly scoped consultation', () =>
   expect(WorkerStartParams.parse(consult).advisoryPolicy).toEqual(consult.advisoryPolicy)
 })
 
+it('refuses snapshots whose aggregate UTF-8 bytes exceed the limit before worker admission', () => {
+  expect(
+    WorkerStartParams.safeParse({
+      ...consult,
+      advisoryPolicy: {
+        ...consult.advisoryPolicy,
+        artifacts: consult.advisoryPolicy.artifacts.map((artifact) => ({
+          ...artifact,
+          text: 'é'.repeat(524_289)
+        }))
+      }
+    }).success
+  ).toBe(false)
+})
+
 it.each([
   { spec: undefined, task: 'existing' },
   { parent: undefined },

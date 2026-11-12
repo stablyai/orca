@@ -2,6 +2,10 @@ import { readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { getRequiredStringFlag, getRequiredStringFlagAllowingEmpty } from './flags'
 import { RuntimeClientError } from './runtime-client'
+import {
+  NodeFileReadTooLargeError,
+  readNodeFileWithinLimit
+} from '../shared/file-content/node-bounded-file-reader'
 
 type BodyOptions = {
   required: boolean
@@ -40,7 +44,8 @@ export async function readTextOrFileFlag(
   flags: Map<string, string | boolean>,
   cwd: string,
   flag: string,
-  required: boolean
+  required: boolean,
+  maximumBytes?: number
 ): Promise<string | undefined> {
   const fileFlag = `${flag}-file`
   const hasText = flags.has(flag)
@@ -57,21 +62,48 @@ export async function readTextOrFileFlag(
     }
     return undefined
   }
-  return hasText
+  const text = hasText
     ? getRequiredStringFlagAllowingEmpty(flags, flag)
-    : readBodyFile(getRequiredStringFlag(flags, fileFlag), cwd)
+    : await readBodyFile(getRequiredStringFlag(flags, fileFlag), cwd, maximumBytes)
+  if (maximumBytes !== undefined && Buffer.byteLength(text, 'utf8') > maximumBytes) {
+    throw inputTooLarge()
+  }
+  return text
 }
 
-async function readBodyFile(path: string, cwd: string): Promise<string> {
+function inputTooLarge() {
+  return new RuntimeClientError('invalid_argument', 'Input exceeds the byte limit.')
+}
+
+async function readBodyFile(path: string, cwd: string, maximumBytes?: number): Promise<string> {
   if (path !== '-') {
-    return readFile(isAbsolute(path) ? path : join(cwd, path), 'utf8')
+    const resolved = isAbsolute(path) ? path : join(cwd, path)
+    if (maximumBytes === undefined) {
+      return readFile(resolved, 'utf8')
+    }
+    try {
+      return (
+        await readNodeFileWithinLimit(resolved, maximumBytes, { regularFileOnly: true })
+      ).buffer.toString('utf8')
+    } catch (error) {
+      if (error instanceof NodeFileReadTooLargeError) {
+        throw inputTooLarge()
+      }
+      throw error
+    }
   }
   if (process.stdin.isTTY) {
     throw new RuntimeClientError('invalid_argument', 'stdin body requested but stdin is a TTY')
   }
   const chunks: Buffer[] = []
+  let bytes = 0
   for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
+    bytes += buffer.length
+    if (maximumBytes !== undefined && bytes > maximumBytes) {
+      throw inputTooLarge()
+    }
+    chunks.push(buffer)
   }
   return Buffer.concat(chunks).toString('utf8')
 }

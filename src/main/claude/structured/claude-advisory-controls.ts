@@ -53,9 +53,15 @@ export function createClaudeAdvisoryControls(
     if (reason) {
       onFault?.(reason)
     }
-    void stopped?.catch((error: unknown) =>
-      onFault?.(error instanceof Error ? error : new Error('Advisor stop failed.'))
-    )
+    void stopped
+      ?.then((gone) => {
+        if (!gone) {
+          onFault?.(new Error('Advisor process exit unproven.'))
+        }
+      })
+      .catch((error: unknown) =>
+        onFault?.(error instanceof Error ? error : new Error('Advisor stop failed.'))
+      )
   }
   const server = createClaudeAdvisoryArtifactServer(
     parsed.data,

@@ -133,7 +133,11 @@ export async function performAttach(
   const supported = (record: AgentSessionRecord | null) =>
     record === null
       ? (!params.advisoryPolicy ||
-          input.adapter.supportsAdvisoryPolicy?.(params.location, params.agent) === true) &&
+          (params.location.workspaceKind === 'folder' &&
+            !params.adopt &&
+            !params.fork &&
+            !params.providerHandle &&
+            input.adapter.supportsAdvisoryPolicy?.(params.location, params.agent) === true)) &&
         input.agents.definition(params.agent) !== null &&
         adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)
       : hostCanStartRecord(input, record)

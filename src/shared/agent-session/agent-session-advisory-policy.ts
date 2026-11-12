@@ -25,7 +25,10 @@ export const agentSessionAdvisoryPolicySchema = z
   .refine(
     (policy) =>
       new Set(policy.artifacts.map((artifact) => artifact.path)).size === policy.artifacts.length &&
-      policy.artifacts.reduce((size, artifact) => size + artifact.text.length, 0) <= 1_048_576
+      policy.artifacts.reduce(
+        (size, artifact) => size + new TextEncoder().encode(artifact.text).byteLength,
+        0
+      ) <= 1_048_576
   )
 
 export type AgentSessionAdvisoryPolicy = z.infer<typeof agentSessionAdvisoryPolicySchema>

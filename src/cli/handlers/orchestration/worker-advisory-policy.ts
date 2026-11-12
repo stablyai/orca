@@ -21,7 +21,7 @@ export async function readWorkerAdvisoryPolicy(
       'The connected Orca runtime does not understand bounded advisory workers. Update or restart Orca before trying again.'
     )
   }
-  const raw = await readTextOrFileFlag(flags, cwd, 'advisory-policy', true)
+  const raw = await readTextOrFileFlag(flags, cwd, 'advisory-policy', true, 8_388_608)
   try {
     if (!raw || Buffer.byteLength(raw, 'utf8') > 8_388_608) {
       throw new Error('Invalid policy size.')

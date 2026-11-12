@@ -97,7 +97,7 @@ export function createClaudeAdvisoryArtifactServer(
                 offset,
                 text: artifact.text.slice(Math.max(0, offset - 80), offset + query.length + 80)
               })
-              offset = artifact.text.indexOf(query, offset + query.length)
+              offset = artifact.text.indexOf(query, offset + 1)
             }
           }
           return jsonResult({ matches, truncated: false })

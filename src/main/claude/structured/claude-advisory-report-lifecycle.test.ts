@@ -36,10 +36,14 @@ it.each([false, true])(
       }
     )
     let stopped: unknown
-    controls.bindClose(async (options) => {
-      stopped = options
-      return false
-    })
+    const faults: string[] = []
+    controls.bindClose(
+      async (options) => {
+        stopped = options
+        return false
+      },
+      (error) => faults.push(error.message)
+    )
     const config = controls.options.mcpServers?.orca_advisor
     if (!config || config.type !== 'sdk') {
       throw new Error('Missing advisory server.')
@@ -55,9 +59,16 @@ it.each([false, true])(
       })
       expect(published).toEqual([{ status: 'inconclusive' }])
       expect(stopped).toEqual({ grace: 'brief' })
+      expect(faults).toEqual(['Advisor process exit unproven.'])
       expect(controls.admitInput()?.message).toContain('Advisor access ended.')
       const read = await client.callTool({ name: 'read_artifact', arguments: { path: 'note.txt' } })
       expect(read.isError).toBe(true)
+      const replay = await client.callTool({
+        name: 'report_advice',
+        arguments: { status: 'inconclusive' }
+      })
+      expect(replay.isError).toBe(true)
+      expect(published).toEqual([{ status: 'inconclusive' }])
       if (ambiguous) {
         expect(response.isError).toBe(true)
       } else {
