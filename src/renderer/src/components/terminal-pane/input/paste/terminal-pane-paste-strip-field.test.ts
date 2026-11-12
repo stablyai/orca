@@ -12,6 +12,14 @@ import { registerTerminalPanePasteListeners } from './terminal-pane-paste-listen
 vi.mock('../../../../store/index', () => ({ useAppStore: { getState: () => ({}) } }))
 vi.mock('@/lib/workspace/ownership/connection-context', () => ({ getConnectionId: () => null }))
 
+/** Only the members these listeners touch are faked; the full controller and DOM event types are large. */
+function stub<T>(value: unknown): T {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial test double; a member the code under test starts using fails the test.
+  return value as T
+}
+type ListenerArgs = Parameters<typeof registerTerminalPanePasteListeners>[0]
+type RightClickArgs = Parameters<typeof createTerminalRightClickPasteCapture>[0]
+
 let container: HTMLDivElement
 let field: HTMLInputElement
 let xtermTextarea: HTMLTextAreaElement
@@ -34,19 +42,19 @@ beforeEach(() => {
   const pane = { id: 1, terminal: {} }
   dispose = registerTerminalPanePasteListeners({
     container,
-    controller: {
+    controller: stub<ListenerArgs['controller']>({
       keybindings: {},
       managerRef: { current: { getActivePane: () => pane, getPanes: () => [pane] } },
       paneTransportsRef: { current: new Map() },
       setTerminalError: vi.fn(),
       worktreeId: 'wt'
-    } as never,
-    execution: {
+    }),
+    execution: stub<ListenerArgs['execution']>({
       createPaneClipboardCopiedFiles: vi.fn(),
       executePanePasteText,
       pasteFromClipboard,
       resolvePaneProtectedMultilinePasteOptions: vi.fn()
-    } as never,
+    }),
     isMac: true,
     shortcutPlatform: 'darwin'
   })
@@ -101,15 +109,17 @@ describe('a paste into the cloud strip field never reaches the terminal', () => 
   it('right-click paste on the field is not claimed by the terminal', () => {
     const { onMouseDownCapture } = createTerminalRightClickPasteCapture({
       rightClickToPaste: true,
-      findClickedPane: () => ({ terminal: {} }) as never
+      findClickedPane: () => stub<ReturnType<RightClickArgs['findClickedPane']>>({ terminal: {} })
     })
     const preventDefault = vi.fn()
-    onMouseDownCapture({
-      button: 2,
-      target: field,
-      preventDefault,
-      stopPropagation: vi.fn()
-    } as unknown as React.MouseEvent<HTMLDivElement>)
+    onMouseDownCapture(
+      stub<React.MouseEvent<HTMLDivElement>>({
+        button: 2,
+        target: field,
+        preventDefault,
+        stopPropagation: vi.fn()
+      })
+    )
     expect(preventDefault).not.toHaveBeenCalled()
   })
 })
