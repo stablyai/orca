@@ -44,11 +44,20 @@ export class AgentIdentityDemand {
   constructor(
     private readonly databasePath: () => string | null,
     private readonly onAnswer: (demand: KeyDemand, identity: RowAgentIdentity) => void,
-    private readonly createClient: () => AgentIdentityClient
+    private readonly createClient: () => AgentIdentityClient,
+    /** Runs as an authority ends, so rows carrying its answers ask the next one. */
+    private readonly onAuthorityEnded: () => void = () => {}
   ) {}
 
   /** Bumped when the store authority ends; an answer from an older one stamps nothing. */
   get generation(): number {
+    return this.generationValue
+  }
+
+  /** Synchronizes with the current store first, so first use is not mistaken for a replacement;
+   *  a caller compares the returned token after its own awaits. */
+  authority(): number {
+    this.syncAuthority()
     return this.generationValue
   }
 
@@ -82,6 +91,10 @@ export class AgentIdentityDemand {
       const waiter = (answer: OrcaSessionId | null): void => {
         clearTimeout(timer)
         demand.waiters.delete(waiter)
+        // The grant belongs to live clicks: with none left, a row waits for the automatic retry.
+        if (demand.waiters.size === 0) {
+          this.bypass.delete(keyString)
+        }
         this.release(keyString)
         resolve(answer)
       }
@@ -89,7 +102,8 @@ export class AgentIdentityDemand {
       timer.unref()
       demand.waiters.add(waiter)
       this.unresolved.add(keyString)
-      if (Date.now() < this.retryAt) {
+      // A click joining the operation already running for this key earns no second attempt.
+      if (!(this.active?.kind === 'identify' && this.active.keyString === keyString)) {
         this.bypass.add(keyString)
       }
       this.schedulePump()
@@ -130,6 +144,8 @@ export class AgentIdentityDemand {
     if (path !== this.authorityPath) {
       this.close()
       this.authorityPath = path
+      // Rows still pending from the ended authority ask this one.
+      this.schedulePump()
     }
   }
 
@@ -162,6 +178,7 @@ export class AgentIdentityDemand {
         this.keys.delete(keyString)
       }
     }
+    this.onAuthorityEnded()
   }
 
   /** One continuation per retiring worker: the pump resumes when it has exited. */
@@ -217,7 +234,6 @@ export class AgentIdentityDemand {
         this.armWake()
         return null
       }
-      this.bypass.delete(explicit)
       return { kind: 'identify', keyString: explicit }
     }
     const membership = this.memberships.keys().next().value
@@ -260,6 +276,8 @@ export class AgentIdentityDemand {
       return
     }
     const { keyString } = operation
+    // Sent now, so a click's grant on it is spent.
+    this.bypass.delete(keyString)
     const key = this.keys.get(keyString)?.key
     if (!key) {
       this.unresolved.delete(keyString)
@@ -268,7 +286,7 @@ export class AgentIdentityDemand {
     }
     void client.identify(path, key).then((answer) => {
       if (current() && answer) {
-        this.settle(keyString, { key, id: answer.id })
+        this.settle(keyString, { key, id: answer.id, authority: generation })
       } else if (current()) {
         for (const waiter of this.keys.get(keyString)?.waiters ?? []) {
           waiter(null)
@@ -290,6 +308,8 @@ export class AgentIdentityDemand {
       }
       this.failing = true
       this.armWake()
+      // Background work waits for the wake, but a click queued behind this one still gets its try.
+      this.schedulePump()
       return
     }
     this.failing = false

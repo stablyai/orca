@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import { isOrcaSessionId } from '../../../shared/orca-session-address'
 import SyncDatabase from '../../sqlite/sync-database'
+import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import { AgentIdentityWorkerClient } from './agent-identity-worker-client'
 import {
   InProcessAgentIdentityClient,
@@ -139,6 +140,39 @@ function scriptedService(
   return { identities, settled }
 }
 
+/** Counts every read of an index, lookups and walks alike, so admission is measured in work. */
+class CountingMap<K, V> extends Map<K, V> {
+  reads = 0
+  override get(key: K): V | undefined {
+    this.reads++
+    return super.get(key)
+  }
+  override has(key: K): boolean {
+    this.reads++
+    return super.has(key)
+  }
+  override forEach(callback: (value: V, key: K, map: Map<K, V>) => void): void {
+    this.reads += this.size
+    super.forEach(callback)
+  }
+  override entries(): MapIterator<[K, V]> {
+    this.reads += this.size
+    return super.entries()
+  }
+  override keys(): MapIterator<K> {
+    this.reads += this.size
+    return super.keys()
+  }
+  override values(): MapIterator<V> {
+    this.reads += this.size
+    return super.values()
+  }
+  override [Symbol.iterator](): MapIterator<[K, V]> {
+    this.reads += this.size
+    return super[Symbol.iterator]()
+  }
+}
+
 function admit(identities: PaneAgentIdentities, place: string, providerSessionId: string): void {
   identities.setPlace(
     place,
@@ -189,13 +223,18 @@ describe('PaneAgentIdentities demand and completion', () => {
     const workers = new ScriptedIdentityWorkers()
     workers.serviceMs = 5
     const { identities, settled } = scriptedService(workers)
+    const places = new CountingMap<string, unknown>()
+    Reflect.set(identities, 'places', places)
     for (let place = 0; place < keys; place++) {
       admit(identities, `p${place}`, `k${place}`)
     }
+    places.reads = 0
     // Every row but the last moves to one shared conversation before the first answer.
     for (let place = 0; place < keys - 1; place++) {
       admit(identities, `p${place}`, 'shared')
     }
+    // Admission reads only its own place: never a walk of the rows already on the key.
+    expect(places.reads).toBe(keys - 1)
     await vi.advanceTimersByTimeAsync(keys * 10)
     // Nothing was sent before the rows moved, and replaced keys never are.
     expect(workers.identifyPosts()).toBe(2)
@@ -294,6 +333,7 @@ describe('PaneAgentIdentities demand and completion', () => {
     await vi.advanceTimersByTimeAsync(5)
     const before = workers.identifyPosts()
     path = 'b.db'
+    identities.syncAuthority()
     admit(identities, 's', 'k')
     await vi.advanceTimersByTimeAsync(5)
     expect(workers.identifyPosts()).toBe(before + 1)
@@ -317,4 +357,210 @@ describe('PaneAgentIdentities demand and completion', () => {
     expect(settled.map((place) => place.identity)).toEqual([expect.objectContaining({ id: null })])
     expect(settled[0]?.identity.pending).toBeUndefined()
   })
+})
+
+describe('PaneAgentIdentities authority', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it("turns an ended store's answers pending everywhere and asks the next store", async () => {
+    vi.useFakeTimers()
+    const workers = new ScriptedIdentityWorkers()
+    // Each store mints its own id for the same conversation.
+    workers.answer = (request) =>
+      request.kind === 'identify'
+        ? {
+            id: request.id,
+            ok: true,
+            value: `claude_${request.path}_${request.key.providerSessionId}`
+          }
+        : {
+            id: request.id,
+            ok: true,
+            value: request.orcaSessionId.startsWith(`claude_${request.path}`)
+          }
+    let path = 'storeA'
+    const settled: SettledAgentIdentityPlace[] = []
+    // Re-stamps each row as the hook server does, so the indexes follow every publication.
+    const identities: PaneAgentIdentities = new PaneAgentIdentities(
+      () => path,
+      (places) => {
+        settled.push(...places)
+        for (const place of places) {
+          identities.setPlace(place.place, place.paneKey, place.identity)
+        }
+      },
+      () => new AgentIdentityWorkerClient(workers.factory)
+    )
+    opened.push(identities)
+    admit(identities, 'row', 'S')
+    identities.assignCanonical('subject', 'pane', sighting({ id: 'S' }))
+    await vi.advanceTimersByTimeAsync(5)
+    const old = identities.canonicalIdentity('subject')!
+    expect(old.id).toBe('claude_storeA_S')
+    settled.length = 0
+
+    path = 'storeB'
+    identities.syncAuthority()
+    // Row, canonical subject and reverse index drop A's answer together, before B answers.
+    expect(settled.map((place) => [place.place, place.identity.pending]).sort()).toEqual([
+      ['\u0001subject', true],
+      ['row', true]
+    ])
+    expect(identities.isCurrent(old)).toBe(false)
+    expect(identities.assign(sighting({ id: 'S' }), old)).toMatchObject({ id: null, pending: true })
+    expect(identities.canonicalIdentity('subject')?.pending).toBe(true)
+    expect(identities.placesOf('claude_storeA_S')).toEqual([])
+    const asked = identities.isTerminalIdentity('claude_storeA_S')
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await asked).toBe(false)
+    expect(identities.canonicalIdentity('subject')?.id).toBe('claude_storeB_S')
+    expect(identities.placesOf('claude_storeB_S').map((place) => place.key)).toEqual([
+      'subject',
+      'row'
+    ])
+  })
+
+  it('keeps its answers when only the worker restarts on the same store', async () => {
+    vi.useFakeTimers()
+    const workers = new ScriptedIdentityWorkers()
+    const { identities } = scriptedService(workers)
+    admit(identities, 'row', 'S')
+    await vi.advanceTimersByTimeAsync(1)
+    const carried = identities.assign(sighting({ id: 'S' }), undefined)!
+    expect(carried.id).toBe('claude_S')
+    // A stuck operation times out and its worker exits; the next operation starts another.
+    workers.answer = (request) => (request.kind === 'has' ? 'never' : 'never')
+    const stuck = identities.isTerminalIdentity('claude_unknown')
+    await vi.advanceTimersByTimeAsync(10_001)
+    expect(await stuck).toBeUndefined()
+    expect(workers.live).toBe(0)
+    workers.answer = (request) => ({ id: request.id, ok: true, value: false })
+    await vi.advanceTimersByTimeAsync(30_000)
+    const asked = identities.isTerminalIdentity('claude_unknown')
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await asked).toBe(false)
+    expect(workers.spawns).toBe(2)
+    expect(identities.isCurrent(carried)).toBe(true)
+    expect(identities.assign(sighting({ id: 'S' }), carried)).toBe(carried)
+    await expect(identities.identify(sighting({ id: 'S' }))).resolves.toBe('claude_S')
+    expect(workers.identifyPosts()).toBe(1)
+  })
+})
+
+describe('PaneAgentIdentities explicit retries', () => {
+  afterEach(() => vi.useRealTimers())
+
+  function failingFor(workers: ScriptedIdentityWorkers, failing: Set<string>): void {
+    workers.serviceMs = 5
+    workers.answer = (request) =>
+      request.kind === 'identify' && failing.has(request.key.providerSessionId)
+        ? { id: request.id, ok: false, error: 'locked' }
+        : request.kind === 'identify'
+          ? { id: request.id, ok: true, value: `claude_${request.key.providerSessionId}` }
+          : { id: request.id, ok: true, value: false }
+  }
+
+  it('gives a click queued behind a failing one its own attempt, and joins a running one', async () => {
+    vi.useFakeTimers()
+    const workers = new ScriptedIdentityWorkers()
+    failingFor(workers, new Set(['A']))
+    const { identities } = scriptedService(workers)
+    const clickA = identities.identify(sighting({ id: 'A' }))
+    await vi.advanceTimersByTimeAsync(1)
+    // Joins A's running attempt: its failure leaves no second "explicit" attempt behind.
+    const joinedA = identities.identify(sighting({ id: 'A' }))
+    const clickB = identities.identify(sighting({ id: 'B' }))
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await clickA).toBeNull()
+    expect(await joinedA).toBeNull()
+    // No event and no 30 s wake: B's attempt follows A's failure.
+    expect(await clickB).toBe('claude_B')
+    expect(workers.identifyPosts()).toBe(2)
+  })
+
+  it('revokes the grant of a click that expired unanswered; its row waits for the wake', async () => {
+    vi.useFakeTimers()
+    const workers = new ScriptedIdentityWorkers()
+    workers.holdExit = true
+    workers.answer = () => 'never'
+    const { identities } = scriptedService(workers)
+    const stuck = identities.identify(sighting({ id: 'A' }))
+    await vi.advanceTimersByTimeAsync(10_001)
+    expect(await stuck).toBeNull()
+    // The timed-out worker is still exiting: B's click cannot be sent before it expires.
+    admit(identities, 'rowB', 'B')
+    const clickB = identities.identify(sighting({ id: 'B' }))
+    await vi.advanceTimersByTimeAsync(10_001)
+    expect(await clickB).toBeNull()
+    workers.answer = (request) =>
+      request.kind === 'identify'
+        ? { id: request.id, ok: true, value: `claude_${request.key.providerSessionId}` }
+        : 'never'
+    workers.releaseExits()
+    await vi.advanceTimersByTimeAsync(19_000)
+    expect(workers.identifyPosts()).toBe(1)
+    // The owner's single wake, 30 s after the failure, is the row's next attempt.
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(workers.identifyPosts()).toBe(2)
+    expect(identities.assign(sighting({ id: 'B' }), undefined)?.id).toBe('claude_B')
+  })
+
+  it.each([200, 2_000])(
+    'gives each of %i queued clicks one attempt after a failure, then holds no grant',
+    async (count) => {
+      vi.useFakeTimers()
+      const workers = new ScriptedIdentityWorkers()
+      failingFor(workers, new Set(Array.from({ length: count }, (_, n) => `k${n}`)))
+      workers.serviceMs = 1
+      const { identities } = scriptedService(workers)
+      admit(identities, 'row', 'k0')
+      const clicks = Array.from({ length: count }, (_, n) =>
+        identities.identify(sighting({ id: `k${n}` }))
+      )
+      await vi.advanceTimersByTimeAsync(count * 2)
+      expect(new Set(await Promise.all(clicks))).toEqual(new Set([null]))
+      expect(workers.identifyPosts()).toBe(count)
+      // No grant outlives its click: the remaining row waits for the next window's single attempt.
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(workers.identifyPosts()).toBe(count)
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(workers.identifyPosts()).toBe(count + 1)
+    }
+  )
+})
+
+it('answers unavailable when the worker cannot load, or is stopped while loading', async () => {
+  const path = databasePath()
+  const missing = join(buildDir, 'missing', 'agent-identity-worker-entry.js')
+  const workers: Worker[] = []
+  const exited = (worker: Worker) => worker.threadId === -1
+  let maxLive = 0
+  const spawn = () => {
+    const worker = spawnWorkerThread(missing)
+    workers.push(worker)
+    maxLive = Math.max(maxLive, workers.filter((spawned) => !exited(spawned)).length)
+    return worker
+  }
+  const service = () => {
+    const identities = new PaneAgentIdentities(
+      () => path,
+      () => {},
+      () => new AgentIdentityWorkerClient(spawn)
+    )
+    opened.push(identities)
+    return identities
+  }
+  const failing = service()
+  expect(await failing.identify(sighting({ id: 'k' }))).toBeNull()
+  // A second click in the backoff waits for the failed worker's exit before another starts.
+  expect(await failing.identify(sighting({ id: 'k' }))).toBeNull()
+  expect(maxLive).toBe(1)
+  const stopping = service()
+  const click = stopping.identify(sighting({ id: 'k' }))
+  await vi.waitFor(() => expect(workers.length).toBe(3))
+  stopping.close()
+  expect(await click).toBeNull()
+  failing.close()
+  // No worker outlives its owner.
+  await vi.waitFor(() => expect(workers.every(exited)).toBe(true))
 })

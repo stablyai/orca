@@ -62,6 +62,8 @@ export type RowAgentIdentity = {
   id: OrcaSessionId | null
   /** Not yet answered by the store: published as null so Copy stays offered and waits. */
   pending?: true
+  /** The store authority that answered; an answer from a replaced store is never carried. */
+  authority?: number
 }
 
 /** What a row publishes as `orcaSessionId`: its id; null while a failed link may still succeed
@@ -72,7 +74,8 @@ export function publishedOrcaSessionId(
   return identity?.id ?? (identity?.pending ? null : undefined)
 }
 
-/** A place whose pending identity just settled, for the hook server to re-stamp and publish. */
+/** A place whose identity just changed (settled, or turned pending as its authority ended), for
+ *  the hook server to re-stamp and publish. */
 export type SettledAgentIdentityPlace = {
   place: string
   paneKey: string
@@ -104,7 +107,8 @@ export class PaneAgentIdentities {
     this.demand = new AgentIdentityDemand(
       databasePath,
       (demand, identity) => this.publish(demand, identity),
-      createClient
+      createClient,
+      () => this.invalidateSettled()
     )
   }
 
@@ -113,8 +117,20 @@ export class PaneAgentIdentities {
     return this.demand.generation
   }
 
-  /** The identity a row carries: the carried one while its provider key is unchanged, the
-   *  current demand's for the key, else a new pending one its admission subscribes to. */
+  /** The current authority's token, synchronized first: take it before any fast path. */
+  authority(): number {
+    return this.demand.authority()
+  }
+
+  /** Whether `identity` is an answer of the current store authority. */
+  isCurrent(identity: RowAgentIdentity): boolean {
+    return identity.pending !== true && identity.authority === this.demand.generation
+  }
+
+  /** The identity a row carries: the carried one while its provider key is unchanged and it is
+   *  not an ended authority's answer, the current demand's for the key, else a new pending one
+   *  its admission subscribes to. The owner syncs the authority when its path changes, so
+   *  admission never ends one. */
   assign(
     sighting: ProviderSessionSighting,
     carried: RowAgentIdentity | undefined
@@ -123,8 +139,11 @@ export class PaneAgentIdentities {
     if (!key) {
       return undefined
     }
-    this.demand.syncAuthority()
-    if (carried && sameProviderKey(carried.key, key)) {
+    if (
+      carried &&
+      sameProviderKey(carried.key, key) &&
+      (carried.pending === true || this.isCurrent(carried))
+    ) {
       return carried
     }
     return this.demand.of(this.keyString(key))?.identity ?? { key, id: null, pending: true }
@@ -140,7 +159,9 @@ export class PaneAgentIdentities {
   /** Whether this host minted `id`; a miss in the live index asks the store, since a sleeping or
    *  closed conversation keeps its id. Undefined when the store cannot answer now. */
   async isTerminalIdentity(id: string): Promise<boolean | undefined> {
-    return this.placesById.has(id) ? true : this.demand.has(id)
+    const authority = this.authority()
+    const known = this.placesById.has(id) ? true : await this.demand.has(id)
+    return authority === this.demand.generation ? known : undefined
   }
 
   /** Keeps the indexes and demand subscriptions exact: `place` is a legacy row key or a
@@ -209,8 +230,37 @@ export class PaneAgentIdentities {
     }
   }
 
+  /** Syncs the store authority; the owner calls it whenever its status path changes. */
+  syncAuthority(): void {
+    this.demand.syncAuthority()
+  }
+
   close(): void {
     this.demand.close()
+  }
+
+  /** The store authority ended: its answers are void, so every place carrying one turns pending
+   *  together (row, canonical subject and reverse index) and asks the next authority. */
+  private invalidateSettled(): void {
+    const invalidated: SettledAgentIdentityPlace[] = []
+    // A re-indexed place is visited again, pending, and skipped.
+    for (const [place, indexed] of this.places) {
+      if (indexed.identity.pending) {
+        continue
+      }
+      const identity = this.demand.of(indexed.keyString)?.identity ?? {
+        key: indexed.identity.key,
+        id: null,
+        pending: true as const
+      }
+      const canonicalSubject = canonicalSubjectOf(place)
+      if (canonicalSubject) {
+        this.canonicalBySubject.set(canonicalSubject, identity)
+      }
+      this.setPlace(place, indexed.paneKey, identity)
+      invalidated.push({ place, paneKey: indexed.paneKey, canonicalSubject, identity })
+    }
+    this.notify(invalidated)
   }
 
   /** Hands every current place still pending on the answered key to the hook server. An
@@ -222,9 +272,7 @@ export class PaneAgentIdentities {
       if (!indexed?.identity.pending) {
         continue
       }
-      const canonicalSubject = place.startsWith(CANONICAL_PLACE)
-        ? place.slice(CANONICAL_PLACE.length)
-        : undefined
+      const canonicalSubject = canonicalSubjectOf(place)
       if (canonicalSubject) {
         this.canonicalBySubject.set(canonicalSubject, identity)
       }
@@ -235,9 +283,13 @@ export class PaneAgentIdentities {
         this.setPlace(place, paneKey, identity)
       }
     }
-    if (settled.length > 0) {
+    this.notify(settled)
+  }
+
+  private notify(places: SettledAgentIdentityPlace[]): void {
+    if (places.length > 0) {
       try {
-        this.onSettled(settled)
+        this.onSettled(places)
       } catch (error) {
         console.error('[agent-hooks] agent identity publication failed', error)
       }
@@ -258,6 +310,10 @@ export class PaneAgentIdentities {
     }
     return keyString
   }
+}
+
+function canonicalSubjectOf(place: string): string | undefined {
+  return place.startsWith(CANONICAL_PLACE) ? place.slice(CANONICAL_PLACE.length) : undefined
 }
 
 function addTo(index: Map<string, Set<string>>, key: string, place: string): void {

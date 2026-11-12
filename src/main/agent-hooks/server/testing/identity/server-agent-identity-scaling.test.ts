@@ -63,6 +63,15 @@ class IdentityTestServer extends AgentHookServer {
     return this.identityClient
   }
 
+  /** The owner's own status path change, as start and stop make it. */
+  moveStatusFile(path: string): void {
+    this.setStatusFilePath(path)
+  }
+
+  endIdentityAuthority(): void {
+    this.agentIdentities.close()
+  }
+
   /** The tmux owner's own publication path for one selected terminal agent. */
   publishTmuxTerminal(index: number, sessionId: string): void {
     const paneKey = tmuxPaneKey(index)
@@ -321,4 +330,58 @@ it('publishes a settled id as a projection: session.tabs wakes, no hook effect r
   }
   expect(touched).toEqual(['wt-1', 'workspace'])
   expect(snapshotsSeen[0]).toMatch(/^claude_/)
+})
+
+describe('terminal agent id authority', () => {
+  const sleeping = () => ({
+    agent: 'claude' as const,
+    providerSession: { key: 'session_id' as const, id: 'sleeping-session' },
+    connectionId: null
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'names a sleeping agent on the first Copy, even when that Copy starts the store',
+    async () => {
+      const server = new IdentityTestServer()
+      cleanups.unshift(() => server.stop())
+      // The path is set without the owner seeing it, so the click itself starts the store.
+      Reflect.set(server, 'lastStatusFilePath', join(tempDir(), 'last-status.json'))
+      expect(await server.resolvePaneAgentId(paneKey(7), sleeping)).toMatch(/^claude_/)
+    }
+  )
+
+  it('answers nothing once the owner ended during the wait', async () => {
+    const server = await serverWith(1)
+    const id = server.getStatusSnapshot()[0]?.orcaSessionId
+    expect(id).toBeTruthy()
+    // A live-index hit still continues after an await; the owner ends before it does.
+    const places = server.terminalAgentPlaces(id!)
+    server.endIdentityAuthority()
+    expect(await places).toBeNull()
+
+    const copying = await started(new IdentityTestServer())
+    copying.identityClient.hold = true
+    copying.ingestRemote(hook(0, 'session-0'), WSL)
+    const copy = copying.resolvePaneAgentId(paneKey(0), () => undefined)
+    await answered()
+    copying.identityClient.release()
+    queueMicrotask(() => copying.endIdentityAuthority())
+    expect(await copy).toBeNull()
+  })
+
+  it("never carries an ended store's id: rows, tmux rows, Copy and refusal ask the next store", async () => {
+    const server = await serverWith(1, 1)
+    const before = server.getStatusSnapshot().map((row) => row.orcaSessionId)
+    expect(before.every(Boolean)).toBe(true)
+    server.moveStatusFile(join(tempDir(), 'last-status.json'))
+    // At once, before the next store answers: no reader sees the ended store's ids.
+    expect(server.getStatusSnapshot().map((row) => row.orcaSessionId)).toEqual([null, null])
+    expect(await server.terminalAgentPlaces(before[0]!)).toBeNull()
+    const copied = await server.resolvePaneAgentId(paneKey(0), () => undefined)
+    await answered()
+    const after = server.getStatusSnapshot().map((row) => row.orcaSessionId)
+    expect(after.every(Boolean)).toBe(true)
+    expect(after.filter((id) => before.includes(id))).toEqual([])
+    expect(copied).toBe(after[0])
+  })
 })

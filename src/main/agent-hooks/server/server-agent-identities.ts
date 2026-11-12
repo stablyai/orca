@@ -42,6 +42,13 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     () => this.createAgentIdentityClient()
   )
 
+  /** The status path names the identity store, so each change ends or starts its authority
+   *  here, outside any admission. */
+  protected setStatusFilePath(path: string | null): void {
+    this.lastStatusFilePath = path
+    this.agentIdentities.syncAuthority()
+  }
+
   /** One lazy identity worker per hook-server owner. */
   protected createAgentIdentityClient(): AgentIdentityClient {
     return new AgentIdentityWorkerClient()
@@ -54,8 +61,8 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
    *  transition effect or enriched subscriber runs again. */
   protected abstract publishAgentIdentityProjection(row: EnrichedAgentHookEventPayload): void
 
-  /** A committed answer re-stamps the current rows still pending on its key and republishes each
-   *  as a projection: status, clocks and order stay as they are. */
+  /** A committed answer, or the end of the authority that gave one, re-stamps the current rows
+   *  on its key and republishes each as a projection: status, clocks and order stay as they are. */
   private publishSettledAgentIdentities(settled: SettledAgentIdentityPlace[]): void {
     const projections: EnrichedAgentHookEventPayload[] = []
     for (const { place, paneKey, canonicalSubject, identity } of settled) {
@@ -71,10 +78,13 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
       const row = this.state.lastStatusByPaneKey.get(place) as
         | EnrichedAgentHookEventPayload
         | undefined
+      const carried = row?.agentIdentity
       // The row may have moved on to another key since the request; only its own key settles.
       if (
-        row?.agentIdentity?.pending !== true ||
-        !sameProviderKey(row.agentIdentity.key, identity.key)
+        !carried ||
+        !sameProviderKey(carried.key, identity.key) ||
+        this.agentIdentities.isCurrent(carried) ||
+        (carried.pending && identity.pending)
       ) {
         continue
       }
@@ -128,7 +138,10 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
   async terminalAgentPlaces(
     id: string
   ): Promise<{ paneKey: string; worktreeId?: string }[] | null> {
-    if ((await this.agentIdentities.isTerminalIdentity(id)) !== true) {
+    const authority = this.agentIdentities.authority()
+    const known = await this.agentIdentities.isTerminalIdentity(id)
+    // An owner that ended during the wait proves nothing, not even an empty terminal.
+    if (known !== true || authority !== this.agentIdentities.generation) {
       return null
     }
     // Read the index after the await, so the places are the rows now, not when asked.
@@ -168,14 +181,15 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     paneKey: string,
     readSleeping: () => SleepingAgentSighting | undefined
   ): Promise<OrcaSessionId | null> {
+    // Before selection, so a first click's lazy store start is not taken for its end.
+    const authority = this.agentIdentities.authority()
     const selected = this.paneAgentSighting(paneKey, readSleeping)
     if (!selected || selected.id) {
       return selected?.id ?? null
     }
-    const generation = this.agentIdentities.generation
     const id = await this.agentIdentities.identify(selected.sighting)
     // The owner may have closed, or the pane moved to another conversation, during the wait.
-    if (generation !== this.agentIdentities.generation) {
+    if (authority !== this.agentIdentities.generation) {
       return null
     }
     const current = this.paneAgentSighting(paneKey, readSleeping)
@@ -199,7 +213,9 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
         ? null
         : {
             sighting: agentSightingOf(live),
-            ...(live.agentIdentity?.id ? { id: live.agentIdentity.id } : {})
+            ...(live.agentIdentity?.id && this.agentIdentities.isCurrent(live.agentIdentity)
+              ? { id: live.agentIdentity.id }
+              : {})
           }
     }
     const sleeping = readSleeping()

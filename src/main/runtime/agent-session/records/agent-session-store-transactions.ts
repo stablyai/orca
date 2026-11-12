@@ -31,6 +31,7 @@ import {
   type AgentSessionStoreRowWrites
 } from './agent-session-store-draft'
 import { changesAgentSenderIdentity } from './agent-session-sender-identity-revision'
+import { AgentSessionProviderAliasIndex } from './agent-session-provider-alias-index'
 
 // Commit validated draft rows atomically before publication; failures discard the draft.
 // The promise queue preserves FIFO and defers BEGIN beyond the caller's open journal transaction.
@@ -96,6 +97,8 @@ export class AgentSessionStoreTransactions {
   /** Replaced only when a record joins or leaves, or a /clear links one conversation to the next:
    *  lookups derived from every record's lineage stay valid across admission and lease writes. */
   private lineage: object = {}
+  /** Built on first use; kept by each committed record write, dropped if the unreadable set moves. */
+  private providerAliases: AgentSessionProviderAliasIndex | null = null
   /** Receipts co-written in one transaction build on each other's drafts, so adoption keeps both. */
   private staged: { transaction: number; draft: AgentSessionStoreState } | null = null
   /** Loaded takeover evidence; immutable for this runtime. */
@@ -130,6 +133,12 @@ export class AgentSessionStoreTransactions {
 
   lineageRevision(): object {
     return this.lineage
+  }
+
+  /** The chat whose provider handle chain names `nativeId`, from the commit-kept alias index. */
+  providerAliasOwner(nativeId: string): string | null {
+    this.providerAliases ??= new AgentSessionProviderAliasIndex(this.published)
+    return this.providerAliases.owner(nativeId, this.published)
   }
 
   get readOnly(): boolean {
@@ -254,6 +263,11 @@ export class AgentSessionStoreTransactions {
             this.senderIdentityRevision++
           }
           this.published = draft
+          if (published.unreadableRecords !== draft.unreadableRecords) {
+            this.providerAliases = null
+          } else {
+            this.providerAliases?.applyCommitted(draft, writes.records)
+          }
           const lineageChanged =
             writes.records.remove.length > 0 ||
             writes.records.upsert.some(([id]) => {
