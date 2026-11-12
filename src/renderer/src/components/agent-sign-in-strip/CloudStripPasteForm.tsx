@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import type { CloudStripModel } from './cloud-agent-strip-model'
 
 /** A pasted value that is a whole code (`code#state`) or the callback URL carrying one. */
@@ -16,9 +17,12 @@ export function looksLikeWholeSetupCode(value: string): boolean {
 export function CloudStripPasteForm({
   paste,
   onSubmitCode,
-  onSubmitSetupCode
+  onSubmitSetupCode,
+  fill = false
 }: {
   paste: NonNullable<CloudStripModel['paste']>
+  /** On its own line (Settings): the field takes the width the buttons leave. */
+  fill?: boolean
   onSubmitCode: (code: string) => void
   onSubmitSetupCode?: (code: string) => void
 }): React.JSX.Element {
@@ -48,7 +52,7 @@ export function CloudStripPasteForm({
   }
   return (
     <form
-      className="flex min-w-0 items-center gap-1.5"
+      className={cn('flex min-w-0 items-center gap-1.5', fill && 'w-full')}
       onSubmit={(event) => {
         event.preventDefault()
         send(code)
@@ -75,7 +79,11 @@ export function CloudStripPasteForm({
           }
         }}
         variant="code"
-        className="h-7 min-w-0"
+        className={cn(
+          'h-7 min-w-0',
+          setupCode && !fill && 'w-40',
+          fill && 'flex-1'
+        )}
       />
       <Button
         type="submit"

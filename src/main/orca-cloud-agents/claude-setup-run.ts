@@ -15,6 +15,8 @@ export type ClaudeSetupRun = {
   submit: (code: string) => boolean
   /** A paste that isn't a code at all: shown like a refused code, and the CLI never sees it. */
   refuse: () => void
+  /** "Open again": the person is getting a new code, so an old refusal goes. */
+  clearRefusal: () => void
   /** Abandons the run (cancel, sign-out, paste instead); nothing it reports afterwards lands. */
   stop: () => void
 }
@@ -34,15 +36,21 @@ export function startClaudeSetupRun(args: {
   let submitter: SubmitSetupCode | null = null
   // The CLI showed its sign-in link: a run that ends without a token after that has expired.
   let linkShown = false
+  // The pasted code's progress; a refusal stays until the next paste or "Open again" (design-squad).
+  let code: 'checking' | 'rejected' | null = null
   const startedAt = args.now()
-  const browser = (extra: { code?: 'checking' | 'rejected' } = {}): void =>
+  const browser = (next?: 'checking' | 'rejected' | null): void => {
+    if (next !== undefined) {
+      code = next
+    }
     args.onSetup({
       phase: 'browser',
       startedAt,
       canReopen: url !== null,
       ...(submitter ? { acceptsCode: true } : {}),
-      ...extra
+      ...(code ? { code } : {})
     })
+  }
   browser()
   void runClaudeSetupToken({
     spawn: args.spawn,
@@ -65,7 +73,7 @@ export function startClaudeSetupRun(args: {
         // The CLI starts over: the old link and its code are spent until the new link shows.
         url = null
         submitter = null
-        browser({ code: 'rejected' })
+        browser('rejected')
       }
     }
   }).then(async (outcome) => {
@@ -104,12 +112,17 @@ export function startClaudeSetupRun(args: {
       if (!live || !submitter || !submitter(code)) {
         return false
       }
-      browser({ code: 'checking' })
+      browser('checking')
       return true
     },
     refuse: () => {
       if (live && submitter) {
-        browser({ code: 'rejected' })
+        browser('rejected')
+      }
+    },
+    clearRefusal: () => {
+      if (live && code === 'rejected') {
+        browser(null)
       }
     },
     stop: () => {

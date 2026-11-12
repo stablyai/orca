@@ -172,14 +172,6 @@ export function SetupRow({
           detailTone={setup.code === 'rejected' ? 'warning' : undefined}
           actions={
             <>
-              {/* Same order on every surface: [Paste code] [Finish setup] [Open again]. */}
-              {setup.acceptsCode ? (
-                <CloudStripPasteForm
-                  paste={setupCodePaste(agent, setup.code, t)}
-                  onSubmitCode={() => undefined}
-                  onSubmitSetupCode={(code) => actions.submitSetupCode?.(code)}
-                />
-              ) : null}
               {setup.canReopen ? (
                 <Button
                   type="button"
@@ -193,7 +185,17 @@ export function SetupRow({
               {cancel}
             </>
           }
-        />
+        >
+          {/* Line 2 (design-squad): [Paste code ………] [Finish setup], the field filling the column. */}
+          {setup.acceptsCode ? (
+            <CloudStripPasteForm
+              fill
+              paste={setupCodePaste(agent, setup.code, t)}
+              onSubmitCode={() => undefined}
+              onSubmitSetupCode={(code) => actions.submitSetupCode?.(code)}
+            />
+          ) : null}
+        </RowShell>
       )
     case 'preparing':
       return (

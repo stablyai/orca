@@ -206,8 +206,16 @@ describe('service: the code from the strip, Settings or the chat UI', () => {
       expect(service.submitClaudeCode(CODE)).toEqual({ ok: false, error: 'unavailable' })
       await vi.advanceTimersByTimeAsync(600)
       children[0]!.emit(`${AUTHORIZE}\n${PROMPT}`)
-      expect(service.setups().claude).toMatchObject({ phase: 'browser', acceptsCode: true })
+      // The refusal stays with the fresh link, until the next paste or "Open again".
+      expect(service.setups().claude).toMatchObject({
+        phase: 'browser',
+        acceptsCode: true,
+        code: 'rejected'
+      })
+      expect(await service.reopen('claude')).toBe(true)
+      expect(service.setups().claude).not.toHaveProperty('code')
       expect(service.submitClaudeCode(CODE)).toEqual({ ok: true, value: true })
+      expect(service.setups().claude).toMatchObject({ code: 'checking' })
     } finally {
       vi.useRealTimers()
     }

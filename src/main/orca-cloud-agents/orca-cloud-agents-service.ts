@@ -264,6 +264,9 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
       if (!url || !isProviderSignInUrl(agent, url)) {
         return false
       }
+      if (agent === 'claude') {
+        claudeRun?.clearRefusal()
+      }
       await deps.openExternal(url)
       return true
     },

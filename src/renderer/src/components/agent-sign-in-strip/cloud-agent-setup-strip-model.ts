@@ -95,12 +95,26 @@ export function cloudAgentSetupStripModel(args: {
       return {
         ...need,
         status: 'busy',
-        detail: setup.acceptsCode
-          ? t(
-              'agentSignInStrip.finishInBrowserPaste',
-              'Finish in your browser, then paste the code here.'
-            )
-          : t('agentSignInStrip.finishInBrowser', 'Finish in your browser'),
+        // A refusal leads, so a narrow pane still reads it (its first sentence, from the same copy).
+        ...(setup.code === 'rejected'
+          ? {
+              title: t('agentSignInStrip.setupCodeRejectedTitle', 'That code didn’t work'),
+              compactTitle: t('agentSignInStrip.setupCodeRejectedTitle', 'That code didn’t work')
+            }
+          : {}),
+        // A refused code stays the detail until the next paste or "Open again".
+        detail:
+          setup.code === 'rejected'
+            ? t(
+                'agentSignInStrip.setupCodeRejected',
+                'That code didn’t work. Paste the newest code from the sign-in page, or open it again.'
+              )
+            : setup.acceptsCode
+              ? t(
+                  'agentSignInStrip.finishInBrowserPaste',
+                  'Finish in your browser, then paste the code here.'
+                )
+              : t('agentSignInStrip.finishInBrowser', 'Finish in your browser'),
         // Claude's page shows a code to bring back: [Paste code] [Finish setup] [Open again].
         paste: setup.acceptsCode ? setupCodePaste(args.agent, setup.code, t) : null,
         primary: setup.canReopen
