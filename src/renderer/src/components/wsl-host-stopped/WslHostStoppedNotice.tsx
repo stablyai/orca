@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { LinuxPenguinIcon } from '@/components/icons/LinuxPenguinIcon'
@@ -69,7 +68,7 @@ export function WslHostStoppedNotice({
             })}
           </span>
           <Button type="button" size={size} disabled={starting} onClick={start}>
-            {starting ? <Loader2 className="animate-spin" /> : null}
+            {starting ? <LoadingSpinner /> : null}
             {t('components.native-chat.hostOutage.start', 'Start')}
           </Button>
         </>
