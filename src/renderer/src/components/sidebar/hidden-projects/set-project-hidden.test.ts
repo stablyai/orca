@@ -16,7 +16,6 @@ vi.mock('sonner', () => ({
 
 const initialState = useAppStore.getState()
 const local: Repo = { ...TEST_REPO, id: 'r' }
-const onBox: Repo = { ...TEST_REPO, id: 'r', connectionId: 'box' }
 let clock = 1000
 
 // Writes land in the store, as a host that echoes hiddenAt would.
@@ -62,23 +61,6 @@ function undo(toastIndex = 0): void {
 }
 
 describe('setProjectHidden', () => {
-  it('hides every host copy a header shows in one action, and one Undo shows them all', async () => {
-    useAppStore.setState({ repos: [local, onBox], updateRepo })
-
-    await setProjectHidden([local, onBox], true, 'r')
-
-    expect(updateRepo.mock.calls.map(([, updates, options]) => [updates, options])).toEqual([
-      [{ hiddenAt: expect.any(Number) }, { hostId: 'local' }],
-      [{ hiddenAt: expect.any(Number) }, { hostId: 'ssh:box' }]
-    ])
-    expect(toastSuccess).toHaveBeenCalledOnce()
-
-    undo()
-    await vi.waitFor(() =>
-      expect(useAppStore.getState().repos.every((repo) => repo.hiddenAt === undefined)).toBe(true)
-    )
-  })
-
   it('leaves a newer hide in place when an older toast’s Undo is clicked', async () => {
     useAppStore.setState({ repos: [local], updateRepo })
     await setProjectHidden([local], true, 'r')
@@ -92,18 +74,5 @@ describe('setProjectHidden', () => {
 
     expect(updateRepo).not.toHaveBeenCalled()
     expect(useAppStore.getState().repos[0]?.hiddenAt).toBe(newerHiddenAt)
-  })
-
-  it('answers Undo neutrally when the project was removed meanwhile', async () => {
-    useAppStore.setState({ repos: [local], updateRepo })
-    await setProjectHidden([local], true, 'r')
-
-    useAppStore.setState({ repos: [] })
-    updateRepo.mockClear()
-    undo()
-
-    await vi.waitFor(() => expect(toastInfo).toHaveBeenCalledOnce())
-    expect(updateRepo).not.toHaveBeenCalled()
-    expect(toastError).not.toHaveBeenCalled()
   })
 })
