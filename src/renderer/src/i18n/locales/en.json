@@ -22306,14 +22306,14 @@
         "chooseAgent": "Choose agent",
         "closePane": "Close pane",
         "files": "Files",
-        "keyboardHint": "↑↓ Enter to open · → agents · / to search",
         "markdown": "Markdown",
         "mobileEmulator": "Mobile emulator",
         "new": "New",
         "newAgent": "New Agent",
         "newNamedAgent": "New {{agent}} agent",
         "noMatches": "No matches",
-        "searchPlaceholder": "Open agent, terminal, or file…",
+        "searchAgentsAndFiles": "Search agents and files",
+        "searchShort": "Search",
         "terminal": "Terminal"
       }
     },
