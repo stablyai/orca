@@ -35,12 +35,16 @@ export async function readRemoteAttachmentArchive(args: {
   })
 }
 
-/** Release receipts carry the output only while its original is still readable. */
+/** Release receipts carry the output only while its original is still readable and steady. */
 export function readRemoteAttachmentOutputIfAvailable(
   args: Parameters<typeof readRemoteAttachmentArchive>[0]
 ): ReturnType<typeof readRemoteAttachmentArchive> {
   return readRemoteAttachmentArchive(args).catch((error: unknown) => {
-    if (error instanceof OrchestrationError && error.code === 'archive_unavailable') {
+    // A transcript written during the read only drops the optional page; it never blocks release.
+    if (
+      error instanceof OrchestrationError &&
+      (error.code === 'archive_unavailable' || error.code === 'source_changed')
+    ) {
       return null
     }
     throw error

@@ -19,6 +19,9 @@ try {
     "UPDATE worker_terminal_archives SET content = CASE WHEN json_valid(content) THEN json_patch('{\\"version\\":3}', json_object(" +
       "'agent', json_extract(content, '$.agent'), " +
       "'processIncarnation', json_extract(content, '$.processIncarnation'), " +
+      "'sessionId', json_extract(content, '$.sessionId'), " +
+      "'transcriptPath', json_extract(content, '$.transcriptPath'), " +
+      "'wslDistro', json_extract(content, '$.wslDistro'), " +
       "'fallbackReason', json_extract(content, '$.fallbackReason'))) " +
       "ELSE '{\\"version\\":3}' END WHERE dispatch_id = ? AND " + workerData.copyPredicate
   );
