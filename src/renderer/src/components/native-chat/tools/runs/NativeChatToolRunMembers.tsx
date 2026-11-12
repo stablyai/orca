@@ -28,11 +28,11 @@ import {
 } from '../../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatToolRunWindowContext } from './native-chat-tool-run-window-context'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
-import type { NativeChatToolRunVirtualizer } from './use-native-chat-tool-run-window'
 import { ROW_KEY_ATTRIBUTE, useNativeChatToolRunPins } from './use-native-chat-tool-run-pins'
 import {
   useNativeChatToolRunWindow,
-  type NativeChatToolRunDrawnRow
+  type NativeChatToolRunDrawnRow,
+  type NativeChatToolRunVirtualizer
 } from './use-native-chat-tool-run-window'
 import { useNativeChatToolRunDetailRoom } from './use-native-chat-tool-run-detail-room'
 
