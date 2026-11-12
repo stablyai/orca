@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { makeRun } from '../automations-page-fixtures'
 import {
   isAutomationRunNowPending,
+  RUN_NOW_DISPATCH_MAX_MS,
+  acknowledgeAutomationRunNowPending,
+  automationRunNowPendingDeadline,
   settleAutomationRunNowPending,
   startAutomationRunNowPending
 } from './automation-run-now-pending'
@@ -89,5 +92,22 @@ describe('isAutomationRunNowPending', () => {
     expect(
       settleAutomationRunNowPending(byRow, 'row', 'r2', (p) => ({ ...p, acknowledgedAt: 5 }))
     ).toEqual({ row: { ...newer, acknowledgedAt: 5 } })
+  })
+
+  it('ends a request whose answer arrives after its own dispatch deadline', () => {
+    const a = { requestId: 'a', rowKey: 'row-a', requestedAt, acknowledgedAt: null, runId: null }
+    // A was started, the user selected B, and A's answer came back at 65s.
+    expect(
+      acknowledgeAutomationRunNowPending(a, 'run-a', requestedAt + RUN_NOW_DISPATCH_MAX_MS + 5_000)
+    ).toBeNull()
+    // Control: an answer inside the deadline is recorded with its own 20s window.
+    const acked = acknowledgeAutomationRunNowPending(a, 'run-a', requestedAt + 1_000)
+    expect(acked).toEqual({ ...a, runId: 'run-a', acknowledgedAt: requestedAt + 1_000 })
+    expect(acked && automationRunNowPendingDeadline(acked)).toBe(requestedAt + 21_000)
+  })
+
+  it('gives an unanswered request a deadline measured from its click', () => {
+    const a = { requestId: 'a', rowKey: 'row-a', requestedAt, acknowledgedAt: null, runId: null }
+    expect(automationRunNowPendingDeadline(a)).toBe(requestedAt + RUN_NOW_DISPATCH_MAX_MS)
   })
 })

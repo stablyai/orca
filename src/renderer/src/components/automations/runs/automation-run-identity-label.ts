@@ -66,15 +66,25 @@ export function getAutomationRunStepKey(event: {
 export const RUN_START_DRIFT_LABEL_MS = 60_000
 
 /**
- * When a run actually launched, or null. Only dispatch proves a launch; skipped and missed
- * runs can carry an observation `startedAt` from before anything ran. Older records that
- * completed or are running without a dispatch time keep their start time.
+ * When a run actually launched, or null.
+ * - Dispatched and completed runs launched at their dispatch time; older records without
+ *   one keep their start time.
+ * - A failed run launched only if it got as far as a session or terminal (failure after
+ *   launch). The chat launcher stamps `dispatchedAt` even when it refuses or throws before
+ *   starting anything, so that time alone is not evidence.
+ * - Skipped and missed runs never launched; their `startedAt` is an observation time.
  */
 export function getAutomationRunLaunchedAt(
-  run: Pick<AutomationRun, 'status' | 'dispatchedAt' | 'startedAt'>
+  run: Pick<
+    AutomationRun,
+    'status' | 'dispatchedAt' | 'startedAt' | 'chatSessionId' | 'terminalPaneKey'
+  >
 ): number | null {
-  if (run.dispatchedAt !== null) {
-    return run.dispatchedAt
+  if (run.status === 'completed' || run.status === 'dispatched') {
+    return run.dispatchedAt ?? run.startedAt
   }
-  return run.status === 'completed' || run.status === 'dispatched' ? run.startedAt : null
+  if (run.status === 'dispatch_failed' && (run.chatSessionId || run.terminalPaneKey)) {
+    return run.dispatchedAt ?? run.startedAt
+  }
+  return null
 }

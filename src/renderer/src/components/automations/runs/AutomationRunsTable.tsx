@@ -15,6 +15,7 @@ import {
   AutomationRunWorkspaceCell
 } from './AutomationRunTableCells'
 import { useRevealAutomationRun } from './use-reveal-automation-run'
+import { automationRunFocusKey } from './automations-reveal-run'
 
 const RUN_ROW_HEIGHT_PX = 59
 const RUN_ROW_OVERSCAN = 10
@@ -53,7 +54,13 @@ export function AutomationRunsTable({
     getItemKey: (index) => entries[index]?.key ?? index
   })
   useRevealAutomationRun(
-    (runId) => entries.findIndex((entry) => entry.run.id === runId),
+    // Why: the same run id can appear under two hosts; the qualified key picks the right row.
+    (runId, runKey) =>
+      entries.findIndex((entry) =>
+        runKey
+          ? automationRunFocusKey(entry.row.key, entry.run.id) === runKey
+          : entry.run.id === runId
+      ),
     (index) => virtualizer.scrollToIndex(index, { align: 'auto' })
   )
 
@@ -115,6 +122,7 @@ export function AutomationRunsTable({
                     type="button"
                     data-testid="automation-runs-row"
                     data-automation-run-id={entry.run.id}
+                    data-automation-run-key={automationRunFocusKey(entry.row.key, entry.run.id)}
                     className={cn(
                       AUTOMATION_RUNS_DASHBOARD_GRID_CLASS,
                       'items-center px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'

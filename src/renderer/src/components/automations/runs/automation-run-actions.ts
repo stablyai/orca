@@ -12,6 +12,7 @@ import type { AutomationListRow } from '../listing/automation-list-row-identity'
 import type { AutomationsPageActionContext } from '../automations-page-action-context'
 import type { AutomationRunNowPending } from '../automation-page-state'
 import {
+  acknowledgeAutomationRunNowPending,
   settleAutomationRunNowPending,
   startAutomationRunNowPending
 } from './automation-run-now-pending'
@@ -118,7 +119,7 @@ export function createAutomationRunActions({
       return
     }
     const startedRunId = result.value?.id ?? null
-    settle((current) => ({ ...current, runId: startedRunId, acknowledgedAt: Date.now() }))
+    settle((current) => acknowledgeAutomationRunNowPending(current, startedRunId, Date.now()))
     useAppStore.getState().recordFeatureInteraction('automation-run')
     invalidateRowHost(row.key, 'run')
     await pageRefresh.hydratePersistedUIState()

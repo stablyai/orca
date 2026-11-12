@@ -10,7 +10,10 @@ import {
   type AutomationsPageFocusTarget
 } from './use-automations-page-history'
 import { AUTOMATIONS_REVEAL_RUN_EVENT } from './runs/automations-reveal-run'
-import { automationsPageNotFoundLocation } from './use-automations-page-routing'
+import {
+  automationsPageNotFoundLocation,
+  automationsRunReturnSelector
+} from './use-automations-page-routing'
 
 const list: AutomationsPageLocation = { page: 'list' }
 const detail: AutomationsPageLocation = { page: 'detail', automationId: 'a1' }
@@ -224,6 +227,95 @@ describe('returning to a run whose table is still loading', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  function mountReturn(container: HTMLElement, target = runTarget) {
+    const hook = renderHook(
+      ({ t }: { t: AutomationsPageFocusTarget }) =>
+        useAutomationsPageFocus(t, { current: container }),
+      { initialProps: { t: target } }
+    )
+    hook.rerender({ t: runsTarget })
+    return hook
+  }
+
+  function addRow(container: HTMLElement, attrs: Record<string, string> = {}): HTMLElement {
+    const row = document.createElement('button')
+    row.setAttribute('data-automation-run-id', 'r9')
+    for (const [name, value] of Object.entries(attrs)) {
+      row.setAttribute(name, value)
+    }
+    container.appendChild(row)
+    return row
+  }
+
+  it('keeps the row when a refetch clears the cached row and lists it again 1.45s later', () => {
+    const container = mountRunsPage()
+    const cached = addRow(container)
+    mountReturn(container)
+    expect(document.activeElement).toBe(cached)
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    cached.remove()
+    act(() => {
+      vi.advanceTimersByTime(1350)
+    })
+    const fresh = addRow(container)
+    act(() => {
+      vi.advanceTimersByTime(50)
+    })
+    expect(document.activeElement).toBe(fresh)
+  })
+
+  it('stops repairing for good once the user focuses something else, even after a blur', () => {
+    const container = mountRunsPage()
+    const cached = addRow(container)
+    mountReturn(container)
+    expect(document.activeElement).toBe(cached)
+    const search = container.querySelector<HTMLInputElement>('input')
+    act(() => {
+      search?.focus()
+      vi.advanceTimersByTime(50)
+      search?.blur()
+    })
+    cached.remove()
+    addRow(container)
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+    expect(document.activeElement).toBe(document.body)
+  })
+
+  it('returns to the run on the right host when two hosts list the same run id', () => {
+    const container = mountRunsPage()
+    const hostA = addRow(container, { 'data-automation-run-key': 'row-a::r9' })
+    const hostB = addRow(container, { 'data-automation-run-key': 'row-b::r9' })
+    const reveal = vi.fn()
+    window.addEventListener(AUTOMATIONS_REVEAL_RUN_EVENT, reveal)
+    mountReturn(container, {
+      ...runTarget,
+      returnSelector: automationsRunReturnSelector('r9', 'row-b'),
+      returnRunKey: 'row-b::r9'
+    })
+    window.removeEventListener(AUTOMATIONS_REVEAL_RUN_EVENT, reveal)
+    expect(document.activeElement).toBe(hostB)
+    expect(document.activeElement).not.toBe(hostA)
+  })
+
+  it('asks the table to reveal the host-qualified run while it is missing', () => {
+    const container = mountRunsPage()
+    const reveal = vi.fn()
+    window.addEventListener(AUTOMATIONS_REVEAL_RUN_EVENT, reveal)
+    mountReturn(container, {
+      ...runTarget,
+      returnSelector: automationsRunReturnSelector('r9', 'row-b'),
+      returnRunKey: 'row-b::r9'
+    })
+    window.removeEventListener(AUTOMATIONS_REVEAL_RUN_EVENT, reveal)
+    expect(reveal.mock.calls[0]?.[0]).toMatchObject({
+      detail: { runId: 'r9', runKey: 'row-b::r9' }
+    })
   })
 
   it('focuses the row once the reloaded data lists it (1.2s read)', () => {

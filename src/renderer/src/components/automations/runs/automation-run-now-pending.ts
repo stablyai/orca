@@ -4,6 +4,33 @@ import type {
   AutomationRunNowPendingByRow
 } from '../automation-page-state'
 
+/** A request whose run never shows up (history read failed) releases Run now after this. */
+export const RUN_NOW_PENDING_MAX_MS = 20_000
+/** A dispatch that has not answered at all is released after this long, measured from the click. */
+export const RUN_NOW_DISPATCH_MAX_MS = 60_000
+
+/** When a request stops holding Run now busy, whatever row is selected. */
+export function automationRunNowPendingDeadline(pending: AutomationRunNowPending): number {
+  return pending.acknowledgedAt === null
+    ? pending.requestedAt + RUN_NOW_DISPATCH_MAX_MS
+    : pending.acknowledgedAt + RUN_NOW_PENDING_MAX_MS
+}
+
+/**
+ * Record the host's answer to a request. An answer that arrives after the request's own
+ * dispatch deadline has passed ends it instead of starting a fresh wait.
+ */
+export function acknowledgeAutomationRunNowPending(
+  pending: AutomationRunNowPending,
+  runId: string | null,
+  now: number
+): AutomationRunNowPending | null {
+  if (now >= pending.requestedAt + RUN_NOW_DISPATCH_MAX_MS) {
+    return null
+  }
+  return { ...pending, runId, acknowledgedAt: now }
+}
+
 // Hosts stamp createdAt on their clock; tolerate a little skew when matching the new run.
 const RUN_NOW_CLOCK_SKEW_MS = 5_000
 

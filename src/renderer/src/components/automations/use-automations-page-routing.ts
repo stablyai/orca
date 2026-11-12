@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import type { AutomationRunNotFound, AutomationsPageLocation } from './automation-page-state'
 import { automationRowHostId } from './automations-page-navigation'
+import { automationRunFocusKey } from './runs/automations-reveal-run'
 import {
   isAutomationRunNowListed,
+  automationRunNowPendingDeadline,
   isAutomationRunNowPending,
   settleAutomationRunNowPending
 } from './runs/automation-run-now-pending'
@@ -13,14 +15,21 @@ import {
   type AutomationsPageFocusTarget
 } from './use-automations-page-history'
 
-// A Run now request whose run never shows up (history read failed) must not lock the button.
-const RUN_NOW_PENDING_MAX_MS = 20_000
-// A dispatch that has not answered at all is released after this long.
-const RUN_NOW_DISPATCH_MAX_MS = 60_000
-
 // JSON string quoting is valid CSS string quoting for the ids and keys used here.
 function attributeSelector(name: string, value: string): string {
   return `[${name}=${JSON.stringify(value)}]`
+}
+
+/**
+ * The run's row on the page you return to. The global Runs table can list one run id under two
+ * hosts, so its rows match only by the host-qualified key; rail and history rows (one
+ * automation on one host) match by id.
+ */
+export function automationsRunReturnSelector(runId: string, rowKey: string | undefined): string {
+  const byId = attributeSelector('data-automation-run-id', runId)
+  return rowKey
+    ? `${attributeSelector('data-automation-run-key', automationRunFocusKey(rowKey, runId))}, ${byId}:not([data-automation-run-key])`
+    : byId
 }
 
 /** A missing destination is still where the user went; replaying it shows not-found again. */
@@ -81,10 +90,7 @@ export function useAutomationsPageRouting(
       return
     }
     // Why: a dispatch that never answers must not lock the button forever.
-    const deadline =
-      selectedPending.acknowledgedAt === null
-        ? selectedPending.requestedAt + RUN_NOW_DISPATCH_MAX_MS
-        : selectedPending.acknowledgedAt + RUN_NOW_PENDING_MAX_MS
+    const deadline = automationRunNowPendingDeadline(selectedPending)
     const timer = setTimeout(clearThisRequest, Math.max(0, deadline - Date.now()))
     return () => clearTimeout(timer)
   }, [runNowListed, selectedPending, setRunNowPending])
@@ -132,8 +138,11 @@ export function useAutomationsPageRouting(
             key: `run:${location.runId}`,
             page: 'run',
             parents: ['detail', 'automationRuns', 'runs'],
-            returnSelector: attributeSelector('data-automation-run-id', location.runId),
-            returnRunId: location.runId
+            returnSelector: automationsRunReturnSelector(location.runId, selectedRow?.key),
+            returnRunId: location.runId,
+            returnRunKey: selectedRow
+              ? automationRunFocusKey(selectedRow.key, location.runId)
+              : undefined
           }
         : location.page === 'detail' || location.page === 'automationRuns'
           ? {

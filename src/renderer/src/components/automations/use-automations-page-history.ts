@@ -69,6 +69,8 @@ export type AutomationsPageFocusTarget = {
   returnSelector: string | null
   /** Set when that entry is a run row, which a virtualized table may need to scroll to. */
   returnRunId?: string
+  /** That run qualified by its automation row, for tables that list several hosts. */
+  returnRunKey?: string
   page: string
 }
 
@@ -155,13 +157,21 @@ export function useAutomationsPageFocus(
   const parents = target?.parents.join(',') ?? ''
   const returnSelector = target?.returnSelector ?? null
   const returnRunId = target?.returnRunId
+  const returnRunKey = target?.returnRunKey
   useLayoutEffect(() => {
     // Why: resolving states (loading, deep link) have no target; keep the last real page.
     if (key === null || page === null) {
       return
     }
     const previous = previousRef.current
-    previousRef.current = { key, page, parents: parents.split(','), returnSelector, returnRunId }
+    previousRef.current = {
+      key,
+      page,
+      parents: parents.split(','),
+      returnSelector,
+      returnRunId,
+      returnRunKey
+    }
     const store = useAppStore.getState()
     const userOpened = store.automationsPageFocusTitleOnOpen
     if (userOpened) {
@@ -176,21 +186,41 @@ export function useAutomationsPageFocus(
     const focusedAtStart = document.activeElement
     let handle = 0
     let keepUntil = 0
-    // Why: a list that is still settling (Runs reloads on open) can replace the row just
-    // focused; while focus has gone nowhere else, move it to the replacement.
+    // The row this hook focused; any other focus means the user moved on.
+    let ownFocus: HTMLElement | null = null
+    let yielded = false
+    // Why: once the user focuses anything else, this navigation's repair stops for good,
+    // even if that focus later returns to the page body.
+    const onFocusIn = (event: FocusEvent): void => {
+      const target = event.target
+      if (!(target instanceof Element) || !selector || !target.matches(selector)) {
+        yielded = true
+      }
+    }
+    document.addEventListener('focusin', onFocusIn, true)
+    const focusRow = (row: HTMLElement): void => {
+      ownFocus = row
+      revealReturnedRow(row)
+      row.focus({ preventScroll: true })
+      flashReturnedRow(row)
+    }
+    // Why: a list that is still loading (Runs reloads on return) can drop or replace the row
+    // just focused, and list it again only when its data arrives; keep it focused for the
+    // whole readiness budget while focus has gone nowhere else.
     const keepReturnedFocus = (): void => {
       const container = containerRef.current
-      const active = document.activeElement
-      if (!container || !selector || (active && active !== document.body)) {
-        if (performance.now() < keepUntil) {
-          handle = requestAnimationFrame(keepReturnedFocus)
-        }
+      if (!container || !selector || yielded) {
         return
       }
-      const replacement = container.querySelector<HTMLElement>(selector)
-      if (replacement) {
-        replacement.focus({ preventScroll: true })
-        flashReturnedRow(replacement)
+      const active = document.activeElement
+      const stillOurs = ownFocus !== null && active === ownFocus && ownFocus.isConnected
+      if (!stillOurs) {
+        const replacement = container.querySelector<HTMLElement>(selector)
+        if (replacement) {
+          focusRow(replacement)
+        } else if (returning?.returnRunId) {
+          requestAutomationRunReveal(returning.returnRunId, returning.returnRunKey)
+        }
       }
       if (performance.now() < keepUntil) {
         handle = requestAnimationFrame(keepReturnedFocus)
@@ -203,7 +233,7 @@ export function useAutomationsPageFocus(
       }
       // Why: the user moved on (clicked or typed somewhere) while the row was loading.
       const active = document.activeElement
-      if (active && active !== focusedAtStart && active !== document.body) {
+      if (yielded || (active && active !== focusedAtStart && active !== document.body)) {
         return
       }
       const element =
@@ -214,11 +244,9 @@ export function useAutomationsPageFocus(
       if (element) {
         if (selector && element.matches(selector)) {
           // Why: focus set from code after a pointer click draws no ring, so mark the row
-          // you came back to; a run row is also brought to the middle of its table.
-          revealReturnedRow(element)
-          element.focus({ preventScroll: true })
-          flashReturnedRow(element)
-          keepUntil = performance.now() + RETURN_SETTLE_MS
+          // you came back to; an off-screen row is also brought into view.
+          focusRow(element)
+          keepUntil = Math.max(giveUpAt, performance.now() + RETURN_SETTLE_MS)
           handle = requestAnimationFrame(keepReturnedFocus)
           return
         }
@@ -226,13 +254,16 @@ export function useAutomationsPageFocus(
         return
       }
       if (returning?.returnRunId) {
-        requestAutomationRunReveal(returning.returnRunId)
+        requestAutomationRunReveal(returning.returnRunId, returning.returnRunKey)
       }
       if (performance.now() < giveUpAt + 100) {
         handle = requestAnimationFrame(attempt)
       }
     }
     attempt()
-    return () => cancelAnimationFrame(handle)
-  }, [key, page, parents, returnSelector, returnRunId, containerRef])
+    return () => {
+      cancelAnimationFrame(handle)
+      document.removeEventListener('focusin', onFocusIn, true)
+    }
+  }, [key, page, parents, returnSelector, returnRunId, returnRunKey, containerRef])
 }

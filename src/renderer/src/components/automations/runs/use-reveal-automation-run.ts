@@ -9,7 +9,7 @@ import {
  * off-screen run can focus its row: an unmounted row has no element to focus.
  */
 export function useRevealAutomationRun(
-  indexOfRun: (runId: string) => number,
+  indexOfRun: (runId: string, runKey: string | undefined) => number,
   scrollToIndex: (index: number) => void
 ): void {
   const latestRef = useRef({ indexOfRun, scrollToIndex })
@@ -25,7 +25,8 @@ export function useRevealAutomationRun(
       if (typeof detail?.runId !== 'string') {
         return
       }
-      const index = latestRef.current.indexOfRun(detail.runId)
+      const runKey = typeof detail.runKey === 'string' ? detail.runKey : undefined
+      const index = latestRef.current.indexOfRun(detail.runId, runKey)
       if (index >= 0) {
         latestRef.current.scrollToIndex(index)
       }
