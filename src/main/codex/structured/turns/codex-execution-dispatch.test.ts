@@ -107,9 +107,9 @@ it.each([{ type: 'apiKey' }, { type: 'chatgpt', id: 'wrong-account', planType: '
   async (account) => {
     const { adapter } = await bounded(account)
     try {
-      await expect(adapter.dispatch(input)).rejects.toBeInstanceOf(
-        StructuredAgentSessionInputNotAdmitted
-      )
+      await expect(adapter.dispatch(input)).rejects.toMatchObject({
+        outcome: { rejection: { kind: 'hostFault', neverReachedAgent: true } }
+      })
     } finally {
       await adapter.closeAll()
     }

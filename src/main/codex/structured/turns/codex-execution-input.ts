@@ -7,12 +7,13 @@ import { agentSessionFailureFact } from '../../../../shared/agent-session/failur
 import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
 import { persistCodexExecutionReceipt } from '../session-lifecycle/codex-execution-receipt'
 
-export function refuseCodexExecutionInput(): never {
+export function refuseCodexExecutionInput(
+  stage: 'controls' | 'state' | 'evidence' | 'capacity' | 'source' | 'freshness' = 'controls'
+): never {
   throw new StructuredAgentSessionInputNotAdmitted({
     state: 'rejected',
-    ...codexDispatchRejection(
-      agentSessionFailureFact('providerRejected', { neverReachedAgent: true })
-    )
+    ...codexDispatchRejection(agentSessionFailureFact('hostFault', { neverReachedAgent: true })),
+    reason: `Orca refused bounded Codex input during ${stage}.`
   })
 }
 
@@ -36,7 +37,7 @@ export async function prepareCodexExecutionInput(
     !execution.record ||
     !execution.reporter
   ) {
-    refuseCodexExecutionInput()
+    refuseCodexExecutionInput('state')
   }
   const captured = await read(input)
   const evidence = captured?.evidence
@@ -61,13 +62,17 @@ export async function prepareCodexExecutionInput(
     (options?.effort !== undefined && options.effort !== policy.effort) ||
     (options?.serviceTier !== undefined && options.serviceTier !== 'default')
   ) {
-    refuseCodexExecutionInput()
+    refuseCodexExecutionInput('evidence')
   }
   try {
     await assertCodexExecutionCapacity(session)
+  } catch {
+    refuseCodexExecutionInput('capacity')
+  }
+  try {
     await assertCodexExecutionSource(evidence.cwd, policy.sourcePin)
   } catch {
-    refuseCodexExecutionInput()
+    refuseCodexExecutionInput('source')
   }
   await persistCodexExecutionReceipt(session)
   return () => {
@@ -78,7 +83,7 @@ export async function prepareCodexExecutionInput(
       execution.inputAdmitted ||
       !execution.controls.isOpen()
     ) {
-      refuseCodexExecutionInput()
+      refuseCodexExecutionInput('freshness')
     }
     execution.inputAdmitted = true
     execution.checkpoint?.()

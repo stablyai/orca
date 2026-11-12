@@ -4,7 +4,9 @@ import type { CodexSession } from '../session-lifecycle/codex-structured-session
 export async function assertCodexExecutionCapacity(session: CodexSession): Promise<void> {
   const policy = session.execution!.policy
   const call = (method: string, params: Record<string, unknown>) =>
-    session.connection.request(method, params, { timeoutMs: 2_000 })
+    session.connection.request(method, params, {
+      timeoutMs: Math.max(1, Math.min(10_000, policy.deadlineAt - Date.now()))
+    })
   const limits = readRecord(readRecord(await call('account/rateLimits/read', {})).rateLimits)
   const windows = ['primary', 'secondary']
     .map((key) => limits[key])
