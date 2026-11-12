@@ -145,10 +145,9 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
       ).stdout
     )
     expect(second.result.action?.actionName).toBe('AXReplaceSelection')
-    expect(second.result.action?.verification).toMatchObject({
+    expect(second.result.action?.verification).toEqual({
       state: 'verified',
-      property: 'focusedText',
-      expected: marker
+      property: 'focusedText'
     })
 
     const after = parseJsonOutput<{ result: ComputerSnapshotResult }>(
@@ -242,10 +241,9 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
       ).stdout
     )
     expect(replacement.result.action?.actionName).toBe('AXReplaceSelection')
-    expect(replacement.result.action?.verification).toMatchObject({
+    expect(replacement.result.action?.verification).toEqual({
       state: 'verified',
-      property: 'focusedText',
-      expected: marker
+      property: 'focusedText'
     })
 
     const after = parseJsonOutput<{ result: ComputerSnapshotResult }>(
