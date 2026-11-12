@@ -31,9 +31,19 @@ import {
   turnText
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
-/** A chat with a turn running, so mail waits as cards behind it. */
-async function busyChat(sessionId: string) {
+/** A running turn, optionally with its first handover still unanswered. */
+async function busyChat(sessionId: string, startReply?: Promise<void>) {
   const chat = await openChat(sessionId)
+  if (startReply) {
+    const request = chat.request
+    chat.request = async (...args) => {
+      const response = await request(...args)
+      if (args[0] === 'turn/start') {
+        await startReply
+      }
+      return response
+    }
+  }
   expect(await sendUserMessage(sessionId, 'go')).toMatchObject({ ok: true })
   await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
   chat.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
@@ -138,70 +148,103 @@ describe('a queued mail card runs only while its chat still owes it', () => {
   })
 
   it('refuses an explicit Send of a card no longer owed, removing it without a turn', async () => {
-    const chat = await busyChat(COORDINATOR)
-    const { runId, taskId } = await coordinatorRunAndTask()
-    await finishWorker(taskId)
-    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
-    vi.spyOn(runtime, 'withdrawStaleChatMail').mockImplementation(() => {})
-    // A check takes the report while its card still waits.
-    expect(await call('orchestration.check', {}, { sessionId: COORDINATOR })).toMatchObject({
-      runId,
-      count: 1
-    })
-    const [card] = journalOf(COORDINATOR).queuedMessages.list()
-    const fields = { messageId: card!.messageId }
-    const sent = await host.queuedMessageSend(
-      { callerKey: 'test-surface' },
-      {
-        envelope: {
-          sessionId: COORDINATOR,
-          clientOperationId: operationId(),
-          expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
-          payloadFingerprint: computeAgentSessionPayloadFingerprint({
-            method: 'agentSession.queuedMessageSend',
+    const reply = Promise.withResolvers<void>()
+    try {
+      const chat = await busyChat(COORDINATOR, reply.promise)
+      const { runId, taskId } = await coordinatorRunAndTask()
+      await finishWorker(taskId)
+      await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
+      const [card] = journalOf(COORDINATOR).queuedMessages.list()
+      expect(card).toMatchObject({ state: 'waiting', consumedAs: null })
+      expect(chat.steers).toEqual([])
+      expect(
+        await host.queuedMessageEditHold(
+          { callerKey: 'test-surface' },
+          {
             sessionId: COORDINATOR,
-            fields
-          })
-        },
-        ...fields
+            messageId: card!.messageId,
+            editId: operationId(),
+            action: 'acquire',
+            expectedBodyFingerprint: card!.fingerprint
+          }
+        )
+      ).toMatchObject({ status: 'held' })
+      vi.spyOn(runtime, 'withdrawStaleChatMail').mockImplementation(() => {})
+      // A check takes the report while its card still waits.
+      expect(await call('orchestration.check', {}, { sessionId: COORDINATOR })).toMatchObject({
+        runId,
+        count: 1
+      })
+      reply.resolve()
+      await settleTurn(COORDINATOR, 0)
+      expect(journalOf(COORDINATOR).queuedMessages.get(card!.messageId)).toMatchObject({
+        state: 'waiting',
+        consumedAs: null
+      })
+      const fields = { messageId: card!.messageId }
+      const sent = await host.queuedMessageSend(
+        { callerKey: 'test-surface' },
+        {
+          envelope: {
+            sessionId: COORDINATOR,
+            clientOperationId: operationId(),
+            expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
+            payloadFingerprint: computeAgentSessionPayloadFingerprint({
+              method: 'agentSession.queuedMessageSend',
+              sessionId: COORDINATOR,
+              fields
+            })
+          },
+          ...fields
+        }
+      )
+      if (sent.ok) {
+        throw new Error('a stale Send went through')
       }
-    )
-    if (sent.ok) {
-      throw new Error('a stale Send went through')
+      // The person is told why the card went, on desktop and phone alike.
+      expect(agentSessionRefusalNotice(sent.refusal, 'send', { agentName: 'Codex' })).toContain(
+        'This chat has moved on.'
+      )
+      expect(await queuedCardTexts()).toEqual([])
+      expect(chat.turns).toHaveLength(1)
+      expect(chat.steers).toEqual([])
+    } finally {
+      reply.resolve()
     }
-    // The person is told why the card went, on desktop and phone alike.
-    expect(agentSessionRefusalNotice(sent.refusal, 'send', { agentName: 'Codex' })).toContain(
-      'This chat has moved on.'
-    )
-    expect(await queuedCardTexts()).toEqual([])
-    expect(chat.turns).toHaveLength(1)
   })
 
   it("lets the person's cards pass mail it cannot decide on now, then hands the mail over first once it can", async () => {
-    const chat = await busyChat(COORDINATOR)
-    const { taskId } = await coordinatorRunAndTask()
-    await finishWorker(taskId)
-    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
-    await queueCard('first question of mine')
-    await queueCard('second question of mine')
-    const unreadable = vi.spyOn(db, 'areUnreadMessages').mockImplementation(() => {
-      throw new Error('database unavailable')
-    })
-    await settleTurn(COORDINATOR, 0)
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
-    // The person's first card went, in their order; the report and their second card still wait.
-    expect(turnText(chat.turns[1]!)).toContain('first question of mine')
-    const waiting = await queuedCardTexts()
-    expect(waiting).toHaveLength(2)
-    expect(waiting[0]).toContain('(worker_done)')
-    unreadable.mockRestore()
-    await settleTurn(COORDINATOR, 1)
-    // Readable again: the older report goes before the person's later card.
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(3), WAIT)
-    expect(isWholeMail(turnText(chat.turns[2]!))).toBe(true)
-    await settleTurn(COORDINATOR, 2)
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(4), WAIT)
-    expect(turnText(chat.turns[3]!)).toContain('second question of mine')
+    const reply = Promise.withResolvers<void>()
+    try {
+      const chat = await busyChat(COORDINATOR, reply.promise)
+      const { taskId } = await coordinatorRunAndTask()
+      await finishWorker(taskId)
+      await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
+      await queueCard('first question of mine')
+      await queueCard('second question of mine')
+      const unreadable = vi.spyOn(db, 'areUnreadMessages').mockImplementation(() => {
+        throw new Error('database unavailable')
+      })
+      expect(chat.steers).toEqual([])
+      reply.resolve()
+      await settleTurn(COORDINATOR, 0)
+      await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
+      // The person's first card went, in their order; the report and their second card still wait.
+      expect(turnText(chat.turns[1]!)).toContain('first question of mine')
+      const waiting = await queuedCardTexts()
+      expect(waiting).toHaveLength(2)
+      expect(waiting[0]).toContain('(worker_done)')
+      unreadable.mockRestore()
+      await settleTurn(COORDINATOR, 1)
+      // Readable again: the older report goes before the person's later card.
+      await vi.waitFor(() => expect(chat.turns).toHaveLength(3), WAIT)
+      expect(isWholeMail(turnText(chat.turns[2]!))).toBe(true)
+      await settleTurn(COORDINATOR, 2)
+      await vi.waitFor(() => expect(chat.turns).toHaveLength(4), WAIT)
+      expect(turnText(chat.turns[3]!)).toContain('second question of mine')
+    } finally {
+      reply.resolve()
+    }
   })
 
   it('hands a Task over without opening the mail database', async () => {
@@ -300,68 +343,75 @@ describe('a queued mail card runs only while its chat still owes it', () => {
   })
 
   it('sends a report refused for queue room once the queue frees room, and never spins meanwhile', async () => {
-    const chat = await busyChat(COORDINATOR)
-    const { runId, taskId } = await coordinatorRunAndTask()
-    // The person's queue holds almost all the room an agent's message may use.
-    for (let card = 0; card < 4; card += 1) {
-      const mutation = structuredAgentSessionMessageSendMutation({
-        sessionId: COORDINATOR,
-        clientOperationId: operationId(),
-        expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
-        body: {
-          kind: 'message',
-          role: 'user',
-          blocks: [{ type: 'text', text: 'x'.repeat(240_000) }]
-        },
-        delivery: 'queue-if-active'
-      })
-      expect(
-        await host.send({ callerKey: 'test-surface' }, { ...mutation, userSend: true })
-      ).toMatchObject({ ok: true, value: { queued: { state: 'waiting' } } })
-    }
-    const send = vi.spyOn(host, 'send')
-    await finishWorker(taskId)
-    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1), WAIT)
-    // The refusal releases the reservation made before the send.
-    await vi.waitFor(
-      () => expect(db.getUnreadMessages(`run:${runId}`)).toMatchObject([{ delivered_at: null }]),
-      WAIT
-    )
-    // Unrelated journal writes do not retry a refusal into a loop.
-    await journalOf(COORDINATOR).appendQueueResume(
-      host.deps.store.getConversation(COORDINATOR)!.currentFence
-    )
-    await vi.waitFor(() => expect(send.mock.calls.length).toBeLessThanOrEqual(2), WAIT)
+    const reply = Promise.withResolvers<void>()
+    try {
+      const chat = await busyChat(COORDINATOR, reply.promise)
+      const { runId, taskId } = await coordinatorRunAndTask()
+      // The person's queue holds almost all the room an agent's message may use.
+      for (let card = 0; card < 4; card += 1) {
+        const mutation = structuredAgentSessionMessageSendMutation({
+          sessionId: COORDINATOR,
+          clientOperationId: operationId(),
+          expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: 'x'.repeat(240_000) }]
+          },
+          delivery: 'queue-if-active'
+        })
+        expect(
+          await host.send({ callerKey: 'test-surface' }, { ...mutation, userSend: true })
+        ).toMatchObject({ ok: true, value: { queued: { state: 'waiting' } } })
+      }
+      const send = vi.spyOn(host, 'send')
+      await finishWorker(taskId)
+      await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1), WAIT)
+      // The refusal releases the reservation made before the send.
+      await vi.waitFor(
+        () => expect(db.getUnreadMessages(`run:${runId}`)).toMatchObject([{ delivered_at: null }]),
+        WAIT
+      )
+      // Unrelated journal writes do not retry a refusal into a loop.
+      await journalOf(COORDINATOR).appendQueueResume(
+        host.deps.store.getConversation(COORDINATOR)!.currentFence
+      )
+      await vi.waitFor(() => expect(send.mock.calls.length).toBeLessThanOrEqual(2), WAIT)
 
-    // Deleting the person's cards frees room: that journal edge alone sends the report.
-    for (const card of journalOf(COORDINATOR).queuedMessages.list()) {
-      const fields = { messageId: card.messageId }
-      expect(
-        await host.queuedMessageDelete(
-          { callerKey: 'test-surface' },
-          {
-            envelope: {
-              sessionId: COORDINATOR,
-              clientOperationId: operationId(),
-              expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
-              payloadFingerprint: computeAgentSessionPayloadFingerprint({
-                method: 'agentSession.queuedMessageDelete',
+      // Deleting the person's cards frees room: that journal edge alone sends the report.
+      for (const card of journalOf(COORDINATOR).queuedMessages.list()) {
+        const fields = { messageId: card.messageId }
+        expect(
+          await host.queuedMessageDelete(
+            { callerKey: 'test-surface' },
+            {
+              envelope: {
                 sessionId: COORDINATOR,
-                fields
-              })
-            },
-            ...fields
-          }
-        )
-      ).toMatchObject({ ok: true })
+                clientOperationId: operationId(),
+                expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
+                payloadFingerprint: computeAgentSessionPayloadFingerprint({
+                  method: 'agentSession.queuedMessageDelete',
+                  sessionId: COORDINATOR,
+                  fields
+                })
+              },
+              ...fields
+            }
+          )
+        ).toMatchObject({ ok: true })
+      }
+      await vi.waitFor(async () => {
+        const cards = await queuedCardTexts()
+        expect(cards).toHaveLength(1)
+        expect(cards[0]).toContain('(worker_done)')
+      }, WAIT)
+      expect(chat.steers).toEqual([])
+      reply.resolve()
+      await settleTurn(COORDINATOR, 0)
+      await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
+      expect(isWholeMail(turnText(chat.turns[1]!))).toBe(true)
+    } finally {
+      reply.resolve()
     }
-    await vi.waitFor(async () => {
-      const cards = await queuedCardTexts()
-      expect(cards).toHaveLength(1)
-      expect(cards[0]).toContain('(worker_done)')
-    }, WAIT)
-    await settleTurn(COORDINATOR, 0)
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
-    expect(isWholeMail(turnText(chat.turns[1]!))).toBe(true)
   })
 })
