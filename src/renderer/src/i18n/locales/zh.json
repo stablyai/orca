@@ -524,7 +524,7 @@
       "actions": {
         "tab": {
           "newAgentNamed": "新建 {{agent}} 标签页",
-          "newAgent": "新建代理标签页(默认代理)"
+          "newAgent": "新建智能体标签页(默认智能体)"
         }
       },
       "filters": {
@@ -534,7 +534,7 @@
       },
       "conflict": "{{binding}} 与 {{titles}} 冲突",
       "groups": {
-        "agents": "代理",
+        "agents": "智能体",
         "browser": "浏览器",
         "chat": "聊天",
         "editors": "编辑器",
@@ -960,7 +960,7 @@
             "33290e88ed": "连接配置文件失败",
             "9fcb07a796": "配置文件已连接",
             "2f6c78a039": "刷新配置文件身份验证失败",
-            "a37b5e6d37": "已退出配置文件",
+            "a37b5e6d37": "已从 Orca 退出登录",
             "83600521e7": "退出登录失败",
             "76deec8f58": "切换组织失败",
             "7d4bc516ee": "切换配置文件失败",
@@ -1640,7 +1640,7 @@
       "executionHostFacts": {
         "sshPlatformWithheld": "SSH 主机尚未报告其操作系统，请连接后重试",
         "runtimePlatformWithheld": "Orca 服务器尚未报告其操作系统，请重新连接后重试",
-        "runtimePlatformUpdate": "此 Orca 服务器不报告其操作系统，请更新服务器以在其上启动代理",
+        "runtimePlatformUpdate": "此 Orca 服务器不报告其操作系统，请更新服务器以在其上启动智能体",
         "hostUnresolvedWithheld": "Orca 暂时无法判断此工作区属于哪个主机"
       },
       "fileOwnerRuntimeTarget": {
@@ -15562,12 +15562,12 @@
             "tip": {
               "copy": {
                 "1fcdfc5fe8": "新功能",
-                "f98e9d1bad": "搜索所有代理会话",
-                "990cc29865": "按对话内容查找任意过往会话，然后从代理停止的位置继续",
+                "f98e9d1bad": "搜索所有智能体会话",
+                "990cc29865": "按对话内容查找任意过往会话，然后从智能体停止的位置继续",
                 "91e2719807": "启用会话搜索",
                 "52e9e84809": "提示",
-                "3eacedec93": "用 Orca CLI 让代理驱动 Orca",
-                "8d54d0ff53": "让代理协调子工作树，并在工作树之间通信",
+                "3eacedec93": "用 Orca CLI 让智能体驱动 Orca",
+                "8d54d0ff53": "让智能体协调子工作树，并在工作树之间通信",
                 "0080bc86eb": "安装 CLI 与技能",
                 "9b58bc5d7a": "使用 <shortcut> 跳转到工作树",
                 "655fc3cb5a": "搜索工作树、切换标签、调整设置或新建工作树，全程不必离开键盘",
@@ -17810,9 +17810,9 @@
           "markManyRead_other": "将 {{count}} 个代理标记为已读",
           "markManyUnread_one": "将 {{count}} 个代理标记为未读",
           "markManyUnread_other": "将 {{count}} 个代理标记为未读",
-          "clearMany_one": "从列表中清除 {{count}} 个代理",
-          "clearMany_other": "从列表中清除 {{count}} 个代理",
-          "clearMany": "从列表中清除 {{count}} 个代理",
+          "clearMany_one": "从列表中清除 {{count}} 个智能体",
+          "clearMany_other": "从列表中清除 {{count}} 个智能体",
+          "clearMany": "从列表中清除 {{count}} 个智能体",
           "markManyRead": "将 {{count}} 个代理标记为已读",
           "markManyUnread": "将 {{count}} 个代理标记为未读"
         }
@@ -18790,7 +18790,7 @@
         "dashboard": {
           "popout": {
             "window": {
-              "title": "Orca 代理仪表板"
+              "title": "Orca 智能体仪表板"
             }
           }
         }
@@ -20644,12 +20644,12 @@
       "targetActive": "当前",
       "empty": "没有可发送的备注",
       "selectedTerminalUnavailable": "所选终端已不可用",
-      "activeTerminalUnavailable": "请打开此工作树中的代理终端，然后重新发送备注",
-      "notAgentSession": "{{target}}终端不是可识别的代理会话",
-      "selectedAgentNeedsPermission": "所选代理需要权限",
-      "activeAgentNeedsPermission": "当前代理需要权限",
-      "statusUnverified": "无法验证{{target}}代理的状态",
-      "notReady": "{{target}}代理尚未准备好接收输入",
+      "activeTerminalUnavailable": "请打开此工作树中的智能体终端，然后重新发送备注",
+      "notAgentSession": "{{target}}终端不是可识别的智能体会话",
+      "selectedAgentNeedsPermission": "所选智能体需要权限",
+      "activeAgentNeedsPermission": "当前智能体需要权限",
+      "statusUnverified": "无法验证{{target}}智能体的状态",
+      "notReady": "{{target}}智能体尚未准备好接收输入",
       "notWritable": "{{target}}智能体未接受这些备注",
       "selectedSubmitFailed": "备注可能已粘贴到所选终端，但 Orca 无法提交",
       "activeSubmitFailed": "备注可能已粘贴到当前终端，但 Orca 无法提交",
@@ -22031,11 +22031,11 @@
       "reopenTerminal_other": "重新打开 {{count}} 个终端",
       "reopened_one": "已重新打开 {{count}} 个终端",
       "reopened_other": "已重新打开 {{count}} 个终端",
-      "resumed_one": "已恢复 {{count}} 个代理会话",
-      "resumed_other": "已恢复 {{count}} 个代理会话",
+      "resumed_one": "已恢复 {{count}} 个智能体会话",
+      "resumed_other": "已恢复 {{count}} 个智能体会话",
       "reopenTerminal": "重新打开 {{count}} 个终端",
       "reopened": "已重新打开 {{count}} 个终端",
-      "resumed": "已恢复 {{count}} 个代理会话"
+      "resumed": "已恢复 {{count}} 个智能体会话"
     },
     "severedDaemonBanner": {
       "unknownCount": "其正在运行的终端",

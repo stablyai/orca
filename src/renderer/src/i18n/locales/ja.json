@@ -903,7 +903,7 @@
             "33290e88ed": "プロファイルの接続に失敗しました",
             "9fcb07a796": "プロファイルが接続されました",
             "2f6c78a039": "プロファイル認証の更新に失敗しました",
-            "a37b5e6d37": "プロファイルからサインアウトしました",
+            "a37b5e6d37": "Orca からサインアウトしました",
             "83600521e7": "サインアウトに失敗しました",
             "76deec8f58": "組織の切り替えに失敗しました",
             "7d4bc516ee": "プロファイルの切り替えに失敗しました",
@@ -1492,9 +1492,9 @@
         "folderWorkspaceCreateFailedMessage": "フォルダーワークスペースを作成できませんでした。上のエラー詳細を確認して、もう一度お試しください。",
         "setupAgentStartupPolicySaveFailed": "セットアップ時の起動設定を保存できませんでした。",
         "5f3d2c8a1b": "MR のベースブランチを特定できませんでした。",
-        "dropPartiallyAttached_one": "{{count}} アイテムの {{failureCount}} を接続できませんでした。",
-        "dropPartiallyAttached_other": "{{count}} 個のアイテムのうち {{failureCount}} 個を接続できませんでした。",
-        "dropPartiallyAttached": "{{count}} 個のアイテムのうち {{failureCount}} 個を接続できませんでした。"
+        "dropPartiallyAttached_one": "{{count}} 個のアイテムのうち {{failureCount}} 個を添付できませんでした。",
+        "dropPartiallyAttached_other": "{{count}} 個のアイテムのうち {{failureCount}} 個を添付できませんでした。",
+        "dropPartiallyAttached": "{{count}} 個のアイテムのうち {{failureCount}} 個を添付できませんでした。"
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "ドロップされたファイルのアップロードに失敗しました。",
