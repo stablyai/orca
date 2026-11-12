@@ -45,20 +45,27 @@ function useHostKeys(hostId: ExecutionHostId): AgentApiKeySummary[] | null {
   return keys
 }
 
-function useRecipeEnvSummary(enabled: boolean): RecipeForwardedEnvSummary | null | undefined {
+/** Main resolves this recipe host's passEnv from its recipe; the renderer only names the host. */
+function useRecipeEnvSummary(
+  enabled: boolean,
+  environmentId: string | null
+): RecipeForwardedEnvSummary | null | undefined {
   const [summary, setSummary] = useState<RecipeForwardedEnvSummary | null | undefined>(null)
   useEffect(() => {
     if (!enabled) {
       return
     }
     let cancelled = false
-    void (window.api.ephemeralVm?.forwardedEnvSummary() ?? Promise.resolve(undefined))
+    void (
+      window.api.ephemeralVm?.forwardedEnvSummary(environmentId ? { environmentId } : undefined) ??
+      Promise.resolve(undefined)
+    )
       .catch(() => undefined)
       .then((next) => !cancelled && setSummary(next))
     return () => {
       cancelled = true
     }
-  }, [enabled])
+  }, [enabled, environmentId])
   return summary
 }
 
@@ -132,7 +139,7 @@ export function useHostPanelBody(
     // A primitive snapshot so the selector stays stable between renders.
     return `${accounts.claude ?? ''}\u0000${accounts.codex ?? ''}`
   })
-  const recipeSummary = useRecipeEnvSummary(host.kind === 'recipe')
+  const recipeSummary = useRecipeEnvSummary(host.kind === 'recipe', host.environmentId)
   const [signOutAgent, setSignOutAgent] = useState<HostAgentSignInAgent | null>(null)
   const unavailable = host.availability !== 'available'
   const agents = (

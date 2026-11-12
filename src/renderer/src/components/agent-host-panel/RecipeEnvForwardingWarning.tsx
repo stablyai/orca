@@ -9,8 +9,9 @@ import type { RecipeForwardedEnvSummary } from '../../../../shared/ephemeral-vm-
 const NAMES_IN_LINE = 3
 
 /**
- * P-4 (agent accounts spec §4, Q9): recipe create scripts get this computer's whole environment.
- * A warning only; names, never values. `summary` null while loading, undefined when unavailable.
+ * P-4 (agent accounts spec §4, Q9): recipe create scripts get this computer's environment, or only
+ * what the recipe's passEnv allows (`summary.narrowed`). A warning only; names, never values.
+ * `summary` null while loading, undefined when unavailable.
  */
 export function RecipeEnvForwardingWarning({
   summary,
@@ -70,10 +71,15 @@ export function RecipeEnvForwardingWarning({
         <TriangleAlert className="mt-0.5 size-4 shrink-0 text-status-warning" aria-hidden />
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className="text-sm font-medium text-foreground">
-            {t(
-              'agentHostPanel.recipeEnv',
-              "This recipe's create script gets this computer's environment."
-            )}
+            {summary?.narrowed
+              ? t(
+                  'agentHostPanel.recipeEnvNarrowed',
+                  "This recipe's create script gets only the variables its passEnv allows."
+                )
+              : t(
+                  'agentHostPanel.recipeEnv',
+                  "This recipe's create script gets this computer's environment."
+                )}
           </p>
           {summary === null ? (
             <Skeleton className="h-3.5 w-4/5" shape="small" />

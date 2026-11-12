@@ -104,7 +104,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
     return listPickerRecipes(store, args.repoId, pluginService)
   })
 
-  registerRecipeForwardedEnvHandler()
+  registerRecipeForwardedEnvHandler(store)
 
   ipcMain.handle(
     'ephemeralVm:listRecipeCatalog',
