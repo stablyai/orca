@@ -12,6 +12,7 @@ export type StructuredAgentSessionOptionRecord = {
 const ANSWERED_VALUE_IDS = [
   'model',
   'effort',
+  'ultracode',
   'fastMode',
   'serviceTier',
   'interactionMode'
@@ -83,6 +84,7 @@ export function structuredAgentSessionOptionStamp(
         | 'reportedModel'
         | 'permissionMode'
         | 'effort'
+        | 'ultracode'
         | 'fastMode'
         | 'serviceTier'
         | 'interactionMode'
@@ -94,6 +96,7 @@ export function structuredAgentSessionOptionStamp(
     summary?.reportedModel,
     summary?.permissionMode,
     summary?.effort,
+    summary?.ultracode,
     summary?.fastMode,
     summary?.serviceTier,
     summary?.interactionMode

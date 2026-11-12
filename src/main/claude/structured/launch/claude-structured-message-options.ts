@@ -12,7 +12,11 @@ import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
 } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { claudeTakesFlagSettings, setClaudeStructuredOption } from './claude-structured-options'
+import {
+  claudeAppliedEffort,
+  claudeTakesFlagSettings,
+  setClaudeStructuredOption
+} from './claude-structured-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import {
   isAbortSignalReason,
@@ -42,13 +46,27 @@ export async function applyClaudeMessageOptions(
   }
 
   throwIfSignalAborted(signal)
+  // A restored switch rides the first message even from a client that never offers it.
+  const requestedUltracode = options.ultracode ?? session.options.get('ultracode')
   // Saved choices stay saved for a CLI that can apply them; this one runs on its own.
   const takesFlagSettings =
-    (options.effort !== undefined || options.fastMode !== undefined) &&
+    (options.effort !== undefined ||
+      options.fastMode !== undefined ||
+      requestedUltracode !== undefined) &&
     (await claudeTakesFlagSettings(session))
   throwIfSignalAborted(signal)
+  // Before effort, which keeps Ultracode on only when it knows the switch's new position.
+  const ultracode = takesFlagSettings ? requestedUltracode : undefined
+  if (ultracode !== undefined && session.appliedInputOptions.get('ultracode') !== ultracode) {
+    await waitForPromiseWithSignal(
+      setClaudeStructuredOption(session, { key: 'ultracode', value: ultracode }, timeoutMs),
+      signal
+    )
+  }
+
+  throwIfSignalAborted(signal)
   const effort = takesFlagSettings ? options.effort : undefined
-  if (effort && session.appliedInputOptions.get('effort') !== effort) {
+  if (effort && !claudeAppliedEffort(session, effort)) {
     await waitForPromiseWithSignal(
       setClaudeStructuredOption(session, { key: 'effort', value: effort }, timeoutMs),
       signal

@@ -144,7 +144,7 @@ export function createClaudeSessionPublication(input: {
       // Only options included at launch can skip their first control write.
       appliedInputOptions: new Map(
         [...(input.launch.savedOptions.options ?? [])].filter(
-          ([key, value]) => key === 'model' || (key === 'effort' && value !== 'ultracode')
+          ([key]) => key === 'model' || key === 'effort'
         )
       ),
       fastModeAtStart: false,

@@ -15,9 +15,10 @@ import {
 import { structuredAgentSessionThreadGoalReport } from '../operations/structured-agent-session-thread-goal'
 // Saved choices, catalog defaults and actual execution reports remain separate facts.
 
-import type {
-  AgentSessionOptionsResult,
-  AgentSessionAcceptedInputSources
+import {
+  AGENT_SESSION_ACCEPTED_INPUT_KEYS,
+  type AgentSessionOptionsResult,
+  type AgentSessionAcceptedInputSources
 } from '../../../../shared/agent-session/options/agent-session-options-result'
 import { journalOpenReadRefusal } from '../../agent-session-journal/replay/journal-open-failure'
 import {
@@ -31,6 +32,7 @@ import type { StructuredAgentSessionMutationContext } from '../operations/struct
 import { readStructuredSessionRecovery } from '../recovery/structured-agent-session-recovery-read'
 import { fillUnknownModelEfforts } from '../../../../shared/agent-session/options/agent-session-model-efforts'
 import { structuredAgentSessionModelPicks } from './structured-agent-session-option-intent'
+import { withLegacyUltracodeEffortLifted } from '../../../../shared/agent-session/options/claude-ultracode-saved-options'
 
 /** A live child's own answer, or the answer at rest; the goal, usage and rewind either way. */
 export async function readStructuredAgentSessionOptions(
@@ -159,7 +161,10 @@ export async function readStructuredAgentSessionOptions(
           (row) => row.isDefault
         )?.id
       : undefined
-  const saved = record?.options ?? {}
+  const saved =
+    agent === 'claude'
+      ? withLegacyUltracodeEffortLifted(record?.options ?? {})
+      : (record?.options ?? {})
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined
@@ -179,6 +184,7 @@ export async function readStructuredAgentSessionOptions(
     ...options.current,
     ...(model !== undefined ? { model } : {}),
     effort: saved.effort ?? options.current.effort,
+    ultracode: selected.current.ultracode ?? options.current.ultracode,
     fastMode: selected.current.fastMode ?? options.current.fastMode,
     // The saved tier as the shared speed rule runs it under the saved model.
     ...(context.deps.agents.definition(agent)?.restingOptions.acceptsKey('interactionMode')
@@ -201,7 +207,7 @@ export async function readStructuredAgentSessionOptions(
     (key) => saved[key] === undefined && defaultedBy(key)
   )
   const acceptedInputSources: AgentSessionAcceptedInputSources = {}
-  for (const key of ['model', 'effort', 'fastMode', 'serviceTier', 'interactionMode'] as const) {
+  for (const key of AGENT_SESSION_ACCEPTED_INPUT_KEYS) {
     if (current[key] !== undefined && saved[key] !== undefined) {
       acceptedInputSources[key] = 'saved'
     }

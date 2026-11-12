@@ -91,6 +91,9 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
             .map(parseChoice)
             .filter((choice): choice is AgentSessionOptionChoice => choice !== null)
         }
+      : {}),
+    ...(typeof row.supportsUltracode === 'boolean'
+      ? { supportsUltracode: row.supportsUltracode }
       : {})
   }
 }

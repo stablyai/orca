@@ -24,6 +24,7 @@ import {
   structuredAgentSessionSendSelection,
   structuredAgentSessionShownSnapshot
 } from './structured-agent-session-option-view'
+import { sortNativeChatSessionOptions } from '../../native-chat/input/native-chat-session-option-snapshot'
 
 const levels = (...values: string[]) => values.map((value) => ({ value, label: value }))
 const OPUS = { id: 'opus[1m]', label: 'Opus', isDefault: false, efforts: levels('low', 'xhigh') }
@@ -474,5 +475,59 @@ describe('Pi supported selection apart from saved intent', () => {
       current: remembered
     })
     expect(effort(unknown)).toMatchObject({ settable: false, kind: { currentValue: 'off' } })
+  })
+})
+
+describe('Claude Ultracode on current and older hosts', () => {
+  const answered = (current: AgentSessionOptionsResult['current'], supportsUltracode?: true) =>
+    applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, {
+      models: [
+        {
+          ...OPUS,
+          chatEfforts: levels('ultracode'),
+          ...(supportsUltracode ? { supportsUltracode } : {})
+        }
+      ],
+      listedModelIds: [OPUS.id],
+      current: { model: OPUS.id, effort: 'xhigh', defaulted: [], ...current }
+    })
+  const effortValues = (state: StructuredAgentSessionOptionState) => {
+    const kind = structuredAgentSessionOptionSnapshot(state).find(({ id }) => id === 'effort')?.kind
+    return kind?.type === 'select' ? kind.choices.map(({ value }) => value) : []
+  }
+
+  it('shows a switch after effort and sends it only to a host that offers it', () => {
+    const current = answered(
+      {
+        ultracode: true,
+        acceptedInputSources: { model: 'saved', effort: 'saved', ultracode: 'saved' }
+      },
+      true
+    )
+    const snapshot = sortNativeChatSessionOptions(structuredAgentSessionOptionSnapshot(current))
+    expect(snapshot.map(({ id }) => id)).toEqual(['effort', 'ultracode'])
+    expect(snapshot[1]?.kind).toEqual({ type: 'boolean', currentValue: true })
+    expect(effortValues(current)).toEqual(['low', 'xhigh'])
+    expect(structuredAgentSessionMessageSelection(current)).toMatchObject({
+      effort: 'xhigh',
+      ultracode: 'true'
+    })
+    const unsaved = answered({ acceptedInputSources: { model: 'saved', effort: 'saved' } }, true)
+    expect(
+      structuredAgentSessionMessageSelection(
+        structuredAgentSessionOptionView(unsaved, undefined, { ultracode: 'true' })
+      )
+    ).toMatchObject({ ultracode: 'true' })
+
+    const older = answered({ acceptedInputSources: { model: 'saved', effort: 'saved' } })
+    expect(structuredAgentSessionOptionSnapshot(older).some(({ id }) => id === 'ultracode')).toBe(
+      false
+    )
+    expect(effortValues(older)).toEqual(['low', 'xhigh', 'ultracode'])
+    expect(
+      structuredAgentSessionMessageSelection(
+        structuredAgentSessionOptionView(older, undefined, { ultracode: 'true' })
+      )
+    ).not.toHaveProperty('ultracode')
   })
 })

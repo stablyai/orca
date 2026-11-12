@@ -4,6 +4,7 @@ import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agen
 import { finishedListingIds } from '../../../../shared/agent-session/options/structured-agent-session-listing-verified-ids'
 import { savedEffectiveServiceTier } from '../../../../shared/agent-session/options/structured-agent-session-effective-tier'
 import { independentAgentModelCatalog } from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { withLegacyUltracodeEffortLifted } from '../../../../shared/agent-session/options/claude-ultracode-saved-options'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../agent-model-catalog/agent-model-catalog-listing-waiters'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 import {
@@ -65,7 +66,10 @@ export async function readStructuredAgentSessionOptionsAtRest(
       legacyOptionsDisplay: true
     })
   }
-  const saved = record.options ?? {}
+  const saved =
+    record.provider === 'claude'
+      ? withLegacyUltracodeEffortLifted(record.options ?? {})
+      : (record.options ?? {})
   // The chat's own folder decides its default, as its first frame did.
   const scoped = await readCatalog(true)
   const folderDefault =
@@ -113,6 +117,10 @@ export async function readStructuredAgentSessionOptionsAtRest(
         ? false
         : null
       : decodeStructuredAgentSessionOptionValue('fastMode', saved.fastMode)
+  const ultracode =
+    saved.ultracode === undefined
+      ? null
+      : decodeStructuredAgentSessionOptionValue('ultracode', saved.ultracode)
   // An unknown model is one the client already treats as unconfirmed. Only a real listing names the
   // account's default; a built-in list's default is a guess, so with none the client keeps its own.
   const model =
@@ -136,6 +144,7 @@ export async function readStructuredAgentSessionOptionsAtRest(
     current: {
       ...(model ? { model } : {}),
       ...(effort ? { effort } : {}),
+      ...(typeof ultracode === 'boolean' ? { ultracode } : {}),
       ...(typeof fastMode === 'boolean' ? { fastMode } : {}),
       ...(serviceTier ? { serviceTier } : {}),
       defaulted

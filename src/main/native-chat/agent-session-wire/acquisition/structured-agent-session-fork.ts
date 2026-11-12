@@ -13,6 +13,7 @@ import { sliceAtCodeUnitLimit } from '../../../../shared/surrogate-safe-text-sli
 import { AgentConversationCopyError } from '../../agent-conversation-copy-error'
 import { acpAgentName } from '../../../acp/session/acp-structured-agent-definitions'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { withoutChatUltracode } from '../../../../shared/agent-session/options/claude-ultracode-saved-options'
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { requireUnownedStructuredAgentSessionAdoption } from '../../../runtime/agent-session/structured-agent-session-create-adoption'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
@@ -123,7 +124,7 @@ export async function prepareStructuredAgentSessionFork(
     accountHome: record.accountHome,
     runtimeKind: 'native',
     options: {
-      ...record.options,
+      ...(input.agent === 'claude' ? withoutChatUltracode(record.options ?? {}) : record.options),
       ...(record.permissionMode
         ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: record.permissionMode }
         : {})

@@ -65,6 +65,7 @@ export function structuredAgentSessionStatusSummary({
   const permissionMode = record?.permissionMode
   // Published so another device's pick moves the client's option stamp.
   const effort = record?.options?.effort
+  const ultracode = record?.options?.ultracode
   const fastMode = record?.options?.fastMode
   const serviceTier = record?.options?.serviceTier
   const interactionMode = record?.options?.interactionMode
@@ -94,6 +95,7 @@ export function structuredAgentSessionStatusSummary({
       : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
     ...(effort ? { effort } : {}),
+    ...(ultracode ? { ultracode } : {}),
     ...(fastMode ? { fastMode } : {}),
     ...(serviceTier ? { serviceTier } : {}),
     ...(isAgentSessionInteractionMode(interactionMode) ? { interactionMode } : {}),

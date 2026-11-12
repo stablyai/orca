@@ -14,13 +14,6 @@ import {
 import { wireClaudeModels, type WireClaudeModel } from './claude-structured-catalog-listing'
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 
-export function claudeObservedEffort(
-  effort: string | null | undefined,
-  ultracode: unknown
-): string | null {
-  return ultracode === true && effort === 'xhigh' ? 'ultracode' : (effort ?? null)
-}
-
 function claudeSettingsEffortFacts(settings: unknown): {
   raw: string | null | undefined
   observed: string | null | undefined
@@ -31,11 +24,7 @@ function claudeSettingsEffortFacts(settings: unknown): {
   const legacy =
     root !== null &&
     (!Object.hasOwn(root, 'applied') || (applied !== null && !Object.hasOwn(applied, 'effort')))
-  const effort = legacy ? (text(record(root?.effective)?.effortLevel) ?? undefined) : raw
-  return {
-    raw,
-    observed: effort === undefined ? undefined : claudeObservedEffort(effort, applied?.ultracode)
-  }
+  return { raw, observed: legacy ? (text(record(root?.effective)?.effortLevel) ?? undefined) : raw }
 }
 
 /** Applied effort includes native overrides; only older CLIs need the settings fallback. */
@@ -80,10 +69,28 @@ export function readClaudeSettingsApplied(
   }
 }
 
+/** Like effort, only a held pick that Claude's applied Ultracode matches is corroborated. */
+export function observeClaudeSettingsUltracode(session: ClaudeSession, settings: unknown): void {
+  const reported = record(record(settings)?.applied)?.ultracode
+  const applied = typeof reported === 'boolean' ? String(reported) : undefined
+  const held = session.options.get('ultracode')
+  if (held === undefined || (applied !== undefined && applied !== held)) {
+    session.confirmedOptions.delete('ultracode')
+  } else if (applied !== undefined) {
+    session.confirmedOptions.add('ultracode')
+  }
+}
+
 export function observeClaudeSettingsApplied(session: ClaudeSession, settings: unknown): void {
   const applied = readClaudeSettingsApplied(settings)
   if (applied) {
     session.appliedOptions = applied
+    if (applied.ultracode !== undefined) {
+      session.reportedOptions.ultracode = applied.ultracode
+      if (session.ultracodeControlIntent === applied.ultracode) {
+        delete session.ultracodeControlIntent
+      }
+    }
   } else {
     delete session.appliedOptions
   }
@@ -134,12 +141,12 @@ export function readClaudeCurrentModel(session: ClaudeSession): {
   }
 }
 
-function decodedFastMode(session: ClaudeSession): boolean | undefined {
-  const encoded = session.options.get('fastMode')
+function decodedSwitch(session: ClaudeSession, key: 'fastMode' | 'ultracode'): boolean | undefined {
+  const encoded = session.options.get(key)
   if (encoded === undefined) {
     return undefined
   }
-  const decoded = decodeStructuredAgentSessionOptionValue('fastMode', encoded)
+  const decoded = decodeStructuredAgentSessionOptionValue(key, encoded)
   return typeof decoded === 'boolean' ? decoded : undefined
 }
 
@@ -186,12 +193,13 @@ function observeClaudeSettingsReadback(
 ): void {
   if (settings !== null && readMutationSequence === session.optionMutationSequence) {
     observeClaudeSettingsEffort(session, settings)
+    observeClaudeSettingsUltracode(session, settings)
     const fastMode = readClaudeSettingsFastMode(settings)
     const perSessionOptIn = readClaudeSettingsFastModePerSessionOptIn(settings)
     observeClaudeSettingsApplied(session, settings)
     if (fastMode !== null) {
       session.reportedOptions.fastMode = fastMode
-      if (decodedFastMode(session) !== undefined) {
+      if (decodedSwitch(session, 'fastMode') !== undefined) {
         session.options.set('fastMode', String(fastMode))
       }
       session.confirmedOptions.add('fastMode')
@@ -223,8 +231,14 @@ export function claudeStructuredSessionOptionsFrom(
   const effort =
     session.options.get('effort') ??
     session.reportedOptions.effort ??
-    claudeObservedEffort(session.appliedOptions?.effort, session.appliedOptions?.ultracode)
-  const desiredFastMode = decodedFastMode(session)
+    session.appliedOptions?.effort
+  const ultracode =
+    decodedSwitch(session, 'ultracode') ??
+    session.ultracodeControlIntent ??
+    (session.legacyUltracodePreset ? true : undefined) ??
+    session.reportedOptions.ultracode ??
+    session.appliedOptions?.ultracode
+  const desiredFastMode = decodedSwitch(session, 'fastMode')
   // Frames can report Fast before settings do; cooldown throttles routing but preserves the preference.
   const fastMode =
     desiredFastMode ??
@@ -233,6 +247,11 @@ export function claudeStructuredSessionOptionsFrom(
   const confirmed = [
     ...(current.confirmed && reportsPick ? ['model'] : []),
     ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : []),
+    ...(ultracode !== undefined &&
+    (session.confirmedOptions.has('ultracode') ||
+      (!session.options.has('ultracode') && ultracode === session.appliedOptions?.ultracode))
+      ? ['ultracode']
+      : []),
     ...(fastMode !== undefined &&
     (session.confirmedOptions.has('fastMode') || !session.options.has('fastMode'))
       ? ['fastMode']
@@ -247,6 +266,7 @@ export function claudeStructuredSessionOptionsFrom(
       reportedModel: reportsPick ? session.reportedOptions.reportedModel : undefined,
       reportedPermissionMode: session.reportedOptions.reportedPermissionMode,
       ...(effort ? { effort } : {}),
+      ...(ultracode !== undefined ? { ultracode } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),
       ...(confirmed.length > 0 ? { confirmed } : {}),
