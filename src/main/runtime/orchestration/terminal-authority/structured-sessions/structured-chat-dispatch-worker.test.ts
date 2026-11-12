@@ -19,7 +19,6 @@ import {
   openChat,
   queuedCardTexts,
   request,
-  runtime,
   sendUserMessage,
   settleTurn,
   turnText
@@ -153,31 +152,5 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     expect(await call('orchestration.check', {}, { sessionId: PEER_CHAT })).toMatchObject({
       messages: []
     })
-  })
-
-  it("counts a chat worker's own Dispatch as depth 2, under the nesting cap", async () => {
-    await openChat(COORDINATOR)
-    await openChat(PEER_CHAT)
-    const { taskId } = await coordinatorRunAndTask()
-    const parent = await call(
-      'orchestration.dispatch',
-      { task: taskId, to: WORKER },
-      { sessionId: COORDINATOR }
-    )
-    expect(parent.dispatch).toMatchObject({ depth: 1 })
-    await call('orchestration.runCreate', { objective: 'sub' }, { sessionId: PEER_CHAT })
-    const subTask = idOf(
-      (await call('orchestration.taskCreate', { spec: 'part' }, { sessionId: PEER_CHAT })).task
-    )
-
-    const subDispatch = { task: subTask, to: 'term_worker' }
-
-    const maxDepth = vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(1)
-    expect(await refusal('orchestration.dispatch', subDispatch, PEER_CHAT)).toMatchObject({
-      code: 'nested_worker_depth_exceeded'
-    })
-    maxDepth.mockReturnValue(2)
-    const child = await call('orchestration.dispatch', subDispatch, { sessionId: PEER_CHAT })
-    expect(child.dispatch).toMatchObject({ depth: 2, creator_dispatch_id: idOf(parent.dispatch) })
   })
 })

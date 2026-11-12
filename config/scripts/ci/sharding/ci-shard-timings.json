@@ -3048,7 +3048,6 @@
       "src/main/runtime/browser/client-pages/orca-runtime-browser-ghost-session-row-close.test.ts": 640,
       "src/main/runtime/browser/screencast/orca-runtime-browser-screencast-e2ee-backlog.test.ts": 659,
       "src/main/runtime/browser/screencast/orca-runtime-browser-screencast-fanout.test.ts": 607,
-      "src/main/runtime/browser/screencast/orca-runtime-browser-screencast-pending-frame-retry.test.ts": 595,
       "src/main/runtime/browser/client-pages/orca-runtime-browser.test.ts": 682,
       "src/main/runtime/terminal/query/orca-runtime-codex-idle-title-chat-address.test.ts": 5781,
       "src/main/runtime/terminal/surface/orca-runtime-cold-restore-terminal-membership-layout-owner.test.ts": 4130,
