@@ -22,7 +22,7 @@ import {
   resolveIssueGitHubApiRepositorySource
 } from '../../../github/github-api-repository'
 import { projectGhExecOptions } from '../../../github/project-view/internals'
-import { runAsDefaultWslCliUserAct } from '../../../git/command-runner/default-wsl-cli-fallback'
+import { runAsDefaultWslCliUserAct } from '../../../git/command-runner/hosted-cli/default-wsl-cli-fallback'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 

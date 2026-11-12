@@ -50,13 +50,6 @@ export class JournalNewestTurn {
     return this.root?.latest.item ?? null
   }
 
-  /** The newest turn or clear, when it is a turn still running. */
-  running(): { item: AgentJournalRenderItem; turnId: string } | null {
-    const item = this.read()
-    const turn = item ? readAgentJournalTurn(item.body) : null
-    return item && turn?.state === 'running' ? { item, turnId: turn.turnId } : null
-  }
-
   /** Releasing Resume marks must be written after this position. */
   failure(): number {
     const winner = this.root?.winner

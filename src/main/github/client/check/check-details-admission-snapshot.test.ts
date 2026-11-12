@@ -5,7 +5,7 @@ import {
   completeFakeSpawn,
   createFakeSpawnedChild
 } from '../../../../shared/__fixtures__/fake-spawned-child'
-import type { GhExecOptions } from '../../../git/command-runner/gh-exec-file'
+import type { GhExecOptions } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { clearGhAccountTokenCacheForTests } from '../../gh-account-token'
 import { clearGhCapabilityStateForTests } from '../../gh-capability-state'
 import { getPRCheckDetails } from './get-pr-check-details'

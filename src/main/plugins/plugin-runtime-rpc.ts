@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { RpcDispatcher, type DispatcherOptions } from '../runtime/rpc/dispatcher'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { PluginRuntimeRpc } from './workers/plugin-host-workspace-method-bindings'
+import type { PluginRuntimeRpc } from './workers/host-api/plugin-host-workspace-method-bindings'
 
 /** An error the runtime answered, with its code (`selector_not_found`, ...). */
 export class PluginRuntimeRpcError extends Error {

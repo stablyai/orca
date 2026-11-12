@@ -92,117 +92,113 @@ const renderTab = () =>
   )
 const loadedCount = () => gitGraphHistoryForTab(workspaceId).view.getState().result?.items.length
 
-it.each([50_000, 500_000])(
-  'releases %i commits of replaced history while the pane stays mounted',
-  async (count) => {
-    viewport.rows = 40
-    const renderedGraph = vi.spyOn(graphSvg, 'GitHistoryGraphSvg')
-    getHistory
-      .mockReset()
-      .mockImplementationOnce(async () => ({
-        ...result,
-        refs: 'all',
-        hasMore: true,
-        items: Array.from({ length: count }, (_, index) => ({
-          id: `old-${index}`,
-          subject: `Old ${index}`,
-          message: `Old ${index}`,
-          parentIds: []
-        }))
+it('releases replaced history while the pane stays mounted', async () => {
+  const count = 500_000
+  viewport.rows = 40
+  const renderedGraph = vi.spyOn(graphSvg, 'GitHistoryGraphSvg')
+  getHistory
+    .mockReset()
+    .mockImplementationOnce(async () => ({
+      ...result,
+      refs: 'all',
+      hasMore: true,
+      items: Array.from({ length: count }, (_, index) => ({
+        id: `old-${index}`,
+        subject: `Old ${index}`,
+        message: `Old ${index}`,
+        parentIds: []
       }))
-      .mockRejectedValueOnce(new Error('network down'))
-      .mockResolvedValue({ ...result, refs: 'head' })
-    await renderTab()
+    }))
+    .mockRejectedValueOnce(new Error('network down'))
+    .mockResolvedValue({ ...result, refs: 'head' })
+  await renderTab()
+  await act(async () => {
+    const scroll = container.querySelector<HTMLDivElement>('div.overflow-y-auto')!
+    scroll.scrollTop = (count - 40) * 24
+    scroll.dispatchEvent(new Event('scroll'))
+  })
+  expect(getHistory).toHaveBeenCalledTimes(2)
+  expect(container.textContent).toContain('network down')
+  const replaced = (() => {
+    const loaded = gitGraphHistoryForTab(workspaceId).view.getState().result!
+    expect(loaded.items).toHaveLength(count)
+    return [
+      new WeakRef(renderedGraph.mock.calls[0]![0].viewModel),
+      new WeakRef(loaded),
+      new WeakRef(loaded.items),
+      new WeakRef(loaded.items[count - 1]!)
+    ]
+  })()
+  await act(async () =>
+    useAppStore.setState({ gitGraphFiltersByWorktree: { [workspaceId]: 'head' } })
+  )
+  await act(async () => {
+    await gitGraphHistoryForTab(workspaceId).settledResult()
+  })
+  expect(loadedCount()).toBe(1)
+  getHistory.mockReset()
+  renderedGraph.mockClear()
+  await expectReleased(replaced)
+  let controller = gitGraphHistoryForTab(workspaceId)
+  const loadDisposable = async () => {
+    getHistory.mockImplementationOnce(async () => ({
+      ...result,
+      items: [{ id: 'disposable', subject: 'Disposable', message: 'Body', parentIds: [] }]
+    }))
     await act(async () => {
-      const scroll = container.querySelector<HTMLDivElement>('div.overflow-y-auto')!
-      scroll.scrollTop = (count - 40) * 24
-      scroll.dispatchEvent(new Event('scroll'))
+      await controller.refresh()
     })
-    expect(getHistory).toHaveBeenCalledTimes(2)
-    expect(container.textContent).toContain('network down')
-    const replaced = (() => {
-      const loaded = gitGraphHistoryForTab(workspaceId).view.getState().result!
-      expect(loaded.items).toHaveLength(count)
-      return [
-        new WeakRef(renderedGraph.mock.calls[0]![0].viewModel),
-        new WeakRef(loaded),
-        new WeakRef(loaded.items),
-        new WeakRef(loaded.items[count - 1]!)
-      ]
-    })()
-    await act(async () =>
-      useAppStore.setState({ gitGraphFiltersByWorktree: { [workspaceId]: 'head' } })
-    )
-    await act(async () => {
-      await gitGraphHistoryForTab(workspaceId).settledResult()
-    })
-    expect(loadedCount()).toBe(1)
+    const payload = controller.view.getState().result!.items[0]!
+    const row = renderedGraph.mock.calls.find(
+      ([props]) => props.viewModel.historyItem.id === 'disposable'
+    )![0].viewModel
+    const weak = [new WeakRef(payload), new WeakRef(row)]
     getHistory.mockReset()
     renderedGraph.mockClear()
-    await expectReleased(replaced)
-    if (count === 500_000) {
-      let controller = gitGraphHistoryForTab(workspaceId)
-      const loadDisposable = async () => {
-        getHistory.mockImplementationOnce(async () => ({
-          ...result,
-          items: [{ id: 'disposable', subject: 'Disposable', message: 'Body', parentIds: [] }]
-        }))
-        await act(async () => {
-          await controller.refresh()
-        })
-        const payload = controller.view.getState().result!.items[0]!
-        const row = renderedGraph.mock.calls.find(
-          ([props]) => props.viewModel.historyItem.id === 'disposable'
-        )![0].viewModel
-        const weak = [new WeakRef(payload), new WeakRef(row)]
-        getHistory.mockReset()
-        renderedGraph.mockClear()
-        return weak
-      }
-      const empty = await loadDisposable()
-      getHistory.mockResolvedValueOnce({ ...result, items: [] })
-      await act(async () => {
-        await controller.refresh()
-      })
-      // A normal refresh commits past React's previous-render snapshot.
-      getHistory.mockRejectedValueOnce(new Error('Empty refresh failed'))
-      await act(async () => {
-        await controller.refresh()
-      })
-      expect(container.textContent).toContain('Empty refresh failed')
-      expect(loadedCount()).toBe(0)
-      getHistory.mockReset()
-      renderedGraph.mockClear()
-      await expectReleased(empty)
-      const missing = await loadDisposable()
-      getHistory.mockRejectedValueOnce(new Error('failed filter'))
-      await act(async () =>
-        useAppStore.setState({ gitGraphFiltersByWorktree: { [workspaceId]: 'all' } })
-      )
-      await act(async () => {
-        await controller.settledResult()
-      })
-      expect(loadedCount()).toBeUndefined()
-      getHistory.mockRejectedValueOnce(new Error('Missing refresh failed'))
-      await act(async () => {
-        await controller.refresh()
-      })
-      expect(container.textContent).toContain('Missing refresh failed')
-      expect(loadedCount()).toBeUndefined()
-      getHistory.mockReset()
-      renderedGraph.mockClear()
-      await expectReleased(missing)
-      const unmounted = await loadDisposable()
-      await act(async () => {
-        disposeGitGraphHistory(`${workspaceId}::git-graph`)
-        root.unmount()
-      })
-      root = createRoot(container)
-      controller = gitGraphHistoryForTab(workspaceId)
-      await expectReleased(unmounted)
-    }
+    return weak
   }
-)
+  const empty = await loadDisposable()
+  getHistory.mockResolvedValueOnce({ ...result, items: [] })
+  await act(async () => {
+    await controller.refresh()
+  })
+  // A normal refresh commits past React's previous-render snapshot.
+  getHistory.mockRejectedValueOnce(new Error('Empty refresh failed'))
+  await act(async () => {
+    await controller.refresh()
+  })
+  expect(container.textContent).toContain('Empty refresh failed')
+  expect(loadedCount()).toBe(0)
+  getHistory.mockReset()
+  renderedGraph.mockClear()
+  await expectReleased(empty)
+  const missing = await loadDisposable()
+  getHistory.mockRejectedValueOnce(new Error('failed filter'))
+  await act(async () =>
+    useAppStore.setState({ gitGraphFiltersByWorktree: { [workspaceId]: 'all' } })
+  )
+  await act(async () => {
+    await controller.settledResult()
+  })
+  expect(loadedCount()).toBeUndefined()
+  getHistory.mockRejectedValueOnce(new Error('Missing refresh failed'))
+  await act(async () => {
+    await controller.refresh()
+  })
+  expect(container.textContent).toContain('Missing refresh failed')
+  expect(loadedCount()).toBeUndefined()
+  getHistory.mockReset()
+  renderedGraph.mockClear()
+  await expectReleased(missing)
+  const unmounted = await loadDisposable()
+  await act(async () => {
+    disposeGitGraphHistory(`${workspaceId}::git-graph`)
+    root.unmount()
+  })
+  root = createRoot(container)
+  controller = gitGraphHistoryForTab(workspaceId)
+  await expectReleased(unmounted)
+})
 
 async function expectReleased(obsolete: WeakRef<object>[]) {
   if (typeof globalThis.gc !== 'function') {

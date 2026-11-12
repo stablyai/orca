@@ -53,6 +53,28 @@ export function NativeChatForegroundTasksProvider(props: {
   return <Context value={value}>{props.children}</Context>
 }
 
+export function nativeChatForegroundTasks(
+  sessionId: string,
+  session: {
+    status: string
+    backgroundTasks: { foregroundTasks?: readonly AgentSessionForegroundTask[] }
+    backgroundTask: (
+      task: AgentSessionForegroundTask
+    ) => Promise<AgentSessionBackgroundResult | null>
+  },
+  children: ReactNode
+) {
+  return (
+    <NativeChatForegroundTasksProvider
+      key={sessionId}
+      tasks={session.status === 'ready' ? session.backgroundTasks.foregroundTasks : undefined}
+      backgroundTask={session.backgroundTask}
+    >
+      {children}
+    </NativeChatForegroundTasksProvider>
+  )
+}
+
 /** Both transcript calls and task rows name the same host-captured invocation. */
 export function NativeChatForegroundTaskAction(props: { toolUseId?: string; taskId?: string }) {
   const t = useTranslate()

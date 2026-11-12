@@ -4,7 +4,7 @@ import {
   completeFakeSpawn,
   createFakeSpawnedChild
 } from '../../../../shared/__fixtures__/fake-spawned-child'
-import type { GhExecOptions } from '../../../git/command-runner/gh-exec-file'
+import type { GhExecOptions } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 
 const { spawnMock, resolverMock, signalMock, forceMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),

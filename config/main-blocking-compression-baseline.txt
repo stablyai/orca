@@ -1,0 +1,7 @@
+# Legacy synchronous compression uses per file; counts may only go DOWN.
+# Only explicit worker/utility entry files are exempt; their imports remain guarded.
+1 src/main/browser/extensions/actions/browser-extension-action-icon.ts
+1 src/main/runtime/rpc/mobile-e2ee-v2-compressed-frame.ts
+1 src/main/ssh/remote-exec/ssh-posix-command-wrapper.ts
+2 src/main/ssh/remote-exec/ssh-remote-powershell.ts
+1 src/shared/remote-runtime/e2ee/node/paired-e2ee-node-compressed-frame.ts

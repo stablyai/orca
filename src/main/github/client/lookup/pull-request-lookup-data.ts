@@ -8,7 +8,7 @@ import type {
   PRReviewDecision
 } from '../../../../shared/github/pull-request-types'
 import { gitExecFileAsync, type OwnerRepo } from '../../gh-utils'
-import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
 import { mapPRState } from '../../mappers'
 import type { MergedPRCommitMembership } from '../../merged-pr-commit-membership'
