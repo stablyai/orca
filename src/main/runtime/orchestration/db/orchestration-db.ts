@@ -80,6 +80,8 @@ class OrchestrationDbCore {
       CREATE INDEX IF NOT EXISTS idx_messages_native_direct_work
         ON messages(to_handle, type)
         WHERE read = 0 AND delivered_at IS NULL AND delivery_contract <> 'audit_only';
+      CREATE INDEX IF NOT EXISTS idx_messages_stop_reports
+        ON messages(run_id) WHERE id LIKE 'msg\\_stop\\_%' ESCAPE '\\';
     `)
     reconcileSettledWorkerDispatches(this.db)
     createCoordinatorMailRoutingTrigger.call(this as unknown as OrchestrationDb)

@@ -49,7 +49,7 @@ import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { registerDroppedPathPreparation } from './dropped-path-preparation-ipc'
 import { isPluginFramePermissionRequest } from './host-frame-permission-policy'
-import { installPluginDesktopFrameServices } from '../plugins/panels/plugin-frame-desktop-services'
+import { installPluginDesktopFrameServices } from '../plugins/panels/desktop-actions/plugin-frame-desktop-services'
 
 export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-window-updater'
 

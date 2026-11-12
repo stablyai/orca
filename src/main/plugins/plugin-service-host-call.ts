@@ -1,22 +1,25 @@
 import { capabilityKinds } from '../../shared/plugins/capabilities/plugin-capabilities'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginAuditLog } from './plugin-audit-log'
-import type { PluginHostCallPolicy } from './workers/plugin-host-call-adapter'
+import type { PluginHostCallPolicy } from './workers/host-api/plugin-host-call-adapter'
 import {
   bindPluginHostServices,
   type PluginRuntimeDelegate
-} from './workers/plugin-host-service-bindings'
-import type { PluginDesktopFrameServices } from './workers/plugin-host-method-bindings'
-import { pluginHostCallRevoked, type PluginHostCallScope } from './workers/plugin-host-call-scope'
+} from './workers/host-api/plugin-host-service-bindings'
+import type { PluginDesktopFrameServices } from './workers/host-api/plugin-host-method-bindings'
+import {
+  pluginHostCallRevoked,
+  type PluginHostCallScope
+} from './workers/host-api/plugin-host-call-scope'
 import type { PluginPanelCaller } from '../../shared/plugins/workers/plugin-panel-bridge-protocol'
-import type { PluginPanelBridgeServices } from './workers/plugin-host-panel-method-bindings'
+import type { PluginPanelBridgeServices } from './workers/host-api/plugin-host-panel-method-bindings'
 import type { PluginPanelBridge } from './panels/plugin-panel-bridge'
 import { pluginStatusBarRevision } from './status-bar/plugin-status-bar-state'
 import type {
   PluginHostCallOutcome,
   PluginSurface
 } from '../../shared/plugins/frames/plugin-protocol'
-import { executePluginHostCallRequest } from './workers/plugin-host-call-adapter'
+import { executePluginHostCallRequest } from './workers/host-api/plugin-host-call-adapter'
 import { getPluginHostRendererActions } from './view/plugin-host-renderer-actions'
 import type { PluginServiceOptions } from './plugin-service-options'
 

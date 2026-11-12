@@ -207,7 +207,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   protected readonly legacyWorkerRecoveryPersistence =
     new RuntimeLegacyWorkerTerminalRecoveryPersistence(
       () => this.store,
-      () => this.getOrchestrationDb(),
+      () => this.getExistingOrchestrationDb(),
       (worktreeId) => this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
     )
 
@@ -248,7 +248,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
     canRecoverPersistentLocalPtys: () => this.canRecoverPersistentLocalPtysFn(),
     isTerminalProvenAbsent: (candidate) => this.isLeafPtyProvenAbsent(candidate.ptyId),
     hasRequestedReleases: () =>
-      this.getOrchestrationDb().listWorkerTerminalReleaseBacklog(1).length > 0,
+      (this.getExistingOrchestrationDb()?.listWorkerTerminalReleaseBacklog(1).length ?? 0) > 0,
     reconcileRequestedReleases: () => reconcileRequestedWorkerTerminalReleases(this),
     reconcile: (options) => this.reconcileLegacyWorkerTerminals(options),
     updateRetry: (plan, deferredDispatchIds, options) =>

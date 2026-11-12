@@ -13,6 +13,12 @@ import {
   answerBrowserJavaScriptDialog,
   getBrowserJavaScriptDialog
 } from '../../guest-lifecycle/prompts/browser-javascript-dialogs'
+import {
+  cancelBrowserPasskeyRequests,
+  getBrowserPasskeyRequest
+} from '../../webauthn/browser-passkey-requests'
+import { formatBrowserPasskeyRequest } from '../../../../shared/browser-passkey-request'
+import { cancelBrowserWebAuthnAccountRequests } from '../../webauthn/browser-webauthn-account-picker'
 import { captureRemoteCliBrowserRevocation } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import {
   ExpectedPageUrlGuard,
@@ -72,10 +78,22 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     guard?.verify(this.livePageUrls(target))
     // Chrome answers an untouched prompt with its default text.
     const promptText = text ?? getBrowserJavaScriptDialog(webContentsId)?.defaultPromptText ?? ''
-    if (!answerBrowserJavaScriptDialog(webContentsId, { accept, promptText })) {
-      throw new BrowserError('browser_no_dialog', 'No JavaScript dialog is open on this page')
+    if (answerBrowserJavaScriptDialog(webContentsId, { accept, promptText })) {
+      return { accepted: accept, ...guard?.withReceipt({}) }
     }
-    return { accepted: accept, ...guard?.withReceipt({}) }
+    // The page's passkey request is the dialog Chrome would show; only cancelling it is possible here.
+    if (!accept && cancelBrowserPasskeyRequests(webContentsId)) {
+      // A security key's account chooser belongs to the request being cancelled.
+      cancelBrowserWebAuthnAccountRequests(target.browserPageId)
+      return { accepted: false, ...guard?.withReceipt({}) }
+    }
+    const passkeyRequest = getBrowserPasskeyRequest(webContentsId)
+    throw new BrowserError(
+      'browser_no_dialog',
+      passkeyRequest
+        ? `No JavaScript dialog is open on this page. ${formatBrowserPasskeyRequest(passkeyRequest.origin, `orca dialog dismiss --page ${target.browserPageId}`)}`
+        : 'No JavaScript dialog is open on this page'
+    )
   }
 
   async storageLocalGet(
