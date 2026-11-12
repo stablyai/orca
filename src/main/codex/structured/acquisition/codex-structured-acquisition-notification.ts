@@ -25,6 +25,9 @@ export function codexAcquisitionNotificationHandler(input: {
   now: () => number
 }): NonNullable<CodexAppServerConnectionHandlers['onNotification']> {
   return (method, params) => {
+    if (method === 'account/updated') {
+      input.acquisition.authRevision += 1
+    }
     const observedAt = CODEX_RECEIPT_TIMED_METHODS.has(method) ? input.now() : undefined
     const dispatchSequenceAtReceipt =
       method === 'turn/started' ? input.dispatchEchoes.latestSequence() : undefined

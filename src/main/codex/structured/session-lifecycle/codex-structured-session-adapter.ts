@@ -1,5 +1,6 @@
 import { copyCodexConversation } from '../../codex-conversation-copy'
 import { readCodexSessionAccountUsage } from './codex-session-account-usage'
+import { readCodexSessionExecutionEvidence } from './codex-session-execution-evidence'
 import * as permission from '../turns/codex-structured-turn-permission'
 import { projectCodexSessionOptions } from '../catalog/codex-structured-service-tier'
 import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
@@ -7,17 +8,15 @@ import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAcquireInput,
-  StructuredAgentSessionAdapter as SessionAdapter,
-  StructuredAgentSessionSetOptionInput
+  StructuredAgentSessionAdapter as SessionAdapter
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenInput } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { CodexJournalTranslationAdmission } from '../journal/codex-structured-journal-contracts'
 import { dispatchCodexTurn } from '../turns/codex-structured-turn-start'
-import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {
-  applyCodexStructuredSessionOption,
+  createCodexSessionOptionSetter,
   readLiveCodexSessionOptions
 } from '../catalog/codex-structured-session-options'
 import {
@@ -87,6 +86,10 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   copyConversation: NonNullable<SessionAdapter['copyConversation']> = (input) =>
     copyCodexConversation(input, this.deps.providerInvocation)
   readAccountUsage = readCodexSessionAccountUsage(this.sessions, () => this.deps.providerInvocation)
+  readExecutionEvidence = readCodexSessionExecutionEvidence(
+    this.sessions,
+    () => this.deps.now?.() ?? Date.now()
+  )
 
   supportsLocation = supportsCodexStructuredLocation
 
@@ -311,15 +314,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   answerPrompt: SessionAdapter['answerPrompt'] = (request) =>
     answerCodexStructuredPrompt({ request, sessions: this.sessions })
 
-  async setOption(
-    input: StructuredAgentSessionSetOptionInput
-  ): Promise<Readonly<Record<string, string>>> {
-    // Legacy fastMode maps to a service tier before dispatch.
-    if (!isCodexTurnOptionKey(input.key) && input.key !== 'fastMode') {
-      throw new Error(`codex app-server has no thread option named ${input.key}`)
-    }
-    return applyCodexStructuredSessionOption(this.session(input.sessionId), input.key, input.value)
-  }
+  setOption = createCodexSessionOptionSetter((sessionId) => this.session(sessionId))
 
   readOptions = (input: { sessionId: string; fence: number }) =>
     readLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)

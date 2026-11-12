@@ -32,6 +32,10 @@ export class CodexAppliedSettings {
   private ended = false
   private unsupported = false
 
+  read(): Readonly<Settings> | null {
+    return this.ended || this.pending.size > 0 ? null : Object.freeze(this.snapshot)
+  }
+
   observe(value: unknown): void {
     const row = readRecord(value)
     const previous = this.snapshot

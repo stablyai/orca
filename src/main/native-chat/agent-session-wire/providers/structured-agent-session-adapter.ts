@@ -1,4 +1,5 @@
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
+import type { AgentSessionExecutionEvidence } from '../../../../shared/agent-session/agent-session-execution-evidence'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
 import type { StructuredAgentSessionConversationCopyInput } from './structured-agent-session-conversation-copy-input'
@@ -174,6 +175,11 @@ export type StructuredAgentSessionSetOptionInput = {
 }
 
 export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
+  readExecutionEvidence?(input: {
+    sessionId: string
+    fence: number
+    signal?: AbortSignal
+  }): Promise<{ evidence: AgentSessionExecutionEvidence; isCurrent: () => boolean } | null>
   readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean

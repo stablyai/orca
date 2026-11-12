@@ -29,8 +29,7 @@ import type { AgentModelCatalogStore } from '../../../native-chat/agent-model-ca
 import type { AgentModelCatalogSessionAccess } from '../../../native-chat/agent-model-catalog/agent-model-catalog-lister'
 import type { StructuredAgentSessionProviderOpen } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { NativeChatVisualsLaunch } from '../../../native-chat/native-chat-visuals-delivery'
-import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import type { CodexSandboxPolicy } from '../launch/codex-structured-sandbox-policy'
+import type { CodexSessionPermissions } from '../turns/codex-structured-turn-permission'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 
 export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
@@ -134,6 +133,8 @@ export type CodexStructuredSessionAdapterDeps = {
 }
 
 export type CodexSession = {
+  modelProvider?: string
+  readonly authRevision?: number
   events?: StructuredAgentSessionEventSink
   account?: AgentSessionAccountKind
   /** CODEX_HOME this app-server launched under. */
@@ -149,16 +150,7 @@ export type CodexSession = {
   threadId: string
   historyMode?: 'legacy' | 'paginated'
   /** Provider facts from this acquisition, not another copy of the chat's selected mode. */
-  permissions?: {
-    acquiredMode: AgentChatPermissionChoice
-    appliedMode?: AgentChatPermissionChoice
-    acquiredSandbox?: CodexSandboxPolicy
-    launchSandboxIntact: boolean
-    cwd: string
-    visualsFolder?: string
-    preparedMode?: AgentChatPermissionChoice
-    preparedAuto?: CodexSandboxPolicy
-  }
+  permissions?: CodexSessionPermissions
   /** Wire-observed open primary turns; rewind and untargeted Stop use these before journal admission. */
   activeTurnIds?: Set<string>
   /** Interrupt-acknowledged turns cannot accept steers while awaiting turn/completed. */

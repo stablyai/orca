@@ -10,6 +10,18 @@ import {
   type CodexSessionOptionCatalog
 } from './codex-structured-model-catalog'
 import { codexSessionCapabilities } from './codex-structured-catalog-entry'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+
+export function createCodexSessionOptionSetter(
+  session: (sessionId: string) => CodexSession
+): StructuredAgentSessionAdapter['setOption'] {
+  return async (input) => {
+    if (!isCodexTurnOptionKey(input.key) && input.key !== 'fastMode') {
+      throw new Error(`codex app-server has no thread option named ${input.key}`)
+    }
+    return applyCodexStructuredSessionOption(session(input.sessionId), input.key, input.value)
+  }
+}
 
 export function restoredCodexSessionOptions(
   options: Readonly<Record<string, string>> | undefined

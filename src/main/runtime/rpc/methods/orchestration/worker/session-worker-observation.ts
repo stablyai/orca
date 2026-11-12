@@ -122,6 +122,10 @@ export async function readStructuredWorkerSettings(
     const policy = host.deps.store.getRecord(sessionId)?.advisoryPolicy
     const policyFingerprint = policy && agentSessionAdvisoryPolicyFingerprint(policy)
     const options = await host.readOptions(sessionId, { readsWithoutModel: true })
+    const execution = await host.deps.adapter?.readExecutionEvidence?.({
+      sessionId,
+      fence: before.currentFence
+    })
     if (getStructuredAgentSessionHost() !== host) {
       return { kind: 'unknown', reason: 'identity_changed' }
     }
@@ -130,6 +134,7 @@ export async function readStructuredWorkerSettings(
     const currentHold = holdStructuredWorker(identity, db)
     if (
       currentHold.kind !== 'held' ||
+      (execution && !execution.isCurrent()) ||
       !ownsDispatch() ||
       currentHold.running.sessionId !== sessionId ||
       after?.currentFence !== before.currentFence ||
@@ -168,6 +173,7 @@ export async function readStructuredWorkerSettings(
       sessionId,
       runtimeFence: before.currentFence,
       agent: before.provider,
+      ...(execution ? { execution: execution.evidence } : {}),
       ...(policy && policyFingerprint
         ? {
             advisory: {

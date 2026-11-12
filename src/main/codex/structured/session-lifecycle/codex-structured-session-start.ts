@@ -158,6 +158,12 @@ export async function openCodexStructuredSession(
       : (opened.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
   const catalogAccess = codexAcquireCatalogAccess(deps, launch, sessionId)
   const session: CodexSession = {
+    ...(typeof opened.thread?.modelProvider === 'string'
+      ? { modelProvider: opened.thread.modelProvider }
+      : {}),
+    get authRevision() {
+      return attempt.window.authRevision
+    },
     events: input.events,
     account: start.account,
     codexHome: launch.codexHome,
@@ -166,6 +172,9 @@ export async function openCodexStructuredSession(
     threadId: opened.threadId,
     historyMode: opened.historyMode,
     permissions: {
+      ...(opened.cwd ? { reportedCwd: opened.cwd } : {}),
+      ...(opened.approvalPolicy ? { approvalPolicy: opened.approvalPolicy } : {}),
+      ...(opened.approvalsReviewer ? { approvalsReviewer: opened.approvalsReviewer } : {}),
       acquiredMode: input.permissionMode ?? 'ask',
       ...(opened.sandbox ? { acquiredSandbox: opened.sandbox } : {}),
       launchSandboxIntact: true,

@@ -223,6 +223,9 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     return reader(input)
   }
 
+  readExecutionEvidence: NonNullable<Adapter['readExecutionEvidence']> = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.readExecutionEvidence?.(input) ?? Promise.resolve(null)
+
   generateText: NonNullable<Adapter['generateText']> = (input) => {
     const { adapter } = this.requireAgent(input)
     if (!adapter.generateText) {

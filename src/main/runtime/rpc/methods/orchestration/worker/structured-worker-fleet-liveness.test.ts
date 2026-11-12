@@ -57,6 +57,7 @@ function record(
 function installHost(current: AgentSessionRecord, attached: boolean) {
   const host = {
     deps: {
+      adapter: { readExecutionEvidence: async () => null },
       store: {
         getRecord: () => current,
         getConversation: () => agentSessionConversationView(current),
@@ -294,6 +295,23 @@ describe('worker-list liveness for chat-mode workers', () => {
       kind: 'unknown',
       reason: 'identity_changed'
     })
+  })
+
+  it('discards native evidence when child ownership changes during the evidence read', async () => {
+    const dispatchId = seed()
+    const current = record('codex')
+    const host = installHost(current, true)
+    host.deps.adapter.readExecutionEvidence = async () => {
+      current.lease.runtimeFence = 8
+      return null
+    }
+    expect(
+      await readStructuredWorkerSettings(
+        { ensureStructuredAgentSessionHost: async () => {} },
+        db,
+        dispatchId
+      )
+    ).toEqual({ kind: 'unknown', reason: 'identity_changed' })
   })
 
   it('discards settings when the runtime replaces the session host during the read', async () => {

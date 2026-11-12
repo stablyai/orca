@@ -18,6 +18,9 @@ import {
 } from '../launch/codex-structured-sandbox-policy'
 
 export type CodexOpenedThread = {
+  cwd?: string
+  approvalPolicy?: string
+  approvalsReviewer?: string
   threadId: string
   reportedPermissionMode?: string | null
   supersededThreadId?: string
@@ -154,7 +157,13 @@ export async function openCodexThread(
   const serviceTierKnown = Object.hasOwn(result, 'serviceTier')
   const serviceTier = nonEmptyString(result.serviceTier)
   const sandbox = readCodexSandboxPolicy(result.sandbox)
+  const cwd = nonEmptyString(result.cwd)
+  const approvalPolicy = nonEmptyString(result.approvalPolicy ?? result.approval_policy)
+  const approvalsReviewer = nonEmptyString(result.approvalsReviewer ?? result.approvals_reviewer)
   return {
+    ...(cwd ? { cwd } : {}),
+    ...(approvalPolicy ? { approvalPolicy } : {}),
+    ...(approvalsReviewer ? { approvalsReviewer } : {}),
     threadId,
     reportedPermissionMode: reportedCodexPermissionMode(result),
     ...(supersededThreadId === undefined ? {} : { supersededThreadId }),
