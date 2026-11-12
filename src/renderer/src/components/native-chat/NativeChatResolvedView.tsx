@@ -1,4 +1,5 @@
 import { useNativeChatDeliveryProjection } from './session/terminal/delivery/use-native-chat-delivery-projection'
+import { useCloudChatHoldHint } from '../agent-sign-in-strip/use-cloud-chat-hold-hint'
 import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { TerminalChatCrewPanel } from '../orchestration-crew/TerminalChatCrewPanel'
 import { cn } from '@/lib/utils'
@@ -111,6 +112,7 @@ export function NativeChatResolvedView({
   const sendWorkingEpoch =
     (session.hookWorking ?? liveWorking) || session.hookAwaitingInput ? turnEpoch : undefined
   const canSend = useNativeChatCanSend(targetPtyId)
+  const cloudHoldHint = useCloudChatHoldHint(paneKey, terminalTabId)
   // Share verified composer delivery with prompt answers and ESC-based Stop.
   const send = useNativeChatInteractiveSend(paneKey, targetPtyId, agent)
   const { messageListRef, revealLatest } = useNativeChatRevealLatest()
@@ -387,9 +389,11 @@ export function NativeChatResolvedView({
           inputOwnedByCard={shownPromptCard !== null}
           terminalTabId={terminalTabId}
           paneKey={paneKey}
-          targetPtyId={targetPtyId}
+          // A held cloud launch has no agent to send to: no target, and the hint points at its strip.
+          targetPtyId={cloudHoldHint ? null : targetPtyId}
           agent={agent}
           canSend={canSend}
+          unavailableHint={cloudHoldHint}
           isWorking={isWorking}
           onStop={stopAgent}
           onOptimisticSend={onOptimisticSend}
