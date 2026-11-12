@@ -80,6 +80,63 @@ it('limits a folder workspace to its own rules and skips I/O without the adverti
   expect(fs.realpath).not.toHaveBeenCalled()
 })
 
+it.each([
+  { name: 'inline', global: 'GLOBAL_RULE', internal: 'INTERNAL_RULE', filler: 'FILLER' },
+  {
+    name: 'saturated',
+    global: 'GLOBAL_RULE\n'.repeat(3_000),
+    internal: 'INTERNAL_RULE\n'.repeat(3_000),
+    filler: 'FILLER\n'.repeat(4_000)
+  }
+])('excludes outside workspace links before reads or pointers when $name', async (contents) => {
+  const { root, home, repo, read } = await workspace()
+  const child = join(repo, 'nested')
+  await fs.mkdir(child)
+  await fs.mkdir(join(repo, '.git'))
+  const global = join(root, 'global-instructions')
+  const outside = join(root, 'outside-instructions')
+  const inside = join(repo, 'instructions')
+  await fs.writeFile(global, contents.global)
+  await fs.symlink(global, join(home, '.gemini', 'GEMINI.md'))
+  await fs.writeFile(outside, 'OUTSIDE_PRIVATE')
+  await fs.writeFile(inside, contents.internal)
+  await fs.symlink(inside, join(repo, 'GEMINI.md'))
+  await fs.writeFile(join(repo, 'AGENTS.md'), contents.filler)
+  await fs.writeFile(join(child, 'GEMINI.md'), contents.filler)
+  await fs.symlink(outside, join(child, 'AGENTS.md'))
+  const append = await read(child)
+  expect(append).toContain('GLOBAL_RULE')
+  expect(append).toContain('INTERNAL_RULE')
+  expect(append).not.toContain('OUTSIDE_PRIVATE')
+  expect(append).not.toContain(outside)
+})
+
+it('uses opened-file facts to keep complete lines when a rule grows during activation', async () => {
+  const { repo, read } = await workspace()
+  const file = join(repo, 'GEMINI.md')
+  await fs.writeFile(file, 'BEFORE\nX')
+  const original = vi.mocked(fs.open).getMockImplementation()!
+  vi.mocked(fs.open).mockImplementationOnce(async (...args) => {
+    await fs.writeFile(file, `BEFORE\n${'é'.repeat(20_000)}`)
+    return original(...args)
+  })
+  const append = await read()
+  expect(append).toContain('BEFORE')
+  expect(append).toContain(`Additional instructions: ${await fs.realpath(file)}`)
+  expect(append).not.toContain('\uFFFD')
+})
+
+it('preserves global rules and omits workspace sources when its canonical root is unavailable', async () => {
+  const { repo, home, read } = await workspace()
+  await fs.writeFile(join(home, '.gemini', 'GEMINI.md'), 'GLOBAL_RULE')
+  await fs.writeFile(join(repo, 'AGENTS.md'), 'WORKSPACE_RULE')
+  vi.mocked(fs.realpath).mockRejectedValueOnce(new Error('Root unavailable'))
+  const append = await read()
+  expect(append).toContain('GLOBAL_RULE')
+  expect(append).not.toContain('WORKSPACE_RULE')
+  expect(append).not.toContain(repo)
+})
+
 it('keeps complete lines and file pointers for large rules, omits binary files, and honors cancellation', async () => {
   const { repo, home, read } = await workspace()
   await fs.writeFile(join(repo, 'GEMINI.md'), `COMPLETE\n${'é'.repeat(20_000)}`)
@@ -148,15 +205,15 @@ it('falls back to cwd rules beyond the ancestor ceiling', async () => {
 })
 
 it.each([
-  [10, 'lines'],
-  [100, 'lines'],
-  [10, 'unwrapped'],
-  [100, 'unwrapped'],
-  [10, 'binary'],
-  [100, 'binary']
+  [10, 'lines', 'Additional instructions:'],
+  [100, 'lines', 'Additional instructions are available'],
+  [10, 'unwrapped', 'Additional instructions:'],
+  [100, 'unwrapped', 'Additional instructions are available'],
+  [10, 'binary', 'Additional instructions:'],
+  [100, 'binary', 'Additional instructions are available']
 ] as const)(
   'bounds activation I/O at %i ancestor directories with %s rules',
-  async (count, shape) => {
+  async (count, shape, expectedPointer) => {
     const { repo, read } = await workspace()
     await fs.mkdir(join(repo, '.git'))
     let cwd = repo
@@ -194,17 +251,11 @@ it.each([
         0
       )
     }
-    expect(operations).toBeLessThanOrEqual(count + 6 * candidates)
+    expect(operations).toBeLessThanOrEqual(count + 1 + 6 * candidates)
     expect(reads.every(({ buffer }) => buffer.length <= 24_000)).toBe(true)
     expect(reads.reduce((sum, { buffer }) => sum + buffer.length, 0)).toBeLessThanOrEqual(80_000)
     expect(Buffer.byteLength(append)).toBeLessThanOrEqual(88_500)
-    if (shape === 'lines') {
-      expect(append).toContain('RULE')
-    }
-    expect(append).toContain('Additional instructions:')
+    expect(append).toContain(expectedPointer)
     expect(append).not.toContain('UNRELATED')
-    if (count === 100) {
-      expect(append).toContain('Additional instructions are available')
-    }
   }
 )

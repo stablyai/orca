@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { readNodeFileHandleWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
+import { isDescendantOrEqualExact } from '../ipc/filesystem/access/filesystem-path-containment'
 import { antigravityUserHome } from './antigravity-chat-user-skills'
 
 const MAX_DIRECTORIES = 128
@@ -47,9 +48,19 @@ export const antigravityChatRulesMeta: NonNullable<AcpLaunchSpec['resolveSession
     return undefined
   }
   const directories = await workspaceRuleDirectories(cwd, signal)
+  signal?.throwIfAborted()
+  const root = await realpath(directories[0] ?? cwd).catch(() => {
+    signal?.throwIfAborted()
+    return null
+  })
+  signal?.throwIfAborted()
   const files = [
-    join(antigravityUserHome(env), '.gemini', 'GEMINI.md'),
-    ...directories.flatMap((directory) => RULE_NAMES.map((name) => join(directory, name)))
+    { file: join(antigravityUserHome(env), '.gemini', 'GEMINI.md'), root: null },
+    ...(root
+      ? directories.flatMap((directory) =>
+          RULE_NAMES.map((name) => ({ file: join(directory, name), root }))
+        )
+      : [])
   ]
   const seen = new Set<string>()
   const sections: string[] = []
@@ -68,11 +79,14 @@ export const antigravityChatRulesMeta: NonNullable<AcpLaunchSpec['resolveSession
       remaining = true
     }
   }
-  for (const file of files) {
+  for (const source of files) {
     signal?.throwIfAborted()
     try {
-      const path = await realpath(file)
+      const path = await realpath(source.file)
       signal?.throwIfAborted()
+      if (source.root !== null && !isDescendantOrEqualExact(path, source.root)) {
+        continue
+      }
       const identity = process.platform === 'win32' ? path.toLowerCase() : path
       if (seen.has(identity)) {
         continue
@@ -96,7 +110,7 @@ export const antigravityChatRulesMeta: NonNullable<AcpLaunchSpec['resolveSession
       const flags = constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NONBLOCK)
       readBytes += length
       const handle = await open(path, flags)
-      const { buffer } = await readNodeFileHandleWithinLimit(handle, length, {
+      const { buffer, stats } = await readNodeFileHandleWithinLimit(handle, length, {
         regularFileOnly: true,
         signal,
         window: { offset: 0, length }
@@ -105,7 +119,7 @@ export const antigravityChatRulesMeta: NonNullable<AcpLaunchSpec['resolveSession
         continue
       }
       // A complete line also avoids splitting a UTF-8 sequence at the read boundary.
-      const truncated = info.size > length
+      const truncated = stats.size > length
       const complete = truncated ? buffer.subarray(0, Math.max(0, buffer.lastIndexOf(10))) : buffer
       const content = new TextDecoder('utf-8', { fatal: true }).decode(complete).trim()
       if (content) {
