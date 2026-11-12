@@ -58,13 +58,14 @@ export function useMobileClaudeSessionStatus(args: {
     }
     let cancelled = false
     let methodMissing = false
-    // Polls and refreshes overlap; only the latest request may set the status.
+    // Polls and refreshes overlap; an answer is dropped only once a newer one is on screen.
     let lastRequest = 0
+    let shownRequest = 0
     const params = { agent, sessionId, ...(transcriptPath ? { transcriptPath } : {}) }
     const askHost = async (): Promise<void> => {
       const request = ++lastRequest
       const response = await claudeSessionStatusRead.request(client, params)
-      if (cancelled || request !== lastRequest) {
+      if (cancelled || request < shownRequest) {
         return
       }
       if (!response.ok) {
@@ -73,6 +74,7 @@ export function useMobileClaudeSessionStatus(args: {
       }
       const reply = claudeSessionStatusRead.interpret(response)
       if (reply.accepted) {
+        shownRequest = request
         setAnswer({ client, chatKey, status: reply.value.status })
       }
     }
