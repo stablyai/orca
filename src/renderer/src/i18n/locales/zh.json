@@ -2317,7 +2317,6 @@
         "hostConnectionFailed": "连接失败",
         "defaultBranchUpdateFailed": "无法更新项目的默认分支，请重试",
         "setLocation": "设置项目位置",
-        "setLocationOnHost": "设置项目在 {{host}} 上的位置",
         "setLocationTooltip": "选择文件夹，或将此项目克隆到 {{host}}",
         "connect": "连接",
         "reconnect": "重新连接",
@@ -3404,7 +3403,6 @@
             "dabd226118": "关闭",
             "34dd5ee38b": "重试",
             "532aea14ce": "取消",
-            "767951265d": "创建工作树时出现问题",
             "cancelProvisioning": "取消"
           }
         }
@@ -18046,7 +18044,6 @@
           "signout": {
             "confirm": {
               "title": "退出 Orca？",
-              "description": "重新登录前，产物和 Orca Relay 将不可用，本地项目和工作树不会受到影响",
               "cancel": "取消",
               "action": "退出登录"
             }
@@ -20470,7 +20467,6 @@
       "startInTerminal": "在终端中启动 {{value0}}"
     },
     "newWorkspace": {
-      "agentOptional": "代理 [可选]",
       "createDescription": "选择项目和工作区名称，如果想启动代理，请选择一个",
       "directSetup": {
         "run": "Run setup",

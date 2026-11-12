@@ -1485,7 +1485,6 @@
       "updateDesktop": "请更新 {{desktop}} 上的 Orca，以使用自动化。"
     },
     "emptyState": {
-      "connectedDescription": "桌面将显示在这里。所有数据均采用端到端加密",
       "connectedTitle": "已连接",
       "description": "与电脑上的 Orca 配对，即可在手机上查看智能体、进入任意终端并推进工作",
       "openDesktopDescription": "前往“设置” → “移动端”，生成配对二维码",

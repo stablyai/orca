@@ -1472,13 +1472,13 @@
         "symlink": "Symbolic links cannot be attached.",
         "unsupported": "Unsupported file type."
       },
-      "orcaCloudSession": {
-        "sandboxRestartsInMinutes_one": "Sandbox for {{name}} restarts in {{count}} minute",
-        "sandboxRestartsInMinutes_other": "Sandbox for {{name}} restarts in {{count}} minutes"
-      },
       "emulator": {
         "androidSdkNotFound": "Android SDK not found. Install Android Studio and set ANDROID_HOME.",
         "xcodeSimulatorToolsUnavailable": "Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`."
+      },
+      "orcaCloudSession": {
+        "sandboxRestartsInMinutes_one": "Sandbox for {{name}} restarts in {{count}} minute",
+        "sandboxRestartsInMinutes_other": "Sandbox for {{name}} restarts in {{count}} minutes"
       },
       "rateLimits": {
         "errors": {
