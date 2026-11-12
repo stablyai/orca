@@ -256,7 +256,10 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
           id={bodyId}
           className={cn(
             'max-w-sm text-sm text-pretty',
-            phase.kind === 'open-failed' ? 'text-destructive' : 'text-muted-foreground'
+            // Unavailable is not the buyer's error: the title and icon carry it, the body stays muted.
+            phase.kind === 'open-failed' && phase.result.status !== 'plan-unavailable'
+              ? 'text-destructive'
+              : 'text-muted-foreground'
           )}
         >
           {body}

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { translate as t } from '@/i18n/i18n'
 import { planFeatureLine, planFeatureLines } from './plan-feature-copy'
-
-// The default-value translator the renderer falls back to (interpolates {{name}}).
-const t = ((_key: string, fallback: string, values?: Record<string, unknown>) =>
-  fallback.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(values?.[name] ?? ''))) as never
 
 const context = { overage: { centsPerHour: 100, defaultSpendCapCents: 2500 }, currency: 'usd' }
 
