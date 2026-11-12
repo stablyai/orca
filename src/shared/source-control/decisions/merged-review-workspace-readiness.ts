@@ -5,7 +5,7 @@ export type MergedReviewWorkspaceReadiness =
   | { kind: 'safe-to-delete' }
   | { kind: 'uncommitted-changes'; count: number }
   /** Merged, but this checkout's HEAD cannot be matched to the review, so its commits may be elsewhere. */
-  | { kind: 'head-not-in-review' }
+  | { kind: 'head-unverified' }
 
 /**
  * Whether a workspace whose review merged still holds work. A squash or rebase merge copies commits onto
@@ -29,5 +29,5 @@ export function resolveMergedReviewWorkspaceReadiness(input: {
   )
   return head.length > 0 && reviewHeads.includes(head)
     ? { kind: 'safe-to-delete' }
-    : { kind: 'head-not-in-review' }
+    : { kind: 'head-unverified' }
 }

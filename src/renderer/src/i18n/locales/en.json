@@ -14789,7 +14789,7 @@
             "pushesToForkTarget": "Pushes to fork {{target}}",
             "mergedReviewUncommitted_one": "{{review}} is merged, but this workspace has {{count}} uncommitted change that is not in it.",
             "mergedReviewUncommitted_other": "{{review}} is merged, but this workspace has {{count}} uncommitted changes that are not in it.",
-            "mergedReviewHeadMoved": "{{review}} is merged, but this branch has commits that are not in it.",
+            "mergedReviewHeadMoved": "{{review}} is merged, but Orca could not confirm that it includes this branch’s current commits.",
             "mergedReviewNothingLeft": "{{review}} is merged and includes this branch’s committed changes.",
             "mergedReviewSafeToDelete": "{{review}} is merged and includes this branch’s committed changes. Ignored files may still be lost when deleting this workspace.",
             "abortRebaseConfirmTitle": "Abort rebase?",

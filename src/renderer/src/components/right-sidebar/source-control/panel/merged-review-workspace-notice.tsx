@@ -57,10 +57,10 @@ export function SourceControlMergedReviewNotice({
           '{{review}} is merged, but this workspace has {{count}} uncommitted change that is not in it.'
       }
     )
-  } else if (readiness.kind === 'head-not-in-review') {
+  } else if (readiness.kind === 'head-unverified') {
     message = t(
       'auto.components.right.sidebar.SourceControl.mergedReviewHeadMoved',
-      '{{review}} is merged, but this branch has commits that are not in it.',
+      '{{review}} is merged, but Orca could not confirm that it includes this branch’s current commits.',
       { review: label }
     )
   } else if (worktree.isMainWorktree) {

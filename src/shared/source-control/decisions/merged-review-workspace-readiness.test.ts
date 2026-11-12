@@ -34,19 +34,31 @@ describe('resolveMergedReviewWorkspaceReadiness', () => {
     ).toEqual({ kind: 'uncommitted-changes', count: 3 })
   })
 
-  it('does not claim safety when HEAD moved past the review or is unknown', () => {
-    for (const headOid of ['def456', null]) {
-      expect(
-        resolveMergedReviewWorkspaceReadiness({ review: merged, headOid, uncommittedCount: 0 })
-      ).toEqual({ kind: 'head-not-in-review' })
-    }
+  it('leaves a different checkout head unverified without assuming its commits are absent', () => {
+    expect(
+      resolveMergedReviewWorkspaceReadiness({
+        review: merged,
+        headOid: 'def456',
+        uncommittedCount: 0
+      })
+    ).toEqual({ kind: 'head-unverified' })
+  })
+
+  it('leaves missing checkout heads and missing review proof unverified', () => {
+    expect(
+      resolveMergedReviewWorkspaceReadiness({
+        review: merged,
+        headOid: null,
+        uncommittedCount: 0
+      })
+    ).toEqual({ kind: 'head-unverified' })
     expect(
       resolveMergedReviewWorkspaceReadiness({
         review: { state: 'merged' },
         headOid: 'abc123',
         uncommittedCount: 0
       })
-    ).toEqual({ kind: 'head-not-in-review' })
+    ).toEqual({ kind: 'head-unverified' })
   })
 
   it('says nothing for reviews that are not merged', () => {
