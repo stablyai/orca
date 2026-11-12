@@ -5,6 +5,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName PresentationFramework
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class OrcaFixtureForeground {
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
+    public static string Title() {
+        var text = new StringBuilder(256);
+        GetWindowText(GetForegroundWindow(), text, text.Capacity);
+        return text.ToString();
+    }
+}
+"@
 
 # Why: ShowActivated=False opens the window behind the foreground one, so any activation by an action is observable.
 [xml]$xaml = @"
@@ -40,7 +54,12 @@ $branch = $window.FindName("Branch")
 $level = $window.FindName("Level")
 for ($i = 0; $i -lt 200; $i++) { [void]$items.Items.Add("Semantic item $i") }
 
-$state = [ordered]@{ ready = $false; activations = 0; active = $false; listOffset = 0.0; listViewport = 0.0; branchExpanded = $false; level = 10.0 }
+$state = [ordered]@{ ready = $false; activations = 0; active = $false; listOffset = 0.0; listViewport = 0.0; branchExpanded = $false; level = 10.0; events = @() }
+# Why: a failed activation check prints this log, which says what ran just before the window was activated.
+$clock = [Diagnostics.Stopwatch]::StartNew()
+function Add-FixtureEvent([string]$Name) {
+    $state.events = @($state.events + "$($clock.ElapsedMilliseconds) $Name fg=$([OrcaFixtureForeground]::Title())" | Select-Object -Last 40)
+}
 function Save-FixtureState {
     # Why: an exception in a WPF event handler would end the fixture; a reader holding the file only delays one write.
     try {
@@ -53,19 +72,21 @@ function Save-FixtureState {
 $window.Add_Activated({
     $state.activations++
     $state.active = $true
+    Add-FixtureEvent "activated"
     Save-FixtureState
     [void]$window.Dispatcher.BeginInvoke([Action]{ [void]$holder.Activate() })
 })
-$window.Add_Deactivated({ $state.active = $false; Save-FixtureState })
+$window.Add_Deactivated({ $state.active = $false; Add-FixtureEvent "deactivated"; Save-FixtureState })
 $items.AddHandler([Windows.Controls.ScrollViewer]::ScrollChangedEvent, [Windows.Controls.ScrollChangedEventHandler]{
     param($source, $change)
     $state.listOffset = $change.VerticalOffset
     $state.listViewport = $change.ViewportHeight
+    Add-FixtureEvent "scrolled $($change.VerticalOffset)"
     Save-FixtureState
 })
-$branch.Add_Expanded({ $state.branchExpanded = $true; Save-FixtureState })
-$branch.Add_Collapsed({ $state.branchExpanded = $false; Save-FixtureState })
-$level.Add_ValueChanged({ $state.level = $level.Value; Save-FixtureState })
+$branch.Add_Expanded({ $state.branchExpanded = $true; Add-FixtureEvent "expanded"; Save-FixtureState })
+$branch.Add_Collapsed({ $state.branchExpanded = $false; Add-FixtureEvent "collapsed"; Save-FixtureState })
+$level.Add_ValueChanged({ $state.level = $level.Value; Add-FixtureEvent "level $($level.Value)"; Save-FixtureState })
 $window.Add_ContentRendered({
     # Why: an owned holder never becomes the process's MainWindowHandle, so pid targeting still finds the controls window.
     $holder.Owner = $window

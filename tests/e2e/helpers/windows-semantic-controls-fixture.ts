@@ -16,7 +16,8 @@ const WindowsSemanticFixtureStateSchema = z.object({
   listOffset: z.number(),
   listViewport: z.number(),
   branchExpanded: z.boolean(),
-  level: z.number()
+  level: z.number(),
+  events: z.array(z.string())
 })
 
 export type WindowsSemanticFixtureState = z.infer<typeof WindowsSemanticFixtureStateSchema>

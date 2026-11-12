@@ -52,7 +52,7 @@ async function runBackgroundAction(
   ).result
   expect(result.action).toMatchObject({ path: 'accessibility', delivery: 'background' })
   const after = await waitForState(effect, label)
-  expect(after.activations).toBe(before.activations)
+  expect(after.activations, after.events.join('\n')).toBe(before.activations)
   return result
 }
 
