@@ -35,7 +35,7 @@ import {
 } from '../agent-hooks/observations/restored-status-dead-terminal-sweep'
 import { startFirstWindowStartupServices } from './first-window-startup-services'
 import { logStartupMilestone } from './startup-diagnostics'
-import type { WindowsDesktopStartupServices } from './windows-desktop-shell-path-startup'
+import type { WindowsDesktopStartupServices } from './shell-environment/windows-desktop-shell-path-startup'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import { mainProcessState as state } from './main-process-state'
 import { shortPluginBranchName } from '../../shared/plugins/events/plugin-events'

@@ -6,7 +6,7 @@ import {
   migrateMobilePairingDataToCanonicalUserDataPath
 } from '../persistence/loading-store/user-data-path'
 import { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
-import { resolveServePinnedBindHost } from './serve-pinned-bind-host'
+import { resolveServePinnedBindHost } from './serve-launch/serve-pinned-bind-host'
 import { isOrcadSidecarLaunch } from '../window/foreground-activation-policy'
 import { registerMobileHandlers } from '../ipc/mobile'
 import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environments/runtime-environment-mobile-relay-hosts'
@@ -18,7 +18,8 @@ import { OffscreenBrowserBackend } from '../browser/backends/offscreen-browser-b
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { getDesktopRelayStatus } from './main-process-relay-status'
 import { startDesktopRelayService } from './main-process-relay-startup'
-import { getServeOptions, getBundledWebClientRoot, printServeReady } from './main-process-serve'
+import { getServeOptions } from './serve-launch/serve-options'
+import { getBundledWebClientRoot, printServeReady } from './main-process-serve'
 import {
   bindTerminalRuntimeStartupServices,
   handleCodexHomePtySpawned,
@@ -27,17 +28,17 @@ import {
 } from './main-process-pty-startup'
 import { prepareCodexRuntimeHomeForLaunch } from './codex-launch-preparation'
 import { prepareCodexSessionResumeForLaunch } from './codex-session-resume-launch'
-import { startWindowsDesktopBeforeShellPathReady } from './windows-desktop-shell-path-startup'
-import { repairKnownPoisonedInstallDirBeforeWindow } from './windows-install-dir-acl-recovery'
-import { installServeQuitHandling } from './serve-quit-handling'
+import { startWindowsDesktopBeforeShellPathReady } from './shell-environment/windows-desktop-shell-path-startup'
+import { repairKnownPoisonedInstallDirBeforeWindow } from './windows-install-permissions/windows-install-dir-acl-recovery'
+import { installServeQuitHandling } from './serve-launch/serve-quit-handling'
 import { installCloudSessionShutdownFlush } from './cloud-session-shutdown-flush'
-import { registerHeadlessServeSshHandlers } from './headless-serve-ssh-registration'
-import { settleServeDesktopActivation } from './serve-desktop-activation'
+import { registerHeadlessServeSshHandlers } from './serve-launch/headless-serve-ssh-registration'
+import { settleServeDesktopActivation } from './serve-launch/serve-desktop-activation'
 import {
   recordRuntimeRpcStartFailure,
   showRuntimeRpcStartupFailureDialog
 } from '../runtime/rpc/server/runtime-rpc-startup-failure'
-import { registerCliForHeadlessServe } from './serve-cli-registration'
+import { registerCliForHeadlessServe } from './serve-launch/serve-cli-registration'
 import { startAppImageCopyPreExtraction } from '../cli/appimage/appimage-copy-pre-extraction'
 import { scheduleAllPendingHistoryTreeRemovals } from '../pty/history/terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'

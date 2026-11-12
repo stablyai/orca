@@ -9,7 +9,7 @@ import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs
 import { getMainE2EConfig } from './testing/e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
-import { checkServeUserDataPath } from './serve-user-data-path-guard'
+import { checkServeUserDataPath } from './serve-launch/serve-user-data-path-guard'
 import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 import { isLinuxWaylandSession } from '../../shared/linux-wayland-session'
 import {

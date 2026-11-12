@@ -16,7 +16,7 @@ import { BrowserClientPageCommandError } from '../browser/client-pages/execution
 import { startPreGoneCrashSampling } from '../crash-reporting/process-exits/process-gone-diagnostics'
 import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-realtime-scheduling-guard'
 import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
-import { handleGpuChildCrash } from './gpu-lifecycle'
+import { handleGpuChildCrash } from './gpu-recovery/gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
 import { hydrateAgentCliShellPath } from '../agent-hooks/installation/local-agent-cli-presence'

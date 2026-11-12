@@ -4,9 +4,9 @@ import { getRelocatedDaemonHost } from '../daemon/executable-host/windows/daemon
 import { app, ipcMain, powerMonitor, session } from 'electron'
 import os from 'node:os'
 import { join } from 'node:path'
-import { maybeRedirectCliLaunch } from './cli-launch-redirect'
+import { maybeRedirectCliLaunch } from './cli-launch/cli-launch-redirect'
 import { runProfileStateRecoveryPreflight } from './profile-state-recovery-preflight'
-import { argvRequestsServeMode, normalizeServeModeArgv } from './serve-mode-argv'
+import { argvRequestsServeMode, normalizeServeModeArgv } from './serve-launch/serve-mode-argv'
 import {
   configureDevUserDataPath,
   configureElectronNetworkCompatibility,
@@ -24,7 +24,7 @@ import {
   installUncaughtPipeErrorGuard,
   installUnhandledRejectionLogging
 } from './main-process-error-guards'
-import { hydrateShellPath, mergePathSegments } from './hydrate-shell-path'
+import { hydrateShellPath, mergePathSegments } from './shell-environment/hydrate-shell-path'
 import { configureRemoteServerUpdater } from '../runtime/hosts/management/remote-server-updater'
 import {
   getRemoteServerUpdaterSnapshot,
@@ -47,7 +47,7 @@ import {
 import { setSpawnObserver } from '@orca/process-host/spawn-observer'
 import { settledDiffCache } from '../git/source-control/git-read-cache-invalidation'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
-import { createServeDesktopActivationGate } from './serve-desktop-activation'
+import { createServeDesktopActivationGate } from './serve-launch/serve-desktop-activation'
 import {
   shouldBypassSingleInstanceLock,
   shouldSkipSingleInstanceLock,
@@ -91,12 +91,12 @@ import {
   ensureVirtualDisplayForHeadlessServe,
   hasUsableLinuxDisplay,
   missingLinuxDisplayMessage
-} from './ensure-virtual-display'
+} from './linux-display/ensure-virtual-display'
 import {
   createGpuCrashDiagnosticsRecorder,
   maybeApplyGpuFallbackForThisLaunch,
   registerGpuLifecycleHandlers
-} from './gpu-lifecycle'
+} from './gpu-recovery/gpu-lifecycle'
 import { mainProcessState as state } from './main-process-state'
 import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
 import { initializeBrowserProcessUserAgent } from '../browser/identity/browser-process-user-agent'

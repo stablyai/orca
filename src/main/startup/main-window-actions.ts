@@ -31,7 +31,7 @@ import { loadMainWindow } from '../window/createMainWindow'
 import {
   describeInstallDirAclPoison,
   isBlockingInstallDirAclRepairInFlight
-} from './windows-install-dir-acl-recovery'
+} from './windows-install-permissions/windows-install-dir-acl-recovery'
 import {
   presentRendererRecoveryPrompt,
   type RendererRecoveryPromptFailure
