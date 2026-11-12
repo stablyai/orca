@@ -19,6 +19,7 @@ import {
 } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import { createLocalHookRootEvidenceReader } from '../shared/agent-hook-listener/presence/hook-process-root-evidence-reader'
+import { readPosixPaneAgentCommandLine } from '../shared/agent-status/process/posix-pane-agent-command-line'
 import { createRelayPaneRootResolver } from './relay-pane-root'
 import {
   sanitizeWslHookInstanceKey,
@@ -59,6 +60,9 @@ async function main(): Promise<void> {
   // Keep endpoint-file identity across restarts so surviving agents can re-coordinate from its rewrite.
   const instanceKey =
     sanitizeWslHookInstanceKey(process.env[WSL_HOOK_RELAY_INSTANCE_ENV]) ?? `port${windowsPort}`
+  const resolvePaneRoot = createRelayPaneRootResolver((paneKey) =>
+    dispatcher.requestPrimary(AGENT_HOOK_PANE_ROOT_METHOD, { paneKey }, { timeoutMs: 400 })
+  )
   const hookServer = new RelayAgentHookServer({
     endpointDir: wslHookRelayEndpointDir(homedir(), instanceKey),
     token,
@@ -67,11 +71,14 @@ async function main(): Promise<void> {
       dispatcher.requestPrimary(CLAUDE_AGENT_VIEW_RELAY_METHOD, { body }, { timeoutMs: 1000 }),
     forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope),
     // The desktop names each pane's root from its PTY inventory; only this guest reads its processes.
-    readHookRootEvidence: createLocalHookRootEvidenceReader(
-      createRelayPaneRootResolver((paneKey) =>
-        dispatcher.requestPrimary(AGENT_HOOK_PANE_ROOT_METHOD, { paneKey }, { timeoutMs: 400 })
-      )
-    )
+    readHookRootEvidence: createLocalHookRootEvidenceReader(resolvePaneRoot),
+    readPaneAgentCommandLine: async (paneKey, agent, sender) => {
+      const root = await resolvePaneRoot(paneKey, undefined)
+      if (!root || root === 'legacy') {
+        return null
+      }
+      return readPosixPaneAgentCommandLine(root.pid, agent, sender)
+    }
   })
   dispatcher.onRequest(AGENT_HOOK_INFER_INTERRUPT_METHOD, async (params) => ({
     applied: hookServer.inferInterrupt(params)

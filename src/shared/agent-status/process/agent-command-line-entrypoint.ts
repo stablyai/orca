@@ -82,10 +82,10 @@ function tokenLooksExecutable(token: string, index: number, firstNormalized: str
   return token.includes('/') || token.includes('\\') || PROCESS_EXTENSION_RE.test(token)
 }
 
-export function findInterpreterEntrypointToken(
-  tokens: string[],
+export function findInterpreterEntrypoint(
+  tokens: readonly string[],
   firstNormalized: string
-): string | null {
+): { entrypointToken: string; argvStart: number } | null {
   if (!isInterpreterProcessName(firstNormalized)) {
     return null
   }
@@ -95,7 +95,8 @@ export function findInterpreterEntrypointToken(
       continue
     }
     if (PYTHON_PROCESS_RE.test(firstNormalized) && token === '-m') {
-      return tokens[index + 1] ?? null
+      const moduleToken = tokens[index + 1]
+      return moduleToken ? { entrypointToken: moduleToken, argvStart: index + 2 } : null
     }
     if (token.startsWith('-')) {
       const name = token.split('=', 1)[0] ?? ''
@@ -108,10 +109,17 @@ export function findInterpreterEntrypointToken(
       continue
     }
     if (tokenLooksExecutable(token, index, firstNormalized)) {
-      return token
+      return { entrypointToken: token, argvStart: index + 1 }
     }
   }
   return null
+}
+
+export function findInterpreterEntrypointToken(
+  tokens: string[],
+  firstNormalized: string
+): string | null {
+  return findInterpreterEntrypoint(tokens, firstNormalized)?.entrypointToken ?? null
 }
 
 export function comparablePath(token: string): string {

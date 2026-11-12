@@ -26,6 +26,7 @@ import {
 import type { JcodeUserPromptEvidence } from '../jcode-session-files'
 import type { JcodeHelperPermissionWait } from './providers/jcode-helper-permission-wait'
 import type { HookRootAttempt } from './presence/hook-process-root-evidence'
+import type { PaneCliBypassObservation } from './permissions/pane-permission-observation'
 import {
   moveOpenCodeSessionBindings,
   unbindOpenCodeSessionsOfPane,
@@ -97,6 +98,8 @@ export type HookListenerState = {
   lastLaunchTokenByPaneKey: Map<string, string>
   /** Hermes turn per pane, so tool hooks from its post-turn background review can be ignored. */
   hermesTurnByPaneKey: Map<string, HermesPaneTurn>
+  /** Live CLI-argv bypass observation per pane for providers whose hooks omit permission_mode. */
+  paneCliBypassObservationByPaneKey: Map<string, PaneCliBypassObservation>
 }
 
 export type HermesPaneTurn = {
@@ -172,7 +175,8 @@ export function createHookListenerState(
     musePaneStateByPaneKey: new Map(),
     opencodeSessionPaneBySessionId: new Map(),
     lastLaunchTokenByPaneKey: new Map(),
-    hermesTurnByPaneKey: new Map()
+    hermesTurnByPaneKey: new Map(),
+    paneCliBypassObservationByPaneKey: new Map()
   }
   legacyStatusAdapterByState.set(state, adapter)
   return state
@@ -256,6 +260,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
   state.hermesTurnByPaneKey.delete(paneKey)
+  deletePaneScopedCacheEntry(state.paneCliBypassObservationByPaneKey, paneKey)
   // A disposed pane's unfinished evidence and exit intent die with it.
   deletePaneScopedCacheEntry(state.hookRootAttempts, paneKey)
 }
@@ -298,6 +303,7 @@ export function movePaneCacheState(
   moveOpenCodeSessionBindings(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastLaunchTokenByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.hermesTurnByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.paneCliBypassObservationByPaneKey, fromPaneKey, toPaneKey)
 }
 
 export function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
@@ -345,5 +351,6 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
   state.hermesTurnByPaneKey.clear()
+  state.paneCliBypassObservationByPaneKey.clear()
   state.hookRootAttempts.clear()
 }

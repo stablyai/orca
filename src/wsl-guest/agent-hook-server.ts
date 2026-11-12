@@ -66,12 +66,9 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
   private lastEnvelopeMetaByPaneKey = new Map<string, CachedPaneEnvelopeMeta>()
   private forward: RelayHookForward
-  private readonly forwardClaudeAgentView: RelayHookServerOptions['forwardClaudeAgentView']
   private isPaneSurfaceRetired: (paneKey: string) => boolean
   private getAgentLaunchToken: (paneKey: string) => string | undefined
-  private readonly readHookRootEvidence: RelayHookServerOptions['readHookRootEvidence']
-  private fixedToken: string | undefined
-  private preferredPort: number
+  private readonly serverOptions: RelayHookServerOptions
   private portFallbackApplied = false
   private readonly presenceChecks = new RelayAgentPresence(this.state)
   private retryScheduler: AgentHookResultRetryScheduler
@@ -81,16 +78,13 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
 
   constructor(options: RelayHookServerOptions) {
     super()
+    this.serverOptions = options
     this.env = options.env ?? REMOTE_AGENT_HOOK_ENV
     this.endpointDir = options.endpointDir ?? defaultEndpointDir()
     this.endpointFilePath = join(this.endpointDir, getEndpointFileName())
-    this.fixedToken = options.token
-    this.preferredPort = options.preferredPort ?? 0
     this.forward = options.forward
-    this.forwardClaudeAgentView = options.forwardClaudeAgentView
     this.isPaneSurfaceRetired = options.isPaneSurfaceRetired ?? (() => false)
     this.getAgentLaunchToken = options.getAgentLaunchToken ?? (() => undefined)
-    this.readHookRootEvidence = options.readHookRootEvidence
     this.configureCanonicalHooks(
       options,
       (paneKey) => this.clearPaneState(paneKey, true),
@@ -122,13 +116,13 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       return
     }
     this.startCanonicalHooks()
-    this.token = this.fixedToken ?? randomUUID()
+    this.token = this.serverOptions.token ?? randomUUID()
     this.endpointFileWritten = false
     this.portFallbackApplied = false
     await drainRelayHookSpool(this.endpointDir, this.state, this.env, (record) => ({
       providerNormalization: this.providerNormalization,
       checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
-      readHookRootEvidence: this.readHookRootEvidence,
+      readHookRootEvidence: this.serverOptions.readHookRootEvidence,
       isCurrent,
       apply: (...args) => this.applyEvent(...args),
       onAccepted: (row) => this.retryScheduler.observeClaudeHook(row, record.receivedAt),
@@ -139,18 +133,19 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       return
     }
     await bindRelayHookServer({
-      preferredPort: this.preferredPort,
+      preferredPort: this.serverOptions.preferredPort ?? 0,
       isCurrent,
       handleRequest: (req, res) =>
         handleRelayHookRequest(req, res, {
           isCurrent,
           token: this.token,
-          forwardClaudeAgentView: this.forwardClaudeAgentView,
+          forwardClaudeAgentView: this.serverOptions.forwardClaudeAgentView,
           env: this.env,
           state: this.state,
           providerNormalization: this.providerNormalization,
           checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
-          readHookRootEvidence: this.readHookRootEvidence,
+          readHookRootEvidence: this.serverOptions.readHookRootEvidence,
+          readPaneAgentCommandLine: this.serverOptions.readPaneAgentCommandLine,
           isPaneSurfaceRetired: this.isPaneSurfaceRetired,
           getAgentLaunchToken: this.getAgentLaunchToken,
           applyEvent: (...args) => this.applyEvent(...args),
