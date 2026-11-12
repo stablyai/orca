@@ -199,4 +199,28 @@ describe('NativeChatQuestionCard', () => {
     expect(rows()[0]!.getAttribute('aria-pressed')).toBe('false')
     expect(onAnswer).not.toHaveBeenCalled()
   })
+  it('submits with a second Enter on the last step instead of deselecting the pick', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    const onAnswer = vi.fn()
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={tabsOrSpaces}
+          onAnswer={onAnswer}
+          onCancel={() => {}}
+          shouldFocus
+        />
+      )
+    })
+    const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    act(() => rows[1]!.focus())
+    pressKey({ key: 'Enter' }, rows[1]!)
+    expect(rows[1]!.getAttribute('aria-pressed')).toBe('true')
+    // Before the auto-advance fires, Enter on the chosen row submits it.
+    pressKey({ key: 'Enter' }, rows[1]!)
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
+    act(() => vi.runAllTimers())
+    expect(onAnswer).toHaveBeenCalledTimes(1)
+  })
 })
