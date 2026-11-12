@@ -137,7 +137,7 @@ export function bindBrowserPageWebviewListeners({
   })
 
   const unsubscribeSystemResumed = subscribeBrowserSystemResume(guestRecovery.validateAfterResume)
-  validateVisibleGuestRegistrationRef.current = guestRecovery.validateAfterResume
+  validateVisibleGuestRegistrationRef.current = guestRecovery.validateVisibleRegistration
   retryGuestRecoveryRef.current = guestRecovery.retryRecovery
 
   webview.addEventListener('did-attach', handleDidAttach)
@@ -181,7 +181,14 @@ export function bindBrowserPageWebviewListeners({
       !metadata.loadError &&
       !metadata.hasCertificateFailure &&
       !browserGuestPreservesRequestedDocument(webview, url, page.url)
-    if (kind === 'navigation') {
+    // Why: a settled snapshot can carry a commit that arrived while observation was
+    // suppressed; route it as a navigation so the URL converges despite a recovery error.
+    const settledCommit =
+      (kind === 'snapshot' || kind === 'stop') &&
+      presentDocument &&
+      Boolean(url) &&
+      url !== page.url
+    if (kind === 'navigation' || settledCommit) {
       handleFullDidNavigate({ url })
     } else if (
       kind === 'in-page' ||
@@ -223,7 +230,7 @@ export function bindBrowserPageWebviewListeners({
     if (isBrowserPageRendererRecoveryPending(browserTabId)) {
       guestRecovery.recoverRenderer()
     } else {
-      guestRecovery.validateAfterResume()
+      guestRecovery.validateVisibleRegistration()
     }
   }
 
@@ -244,7 +251,7 @@ export function bindBrowserPageWebviewListeners({
     container.removeEventListener('drop', onContainerDrop)
     unsubscribeSystemResumed()
     guestRecovery.dispose()
-    if (validateVisibleGuestRegistrationRef.current === guestRecovery.validateAfterResume) {
+    if (validateVisibleGuestRegistrationRef.current === guestRecovery.validateVisibleRegistration) {
       validateVisibleGuestRegistrationRef.current = () => {}
     }
     if (retryGuestRecoveryRef.current === guestRecovery.retryRecovery) {
