@@ -13,14 +13,17 @@ import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-b
 import { isHeadlessBuiltPublication } from './mobile-session-snapshot-equality'
 import { sameRuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
+import type { MobileSessionTabSubscription } from '../construction/runtime-identity-state'
 
 export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {
   protected abstract getListedBrowserTabsByPageId(
     ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['getListedBrowserTabsByPageId']>
   ): ReturnType<ScheduleMobileSessionTabsChangedMethods['getListedBrowserTabsByPageId']>
   protected abstract selectMobileSessionTabsListeners(
-    ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['selectMobileSessionTabsListeners']>
-  ): ReturnType<ScheduleMobileSessionTabsChangedMethods['selectMobileSessionTabsListeners']>
+    worktree?: string,
+    clientNavigationId?: string,
+    candidates?: Iterable<MobileSessionTabSubscription>
+  ): MobileSessionTabSubscription[]
 
   protected abstract notifyMobileSessionTabsChangedNow(
     ...args: Parameters<
