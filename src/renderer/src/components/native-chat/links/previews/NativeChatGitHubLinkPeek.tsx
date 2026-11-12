@@ -15,7 +15,10 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import {
   githubLinkPreviewKey,
   loadGitHubLinkPreview,
-  readCachedGitHubLinkPreview
+  loadRoutedGitHubLinkPreview,
+  readCachedGitHubLinkPreview,
+  readCachedRoutedGitHubLinkPreview,
+  routedGitHubLinkPreviewKey
 } from './native-chat-github-link-preview'
 import {
   githubLinkBelongsToRepo,
@@ -69,12 +72,29 @@ function PeekFooter({ item }: { item: GitHubWorkItem }): React.JSX.Element {
   )
 }
 
+/** Which lookup answers a card: the chat repo's, or one routed through another repo on the chat's host. */
+export type GitHubPeekSource = { kind: 'repo'; repo: Repo } | { kind: 'routed'; hostId: string }
+
+function peekLookup(source: GitHubPeekSource, link: GitHubIssueOrPRLink) {
+  return source.kind === 'repo'
+    ? {
+        key: githubLinkPreviewKey(source.repo, link),
+        read: () => readCachedGitHubLinkPreview(source.repo, link),
+        load: () => loadGitHubLinkPreview(source.repo, link)
+      }
+    : {
+        key: routedGitHubLinkPreviewKey(source.hostId, link),
+        read: () => readCachedRoutedGitHubLinkPreview(source.hostId, link),
+        load: () => loadRoutedGitHubLinkPreview(source.hostId, link)
+      }
+}
+
 export function NativeChatGitHubPeekBody({
-  repo,
+  source,
   link,
   otherRepoFallback
 }: {
-  repo: Repo
+  source: GitHubPeekSource
   link: GitHubIssueOrPRLink
   /** For a link to another repo, which an older host or a repo the sign-in can't read leaves
    *  unanswered: what such a link showed before, kept until its details arrive, and never a failure.
@@ -82,11 +102,8 @@ export function NativeChatGitHubPeekBody({
   otherRepoFallback?: ReactNode
 }): ReactNode {
   const t = useTranslate()
-  const { state, retry } = useNativeChatHoverPreview(
-    githubLinkPreviewKey(repo, link),
-    () => readCachedGitHubLinkPreview(repo, link),
-    () => loadGitHubLinkPreview(repo, link)
-  )
+  const lookup = peekLookup(source, link)
+  const { state, retry } = useNativeChatHoverPreview(lookup.key, lookup.read, lookup.load)
   if (otherRepoFallback && state.status !== 'ready') {
     return otherRepoFallback
   }

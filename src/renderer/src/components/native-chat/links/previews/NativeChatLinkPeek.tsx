@@ -4,6 +4,7 @@ import { NativeChatGitHubPeekBody, resolveGitHubPeekLink } from './NativeChatGit
 import { NativeChatWebPeekBody } from './NativeChatWebLinkPeek'
 import { NativeChatLinkPeekContext } from './native-chat-link-peek-context'
 import { previewableWebUrl } from './native-chat-web-link-preview'
+import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 
 /** Hover or focus a link to preview it: PRs and issues on its repo's GitHub host, or what a web page says about itself. */
 export function NativeChatLinkPeek({
@@ -13,7 +14,7 @@ export function NativeChatLinkPeek({
   href: string | undefined
   children: ReactNode
 }): ReactNode {
-  const { githubRepo, webPreviews } = useContext(NativeChatLinkPeekContext)
+  const { githubRepo, githubRoutingHostId, webPreviews } = useContext(NativeChatLinkPeekContext)
   const body = useMemo(() => {
     const webUrl = webPreviews ? previewableWebUrl(href) : null
     const webBody = webUrl ? (
@@ -27,15 +28,28 @@ export function NativeChatLinkPeek({
     if (githubRepo && github) {
       return (
         <NativeChatGitHubPeekBody
-          key={href}
-          repo={githubRepo.repo}
+          key={`repo:${githubRepo.repo.id}:${href}`}
+          source={{ kind: 'repo', repo: githubRepo.repo }}
           link={github.link}
           otherRepoFallback={github.ownRepo ? undefined : webBody}
         />
       )
     }
+    // No chat repo on the link's host, as in a folder workspace: another repo on the chat's host
+    // can still answer with its GitHub sign-in. A web page fetch can't read private repos.
+    const routed = href && githubRoutingHostId ? parseGitHubIssueOrPRLink(href) : null
+    if (routed && githubRoutingHostId) {
+      return (
+        <NativeChatGitHubPeekBody
+          key={`routed:${githubRoutingHostId}:${href}`}
+          source={{ kind: 'routed', hostId: githubRoutingHostId }}
+          link={routed}
+          otherRepoFallback={webBody}
+        />
+      )
+    }
     return webBody
-  }, [githubRepo, href, webPreviews])
+  }, [githubRepo, githubRoutingHostId, href, webPreviews])
   if (!body) {
     return children
   }

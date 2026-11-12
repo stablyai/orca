@@ -1,4 +1,5 @@
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
+import { useAppStore } from '@/store/index'
 import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -6,6 +7,7 @@ import { githubRepoIdentityKey } from '../../../../../../shared/github/repositor
 import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { createHoverPreviewCache } from './native-chat-hover-preview-cache'
+import { findGitHubPreviewRouteRepo } from './native-chat-github-route-repo'
 
 const previews = createHoverPreviewCache<GitHubWorkItem>({ freshMs: 60_000, maxEntries: 200 })
 
@@ -64,4 +66,27 @@ export function reloadGitHubLinkPreview(
 ): Promise<GitHubWorkItem | null> {
   previews.expire(githubLinkPreviewKey(repo, link))
   return loadGitHubLinkPreview(repo, link)
+}
+
+/** For a chat without a repo on the link's GitHub host; the repo that answers is picked on the chat's
+ *  host when the card opens. */
+export function routedGitHubLinkPreviewKey(hostId: string, link: GitHubIssueOrPRLink): string {
+  return `${hostId}:routed:${githubRepoIdentityKey(link.slug)}#${link.number}:${link.type}`
+}
+
+export function readCachedRoutedGitHubLinkPreview(
+  hostId: string,
+  link: GitHubIssueOrPRLink
+): GitHubWorkItem | null {
+  return previews.read(routedGitHubLinkPreviewKey(hostId, link))
+}
+
+export function loadRoutedGitHubLinkPreview(
+  hostId: string,
+  link: GitHubIssueOrPRLink
+): Promise<GitHubWorkItem | null> {
+  return previews.load(routedGitHubLinkPreviewKey(hostId, link), async () => {
+    const repo = await findGitHubPreviewRouteRepo(useAppStore.getState().repos, hostId, link)
+    return repo ? fetchPreview(repo, link) : null
+  })
 }
