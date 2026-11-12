@@ -1,6 +1,10 @@
 // Shared host/command/plan notice presentation: desktop translates the copy; mobile renders it directly.
 
 import { readClaudeModelFallbackFrame } from './claude-model-fallback'
+import {
+  AGENT_SESSION_MODEL_SWITCH_PRESENTATION,
+  readAgentSessionModelSwitchFrame
+} from '../agent-session/journal/agent-session-model-switch'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../agent-session/journal/agent-session-turn-notice'
 import {
   isAgentSessionHostStatusPresentation,
@@ -31,6 +35,8 @@ export type NativeChatNoticeLook =
   | { kind: 'host-status'; presentation: AgentSessionHostStatusPresentation }
   | { kind: 'plan' }
   | { kind: 'model-fallback'; from: string; to: string }
+  /** A provider's own model switch, centered with its icon. */
+  | { kind: 'model-switch'; from: string; to: string }
   /** Faint, as a system row with no notice of its own is. */
   | { kind: 'aside' }
   | {
@@ -78,6 +84,12 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
   }
   if (presentation === NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION) {
     return { kind: 'aside' }
+  }
+  if (presentation === AGENT_SESSION_MODEL_SWITCH_PRESENTATION) {
+    const modelSwitch = readAgentSessionModelSwitchFrame(block.providerFrame)
+    if (modelSwitch) {
+      return { kind: 'model-switch', ...modelSwitch }
+    }
   }
   // Orca stopped the reply, not the agent: stored red for clients that predate it, read as a notice.
   if (presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION) {
