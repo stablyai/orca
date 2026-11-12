@@ -80,8 +80,8 @@ it('projects one capable source through cold, deadline, late, failed-refresh and
       agent: 'claude',
       repoId: TEST_REPO.id,
       executionHostId: 'runtime:alpha',
-      linkedWorkItem: null,
-      note: '',
+      prompt: '',
+      draftPrompt: null,
       settings: useAppStore.getState().settings,
       launchHost: { kind: 'known', platform: 'linux', hostKind: 'runtime' },
       shell: 'posix',
@@ -127,8 +127,8 @@ it('projects one capable source through cold, deadline, late, failed-refresh and
       agent: 'codex',
       repoId: TEST_REPO.id,
       executionHostId: 'runtime:alpha',
-      linkedWorkItem: null,
-      note: '',
+      prompt: '',
+      draftPrompt: null,
       settings: useAppStore.getState().settings,
       launchHost: { kind: 'known', platform: 'linux', hostKind: 'runtime' },
       shell: 'posix',
@@ -230,4 +230,23 @@ it('updates the shared cold projection when existing capability resolves after t
   } finally {
     vi.useRealTimers()
   }
+})
+
+it('starts Codex with a clean cmd command and submits the initial prompt after startup', async () => {
+  const { buildQuickComposerStartup } = await import('@/hooks/composer-state/quick-startup-plan')
+  const startup = buildQuickComposerStartup({
+    agent: 'codex',
+    prompt: 'Fix the login flow.\nAdd a regression test.',
+    draftPrompt: null,
+    promptDelivery: 'submit-after-ready',
+    settings: undefined,
+    launchHost: { kind: 'known', platform: 'win32', hostKind: 'runtime' },
+    shell: 'cmd',
+    isRemote: true,
+    telemetrySource: undefined
+  })
+
+  expect(startup.startupPlan?.launchCommand).not.toContain('Fix the login flow.')
+  expect(startup.startupPlan?.followupPrompt).toBe('Fix the login flow.\nAdd a regression test.')
+  expect(startup.promptPlan?.submitPastedPrompt).toBe(true)
 })

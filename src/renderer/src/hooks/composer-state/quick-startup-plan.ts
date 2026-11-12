@@ -6,7 +6,6 @@ import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../sh
 import { terminalSessionOptionInputs } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { useAppStore } from '@/store/index'
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/work-items/linked-work-item-context'
 import type { ComposerModel } from './composer-model'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -28,6 +27,7 @@ export type QuickComposerStartupInput = {
   agent: TuiAgent | null
   prompt: string
   draftPrompt: string | null | undefined
+  promptDelivery?: WorktreeCreationRequest['promptDelivery']
   settings: GlobalSettings | null | undefined
   /** Withheld fails an agent launch; a workspace created without an agent never reads it. */
   launchHost: ExecutionHostPlatformFact
@@ -64,7 +64,7 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
     ? planLaunchAgentStartupPrompt({
         base: inputs,
         prompt: draftPrompt ?? prompt,
-        promptDelivery: draftPrompt ? 'draft' : 'auto-submit',
+        promptDelivery: draftPrompt ? 'draft' : (input.promptDelivery ?? 'auto-submit'),
         submitFollowup: true,
         isFollowupPath: TUI_AGENT_CONFIG[inputs.agent].promptInjectionMode === 'stdin-after-start'
       })
@@ -113,16 +113,13 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
 }
 
 export async function prepareQuickComposerStartup(
-  input: Omit<QuickComposerStartupInput, 'prompt' | 'draftPrompt'> & {
+  input: QuickComposerStartupInput & {
     repoId: string
     executionHostId: ComposerModel['selectedRepoExecutionHostId']
-    linkedWorkItem: Parameters<typeof resolveQuickCreateLinkedWorkItemPrompt>[0]
-    note: string
-    initialPrompt?: string
     legacyLaunchInputs?: WorktreeCreationRequest['legacyLaunchInputs']
     ephemeralVm?: boolean
   }
-): Promise<QuickComposerStartup & { prompt: string; draftPrompt: string | null }> {
+): Promise<QuickComposerStartup> {
   const preferences = input.agent
     ? await ensureAgentLaunchPreferences(useAppStore.getState(), {
         kind: 'git-worktree',
@@ -130,27 +127,25 @@ export async function prepareQuickComposerStartup(
         executionHostId: input.executionHostId ?? undefined
       })
     : undefined
-  const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
-    input.agent ? input.linkedWorkItem : null,
-    input.note,
-    input.agent ? input.initialPrompt : undefined
-  )
+  const { prompt, draftPrompt } = input
   const settings = input.settings
     ? {
         ...input.settings,
         agentLaunchChoices: preferences?.agentLaunchChoices ?? input.settings.agentLaunchChoices
       }
     : input.settings
-  const legacy = (text?: string, delivery?: 'draft' | 'auto-submit') =>
+  const legacy = (text?: string, delivery?: WorktreeCreationRequest['promptDelivery']) =>
     buildQuickComposerStartup({
       ...input,
       prompt: text ?? prompt,
       draftPrompt: text !== undefined ? (delivery === 'draft' ? text : null) : draftPrompt,
+      promptDelivery: delivery ?? input.promptDelivery,
       settings,
       launchInputs: input.legacyLaunchInputs ?? input.launchInputs
     })
   const host = parseExecutionHostId(input.executionHostId)
   const hostComposes =
+    input.promptDelivery !== 'submit-after-ready' &&
     (input.launchInputs !== undefined || Boolean(draftPrompt)) &&
     !input.ephemeralVm &&
     host?.kind === 'runtime' &&
@@ -174,8 +169,6 @@ export async function prepareQuickComposerStartup(
         }).sessionOptions
       : undefined
   return {
-    prompt,
-    draftPrompt,
     ...(eager ?? {
       startupPlan: null,
       backendStartup: undefined,

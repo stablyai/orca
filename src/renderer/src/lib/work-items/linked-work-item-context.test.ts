@@ -36,7 +36,7 @@ describe('quick create initial prompt', () => {
     })
   })
 
-  it('includes the linked work item when auto-submitting a typed prompt', () => {
+  it('sends only the explicitly entered prompt when a work item is linked', () => {
     expect(
       resolveQuickCreateLinkedWorkItemPrompt(
         { number: 42, url: 'https://github.com/acme/app/issues/42' },
@@ -44,7 +44,7 @@ describe('quick create initial prompt', () => {
         'Fix this issue'
       )
     ).toEqual({
-      prompt: 'Fix this issue\n\nhttps://github.com/acme/app/issues/42',
+      prompt: 'Fix this issue',
       draftPrompt: null
     })
   })

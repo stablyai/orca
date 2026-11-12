@@ -3,6 +3,7 @@ import { ChevronDown, Settings2 } from 'lucide-react'
 import type AgentCombobox from '@/components/agent/AgentCombobox'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -11,6 +12,8 @@ import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-car
 type NewWorkspaceComposerAgentSectionProps = Pick<
   NewWorkspaceComposerCardProps,
   | 'quickAgent'
+  | 'agentPrompt'
+  | 'onAgentPromptChange'
   | 'agentSurfaceRows'
   | 'agentPickerDraft'
   | 'agentSetupDisabled'
@@ -35,6 +38,8 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
 
 export function NewWorkspaceComposerAgentSection({
   quickAgent,
+  agentPrompt,
+  onAgentPromptChange,
   agentSurfaceRows,
   agentPickerDraft,
   agentSetupDisabled,
@@ -52,6 +57,7 @@ export function NewWorkspaceComposerAgentSection({
   handleSetDefaultAgent
 }: NewWorkspaceComposerAgentSectionProps): React.JSX.Element {
   const t = useTranslate()
+  const initialPromptId = React.useId()
   return (
     <>
       <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
@@ -101,6 +107,24 @@ export function NewWorkspaceComposerAgentSection({
           onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}
         />
       </div>
+
+      {quickAgent && !advancedLocked && (
+        <div className="min-w-0 space-y-1">
+          <label htmlFor={initialPromptId} className="text-xs font-medium text-muted-foreground">
+            {t('auto.components.NewWorkspaceComposerCard.initialPrompt', 'Initial prompt')}{' '}
+            <span className="text-muted-foreground/70">
+              {t('auto.components.NewWorkspaceComposerCard.0c5d6a479c', '[Optional]')}
+            </span>
+          </label>
+          <Textarea
+            id={initialPromptId}
+            rows={2}
+            className="resize-none"
+            value={agentPrompt}
+            onChange={(event) => onAgentPromptChange(event.target.value)}
+          />
+        </div>
+      )}
 
       <div className="!mb-2">
         <Button

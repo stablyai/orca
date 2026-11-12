@@ -36,6 +36,10 @@ export function openBackgroundDeclinedTerminal(
       ? { ...built, draftPrompt: heldChatMessage }
       : built
   if (host.kind === 'environment' && args.request.agent) {
+    const promptDelivery =
+      heldChatMessage || args.request.launchDraftPrompt
+        ? 'draft'
+        : (args.request.promptDelivery ?? 'auto-submit')
     const completion = launchAgentInWebHostTab({
       ...(built?.freshAgentLaunch ?? args.request.launchInputs),
       submitFollowup: true,
@@ -43,14 +47,14 @@ export function openBackgroundDeclinedTerminal(
       environmentId: host.environmentId,
       worktreeId: args.worktreeId,
       prompt: heldChatMessage ?? args.request.launchDraftPrompt ?? args.request.quickPrompt,
-      promptDelivery: heldChatMessage || args.request.launchDraftPrompt ? 'draft' : 'auto-submit',
+      promptDelivery,
       activate: false,
       selectWorktree: false,
       isCancelled: () => signal?.aborted === true,
       buildStartup: () => {
         const rebuilt = args.request.creationStartup?.legacy(
           heldChatMessage ?? args.request.launchDraftPrompt ?? args.request.quickPrompt,
-          heldChatMessage || args.request.launchDraftPrompt ? 'draft' : 'auto-submit'
+          promptDelivery
         )
         if (rebuilt?.promptPlan) {
           return rebuilt.promptPlan

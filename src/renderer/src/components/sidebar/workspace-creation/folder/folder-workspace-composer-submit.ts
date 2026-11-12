@@ -1,4 +1,3 @@
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/work-items/linked-work-item-context'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
@@ -107,9 +106,7 @@ export async function submitFolderWorkspaceCreate({
       }
     : settings
   const typedPrompt = quickAgent && initialPrompt?.trim() ? initialPrompt : null
-  const prompt = typedPrompt
-    ? resolveQuickCreateLinkedWorkItemPrompt(linkedWorkItem, note, typedPrompt).prompt
-    : note
+  const prompt = typedPrompt ?? note
   const startupPlan =
     quickAgent && launchPlatform && linkedWorkItem && !typedPrompt
       ? buildFolderWorkspaceLinkedStartupPlan({
@@ -137,15 +134,24 @@ export async function submitFolderWorkspaceCreate({
               isRemote: launchIsRemote
             }),
             ...(agentEnv ? { agentEnv } : {}),
-            prompt,
-            allowEmptyPromptLaunch: true
+            prompt: typedPrompt ? '' : note,
+            allowEmptyPromptLaunch: true,
+            ...(typedPrompt ? { suppressStartupUpdatePrompt: true } : {})
           })
         : null
+  if (startupPlan && typedPrompt) {
+    startupPlan.followupPrompt = typedPrompt
+  }
   // Argv prefill embeds the draft in launchCommand, so draftPrompt alone cannot detect it.
   const launchDraftPrompt =
     quickAgent && linkedWorkItem && !typedPrompt
       ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note)
       : null
+  const promptDelivery = launchDraftPrompt
+    ? 'draft'
+    : typedPrompt
+      ? 'submit-after-ready'
+      : 'auto-submit'
   const launchRequest = quickAgent
     ? {
         requestId: createBrowserUuid(),
@@ -158,7 +164,7 @@ export async function submitFolderWorkspaceCreate({
           executionHostId: getRepoExecutionHostId(projectGroup)
         },
         prompt: launchDraftPrompt ?? prompt,
-        promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const)
+        promptDelivery
       }
     : null
   // Creation retains its chosen route, but admission after materialization may fall back.
@@ -219,7 +225,7 @@ export async function submitFolderWorkspaceCreate({
             agentArgs: launchInputs ? launchInputs.agentArgs : requestedAgentArgs,
             sessionOptions,
             prompt: launchDraftPrompt ?? prompt,
-            promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const),
+            promptDelivery,
             legacy: () => ({
               startupPlan,
               pasteDraftAfterLaunch: startupPlan.draftPrompt ?? startupPlan.followupPrompt ?? null,

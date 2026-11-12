@@ -22,7 +22,8 @@ export function buildWorktreeCreationStartupOpt(
     ? {
         ...request.launchInputs,
         prompt: request.launchDraftPrompt ?? request.quickPrompt,
-        promptDelivery: request.launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const),
+        promptDelivery:
+          request.promptDelivery ?? (request.launchDraftPrompt ? 'draft' : 'auto-submit'),
         recovery: true as const,
         legacy: () =>
           intent?.legacy().promptPlan ?? {

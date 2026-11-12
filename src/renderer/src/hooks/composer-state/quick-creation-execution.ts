@@ -133,7 +133,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         }
       }
 
-      const promptDelivery = quickDraftPrompt ? 'draft' : 'auto-submit'
+      const promptDelivery = quickDraftPrompt
+        ? 'draft'
+        : agent && options?.initialPrompt?.trim()
+          ? 'submit-after-ready'
+          : 'auto-submit'
       // Why: the verdict is persisted on the request as data and re-entered once the worktree exists.
       const agentLaunchRoute = !agent
         ? 'terminal-tui'
@@ -154,9 +158,9 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
 
       const quickStartup = await prepareQuickComposerStartup({
         agent,
-        linkedWorkItem: submitLinkedWorkItem,
-        note: trimmedNote,
-        initialPrompt: options?.initialPrompt,
+        prompt: quickPrompt,
+        draftPrompt: quickDraftPrompt,
+        promptDelivery,
         repoId,
         executionHostId: selectedRepoExecutionHostId,
         settings,
