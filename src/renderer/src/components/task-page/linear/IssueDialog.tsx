@@ -1,7 +1,7 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { useTranslate } from '@/i18n/use-translate'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'

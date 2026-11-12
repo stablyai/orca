@@ -1,5 +1,6 @@
 import { agentPickerModels } from './agent-launch-picker-catalog'
 import { resolveAgentChoiceLayers } from '../choices/agent-choice-layers'
+import type { TuiAgent } from '../catalog/tui-agent'
 import type { AgentPickerEntry, AgentPickerModel } from './agent-launch-picker'
 import type { AgentDedicatedChoices } from '../choices/agent-launch-choices'
 
@@ -8,6 +9,33 @@ export type AgentPickerSetup = {
   model: AgentPickerModel
   choices: AgentDedicatedChoices
   label: string
+}
+
+const AGENT_SEARCH_ALIASES: Partial<Record<TuiAgent, readonly string[]>> = {
+  antigravity: ['agy']
+}
+
+function agentPickerEntryAliases(
+  entry: Pick<AgentPickerEntry, 'agent' | 'aliases'>
+): readonly string[] {
+  const builtIn = AGENT_SEARCH_ALIASES[entry.agent] ?? []
+  return entry.aliases?.length ? [...builtIn, ...entry.aliases] : builtIn
+}
+
+export function filterAgentPickerEntries(
+  entries: readonly AgentPickerEntry[],
+  query: string
+): AgentPickerEntry[] {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (!words.length) {
+    return [...entries]
+  }
+  return entries.filter((entry) => {
+    const haystack = [entry.agent, entry.label, ...agentPickerEntryAliases(entry)]
+      .join(' ')
+      .toLowerCase()
+    return words.every((word) => haystack.includes(word))
+  })
 }
 
 const tokens = (value: string): string[] =>
@@ -37,12 +65,14 @@ export function searchAgentPickerSetups(
     if (!entry.surfaces.length) {
       continue
     }
-    const agentWords = tokens([entry.agent, entry.label, ...(entry.aliases ?? [])].join(' '))
+    const agentWords = tokens(
+      [entry.agent, entry.label, ...agentPickerEntryAliases(entry)].join(' ')
+    )
     if (words.every((word) => score(word, agentWords))) {
       continue
     }
     for (const model of agentPickerModels(entry)) {
-      if (model.isLegacy || model.hidden) {
+      if (model.hidden) {
         continue
       }
       const modelWords = tokens([model.id, model.label].join(' '))

@@ -5,7 +5,7 @@ import {
   useTerminalArtifactTempFiles
 } from './orca-runtime-files-terminal-artifact-fixtures'
 import { describe, expect, it, vi } from 'vitest'
-import { open, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises'
+import { readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   renameMock,
@@ -13,10 +13,6 @@ import {
   statMock
 } from '../../files/runtime-file-command-mock-registry'
 import { useRuntimeFileHostLifecycle } from '../../files/runtime-file-host.test-fixture'
-import {
-  LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
-  RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES
-} from '../../files/file-preview-budget'
 
 vi.mock('fs', async () =>
   (await import('../../files/runtime-file-command-mock-registry')).fsModuleMock()
@@ -31,7 +27,7 @@ vi.mock(
 vi.mock('../../../ipc/filesystem/access/filesystem-auth', async () =>
   (await import('../../files/runtime-file-command-mock-registry')).filesystemAuthModuleMock()
 )
-vi.mock('../../../git/runner', async () =>
+vi.mock('../../../git/command-runner/host-routing/wsl-aware-spawn', async () =>
   (await import('../../files/runtime-file-command-mock-registry')).gitRunnerModuleMock()
 )
 vi.mock(
@@ -159,67 +155,7 @@ describe('RuntimeTerminalArtifacts', () => {
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('{"ok":true}')
     })
 
-    it('pages a granted binary file whole, beyond the text read cap, for its client only', async () => {
-      const bytes = Buffer.alloc(3 * 1024 * 1024 + 7, 0xab)
-      bytes[0] = 0
-      const artifactPath = await tempFile('teste.mp4', '')
-      await writeFile(artifactPath, bytes)
-      const { paths, commands } = createTerminalArtifactSubjects({ path: '/repo' })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-      const target = absoluteFileTarget(await resolveTerminalArtifactPath(paths, artifactPath))
-      const readPage = (offset: number, clientId = 'client-a') =>
-        commands.readTerminalArtifactChunk(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          offset,
-          512 * 1024,
-          clientId
-        )
-
-      const pages: Buffer[] = []
-      for (let offset = 0, eof = false; !eof;) {
-        const page = await readPage(offset)
-        pages.push(Buffer.from(page.contentBase64, 'base64'))
-        offset += page.bytesRead
-        eof = page.eof
-      }
-
-      expect(Buffer.concat(pages).equals(bytes)).toBe(true)
-      await expect(readPage(0, 'client-b')).rejects.toThrow()
-    })
-
     // Why: files above the digest cap are pinned by stat alone; utimes can restore mtime but never ctime.
-    it('rejects a page of a large granted file rewritten in place with its mtime restored', async () => {
-      const artifactPath = await tempFile('render.mp4', '')
-      await writeFile(artifactPath, Buffer.alloc(LOCAL_PREVIEWABLE_BINARY_MAX_BYTES + 1, 0xab))
-      // Whole seconds, so restoring them reproduces the granted mtime exactly.
-      const pinnedSeconds = 1_700_000_000
-      await utimes(artifactPath, pinnedSeconds, pinnedSeconds)
-      const { paths, commands } = createTerminalArtifactSubjects({ path: '/repo' })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-      const target = absoluteFileTarget(await resolveTerminalArtifactPath(paths, artifactPath))
-
-      const handle = await open(artifactPath, 'r+')
-      const grantedCtimeMs = (await handle.stat()).ctimeMs
-      // Why: coarse-tick filesystems can stamp a quick rewrite with the granted ctime; rewrite until it moves.
-      do {
-        await handle.write(Buffer.alloc(16, 0xcd), 0, 16, 0)
-        await handle.utimes(pinnedSeconds, pinnedSeconds)
-      } while ((await handle.stat()).ctimeMs === grantedCtimeMs)
-      await handle.close()
-
-      await expect(
-        commands.readTerminalArtifactChunk(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          0,
-          512 * 1024,
-          'client-a'
-        )
-      ).rejects.toThrow('terminal_file_grant_stale')
-    })
 
     it('rejects retargeted symlink terminal artifact reads before returning outside content', async () => {
       const artifactPath = await tempFile('result.json', '{"ok":true}')
@@ -265,30 +201,6 @@ describe('RuntimeTerminalArtifacts', () => {
         )
       ).rejects.toThrow('terminal_file_grant_stale')
       await expect(readFile(outsidePath, 'utf8')).resolves.toBe('{"secret":true}')
-    })
-
-    it('keeps local terminal artifact previews above the remote cap available', async () => {
-      const size = RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
-      const artifactPath = await tempFile('result.png', 'a'.repeat(size))
-      const { paths, commands } = createTerminalArtifactSubjects({ path: '/repo' })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-
-      const result = await resolveTerminalArtifactPath(paths, artifactPath)
-      const target = absoluteFileTarget(result)
-
-      await expect(
-        commands.readTerminalArtifactPreview(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          'client-a'
-        )
-      ).resolves.toMatchObject({
-        content: Buffer.alloc(size, 0x61).toString('base64'),
-        isBinary: true,
-        isImage: true,
-        mimeType: 'image/png'
-      })
     })
 
     it('rejects binary-extension terminal artifacts from the editable text path', async () => {

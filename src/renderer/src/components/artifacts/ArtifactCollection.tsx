@@ -3,12 +3,12 @@ import { Loader2 } from 'lucide-react'
 import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { clampArtifactListSearchQuery, filterArtifactsBySearchQuery } from './artifact-list-search'
 import { ArtifactListRows } from './ArtifactListRows'
 import { ArtifactListTableHeader } from './ArtifactListTableHeader'
 import { ArtifactListToolbar } from './ArtifactListToolbar'
-import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-table-layout'
+import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-interaction/list-table-layout'
 
 export function ArtifactCollection({
   artifacts,

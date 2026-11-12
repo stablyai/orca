@@ -94,7 +94,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/window-visibility-interval', () => ({
+vi.mock('@/lib/window-activity/window-visibility-interval', () => ({
   installWindowVisibilityInterval: () => () => undefined
 }))
 

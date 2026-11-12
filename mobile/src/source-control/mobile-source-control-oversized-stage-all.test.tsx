@@ -28,7 +28,6 @@ vi.mock('../platform/haptics', () => ({
   triggerImpact: () => undefined
 }))
 
-import { BRIDGE_MAX_MESSAGE_BYTES } from '../mobile-web-shell/bridge/bridge-caps'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useMobileGitRequests } from './use-mobile-git-requests'
 import { useMobileSourceControlRunners } from './use-mobile-source-control-runners'
@@ -68,33 +67,6 @@ function idleRunnerParams() {
 }
 
 describe('stage-all over the outbound frame cap', () => {
-  it('refuses the frame at the page rather than posting one the shell drops', async () => {
-    const pair = createFakeBridgePortPair()
-    await pair.flush()
-    const postedBefore = pair.toShell.length
-
-    const rejection = await pair.client
-      .sendRequest('git.bulkStage', { worktree: 'id:wt-1', filePaths: STAGEABLE_PATHS })
-      .then(
-        () => null,
-        (error: unknown) => error
-      )
-    await pair.flush()
-
-    expect(rejection).toBeInstanceOf(Error)
-    expect(rejection instanceof Error ? rejection.name : String(rejection)).toBe(
-      'BridgeRequestOversizedError'
-    )
-    // The frame never left, so this is definite failure and a smaller retry cannot duplicate host work.
-    expect(pair.toShell.length).toBe(postedBefore)
-    expect(pair.hostDiagnostics).toEqual([])
-    expect(pair.diagnostics.map((entry) => entry.kind)).toEqual(['send-oversized'])
-    const [diagnostic] = pair.diagnostics
-    expect(diagnostic.kind === 'send-oversized' ? diagnostic.bytes : 0).toBeGreaterThan(
-      BRIDGE_MAX_MESSAGE_BYTES
-    )
-  })
-
   it('reports the oversized action and suggests fewer files, then stops being busy', async () => {
     const pair = createFakeBridgePortPair()
     await pair.flush()

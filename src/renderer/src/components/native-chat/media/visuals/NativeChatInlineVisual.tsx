@@ -1,10 +1,9 @@
-import { useAppStore } from '@/store'
-import { captureLinkOpenIntent } from '@/lib/link-open-intent'
-import { beginLinkOpenRequest } from '@/lib/link-open-request'
+import { useAppStore } from '@/store/index'
+import { captureLinkOpenIntent } from '@/lib/links/placement/link-open-intent'
+import { beginLinkOpenRequest } from '@/lib/links/link-open-request'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { SquareArrowOutUpRight } from 'lucide-react'
 import { toast } from 'sonner'
-import type { ArtifactWriteRequest } from '../../../../../../shared/artifacts/artifacts'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
 import { Button } from '@/components/ui/button'
@@ -20,9 +19,10 @@ import {
 import { NATIVE_CHAT_VISUAL_RESERVED_HEIGHT, NativeChatVisualFrame } from './NativeChatVisualFrame'
 import { observeTranscriptVisibility } from '../images/native-chat-image-visibility'
 import { NativeChatForwardedGestureContext } from '../../viewport/scroll/native-chat-reader-scroll-input'
-import type { NativeChatVisualOwner } from './native-chat-visual-owner'
 import { readNativeChatVisual } from './native-chat-visual-read-client'
 import { useNativeChatVisualDocument } from './use-native-chat-visual-document'
+import type { ArtifactWriteRequest } from '../../../../../../shared/artifacts/artifacts'
+import type { NativeChatVisualOwner } from './native-chat-visual-owner'
 
 export function NativeChatVisualUnavailable(): React.JSX.Element {
   const t = useTranslate()

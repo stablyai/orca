@@ -138,17 +138,23 @@ function QueuedMessageCardContents({
               style={({ pressed }) => [
                 styles.textAction,
                 pressed && styles.pressed,
+                // Filled like the composer's primary while Steer queued would press it.
+                lit && styles.litAction,
                 (busy || steerHeld) && styles.disabled
               ]}
               disabled={busy || steerHeld}
               onPress={onSend}
             >
               {steers ? (
-                <CornerDownRight size={12} color={colors.textPrimary} strokeWidth={2} />
+                <CornerDownRight
+                  size={12}
+                  color={lit ? colors.bgBase : colors.textPrimary}
+                  strokeWidth={2}
+                />
               ) : (
-                <Send size={12} color={colors.textPrimary} strokeWidth={2} />
+                <Send size={12} color={lit ? colors.bgBase : colors.textPrimary} strokeWidth={2} />
               )}
-              <Text style={styles.actionLabel}>
+              <Text style={[styles.actionLabel, lit && styles.litActionLabel]}>
                 {steers
                   ? t('session.queuedMessageCardRow.steer', 'Steer')
                   : t('session.queuedMessageCardRow.send', 'Send')}

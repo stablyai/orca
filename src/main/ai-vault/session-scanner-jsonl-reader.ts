@@ -2,6 +2,10 @@ import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from './ai-vault-scan
 import type { Hash } from 'node:crypto'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import {
+  isZstdTranscriptPath,
+  zstdTranscriptStream
+} from '../native-chat/transcript-zstd-decompression'
+import {
   MAX_SESSION_TRANSCRIPT_RECORD_BYTES,
   type SkippedTranscriptRecord
 } from './transcripts/session-transcript-record-budget'
@@ -60,7 +64,18 @@ export async function consumeCompleteJsonlLines(args: {
   let discarding = false
   const skippedRecords: SkippedTranscriptRecord[] = []
 
-  const stream = openTranscriptReadStream(args.path, { start: args.start }, 'scan', args.signal)
+  // Compressed transcripts are immutable archives; every read starts from zero and decodes.
+  const compressed = isZstdTranscriptPath(args.path)
+  if (compressed && args.start !== 0) {
+    throw new Error(`compressed transcript cannot resume at byte ${args.start}: ${args.path}`)
+  }
+  const rawStream = openTranscriptReadStream(
+    args.path,
+    { start: compressed ? 0 : args.start },
+    'scan',
+    args.signal
+  )
+  const stream = compressed ? zstdTranscriptStream(rawStream) : rawStream
   let chunkStart = args.start
   try {
     for await (const chunk of stream as AsyncIterable<Buffer>) {

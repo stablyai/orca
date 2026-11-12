@@ -25,6 +25,13 @@ export type ExecutionHostOwnerLookup<T extends ExecutionHostOwnerRow> = {
   byHost: (repoId: string, hostId: ExecutionHostId) => T | null
 }
 
+export type RepoRowExecutionHostLookup<T extends ExecutionHostOwnerRow> =
+  ExecutionHostOwnerLookup<T> & {
+    rowsFor: (repoId: string) => readonly T[]
+    /** Grouping retains the legacy host fallback; routing still rejects malformed hosts. */
+    registrationHostsFor: (repoId: string) => ReadonlySet<ExecutionHostId>
+  }
+
 export type WorktreeExecutionHostResolution<T extends ExecutionHostOwnerRow> =
   | {
       kind: 'resolved'
@@ -82,7 +89,7 @@ const EMPTY_ROWS: readonly never[] = []
 /** Group once to avoid O(repos) scans per worktree/target. Retain repo-list order because byId chooses the first agreeing row. */
 export function createRepoRowExecutionHostLookup<T extends ExecutionHostOwnerRow>(
   repos: readonly T[]
-): ExecutionHostOwnerLookup<T> {
+): RepoRowExecutionHostLookup<T> {
   const rowsById = new Map<string, T[]>()
   for (const repo of repos) {
     const repoId = repo.id
@@ -94,7 +101,19 @@ export function createRepoRowExecutionHostLookup<T extends ExecutionHostOwnerRow
     }
   }
   const rowsFor = (repoId: string): readonly T[] => rowsById.get(repoId) ?? EMPTY_ROWS
-  return createRepoExecutionHostLookup(rowsFor)
+  const registrationHosts = new Map<string, ReadonlySet<ExecutionHostId>>()
+  return {
+    ...createRepoExecutionHostLookup(rowsFor),
+    rowsFor,
+    registrationHostsFor: (repoId) => {
+      let hosts = registrationHosts.get(repoId)
+      if (!hosts) {
+        hosts = new Set(rowsFor(repoId).map(getRepoExecutionHostId))
+        registrationHosts.set(repoId, hosts)
+      }
+      return hosts
+    }
+  }
 }
 
 /** Reuse an existing complete repo index without changing execution-host matching semantics. */

@@ -1,4 +1,5 @@
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
+import '@/diagnostics/crash-reporting/crash-diagnostics'
+import { recordRendererCrashBreadcrumb } from '../../../../diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import {
   getGitHubPRRefreshStateExpiryAt,
   type PRRefreshState

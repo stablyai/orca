@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { splitPathHeadForElision } from '@/lib/path-display/path-head-elision'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 const NO_SECONDARY_MATCHES: readonly { text: string; ranges: readonly MatchRange[] }[] = []
 
@@ -117,7 +117,8 @@ export function PaletteOpenTabPrimaryLine({
   secondaryMatches = NO_SECONDARY_MATCHES,
   elideSecondaryPathHead = false,
   sessionAge,
-  leadingBadges
+  leadingBadges,
+  secondary
 }: {
   title: string
   titleRanges: readonly MatchRange[]
@@ -127,9 +128,11 @@ export function PaletteOpenTabPrimaryLine({
   elideSecondaryPathHead?: boolean
   sessionAge?: string
   leadingBadges?: React.ReactNode
+  /** Rich secondary content, drawn after "·" and truncated, in place of `secondaryText`. */
+  secondary?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
-  const showSecondary = secondaryText.trim().length > 0
+  const showSecondary = secondaryText.trim().length > 0 || Boolean(secondary)
   const additionalSecondaryMatches = secondaryMatches.filter(
     (match) => match.text && match.text !== secondaryText
   )
@@ -158,7 +161,12 @@ export function PaletteOpenTabPrimaryLine({
         </span>
       ) : null}
       {leadingBadges}
-      {showSecondary ? (
+      {secondary ? (
+        <>
+          <span className="shrink-0 text-muted-foreground/45">·</span>
+          <span className="min-w-0 truncate text-[12px] text-muted-foreground/92">{secondary}</span>
+        </>
+      ) : showSecondary ? (
         <PaletteOpenTabSecondaryText
           text={secondaryText}
           ranges={secondaryRanges}

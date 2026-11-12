@@ -24,7 +24,7 @@ function pdfFileSink(file: FsFile): MobileMediaSink {
   file.create({ overwrite: true })
   const handle = file.open()
   return {
-    append: (bytes) => handle.writeBytes(bytes),
+    append: (bytes) => handle.writeBytesSync(bytes),
     finish: () => {
       handle.close()
       return Platform.OS === 'android' ? file.contentUri : file.uri

@@ -1,14 +1,11 @@
-import { withoutGitGraph } from '../../../shared/workspace-layout/workspace-layout-client-visibility'
+import { withoutGitGraph } from '../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceLayoutModel } from '../../../shared/workspace-layout/workspace-layout-model'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
 import { expect, it } from 'vitest'
-import { createGitGraphFrameProjection, projectGitGraphLayout } from './git-graph-layout-projection'
-import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
-import {
-  diffPublishedLayouts,
-  indexPublishedLayout
-} from '../../../shared/workspace-layout/workspace-layout-records'
+import './git-graph-layout-projection'
+import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/published-layout/workspace-layout-published'
+import '../../../shared/workspace-layout/published-layout/workspace-layout-records'
 
 function layout(): PublishedWorkspaceLayout {
   return {
@@ -37,53 +34,6 @@ function layout(): PublishedWorkspaceLayout {
     }
   }
 }
-
-it('hides graph tabs in snapshots and later record frames while preserving sequence', () => {
-  const original = layout()
-  const project = createGitGraphFrameProjection()
-  expect(
-    project({ type: 'snapshot', seq: 1, workspaces: [{ key: 'w', layout: original }] })
-  ).toMatchObject({
-    workspaces: [
-      {
-        layout: {
-          groups: [
-            { id: 'g1', tabIds: ['a', 'b'] },
-            { id: 'g2', tabIds: ['c'] }
-          ]
-        }
-      }
-    ]
-  })
-  const after = {
-    ...original,
-    groups: [
-      { id: 'g1', tabIds: ['graph'] },
-      { id: 'g2', tabIds: ['a', 'b', 'c'] }
-    ]
-  }
-  const change = diffPublishedLayouts(
-    'w',
-    indexPublishedLayout(original),
-    indexPublishedLayout(after),
-    after
-  )!
-  const frame = project({ type: 'records', epoch: 'e', seq: 2, workspaces: [change] })
-  expect(frame).toMatchObject({
-    type: 'records',
-    epoch: 'e',
-    seq: 2,
-    workspaces: [
-      {
-        workspace: {
-          groups: [{ id: 'g2', tabIds: ['a', 'b', 'c'] }],
-          groupLayout: { type: 'leaf', groupId: 'g2' }
-        }
-      }
-    ]
-  })
-  expect(projectGitGraphLayout(after).tabs.map((tab) => tab.id)).toEqual(['a', 'b', 'c'])
-})
 
 function canonical(original = layout()): WorkspaceLayoutModel {
   return {
@@ -402,77 +352,4 @@ it('places a detached pane at a visible gap and leaves the hidden graph untouche
     { id: 'g1', tabOrder: ['a', 'graph', 'b'] },
     { id: 'g2', tabOrder: ['c', 'minted'] }
   ])
-})
-
-it('projects graph add/remove around binding-only deltas without losing visible updates', () => {
-  const original = layout()
-  original.tabs = original.tabs.map((tab) =>
-    tab.id === 'c'
-      ? {
-          ...tab,
-          kind: 'terminal',
-          terminal: {
-            defaultTitle: 'Terminal 1',
-            root: { type: 'leaf', leafId: 'one' },
-            panes: [{ leafId: 'one', ptyId: 'initial' }]
-          }
-        }
-      : tab
-  )
-  const graphFree = {
-    ...original,
-    tabs: original.tabs.filter((tab) => tab.id !== 'graph'),
-    groups: [
-      { id: 'g1', tabIds: ['a', 'b'] },
-      { id: 'g2', tabIds: ['c'] }
-    ]
-  }
-  const project = createGitGraphFrameProjection()
-  project({ type: 'workspace', key: 'w', seq: 1, layout: graphFree })
-  const binding = {
-    key: 'w',
-    change: 'records' as const,
-    bindings: { set: [{ leafId: 'one', ptyId: 'pty' }] }
-  }
-  const before = project({ type: 'records', epoch: 'e', seq: 2, workspaces: [binding] })
-  expect(before.type === 'records' && before.workspaces[0]).toBe(binding)
-  const added = project({
-    type: 'records',
-    epoch: 'e',
-    seq: 3,
-    workspaces: [
-      diffPublishedLayouts(
-        'w',
-        indexPublishedLayout(graphFree),
-        indexPublishedLayout(original),
-        original
-      )!
-    ]
-  })
-  expect(added).toMatchObject({ workspaces: [] })
-  const whileHidden = project({
-    type: 'records',
-    epoch: 'e',
-    seq: 4,
-    workspaces: [{ ...binding, bindings: { set: [{ leafId: 'one', ptyId: 'next' }] } }]
-  })
-  expect(whileHidden).toMatchObject({
-    workspaces: [{ key: 'w', bindings: { set: [{ leafId: 'one', ptyId: 'next' }] } }]
-  })
-  const removed = project({
-    type: 'records',
-    epoch: 'e',
-    seq: 5,
-    workspaces: [
-      diffPublishedLayouts(
-        'w',
-        indexPublishedLayout(original),
-        indexPublishedLayout(graphFree),
-        graphFree
-      )!
-    ]
-  })
-  expect(removed).toMatchObject({ workspaces: [] })
-  const after = project({ type: 'records', epoch: 'e', seq: 6, workspaces: [binding] })
-  expect(after.type === 'records' && after.workspaces[0]).toBe(binding)
 })

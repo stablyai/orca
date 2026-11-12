@@ -24,6 +24,7 @@ type AddRepoDialogStepContentProps = {
   serverPath: string
   /** The path came from Windows' picker or an Explorer drop, so the host's browser is skipped. */
   serverPathPrefilled?: boolean
+  directEntry?: boolean
   isAddingServerPath: boolean
   cloneUrl: string
   cloneDestination: string
@@ -91,6 +92,7 @@ export function AddRepoDialogStepContent({
   nestedScanId,
   serverPath,
   serverPathPrefilled = false,
+  directEntry = false,
   isAddingServerPath,
   cloneUrl,
   cloneDestination,
@@ -184,6 +186,7 @@ export function AddRepoDialogStepContent({
         addProjectBusyLabel={addProjectBusyLabel}
         hostSelector={hostSelector}
         initialBrowsing={!(serverPathPrefilled && serverPath.trim())}
+        directEntry={directEntry}
         onServerPathChange={onServerPathChange}
         onAddServerPath={onAddServerPath}
         onOpenCloneStep={onOpenCloneStep}

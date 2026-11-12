@@ -9,7 +9,7 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { isRemoteRuntimeFileOperation } from '@/runtime/files/runtime-file-routing'
 import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import {

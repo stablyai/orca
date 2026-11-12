@@ -2,7 +2,7 @@ import {
   getWindowParkVisible,
   subscribeWindowParkVisibility,
   WINDOW_HIDE_PARK_GRACE_MS
-} from '@/lib/window-park-visibility'
+} from '@/lib/window-activity/window-park-visibility'
 import {
   createWindowVisibilitySubscriptionEntry,
   type SubscriptionEntry

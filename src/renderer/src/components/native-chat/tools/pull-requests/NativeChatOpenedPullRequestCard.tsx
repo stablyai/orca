@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { GitPullRequest } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import { DiffLineCounts } from '@/components/right-sidebar/source-control/listing/diff-line-counts'
 import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/links'

@@ -17,7 +17,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../../persistence/terminal-topology/terminal-pane-admission'
-import { resolveHostId } from '../../persistence/loading-store/session-host-partitions'
+import { resolveHostId } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { toComparableRelaySshPtyId } from '../../../shared/ssh-pty-id'
 import '../terminal/launch/spawned-pty-env-fixtures'
 import './runtime-test-module-registration.spec'
@@ -323,7 +323,8 @@ function createFolderWorkspaceRuntimeStore(
   return {
     ...store,
     getProjectGroups: () => [projectGroup],
-    getFolderWorkspaces: () => [folderWorkspace]
+    getFolderWorkspaces: () => [folderWorkspace],
+    getFolderWorkspace: (id: string) => (id === folderWorkspace.id ? folderWorkspace : undefined)
   }
 }
 

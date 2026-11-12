@@ -32,7 +32,7 @@ function fakeFile(bytes: Uint8Array): NativeMediaFile {
         set offset(next: number | null) {
           cursor = next ?? 0
         },
-        readBytes: (length: number) => {
+        readBytesSync: (length: number) => {
           const slice = bytes.subarray(cursor, cursor + length)
           cursor += slice.byteLength
           return slice
@@ -410,7 +410,7 @@ describe('reading chunks', () => {
           handles.push(ledger)
           return {
             offset: 0,
-            readBytes: (): Uint8Array => {
+            readBytesSync: (): Uint8Array => {
               throw new Error('the device stopped reading')
             },
             close: () => {

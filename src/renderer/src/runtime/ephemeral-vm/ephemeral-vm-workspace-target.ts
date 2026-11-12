@@ -93,7 +93,10 @@ export async function prepareEphemeralVmWorkspaceTarget(
         await assertRuntimeEnvironmentCapability(
           environmentId,
           WORKTREE_PROVISIONED_ROOT_RUNTIME_CAPABILITY,
-          'The Orca server on this VM cannot adopt a provisioned root. Update Orca on the VM.'
+          translate(
+            'auto.lib.ephemeralVm.provisionedRootNeedsUpdate',
+            'The Orca server on this VM cannot adopt a provisioned root. Update Orca on the VM.'
+          )
         )
       }
     } catch (error) {
