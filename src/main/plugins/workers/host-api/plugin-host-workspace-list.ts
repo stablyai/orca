@@ -9,6 +9,7 @@ import {
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
+import type { PluginHostServices } from './plugin-host-method-bindings'
 
 type WorkspaceList = PluginHostResult<'workspace.list'>
 type WorkspaceStatus = NonNullable<WorkspaceList['workspaces'][number]['status']>
@@ -102,9 +103,17 @@ export const PLUGIN_WORKSPACE_STATUS_TTL_MS = 1000
 // listing in flight, however long it takes, and its answer for a second after it lands. Keyed by
 // the runtime RPC it came from.
 type StatusRead = { read: Promise<WorkspaceStatuses>; settledAt: number | null }
-const statusReads = new WeakMap<object, StatusRead>()
+/** What the shared status listing is keyed by: the runtime RPC, or the services without one. */
+export type PluginStatusListingOwner =
+  | NonNullable<PluginHostServices['runtimeRpc']>
+  | PluginHostServices
+  | PluginRuntimeRpc
+const statusReads = new WeakMap<PluginStatusListingOwner, StatusRead>()
 
-function workspaceStatuses(call: PluginRuntimeRpc, source: object): Promise<WorkspaceStatuses> {
+function workspaceStatuses(
+  call: PluginRuntimeRpc,
+  source: PluginStatusListingOwner
+): Promise<WorkspaceStatuses> {
   const cached = statusReads.get(source)
   if (
     cached &&
@@ -158,7 +167,7 @@ function fitsBounds(row: {
 export async function listPluginWorkspaces(
   call: PluginRuntimeRpc,
   includeStatus: boolean,
-  statusSource: object = call
+  statusSource: PluginStatusListingOwner = call
 ): Promise<WorkspaceList> {
   const [listed, repos, folderList, statuses] = await Promise.all([
     call('worktree.list', { limit: PLUGIN_WORKSPACE_LIST_LIMIT }),
