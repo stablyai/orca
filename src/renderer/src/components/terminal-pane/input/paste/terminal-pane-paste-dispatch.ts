@@ -1,5 +1,6 @@
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { pasteTerminalText } from './terminal-bracketed-paste'
+import { isTerminalStartingForPaste } from './terminal-paste-startup-window'
 import { executeTerminalPastePlan } from './terminal-paste-executor'
 import { planTerminalPasteWithYield } from './terminal-paste-coordinator'
 import type {
@@ -40,7 +41,8 @@ export async function pasteTextIntoTerminalPane({
 }: PasteTextIntoTerminalPaneArgs): Promise<TerminalPasteExecutionResult> {
   // Why: before the program enables bracketed paste, a raw line break in a user's paste submits as Enter.
   const userPasteIntoStartingTerminal =
-    source !== 'programmatic' && transport?.isHoldingInput?.() === true
+    source !== 'programmatic' &&
+    (transport?.isHoldingInput?.() === true || isTerminalStartingForPaste(pane.terminal))
   const plan = await planTerminalPasteWithYield({
     text,
     source,

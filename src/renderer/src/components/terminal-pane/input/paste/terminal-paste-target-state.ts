@@ -13,6 +13,7 @@ type TerminalPasteTransport = {
   getPtyId: () => string | null
   isConnected: () => boolean
   isHoldingInput?: () => boolean
+  acceptsInputNow?: () => boolean
 }
 
 export type TerminalPasteTargetState = {
@@ -43,7 +44,9 @@ export function isTerminalPanePasteTargetCurrent({
   const livePtyId = transport.getPtyId()
   return (
     (livePtyId === ptyId || ptyId === null) &&
-    (transport.isConnected() || transport.isHoldingInput?.() === true)
+    (transport.isConnected() ||
+      transport.isHoldingInput?.() === true ||
+      transport.acceptsInputNow?.() === true)
   )
 }
 

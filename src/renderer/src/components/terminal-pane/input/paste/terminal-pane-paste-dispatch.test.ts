@@ -71,6 +71,45 @@ describe('pasteTextIntoTerminalPane into a starting terminal', () => {
     })
   })
 
+  it('keeps a pasted line break inert in a connected terminal whose shell is still starting', async () => {
+    const written: string[] = []
+    const transport = {
+      sendInput: (data: string) => {
+        written.push(data)
+        return true
+      },
+      sendInputAccepted: async () => true,
+      isHoldingInput: () => false
+    }
+    const terminal = {
+      modes: { bracketedPasteMode: false },
+      options: {},
+      paste: (data: string) => {
+        transport.sendInput(data)
+      },
+      input: (data: string) => {
+        transport.sendInput(data)
+      }
+    }
+
+    const result = await pasteTextIntoTerminalPane({
+      pane: { id: 1, leafId: 'leaf-1', terminal },
+      text: 'echo hi\n',
+      source: 'app-menu',
+      ptyId: 'pty-1',
+      runtime: { kind: 'local', platform: 'darwin', runtimeKey: 'local:darwin' },
+      transport,
+      inputKind: 'driving',
+      isTargetCurrent: () => true,
+      canContinue: () => true
+    })
+
+    expect({ status: result.status, written: written.join('') }).toEqual({
+      status: 'pasted',
+      written: '\x1b[200~echo hi\r\x1b[201~'
+    })
+  })
+
   it('refuses a paste too large for one held entry before writing any of it', async () => {
     await expect(pasteBeforeConnect('x'.repeat(70_000))).resolves.toEqual({
       status: 'rejected',

@@ -3,6 +3,7 @@ import { useAppStore } from '@/store/index'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-output/terminal-delivery-credit'
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-session/hibernation/agent-hibernation-output-activity'
 import { observeTerminalBracketedPasteModeOutput } from '../../input/paste/terminal-bracketed-paste'
+import { observeTerminalStartupPasteOutput } from '../../input/paste/terminal-paste-startup-window'
 import type { PtyDataMeta } from '../../pty-transport/delivery/pty-dispatcher'
 import { sendTerminalOscColorQueryReplies } from '../../emulation/terminal-capability-replies'
 import { isDropSentinelMeta } from '../../pty-transport/delivery/terminal-stream-position'
@@ -84,6 +85,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     }
     session.respondToTerminalPixelSizeQueries(data)
     observeTerminalBracketedPasteModeOutput(session.pane.terminal, data)
+    observeTerminalStartupPasteOutput(session.pane.terminal, data)
     // Why: under main side-effect authority these facts arrive via pty:sideEffect; byte-scanning here would double-fire. Remote PTYs / kill-switch-off keep this path.
     if (!session.mainSideEffectAuthority) {
       for (const link of session.observeTerminalGitHubPRLink(data)) {
