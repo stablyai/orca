@@ -37,8 +37,7 @@ export class HistoryReadConsumer {
     barrier: () => Promise<void>
   ): Promise<HistoryFlight | 'image' | null> {
     for (;;) {
-      this.signal.throwIfAborted()
-      await barrier()
+      await this.untilAborted(barrier())
       const found = this.findSync(journal, scrollbackRows)
       if (found === 'joined') {
         // A failed or revoked flight is this read's answer too; it does not reconstruct again.
@@ -49,20 +48,41 @@ export class HistoryReadConsumer {
       }
       const lane = await this.reads.waitLane(this.signal)
       if (lane === 'published') {
-        continue
-      }
-      const afterLane = this.findSync(journal, scrollbackRows)
-      if (afterLane !== 'miss') {
-        lane()
-        if (afterLane === 'joined') {
-          return (await this.awaitInterest()) ? 'image' : null
+        // Join at publication so a short flight cannot finish unseen; the barrier then proves it.
+        const flight = this.key ? this.reads.current(journal, this.key) : null
+        if (!flight) {
+          continue
         }
-        return afterLane
+        this.interest = flight.join()
+        try {
+          await this.untilAborted(barrier())
+        } catch (error) {
+          this.dropImage()
+          throw error
+        }
+        if (journal.derivedKey(scrollbackRows) !== flight.key) {
+          this.dropImage()
+          continue
+        }
+        return (await this.awaitInterest()) ? 'image' : null
       }
-      let releaseReplay: () => void
+      let releaseReplay: (() => void) | null = null
       try {
+        // The cut is captured after the lane wait, so its barrier settles again first.
+        await this.untilAborted(barrier())
+        const afterLane = this.findSync(journal, scrollbackRows)
+        if (afterLane !== 'miss') {
+          lane()
+          return afterLane === 'joined'
+            ? (await this.awaitInterest())
+              ? 'image'
+              : null
+            : afterLane
+        }
         releaseReplay = await journal.acquireRead(this.signal)
+        this.signal.throwIfAborted()
       } catch (error) {
+        releaseReplay?.()
         lane()
         throw error
       }
@@ -117,21 +137,38 @@ export class HistoryReadConsumer {
 
   private async awaitInterest(): Promise<boolean> {
     const interest = this.interest!
-    const abort = Promise.withResolvers<null>()
-    const onAbort = (): void => abort.resolve(null)
-    this.signal.addEventListener('abort', onAbort, { once: true })
     try {
-      const lease = await Promise.race([interest.result, abort.promise])
+      const lease = await this.untilAborted(interest.result)
       if (!lease) {
-        // A cancelled or failed join leaves only this interest; others keep theirs.
+        // A failed join leaves only this interest; others keep theirs.
         interest.leave()
         this.interest = null
-        this.signal.throwIfAborted()
         return false
       }
       this.interest = null
       this.lease = lease
       return true
+    } catch (error) {
+      // Withdraws only this participant, whether the abort came before or during the wait.
+      interest.leave()
+      this.interest = null
+      throw error
+    }
+  }
+
+  /**
+   * Waits for work this consumer does not own while honouring its one deadline, including an
+   * abort that already happened. The awaited work itself continues for its other owners.
+   */
+  private async untilAborted<T>(work: Promise<T>): Promise<T> {
+    this.signal.throwIfAborted()
+    const aborted = Promise.withResolvers<never>()
+    const onAbort = (): void => aborted.reject(this.signal.reason)
+    this.signal.addEventListener('abort', onAbort, { once: true })
+    try {
+      const value = await Promise.race([work, aborted.promise])
+      this.signal.throwIfAborted()
+      return value
     } finally {
       this.signal.removeEventListener('abort', onAbort)
     }

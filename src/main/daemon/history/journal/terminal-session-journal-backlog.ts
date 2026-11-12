@@ -77,6 +77,11 @@ export class TerminalJournalBacklog {
     )
   }
 
+  /** Each queued record's charge, head first, as a reader's cut freezes them. */
+  chargeSnapshot(): number[] {
+    return this.charges.slice()
+  }
+
   /** Returns the bytes released by committing these head records. */
   commit(records: number, headOffset: number): number {
     const released = this.charges.splice(0, records).reduce((sum, bytes) => sum + bytes, 0)

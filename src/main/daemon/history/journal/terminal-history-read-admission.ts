@@ -10,7 +10,8 @@ import type {
 /** Admitted deep-history consumers host-wide, waiting, joined and writing alike. */
 export const HISTORY_READ_CONSUMERS = 64
 
-type FitsReadSource = (journal: TerminalSessionJournal, bytes: number, records: number) => boolean
+/** Whether the host's writers plus this many frozen read bytes stay within the host bound. */
+type FitsReadSource = (frozenBytes: number) => boolean
 
 /**
  * Host owner of deep-history reads: bounded consumers, the derived-image budget, one cold lane
@@ -22,15 +23,20 @@ export class TerminalHistoryReads {
   private flight: HistoryFlight | null = null
   private readonly wakers = new Set<() => void>()
   private readonly severs = new Set<() => void>()
-  private sourceCharge = 0
+  private readonly sources = new Set<TerminalSessionJournal>()
 
   constructor(
     private readonly fits: FitsReadSource,
     readonly images = new DerivedHistoryImageBudget()
   ) {}
 
+  /** Frozen read backing no longer shared with any writer, counted once. */
   get readSourceBytes(): number {
-    return this.sourceCharge
+    let bytes = 0
+    for (const journal of this.sources) {
+      bytes += journal.frozenBytes
+    }
+    return bytes
   }
 
   /** A consumer record held until its reply settles; null when all are taken. */
@@ -53,15 +59,18 @@ export class TerminalHistoryReads {
 
   /** Reserves before the copy; release follows the severing of every reference into it. */
   reserveSource(journal: TerminalSessionJournal, sever: () => void): (() => void) | null {
-    const { bytes, records } = journal.pendingSource
-    if (!this.fits(journal, this.sourceCharge + bytes, records)) {
+    const release = journal.holdFrozenSource(sever, (bytes) =>
+      this.fits(this.readSourceBytes + bytes)
+    )
+    if (!release) {
       return null
     }
-    this.sourceCharge += bytes
+    this.sources.add(journal)
     this.severs.add(sever)
     return () => {
       this.severs.delete(sever)
-      this.sourceCharge -= bytes
+      this.sources.delete(journal)
+      release()
     }
   }
 

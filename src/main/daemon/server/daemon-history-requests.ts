@@ -7,7 +7,7 @@ import type { FlushHistoryRequest, FlushHistoryResult } from '../protocol/daemon
 import type { TerminalHistoryJournals } from '../history/journal/terminal-history-journals'
 import { resolveDaemonSessionScrollbackRows } from '../sessions/daemon-session-scrollback-window'
 import { encodeNdjson } from '../../../shared/main-process-ndjson-framer'
-import { withPreparedReply } from './daemon-reply-obligation'
+import { ABANDONED_REPLY, withPreparedReply } from './daemon-reply-obligation'
 // Deep reads end by the caller's own budget; a client that sends none still gets a finite one.
 const DEEP_SNAPSHOT_BUDGET_MS = 30_000
 
@@ -102,25 +102,38 @@ async function readDaemonHistorySnapshot(
       ? { snapshot, history: journal.outcome(snapshot.outputSequence ?? 0) }
       : unavailable
   }
-  // Past a gap no deeper answer exists; the live window stays its own operation.
-  const consumer = journal.gapped ? null : journals.reads.admit(request.signal)
+  // Every deep reply, refusals included, is owned by one of the bounded consumers.
+  const consumer = journals.reads.admit(request.signal)
   if (!consumer) {
-    return unavailable
+    return withPreparedReply({ ...unavailable }, ABANDONED_REPLY)
   }
   const failed = (): GetSnapshotResult =>
     withPreparedReply({ ...unavailable }, { release: () => consumer.release() })
+  if (journal.gapped) {
+    // Past a gap no deeper answer exists; the live window stays its own operation.
+    return failed()
+  }
   try {
     const found = await consumer.acquire(journal, scrollbackRows, async () => {
       // Settle ownership proof and held startup bytes so the cut's owner matches its bytes.
       await session.settleShellOwnershipConfirmation()
       session.snapshotBarrier()
     })
+    if (found !== null && found !== 'image') {
+      // The lane and replay waits may let startup bytes arrive; release them into the cut.
+      session.snapshotBarrier()
+    }
     const ready =
       found === 'image' ||
       (found !== null && found.capture() && (await consumer.awaitFlight(found)))
     const image = consumer.image
     // The incarnation it was read for must still own the ID; never publish it for a successor.
-    if (!ready || !image || journals.live(sessionId, session.incarnationId) !== journal) {
+    if (
+      !ready ||
+      !image ||
+      request.signal.aborted ||
+      journals.live(sessionId, session.incarnationId) !== journal
+    ) {
       return failed()
     }
     const result: GetSnapshotResult = { snapshot: image.snapshot, history: image.outcome }

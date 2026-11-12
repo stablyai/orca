@@ -17,14 +17,14 @@ export async function answerDaemonControlRequest(
   try {
     const result = await route()
     owned = takePreparedReply(result)
-    if (isNotify) {
+    if (isNotify || owned?.abandon) {
       return owned?.release()
     }
     line = owned?.line ?? encodeNdjson({ id: request.id, ok: true, payload: result })
     replied = onReply
   } catch (error) {
     owned ??= takePreparedReply(error)
-    if (isNotify) {
+    if (isNotify || owned?.abandon) {
       return owned?.release()
     }
     try {

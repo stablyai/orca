@@ -88,7 +88,9 @@ export async function createOrAttachTerminalSession(
           shellState: attachedSession.shellState,
           incarnationId: attachedSession.incarnationId,
           ...getDaemonSessionResultMetadata(attachedSession),
-          ...(isSessionInputClosed(attachedSession) ? { inputClosed: true as const } : {})
+          ...(isSessionInputClosed(attachedSession) ? { inputClosed: true as const } : {}),
+          // An encoded reply must carry the claim result its caller reports.
+          ...(opts.agentSessionEnsured ? { agentSessionEnsure: opts.agentSessionEnsured } : {})
         }
         if (hold?.capture(result) === 'retry') {
           hold.release()

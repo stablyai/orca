@@ -6,8 +6,15 @@
 export type PreparedDaemonReply = {
   /** The complete `{id, ok, payload}` line; written as-is, never encoded again. */
   readonly line?: string
+  /**
+   * A deep reply refused without an admitted consumer: never encoded or written, so refusals
+   * cannot grow socket backing beyond the 64 owned replies; the caller's own timeout answers.
+   */
+  readonly abandon?: true
   release(): void
 }
+
+export const ABANDONED_REPLY: PreparedDaemonReply = { abandon: true, release: () => {} }
 
 const prepared = new WeakMap<object, PreparedDaemonReply>()
 

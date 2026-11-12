@@ -117,6 +117,9 @@ export async function spawnAndPublishSession(
     }
     if (noFork) {
       rollbackHold()
+    } else if (historyHold) {
+      // A process may exist: its conservative disk truth stays, only the bookkeeping ends.
+      deps.historyJournals?.retireHold(historyHold)
     }
     throw error
   }

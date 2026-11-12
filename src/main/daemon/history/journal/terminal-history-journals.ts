@@ -13,11 +13,7 @@ import {
   writeTerminalHistoryMeta,
   type SessionMeta
 } from '../storage/terminal-history-metadata'
-import {
-  JOURNAL_SESSION_BACKLOG_BYTES,
-  JOURNAL_SESSION_BACKLOG_RECORDS,
-  TerminalSessionJournal
-} from './terminal-session-journal'
+import { TerminalSessionJournal } from './terminal-session-journal'
 import { TerminalHistoryReads } from './terminal-history-read-admission'
 import type { TerminalSessionJournalReads } from './terminal-session-journal-reads'
 
@@ -36,10 +32,7 @@ export type TerminalHistoryHold = {
 export class TerminalHistoryJournals {
   private readonly replay = new PrioritySemaphore(1)
   readonly reads = new TerminalHistoryReads(
-    (journal, readBytes, records) =>
-      this.backlogBytes + readBytes <= JOURNAL_HOST_BACKLOG_BYTES &&
-      journal.backlog + journal.pendingSource.bytes <= JOURNAL_SESSION_BACKLOG_BYTES &&
-      records + journal.pendingSource.records <= JOURNAL_SESSION_BACKLOG_RECORDS
+    (frozenBytes) => this.backlogBytes + frozenBytes <= JOURNAL_HOST_BACKLOG_BYTES
   )
   // Latest journal per ID until its actual I/O settles; a successor waits on it.
   private readonly byId = new Map<string, TerminalSessionJournal>()
@@ -126,6 +119,13 @@ export class TerminalHistoryJournals {
       this.logger?.log('terminal-history-hold-rollback-failed', {
         message: error instanceof Error ? error.message : String(error)
       })
+    }
+  }
+
+  /** Ends an unused hold's bookkeeping without touching the metadata it wrote. */
+  retireHold(hold: TerminalHistoryHold): void {
+    if (this.holds.get(hold.sessionId) === hold) {
+      this.holds.delete(hold.sessionId)
     }
   }
 

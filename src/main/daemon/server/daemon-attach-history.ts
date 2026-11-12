@@ -7,7 +7,11 @@ import type { HistoryFlight } from '../history/journal/terminal-history-read-adm
 import type { HistoryReadConsumer } from '../history/journal/terminal-history-read-consumer'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { TerminalHistoryUnavailableError } from '../protocol/daemon-history-protocol'
-import { withPreparedReply, type PreparedDaemonReply } from './daemon-reply-obligation'
+import {
+  ABANDONED_REPLY,
+  withPreparedReply,
+  type PreparedDaemonReply
+} from './daemon-reply-obligation'
 
 // Bounded like the former adapter overlay; the live terminal keeps running meanwhile.
 const ATTACH_HISTORY_IMAGE_DEADLINE_MS = 5_000
@@ -37,6 +41,7 @@ export function openAttachHistory(
   let consumer: HistoryReadConsumer | null = null
   let leading: HistoryFlight | null = null
   let line: string | undefined
+  let encodedClaim: CreateOrAttachResult['agentSessionEnsure']
   // One absolute deadline for every admission, join, retry and settlement of this attach.
   let signal: AbortSignal | null = null
   const owned = (): PreparedDaemonReply | null => {
@@ -57,7 +62,7 @@ export function openAttachHistory(
       consumer ??= journals.reads.admit(signal)
       const reader = consumer
       if (!reader) {
-        throw new TerminalHistoryUnavailableError()
+        throw withPreparedReply(new TerminalHistoryUnavailableError(), ABANDONED_REPLY)
       }
       reader.dropImage()
       line = undefined
@@ -87,6 +92,7 @@ export function openAttachHistory(
           // Owned once: a later launch-note change cannot alter the encoded reply.
           result.launchNote = structuredClone(result.launchNote)
           line = encodeOrUnavailable(encodeReply, result)
+          encodedClaim = result.agentSessionEnsure
           return 'captured'
         },
         release: () => {
@@ -129,6 +135,9 @@ export function openAttachHistory(
           throw new TerminalHistoryUnavailableError()
         }
         final = { ...result, snapshot: image.snapshot, history: image.outcome }
+        line = encodeOrUnavailable(encodeReply, final)
+      } else if (final.agentSessionEnsure !== encodedClaim) {
+        // A claim settled only after its inner attach: the line must report what the caller does.
         line = encodeOrUnavailable(encodeReply, final)
       }
       // Final membership check, with no await before the caller commits the attachment.

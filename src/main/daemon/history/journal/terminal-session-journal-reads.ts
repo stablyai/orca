@@ -24,6 +24,11 @@ import {
 } from './terminal-history-derived-image'
 
 export const JOURNAL_READ_PRIORITY = 1
+export const JOURNAL_SESSION_BACKLOG_BYTES = 8 * 1024 * 1024
+export const JOURNAL_SESSION_BACKLOG_RECORDS = 10_000
+
+/** A reader's frozen records: their charges as prefix sums and where the queue stood. */
+type FrozenReadSource = { base: number; cumulative: number[]; sever: () => void }
 
 type JournalState = 'open' | 'gap'
 
@@ -44,6 +49,7 @@ export class TerminalSessionJournalReads {
   /** Bumped by every applied record and every transition that can change a derived answer. */
   protected appliedRevision = 0
   private derived: DerivedHistoryImage | null = null
+  protected frozen: FrozenReadSource | null = null
   constructor(
     protected readonly host: TerminalSessionJournalHost,
     root: string,
@@ -105,9 +111,65 @@ export class TerminalSessionJournalReads {
     }
   }
 
-  /** Backing a reader's cut must reserve before copying: queued bytes and records. */
-  get pendingSource(): { bytes: number; records: number } {
-    return { bytes: this.queue.bytes, records: this.queue.length }
+  /**
+   * Holds the queue's current records for a reader before its copy. Records still queued share
+   * their strings with the writer and count once; records committed out of the queue, and the
+   * tail a later write may coalesce away from, count against this session's limits.
+   */
+  holdFrozenSource(sever: () => void, fitsHost: (bytes: number) => boolean): (() => void) | null {
+    const cumulative = [0]
+    for (const charge of this.queue.chargeSnapshot()) {
+      cumulative.push(cumulative.at(-1)! + charge)
+    }
+    const frozen: FrozenReadSource = { base: this.queue.committed, cumulative, sever }
+    this.frozen = frozen
+    if (!this.withinSessionLimits() || !fitsHost(this.frozenBytes)) {
+      this.frozen = null
+      return null
+    }
+    return () => {
+      if (this.frozen === frozen) {
+        this.frozen = null
+      }
+    }
+  }
+
+  /** Frozen backing no longer shared with the writer's queue. */
+  get frozenBytes(): number {
+    const frozen = this.frozen
+    if (!frozen) {
+      return 0
+    }
+    const { count, left } = this.frozenSplit(frozen)
+    const cumulative = frozen.cumulative
+    return cumulative[left] + (left < count ? cumulative[count] - cumulative[count - 1] : 0)
+  }
+
+  protected get frozenRecords(): number {
+    const frozen = this.frozen
+    if (!frozen) {
+      return 0
+    }
+    const { count, left } = this.frozenSplit(frozen)
+    return left + (left < count ? 1 : 0)
+  }
+
+  /** The writer's backlog and a reader's frozen-only backing, counted once, within limits. */
+  protected withinSessionLimits(): boolean {
+    return (
+      this.queue.bytes + this.frozenBytes <= JOURNAL_SESSION_BACKLOG_BYTES &&
+      this.queue.length + this.frozenRecords <= JOURNAL_SESSION_BACKLOG_RECORDS
+    )
+  }
+
+  private frozenSplit(frozen: FrozenReadSource): { count: number; left: number } {
+    const count = frozen.cumulative.length - 1
+    // A gap drops the queue: every frozen record is then the reader's alone.
+    const left =
+      this.state === 'gap'
+        ? count
+        : Math.min(count, Math.max(0, this.queue.committed - frozen.base))
+    return { count, left }
   }
 
   /** A reader's cut; only the returned handle holds the copied pending records. */

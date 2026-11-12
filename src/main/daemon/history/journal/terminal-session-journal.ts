@@ -9,8 +9,10 @@ import { TerminalSessionJournalReads } from './terminal-session-journal-reads'
 
 export type { TerminalHistoryCut } from './terminal-session-journal-contract'
 
-export const JOURNAL_SESSION_BACKLOG_BYTES = 8 * 1024 * 1024
-export const JOURNAL_SESSION_BACKLOG_RECORDS = 10_000
+export {
+  JOURNAL_SESSION_BACKLOG_BYTES,
+  JOURNAL_SESSION_BACKLOG_RECORDS
+} from './terminal-session-journal-reads'
 export const JOURNAL_FOLD_PRIORITY = 0
 export { JOURNAL_READ_PRIORITY } from './terminal-session-journal-reads'
 // Bounds appends to about one per second per streaming session (base pulled every 5 s).
@@ -54,12 +56,13 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
     if (opts.origin) {
       // The seed stays whole so a predecessor-replacing checkpoint can cover exactly it.
       this.originRecords = this.queue.sealAll()
-    } else if (
-      this.queue.bytes > JOURNAL_SESSION_BACKLOG_BYTES ||
-      this.queue.length > JOURNAL_SESSION_BACKLOG_RECORDS
-    ) {
-      this.gap('backlog_exhausted')
-      return
+    } else if (!this.withinSessionLimits()) {
+      // A frozen read yields first; only the writer's own backlog can exhaust the session.
+      this.frozen?.sever()
+      if (!this.withinSessionLimits()) {
+        this.gap('backlog_exhausted')
+        return
+      }
     }
     // The origin opens promptly; later output waits for its append window.
     if (this.writer) {
