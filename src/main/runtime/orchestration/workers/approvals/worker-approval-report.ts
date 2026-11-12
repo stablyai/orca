@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import {
   WorkerApprovalPayloadSchema,
+  closedApproval,
   type WorkerApprovalOutcome,
   type WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
@@ -13,7 +14,6 @@ import {
   stopReportId,
   type WorkerTurnStopReportDeps
 } from '../turn-stops/worker-turn-stop-report'
-import { closedApproval } from './worker-approval'
 
 /** A Claude terminal worker's approval id; a chat worker's is its journal item id. */
 export const TERMINAL_APPROVAL_ID_PREFIX = 'apr_'
