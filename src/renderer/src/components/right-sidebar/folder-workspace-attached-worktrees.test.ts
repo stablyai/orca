@@ -258,3 +258,19 @@ it('attaches cross-store roots only to the resolved host when folder IDs collide
   expect(local.childWorktrees).toEqual([])
   expect(paired.owners.map((owner) => owner.worktree.id)).toEqual(['root', 'child'])
 })
+
+it('retires an attached worktree at durable admission while legacy pending rows remain visible', () => {
+  const child = makeWorktree({ id: 'repo-1::/retiring', removing: true })
+  const list = (row: Worktree) =>
+    getAttachedWorktreesForFolderWorkspace({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      activeWorktreeId: null,
+      folderWorkspaces: [makeFolder()],
+      workspaceLineageByChildKey: { [row.id]: makeWorkspaceLineage(row) },
+      worktreeLineageById: {},
+      worktreesByRepo: { 'repo-1': [row] },
+      crossStoreChildrenByFolderId: new Map()
+    }).childWorktrees.map((row) => row.id)
+  expect(list(child)).toEqual(['repo-1::/retiring'])
+  expect(list({ ...child, removalRecorded: true })).toEqual([])
+})

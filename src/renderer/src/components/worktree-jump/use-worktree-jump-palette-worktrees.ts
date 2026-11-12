@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
 import { useMemo } from 'react'
 import { getStructuredChatWorktreeIds } from '@/components/sidebar/worktree-list/listing/visible-worktree-activity-inputs'
 import { filterWorkspaceRows } from '../../../../shared/workspace-view/workspace-row-filters'
@@ -187,7 +188,9 @@ export function useWorktreeJumpPaletteWorktrees({
   const sortedWorktrees = useMemo(
     () =>
       hasQuery
-        ? browserSortedWorktrees.filter((worktree) => !worktree.isArchived)
+        ? browserSortedWorktrees.filter(
+            (worktree) => !worktree.isArchived && !isWorktreeRetiredByRemoval(worktree)
+          )
         : searchScopeWorktrees,
     [hasQuery, browserSortedWorktrees, searchScopeWorktrees]
   )

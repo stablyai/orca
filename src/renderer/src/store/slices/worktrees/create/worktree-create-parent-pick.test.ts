@@ -93,3 +93,27 @@ describe('a composer parent picked on another machine', () => {
     })
   })
 })
+
+it('drops a retained parent pick after durable removal, but keeps legacy pending picks', () => {
+  const store = createTestStore()
+  const parent = makeWorktree({
+    id: 'repo1::/parent',
+    repoId: 'repo1',
+    hostId: 'local',
+    displayName: 'Parent',
+    removing: true
+  })
+  store.setState({ repos: [TEST_REPO], worktreesByRepo: { repo1: [parent] } })
+  expect(resolveWorktreeCreateParent(store.getState(), parent.id, 'local').staleBeforeCreate).toBe(
+    false
+  )
+  store.setState({ worktreesByRepo: { repo1: [{ ...parent, removalRecorded: true }] } })
+  for (const pick of [parent.id, `local|${parent.id}`]) {
+    expect(resolveWorktreeCreateParent(store.getState(), pick, 'local')).toMatchObject({
+      staleBeforeCreate: true
+    })
+    expect(
+      resolveWorktreeCreateParent(store.getState(), pick, 'runtime:other').crossStoreParentRow
+    ).toBeUndefined()
+  }
+})

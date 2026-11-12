@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal-visibility'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../ownership/worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { useAppStore } from '@/store/index'
@@ -155,7 +156,7 @@ export function activateAndRevealWorktreeWithOutcome(
     return { opened: { primaryTabId: null } }
   }
   const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
-  if (!wt) {
+  if (!wt || isWorktreeRetiredByRemoval(wt)) {
     return { refused: { reason: 'workspace-missing', failureNotified: false } }
   }
   const pendingCreationId = findPendingWorktreeCreationId(state.pendingWorktreeCreations, wt.id)

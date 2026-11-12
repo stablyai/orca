@@ -1,6 +1,7 @@
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import { isWorktreeRetiredByRemoval } from '../worktree/removal-visibility'
 import {
   filterWorkspaceRows,
   type WorkspaceRowFactReader,
@@ -46,7 +47,10 @@ export function selectVisibleSidebarWorktrees({
   // Keep valid nonarchived ancestors despite ordinary filters so children retain their hierarchy.
   const selectedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
 
-  let all = filterWorkspaceRows(rows, filters, facts)
+  let all = filterWorkspaceRows(rows, filters, {
+    ...facts,
+    isArchived: (row) => facts.isArchived(row) || isWorktreeRetiredByRemoval(row)
+  })
 
   if (forcedVisibleWorktreeIds && forcedVisibleWorktreeIds.length > 0) {
     const includedIds = new Set(all.map((worktree) => worktree.id))
@@ -54,7 +58,7 @@ export function selectVisibleSidebarWorktrees({
       const worktree = includedIds.has(worktreeId)
         ? undefined
         : [...ancestorByIdentity.values()].find((candidate) => candidate.id === worktreeId)
-      if (worktree) {
+      if (worktree && !isWorktreeRetiredByRemoval(worktree)) {
         includedIds.add(worktreeId)
         all.push(worktree)
       }
@@ -106,6 +110,9 @@ function addVisibleLineageAncestors(
   // An older peer's loop reaches a row again before it is included.
   const visiting = new Set<string>()
   const addWithAncestors = (worktree: Worktree): void => {
+    if (isWorktreeRetiredByRemoval(worktree)) {
+      return
+    }
     const identity = getWorktreeHostIdentity(worktree)
     if (included.has(identity) || visiting.has(identity)) {
       return

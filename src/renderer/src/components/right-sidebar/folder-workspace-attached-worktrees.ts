@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
@@ -107,7 +108,7 @@ export function getAttachedWorktreesForFolderWorkspace({
   const childrenByParent = new Map<string, Worktree[]>()
   for (const [identity, parent] of parentByIdentity) {
     const child = rows.get(identity)!
-    if (child.isArchived) {
+    if (child.isArchived || isWorktreeRetiredByRemoval(child)) {
       continue
     }
     const parentIdentity = getWorktreeHostIdentity(parent)
@@ -131,6 +132,7 @@ export function getAttachedWorktreesForFolderWorkspace({
     const identity = getWorktreeHostIdentity(worktree)
     if (
       worktree.isArchived ||
+      isWorktreeRetiredByRemoval(worktree) ||
       members.has(identity) ||
       selectedById.get(worktree.id) !== worktree
     ) {
@@ -220,7 +222,7 @@ export function getLineageChildrenByParentId(
   const queue = [...rootWorktreeIds]
   for (let index = 0; index < queue.length; index += 1) {
     for (const child of projectedChildrenByParentId.get(queue[index]) ?? []) {
-      if (child.isArchived || includedIds.has(child.id)) {
+      if (child.isArchived || isWorktreeRetiredByRemoval(child) || includedIds.has(child.id)) {
         continue
       }
       includedIds.add(child.id)
@@ -231,7 +233,8 @@ export function getLineageChildrenByParentId(
   const descendantsByParentId = new Map<string, Worktree[]>()
   for (const parentId of includedIds) {
     const children = (projectedChildrenByParentId.get(parentId) ?? []).filter(
-      (child) => includedIds.has(child.id) && !child.isArchived
+      (child) =>
+        includedIds.has(child.id) && !child.isArchived && !isWorktreeRetiredByRemoval(child)
     )
     if (children.length > 0) {
       descendantsByParentId.set(parentId, children)
@@ -255,7 +258,7 @@ export function getLineageChildWorktree(
     return null
   }
   const worktree = worktreeById.get(childScope.worktreeId)
-  if (!worktree || worktree.isArchived) {
+  if (!worktree || worktree.isArchived || isWorktreeRetiredByRemoval(worktree)) {
     return null
   }
   if (lineage.childInstanceId && lineage.childInstanceId !== worktree.instanceId) {

@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
 import {
   getRepoDisplayLabelKey,
   getRepoDisplayLabelsByPath
@@ -139,7 +140,7 @@ export function buildPaletteFilterModel({
   const worktreeCountByHostId = new Map<string, number>()
   const worktreeCountByRepoId = new Map<string, number>()
   for (const worktree of worktrees) {
-    if (worktree.isArchived) {
+    if (worktree.isArchived || isWorktreeRetiredByRemoval(worktree)) {
       continue
     }
     const hostId = resolveWorktreeFilterHostId(worktree, repoById, defaultHostId)

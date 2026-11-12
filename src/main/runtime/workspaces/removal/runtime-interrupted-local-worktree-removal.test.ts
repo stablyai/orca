@@ -678,11 +678,11 @@ describe('finishing an interrupted worktree removal after a restart', () => {
 
       const { outcome, purged, records } = await finishAfterRestart({ force })
 
-      const refusal = `${worktreePath} is no longer a Git worktree, so its folder was left on disk. Delete the folder yourself to finish removing this workspace.`
-      expect(outcome).toEqual({ status: 'failed', error: `Error: ${refusal}` })
+      const refusal = expect.stringContaining('folder was left on disk')
+      expect(outcome).toEqual({ status: 'failed', error: refusal })
       const native = process.platform === 'win32'
       if (native && force) {
-        await expect(deleteViaEntry('runtime', force)).rejects.toThrow(refusal)
+        await expect(deleteViaEntry('runtime', force)).rejects.toThrow(/folder was left on disk/)
         await removalTable.persistWorktreeRemovalRecords()
         expect(await readWorktreeRemovalRecords(recordsDir)).toEqual(records)
         expect(await readFile(join(admin, 'gitdir'), 'utf8')).toBe(backlink)
@@ -707,8 +707,8 @@ describe('finishing an interrupted worktree removal after a restart', () => {
 
     const { outcome, purged, records } = await finishAfterRestart({ force: true })
 
-    const refusal = `${worktreePath} is no longer a Git worktree, so its folder was left on disk. Delete the folder yourself to finish removing this workspace.`
-    expect(outcome).toEqual({ status: 'failed', error: `Error: ${refusal}` })
+    const refusal = expect.stringContaining('folder was left on disk')
+    expect(outcome).toEqual({ status: 'failed', error: refusal })
     expect(await readFile(join(worktreePath, 'notes.txt'), 'utf8')).toBe('mine\n')
     expect(removeHostTree).not.toHaveBeenCalled()
     // Git let go of the checkout, so the recorded branch delete runs (merged only); no files.

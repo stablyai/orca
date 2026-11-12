@@ -39,7 +39,8 @@ import {
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   removesInBackground,
-  startBackgroundWorktreeRemoval
+  startBackgroundWorktreeRemoval,
+  waitForWorktreeRemovalAcceptance
 } from '../../../workspaces/removal/worktree-background-removal'
 
 export async function removeRegisteredLocalWorktree(
@@ -171,8 +172,10 @@ export async function removeRegisteredLocalWorktree(
       return result
     },
     publish: () => runtime.publishWorktreeRemovalChange(repoId),
+    admissionFailed: () => removalGate.finish(false),
     cleanupPushTargetRemote: cleanupPushTarget
   })
+  await waitForWorktreeRemovalAcceptance(args.worktreeId)
   return { removing: true }
 }
 

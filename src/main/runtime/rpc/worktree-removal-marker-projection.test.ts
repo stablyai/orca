@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
@@ -8,7 +11,9 @@ import type {
 } from '../../../shared/runtime-worktree-contracts'
 import {
   _resetPendingWorktreeRemovalsForTests,
-  startBackgroundWorktreeRemoval
+  startBackgroundWorktreeRemoval,
+  loadWorktreeRemovalRecords,
+  waitForWorktreeRemovalAcceptance
 } from '../../workspaces/removal/worktree-background-removal'
 import { snapshotPendingWorktreeRemovals } from '../../workspaces/removal/worktree-removal-listing'
 import {
@@ -44,7 +49,10 @@ function psResult(): RuntimeWorktreePsResult {
 }
 
 describe('worktree listings while a checkout is being deleted', () => {
-  beforeEach(() => {
+  let directory = ''
+  beforeEach(async () => {
+    directory = await mkdtemp(join(tmpdir(), 'orca-marker-projection-'))
+    await loadWorktreeRemovalRecords(directory)
     void startBackgroundWorktreeRemoval({
       removal: {
         worktreeId: removingId,
@@ -57,10 +65,12 @@ describe('worktree listings while a checkout is being deleted', () => {
       run: () => new Promise(() => {}),
       publish: () => {}
     })
+    await waitForWorktreeRemovalAcceptance(removingId)
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     _resetPendingWorktreeRemovalsForTests()
+    await rm(directory, { recursive: true, force: true })
   })
 
   it('marks the row for a desktop or web client that negotiated the marker', () => {
@@ -69,13 +79,13 @@ describe('worktree listings while a checkout is being deleted', () => {
       projectWorktreeListRemovals(listResult(), context, snapshotPendingWorktreeRemovals())
         .worktrees
     ).toEqual([
-      { id: removingId, hostId: 'local', removing: true },
+      { id: removingId, hostId: 'local', removing: true, removalRecorded: true },
       { id: keptId, hostId: 'local' }
     ])
     expect(
       projectWorktreePsRemovals(psResult(), context, snapshotPendingWorktreeRemovals()).worktrees
     ).toEqual([
-      { worktreeId: removingId, hostId: 'local', removing: true },
+      { worktreeId: removingId, hostId: 'local', removing: true, removalRecorded: true },
       { worktreeId: keptId, hostId: 'local' }
     ])
   })

@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal-visibility'
 import { matchPaletteDocument } from '../../../../../../shared/palette-match/match-document'
 import { preparePaletteQuery } from '../../../../../../shared/palette-match/palette-query'
 import type { MatchRange } from '../../../../../../shared/palette-match/normalized-text'
@@ -80,7 +81,9 @@ export function getWorktreePaletteSearchScope(args: {
   }
 
   // Explicit search recovers sleeping/default-branch workspaces hidden by sidebar filters.
-  return args.allWorktrees.filter((worktree) => !worktree.isArchived)
+  return args.allWorktrees.filter(
+    (worktree) => !worktree.isArchived && !isWorktreeRetiredByRemoval(worktree)
+  )
 }
 
 function makeEmptyPaletteSearchResult(

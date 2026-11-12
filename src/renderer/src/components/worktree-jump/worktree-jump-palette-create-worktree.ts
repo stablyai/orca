@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
 import { worktreeMatchesGitHubNumber } from '@/lib/work-items/github/github-work-item-workspace-attachment'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
@@ -184,6 +185,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
       const matches = workspaces.filter(
         (worktree) =>
           !worktree.isArchived &&
+          !isWorktreeRetiredByRemoval(worktree) &&
           worktreeMatchesGitHubNumber(
             worktree,
             ghNumber,

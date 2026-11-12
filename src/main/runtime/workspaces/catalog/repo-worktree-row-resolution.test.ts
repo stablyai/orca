@@ -1,3 +1,8 @@
+import {
+  joinResolvedWorktreeScans,
+  type ResolvedWorktreeRepoScans
+} from './resolved-worktree-scan-join'
+import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { Repo } from '../../../../shared/repo-types'
@@ -9,12 +14,18 @@ import type { Store } from '../../../persistence/loading-store/store'
 import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
 import { buildDetectedGitWorktrees } from '../../../ipc/worktrees/listing/ssh-worktree-fallback'
 import {
+  projectRepoWorktreeRows,
   resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
   scanRepoWorktreeRows,
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import {
+  pendingWorktreeRemovals,
+  recordedWorktreeRemovals,
+  finishedWorktreeRemovals
+} from '../../../workspaces/removal/worktree-removal-table'
 import { bumpLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
 
 function repo(
@@ -234,3 +245,105 @@ describe('folder-to-Git checkout identity', () => {
     }
   )
 })
+
+describe('durable removal projection onto cached host rows', () => {
+  it('retires admitted rows without another scan and fences old rows after cleanup, only on their host', async () => {
+    const local = repo('shared', '/local/repo', { executionHostId: 'local' })
+    const remote = repo('shared', '/remote/repo', { executionHostId: 'ssh:builder' })
+    const deps = createDeps([local, remote])
+    const scan = await scanRepoWorktreeRows(deps, local, new Map())
+    const id = 'shared::/same/worktree'
+    const record = {
+      worktreeId: id,
+      repoId: local.id,
+      repoPath: local.path,
+      worktreePath: '/same/worktree',
+      branch: 'feature',
+      head: 'abc123',
+      deleteBranch: false,
+      force: false,
+      requestedAt: 1
+    }
+    pendingWorktreeRemovals.set(id, record)
+    try {
+      expect(projectRepoWorktreeRows(deps, local, scan, {})).toMatchObject([{ id }])
+      expect(projectRepoWorktreeRows(deps, local, scan, {})[0].removalRecorded).toBeUndefined()
+      recordedWorktreeRemovals.add(record)
+      expect(projectRepoWorktreeRows(deps, local, scan, {})).toMatchObject([
+        { id, removing: true, removalRecorded: true }
+      ])
+      expect(projectRepoWorktreeRows(deps, remote, scan, {})[0].removalRecorded).toBeUndefined()
+      pendingWorktreeRemovals.delete(id)
+      finishedWorktreeRemovals.add(record)
+      expect(projectRepoWorktreeRows(deps, local, scan, {})).toEqual([])
+      expect(projectRepoWorktreeRows(deps, remote, scan, {})).toMatchObject([{ id }])
+    } finally {
+      pendingWorktreeRemovals.delete(id)
+    }
+  })
+})
+
+it.each([
+  [12, 750],
+  [120, 7500]
+])(
+  'keeps removal witnesses repo-scoped without recopying on metadata joins (%i repos, %i removals)',
+  (repoCount, removalCount) => {
+    const repos = Array.from({ length: repoCount }, (_, i) =>
+      repo(`fleet-${i}`, `/fleet/${i}`, { executionHostId: 'local' })
+    )
+    const deps = createDeps(repos)
+    const scans: ResolvedWorktreeRepoScans = new Map(
+      repos.map((owner) => [
+        getRepoHostIdentityForParts(owner.id, 'local'),
+        { ok: true, worktrees: [], gitRun: null }
+      ])
+    )
+    const records = Array.from({ length: removalCount }, (_, i) => ({
+      worktreeId: `fleet-0::/retiring/${i}`,
+      repoId: 'fleet-0',
+      repoPath: '/fleet/0',
+      worktreePath: `/retiring/${i}`,
+      branch: `feature-${i}`,
+      head: 'abc123',
+      force: false,
+      deleteBranch: false,
+      requestedAt: 1
+    }))
+    for (const record of records) {
+      pendingWorktreeRemovals.set(record.worktreeId, record)
+      recordedWorktreeRemovals.add(record)
+    }
+    const firstScan = scans.get(getRepoHostIdentityForParts('fleet-0', 'local'))!
+    firstScan.worktrees = [gitWorktree('/retiring/0')]
+    try {
+      const joined = joinResolvedWorktreeScans(deps.store, () => deps, scans)
+      expect(joined.worktrees).toMatchObject([{ id: records[0].worktreeId, removalRecorded: true }])
+      expect([...scans.values()].map((scan) => scan.removals?.size ?? 0)).toEqual([
+        removalCount,
+        ...Array(repoCount - 1).fill(0)
+      ])
+      const witnesses = firstScan.removals!
+      const enumerateWitnesses = vi.spyOn(witnesses, Symbol.iterator)
+      const enumerateGlobal = vi.spyOn(pendingWorktreeRemovals, Symbol.iterator)
+      try {
+        deps.metaById[records[0].worktreeId] = { displayName: 'changed metadata' } as WorktreeMeta
+        joinResolvedWorktreeScans(deps.store, () => deps, scans)
+        // Unrelated metadata cannot invalidate removal membership: no witness entries need copying.
+        expect(enumerateWitnesses).not.toHaveBeenCalled()
+        expect(enumerateGlobal).not.toHaveBeenCalled()
+        expect(firstScan.removals).toBe(witnesses)
+      } finally {
+        enumerateWitnesses.mockRestore()
+        enumerateGlobal.mockRestore()
+      }
+      pendingWorktreeRemovals.delete(records[0].worktreeId)
+      finishedWorktreeRemovals.add(records[0])
+      expect(joinResolvedWorktreeScans(deps.store, () => deps, scans).worktrees).toEqual([])
+    } finally {
+      for (const record of records) {
+        pendingWorktreeRemovals.delete(record.worktreeId)
+      }
+    }
+  }
+)

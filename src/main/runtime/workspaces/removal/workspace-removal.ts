@@ -13,7 +13,10 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { finishAcceptedWorktreeRemoval } from '../../../workspaces/removal/worktree-background-removal'
+import {
+  finishAcceptedWorktreeRemoval,
+  waitForWorktreeRemovalAcceptance
+} from '../../../workspaces/removal/worktree-background-removal'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   getRuntimeWorktreeRemovalOptionsKey,
@@ -90,6 +93,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
     // Why: a retry or a second client asking while Git still deletes joins that removal.
     const pending = this.joinPendingWorktreeRemoval(removalTarget.id, options)
     if (pending) {
+      await waitForWorktreeRemovalAcceptance(removalTarget.id, cleanupHostId)
       return options.waitForBackgroundRemoval ? await pending : { removing: true }
     }
     const emitRemoved = (): void =>
@@ -98,10 +102,8 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
         worktreeId: removalTarget.id,
         path: removalTarget.path
       })
-    const cleanupScopeKey = preservedBranchCleanupScopeKey({
-      worktreeId: removalTarget.id,
-      hostId: cleanupHostId
-    })
+    const { id: worktreeId } = removalTarget
+    const cleanupScopeKey = preservedBranchCleanupScopeKey({ worktreeId, hostId: cleanupHostId })
     const optionsKey = getRuntimeWorktreeRemovalOptionsKey({
       force,
       runHooks,

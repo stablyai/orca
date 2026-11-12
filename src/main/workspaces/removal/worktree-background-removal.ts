@@ -1,4 +1,15 @@
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  addPendingRemoval,
+  settlementsByWorktreeId,
+  waitForPendingWorktreeRemoval,
+  type RemovalSettlement
+} from './worktree-removal-settlement'
+export {
+  waitForPendingWorktreeRemoval,
+  waitForWorktreeRemovalAcceptance,
+  finishAcceptedWorktreeRemoval
+} from './worktree-removal-settlement'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { normalizeLocalBranchRef } from '../../git/worktrees/worktree-operation-options'
@@ -13,8 +24,9 @@ import {
   finishedWorktreeRemovals,
   pendingWorktreeRemovals,
   persistWorktreeRemovalRecords,
-  setWorktreeRemovalRecordsDirectory,
-  worktreeCheckoutExists
+  recordedWorktreeRemovals,
+  recordWorktreeRemoval,
+  setWorktreeRemovalRecordsDirectory
 } from './worktree-removal-table'
 
 export type BackgroundWorktreeRemovalJob = {
@@ -24,16 +36,11 @@ export type BackgroundWorktreeRemovalJob = {
   publish: () => void
   /** Clean the push-target remote even when Git partially fails. */
   cleanupPushTargetRemote?: () => Promise<void>
-}
-
-type RemovalSettlement = {
-  result: Promise<RemoveWorktreeResult>
-  resolve: (result: RemoveWorktreeResult) => void
-  reject: (error: unknown) => void
+  /** Release teardown fences when durable admission fails before run can take ownership. */
+  admissionFailed?: () => Promise<void>
 }
 
 const jobsByWorktreeId = new Map<string, Promise<void>>()
-const settlementsByWorktreeId = new Map<string, RemovalSettlement>()
 const stopControllers = new Set<AbortController>()
 // Loaded removals' terminal/watcher fences, held until the resumed job takes its own gate.
 const startupFencesByWorktreeId = new Map<string, WatcherRemovalGate>()
@@ -48,7 +55,7 @@ export async function loadWorktreeRemovalRecords(
   for (const record of await readWorktreeRemovalRecords(directory)) {
     if (record.failure) {
       // Removed repos have no listing to clear a failed-removal record.
-      if (hasRepo(record.repoId) && (await worktreeCheckoutExists(record.worktreePath))) {
+      if (hasRepo(record.repoId)) {
         failedWorktreeRemovals.set(record.worktreeId, record)
       } else {
         droppedFailure = true
@@ -56,7 +63,8 @@ export async function loadWorktreeRemovalRecords(
       continue
     }
     if (!pendingWorktreeRemovals.has(record.worktreeId)) {
-      addPendingRemoval(record)
+      recordedWorktreeRemovals.add(record)
+      addPendingRemoval(record).accept()
       try {
         startupFencesByWorktreeId.set(
           record.worktreeId,
@@ -78,57 +86,6 @@ export function releaseStartupRemovalFence(worktreeId: string): void {
   startupFencesByWorktreeId.delete(worktreeId)
 }
 
-function addPendingRemoval(record: WorktreeRemovalRecord): RemovalSettlement {
-  let resolve!: RemovalSettlement['resolve']
-  let reject!: RemovalSettlement['reject']
-  const result = new Promise<RemoveWorktreeResult>((settle, fail) => {
-    resolve = settle
-    reject = fail
-  })
-  // Older clients and restart-resumed jobs may have no caller to handle a rejection.
-  result.catch(() => {})
-  const settlement = { result, resolve, reject }
-  failedWorktreeRemovals.delete(record.worktreeId)
-  pendingWorktreeRemovals.set(record.worktreeId, record)
-  settlementsByWorktreeId.set(record.worktreeId, settlement)
-  return settlement
-}
-
-/** Pending removals are host-local; never join a same-ID checkout on another host. */
-export function waitForPendingWorktreeRemoval(
-  worktreeId: string,
-  hostId?: ExecutionHostId,
-  deleteBranch?: boolean
-): Promise<RemoveWorktreeResult> | undefined {
-  if ((hostId ?? LOCAL_EXECUTION_HOST_ID) !== LOCAL_EXECUTION_HOST_ID) {
-    return undefined
-  }
-  assertAcceptedBranchChoice(pendingWorktreeRemovals.get(worktreeId), deleteBranch)
-  return settlementsByWorktreeId.get(worktreeId)?.result
-}
-
-function assertAcceptedBranchChoice(
-  record: WorktreeRemovalRecord | undefined,
-  deleteBranch: boolean | undefined
-): void {
-  if (record && deleteBranch !== undefined && record.deleteBranch !== deleteBranch) {
-    throw new Error(
-      `Orca already accepted removal of ${record.worktreePath} with a different branch choice. That cleanup may already have run; check the branch before retrying.`
-    )
-  }
-}
-
-/** Await the delete while preserving the acceptance result fields. */
-export async function finishAcceptedWorktreeRemoval<T extends RemoveWorktreeResult>(
-  accepted: T,
-  worktreeId: string,
-  hostId?: ExecutionHostId
-): Promise<Omit<T, 'removing'>> {
-  const { removing, ...acceptance } = accepted
-  const pending = removing ? waitForPendingWorktreeRemoval(worktreeId, hostId) : undefined
-  return pending ? { ...acceptance, ...(await pending) } : acceptance
-}
-
 export function removesInBackground(
   worktreePath: string,
   options: { wslDistro?: string }
@@ -145,6 +102,14 @@ export function startBackgroundWorktreeRemoval(
     > & { worktree: Pick<GitWorktreeInfo, 'path' | 'branch' | 'head'> }
   } & BackgroundWorktreeRemovalJob
 ): Promise<RemoveWorktreeResult> {
+  const pending = waitForPendingWorktreeRemoval(
+    args.removal.worktreeId,
+    undefined,
+    args.removal.deleteBranch
+  )
+  if (pending) {
+    return pending
+  }
   const { worktree, ...accepted } = args.removal
   const record: WorktreeRemovalRecord = {
     ...accepted,
@@ -154,8 +119,7 @@ export function startBackgroundWorktreeRemoval(
     requestedAt: Date.now()
   }
   const settlement = addPendingRemoval(record)
-  runBackgroundWorktreeRemoval(record, args, persistWorktreeRemovalRecords())
-  publishSafely(args.publish)
+  runBackgroundWorktreeRemoval(record, args, recordWorktreeRemoval(record))
   return settlement.result
 }
 
@@ -167,6 +131,10 @@ export function retryFailedWorktreeRemoval(
   force?: boolean,
   deleteBranch?: boolean
 ): Promise<RemoveWorktreeResult> | undefined {
+  const pending = waitForPendingWorktreeRemoval(worktreeId, hostId, deleteBranch)
+  if (pending) {
+    return pending
+  }
   const failed =
     (hostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID
       ? failedWorktreeRemovals.get(worktreeId)
@@ -189,8 +157,7 @@ export function retryFailedWorktreeRemoval(
       return job.run(stopSignal)
     }
   }
-  runBackgroundWorktreeRemoval(record, leftoverOnly, persistWorktreeRemovalRecords())
-  publishSafely(job.publish)
+  runBackgroundWorktreeRemoval(record, leftoverOnly, recordWorktreeRemoval(record))
   return settlement.result
 }
 
@@ -240,7 +207,31 @@ async function settleBackgroundWorktreeRemoval(
   recorded: Promise<void>,
   stopSignal: AbortSignal
 ): Promise<void> {
-  await waitForRecordWrite(record, recorded)
+  try {
+    await recorded
+  } catch (error) {
+    const refusal = new Error(
+      'Could not start deletion. The workspace is still on disk; reopen any stopped terminals and try again.',
+      { cause: error }
+    )
+    if (pendingWorktreeRemovals.get(record.worktreeId) === record) {
+      pendingWorktreeRemovals.delete(record.worktreeId)
+      settlementsByWorktreeId.delete(record.worktreeId)
+    }
+    try {
+      await job.admissionFailed?.()
+    } catch (cleanupError) {
+      console.warn('[worktrees] failed to release refused removal', cleanupError)
+    }
+    settlement?.refuse(refusal)
+    settlement?.reject(refusal)
+    publishSafely(job.publish)
+    return
+  }
+  if (settlement) {
+    settlement.accept()
+  }
+  publishSafely(job.publish)
   let settle: (settlement: RemovalSettlement) => void
   let failure: WorktreeRemovalRecord['failure']
   try {
@@ -282,28 +273,6 @@ async function settleBackgroundWorktreeRemoval(
   publishSafely(job.publish)
   if (cleared) {
     await persistWorktreeRemovalRecords()
-  }
-}
-
-// Prefer a durable resume record, but do not hold deletion indefinitely on stalled disk writes.
-const RECORD_WRITE_WAIT_MS = 2_000
-
-async function waitForRecordWrite(
-  record: WorktreeRemovalRecord,
-  recorded: Promise<void>
-): Promise<void> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timedOut = await Promise.race([
-    recorded.then(() => false),
-    new Promise<boolean>((resolve) => {
-      timer = setTimeout(() => resolve(true), RECORD_WRITE_WAIT_MS)
-    })
-  ])
-  clearTimeout(timer)
-  if (timedOut) {
-    console.warn(
-      `[worktrees] removal record for ${record.worktreePath} not on disk after ${RECORD_WRITE_WAIT_MS} ms; deleting anyway`
-    )
   }
 }
 

@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal-visibility'
 import { toWorktreeRelativePath } from '../../../../../shared/terminal/links/terminal-links'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
@@ -10,7 +11,14 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 
-type WorkspaceRow = { id: string; path: string; hostId?: string; isArchived?: boolean }
+type WorkspaceRow = {
+  id: string
+  path: string
+  hostId?: string
+  isArchived?: boolean
+  removing?: true
+  removalRecorded?: true
+}
 
 export type PluginEditorWorkspace = {
   worktreeId: string
@@ -47,7 +55,7 @@ export function findWorkspaceShowingFile(
   let best: (PluginEditorWorkspace & { depth: number; active: boolean }) | null = null
   for (const worktree of workspaces) {
     const local = worktree.hostId === undefined || worktree.hostId === LOCAL_EXECUTION_HOST_ID
-    if (!local || worktree.isArchived) {
+    if (!local || worktree.isArchived || isWorktreeRetiredByRemoval(worktree)) {
       continue
     }
     for (const filePath of paths) {
