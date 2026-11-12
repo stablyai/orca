@@ -25194,7 +25194,13 @@
       "alwaysAllow": "Always allow {{host}} for this plugin"
     },
     "actionConfirmation": {
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "deleteAutomation": "{{plugin}} wants to delete the automation “{{automation}}”",
+      "deleteAutomationDetail": "The plugin did not create it. Its schedule stops and it is removed from Automations.",
+      "delete": "Delete",
+      "changeAutomation": "{{plugin}} wants to change the automation “{{automation}}”",
+      "changeAutomationDetail": "The plugin did not create it. It would change: {{fields}}.",
+      "change": "Change"
     }
   },
   "checks": {

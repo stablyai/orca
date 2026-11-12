@@ -2,10 +2,21 @@ import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from '../contributions/plugin-event-contribution'
 import { ALL_SURFACES, FRAMES_ONLY, spec } from './plugin-host-method-spec'
 import { AGENT_STATUS_STATES } from '../../agent-status/contracts/agent-status-types'
+import { hasUnsafeProviderSessionIdChars } from '../../agent-session/lifecycle/agent-session-resume'
 import {
   PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS,
   pluginBridgeNameSchema
 } from './plugin-panel-bridge-protocol'
+
+/** An agent's own session id, as it reports it; `agent.resume` takes it. */
+export const pluginAgentSessionIdSchema = z
+  .string()
+  .min(1)
+  .max(512)
+  .refine(
+    (id) => id === id.trim() && !id.startsWith('-') && !hasUnsafeProviderSessionIdChars(id),
+    'invalid session id'
+  )
 
 const pluginRequestParams = z.strictObject({
   name: pluginBridgeNameSchema,
@@ -29,7 +40,10 @@ const agentsListResult = z.object({
         agent: z.string().max(128).nullable(),
         state: z.enum(AGENT_STATUS_STATES),
         /** When it entered `state`, in ms since the epoch. */
-        stateStartedAt: z.number().finite()
+        stateStartedAt: z.number().finite(),
+        /** The agent's own session id, which `agent.resume` takes; null when Orca has none.
+         *  Absent before host API 1.8. */
+        sessionId: pluginAgentSessionIdSchema.nullable().optional()
       })
     )
     .max(PLUGIN_AGENT_LIST_LIMIT)

@@ -19,7 +19,8 @@ export const PLUGIN_PROJECT_LIST_LIMIT = 500
 export const PLUGIN_TERMINAL_READ_MAX_LINES = 2000
 export const PLUGIN_HOST_ID_MAX_LENGTH = 1024
 const ID_MAX = PLUGIN_HOST_ID_MAX_LENGTH
-const TEXT_MAX = 4096
+export const PLUGIN_HOST_TEXT_MAX_LENGTH = 4096
+const TEXT_MAX = PLUGIN_HOST_TEXT_MAX_LENGTH
 
 export const pluginWorkspaceIdSchema = z.string().min(1).max(ID_MAX)
 export const pluginTerminalIdSchema = z.string().min(1).max(ID_MAX)
@@ -144,16 +145,20 @@ const isHiddenOrControl = (char: string): boolean => {
   const code = char.codePointAt(0) ?? 0
   return HIDDEN_OR_CONTROL_RANGES.some(([low, high]) => code >= low && code <= high)
 }
+/** One line of plain text: no control, bidi or invisible characters. */
+export function isPluginPlainLine(text: string): boolean {
+  return ![...text].some(isHiddenOrControl)
+}
+/** A name Orca shows as a label: it could otherwise read as another item's name. */
+export const pluginLabelNameSchema = z
+  .string()
+  .max(PLUGIN_WORKSPACE_NAME_MAX)
+  .refine((name) => name.trim().length > 0, 'name must not be blank')
+  .refine(isPluginPlainLine, 'name must be one line of plain text')
 const workspaceRenameParams = z.strictObject({
   workspaceId,
   /** The name the sidebar shows. It replaces an automatic (branch) name or a person's rename. */
-  name: z
-    .string()
-    .max(PLUGIN_WORKSPACE_NAME_MAX)
-    .refine((name) => name.trim().length > 0, 'name must not be blank')
-    // A sidebar label is one line of plain text: no control, bidi or invisible characters,
-    // which could make it read as another workspace's name.
-    .refine((name) => ![...name].some(isHiddenOrControl), 'name must be one line of plain text')
+  name: pluginLabelNameSchema
 })
 const workspaceRenameResult = z.object({ name: z.string() })
 
@@ -177,10 +182,12 @@ const terminalReadResult = z.object({
   truncated: z.boolean()
 })
 
+/** An agent Orca knows: `claude`, `codex`, `gemini`, ... */
+export const pluginAgentSchema = z.string().min(1).max(64).refine(isTuiAgent, 'unknown agent')
+
 const agentLaunchParams = z.strictObject({
   workspaceId,
-  /** An agent Orca knows: `claude`, `codex`, `gemini`, ... */
-  agent: z.string().min(1).max(64).refine(isTuiAgent, 'unknown agent'),
+  agent: pluginAgentSchema,
   /** Sent to the agent as its first message. */
   prompt: z.string().min(1).max(TEXT_MAX).optional()
 })

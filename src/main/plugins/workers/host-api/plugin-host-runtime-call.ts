@@ -36,7 +36,8 @@ const RUNTIME_FAILURES: ReadonlyMap<string, Failure> = new Map([
   ['terminal_tab_pinned', ['conflict', "the terminal's tab is pinned; unpin it in Orca first"]],
   ['renderer_unavailable', NO_WINDOW],
   ['client_disconnected', ['unavailable', 'the host that owns this is not connected']],
-  ['runtime_unavailable', ['unavailable', 'this Orca host cannot run workspace actions now']]
+  ['runtime_unavailable', ['unavailable', 'this Orca host cannot run workspace actions now']],
+  ['Automation not found.', ['action_failed', 'no automation has this id']]
 ])
 const UNKNOWN_FAILURE: Failure = ['action_failed', 'Orca could not complete this action']
 

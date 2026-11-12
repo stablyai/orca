@@ -10,7 +10,10 @@ import {
   PLUGIN_WORKSPACE_TERMINAL_LIMIT,
   type pluginWorkspaceContextSchema
 } from '../../../../shared/plugins/workers/plugin-host-api'
-import { PLUGIN_AGENT_LIST_LIMIT } from '../../../../shared/plugins/workers/plugin-host-api-panel-methods'
+import {
+  PLUGIN_AGENT_LIST_LIMIT,
+  pluginAgentSessionIdSchema
+} from '../../../../shared/plugins/workers/plugin-host-api-panel-methods'
 import {
   PLUGIN_HOST_ID_MAX_LENGTH,
   pluginWorkspaceId
@@ -36,11 +39,21 @@ export type PluginAgentStatusRow = {
   agentType?: string
   stateStartedAt: number
   providerSessionOnly?: boolean
+  /** The agent's own session, which a resume names. */
+  providerSession?: { id: string; transcriptPath?: string }
 }
 
 export type PluginWorkspaceContext = z.output<typeof pluginWorkspaceContextSchema>
 
 type Context = { worktreeId: string; identityKey?: string; branch: string; displayName: string }
+
+/** The session id a plugin may see: what `agent.resume` accepts, else none. */
+export function pluginAgentSessionId(
+  session: { id: string } | null | undefined
+): string | undefined {
+  const id = session?.id
+  return id && pluginAgentSessionIdSchema.safeParse(id).success ? id : undefined
+}
 
 /** A pane's own name wins over the title its program sets. */
 export function pluginTerminalTitle(terminal: {
@@ -134,7 +147,8 @@ export function projectPluginWorkspaceAgents(
         title: terminal?.title ?? null,
         agent: row.agentType?.slice(0, 128) ?? null,
         state: row.state,
-        stateStartedAt: row.stateStartedAt
+        stateStartedAt: row.stateStartedAt,
+        sessionId: pluginAgentSessionId(row.providerSession) ?? null
       }
     })
 }

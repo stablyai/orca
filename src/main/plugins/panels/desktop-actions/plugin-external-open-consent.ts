@@ -1,3 +1,4 @@
+// @protected-copy: a plugin language pack must not reword what the person is asked to allow.
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../../../persistence/loading-store/store'
 import { translateMain } from '../../../i18n/main-i18n'

@@ -1,8 +1,8 @@
 import { dialog, type BrowserWindow } from 'electron'
 import { translateMain } from '../../i18n/main-i18n'
+import type { PluginActionConfirmation } from './plugin-confirmation-subject'
 
-/** `unavailable`: nobody can answer (no window, or it is hidden or minimized). */
-export type PluginActionConfirmation = 'allowed' | 'cancelled' | 'unavailable'
+export type { PluginActionConfirmation }
 
 export type PluginActionConfirmationRequest = {
   /** One line that names the plugin and what it wants to do. */

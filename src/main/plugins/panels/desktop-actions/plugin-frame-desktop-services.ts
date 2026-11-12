@@ -13,6 +13,7 @@ import {
 import { markPluginSavedFileAsDownloaded } from './plugin-save-as-download-mark'
 import { confirmPluginExternalOpen } from './plugin-external-open-consent'
 import { confirmPluginAction } from '../../consent/plugin-action-confirmation'
+import { pluginConfirmationCopy } from '../../consent/plugin-confirmation-copy'
 import type { Store } from '../../../persistence/loading-store/store'
 import { translateMain } from '../../../i18n/main-i18n'
 import { blockedPluginSaveAsExtension } from '../../../../shared/plugins/frames/plugin-save-as-extensions'
@@ -91,8 +92,11 @@ export function installPluginDesktopFrameServices(
     return
   }
   services = {
-    async confirm(request, scope) {
-      const { answer } = await confirmPluginAction(confirmationWindow(scope), request)
+    async confirm(pluginId, subject, scope) {
+      const { answer } = await confirmPluginAction(
+        confirmationWindow(scope),
+        pluginConfirmationCopy(scope.pluginName ?? pluginId, subject)
+      )
       // The question may have stayed open while the plugin was disabled or removed.
       scope.assertActive()
       return answer

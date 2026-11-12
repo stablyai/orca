@@ -182,6 +182,18 @@ function summarizeParams(method: string, params: unknown): string {
     case 'terminal.focus':
     case 'terminal.close':
       return `terminal=${String(record.terminalId)}`
+    case 'workspace.create':
+      return `project=${String(record.projectId)} agent=${String(record.agent ?? 'none')} promptChars=${textLength(record.prompt)} setup=${String(record.setup ?? 'default')} open=${record.open === true}`
+    case 'agent.resume':
+      return `workspace=${String(record.workspaceId)} agent=${String(record.agent)} session=${String(record.sessionId)}`
+    case 'automation.create':
+      return `${record.workspaceId ? `workspace=${String(record.workspaceId)}` : `project=${String(record.projectId)}`} agent=${String(record.agent)} promptChars=${textLength(record.prompt)}`
+    case 'automation.update':
+      return `automation=${String(record.automationId)} fields=${Object.keys(record)
+        .filter((key) => key !== 'automationId')
+        .join(',')}`
+    case 'automation.delete':
+      return `automation=${String(record.automationId)}`
     case 'notifications.show': {
       const title = typeof record.title === 'string' ? record.title : ''
       return `titleChars=${title.length}`
@@ -195,4 +207,8 @@ function summarizeParams(method: string, params: unknown): string {
     default:
       return ''
   }
+}
+
+function textLength(value: unknown): number {
+  return typeof value === 'string' ? value.length : 0
 }
