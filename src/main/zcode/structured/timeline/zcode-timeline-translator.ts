@@ -44,6 +44,8 @@ export class ZcodeTimelineTranslator {
   private openTurnKey: string | null = null
   /** Sends awaiting their provider echo, by the exact input text sent. */
   private readonly inFlight: { clientMessageId: string; text: string }[] = []
+  /** Each turn key's provider input message id — the fork/rewind anchor session/messages matches. */
+  private readonly turnInputMessageIds = new Map<string, string>()
 
   constructor(options: ZcodeTimelineTranslatorOptions) {
     this.providerSessionId = options.providerSessionId
@@ -64,6 +66,11 @@ export class ZcodeTimelineTranslator {
 
   get currentTurnKey(): string | null {
     return this.openTurnKey
+  }
+
+  /** The provider input message id a settled send's turn anchored on, for its rewind identity. */
+  inputMessageIdOf(turnKey: string | null): string | null {
+    return turnKey !== null ? (this.turnInputMessageIds.get(turnKey) ?? null) : null
   }
 
   private join(turnKey: string | null): { thread: string; turn?: string } {
@@ -138,6 +145,10 @@ export class ZcodeTimelineTranslator {
       readString(payload.queryId) ??
       readString(payload.foregroundExecutionId) ??
       readString(payload.messageId)
+    const inputMessageId = readString(payload.messageId)
+    if (turnKey !== null && inputMessageId !== null) {
+      this.turnInputMessageIds.set(turnKey, inputMessageId)
+    }
     const events: ProviderTimelineEvent[] = []
     const inputText = readString(payload.input)
     const isBackground = payload.inputSource === 'background_task'

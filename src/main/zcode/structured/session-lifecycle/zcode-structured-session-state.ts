@@ -31,6 +31,8 @@ export type ZcodeStructuredLaunch = {
   model: ZcodeLaunchModel | null
   /** The provider session a resume continues; null creates a new session. */
   resumeSessionId: string | null
+  /** Set when that resume continues a rewind fork, so the open reports a forked chain link. */
+  forkedFromKey?: string
   /** Provider tables and app-version env the spawn must carry (agent env additions). */
   providerEnv: Record<string, string>
   /** The desktop-bundle runtime to retry on when this CLI refuses the account push. */

@@ -5,6 +5,7 @@ import { supportsSupervisedProviderChildLocation } from '../../provider-process/
 import { zcodeModelCatalogDiscovery } from '../../runtime/agent-session/model-catalog/structured-agent-model-catalog-discovery'
 import type { StructuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import { ZCODE_STRUCTURED_AGENT } from './launch/zcode-structured-agent-definition'
+import { ZCODE_TRANSCRIPT_IMPORT } from './zcode-transcript-import'
 import { resolveStructuredAgentCommand } from '../../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentSessionHistory } from '../../native-chat/structured-agent-cli-conversations'
 
@@ -17,9 +18,8 @@ export const ZCODE_SESSION_HISTORY: StructuredAgentSessionHistory = {
 
 export const ZCODE_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
   definition: ZCODE_STRUCTURED_AGENT,
-  // zcode conversations live in its own SQLite store, which the opencode-family transcript
-  // reader already parses; wiring adoption is follow-up work, so import nothing yet.
-  transcriptImport: null,
+  // Forks need the conversation store to resolve; adoption itself stays unwired for zcode.
+  transcriptImport: ZCODE_TRANSCRIPT_IMPORT,
   sessionHistory: ZCODE_SESSION_HISTORY,
   // A disposable backend session lists the pushed account's models; sessions report live changes.
   modelCatalog: zcodeModelCatalogDiscovery,

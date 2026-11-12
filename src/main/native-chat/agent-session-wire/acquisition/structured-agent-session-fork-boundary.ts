@@ -3,6 +3,7 @@ import { agentSessionCurrentContextRows } from '../../../../shared/agent-session
 import { savedRewindKeys } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
+import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSnapshot } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
@@ -10,6 +11,8 @@ import type { StructuredAgentSessionAdapter } from '../providers/structured-agen
 type Checkpoint = NonNullable<
   Parameters<NonNullable<StructuredAgentSessionAdapter['copyConversation']>>[0]['checkpoint']
 >
+
+type ForkCutIdentity = Extract<AgentJournalItemIdentity, { provider: 'claude' | 'zcode' }>
 
 /** Fork admission follows the retained containing root, independently of rewind eligibility. */
 export function structuredAgentSessionForkBoundary(
@@ -55,19 +58,24 @@ export function structuredAgentSessionForkBoundary(
     (turn && (turn.state === 'completed' || turn.state === 'interrupted')) ||
     record.lease.deathEvidence
   )
+  // zcode rides the claude slots with its turn key in the uuid position, like the cut does.
+  const cutToken = (identity: ForkCutIdentity): string =>
+    identity.provider === 'zcode' ? identity.turnId : identity.uuid
   const checkpoint: Checkpoint = {
     selectedItemId: keys.providerKey(selected.itemId),
     settled,
     ...(turn ? { turnId: turn.providerTurnId ?? turn.turnId } : {}),
-    ...(identity?.provider === 'codex' ? { turnId: identity.turnId } : {}),
-    ...(opener?.provider === 'claude'
-      ? { rootMessage: { sessionId: opener.sessionId, uuid: opener.uuid } }
+    ...(identity?.provider === 'codex' || identity?.provider === 'zcode'
+      ? { turnId: identity.turnId }
       : {}),
-    ...(identity?.provider === 'claude'
-      ? { throughMessage: { sessionId: identity.sessionId, uuid: identity.uuid } }
+    ...(opener && (opener.provider === 'claude' || opener.provider === 'zcode')
+      ? { rootMessage: { sessionId: opener.sessionId, uuid: cutToken(opener) } }
       : {}),
-    ...(nextIdentity?.provider === 'claude'
-      ? { beforeMessage: { sessionId: nextIdentity.sessionId, uuid: nextIdentity.uuid } }
+    ...(identity && (identity.provider === 'claude' || identity.provider === 'zcode')
+      ? { throughMessage: { sessionId: identity.sessionId, uuid: cutToken(identity) } }
+      : {}),
+    ...(nextIdentity && (nextIdentity.provider === 'claude' || nextIdentity.provider === 'zcode')
+      ? { beforeMessage: { sessionId: nextIdentity.sessionId, uuid: cutToken(nextIdentity) } }
       : {})
   }
   return {

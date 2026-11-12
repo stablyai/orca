@@ -1,4 +1,6 @@
 import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { pendingAgentSessionRewindFork } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
 import {
   resolveStructuredAgentCommand,
   type StructuredAgentCommand
@@ -133,7 +135,15 @@ export function zcodeStructuredLaunchPart(
           ? {}
           : { permissionMode: basis.permissionMode ?? 'ask' }),
         model: model ? withSavedEffort(model, record.options?.effort) : null,
-        resumeSessionId: head?.handle.nativeId ?? null,
+        // An owed rewind fork outranks the head: the chat continues in the fork zcode built, and
+        // the open must report that continuation as a fork of the head the chain still holds.
+        resumeSessionId:
+          pendingAgentSessionRewindFork(record.rewind, head?.handle.nativeId)?.sessionId ??
+          head?.handle.nativeId ??
+          null,
+        ...(head && pendingAgentSessionRewindFork(record.rewind, head.handle.nativeId)
+          ? { forkedFromKey: agentSessionProviderHandleKey(head.handle) }
+          : {}),
         providerEnv,
         fallbackRuntime: cliFallback
       },

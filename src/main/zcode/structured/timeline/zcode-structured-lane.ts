@@ -22,8 +22,8 @@ export type ZcodeStructuredLaneDeps = {
   generation: string
   providerSessionId: string
   logger: StructuredAgentSessionLogger
-  /** First provider event confirms receipt of an Orca send. */
-  onInputAccepted: (clientMessageId: string) => void
+  /** First provider event confirms receipt of an Orca send, naming its provider turn when known. */
+  onInputAccepted: (clientMessageId: string, providerTurnId: string | null) => void
   /** Permanent sink refusal prevents further journaling. */
   onFailed: (reason: string) => void
   now?: () => number
@@ -123,7 +123,7 @@ export class ZcodeStructuredLane {
       // Ignore live-child evidence after session end.
       this.ended ||= event.type === 'session.ended'
       if (event.type === 'input.accepted') {
-        this.deps.onInputAccepted(event.clientMessageId)
+        this.deps.onInputAccepted(event.clientMessageId, event.join?.turn ?? null)
       }
     }
     this.notifyTurnWatchers()

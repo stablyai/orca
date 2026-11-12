@@ -27,6 +27,7 @@ import { stopAgentSessionProviderRoot } from '../../../native-chat/agent-session
 import type { ZcodeStructuredSession } from './zcode-structured-session'
 import { startZcodeStructuredSession, zcodeStartFailure } from './zcode-structured-start'
 import { readMessageText } from '../turns/zcode-message-text'
+import { zcodeCopyConversation, zcodeForkForRewind } from './zcode-structured-session-fork'
 import { mintZcodeAcquisitionGeneration } from './zcode-structured-session-state'
 import { ZcodeAppServerRequestError } from '../../app-server/zcode-app-server-errors'
 
@@ -146,6 +147,15 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   /** Every zcode option write is a plain RPC; any of them may land while the child is idle. */
   canSetOptionWhileIdle: (input: StructuredAgentSessionSetOptionInput) => boolean = () => true
+
+  /** Fork/rewind resolve against persisted sessions over a disposable backend, live child or not. */
+  rewindSupport = (): { supported: true } => ({ supported: true })
+
+  copyConversation: NonNullable<StructuredAgentSessionAdapter['copyConversation']> = (input) =>
+    zcodeCopyConversation(this.deps, input)
+
+  forkForRewind: NonNullable<StructuredAgentSessionAdapter['forkForRewind']> = (input) =>
+    zcodeForkForRewind(this.deps, input)
 
   async setOption(input: StructuredAgentSessionSetOptionInput) {
     const session = this.live(input.sessionId)

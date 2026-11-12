@@ -95,7 +95,12 @@ export async function openZcodeSession(
     providerSessionId,
     logger: session.deps.logger ?? createStructuredAgentSessionLogger(),
     now: session.deps.now,
-    onInputAccepted: (clientMessageId) => session.turns.accept(clientMessageId),
+    onInputAccepted: (clientMessageId, providerTurnId) =>
+      session.turns.accept(
+        clientMessageId,
+        providerTurnId,
+        session.lane?.translator.inputMessageIdOf(providerTurnId) ?? null
+      ),
     onFailed: (reason) =>
       session.deps.forceClose(
         sessionId,
@@ -128,7 +133,13 @@ export async function openZcodeSession(
     link: {
       linkId: `zcode-${session.deps.acquire.fence}-${providerSessionId}`.slice(0, 128),
       handle: { transport: 'zcode-app-server', agent: 'zcode', nativeId: providerSessionId },
-      origin: session.deps.resumeSessionId ? 'resumed' : 'created',
+      // Continuing a rewind fork changes the chain's root: it is a fork of the head, not a resume.
+      ...(session.deps.launch.forkedFromKey
+        ? {
+            origin: 'forked' as const,
+            forkedFromKey: session.deps.launch.forkedFromKey
+          }
+        : { origin: session.deps.resumeSessionId ? ('resumed' as const) : ('created' as const) }),
       mintedAtFence: session.deps.acquire.fence,
       observedAt: session.deps.now()
     },

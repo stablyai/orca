@@ -564,6 +564,8 @@
 1 src/main/wsl/host-lifecycle/wsl-host-early-wake.ts
 1 src/main/wsl/host-lifecycle/wsl-orphan-holder-release.ts
 1 src/main/zcode/hook-config-json.ts
+3 src/main/zcode/structured/credentials/zcode-account-config-push.ts
+10 src/main/zcode/structured/launch/zcode-runtime-resolution.ts
 12 src/main/zcode/zcode-plan-api-key-store.ts
 6 src/shared/agent-hook-listener/claude-session-continuation.ts
 4 src/shared/agent-hook-listener/reverse-file-region-scan.ts

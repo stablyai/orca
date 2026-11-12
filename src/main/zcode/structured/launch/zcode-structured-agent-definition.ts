@@ -10,9 +10,10 @@ export const ZCODE_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   handleTransport: ZCODE_STRUCTURED_HANDLE_NAMESPACE.transport,
   accountHomeVariable: 'ZCODE_HOME',
   capabilities: {
-    // zcode 0.16+ removed its rewind RPC in favor of the v4 conversation API, which the
-    // app-server protocol does not expose.
-    rewind: false,
+    // No rewind RPC: Orca rewinds by resuming the fork that keeps the earlier turns, which the
+    // adapter performs over a disposable backend even when the chat has no live child.
+    rewind: true,
+    fork: 'checkpoint',
     compact: true,
     threadGoal: false,
     contextUsage: true,

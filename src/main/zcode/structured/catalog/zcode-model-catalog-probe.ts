@@ -1,7 +1,6 @@
 import { homedir } from 'node:os'
 import {
   assertStructuredAgentResolutionCurrent,
-  resolveStructuredAgentCommand,
   type StructuredAgentCommandSettings,
   type StructuredAgentResolutionOperation
 } from '../../../native-chat/structured-agent-command-resolution'
@@ -19,13 +18,7 @@ import type {
   ZcodeAppServerConnection,
   ZcodeAppServerServerRequest
 } from '../../../zcode/app-server/zcode-app-server-connection-types'
-import {
-  readBundledZcodeAppVersion,
-  zcodeBundledLaunch,
-  zcodeProviderEnv
-} from '../launch/zcode-runtime-resolution'
-import { ZCODE_APP_SERVER_ARGS } from '../launch/zcode-structured-launch-resolution'
-import { zcodeStructuredLaunchArgs } from '../launch/zcode-structured-launch-args'
+import { zcodeHeadlessLaunch } from '../launch/zcode-headless-launch'
 import {
   pushZcodeAccountConfig,
   readZcodeBuiltinTable
@@ -45,43 +38,10 @@ async function zcodeCatalogLaunch(
   environment: NodeJS.ProcessEnv,
   deps: ZcodeModelCatalogProbeDeps
 ): Promise<{ command: string; args: string[]; env: Record<string, string> }> {
-  const pathEnv = environment.PATH ?? environment.Path ?? null
-  const resolved = resolveStructuredAgentCommand(
-    'zcode',
-    deps.resolveCommandSettings ? deps.resolveCommandSettings() : {},
-    {
-      pathEnv,
-      ...(environment.HOME ? { homePath: environment.HOME } : {})
-    }
-  )
-  const configuredArgs = zcodeStructuredLaunchArgs(
-    deps.resolveLaunchArgs ? await deps.resolveLaunchArgs() : []
-  )
-  const bundled = zcodeBundledLaunch(pathEnv)
-  const runtime = bundled ? (bundled.args[0] ?? resolved.command) : resolved.command
-  const providerEnv = zcodeProviderEnv(runtime)
-  if (providerEnv.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE === undefined) {
-    const version = readBundledZcodeAppVersion(runtime)
-    if (version) {
-      providerEnv.ZCODE_APP_VERSION = version
-    }
-  }
-  // A desktop parent's ZCODE_* variables flip the backend out of the protocol this speaks.
-  const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries(environment)) {
-    if (value !== undefined && !(key.startsWith('ZCODE_') && key !== 'ZCODE_HOME')) {
-      env[key] = value
-    }
-  }
-  return {
-    command: bundled?.command ?? resolved.command,
-    args: [
-      ...(bundled ? [...bundled.prefixArgs, ...bundled.args] : [...resolved.prefixArgs]),
-      ...configuredArgs,
-      ...ZCODE_APP_SERVER_ARGS
-    ],
-    env: { ...env, ...bundled?.env, ...providerEnv }
-  }
+  return zcodeHeadlessLaunch(environment, {
+    ...(deps.resolveCommandSettings ? { commandSettings: deps.resolveCommandSettings() } : {}),
+    ...(deps.resolveLaunchArgs ? { launchArgs: await deps.resolveLaunchArgs() } : {})
+  })
 }
 
 /**

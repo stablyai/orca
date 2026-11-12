@@ -77,12 +77,29 @@ export class ZcodeStructuredTurns {
     )
   }
 
-  /** A provider echo settled this send (input.accepted event). */
-  accept(clientMessageId: string): void {
+  /**
+   * A provider echo settled this send (input.accepted event). The echo's input message id is the
+   * rewind anchor session/messages matches; the turn key is only the fallback spelling.
+   */
+  accept(
+    clientMessageId: string,
+    providerTurnId: string | null,
+    providerMessageId: string | null
+  ): void {
     if (this.unsettled.delete(clientMessageId)) {
+      const sessionId = this.sessionId()
+      const turnToken = providerMessageId ?? providerTurnId
       this.deps.settle({
         clientMessageId,
-        providerIdentity: { provider: 'orca', clientMessageId }
+        ...(sessionId && turnToken
+          ? {
+              providerIdentity: {
+                provider: 'zcode' as const,
+                sessionId,
+                turnId: turnToken
+              }
+            }
+          : { providerIdentity: { provider: 'orca' as const, clientMessageId } })
       })
     }
   }
