@@ -29,29 +29,26 @@ const model: CloudStripModel = {
   announcement: 'A title'
 }
 
-function strip(wrap?: boolean): HTMLElement {
+function strip(): HTMLElement {
   const { container } = render(
     <TooltipProvider>
-      <CloudAgentSignInStrip model={model} prompt={null} actions={actions} wrap={wrap} />
+      <CloudAgentSignInStrip model={model} prompt={null} actions={actions} width="compact" />
     </TooltipProvider>
   )
   return container.querySelector<HTMLElement>('[data-cloud-sign-in-strip]')!
 }
 
 describe('CloudAgentSignInStrip wrap', () => {
-  it('keeps every existing strip at the fixed 56 px, one truncated line each', () => {
+  it('never truncates: the strip grows and title and detail wrap up to 3 lines, even when narrow', () => {
     const element = strip()
-    expect(element.className).toContain('h-14')
-    expect(element.className).not.toContain('min-h-14')
-    expect(element.querySelector('[data-strip-text] span')?.className).toContain('truncate')
-  })
-
-  it('opt-in wrap grows the strip and lets title and detail wrap up to 3 lines', () => {
-    const element = strip(true)
     expect(element.className).toContain('min-h-14')
     expect(element.className).not.toMatch(/(^|\s)h-14(\s|$)/)
-    const text = element.querySelector('[data-strip-text] span')
-    expect(text?.className).toContain('line-clamp-3')
-    expect(text?.className).not.toContain('truncate')
+    const [title, detail] = element.querySelectorAll('[data-strip-text] > span')
+    for (const text of [title, detail]) {
+      expect(text?.className).toContain('line-clamp-3')
+      expect(text?.className).not.toContain('truncate')
+      expect(text?.className).not.toContain('sr-only')
+    }
+    expect(title?.textContent).toBe(model.title)
   })
 })
