@@ -25,7 +25,12 @@ export function agentSessionNeverStarted({
 }
 
 export function agentSessionConversationView(record: ConversationFacts) {
-  const { lease, acquiredAccount: _acquiredAccount, ...conversation } = record
+  const {
+    lease,
+    acquiredAccount: _acquiredAccount,
+    advisoryPolicy: _advisoryPolicy,
+    ...conversation
+  } = record
   const {
     claimStatus,
     handoffStage,

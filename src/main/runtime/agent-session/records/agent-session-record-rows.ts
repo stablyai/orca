@@ -4,6 +4,7 @@ import { agentSessionConversationView } from '../../../../shared/agent-session/l
 
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
+  AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION,
   isPersistedAgentSessionRecord,
   isPersistedAgentSessionObservationRecord,
   type AgentSessionLease
@@ -68,7 +69,8 @@ function unreadableRecordReason(value: unknown): string {
     typeof value === 'object' && value !== null && 'schemaVersion' in value
       ? value.schemaVersion
       : undefined
-  return schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION
+  return schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION ||
+    schemaVersion === AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION
     ? 'current_shape_invalid'
     : 'unsupported_schema'
 }

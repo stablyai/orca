@@ -5,8 +5,10 @@ import {
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
+  AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionAdvisoryPolicySchema } from '../../../../shared/agent-session/agent-session-advisory-policy'
 import { normalizeAgentSessionConversationName } from '../../../../shared/agent-session/agent-session-conversation-name'
 
 export type AgentSessionRecordIdentity = Pick<
@@ -16,6 +18,7 @@ export type AgentSessionRecordIdentity = Pick<
   | 'provider'
   | 'accountHome'
   | 'options'
+  | 'advisoryPolicy'
   | 'launchArgs'
   | 'launchDirectory'
   | 'forkedFrom'
@@ -30,14 +33,25 @@ export function agentSessionRecordIdentityFields(
   const { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode, ...options } =
     identity.options ?? {}
   const conversationName = normalizeAgentSessionConversationName(identity.conversationName)
+  const advisory =
+    identity.advisoryPolicy === undefined
+      ? null
+      : agentSessionAdvisoryPolicySchema.safeParse(identity.advisoryPolicy)
+  if (advisory && !advisory.success) {
+    throw new Error('agent_session_advisory_policy_invalid')
+  }
+  const schemaVersion: AgentSessionRecord['schemaVersion'] = advisory
+    ? AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION
+    : AGENT_SESSION_RECORD_SCHEMA_VERSION
   return {
-    schemaVersion: AGENT_SESSION_RECORD_SCHEMA_VERSION,
+    schemaVersion,
     sessionId: identity.sessionId,
     location: identity.location,
     provider: identity.provider,
     accountHome: identity.accountHome,
     ...(identity.forkedFrom ? { forkedFrom: identity.forkedFrom } : {}),
     ...(Object.keys(options).length > 0 ? { options } : {}),
+    ...(advisory?.success ? { advisoryPolicy: advisory.data } : {}),
     ...(permissionMode ? { permissionMode } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
     // /clear retains its tab and launch directory.

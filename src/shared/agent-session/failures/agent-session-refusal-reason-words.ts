@@ -68,6 +68,9 @@ const TERMINAL_CLAIM = causeWords('terminalAgentHoldsChat', 'actFirst', 'quitTer
 const REASON_WORDS = {
   agent_session_operation_invalid: {
     requestMalformed: codeWords('hostFinding'),
+    advisoryAlreadyStarted: codeWords('goElsewhere'),
+    advisoryDeadlinePassed: codeWords('goElsewhere'),
+    advisoryPolicyMismatch: codeWords('goElsewhere'),
     operationIdInvalid: codeWords('hostFinding'),
     messageIdReused: codeWords('hostFinding'),
     // Settled under that id, so the control's retry goes out under a new one.

@@ -1,4 +1,8 @@
 import { isOptionalUsageLimitContinueCancel } from './agent-session-usage-limit-continue'
+import {
+  agentSessionAdvisoryPolicySchema,
+  type AgentSessionAdvisoryPolicy
+} from '../agent-session-advisory-policy'
 import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
@@ -35,6 +39,8 @@ import {
 } from './agent-session-account-home'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
+// Older writers must set constrained rows aside rather than resume them without their policy.
+export const AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION = 3 as const
 
 export type AgentSessionWorkspaceKind = 'git-worktree' | 'folder'
 
@@ -47,8 +53,7 @@ export type AgentSessionExecutionLocation = {
   workspaceKind: AgentSessionWorkspaceKind
 }
 
-/** Provider launch environment captured by the host when the session is created. */
-export type AgentSessionLaunchEnv = Record<string, string>
+export { isAgentSessionLaunchEnv, type AgentSessionLaunchEnv } from './agent-session-launch-env'
 
 /** Provider CLI arguments captured by the host when the session is created. */
 export type AgentSessionLaunchArgs = string[]
@@ -111,7 +116,9 @@ export type AgentSessionForkedFrom = {
 }
 
 export type AgentSessionRecord = {
-  schemaVersion: typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
+  schemaVersion:
+    | typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
+    | typeof AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION
   sessionId: string
   location: AgentSessionExecutionLocation
   /** The agent this session names, whether this build can run it or not. */
@@ -125,6 +132,7 @@ export type AgentSessionRecord = {
   launchDirectory?: string
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
   options?: Record<string, string>
+  advisoryPolicy?: AgentSessionAdvisoryPolicy
   /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
   permissionMode?: string
   usageLimitContinueCancel?: { turnItemId: string; resetsAt: number }
@@ -152,8 +160,6 @@ export type AgentSessionRecord = {
 const MAX_ID_LENGTH = 512
 /** A death evidence's `detail` past this fails a load, so whoever writes one cuts it here. */
 export const MAX_AGENT_SESSION_DEATH_DETAIL_CHARS = MAX_ID_LENGTH
-const MAX_LAUNCH_ENV_ENTRIES = 256
-const MAX_LAUNCH_ENV_VALUE_LENGTH = 65_536
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
 
 const isBoundedString = (value: unknown, max: number): value is string =>
@@ -227,22 +233,6 @@ export function isAgentSessionOptions(value: unknown): value is Record<string, s
   )
 }
 
-export function isAgentSessionLaunchEnv(value: unknown): value is AgentSessionLaunchEnv {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false
-  }
-  const entries = Object.entries(value)
-  return (
-    entries.length <= MAX_LAUNCH_ENV_ENTRIES &&
-    entries.every(
-      ([key, entry]) =>
-        isBoundedString(key, MAX_ID_LENGTH) &&
-        typeof entry === 'string' &&
-        entry.length <= MAX_LAUNCH_ENV_VALUE_LENGTH
-    )
-  )
-}
-
 function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeathEvidence {
   if (typeof value !== 'object' || value === null) {
     return false
@@ -308,7 +298,10 @@ export function isPersistedAgentSessionObservationRecord(
   const record = value
   if (
     !(
-      record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&
+      ((record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&
+        !Object.hasOwn(record, 'advisoryPolicy')) ||
+        (record.schemaVersion === AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION &&
+          agentSessionAdvisoryPolicySchema.safeParse(record.advisoryPolicy).success)) &&
       isAgentSessionId(record.sessionId) &&
       isAgentSessionExecutionLocation(record.location) &&
       isStructuredAgentId(record.provider) &&
