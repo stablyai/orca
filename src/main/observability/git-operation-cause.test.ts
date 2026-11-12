@@ -52,13 +52,18 @@ it('keeps concurrent Git causes isolated and retires a settled cause before deta
       })
     }),
     expect.objectContaining({
-      attributes: {
+      attributes: expect.objectContaining({
         'git.subcommand': 'worktree',
         'git.arg_count': 3,
         'git.variant': 'worktree-remove'
-      }
+      })
     })
   ])
+  expect(records[2]).toEqual(
+    expect.objectContaining({
+      attributes: expect.not.objectContaining({ 'git.reason': expect.any(String) })
+    })
+  )
   expect(JSON.stringify(records)).not.toContain('PRIVATE_')
 })
 
