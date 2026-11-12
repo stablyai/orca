@@ -4,7 +4,7 @@ import {
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
 } from '../../../shared/agent-session/structured-agent-session-reducer'
-import { toolUse, toolResult } from '../../claude/claude-child-work-producer-harness.test-fixture'
+import { toolUse, toolResult } from '../../claude/structured/claude-foreground-task-test-support'
 import { HOST_TEST_SESSION as SESSION } from './host/testing/structured-agent-session-host-test-data'
 import { fixture } from './host/testing/structured-agent-session-claude-stop-contract-test-fixture'
 import { openTurn } from './host/testing/structured-agent-session-claude-stop-contract-test-actions'

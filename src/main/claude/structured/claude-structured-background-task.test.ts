@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  producer,
-  toolUse,
-  toolResult,
-  system
-} from '../claude-child-work-producer-harness.test-fixture'
+import { producer, toolUse, toolResult, system } from './claude-foreground-task-test-support'
 
 describe('moving a running Claude call into the background', () => {
   it('targets the invoking call before a task row exists, then retains the background task until its own ending', async () => {

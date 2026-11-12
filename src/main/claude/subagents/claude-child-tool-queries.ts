@@ -6,7 +6,7 @@ import type {
   ClaudeSubagentLinkageSource
 } from './claude-subagent-linkage'
 import type { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
-import { claudeRecord } from './structured/journal/claude-structured-item-translation'
+import { claudeRecord } from '../structured/journal/claude-structured-item-translation'
 
 export type ClaudeChildToolQueries = {
   foregroundToolIds: () => string[]
