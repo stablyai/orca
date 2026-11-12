@@ -7,7 +7,7 @@ function extension() {
   const frames: { method: string; params: unknown }[] = []
   const hooks = new Map<string, (event: unknown, context: unknown) => void>()
   let now = 0
-  const module = { exports: {} as { default: (api: unknown) => void } }
+  const module: { exports: { default?: (api: unknown) => void } } = { exports: {} }
   const code = transformSync(
     readFileSync(
       new URL('../../../resources/native-chat-visuals/omp-native-chat.mjs', import.meta.url),
@@ -33,6 +33,9 @@ function extension() {
       throw new Error(`Unexpected module ${name}`)
     }
   })
+  if (!module.exports.default) {
+    throw new Error('OMP extension did not export its entry point')
+  }
   module.exports.default({
     on: (name: string, hook: (event: unknown, context: unknown) => void) => hooks.set(name, hook),
     registerCommand: () => {}
