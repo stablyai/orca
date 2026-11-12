@@ -1,3 +1,4 @@
+import { GitCommandTimeoutError } from '../../../../shared/git/commands/git-command-timeout'
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
@@ -9,7 +10,11 @@ import {
 } from './worktree-copy-on-write-checkout'
 import { rollBackCreatedWorktree } from './worktree-create-rollback'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../worktree-operation-options'
-import { gitExecOptions, resolveWorktreeAddTimeoutMs } from '../worktree-operation-options'
+import {
+  gitExecOptions,
+  resolveWorktreeAddTimeoutMs,
+  worktreeAddTimeoutMessage
+} from '../worktree-operation-options'
 
 /** `git hook run` (Git 2.36+), which runs post-checkout with the arguments `worktree add` uses. */
 function supportsHookRun(repoPath: string, options: AddWorktreeOptions): Promise<boolean> {
@@ -102,6 +107,10 @@ export async function addWorktreeWithCopyOnWriteCheckout(
     )
     return addResult
   } catch (error) {
+    // The checkout ran outside `worktree add`, so keep its guidance for raising the limit.
+    if (error instanceof GitCommandTimeoutError) {
+      error.message = worktreeAddTimeoutMessage(error.timeoutMs)
+    }
     throw await rollBackCreatedWorktree(repoPath, worktreePath, branch, options, error)
   } finally {
     checkoutProgress?.close()
