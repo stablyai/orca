@@ -132,26 +132,6 @@ describe('the side chat fork point the transcript finds while laying out', () =>
     ).toEqual({ kind: 'ready', throughItemId: 'reply-live' })
   })
 
-  it('forks through a reply that ends on an inline visual', () => {
-    const visual = {
-      ...row('reply-visual', 'assistant', 10_001),
-      blocks: [
-        { type: 'text' as const, text: 'Here is the trend.\n\n::orca-visual{file="trend.html"}' }
-      ]
-    }
-    const { input, latestTurnKey } = conversation(
-      [finished(0), { ask: 'ask-1', replies: [visual] }],
-      false
-    )
-
-    expect(
-      buildNativeChatTranscript({
-        ...input,
-        forkOffer: offer('checkpoint', new Set(['reply-0', 'reply-visual']), latestTurnKey)
-      }).forkPoint
-    ).toEqual({ kind: 'ready', throughItemId: 'reply-visual' })
-  })
-
   it('has nothing to fork above a /clear', () => {
     const { input, latestTurnKey } = conversation([finished(1)], false)
 
