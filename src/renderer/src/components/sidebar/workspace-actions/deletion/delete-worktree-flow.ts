@@ -24,6 +24,8 @@ import {
 import { runWorktreeDeletesInParallel } from './worktree-delete-execution'
 import { runWorktreeDeleteWithToast } from './run-worktree-delete-with-toast'
 import { collectRemovalUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
+import { isCloudPrimaryRowNow } from '@/lib/orca-cloud/cloud-host-rows'
+import { requestCloudPrimaryDelete } from '@/lib/orca-cloud/cloud-primary-delete-request'
 
 /** Standard Git-worktree deletion funnel; stale record/instance guards precede confirmation preferences. */
 export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOptions = {}): void {
@@ -38,6 +40,11 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     if (parseWorkspaceKey(worktreeId)?.type !== 'folder') {
       showWorkspaceListChangedToast()
     }
+    return
+  }
+  // An Orca Cloud workspace's own checkout is the workspace, not a repo's primary: delete the sandbox.
+  if (isCloudPrimaryRowNow(target)) {
+    requestCloudPrimaryDelete(target)
     return
   }
   if (target.isMainWorktree) {

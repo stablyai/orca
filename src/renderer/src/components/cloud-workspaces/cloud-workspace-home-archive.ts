@@ -63,6 +63,18 @@ function asResult(
   return { ok: false, code: 'failed', message, userMessage: message }
 }
 
+/** The control plane archives a sandbox this window cannot archive itself (paired, or no row). */
+export function archiveSandboxThroughControlPlane(
+  sandboxId: string,
+  name: string,
+  deps: HomeArchiveDeps = defaultDeps()
+): Promise<boolean> {
+  return deps.archiveWithUndo(`home:${sandboxId}`, {
+    name,
+    commit: async () => asResult(await deps.patchArchived(sandboxId, true))
+  })
+}
+
 export async function archiveFromHome(
   w: CloudWorkspace,
   name: string,

@@ -346,3 +346,64 @@ describe('Delete from Home with a runtime record but no sidebar row (REG-8b)', (
     vi.unstubAllGlobals()
   })
 })
+
+vi.mock('@/lib/orca-cloud/cloud-primary-delete-request', () => ({
+  requestCloudPrimaryDelete: vi.fn()
+}))
+
+describe('Delete on a cloud workspace on its default branch (CLOUD-PRIMARY-DELETE)', () => {
+  beforeEach(async () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: false }
+    mocks.state.openModal.mockClear()
+    mocks.state.repos = []
+    const { requestCloudPrimaryDelete } =
+      await import('@/lib/orca-cloud/cloud-primary-delete-request')
+    vi.mocked(requestCloudPrimaryDelete).mockClear()
+  })
+
+  async function pairWith(environmentId: string): Promise<void> {
+    vi.stubGlobal('window', {
+      api: {
+        cloudWorkspaces: {
+          localWorkspaces: async () => [],
+          environmentBindings: async () => ({ sbx_paired: { environmentId } })
+        }
+      }
+    })
+    const { refreshCloudWorktreeBindings } =
+      await import('@/components/cloud-workspaces/cloud-workspace-identity')
+    await refreshCloudWorktreeBindings()
+  }
+
+  it('a paired cloud workspace is deletable: the cloud delete dialog, never "Remove Project"', async () => {
+    await pairWith('env-cloud')
+    const { runWorktreeDelete } = await import('./delete-worktree-flow')
+    const { requestCloudPrimaryDelete } =
+      await import('@/lib/orca-cloud/cloud-primary-delete-request')
+    setWorktrees([{ id: 'wt-main', isMainWorktree: true, hostId: 'runtime:env-cloud' }])
+    runWorktreeDelete('wt-main', { expectedHostId: 'runtime:env-cloud' })
+    expect(requestCloudPrimaryDelete).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'wt-main', hostId: 'runtime:env-cloud' })
+    )
+    expect(mocks.state.openModal).not.toHaveBeenCalledWith(
+      'confirm-remove-folder',
+      expect.anything()
+    )
+    vi.unstubAllGlobals()
+  })
+
+  it('a local primary checkout still cannot be deleted: it offers removing the project', async () => {
+    await pairWith('env-cloud')
+    const { runWorktreeDelete } = await import('./delete-worktree-flow')
+    const { requestCloudPrimaryDelete } =
+      await import('@/lib/orca-cloud/cloud-primary-delete-request')
+    setWorktrees([{ id: 'wt-local-main', isMainWorktree: true }])
+    runWorktreeDelete('wt-local-main')
+    expect(requestCloudPrimaryDelete).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).toHaveBeenCalledWith(
+      'confirm-remove-folder',
+      expect.objectContaining({ repoId: 'repo-1' })
+    )
+    vi.unstubAllGlobals()
+  })
+})

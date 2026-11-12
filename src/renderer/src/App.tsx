@@ -7,6 +7,7 @@ import { BrowserWebAuthnAccountDialog } from './components/browser-webauthn-acco
 import { BrowserExtensionInstallDialog } from './components/browser-extension-install-dialog'
 import { PlansDialogHost } from './components/billing/plans/PlansDialogHost'
 import { CloudMoveToComputerDialogMount } from './components/orca-cloud/CloudMoveToComputerDialogMount'
+import { CloudPrimaryDeleteDialogMount } from './components/orca-cloud/CloudPrimaryDeleteDialog'
 import { CloudSecretsAskDialogHost } from './components/cloud-secrets-ask/CloudSecretsMissingNotice'
 import { OrcaCloudSignInSheet } from './components/settings/agent-accounts/sign-in-sheet/OrcaCloudSignInSheet'
 import { AgentHostPanel } from './components/agent-host-panel/AgentHostPanel'
@@ -128,6 +129,7 @@ function App(): React.JSX.Element {
             <BrowserExtensionInstallDialog />
             <PlansDialogHost />
             <CloudMoveToComputerDialogMount />
+            <CloudPrimaryDeleteDialogMount />
             <CloudSecretsAskDialogHost />
             <AgentHostPanel />
             <OrcaCloudSignInSheet />
