@@ -4025,7 +4025,6 @@
       "src/main/text-generation/source-control-wsl-launch.test.ts": 482,
       "src/main/text-generation/source-control-wsl-prompt.test.ts": 2440,
       "src/main/tray/system-tray.test.ts": 556,
-      "src/main/tray/tray-attention-icon.test.ts": 52,
       "src/main/tray/tray-dev-badge.test.ts": 51,
       "src/main/updater/updater-events.test.ts": 280,
       "src/main/updater/updater-linux-package-recovery-actions.test.ts": 2294,
