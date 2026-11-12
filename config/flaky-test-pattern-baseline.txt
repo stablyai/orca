@@ -483,7 +483,7 @@
 2 test-no-wall-clock:src/main/grok/grok-hook-stdin-no-eof.test.ts
 3 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
 1 test-no-wall-clock:src/main/ipc/terminal-render-desync-evidence.test.ts
-5 test-no-wall-clock:src/main/ipc/worktrees-orphan-directory-cleanup.test.ts
+2 test-no-wall-clock:src/main/ipc/worktrees-orphan-directory-cleanup.test.ts
 2 test-no-wall-clock:src/main/ipc/worktrees/git/worktree-git-status-attribution-real-git.test.ts
 2 test-no-wall-clock:src/main/macos-permissions/macos-tcc-log-stream-orphans.test.ts
 4 test-no-wall-clock:src/main/managed-server/activation/orcad-exited-own-fence-mutation-race.test.ts
