@@ -3414,6 +3414,10 @@
       "outcomeUnknownReturned": "Orca couldn't confirm whether the conversation went back to this message. Your message is back in the composer, and Orca checks the conversation before your next message is sent.",
       "timeout": "The chat didn't update after going back to this message. Reopen it to see the latest.",
       "pending": "Wait for the conversation to go back to the earlier message."
+    },
+    "sessionOptionErrors": {
+      "controlUnavailable": "{{agent}} can't change options from Chat in this session.",
+      "controlNotSent": "{{agent}} did not receive the option change. Try again."
     }
   },
   "sourceControl": {

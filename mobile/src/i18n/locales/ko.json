@@ -645,6 +645,10 @@
       "unconfirmed": "{{agent}}이(가) 분기를 확인하지 못했습니다. 채팅이 열렸을 수 있습니다. 다시 분기하기 전에 세션 기록을 확인하세요.",
       "failed": "{{agent}}이(가) 이 채팅을 분기하지 못했습니다. {{detail}}",
       "unsupported": "이 호스트에서 이전 버전의 Orca가 실행 중입니다. 호스트의 Orca를 업데이트하고 다시 시도하세요."
+    },
+    "sessionOptionErrors": {
+      "controlUnavailable": "이 세션에서는 채팅에서 {{agent}}의 옵션을 변경할 수 없습니다.",
+      "controlNotSent": "{{agent}}에 옵션 변경이 전달되지 않았습니다. 다시 시도하세요."
     }
   },
   "common": {

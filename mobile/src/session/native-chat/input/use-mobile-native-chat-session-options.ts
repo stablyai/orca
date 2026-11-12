@@ -1,3 +1,8 @@
+import { translate } from '../../../i18n/mobile-i18n'
+import {
+  SessionOptionApplyError,
+  SESSION_OPTION_APPLY_FAILURE_COPY
+} from '../../../../../src/shared/native-chat/input/native-chat-session-option-apply-failure'
 import {
   sameNativeChatSessionOptionBinding,
   type NativeChatSessionOptionBinding
@@ -13,10 +18,7 @@ import {
   useSyncExternalStore
 } from 'react'
 import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog'
-import type {
-  CatalogCommandDelivery,
-  CatalogModel
-} from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
+import type { CatalogModel } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import type {
   NativeChatSessionOptionSettingsMutation,
   SessionOptionsSurface,
@@ -24,6 +26,10 @@ import type {
   SessionOptionValue
 } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
+import type {
+  NativeChatSessionOptionDispatchOptions,
+  NativeChatSessionOptionDispatchResult
+} from '../../../../../src/shared/native-chat/input/native-chat-session-option-dispatch'
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
@@ -75,9 +81,10 @@ type HookArgs = {
   modelSwitchCommand?: string
   dispatchCommand: (
     command: string,
-    options?: { delivery?: CatalogCommandDelivery }
-  ) => Promise<MobileNativeChatSendOutcome>
+    options?: NativeChatSessionOptionDispatchOptions
+  ) => Promise<MobileNativeChatSendOutcome | NativeChatSessionOptionDispatchResult>
   onAgentPicker?: () => void
+  onControlError?: (message: string) => void
   /** Saves picks as the host's launch defaults, as desktop does. */
   writeSettings?: (mutation: NativeChatSessionOptionSettingsMutation) => void
 }
@@ -126,9 +133,10 @@ function createMobileSurfaceEntry(args: {
       ) {
         throw new Error('The chat changed before the command was sent.')
       }
-      const outcome = options?.delivery
-        ? await args.captured.dispatchCommand(command, { delivery: options.delivery })
-        : await args.captured.dispatchCommand(command)
+      const outcome = await args.captured.dispatchCommand(command, options)
+      if (typeof outcome === 'object') {
+        return outcome
+      }
       // Desktop commits a pick only after the terminal confirms the write.
       if (outcome === 'rejected' || outcome === 'unknown') {
         throw new Error('The terminal did not accept the command.')
@@ -261,7 +269,27 @@ export function useMobileNativeChatSessionOptions(
       return run(surface)
         .then(
           () => true,
-          () => false
+          (error: unknown) => {
+            const currentBinding = operation.owner?.readCurrentBinding()
+            if (
+              error instanceof SessionOptionApplyError &&
+              (error.code === 'controlUnavailable' || error.code === 'controlNotSent') &&
+              activeIdentityRef.current === operation.identity &&
+              args.isDispatchTargetCurrent?.() !== false &&
+              (!operation.owner ||
+                (currentBinding &&
+                  sameNativeChatSessionOptionBinding(operation.owner.binding, currentBinding)))
+            ) {
+              latest.current.onControlError?.(
+                translate(
+                  `chat.sessionOptionErrors.${error.code}`,
+                  SESSION_OPTION_APPLY_FAILURE_COPY[error.code],
+                  { agent: error.agent ?? '' }
+                )
+              )
+            }
+            return false
+          }
         )
         .finally(() => {
           setPending((current) => (current === operation ? null : current))

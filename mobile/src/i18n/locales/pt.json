@@ -684,6 +684,10 @@
       "unconfirmed": "{{agent}} não conseguiu confirmar a ramificação. Ela pode ter sido aberta; confira o histórico de sessões antes de tentar novamente.",
       "failed": "{{agent}} não conseguiu ramificar este chat. {{detail}}",
       "unsupported": "Este host executa uma versão antiga do Orca. Atualize o Orca no host e tente novamente."
+    },
+    "sessionOptionErrors": {
+      "controlUnavailable": "{{agent}} não pode alterar as opções pelo chat nesta sessão.",
+      "controlNotSent": "{{agent}} não recebeu a alteração da opção. Tente novamente."
     }
   },
   "common": {

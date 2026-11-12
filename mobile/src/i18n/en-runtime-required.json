@@ -138,6 +138,10 @@
     "turnStatus": {
       "seconds_one": "{{count}}s",
       "seconds_other": "{{count}}s"
+    },
+    "sessionOptionErrors": {
+      "controlUnavailable": "{{agent}} can't change options from Chat in this session.",
+      "controlNotSent": "{{agent}} did not receive the option change. Try again."
     }
   },
   "components": {

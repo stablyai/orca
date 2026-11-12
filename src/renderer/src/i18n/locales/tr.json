@@ -20162,7 +20162,9 @@
         "toggleBaselineUnknown": "Mevcut değer bilinmiyor; bunun yerine Aç/kapat eylemini kullanın.",
         "afterStartOnly": "Bu seçenek yalnızca oturum başladıktan sonra kullanılabilir.",
         "valueRequired": "Bu seçenek bir değer gerektirir.",
-        "toggleValueKnown": "Bu seçeneğin değeri biliniyor; bunun yerine Açık veya Kapalı seçin."
+        "toggleValueKnown": "Bu seçeneğin değeri biliniyor; bunun yerine Açık veya Kapalı seçin.",
+        "controlUnavailable": "{{agent}} bu oturumda seçenekleri sohbetten değiştiremiyor.",
+        "controlNotSent": "{{agent}} seçenek değişikliğini almadı. Tekrar deneyin."
       },
       "composerErrors": {
         "goalObjectiveMissing": "/goal sonrasında hedefi açıklayın.",

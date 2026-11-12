@@ -66,13 +66,13 @@ export function resetNativeChatPtySendQueuesForTests(): void {
   ptyQueues.clear()
 }
 
-export function cancelNativeChatPtySends(ptyId: string): void {
+export function cancelNativeChatPtySends(ptyId: string, keepInput = false): void {
   const state = ptyQueues.get(ptyId)
   if (!state) {
     return
   }
   for (const handle of state.handles) {
-    handle.cancel()
+    handle.cancel(keepInput)
   }
 }
 

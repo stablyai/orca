@@ -61,12 +61,14 @@ function hasClaudeModelSwitchRejection(buffer: string): boolean {
 export function createClaudeModelSwitchConfirmationObserver(args: {
   expectedModelLabel: string | null
   subscribeToData: SubscribeToData
-  submitConfirmation: () => boolean | void
+  submitConfirmation: () => boolean | void | Promise<boolean | void>
   timeoutMs?: number
 }): ClaudeModelSwitchConfirmationObserver {
   let armed = false
   let settled = false
   let confirmationSubmitted = false
+  let confirmationPending = false
+  let pendingOutcome: ClaudeModelSwitchOutcome | null = null
   let observed = ''
   let timeout: ReturnType<typeof setTimeout> | null = null
   let unsubscribe: (() => void) | null = null
@@ -81,6 +83,10 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
 
   const finish = (outcome: ClaudeModelSwitchOutcome): void => {
     if (settled) {
+      return
+    }
+    if (confirmationPending && outcome !== 'unknown') {
+      pendingOutcome = outcome
       return
     }
     settled = true
@@ -115,15 +121,30 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
     }
     if (!confirmationSubmitted && hasClaudeModelSwitchConfirmation(observed)) {
       confirmationSubmitted = true
+      confirmationPending = true
       try {
         // The picker already authorizes switching; this exact warning defaults to Yes and needs one Enter.
-        const accepted = args.submitConfirmation() !== false
-        if (!accepted) {
-          finish('unknown')
-          return
+        const complete = (accepted: boolean | void): void => {
+          confirmationPending = false
+          if (settled) {
+            return
+          }
+          if (accepted === false) {
+            finish('unknown')
+          } else if (pendingOutcome) {
+            finish(pendingOutcome)
+          } else {
+            scheduleTimeout()
+          }
         }
-        scheduleTimeout()
+        const submitted = args.submitConfirmation()
+        if (submitted instanceof Promise) {
+          void submitted.then(complete, () => complete(false))
+        } else {
+          complete(submitted)
+        }
       } catch {
+        confirmationPending = false
         finish('unknown')
       }
     }

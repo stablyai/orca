@@ -649,6 +649,10 @@
       "unconfirmed": "{{agent}} çatallamayı doğrulayamadı. Yine de açılmış olabilir; yeniden çatallamadan önce Oturum Geçmişini kontrol edin.",
       "failed": "{{agent}} bu sohbeti çatallayamadı. {{detail}}",
       "unsupported": "Bu ana makinede eski bir Orca sürümü çalışıyor. Ana makinedeki Orca’yı güncelleyip tekrar deneyin."
+    },
+    "sessionOptionErrors": {
+      "controlUnavailable": "{{agent}} bu oturumda seçenekleri sohbetten değiştiremiyor.",
+      "controlNotSent": "{{agent}} seçenek değişikliğini almadı. Tekrar deneyin."
     }
   },
   "common": {

@@ -19382,7 +19382,9 @@
         "toggleBaselineUnknown": "当前值未知，请改用“切换”操作。",
         "afterStartOnly": "此选项仅在会话启动后可用。",
         "valueRequired": "此选项需要一个值。",
-        "toggleValueKnown": "此选项的值已知，请改选“开启”或“关闭”。"
+        "toggleValueKnown": "此选项的值已知，请改选“开启”或“关闭”。",
+        "controlUnavailable": "{{agent}} 无法在此会话中通过聊天更改选项。",
+        "controlNotSent": "{{agent}} 未收到选项更改。请重试。"
       },
       "composerErrors": {
         "goalObjectiveMissing": "请在 /goal 后描述目标。",

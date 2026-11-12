@@ -20189,7 +20189,9 @@
         "toggleBaselineUnknown": "La valeur actuelle est inconnue ; utilisez plutôt l’action « Basculer ».",
         "afterStartOnly": "Cette option n’est disponible qu’après le démarrage de la session.",
         "valueRequired": "Cette option nécessite une valeur.",
-        "toggleValueKnown": "Cette option a une valeur connue ; choisissez « Activé » ou « Désactivé »."
+        "toggleValueKnown": "Cette option a une valeur connue ; choisissez « Activé » ou « Désactivé ».",
+        "controlUnavailable": "{{agent}} ne peut pas modifier les options depuis le chat dans cette session.",
+        "controlNotSent": "{{agent}} n’a pas reçu la modification de l’option. Réessayez."
       },
       "composerErrors": {
         "goalObjectiveMissing": "Décrivez l’objectif après /goal.",

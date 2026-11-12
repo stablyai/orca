@@ -19442,7 +19442,9 @@
         "toggleBaselineUnknown": "現在の値が不明です。代わりに「切り替える」操作を使用してください。",
         "afterStartOnly": "このオプションはセッション開始後にのみ使用できます。",
         "valueRequired": "このオプションには値が必要です。",
-        "toggleValueKnown": "このオプションの値は判明しています。代わりに「オン」か「オフ」を選択してください。"
+        "toggleValueKnown": "このオプションの値は判明しています。代わりに「オン」か「オフ」を選択してください。",
+        "controlUnavailable": "このセッションでは、{{agent}} のオプションをチャットから変更できません。",
+        "controlNotSent": "{{agent}} にオプションの変更が届きませんでした。もう一度お試しください。"
       },
       "composerErrors": {
         "goalObjectiveMissing": "/goal の後に目標を記述してください。",

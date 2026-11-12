@@ -649,6 +649,10 @@
       "unconfirmed": "{{agent}} konnte das Abzweigen nicht bestätigen. Der Chat wurde möglicherweise dennoch geöffnet; prüfe den Sitzungsverlauf, bevor du erneut abzweigst.",
       "failed": "{{agent}} konnte diesen Chat nicht abzweigen. {{detail}}",
       "unsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut."
+    },
+    "sessionOptionErrors": {
+      "controlUnavailable": "{{agent}} kann Optionen in dieser Sitzung nicht über den Chat ändern.",
+      "controlNotSent": "{{agent}} hat die Optionsänderung nicht erhalten. Versuche es erneut."
     }
   },
   "common": {

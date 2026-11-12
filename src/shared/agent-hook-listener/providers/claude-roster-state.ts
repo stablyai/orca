@@ -57,13 +57,9 @@ export function voidClaimsOfReplacedClaudeSession(
   if (!sessionId) {
     return
   }
-  const previousOwner = state.claudeSessionByPaneKey.get(paneKey)
-  const session = previousOwner?.id === sessionId ? previousOwner : { id: sessionId }
-  if (eventName === 'SessionStart') {
-    session.model = readString(hookPayload, 'model') ?? session.model
-  }
-  state.claudeSessionByPaneKey.set(paneKey, session)
-  if (previousOwner === undefined || previousOwner.id === sessionId) {
+  const previousOwner = state.claudeSessionOwnerByPaneKey.get(paneKey)
+  state.claudeSessionOwnerByPaneKey.set(paneKey, sessionId)
+  if (previousOwner === undefined || previousOwner === sessionId) {
     return
   }
   // Compact restarts stay in-turn. If more compact-capable owner events are added, give them equivalent guards.

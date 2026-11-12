@@ -16,6 +16,47 @@ import type { PersistedNativeChatSessionOptions } from './native-chat-session-op
 describe('native chat PTY session options', () => {
   beforeEach(() => clearNativeChatSessionOptionCacheForTests())
 
+  it('keeps model, defaults and picker callbacks unchanged when a foreign Terminal draft blocks any control', async () => {
+    const persist = vi.fn()
+    const picker = vi.fn()
+    seedNativeChatAppliedSessionOptions('blocked-claude', 'claude', {
+      model: 'opus',
+      effort: 'high'
+    })
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'blocked-claude',
+      mode: 'live',
+      modelLabel: 'Model',
+      dispatchCommand: () => ({ outcome: 'blocked', reason: 'foreign-draft', agent: 'claude' }),
+      persistSelection: persist,
+      onAgentPicker: picker
+    })!
+    await expect(surface.setOption('model', 'haiku')).rejects.toThrow()
+    await expect(surface.invokeAction('fastMode')).rejects.toThrow()
+    expect(surface.getSnapshot().find(({ id }) => id === 'model')).toMatchObject({
+      kind: { currentValue: 'opus' },
+      valueSource: 'applied'
+    })
+    seedNativeChatAppliedSessionOptions('blocked-codex', 'codex', { model: 'gpt-6.1' })
+    const codex = createNativeChatPtySessionOptions({
+      agent: 'codex',
+      scopeKey: 'blocked-codex',
+      mode: 'live',
+      modelLabel: 'Model',
+      dispatchCommand: () => ({ outcome: 'blocked', reason: 'foreign-draft', agent: 'codex' }),
+      persistSelection: persist,
+      onAgentPicker: picker
+    })!
+    await expect(codex.invokeAction('model')).rejects.toThrow()
+    expect(codex.getSnapshot().find(({ id }) => id === 'model')).toMatchObject({
+      kind: { currentValue: 'gpt-6.1' },
+      valueSource: 'applied'
+    })
+    expect(persist).not.toHaveBeenCalled()
+    expect(picker).not.toHaveBeenCalled()
+  })
+
   it('keeps the prior model and persistence when Claude rejects the switch', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'fable',
@@ -97,7 +138,9 @@ describe('native chat PTY session options', () => {
     )
     expect(dispatch).not.toHaveBeenCalled()
     const result = await surface.invokeAction('fastMode')
-    expect(dispatch).toHaveBeenCalledWith('/fast')
+    expect(dispatch).toHaveBeenCalledWith('/fast', {
+      intent: { kind: 'toggle', optionId: 'fastMode', modelId: 'opus' }
+    })
     expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
       valueSource: 'unknown',
       action: { type: 'toggle-command' }
@@ -158,11 +201,19 @@ describe('native chat PTY session options', () => {
     const second = surface.setOption('effort', 'low')
     // Wait for the microtask-queued applier to dispatch before testing serialization.
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
-    expect(dispatch).not.toHaveBeenCalledWith('/effort low')
+    expect(dispatch).not.toHaveBeenCalledWith('/effort low', expect.anything())
     releaseFirst?.()
     await first
     await second
-    expect(dispatch).toHaveBeenCalledWith('/effort low')
+    expect(dispatch).toHaveBeenCalledWith('/effort low', {
+      intent: {
+        kind: 'set',
+        optionId: 'effort',
+        value: 'low',
+        modelId: 'opus',
+        values: { model: 'opus', effort: 'high', fastMode: false }
+      }
+    })
     expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
       kind: { currentValue: 'low' }
     })
@@ -327,7 +378,14 @@ describe('native chat PTY session options', () => {
     await surface.setOption('model', 'future-model')
     expect(dispatch).toHaveBeenCalledExactlyOnceWith('/model future-model', {
       detectAgentInteraction: 'claude-model-switch-confirmation',
-      expectedChoiceLabel: 'Future Model'
+      expectedChoiceLabel: 'Future Model',
+      intent: {
+        kind: 'set',
+        optionId: 'model',
+        value: 'future-model',
+        modelId: 'future-model',
+        values: { model: 'future-model' }
+      }
     })
   })
 

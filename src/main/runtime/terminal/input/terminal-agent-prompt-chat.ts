@@ -2,7 +2,7 @@ import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt
 import type { TerminalChatInput } from './terminal-chat-input-ownership'
 import type { AgentPromptExpectedBinding } from './agent-prompt-write-options'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
-import { assertTerminalInputAdmitted } from './terminal-input-admission'
+import { assertTerminalInputAdmitted, type TerminalInputSource } from './terminal-input-admission'
 import {
   assertAgentPromptRequestActive,
   waitForAgentPromptDelay,
@@ -106,6 +106,56 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
     entry: TerminalChatInput,
     agent: TerminalAgent
   ): Promise<RuntimeTerminalSend> {
+    return this.runTerminalChatInput(handle, binding, entry, async (write) => {
+      const frames = entry.frames!
+      const scheduleText = frames[0]
+      const platform = this.getPtyWriteHostPlatform(binding.ptyId)
+      await write(frames[1])
+      const joined = agentPromptSubmitJoinsPasteFrame(agent)
+      for (let index = 2; index < frames.length; index++) {
+        const frame = frames[index]
+        const last = index === frames.length - 1
+        const gate =
+          last && !joined
+            ? this.createAgentPromptRenderGate(
+                binding.ptyId,
+                getTerminalPasteIngestMs(platform, Buffer.byteLength(frame)),
+                scheduleText
+              )
+            : null
+        try {
+          gate?.arm()
+          await write(frame + (last && joined ? NATIVE_CHAT_SUBMIT : ''))
+          if (gate) {
+            await waitForAgentPromptPromise(gate.wait(), entry.signal)
+          } else if (!last) {
+            await waitForAgentPromptDelay(
+              300 + getTerminalPasteIngestMs(platform, Buffer.byteLength(frame)),
+              entry.signal
+            )
+          }
+        } finally {
+          gate?.dispose()
+        }
+      }
+      if (!joined) {
+        await waitForAgentPromptDelay(
+          resolveAgentPromptSubmitDelayForAgent(platform, scheduleText, agent),
+          entry.signal
+        )
+        await write(NATIVE_CHAT_SUBMIT)
+      }
+    })
+  }
+
+  protected async runTerminalChatInput(
+    handle: string,
+    binding: AgentPromptExpectedBinding & { generation: number },
+    entry: TerminalChatInput,
+    perform: (write: (data: string) => Promise<void>) => Promise<void>,
+    inputSource: TerminalInputSource = 'desktop',
+    hooks?: { beforeWrite?: (ptyId: string) => void; afterWrite?: () => Promise<void> }
+  ): Promise<RuntimeTerminalSend> {
     let bytesWritten = 0
     let effectPossible = false
     let weak = false
@@ -123,7 +173,7 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
       if (!this.ptysById.get(binding.ptyId)?.connected || this.isPtyStopRequested(binding.ptyId)) {
         throw new Error('terminal_not_writable')
       }
-      assertTerminalInputAdmitted(this, binding.ptyId, 'desktop')
+      assertTerminalInputAdmitted(this, binding.ptyId, inputSource)
     }
     const write = async (data: string): Promise<void> => {
       assertWritable()
@@ -131,6 +181,8 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
       if (!controller) {
         throw new Error('terminal_not_writable')
       }
+      hooks?.beforeWrite?.(binding.ptyId)
+      assertWritable()
       // A provider can throw after handoff, before returning its settlement promise.
       effectPossible = true
       const settlement = this.promptInputs.withChatWrite(binding.ptyId, binding.generation, () => {
@@ -162,6 +214,7 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
         throw settled
       }
       bytesWritten += Buffer.byteLength(data)
+      await hooks?.afterWrite?.()
     }
     const queued = this.serializeAgentPromptSubmission(
       binding.ptyId,
@@ -170,44 +223,7 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
         entry.start()
         try {
           assertWritable()
-          const frames = entry.frames!
-          const scheduleText = frames[0]
-          const platform = this.getPtyWriteHostPlatform(binding.ptyId)
-          await write(frames[1])
-          const joined = agentPromptSubmitJoinsPasteFrame(agent)
-          for (let index = 2; index < frames.length; index++) {
-            const frame = frames[index]
-            const last = index === frames.length - 1
-            const gate =
-              last && !joined
-                ? this.createAgentPromptRenderGate(
-                    binding.ptyId,
-                    getTerminalPasteIngestMs(platform, Buffer.byteLength(frame)),
-                    scheduleText
-                  )
-                : null
-            try {
-              gate?.arm()
-              await write(frame + (last && joined ? NATIVE_CHAT_SUBMIT : ''))
-              if (gate) {
-                await waitForAgentPromptPromise(gate.wait(), entry.signal)
-              } else if (!last) {
-                await waitForAgentPromptDelay(
-                  300 + getTerminalPasteIngestMs(platform, Buffer.byteLength(frame)),
-                  entry.signal
-                )
-              }
-            } finally {
-              gate?.dispose()
-            }
-          }
-          if (!joined) {
-            await waitForAgentPromptDelay(
-              resolveAgentPromptSubmitDelayForAgent(platform, scheduleText, agent),
-              entry.signal
-            )
-            await write(NATIVE_CHAT_SUBMIT)
-          }
+          await perform(write)
           return weak
             ? result(false, writeUnverifiable('transport_settlement_lost', true))
             : result(true, { outcome: 'accepted' })

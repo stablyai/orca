@@ -215,9 +215,9 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       onSwitchToTerminal,
       readTerminalScreen,
       paneKey,
-      structuredTransport
+      structuredTransport,
+      launchSeed
     })
-    const contextUsageSummary = useNativeChatContextUsageSummary(structuredTransport)
 
     const sendStructured = useNativeChatStructuredComposerSend({
       agent,
@@ -401,7 +401,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           onStop={interrupt}
           sessionOptionsSurface={sessionOptions.surface}
           sessionOptionsSnapshot={sessionOptions.snapshot}
-          contextUsage={contextUsageSummary}
+          contextUsage={useNativeChatContextUsageSummary(structuredTransport)}
           sessionOptionsPickerRequest={structuredTransport?.optionPickerRequest ?? null}
           agent={agent}
           launchPrompt={launchPrompt}

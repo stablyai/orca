@@ -20,11 +20,15 @@ import {
   isFlipOnlyMidSession,
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
-import type {
-  NativeChatSessionOptionDispatchCommand,
-  NativeChatSessionOptionDispatchResult
+import {
+  createSerializedApplyQueue,
+  type NativeChatSessionOptionDispatchCommand,
+  type NativeChatSessionOptionDispatchResult
 } from './native-chat-session-option-dispatch'
-import { SessionOptionApplyError } from './native-chat-session-option-apply-failure'
+import {
+  SessionOptionApplyError,
+  assertControlNotBlocked
+} from './native-chat-session-option-apply-failure'
 import {
   resolveEffectiveNativeChatModelId,
   type NativeChatSessionOptionMode
@@ -50,19 +54,6 @@ type SessionOptionApplyContext = {
     value: SessionOptionValue,
     source: 'applied' | 'dispatched'
   ) => string | null
-}
-
-/** Serialize absolute targets so they observe prior flips instead of stale baselines. */
-function createSerializedApplyQueue(): <T>(fn: () => Promise<T>) => Promise<T> {
-  let tail: Promise<unknown> = Promise.resolve()
-  return <T>(fn: () => Promise<T>): Promise<T> => {
-    const run = tail.then(fn, fn)
-    tail = run.then(
-      () => undefined,
-      () => undefined
-    )
-    return run
-  }
 }
 
 function currentApply(
@@ -108,11 +99,14 @@ function finish(
 
 async function handleAgentPicker(
   ctx: SessionOptionApplyContext,
+  optionId: string,
   midSession: Extract<CatalogMidSessionApply, { kind: 'agent-picker' }>
 ): Promise<SessionOptionSetResult> {
-  await (midSession.delivery
-    ? ctx.dispatchCommand(midSession.command, { delivery: midSession.delivery })
-    : ctx.dispatchCommand(midSession.command))
+  const result = await ctx.dispatchCommand(midSession.command, {
+    intent: { kind: 'picker', optionId },
+    ...(midSession.delivery ? { delivery: midSession.delivery } : {})
+  })
+  applyDispatchOutcome(ctx, result)
   ctx.settle(() => ctx.clearModelTruth())
   const snapshot = ctx.publish()
   if (ctx.canCommit()) {
@@ -154,18 +148,27 @@ async function dispatchLiveCommand(
     args.optionId === 'model' && typeof args.value === 'string'
       ? (findCatalogModel({ ...ctx.catalog, models }, args.value)?.label ?? args.value)
       : undefined
-  return detectAgentInteraction
-    ? await ctx.dispatchCommand(command, {
-        detectAgentInteraction,
-        expectedChoiceLabel
-      })
-    : await ctx.dispatchCommand(command)
+  return ctx.dispatchCommand(command, {
+    intent: {
+      kind: 'set',
+      optionId: args.optionId,
+      value: args.value,
+      ...(args.modelId
+        ? {
+            modelId: args.modelId,
+            values: flattenNativeChatSessionOptionRecord(record, args.modelId)
+          }
+        : {})
+    },
+    ...(detectAgentInteraction ? { detectAgentInteraction, expectedChoiceLabel } : {})
+  })
 }
 
 function applyDispatchOutcome(
   ctx: SessionOptionApplyContext,
   dispatchResult: NativeChatSessionOptionDispatchResult | void
 ): SessionOptionSetResult | null {
+  assertControlNotBlocked(dispatchResult)
   if (dispatchResult?.outcome === 'rejected') {
     throw new SessionOptionApplyError('modelRejected')
   }
@@ -289,7 +292,7 @@ async function applyInvokeAction(
     if (ctx.mode !== 'live') {
       throw new SessionOptionApplyError('afterStartOnly')
     }
-    return handleAgentPicker(ctx, apply.midSession)
+    return handleAgentPicker(ctx, id, apply.midSession)
   }
   if (!isFlipOnlyMidSession(apply.midSession)) {
     throw new SessionOptionApplyError('valueRequired')
@@ -301,23 +304,23 @@ async function applyInvokeAction(
     throw new SessionOptionApplyError('toggleValueKnown')
   }
   // Inverting an unknown baseline still leaves an unknown absolute value.
-  await ctx.dispatchCommand(apply.midSession.command)
+  const result = await ctx.dispatchCommand(apply.midSession.command, {
+    intent: { kind: 'toggle', optionId: id, ...(modelId ? { modelId } : {}) }
+  })
+  applyDispatchOutcome(ctx, result)
   return finish(ctx)
 }
 
-export function createSessionOptionAppliers(ctx: SessionOptionApplyContext): {
-  setOption: (id: string, value: SessionOptionValue) => Promise<SessionOptionSetResult>
-  invokeAction: (id: string) => Promise<SessionOptionSetResult>
-} {
+export function createSessionOptionAppliers(ctx: SessionOptionApplyContext) {
   const serialize = createSerializedApplyQueue()
   return {
-    setOption: (id, value) =>
+    setOption: (id: string, value: SessionOptionValue) =>
       serialize(() =>
         ctx.runOperation
           ? ctx.runOperation(() => applySetOption(ctx, id, value))
           : applySetOption(ctx, id, value)
       ),
-    invokeAction: (id) =>
+    invokeAction: (id: string) =>
       serialize(() =>
         ctx.runOperation
           ? ctx.runOperation(() => applyInvokeAction(ctx, id))

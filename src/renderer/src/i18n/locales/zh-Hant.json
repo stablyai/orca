@@ -19870,7 +19870,9 @@
         "toggleBaselineUnknown": "目前的值未知，請改用「切換」動作。",
         "afterStartOnly": "此選項僅在工作階段啟動後可用。",
         "valueRequired": "此選項需要一個值。",
-        "toggleValueKnown": "此選項的值已知，請改選「開啟」或「關閉」。"
+        "toggleValueKnown": "此選項的值已知，請改選「開啟」或「關閉」。",
+        "controlUnavailable": "{{agent}} 無法在此工作階段中透過聊天變更選項。",
+        "controlNotSent": "{{agent}} 未收到選項變更。請重試。"
       },
       "composerErrors": {
         "goalObjectiveMissing": "請在 /goal 後描述目標。",

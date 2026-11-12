@@ -645,6 +645,10 @@
       "unconfirmed": "{{agent}} は分岐を確認できませんでした。チャットが開いている可能性があります。再度分岐する前にセッション履歴を確認してください。",
       "failed": "{{agent}} はこのチャットを分岐できませんでした。{{detail}}",
       "unsupported": "このホストでは古いバージョンの Orca が実行されています。ホストの Orca を更新して再試行してください。"
+    },
+    "sessionOptionErrors": {
+      "controlUnavailable": "このセッションでは、{{agent}} のオプションをチャットから変更できません。",
+      "controlNotSent": "{{agent}} にオプションの変更が届きませんでした。もう一度お試しください。"
     }
   },
   "common": {

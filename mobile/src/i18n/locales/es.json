@@ -684,6 +684,10 @@
       "unconfirmed": "{{agent}} no pudo confirmar la creación de la rama. Es posible que se haya abierto; revisa el historial de sesiones antes de volver a intentarlo.",
       "failed": "{{agent}} no pudo crear una rama de este chat. {{detail}}",
       "unsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo."
+    },
+    "sessionOptionErrors": {
+      "controlUnavailable": "{{agent}} no puede cambiar las opciones desde el chat en esta sesión.",
+      "controlNotSent": "{{agent}} no recibió el cambio de opción. Inténtalo de nuevo."
     }
   },
   "common": {

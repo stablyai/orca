@@ -228,6 +228,8 @@ export function useMobileNativeChatController(args: {
       activeChatStructured,
       agent: activeChatResolution?.agent ?? null,
       dispatchCommand: handleNativeChatDispatchCommand,
+      hasSeededLaunchDraft: () => readSeededLaunchDraftSeed() !== null,
+      terminalInputEnabled: inputSendable,
       isTabChatView,
       isWorking: nativeChatAgentWorking,
       reportedModel: activeSessionTab?.agentStatus?.model ?? null,

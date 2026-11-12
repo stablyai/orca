@@ -20788,7 +20788,9 @@
         "toggleBaselineUnknown": "Current value is unknown; use the Toggle action instead.",
         "afterStartOnly": "This option is only available after the session starts.",
         "valueRequired": "This option requires a value.",
-        "toggleValueKnown": "This option has a known value; choose On or Off instead."
+        "toggleValueKnown": "This option has a known value; choose On or Off instead.",
+        "controlUnavailable": "{{agent}} can't change options from Chat in this session.",
+        "controlNotSent": "{{agent}} did not receive the option change. Try again."
       },
       "composerErrors": {
         "goalObjectiveMissing": "Describe the goal after /goal.",

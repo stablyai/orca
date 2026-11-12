@@ -183,7 +183,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
   }
 
   /** The user's text in a composer the screen model has fully caught up on; null when unknown. */
-  private readCaughtUpComposerTypedText(ptyId: string): string | null {
+  protected readCaughtUpComposerTypedText(ptyId: string): string | null {
     const state = this.readWholeScreenModel(ptyId)
     return state && state.outputSequence === this.getPtyOutputSequence(ptyId)
       ? readTerminalComposerTypedText(state.emulator.getCursorLineContext())

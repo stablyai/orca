@@ -33,9 +33,9 @@ export function normalizeClaudeSubagentLifecycleEvent(
   if (!lifecycleId) {
     return null
   }
-  const sessionOwner = state.claudeSessionByPaneKey.get(paneKey)
+  const sessionOwner = state.claudeSessionOwnerByPaneKey.get(paneKey)
   const currentSession =
-    sessionOwner !== undefined && sessionOwner.id === readString(hookPayload, 'session_id')
+    sessionOwner !== undefined && sessionOwner === readString(hookPayload, 'session_id')
   const compatibleSession = sessionOwner === undefined || currentSession
   const cachedLead = state.claudeLeadStateByPaneKey.get(paneKey)
   const ownsUnbackedWait =

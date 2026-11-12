@@ -20180,7 +20180,9 @@
         "toggleBaselineUnknown": "Der aktuelle Wert ist unbekannt; stattdessen die Aktion „Umschalten“ verwenden.",
         "afterStartOnly": "Diese Option ist erst nach dem Start der Sitzung verfügbar.",
         "valueRequired": "Diese Option benötigt einen Wert.",
-        "toggleValueKnown": "Der Wert dieser Option ist bekannt; stattdessen „Ein“ oder „Aus“ auswählen."
+        "toggleValueKnown": "Der Wert dieser Option ist bekannt; stattdessen „Ein“ oder „Aus“ auswählen.",
+        "controlUnavailable": "{{agent}} kann Optionen in dieser Sitzung nicht über den Chat ändern.",
+        "controlNotSent": "{{agent}} hat die Optionsänderung nicht erhalten. Versuche es erneut."
       },
       "composerErrors": {
         "goalObjectiveMissing": "Das Ziel nach /goal beschreiben.",

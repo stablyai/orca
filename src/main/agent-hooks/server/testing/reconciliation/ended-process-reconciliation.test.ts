@@ -119,11 +119,11 @@ describe('reconcileEndedProcessForPaneKeys', () => {
     const server = await startServer()
     try {
       claudeRow(server, 'working')
-      server._getStateForTests().claudeSessionByPaneKey.set(PANE, { id: 'session-a' })
+      server._getStateForTests().claudeSessionOwnerByPaneKey.set(PANE, 'session-a')
 
       server.reconcileEndedProcessForPaneKeys([PANE])
 
-      expect(server._getStateForTests().claudeSessionByPaneKey.has(PANE)).toBe(false)
+      expect(server._getStateForTests().claudeSessionOwnerByPaneKey.has(PANE)).toBe(false)
       // A fresh unanchored cron must survive the new owner's first lead event.
       for (const payload of [
         { hook_event_name: 'Stop', session_crons: [{ id: 'new-cron' }] },

@@ -645,6 +645,10 @@
       "unconfirmed": "{{agent}} 无法确认是否已创建分支。它可能已经打开；请先检查会话历史，再重试。",
       "failed": "{{agent}} 无法从此聊天创建分支。{{detail}}",
       "unsupported": "此主机运行的是旧版 Orca。请更新主机上的 Orca 后重试。"
+    },
+    "sessionOptionErrors": {
+      "controlUnavailable": "{{agent}} 无法在此会话中通过聊天更改选项。",
+      "controlNotSent": "{{agent}} 未收到选项更改。请重试。"
     }
   },
   "common": {

@@ -676,6 +676,7 @@ import { SendRecordedParams } from './structured-agent-session-send-recorded-par
 import { SubscribeParams } from './structured-agent-session-subscribe-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalLimitUpdateParams } from './terminal-limit-params'
+import { TerminalModelControlParams } from './terminal-model-control-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-params'
 import {
@@ -1568,6 +1569,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.inspectProcess': TerminalInspectProcess,
   'terminal.isRunningAgent': TerminalHandle,
   'terminal.list': TerminalListParams,
+  'terminal.model-control': TerminalModelControlParams,
   'terminal.multiplex': TerminalMultiplex,
   'terminal.openInputSession': TerminalOpenInputSession,
   'terminal.read': TerminalRead,

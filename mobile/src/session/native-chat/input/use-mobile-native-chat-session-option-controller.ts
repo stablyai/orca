@@ -18,6 +18,13 @@ import type {
 } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { mobileNativeChatScopeKey } from '../mobile-native-chat-scope-key'
 import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
+import type { NativeChatSessionOptionDispatchOptions } from '../../../../../src/shared/native-chat/input/native-chat-session-option-dispatch'
+import { sendMobileNativeChatModelControl } from './mobile-native-chat-model-control'
+import { sameNativeChatSessionOptionBinding } from '../../../../../src/shared/native-chat/input/native-chat-session-option-binding'
+import {
+  acquireMobileNativeChatTerminalWrite,
+  releaseMobileNativeChatTerminalWrite
+} from '../mobile-native-chat-terminal-write-lock'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import {
   useMobileNativeChatSessionOptions,
@@ -37,6 +44,10 @@ export function useMobileNativeChatSessionOptionController(args: {
   activeSessionTabId: string | null
   agent: string | null
   dispatchCommand: (text: string) => Promise<MobileNativeChatSendOutcome>
+  onSendError?: (message: string) => void
+  hasSeededLaunchDraft?: () => boolean
+  deviceTokenRef?: MutableRefObject<string | null>
+  terminalInputEnabled?: boolean
   hostId: string
   isTabChatView: (tabId: string) => boolean
   isWorking: boolean
@@ -145,6 +156,67 @@ export function useMobileNativeChatSessionOptionController(args: {
     selectedTab?.agentStatus?.providerSession?.id,
     selectedTab?.agentStatus?.providerSession?.transcriptPath
   ])
+  const dispatchOptionCommand = useCallback(
+    async (command: string, options?: NativeChatSessionOptionDispatchOptions) => {
+      if (args.terminalInputEnabled === false) {
+        return 'rejected' as const
+      }
+      const binding = owner?.binding
+      const clientId = args.deviceTokenRef?.current
+      if (
+        client &&
+        owner &&
+        binding?.terminalHandle &&
+        clientId &&
+        options?.intent &&
+        !args.hasSeededLaunchDraft?.()
+      ) {
+        if (!acquireMobileNativeChatTerminalWrite(binding.terminalHandle)) {
+          return 'rejected' as const
+        }
+        let result
+        try {
+          result = await sendMobileNativeChatModelControl({
+            client,
+            terminal: binding.terminalHandle,
+            incarnationId: binding.incarnationId,
+            clientId,
+            control: {
+              agent: binding.agent,
+              intent: options.intent,
+              observation: {
+                detectAgentInteraction: options.detectAgentInteraction,
+                expectedChoiceLabel: options.expectedChoiceLabel
+              }
+            },
+            isCurrent: () => {
+              const current = owner.readCurrentBinding()
+              return (
+                current !== null &&
+                sameNativeChatSessionOptionBinding(binding, current) &&
+                (!args.activeHandleRef || args.activeHandleRef.current === binding.terminalHandle)
+              )
+            }
+          })
+        } finally {
+          releaseMobileNativeChatTerminalWrite(binding.terminalHandle)
+        }
+        if (result) {
+          return result
+        }
+      }
+      return dispatchCommand(command)
+    },
+    [
+      client,
+      owner,
+      args.hasSeededLaunchDraft,
+      args.activeHandleRef,
+      args.deviceTokenRef,
+      args.terminalInputEnabled,
+      dispatchCommand
+    ]
+  )
   const sessionOptions = useMobileNativeChatSessionOptions({
     owner,
     isDispatchTargetCurrent: () =>
@@ -156,8 +228,9 @@ export function useMobileNativeChatSessionOptionController(args: {
     agent: activeChatStructured ? null : agent,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel,
-    dispatchCommand,
+    dispatchCommand: dispatchOptionCommand,
     onAgentPicker: handleAgentPicker,
+    onControlError: args.onSendError,
     writeSettings
   })
   // Kept with nothing to pick (OMP lists no models): the "/" menu reads the chat's commands from it.

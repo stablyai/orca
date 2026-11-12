@@ -684,6 +684,10 @@
       "unconfirmed": "{{agent}} n’a pas pu confirmer la création de la branche. Elle s’est peut-être ouverte malgré tout ; consultez l’historique des sessions avant de réessayer.",
       "failed": "{{agent}} n’a pas pu créer de branche de cette conversation. {{detail}}",
       "unsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez."
+    },
+    "sessionOptionErrors": {
+      "controlUnavailable": "{{agent}} ne peut pas modifier les options depuis le chat dans cette session.",
+      "controlNotSent": "{{agent}} n’a pas reçu la modification de l’option. Réessayez."
     }
   },
   "common": {

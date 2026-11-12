@@ -9,7 +9,7 @@ export function paneHasStateClaims(state: HookListenerState, paneKey: string): b
     state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
     state.claudeActiveSessionCronPaneKeys.has(paneKey) ||
     state.claudeLaunchedBackgroundTasksByPaneKey.has(paneKey) ||
-    state.claudeSessionByPaneKey.has(paneKey) ||
+    state.claudeSessionOwnerByPaneKey.has(paneKey) ||
     state.codexSubagentRosterByPaneKey.has(paneKey) ||
     state.codexLeadStateByPaneKey.has(paneKey) ||
     state.codexAsyncQuestionsByPaneKey.has(paneKey)

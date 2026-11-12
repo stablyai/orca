@@ -1721,7 +1721,9 @@
         "toggleBaselineUnknown": "Current value is unknown; use the Toggle action instead.",
         "toggleValueKnown": "This option has a known value; choose On or Off instead.",
         "unknownOption": "Unknown session option: {{id}}",
-        "valueRequired": "This option requires a value."
+        "valueRequired": "This option requires a value.",
+        "controlUnavailable": "{{agent}} can't change options from Chat in this session.",
+        "controlNotSent": "{{agent}} did not receive the option change. Try again."
       },
       "state": {
         "empty": {

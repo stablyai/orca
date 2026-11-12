@@ -6,6 +6,7 @@ import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty
 import { createAgentPromptSubmissionRuntime } from '../terminal/input/agent-prompt-submission-runtime-test-fixture'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal/terminal'
+import { readRuntimeFixture } from '../terminal/wait/agent-transcript-replay-test-harness'
 
 vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeListingModule>()),
@@ -50,6 +51,167 @@ function send(runtime: OrcaRuntimeService, handle: string, text: string) {
 
 describe('host-owned Chat input', () => {
   afterEach(() => vi.useRealTimers())
+
+  it.each([
+    ['claude', 'claude-2-1-316-default-unlabelled-middle', 100, 30, ''],
+    ['codex', 'codex-0-137-0-rotating-placeholder', 80, 24, '\x1b[20;3H\x1b[0mship it\x1b[K']
+  ] as const)(
+    'blocks %s foreign drafts in recognized native editors before any model bytes',
+    async (agent, fixture, cols, rows, typed) => {
+      const { runtime, handle, writes } = await createRuntime(undefined, agent)
+      vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols, rows })
+      runtime.onPtyData('pty-prompt', readRuntimeFixture(fixture) + typed, Date.now())
+      await runtime.readTerminal(handle, { screen: true })
+      const result = await runtime.controlTerminalModel(
+        handle,
+        {
+          agent,
+          intent:
+            agent === 'codex'
+              ? { kind: 'picker', optionId: 'model' }
+              : { kind: 'set', optionId: 'model', value: 'opus' }
+        },
+        { inputSource: 'desktop' }
+      )
+      expect(result).toEqual({ outcome: 'blocked', reason: 'foreign-draft', agent })
+      expect(writes).toEqual([])
+    }
+  )
+
+  it('hands unknown and unsupported editor contexts back with no effects', async () => {
+    for (const agent of ['claude', 'codex', 'omp'] as const) {
+      const { runtime, handle, writes } = await createRuntime(undefined, agent)
+      if (agent === 'codex') {
+        vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 120, rows: 40 })
+        runtime.onPtyData(
+          'pty-prompt',
+          readRuntimeFixture('codex-fullscreen-multiline-early-input'),
+          Date.now()
+        )
+      }
+      await expect(
+        runtime.controlTerminalModel(
+          handle,
+          { agent, intent: { kind: 'picker', optionId: 'model' } },
+          { inputSource: 'desktop' }
+        )
+      ).resolves.toEqual({ outcome: 'legacy' })
+      expect(writes).toEqual([])
+    }
+  })
+
+  it('keeps the legacy route when launch metadata cannot identify the current agent', async () => {
+    const { runtime, handle, writes } = await createRuntime(undefined, 'codex')
+    await expect(
+      runtime.controlTerminalModel(
+        handle,
+        {
+          agent: 'claude',
+          intent: { kind: 'set', optionId: 'model', value: 'opus' }
+        },
+        { inputSource: 'desktop' }
+      )
+    ).resolves.toEqual({ outcome: 'legacy' })
+    expect(writes).toEqual([])
+  })
+
+  it('delivers an advertised option even when its model matches a seed without that option', async () => {
+    const { runtime, handle, writes } = await createRuntime(undefined, 'claude')
+    vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 100, rows: 30 })
+    runtime.onPtyData(
+      'pty-prompt',
+      readRuntimeFixture('claude-2-1-316-default-unlabelled-empty'),
+      Date.now()
+    )
+    await expect(
+      runtime.controlTerminalModel(
+        handle,
+        {
+          agent: 'claude',
+          intent: { kind: 'toggle', optionId: 'fastMode', modelId: 'sonnet' }
+        },
+        { inputSource: 'desktop' }
+      )
+    ).resolves.toEqual({ outcome: 'dispatched' })
+    expect(writes).toEqual(['/fast', '\r'])
+  })
+
+  it('keeps the empty native Codex picker key sequence', async () => {
+    const { runtime, handle, writes } = await createRuntime(undefined, 'codex')
+    vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 80, rows: 24 })
+    runtime.onPtyData(
+      'pty-prompt',
+      readRuntimeFixture('codex-0-137-0-rotating-placeholder'),
+      Date.now()
+    )
+    await runtime.readTerminal(handle, { screen: true })
+    await expect(
+      runtime.controlTerminalModel(
+        handle,
+        { agent: 'codex', intent: { kind: 'picker', optionId: 'model' } },
+        { inputSource: 'desktop' }
+      )
+    ).resolves.toEqual({ outcome: 'picker-opened' })
+    expect(writes).toEqual(['\x15', '/', 'm', 'o', 'd', 'e', 'l', '\r'])
+  })
+
+  it.each([false, true])(
+    'orders the Claude warning behind command acceptance and fences foreign input=%s',
+    async (foreignInput) => {
+      const commandStarted = Promise.withResolvers<void>()
+      const commandAccepted = Promise.withResolvers<WriteSettlement>()
+      let runtime: OrcaRuntimeService
+      let submits = 0
+      const fixture = await createRuntime((data) => {
+        if (data !== '\r') {
+          return { outcome: 'accepted' }
+        }
+        submits++
+        if (submits === 1) {
+          runtime.onPtyData(
+            'pty-prompt',
+            'Switch model? This conversation is cached for the current model',
+            Date.now()
+          )
+          commandStarted.resolve()
+          return commandAccepted.promise
+        }
+        runtime.onPtyData('pty-prompt', 'Set model to Opus 5.5 (1M context)', Date.now())
+        return { outcome: 'accepted' }
+      }, 'claude')
+      runtime = fixture.runtime
+      vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 100, rows: 30 })
+      runtime.onPtyData(
+        'pty-prompt',
+        readRuntimeFixture('claude-2-1-316-default-unlabelled-empty'),
+        Date.now()
+      )
+      const control = runtime.controlTerminalModel(
+        fixture.handle,
+        {
+          agent: 'claude',
+          intent: { kind: 'set', optionId: 'model', value: 'claude-opus-5-5[1m]' },
+          observation: {
+            detectAgentInteraction: 'claude-model-switch-confirmation',
+            expectedChoiceLabel: 'Claude Opus 5.5 (1M context)'
+          }
+        },
+        { inputSource: 'desktop' }
+      )
+      await commandStarted.promise
+      expect(fixture.writes).toEqual(['/model claude-opus-5-5[1m]', '\r'])
+      if (foreignInput) {
+        runtime.terminalRunFacts.recordInput('pty-prompt', 'driving', 'new draft')
+      }
+      commandAccepted.resolve({ outcome: 'accepted' })
+      await expect(control).resolves.toEqual({ outcome: foreignInput ? 'unknown' : 'applied' })
+      expect(fixture.writes).toEqual(
+        foreignInput
+          ? ['/model claude-opus-5-5[1m]', '\r']
+          : ['/model claude-opus-5-5[1m]', '\r', '\r']
+      )
+    }
+  )
 
   it('serializes two admitted sends without either invalidating its sibling and writes one joined Enter each', async () => {
     const { runtime, handle, writes } = await createRuntime()

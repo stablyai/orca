@@ -19,7 +19,7 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
   ptyId: string
   expectedModelLabel: string | null
   subscribeToData?: SubscribeToData
-  submitConfirmation?: () => boolean | void
+  submitConfirmation?: () => boolean | void | Promise<boolean | void>
   timeoutMs?: number
 }): ClaudeModelSwitchConfirmationObserver {
   return createConfirmationObserver({

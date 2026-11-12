@@ -5,13 +5,13 @@ import type {
   RuntimeTerminalSend
 } from '../../../../shared/runtime-terminal-send-contract'
 import type { AgentTransitionDetector } from '../../../agent-hooks/observations/agent-transition-detector'
-import { OrcaRuntimeWithTerminalChatPrompt } from './terminal-agent-prompt-chat'
+import { OrcaRuntimeWithTerminalModelControl } from './terminal-model-control'
 import {
   AgentPromptPermissionReturnedError,
   waitWhileAgentPromptBlocked
 } from './agent-prompt-permission-hold'
 
-export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRuntimeWithTerminalChatPrompt {
+export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRuntimeWithTerminalModelControl {
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
 
   /** Every prompt write judges a restored permission wait on the screen as it is now (#35962). */
