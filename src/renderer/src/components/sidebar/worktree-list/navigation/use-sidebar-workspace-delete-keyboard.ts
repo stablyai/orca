@@ -71,7 +71,7 @@ export function useSidebarWorkspaceDeleteKeyboard({
   )
   const handleContainerKeyUp = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.target !== e.currentTarget || textInputOwnsComposition(e)) {
+      if (e.target !== e.currentTarget || textInputOwnsComposition(e.nativeEvent)) {
         resetDeleteGesture()
         return
       }

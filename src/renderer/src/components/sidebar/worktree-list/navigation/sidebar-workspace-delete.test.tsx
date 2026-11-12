@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import React, { act, useRef } from 'react'
+import { act, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useStore } from 'zustand'
@@ -179,6 +179,27 @@ it('leaves prompt and rename keys untouched, even with an existing selection', (
     act(() => (field as HTMLElement).focus())
     expect(key(field).defaultPrevented).toBe(false)
   }
+  expect(deleteOne).not.toHaveBeenCalled()
+})
+it('yields during composition and modal ownership, and never substitutes an ineligible row', () => {
+  click(1)
+  expect(key(list, { isComposing: true }).defaultPrevented).toBe(false)
+  activeModal = 'settings'
+  render()
+  expect(key(list).defaultPrevented).toBe(false)
+  activeModal = 'none'
+  items = [{ ...b, isMainWorktree: true }]
+  render()
+  click(0)
+  expect(key(list).defaultPrevented).toBe(false)
+  items = [b]
+  render()
+  store.setState({
+    deleteStateByWorktreeId: {
+      b: { isDeleting: true, error: null, canForceDelete: false, forceDeleteReason: null }
+    }
+  })
+  expect(key(list).defaultPrevented).toBe(false)
   expect(deleteOne).not.toHaveBeenCalled()
 })
 it('uses explicit arrow preview selection and cancels its pending activation before deletion', () => {

@@ -17,6 +17,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { focusActiveWorkspaceSurfaceFromSidebar } from './focus-workspace-surface'
 import type { WorktreeContextMenuDeleteIntent } from '../../workspace-actions/context-menu/worktree-context-menu-delete-intent'
 import { useSidebarWorkspaceDeleteKeyboard } from './use-sidebar-workspace-delete-keyboard'
+import { textInputOwnsComposition } from '../../../../../../shared/text-input-shortcut-policy'
 import { useWorkspaceNeighborPrewarm } from './use-neighbor-prewarm'
 
 const PREVIEW_COMMIT_FIRST_REPEAT_MS = 120
@@ -277,10 +278,10 @@ export function useWorktreeListKeyboardNavigation(args: {
   ])
 
   const handleContainerKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (
         e.defaultPrevented ||
-        e.isComposing ||
+        textInputOwnsComposition(e.nativeEvent) ||
         e.target !== e.currentTarget ||
         activeModal !== 'none' ||
         hasVisibleOverlay()
