@@ -158,10 +158,12 @@ export class FederationRelayScheduler {
     if (outcome === 'failed') {
       chain.failures += 1
       chain.idleSyncs = 0
+    } else if (outcome === 'moved') {
+      chain.failures = 0
+      wake(chain)
     } else {
       chain.failures = 0
-      chain.idleSyncs =
-        outcome === 'moved' || Date.now() < chain.awakeUntil ? 0 : chain.idleSyncs + 1
+      chain.idleSyncs = Date.now() < chain.awakeUntil ? 0 : chain.idleSyncs + 1
     }
     const delayMs = chain.runAgain
       ? 0
