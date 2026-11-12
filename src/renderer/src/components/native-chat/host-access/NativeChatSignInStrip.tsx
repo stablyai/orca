@@ -7,12 +7,14 @@ import type { AntigravityChatSignInPrompt } from '@/components/provider-accounts
 import { chatSignInLine } from '@/components/provider-accounts/use-antigravity-chat-sign-in'
 import { openAntigravitySignInSettings } from '@/components/provider-accounts/open-antigravity-sign-in-settings'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { NativeChatInstallTile } from './NativeChatInstallTile'
 
 export type NativeChatSignInStripState = {
   prompt: AntigravityChatSignInPrompt
   view: AntigravityChatSignInView
   agent: AgentType
+  host: RuntimeClientTarget
 }
 
 export const nativeChatSignInTitle = (agentLabel: string, t: Translate = translate): string =>
@@ -26,7 +28,7 @@ export function NativeChatSignInStrip(props: {
   agentLabel: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const { prompt, view, agent } = props.state
+  const { prompt, view, agent, host } = props.state
   const failed = prompt === 'failed'
   return (
     <div
@@ -54,8 +56,9 @@ export function NativeChatSignInStrip(props: {
           </p>
         )}
       </div>
-      {prompt === 'signingIn' ? null : (
-        <Button size="sm" onClick={openAntigravitySignInSettings}>
+      {/* A browser that didn't open still needs Copy link and Cancel, which live in Settings. */}
+      {prompt === 'signingIn' && !view.openFailed ? null : (
+        <Button size="sm" onClick={() => openAntigravitySignInSettings(host)}>
           {t('accounts.antigravity.signInEllipsis', 'Sign in…')}
         </Button>
       )}

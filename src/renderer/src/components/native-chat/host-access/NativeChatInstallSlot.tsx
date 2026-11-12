@@ -62,12 +62,14 @@ export function useNativeChatInstallSlot(
   const signsIn =
     props.agent === 'antigravity' &&
     props.isVisible &&
+    !hostProgram &&
     slot.kind === 'none' &&
     observation.kind === 'active' &&
     antigravityOrcaRuntimeSignsIn(observation)
   const signInView = useAntigravityChatSignIn(signsIn ? props.target : null)
   const prompt = signsIn ? antigravityChatSignInPrompt(signInView) : null
-  const signIn = prompt === null ? null : { prompt, view: signInView, agent: props.agent }
+  const signIn =
+    prompt === null ? null : { prompt, view: signInView, agent: props.agent, host: props.target }
   const unavailableHint =
     slot.kind === 'install'
       ? managedRuntimeInstallCard(slot.state, agentLabel, slot.layout, undefined, t).title

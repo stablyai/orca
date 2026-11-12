@@ -29,14 +29,6 @@ import {
 } from '../../../lib/agent-session/launch/native-chat-provider-choice'
 import { ManagedRuntimeInstallRow } from '../../managed-runtime/ManagedRuntimeInstallRow'
 import { managedRuntimeInstallPending } from '../../managed-runtime/managed-runtime-install-view'
-import {
-  antigravityChatSignInPrompt,
-  antigravityOrcaRuntimeSignsIn
-} from '../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
-import { chatSignInLine } from '../../provider-accounts/use-antigravity-chat-sign-in'
-import { openAntigravitySignInSettings } from '../../provider-accounts/open-antigravity-sign-in-settings'
-import { LoadingSpinner } from '../../LoadingSpinner'
-import { Button } from '../../ui/button'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 import { getChatLaunchEntriesByKey } from './chat-launch-search'
 import { useTranslate } from '@/i18n/use-translate'
@@ -140,63 +132,20 @@ function ChatAgentRow({
   )
 }
 
-/** Shows the next step the agent's chat still needs here: installing its runtime, then signing in. */
+/** Offers the agent's chat runtime install in its row until this computer has a current copy. */
 function ManagedChatAgentRow(props: ChatAgentRowProps): React.JSX.Element {
-  const t = useTranslate()
-  const { runtime, signIn, signInRunning } = useAgentChatRuntimeInstall(props.agent)
-  if (runtime.kind !== 'active') {
-    return <ChatAgentRow {...props} />
-  }
-  if (managedRuntimeInstallPending(runtime.snapshot)) {
-    return (
-      <ManagedRuntimeInstallRow
-        observation={runtime}
-        agentLabel={props.label}
-        signInRunning={signInRunning}
-        menu={false}
-      >
-        {(line, actions) => <ChatAgentRow {...props} line={line} actions={actions} />}
-      </ManagedRuntimeInstallRow>
-    )
-  }
-  const prompt =
-    props.agent === 'antigravity' && antigravityOrcaRuntimeSignsIn(runtime)
-      ? antigravityChatSignInPrompt(signIn)
-      : null
-  if (prompt === null) {
+  const { runtime, signInRunning } = useAgentChatRuntimeInstall(props.agent)
+  if (runtime.kind !== 'active' || !managedRuntimeInstallPending(runtime.snapshot)) {
     return <ChatAgentRow {...props} />
   }
   return (
-    <ChatAgentRow
-      {...props}
-      line={
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex min-h-4 flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground"
-        >
-          {prompt === 'signingIn' ? (
-            <>
-              <LoadingSpinner className="size-3" />
-              {chatSignInLine(signIn.flow, signIn.auth, signIn.openFailed, t)}
-            </>
-          ) : prompt === 'failed' ? (
-            <span className="text-destructive">
-              {t('accounts.antigravity.chatFailed', 'Sign-in failed. Try again.')}
-            </span>
-          ) : (
-            <>
-              <span aria-hidden className="size-1.5 rounded-full bg-muted-foreground/60" />
-              {t('accounts.antigravity.chatBadgeSignedOut', 'Not signed in')}
-            </>
-          )}
-        </div>
-      }
-      actions={
-        <Button size="xs" variant="outline" onClick={openAntigravitySignInSettings}>
-          {t('accounts.antigravity.signInEllipsis', 'Sign in…')}
-        </Button>
-      }
-    />
+    <ManagedRuntimeInstallRow
+      observation={runtime}
+      agentLabel={props.label}
+      signInRunning={signInRunning}
+      menu={false}
+    >
+      {(line, actions) => <ChatAgentRow {...props} line={line} actions={actions} />}
+    </ManagedRuntimeInstallRow>
   )
 }
