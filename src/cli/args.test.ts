@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { CommandSpec } from './args'
 import {
+  BOOLEAN_FLAGS,
   REPEATED_FLAG_SEPARATOR,
   findCommandSpec,
   normalizeCommandPositionals,
@@ -35,6 +36,14 @@ describe('parseArgs', () => {
     const parsed = parseArgs(['--value='])
 
     expect(parsed.flags.get('value')).toBe('')
+  })
+
+  it('parses the open graphics fallback as a boolean flag', () => {
+    const parsed = parseArgs(['open', '--disable-gpu'])
+
+    expect(BOOLEAN_FLAGS.has('disable-gpu')).toBe(true)
+    expect(parsed.commandPath).toEqual(['open'])
+    expect(parsed.flags.get('disable-gpu')).toBe(true)
   })
 
   it('does not consume a command token after an unknown flag', () => {

@@ -20,6 +20,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'debug',
   'delete-branch',
   'delta',
+  'disable-gpu',
   'dry-run',
   'enter',
   'focus',

@@ -57,7 +57,19 @@ import {
 
 const STARTUP_ABORT_MS = 30_000
 
-export function launchOrcaApp(): void {
+export type LaunchOrcaAppOptions = {
+  disableGpu?: boolean
+}
+
+function appArgsWithGpu(executable: string, options: LaunchOrcaAppOptions): string[] {
+  const args = getExecutableAppArgs(executable)
+  if (options.disableGpu) {
+    args.push('--disable-gpu')
+  }
+  return args
+}
+
+export function launchOrcaApp(options: LaunchOrcaAppOptions = {}): void {
   const overrideCommand = process.env.ORCA_OPEN_COMMAND
   if (typeof overrideCommand === 'string' && overrideCommand.trim().length > 0) {
     spawnDetached(overrideCommand, [], { shell: true })
@@ -69,7 +81,7 @@ export function launchOrcaApp(): void {
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
     const pinned = pinLaunchUserDataPath(
-      getExecutableAppArgs(overrideExecutable),
+      appArgsWithGpu(overrideExecutable, options),
       stripElectronRunAsNode(process.env),
       userDataPath
     )
@@ -85,7 +97,7 @@ export function launchOrcaApp(): void {
       const appBundlePath = getMacAppBundlePath(process.execPath)
       if (appBundlePath) {
         // Launch the macOS bundle through Launch Services to preserve its app lifecycle.
-        spawnDetached('open', getMacOpenArgs(appBundlePath, userDataPath), {
+        spawnDetached('open', getMacOpenArgs(appBundlePath, userDataPath, options), {
           env: stripElectronRunAsNode(process.env)
         })
         return
@@ -93,7 +105,7 @@ export function launchOrcaApp(): void {
     }
 
     const pinned = pinLaunchUserDataPath(
-      getExecutableAppArgs(process.execPath),
+      appArgsWithGpu(process.execPath, options),
       stripElectronRunAsNode(process.env),
       userDataPath
     )
@@ -108,11 +120,19 @@ export function launchOrcaApp(): void {
 }
 
 /** Nondefault profiles need a new instance: open drops env and only new instances receive --args. */
-export function getMacOpenArgs(appBundlePath: string, userDataPath: string): string[] {
+export function getMacOpenArgs(
+  appBundlePath: string,
+  userDataPath: string,
+  options: LaunchOrcaAppOptions = {}
+): string[] {
   if (isSameUserDataPath(userDataPath, getPlatformUserDataPath())) {
-    return [appBundlePath]
+    return options.disableGpu ? [appBundlePath, '--args', '--disable-gpu'] : [appBundlePath]
   }
-  return ['-n', appBundlePath, '--args', `--user-data-dir=${userDataPath}`]
+  const args = ['-n', appBundlePath, '--args', `--user-data-dir=${userDataPath}`]
+  if (options.disableGpu) {
+    args.push('--disable-gpu')
+  }
+  return args
 }
 
 function spawnDetached(command: string, args: string[], options: SpawnOptions): void {
