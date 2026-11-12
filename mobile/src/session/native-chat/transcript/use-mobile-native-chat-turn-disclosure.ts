@@ -16,23 +16,17 @@ import type {
   NativeChatTurnStatus
 } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../../src/shared/native-chat/transcript/native-chat-live-turn-membership'
-import {
-  nativeChatTurnMembership,
-  type NativeChatTurnJournal
-} from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../src/shared/native-chat/transcript/native-chat-messages-waiting-behind-live-turn'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../../src/shared/native-chat/native-chat-streaming'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
 import type { MobileNativeChatRunPresentation } from './mobile-native-chat-run-descriptors'
-import {
-  nativeChatRowsInDrawOrder,
-  nativeChatTurnBarRows
-} from '../../../../../src/shared/native-chat/transcript/native-chat-turn-grouping'
+import { nativeChatTurnBarRows } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-grouping'
+import { useMobileNativeChatTurnRows } from './use-mobile-native-chat-turn-rows'
 import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 
 const EMPTY_TURN_IDS: ReadonlySet<string> = new Set()
-const NO_TURN_KEYS: readonly undefined[] = []
 const MAX_EXPANDED_TURNS = 128
 
 export type MobileNativeChatLiveLine = NativeChatLiveLine & { reasoningExpanded: boolean }
@@ -105,26 +99,9 @@ export function useMobileNativeChatTurnDisclosure({
     turnKeys,
     liveTurnKey,
     unresolvedRowIds,
-    partialTurnKey
-  } = useMemo(() => {
-    if (!enabled) {
-      return {
-        rows: messages,
-        turnKeys: NO_TURN_KEYS,
-        liveTurnKey: undefined,
-        unresolvedRowIds: undefined,
-        partialTurnKey: undefined
-      }
-    }
-    const membership = nativeChatTurnMembership(messages, turnJournal)
-    return {
-      rows: nativeChatRowsInDrawOrder(messages, membership.drawOrder),
-      turnKeys: nativeChatRowsInDrawOrder(membership.turnKeys, membership.drawOrder),
-      liveTurnKey: membership.liveTurnKey,
-      partialTurnKey: membership.partialTurnKey,
-      unresolvedRowIds: membership.unresolvedRowIds
-    }
-  }, [enabled, messages, turnJournal])
+    partialTurnKey,
+    providerTurnBoundsKnown
+  } = useMobileNativeChatTurnRows({ messages, enabled, turnJournal })
   const turnStatuses = useMobileNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,
@@ -209,7 +186,8 @@ export function useMobileNativeChatTurnDisclosure({
     receipts,
     completedByTurn,
     expandedTurnKeys: expandedTurnIds,
-    liveReasoningId
+    liveReasoningId,
+    providerTurnBoundsKnown
   })
   const presentation = useMemo(
     () => ({ rows, workRuns, turnKeys, receipts }),

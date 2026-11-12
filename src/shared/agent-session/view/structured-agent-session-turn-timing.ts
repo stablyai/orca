@@ -14,7 +14,7 @@ import {
   agentTurnVerdict,
   type AgentTurnOutcome
 } from '../../agent-status/lifecycle/agent-turn-outcome'
-import { structuredAgentTurnAnchors } from '../../native-chat/transcript/native-chat-turn-membership'
+import { structuredAgentTurnAnchors } from '../../native-chat/transcript/native-chat-turn-anchors'
 import type {
   NativeChatSettledTurn,
   NativeChatSettledTurns

@@ -34,17 +34,20 @@ function mobileNativeChatTurnFold({
   turnKeys,
   receipts,
   settledTurnKeys,
-  expandedTurnKeys
+  expandedTurnKeys,
+  providerTurnBoundsKnown
 }: TranscriptRows & {
   settledTurnKeys: ReadonlySet<string>
   expandedTurnKeys: ReadonlySet<string>
+  providerTurnBoundsKnown: boolean
 }): NativeChatTurnFold {
   return nativeChatTurnFold({
     rows: rows.map((message, index) =>
       nativeChatTurnFoldRow(message, turnKeys[index], receipts?.has(message.id) === true)
     ),
     settledTurnKeys,
-    expandedTurnKeys
+    expandedTurnKeys,
+    providerTurnBoundsKnown
   })
 }
 
@@ -94,12 +97,14 @@ export function useMobileNativeChatTranscriptRows({
   receipts,
   completedByTurn,
   expandedTurnKeys,
-  liveReasoningId
+  liveReasoningId,
+  providerTurnBoundsKnown
 }: TranscriptRows & {
   enabled: boolean
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
   expandedTurnKeys: ReadonlySet<string>
   liveReasoningId: string | undefined
+  providerTurnBoundsKnown: boolean
 }): { fold: NativeChatTurnFold; trailingRunIndex: number; workRuns: MobileNativeChatWorkRuns } {
   const fold = useMemo(
     () =>
@@ -113,10 +118,11 @@ export function useMobileNativeChatTranscriptRows({
                 status.workedSeconds != null ? [turnKey] : []
               )
             ),
-            expandedTurnKeys
+            expandedTurnKeys,
+            providerTurnBoundsKnown
           })
         : NATIVE_CHAT_EMPTY_TURN_FOLD,
-    [completedByTurn, enabled, expandedTurnKeys, receipts, rows, turnKeys]
+    [completedByTurn, enabled, expandedTurnKeys, providerTurnBoundsKnown, receipts, rows, turnKeys]
   )
   // The turn owns liveness: its frontier stays live between calls, while earlier runs are settled.
   const trailingRunIndex = useMemo(
