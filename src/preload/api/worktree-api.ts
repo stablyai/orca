@@ -1,3 +1,8 @@
+import type { FolderWorkspaceDeleteOptions } from '../../shared/project-group-removal'
+import type {
+  FolderWorkspaceCreateInput,
+  FolderWorkspaceCreateResult
+} from '../../shared/folder-workspaces/folder-workspace-create'
 import type { WorkspaceMetadataSet } from '../../shared/worktree/workspace-metadata-set'
 import type { SparsePresetFailure } from '../../shared/worktree/sparse-preset-failure'
 import type {
@@ -168,15 +173,7 @@ export type WorktreeApi = {
 export type FolderWorkspacesApi = {
   list: () => Promise<FolderWorkspace[]>
   getPathStatus: (args: FolderWorkspacePathStatusRequest) => Promise<FolderWorkspacePathStatus>
-  create: (args: {
-    projectGroupId: string
-    name?: string
-    folderPath?: string | null
-    connectionId?: string | null
-    linkedTask?: FolderWorkspace['linkedTask']
-    createdWithAgent?: FolderWorkspace['createdWithAgent']
-    pendingFirstAgentMessageRename?: boolean
-  }) => Promise<FolderWorkspace>
+  create: (args: FolderWorkspaceCreateInput) => Promise<FolderWorkspaceCreateResult>
   update: (args: {
     folderWorkspaceId: string
     updates: Partial<
@@ -200,7 +197,11 @@ export type FolderWorkspacesApi = {
       >
     >
   }) => Promise<FolderWorkspace | null>
-  delete: (args: { folderWorkspaceId: string }) => Promise<boolean>
+  delete: (
+    args: {
+      folderWorkspaceId: string
+    } & FolderWorkspaceDeleteOptions
+  ) => Promise<boolean>
 }
 
 export type SparsePresetsApi = {

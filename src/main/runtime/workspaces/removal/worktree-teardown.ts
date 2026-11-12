@@ -1,5 +1,13 @@
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import { recordPtyStopEvidence } from './worktree-pty-stop-outcomes'
+import type { WorktreeTeardownDeps, WorktreeTeardownResult } from './worktree-teardown-contract'
+import type { WorktreePtyStopContext } from '../../terminal/stop/worktree-terminal-stop-options'
+import type { PtyShutdownEvidence } from '../../../providers/pty-provider-contract'
+export type {
+  WorktreeTeardownRuntime,
+  WorktreeTeardownSnapshot,
+  WorktreeTeardownDeps,
+  WorktreeTeardownResult
+} from './worktree-teardown-contract'
 import {
   isUnstoppedPtyRemovalError,
   RUNNING_AGENT_SESSION_REMOVAL_PREFIX,
@@ -20,8 +28,7 @@ import {
   listStructuredSessionsForWorktree,
   retireStructuredSessionTabsForWorktree,
   unclosedStructuredSessions,
-  type StructuredSessionInWorkspace,
-  type StructuredWorktreeSweepRuntime
+  type StructuredSessionInWorkspace
 } from './structured-session-worktree-teardown'
 import {
   createWorktreeSweepTracker,
@@ -34,37 +41,6 @@ import {
   describeUnstoppedPtys,
   resolveUnstoppedPtyVerdict
 } from './unstopped-pty-verification'
-
-export type WorktreeTeardownRuntime = StructuredWorktreeSweepRuntime &
-  Pick<OrcaRuntimeService, 'stopTerminalsForWorktree' | 'getPtyLivenessVerdict'>
-
-export type WorktreeTeardownDeps = {
-  runtime?: WorktreeTeardownRuntime
-  /** Authoritative id for callers whose selector no longer resolves (orphaned workspace). */
-  resolvedWorktreeId?: string
-  /** SSH connection owning `resolvedWorktreeId`; prevents same-id cross-host graph matches. */
-  resolvedConnectionId?: string
-  /** Runtime environment owning a mirrored `resolvedWorktreeId`. */
-  resolvedRuntimeEnvironmentId?: string
-  localProvider: IPtyProvider
-  onPtyStopped?: (ptyId: string) => void
-  timeoutMs?: number
-  requirePhysicalStop?: boolean
-  /** Explicit Force Delete only: warn instead of throwing when a stop stays unproven (#11960). */
-  allowUnverifiedStop?: boolean
-  includeProviderInventory?: boolean
-  includeLocalRegistry?: boolean
-  /** Close structured sessions for destructive folder removals even without PTY proof. This is separate from requirePhysicalStop; reconciliation sets neither and must never close sessions. */
-  closeStructuredSessions?: boolean
-}
-
-export type WorktreeTeardownResult = {
-  runtimeStopped: number
-  providerStopped: number
-  registryStopped: number
-  /** Structured agent sessions this teardown closed; absent when it closed none. */
-  structuredStopped?: number
-}
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
 
@@ -84,9 +60,11 @@ export async function killAllProcessesForWorktree(
   const structuredSweep = sweepStructuredSessions(worktreeId, deps, deadline, sweeps)
   void structuredSweep.catch(() => undefined)
   const stopAttempts = new Map<string, Promise<boolean>>()
+  const confirmExit = (id: string, incarnationId?: string, evidence?: PtyShutdownEvidence) =>
+    recordPtyStopEvidence(deps.snapshot?.ptyOutcomes?.get(id), incarnationId, evidence)
   const stopPty = (
     ptyId: string,
-    stop: () => Promise<boolean>
+    stop: (context?: WorktreePtyStopContext) => Promise<boolean>
   ): Promise<{ stopped: boolean; owner: boolean }> => {
     const previous = stopAttempts.get(ptyId) ?? Promise.resolve(false)
     const current = previous
@@ -94,7 +72,27 @@ export async function killAllProcessesForWorktree(
         if (stopped) {
           return { stopped: true, owner: false }
         }
-        const didStop = await stop()
+        const candidate = deps.snapshot?.ptyOutcomes?.get(ptyId)
+        if (candidate?.conflict) {
+          return { stopped: false, owner: false }
+        }
+        deps.snapshot?.runtime.assertCurrent(ptyId)
+        if (candidate) {
+          candidate.attempted = true
+        }
+        const didStop = await stop(
+          candidate
+            ? {
+                expectedIncarnationId: candidate.incarnationId,
+                establishedOwnerOnly: true,
+                onExitEvidence: (evidence) => confirmExit(ptyId, candidate.incarnationId, evidence)
+              }
+            : undefined
+        )
+        const verdict = deps.runtime?.getPtyLivenessVerdict(ptyId)
+        if (verdict?.status === 'exited') {
+          confirmExit(ptyId, verdict.incarnationId)
+        }
         return { stopped: didStop, owner: didStop }
       })
       .catch(() => ({ stopped: false, owner: false }))
@@ -112,8 +110,9 @@ export async function killAllProcessesForWorktree(
           deps.runtime!.stopTerminalsForWorktree(worktreeId, {
             deadline,
             stopPty,
+            ...(deps.snapshot ? { snapshot: deps.snapshot.runtime } : {}),
             ...(deps.resolvedWorktreeId ? { resolvedWorktreeId: deps.resolvedWorktreeId } : {}),
-            ...(deps.resolvedConnectionId
+            ...(deps.resolvedConnectionId !== undefined
               ? { resolvedConnectionId: deps.resolvedConnectionId }
               : {}),
             ...(deps.resolvedRuntimeEnvironmentId
@@ -132,17 +131,19 @@ export async function killAllProcessesForWorktree(
       )
     : Promise.resolve({ stopped: 0 })
   const providerSweep =
-    deps.includeProviderInventory === false
+    deps.includeProviderInventory === false || !deps.localProvider
       ? Promise.resolve(0)
       : settleBeforeDeadline(
           sweeps.track(() =>
             sweepProviderByPrefix(
               worktreeId,
-              deps.localProvider,
+              deps.localProvider!,
               deadline,
               stopPty,
               deps.onPtyStopped,
-              deps.requirePhysicalStop
+              deps.requirePhysicalStop,
+              deps.snapshot?.provider,
+              confirmExit
             )
           ),
           0,
@@ -150,16 +151,26 @@ export async function killAllProcessesForWorktree(
           deps.requirePhysicalStop ? deadlineError : undefined
         )
   const registrySweep =
-    deps.includeLocalRegistry === false
+    deps.includeLocalRegistry === false || !deps.localProvider
       ? Promise.resolve(0)
       : settleBeforeDeadline(
           sweeps.track(() =>
             sweepRegistryForWorktree(
               worktreeId,
-              deps.localProvider,
+              deps.localProvider!,
               deadline,
               stopPty,
-              deps.onPtyStopped
+              deps.onPtyStopped,
+              deps.snapshot?.registry,
+              deps.snapshot
+                ? new Map([
+                    ...deps.snapshot.provider.map((row) => [row.id, row.incarnationId] as const),
+                    ...[...deps.snapshot.runtime.records].flatMap(([id, row]) =>
+                      row?.incarnationId ? [[id, row.incarnationId] as const] : []
+                    )
+                  ])
+                : undefined,
+              confirmExit
             )
           ),
           0,
@@ -213,6 +224,9 @@ export async function killAllProcessesForWorktree(
     }
   }
   if (deps.requirePhysicalStop) {
+    if (!deps.localProvider) {
+      throw new Error('Cannot confirm terminal exit without its provider.')
+    }
     const stopResults = await Promise.all(
       [...stopAttempts].map(async ([ptyId, stopped]) => [ptyId, await stopped] as const)
     )
@@ -247,12 +261,14 @@ export async function killAllProcessesForWorktree(
     runtimeStopped: runtimeResult.stopped,
     providerStopped,
     registryStopped,
-    ...(structuredStopped > 0 ? { structuredStopped } : {})
+    ...(structuredStopped > 0 ? { structuredStopped } : {}),
+    ...(deps.snapshot ? { structuredStopConfirmed: structured.stopConfirmed } : {})
   }
 }
 
 type StructuredSweepOutcome = {
   closed: number
+  stopConfirmed?: boolean
   /** Retire detached/unclosed tabs only after removal passes every refusal; structured closure precedes the PTY verdict. */
   retirable: readonly StructuredSessionInWorkspace[]
 }
@@ -270,12 +286,13 @@ async function sweepStructuredSessions(
     return NO_STRUCTURED_SWEEP
   }
   // Fence sessions and tab retirement by host: repo/path ids repeat across local, SSH and runtime owners.
-  const { members, live } = listStructuredSessionsForWorktree(worktreeId, deps)
+  const { members, live } =
+    deps.snapshot?.structured ?? listStructuredSessionsForWorktree(worktreeId, deps)
   const liveIds = new Set(live.map((session) => session.sessionId))
   // Detached chats are absent from PTY lists but still need durable tab retirement.
   const retirable = members.filter((session) => !liveIds.has(session.sessionId))
   if (live.length === 0) {
-    return { closed: 0, retirable }
+    return { closed: 0, retirable, stopConfirmed: true }
   }
   // Bound serial closes by the sweep deadline without a PTY timeout sentinel, which would misclassify session failures and defeat Force Delete.
   // Track abandoned work for force grace; read incremental progress so mid-loop timeouts retain confirmed closes.
@@ -294,7 +311,7 @@ async function sweepStructuredSessions(
   const closed = progress.closed
   const unstopped = unclosedStructuredSessions(progress)
   if (unstopped.length === 0) {
-    return { closed, retirable }
+    return { closed, retirable, stopConfirmed: true }
   }
   // Folder removals share the root and ignore refusals; only proof-requiring removal can block deletion.
   if (deps.requirePhysicalStop && !deps.allowUnverifiedStop) {
@@ -308,5 +325,5 @@ async function sweepStructuredSessions(
     `[worktree-teardown] forcing removal of ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}${describeUnclosedStructuredSessions(unstopped)}`
   )
   // Force/best-effort removal forgets the workspace even if close is unproven; retire those tabs with detached members.
-  return { closed, retirable: [...retirable, ...unstopped] }
+  return { closed, retirable: [...retirable, ...unstopped], stopConfirmed: false }
 }

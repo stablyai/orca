@@ -1,3 +1,4 @@
+import { runtimeProbeTimeout } from '../../../shared/remote-runtime/requests/group-delete-request-deadline'
 import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from './runtime-environment-capability-evidence'
 import type { RuntimeEnvironmentCall } from './runtime-environment-call'
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
@@ -172,7 +173,7 @@ export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
   const status = await shared.request<RuntimeStatus>(
     'status.get',
     undefined,
-    call.timeoutMs,
+    runtimeProbeTimeout(call.method, call.timeoutMs),
     undefined,
     call.signal,
     { beforeSend: () => void (statusSocket = shared.socketGeneration.peek()) }

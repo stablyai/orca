@@ -1,3 +1,4 @@
+import { startRuntimeRequestTimer } from './group-delete-request-deadline'
 import { randomUUID } from 'node:crypto'
 import { abortSignalReason } from '../../abort-signal-reason'
 import { serializeRemoteRuntimeRpcRequest } from '../remote-runtime-memory-limits'
@@ -67,7 +68,7 @@ export function requestSharedControl<TResult>(args: {
       args.retireRequestId?.(requestId)
       rejectSharedControlPendingRequest(pendingRequests, requestId, abortSignalReason(args.signal!))
     }
-    const timeout = setTimeout(() => {
+    const timeout = startRuntimeRequestTimer(args.method, args.timeoutMs, () => {
       const pending = pendingRequests.get(requestId)
       if (!pending) {
         return
@@ -78,7 +79,7 @@ export function requestSharedControl<TResult>(args: {
       // Why: one stalled method does not prove the shared socket is dead;
       // socket liveness owns connection-wide teardown so other RPCs survive.
       pending.reject(remoteRuntimeTimeoutError())
-    }, args.timeoutMs)
+    })
     pendingRequests.set(requestId, {
       method: args.method.slice(0, MAX_RETAINED_METHOD_CHARS),
       resolve: resolve as (response: RuntimeRpcResponse<unknown>) => void,

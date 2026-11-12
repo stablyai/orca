@@ -1,3 +1,5 @@
+import type { SubmitFolderWorkspaceCreateParams } from './folder-workspace-composer-submit-input'
+import { shouldApplyWorkspaceSourceAutoName } from '../../../../../../shared/new-workspace/workspace-source'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import {
   buildWorkspaceSourceSelection,
@@ -46,4 +48,30 @@ export function getLinkedItemDisplayName(item: LinkedWorkItemSummary): string | 
 
 export function getFolderWorkspacePrimaryActionLabel(t: Translate = translate): string {
   return t('auto.components.sidebar.FolderWorkspaceComposerDialog.create', 'Create workspace')
+}
+
+export function resolveFolderWorkspaceName({
+  projectGroup,
+  name,
+  lastAutoName,
+  linkedWorkItem
+}: Pick<
+  SubmitFolderWorkspaceCreateParams,
+  'projectGroup' | 'name' | 'lastAutoName' | 'linkedWorkItem'
+>): string {
+  const linkedName = linkedWorkItem ? getLinkedItemDisplayName(linkedWorkItem) : null
+  const nameIsAutoManaged = shouldApplyWorkspaceSourceAutoName({
+    currentName: name,
+    lastAutoName,
+    lookupTextIsQuery: !linkedWorkItem
+  })
+  return nameIsAutoManaged && linkedName
+    ? linkedName
+    : name.trim() ||
+        linkedName ||
+        translate(
+          'auto.components.sidebar.folderWorkspaceComposer.defaultWorkspaceName',
+          '{{name}} workspace',
+          { name: projectGroup.name }
+        )
 }

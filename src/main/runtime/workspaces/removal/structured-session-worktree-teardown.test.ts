@@ -1,3 +1,7 @@
+import { captureStructuredSessionPresentations } from '../../session-tabs/structured-session-tab-presentation'
+import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { QueuedChatTabChange } from '../../agent-session/agent-session-tab-layout-queue'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -546,5 +550,221 @@ describe('worktree teardown and structured agent sessions', () => {
     })
     await killAllProcessesForWorktree(WORKTREE, destructiveDeps())
     expect([...host.visible]).toEqual(['s1'])
+  })
+  it('forgets local live and detached chats in a bulk folder removal without a PTY provider', async () => {
+    const { killAllProcessesForWorktrees } = await import('./worktree-batch-teardown')
+    const host = installHost({
+      records: [
+        record('local-live', WORKTREE),
+        record('local-detached', WORKTREE),
+        record('other-host', WORKTREE, { executionHostId: 'ssh:other' })
+      ],
+      stuck: new Set(['local-live']),
+      detached: new Set(['local-detached', 'other-host']),
+      visible: ['local-live', 'local-detached', 'other-host']
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const result = await killAllProcessesForWorktrees(
+        [{ worktreeId: WORKTREE, connectionId: null }],
+        {
+          localProvider: null,
+          runtime: runtimeDouble({})
+        }
+      )
+      expect([...result.values()]).toEqual([false])
+      expect([...host.visible]).toEqual(['other-host'])
+      expect(host.closed).toEqual(['local-live'])
+    } finally {
+      warn.mockRestore()
+    }
+  })
+  it('captures saved and pending presentations once and preserves cleanup proof after its own tab retirement', async () => {
+    const { killAllProcessesForWorktrees } = await import('./worktree-batch-teardown')
+    const measure = async (count: number, unrelated: number) => {
+      const records = Array.from({ length: count + unrelated }, (_, i) =>
+        record(`chat-${i}`, `folder:${i}`)
+      )
+      const host = installHost({ records, visible: records.map((row) => row.sessionId) })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: installHost above installs this visibility method.
+      const hostObject = hostRef.current as {
+        setSessionTabVisibility: (...args: unknown[]) => Promise<void>
+      }
+      const hide = hostObject.setSessionTabVisibility
+      hostObject.setSessionTabVisibility = async (...args) => {
+        await hide(...args)
+        sessionCrewChanges.notify(new Set(['records']))
+      }
+      let savedVisits = 0
+      let pendingVisits = 0
+      const saved: NonNullable<WorkspaceSessionState['unifiedTabs']> = {}
+      const pending: QueuedChatTabChange[] = []
+      records.forEach((row) => {
+        saved[row.location.workspaceId] = [
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: presentation discovery reads only this tab’s identity fields.
+          {
+            id: `tab-${row.sessionId}`,
+            contentType: 'agent-session',
+            get entityId() {
+              savedVisits++
+              return row.sessionId
+            }
+          } as never
+        ]
+        pending.push({
+          worktreeId: row.location.workspaceId,
+          change: {
+            get open() {
+              pendingVisits++
+              return {
+                sessionId: row.sessionId,
+                agent: 'claude' as const,
+                tabId: `queued-${row.sessionId}`
+              }
+            }
+          }
+        })
+      })
+      const targets = records.slice(0, count).map((row) => ({
+        worktreeId: row.location.workspaceId,
+        connectionId: null
+      }))
+      const capture = vi.fn((ids: readonly string[]) =>
+        captureStructuredSessionPresentations(ids, {
+          raw: () => null,
+          saved,
+          pending
+        })
+      )
+      const removeSaved = vi.fn()
+      const runtime = runtimeDouble({
+        captureWorktreeTerminalStops: async () => ({
+          snapshots: new Map(
+            targets.map((target) => [
+              JSON.stringify([null, target.worktreeId]),
+              {
+                ptyIds: new Set(),
+                records: new Map(),
+                assertCurrent: () => {}
+              }
+            ])
+          ),
+          finish: () => {}
+        }),
+        stopTerminalsForWorktree: async () => ({ stopped: 0 }),
+        captureStructuredAgentSessionPresentations: capture,
+        captureStructuredAgentSessionPresentation: () => {
+          throw new Error('per-member capture')
+        },
+        currentLocalStructuredSessionPresentation: () => null,
+        removeCapturedStructuredSessionSavedTabs: removeSaved
+      })
+      const result = await killAllProcessesForWorktrees(targets, { runtime, localProvider })
+      expect([...result.values()]).toEqual(Array(count).fill(true))
+      expect(capture).toHaveBeenCalledOnce()
+      expect(savedVisits).toBe(count + unrelated)
+      // One pending identity read per row, plus one tab ID read per selected output.
+      expect(pendingVisits).toBe(2 * count + unrelated)
+      expect(removeSaved).toHaveBeenCalledTimes(count)
+      expect(host.closed).toHaveLength(count)
+      expect(host.visible.size).toBe(unrelated)
+    }
+    await measure(10, 100)
+    await measure(100, 100)
+    await measure(10, 1000)
+  })
+
+  it('keeps runner cleanup eligible for a resting chat whose surface was retired', async () => {
+    const { killAllProcessesForWorktrees } = await import('./worktree-batch-teardown')
+    const host = installHost({
+      records: [record('resting', WORKTREE)],
+      detached: new Set(['resting']),
+      visible: ['resting']
+    })
+    const runtime = runtimeDouble({
+      captureWorktreeTerminalStops: async () => ({
+        snapshots: new Map([
+          [
+            JSON.stringify([null, WORKTREE]),
+            { ptyIds: new Set(), records: new Map(), assertCurrent: () => {} }
+          ]
+        ]),
+        finish: () => {}
+      }),
+      stopTerminalsForWorktree: async () => ({ stopped: 0 })
+    })
+    const result = await killAllProcessesForWorktrees(
+      [{ worktreeId: WORKTREE, connectionId: null }],
+      { runtime, localProvider }
+    )
+    expect([...result.values()]).toEqual([true])
+    expect([...host.visible]).toEqual([])
+    expect(host.closed).toEqual([])
+  })
+
+  it('denies runner cleanup for a member registered during asynchronous exit retirement', async () => {
+    const { killAllProcessesForWorktrees } = await import('./worktree-batch-teardown')
+    const records = [record('original', WORKTREE)]
+    installHost({ records, visible: ['original'] })
+    let inventories = 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this controlled provider exposes only the discovery and shutdown used by the batch.
+    const provider = {
+      listProcesses: async () =>
+        ++inventories === 1 ? [{ id: 'pty-a', worktreeId: WORKTREE, incarnationId: 'inc-a' }] : [],
+      shutdown: async () => {}
+    } as never
+    const runtime = runtimeDouble({
+      captureWorktreeTerminalStops: async () => ({
+        snapshots: new Map([
+          [
+            JSON.stringify([null, WORKTREE]),
+            { ptyIds: new Set(['pty-a']), records: new Map(), assertCurrent: () => {} }
+          ]
+        ]),
+        finish: () => {}
+      }),
+      stopTerminalsForWorktree: async () => ({ stopped: 1 }),
+      getPtyLivenessVerdict: () => null,
+      onPtyExit: async () => {
+        await Promise.resolve()
+        records.push(record('late-member', WORKTREE))
+        sessionCrewChanges.notify(new Set(['records']))
+      }
+    })
+    const result = await killAllProcessesForWorktrees(
+      [{ worktreeId: WORKTREE, connectionId: null }],
+      { runtime, localProvider: provider }
+    )
+    expect([...result.values()]).toEqual([false])
+  })
+
+  it('retires encoded SSH owner members while preserving same-ID other-host chats', async () => {
+    const { killAllProcessesForWorktrees } = await import('./worktree-batch-teardown')
+    const host = installHost({
+      records: [
+        record('encoded-owner', WORKTREE, { executionHostId: 'ssh:qa%2Fhost' }),
+        record('other-owner', WORKTREE, { executionHostId: 'ssh:other' })
+      ],
+      visible: ['encoded-owner', 'other-owner']
+    })
+    await killAllProcessesForWorktrees([{ worktreeId: WORKTREE, connectionId: 'qa/host' }], {
+      localProvider: null,
+      runtime: runtimeDouble({
+        stopTerminalsForWorktree: async () => ({ stopped: 0 }),
+        captureStructuredAgentSessionPresentations: (ids: readonly string[]) =>
+          captureStructuredSessionPresentations(ids, {
+            raw: () => {
+              throw new Error('local presentation guard')
+            },
+            saved: {},
+            pending: []
+          }),
+        currentLocalStructuredSessionPresentation: () => {
+          throw new Error('local presentation guard')
+        }
+      })
+    })
+    expect(host.closed).toEqual(['encoded-owner'])
+    expect([...host.visible]).toEqual(['other-owner'])
   })
 })

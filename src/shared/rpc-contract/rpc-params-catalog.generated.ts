@@ -582,10 +582,11 @@ import { RecipeVmWakeParams } from './recipe-vm-wake-params'
 import { ReferenceFind, ReferenceList } from './reference-params'
 import {
   ProjectGroupCreate,
+  ProjectGroupDelete,
+  ProjectGroupHooksCheck,
   ProjectGroupImportNested,
   ProjectGroupMoveProject,
   ProjectGroupScanNested,
-  ProjectGroupSelector,
   ProjectGroupUpdate,
   ProjectGroupUpdateMany,
   RepoClone,
@@ -1452,8 +1453,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'preflight.refreshAgents': PreflightAgentDetection,
   'project.list': null,
   'project.update': ProjectUpdate,
+  'projectGroup.checkHooks': ProjectGroupHooksCheck,
   'projectGroup.create': ProjectGroupCreate,
-  'projectGroup.delete': ProjectGroupSelector,
+  'projectGroup.delete': ProjectGroupDelete,
   'projectGroup.importNested': ProjectGroupImportNested,
   'projectGroup.list': null,
   'projectGroup.moveProject': ProjectGroupMoveProject,

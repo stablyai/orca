@@ -7,6 +7,8 @@ import type {
   SetupAgentStartupPolicy,
   SetupRunPolicy
 } from '../../../../../../shared/orca-yaml-hook-types'
+import type { WorkspaceHookOwner } from '../../../../../../shared/workspace-hook-owner'
+import { Button } from '@/components/ui/button'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
@@ -35,7 +37,9 @@ import { useRepositoryIssueCommand } from './use-repository-issue-command'
 import { getRepositoryHookScriptDescription } from './repository-git-hooks-search-entries'
 
 type RepositoryHooksSectionProps = {
-  repo: Repo
+  repo: WorkspaceHookOwner
+  gitRepo?: Repo
+  setupExample?: string
   yamlHooks: OrcaHooks | null
   hasHooksFile: boolean
   hooksInspectionReady: boolean
@@ -48,6 +52,8 @@ type RepositoryHooksSectionProps = {
 
 export function RepositoryHooksSection({
   repo,
+  gitRepo,
+  setupExample,
   yamlHooks,
   hasHooksFile,
   hooksInspectionReady,
@@ -152,6 +158,38 @@ export function RepositoryHooksSection({
             onCommit={commitScriptDraft}
             sectionId={getRepositoryLocalCommandsSectionId(repo.id)}
           />
+          {setupExample ? (
+            <div className="mt-3 space-y-2">
+              <p className="text-settings-detail text-muted-foreground">
+                {t(
+                  'settings.groupHooks.example',
+                  'Example: create a worktree in each repo (this machine only)'
+                )}
+              </p>
+              <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
+                <code>{setupExample}</code>
+              </pre>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    updateScriptDraft('setup', setupExample)
+                    commitScriptDraft()
+                  }}
+                >
+                  {t('settings.groupHooks.useExample', 'Use this example')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void window.api.ui.writeClipboardText(setupExample)}
+                >
+                  {t('common.copy', 'Copy')}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </SearchableSetting>
         <SearchableSetting
           title={t(
@@ -230,13 +268,13 @@ export function RepositoryHooksSection({
             />
           </div>
         ) : null}
-        {isFolder ? null : (
+        {gitRepo && !isFolder ? (
           <RepositoryIssueCommandRow
-            repo={repo}
+            repo={gitRepo}
             repoHostIdentity={repoHostIdentity}
             forceVisible={forceVisible}
           />
-        )}
+        ) : null}
         <SearchableSetting
           title={t('auto.components.settings.RepositoryHooksSection.c9bc1bfd8f', 'Advanced')}
           description={t(

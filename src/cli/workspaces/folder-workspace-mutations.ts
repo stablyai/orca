@@ -1,3 +1,4 @@
+import { worktreeRemovalReplyTimeoutMs } from '../../shared/worktree/archive-hook-removal-gate'
 import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import type {
   RuntimeWorktreeRecord,
@@ -5,7 +6,10 @@ import type {
   RuntimeWorktreeSetResult
 } from '../../shared/runtime-worktree-contracts'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import { FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
+import {
+  FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY,
+  PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY
+} from '../../shared/worktree-runtime-capabilities'
 import { folderIdOfSelector, folderWorkspaceKey } from '../../shared/workspace-scope'
 import { formatWorktreeShow } from './workspace-format'
 import { printResult } from '../output/command-result-output'
@@ -137,17 +141,35 @@ async function removeFolderWorkspace(
   flags: Flags,
   folderId: string
 ): Promise<RuntimeRpcSuccess<RuntimeWorktreeRemoveResult>> {
-  const noGit = 'does not apply: a folder workspace has no branch or archive hooks.'
-  refuseFolderFlags(flags, [
-    ['delete-branch', noGit],
-    ['run-hooks', noGit],
-    ['allow-failed-archive-hook', noGit]
-  ])
+  const noGit = 'does not apply: a folder workspace has no branch.'
+  refuseFolderFlags(flags, [['delete-branch', noGit]])
   await assertUniqueIdMutationSupported(client)
-  const removal = await client.call<{ deleted: boolean }>('folderWorkspace.delete', {
-    folderWorkspaceId: folderId,
-    requireUniqueId: true
-  })
+  const runHooks = flags.get('run-hooks') === true
+  const allowFailedArchiveHook = flags.get('allow-failed-archive-hook') === true
+  if (allowFailedArchiveHook && !runHooks) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--allow-failed-archive-hook needs --run-hooks. Pass both, or drop the waiver.'
+    )
+  }
+  const status = await client.call<RuntimeStatus>('status.get')
+  const supported =
+    status.result.capabilities?.includes(PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY) === true
+  if (!supported && (runHooks || allowFailedArchiveHook)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'Update Orca on the workspace host to run group archive scripts. Nothing was changed.'
+    )
+  }
+  const removal = await client.call<{ deleted: boolean }>(
+    'folderWorkspace.delete',
+    {
+      folderWorkspaceId: folderId,
+      requireUniqueId: true,
+      ...(supported ? { runHooks, allowFailedArchiveHook } : {})
+    },
+    { timeoutMs: worktreeRemovalReplyTimeoutMs(runHooks) }
+  )
   if (!removal.result.deleted) {
     throw folderGone(folderId)
   }

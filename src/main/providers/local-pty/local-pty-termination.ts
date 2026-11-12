@@ -16,6 +16,7 @@ import {
   ptyAgentSessionIds,
   ptyForceKillTimers,
   ptyPhysicalExits,
+  ptyIncarnations,
   ptyProcesses,
   ptyShutdownOperations,
   ptyTerminationMode,
@@ -217,10 +218,17 @@ async function shutdownTrackedPty(
 
 export async function shutdownLocalPty(
   id: string,
-  opts: { immediate?: boolean; keepHistory?: boolean }
+  opts: { immediate?: boolean; keepHistory?: boolean; expectedIncarnationId?: string }
 ): Promise<void> {
-  cancelPendingLocalPtySpawns(id)
+  const proc = ptyProcesses.get(id)
+  if (opts.expectedIncarnationId && ptyIncarnations.get(id) !== opts.expectedIncarnationId) {
+    throw new Error('Terminal was replaced before shutdown')
+  }
   const pending = ptyShutdownOperations.get(id)
+  if (opts.expectedIncarnationId && pending && pending.proc !== proc) {
+    throw new Error('Terminal shutdown belongs to another process')
+  }
+  cancelPendingLocalPtySpawns(id)
   if (pending) {
     if (opts.immediate === true) {
       pending.immediate = true
@@ -231,7 +239,6 @@ export async function shutdownLocalPty(
     await pending.promise
     return
   }
-  const proc = ptyProcesses.get(id)
   if (!proc) {
     return
   }

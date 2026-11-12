@@ -22,3 +22,7 @@ export function unregisterPty(ptyId: string): void {
 export function listRegisteredPtys(): PtyRegistration[] {
   return [...registry.values()]
 }
+
+export function getRegisteredPty(ptyId: string): PtyRegistration | undefined {
+  return registry.get(ptyId)
+}

@@ -116,6 +116,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   supportsFencedTermination = (id: string): boolean =>
     this.ownerRecovery.getVerifiedRoute(id)?.supportsFencedTermination?.(id) === true
 
+  resolveEstablishedShutdownOwner = (id: string, expectedIncarnationId: string) =>
+    this.ownerRecovery.captureEstablishedShutdownOwner(id, expectedIncarnationId)
+
   killFenced = (request: PtyFencedTerminationRequest) =>
     terminateResolvedDaemonSession(request, () =>
       this.ownerRecovery.resolveFencedOwner(request.id, request.expectedIncarnationId)

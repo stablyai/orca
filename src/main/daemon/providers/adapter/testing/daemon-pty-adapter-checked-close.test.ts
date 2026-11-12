@@ -1,8 +1,10 @@
 import '../../../pty-subprocess/testing/mock-descendant-sweep'
+import { shutdownProviderWithExitEvidence } from '../../../../ipc/pty/provider/shutdown-detect'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
+import { DaemonPtyRouter } from '../../routing/daemon-pty-router'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,
@@ -11,20 +13,25 @@ import {
 } from './daemon-pty-adapter-test-harness'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import type { SubprocessHandle } from '../../../sessions/session-subprocess-handle'
+import { FENCED_TERMINATION_PROTOCOL_VERSION } from '../../../protocol/daemon-protocol-version'
 
 let harness: DaemonAdapterHarness | undefined
 let adapter: DaemonPtyAdapter | undefined
 let subprocess: SubprocessHandle & { _simulateExit(code: number): void }
 
-async function start(withHistory = true): Promise<DaemonPtyAdapter> {
-  harness = await startDaemonAdapterHarness(() => {
-    subprocess = createMockSubprocess()
-    return subprocess
-  })
+async function start(withHistory = true, protocolVersion?: number): Promise<DaemonPtyAdapter> {
+  harness = await startDaemonAdapterHarness(
+    () => {
+      subprocess = createMockSubprocess()
+      return subprocess
+    },
+    protocolVersion !== undefined ? { protocolVersion } : {}
+  )
   harness.adapter.dispose()
   adapter = new DaemonPtyAdapter({
     socketPath: harness.socketPath,
     tokenPath: harness.tokenPath,
+    ...(protocolVersion !== undefined ? { protocolVersion } : {}),
     ...(withHistory ? { historyPath: join(harness.dir, 'history') } : {})
   })
   return adapter
@@ -58,6 +65,61 @@ afterEach(async () => {
 })
 
 describe('DaemonPtyAdapter checked explicit close', () => {
+  it('signals a legacy owner without claiming an unobserved exit', async () => {
+    const provider = await start(false, FENCED_TERMINATION_PROTOCOL_VERSION - 1)
+    const created = await spawn(provider)
+    vi.spyOn(provider, 'onExit').mockImplementation(() => () => {})
+    const checked = vi.spyOn(provider, 'killFenced')
+    const request = vi.spyOn(provider['client'], 'request')
+    await expect(
+      shutdownProviderWithExitEvidence(provider, created.id, {
+        immediate: true,
+        expectedIncarnationId: created.incarnationId
+      })
+    ).resolves.toMatchObject({ confirmed: false, allowAbsenceProof: false })
+    expect(subprocess.forceKill).toHaveBeenCalledOnce()
+    expect(checked).not.toHaveBeenCalled()
+    expect(request.mock.calls.filter(([type]) => type === 'kill')).toHaveLength(1)
+  })
+
+  it('refuses legacy signal and history cleanup when its elected router owner changes during the real lifecycle lock', async () => {
+    const provider = await start(true, FENCED_TERMINATION_PROTOCOL_VERSION - 1)
+    const created = await spawn(provider)
+    const router = new DaemonPtyRouter({ current: provider, legacy: [] })
+    await router.listProcesses()
+    const tree = historyTree(created.id)
+    const meta = readFileSync(join(tree, 'meta.json'), 'utf8')
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>()
+    const { promise: entered, resolve: started } = Promise.withResolvers<void>()
+    const lock = provider['withHistorySpawnLock'](created.id, async () => {
+      started()
+      await gate
+    })
+    await entered
+    const shutdown = vi.spyOn(provider, 'shutdown')
+    const request = vi.spyOn(provider['client'], 'request')
+    const closing = expect(
+      shutdownProviderWithExitEvidence(router, created.id, {
+        immediate: true,
+        expectedIncarnationId: created.incarnationId,
+        establishedOwnerOnly: true
+      })
+    ).rejects.toThrow('owner changed')
+    await waitFor(() => shutdown.mock.calls.length === 1)
+    vi.spyOn(provider, 'listProcesses').mockResolvedValue([
+      { id: created.id, incarnationId: 'successor', cwd: '', title: '' }
+    ])
+    await router.listProcesses()
+    release()
+    await lock
+    await closing
+    expect(request.mock.calls.filter(([type]) => type === 'kill')).toHaveLength(0)
+    expect(subprocess.forceKill).not.toHaveBeenCalled()
+    expect(readFileSync(join(tree, 'meta.json'), 'utf8')).toBe(meta)
+    expect(provider.getHistoryManager()!.hasWriter(created.id)).toBe(true)
+    expect(router.resolveEstablishedShutdownOwner(created.id, 'successor')?.provider).toBe(provider)
+  })
+
   it.each(['ended', 'already_exited'] as const)(
     'removes the real history tree after %s without another kill',
     async (outcome) => {
@@ -197,7 +259,10 @@ describe('DaemonPtyAdapter checked explicit close', () => {
         }
         return originalRequest(type, payload)
       })
-    const closing = provider.killFenced(checkedRequest(predecessor.id, predecessor.incarnationId))
+    const closing = shutdownProviderWithExitEvidence(provider, predecessor.id, {
+      immediate: true,
+      expectedIncarnationId: predecessor.incarnationId
+    })
     releaseOpen()
     const replacement = await replacing
     const tree = historyTree(replacement.id)
@@ -205,7 +270,7 @@ describe('DaemonPtyAdapter checked explicit close', () => {
     await waitFor(() => replyHeld)
     release()
 
-    await expect(closing).resolves.toEqual({ outcome: 'already_exited' })
+    await expect(closing).resolves.toMatchObject({ observed: false, confirmed: true })
     expect(readFileSync(join(tree, 'meta.json'), 'utf8')).toBe(meta)
     expect(provider.getHistoryManager()!.hasWriter(replacement.id)).toBe(true)
     expect(provider.hasPty(replacement.id)).toBe(true)

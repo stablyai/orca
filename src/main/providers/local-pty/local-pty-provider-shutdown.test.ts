@@ -3,6 +3,12 @@ import type * as WslAvailabilityTypes from '../../wsl/discovery/wsl-availability
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from '../macos-tcc-login-shell'
 import type * as PosixPtyProcessTable from '../../pty/process-retirement/posix-pty-process-table'
+import { killAllProcessesForWorktrees } from '../../runtime/workspaces/removal/worktree-batch-teardown'
+import { captureWorktreeTerminalStops } from '../../runtime/terminal/stop/worktree-terminal-removal-snapshot'
+import { OrcaRuntimeWithStopTerminalsForWorktree } from '../../runtime/terminal/stop/worktree-terminal-stop'
+import type { WorktreeTeardownRuntime } from '../../runtime/workspaces/removal/worktree-teardown'
+import type { RuntimePtyWorktreeRecord } from '../../runtime/terminal/records/runtime-terminal-state-records'
+import type { WorktreePtyStopContext } from '../../runtime/terminal/stop/worktree-terminal-stop-options'
 
 const {
   existsSyncMock,
@@ -59,6 +65,10 @@ vi.mock('electron', () => ({
   app: {
     getPath: vi.fn(() => '/tmp/orca-user-data')
   }
+}))
+
+vi.mock('../../runtime/terminal/launch/terminal-split-source-authority', () => ({
+  OrcaRuntimeWithResolveTerminalSplitSourceAuthority: class {}
 }))
 
 vi.mock('node-pty', () => ({
@@ -135,6 +145,7 @@ import {
   LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS
 } from './local-pty-termination'
 import { LocalPtyProvider } from './local-pty-provider'
+import { ptyIncarnations } from './local-pty-provider-state'
 import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
@@ -180,6 +191,84 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('shutdown', () => {
+    it('retains a provider-captured identity through a recordless graph stop before local replacement', async () => {
+      const created = await provider.spawn({
+        sessionId: 'folder:identity@@pane',
+        worktreeId: 'folder:identity',
+        cols: 80,
+        rows: 24
+      })
+      const target = { worktreeId: 'folder:identity', connectionId: null }
+      const records = new Map<string, RuntimePtyWorktreeRecord>()
+      const kill = vi.spyOn(mockProc, 'kill').mockImplementation(() => {
+        exitCb?.({ exitCode: 137 })
+      })
+      const shutdown = provider.shutdown.bind(provider)
+      vi.spyOn(provider, 'shutdown').mockImplementation(async (id, options) => {
+        ptyIncarnations.set(id, 'replacement-incarnation')
+        await shutdown(id, options)
+      })
+      const controllerStop = vi.fn(async (id: string, options?: WorktreePtyStopContext) => {
+        await provider.shutdown(id, { immediate: true, ...options })
+        return true
+      })
+      const graph = {
+        captureReadyGraphEpoch: () => 1,
+        assertStableReadyGraph: () => {},
+        ptysById: records,
+        ptyController: { stopAndWait: controllerStop }
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements every runtime port used by the batch and real runtime stop method.
+      const runtime = {
+        captureWorktreeTerminalStops: () =>
+          captureWorktreeTerminalStops([target], {
+            acquire: async () => {
+              throw new Error('lease unavailable')
+            },
+            captureFence: () => () => {},
+            leaves: () => [{ worktreeId: target.worktreeId, ptyId: created.id }],
+            ptys: records
+          }),
+        stopTerminalsForWorktree: (id, options) =>
+          OrcaRuntimeWithStopTerminalsForWorktree.prototype.stopTerminalsForWorktree.call(
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this supplies the graph/controller ports reached by the stop method.
+            graph as never,
+            id,
+            options
+          ),
+        getPtyLivenessVerdict: () => null,
+        captureStructuredAgentSessionPresentation: () => ({ raw: null, saved: [] }),
+        currentLocalStructuredSessionPresentation: () => null,
+        removeCapturedStructuredSessionSavedTabs: () => {},
+        retireStructuredAgentSessionTabFromSnapshot: () => true
+      } as WorktreeTeardownRuntime
+      const result = await killAllProcessesForWorktrees([target], {
+        runtime,
+        localProvider: provider
+      })
+      expect([...result.values()]).toEqual([false])
+      expect(controllerStop).toHaveBeenCalledWith(
+        created.id,
+        expect.objectContaining({ expectedIncarnationId: created.incarnationId })
+      )
+      expect(kill).not.toHaveBeenCalled()
+      expect(provider.hasPty(created.id)).toBe(true)
+    })
+
+    it('refuses a reused provider-only id before signalling its replacement', async () => {
+      const created = await provider.spawn({ cols: 80, rows: 24 })
+      ptyIncarnations.set(created.id, 'replacement-incarnation')
+      const kill = vi.spyOn(mockProc, 'kill')
+      await expect(
+        provider.shutdown(created.id, {
+          immediate: true,
+          expectedIncarnationId: created.incarnationId
+        })
+      ).rejects.toThrow('replaced')
+      expect(kill).not.toHaveBeenCalled()
+      expect(provider.hasPty(created.id)).toBe(true)
+    })
+
     it('keeps shutdown and ownership pending until node-pty reports physical exit', async () => {
       const killSpy = vi.fn()
       mockProc.kill = killSpy

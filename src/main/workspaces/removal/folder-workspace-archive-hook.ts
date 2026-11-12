@@ -1,5 +1,6 @@
+import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { isRepoOnCatalogHost } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+import type { WorkspaceHookOwner } from '../../../shared/workspace-hook-owner'
 import type { ArchiveHookOverride } from '../../../shared/worktree/archive-hook-removal-gate'
 import { removeFolderSetupRunnerFiles } from '../../workspace-hooks/folder-setup-runner-files'
 import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'
@@ -12,9 +13,11 @@ import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gat
  * Only the host holding the folder runs it; others own no files there.
  */
 export async function gateFolderWorkspaceRemovalOnArchiveHook(args: {
-  repo: Repo
+  repo: WorkspaceHookOwner
   worktreeId: string
   displayName: string
+  workspacePath?: string
+  hooks?: OrcaHooks | null
   runArchive: boolean
   allowFailure: boolean
   runtimeTarget: () => HookRuntimeTarget | undefined
@@ -23,12 +26,16 @@ export async function gateFolderWorkspaceRemovalOnArchiveHook(args: {
   if (!args.runArchive || !isRepoOnCatalogHost(repo)) {
     return undefined
   }
-  const hooks = getEffectiveHooks(repo)
+  const hooks = args.hooks === undefined ? getEffectiveHooks(repo) : args.hooks
   if (!hooks?.scripts.archive) {
     return undefined
   }
   const result = await runHook('archive', repo.path, repo, repo.path, args.runtimeTarget(), {
-    identity: { worktreeId: args.worktreeId, displayName: args.displayName },
+    identity: {
+      worktreeId: args.worktreeId,
+      displayName: args.displayName,
+      workspacePath: args.workspacePath
+    },
     hooks
   })
   return gateWorktreeRemovalOnArchiveHook({
@@ -39,7 +46,10 @@ export async function gateFolderWorkspaceRemovalOnArchiveHook(args: {
 }
 
 /** Runner files are per launch; drop this workspace's once its processes have stopped. */
-export function removeFolderWorkspaceRunnerFiles(repo: Repo, worktreeId: string): void {
+export function removeFolderWorkspaceRunnerFiles(
+  repo: WorkspaceHookOwner,
+  worktreeId: string
+): void {
   if (!isRepoOnCatalogHost(repo)) {
     return
   }

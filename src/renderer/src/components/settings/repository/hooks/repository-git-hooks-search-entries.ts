@@ -6,7 +6,7 @@ import type { Translate } from '@/i18n/use-translate'
 import { searchKeywordTranslator } from '../../search/settings-search-keywords'
 
 export function getRepositoryHookScriptDescription(
-  repo: Repo,
+  repo: Pick<Repo, 'kind' | 'displayName'>,
   hook: 'setup' | 'archive',
   t: Translate
 ): string {
@@ -33,7 +33,7 @@ export function getRepositoryHookScriptDescription(
 }
 
 export function getRepositoryGitHooksSearchEntries(
-  repo: Repo,
+  repo: Pick<Repo, 'kind' | 'displayName'>,
   t: Translate = translate
 ): SettingsSearchEntry[] {
   const translateSearchKeyword = searchKeywordTranslator(t)

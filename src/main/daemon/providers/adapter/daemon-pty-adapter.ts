@@ -1,18 +1,10 @@
-import {
-  isPtyFencedTerminationOutcome,
-  type PtyFencedTerminationRequest,
-  type PtyFencedTerminationOutcome
-} from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
-import {
-  FENCED_TERMINATION_PROTOCOL_VERSION,
-  supportsMode2031UnsubscribeFact
-} from '../../protocol/daemon-protocol-version'
+import { supportsMode2031UnsubscribeFact } from '../../protocol/daemon-protocol-version'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import type { DaemonPtyRouterExitEvent } from '../../protocol/daemon-pty-router-events'
 import { logWslPaneDiagnostic } from '../wsl/daemon-wsl-diagnostic-log'
 import { classifyWslBridgeExit, WSL_DISTRO_LOSS_EXIT_CODE } from '../wsl/daemon-wsl-bridge-exit'
 import { isProvenProcessExit } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import { DaemonPtyPreservedHostLoss } from './daemon-pty-preserved-host-loss'
+import { DaemonPtyFencedShutdown } from './daemon-pty-fenced-shutdown'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-adapter-options'
 
 import type { DaemonEvent } from '../../protocol/daemon-stream-events'
@@ -34,52 +26,11 @@ import type {
 import { observeDaemonAsyncIoHealth } from '../../observability/daemon-async-io-telemetry-event'
 import { sameEndpointIdentity } from '../../endpoint/identity/daemon-endpoint-incarnation'
 
-export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPtyProvider {
+export class DaemonPtyAdapter extends DaemonPtyFencedShutdown implements IPtyProvider {
   constructor(opts: DaemonPtyAdapterOptions) {
     super(opts)
     // Registered after the base listener, which marks the sessions awaiting recovery first.
     this.client.onDisconnected(() => this.recoverAfterEndpointLoss())
-  }
-
-  supportsFencedTermination(_id: string): boolean {
-    return this.protocolVersion >= FENCED_TERMINATION_PROTOCOL_VERSION
-  }
-
-  async killFenced(request: PtyFencedTerminationRequest): Promise<PtyFencedTerminationOutcome> {
-    if (!this.supportsFencedTermination(request.id)) {
-      return { outcome: 'refused', reason: 'unsupported' }
-    }
-    // Capture the checked identity before waiting on connection or lifecycle locks.
-    const { id, expectedIncarnationId, requireNoAgentOwner, requireUnattached } = request
-    try {
-      return await this.withHistorySpawnLock(id, async () => {
-        const incarnationBeforeKill = this.sessionIncarnations.get(id)
-        await this.ensureConnected()
-        const result = await this.client.request<unknown>('kill', {
-          sessionId: id,
-          immediate: true,
-          expectedIncarnationId,
-          requireNoAgentOwner,
-          requireUnattached
-        })
-        if (!isPtyFencedTerminationOutcome(result)) {
-          return { outcome: 'refused', reason: 'unverifiable' }
-        }
-        const currentIncarnationId = this.sessionIncarnations.get(id)
-        if (
-          (result.outcome === 'ended' || result.outcome === 'already_exited') &&
-          (incarnationBeforeKill === undefined ||
-            incarnationBeforeKill === expectedIncarnationId) &&
-          (currentIncarnationId === undefined || currentIncarnationId === expectedIncarnationId)
-        ) {
-          // Exit may clear the incarnation first; hold the spawn lock through removal to protect replacement sessions.
-          await this.completeShutdownWithHistoryLock(id, {})
-        }
-        return result
-      })
-    } catch {
-      return { outcome: 'refused', reason: 'unverifiable' }
-    }
   }
 
   async getAsyncIoHealth(): Promise<DaemonAsyncIoStatus> {

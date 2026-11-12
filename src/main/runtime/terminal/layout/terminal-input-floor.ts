@@ -97,6 +97,21 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
     return unsubscribe
   }
 
+  protected notifyPtyExitListeners(ptyId: string): void {
+    const listeners = this.ptyExitListenersByPtyId.get(ptyId)
+    if (!listeners) {
+      return
+    }
+    this.ptyExitListenersByPtyId.delete(ptyId)
+    for (const listener of listeners) {
+      try {
+        listener()
+      } catch {
+        // A subscriber cannot change exit cleanup for other waiters.
+      }
+    }
+  }
+
   /** Resolves once a registered PTY's exit reaches its runtime record; false on timeout. */
   waitForPtyExitRecord(ptyId: string, timeoutMs: number): Promise<boolean> {
     if (!this.ptysById.has(ptyId) || this.isPtyKnownExited(ptyId)) {

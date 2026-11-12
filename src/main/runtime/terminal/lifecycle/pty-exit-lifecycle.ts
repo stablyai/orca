@@ -1,3 +1,4 @@
+import { PtyExitRetirements, type PtyExitOptions } from './pty-exit-retirements'
 import { OrcaRuntimeWithOnClientDisconnected } from '../layout/terminal-client-disconnect'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 
@@ -18,6 +19,7 @@ import { closedPaneOfExitedPty, type ClosedPaneOfExit } from './closed-pane-of-e
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnected {
+  protected abstract notifyPtyExitListeners(ptyId: string): void
   protected abstract pruneDisconnectedPtyRecords(): void
 
   protected abstract failActiveDispatchOnExit(
@@ -58,27 +60,37 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     )
   }
 
+  private readonly ptyExitRetirements = new PtyExitRetirements()
+
+  waitForPtyExitRetirement(ptyId: string, incarnationId?: string): Promise<boolean> {
+    return this.ptyExitRetirements.wait(ptyId, incarnationId, this.getPtyLivenessVerdict(ptyId))
+  }
+
   onPtyExit(
     ptyId: string,
     exitCode: number,
     exitIncarnationId?: PtyIncarnationId,
-    options: {
-      hostExitConfirmed?: boolean
-      cause?: TerminalExitCause
-      /** Physical provider exit differs from hostExitConfirmed: node-pty can report a real exit as -1, indistinguishable numerically from failed stops. */
-      providerExitObserved?: boolean
-      /** A window's view of the pane was showing when it ended (layout-owner build). */
-      viewShown?: boolean
-      /** Its host went away (a WSL bridge pane's distro stopped): keep the pane to cold-restore, as after a daemon crash. */
-      hostLost?: boolean
-    } = {}
+    options: PtyExitOptions = {}
+  ): void | Promise<void> {
+    const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
+    const current = pending ? pending.incarnationId : this.ptysById.get(ptyId)?.incarnationId
+    if (exitIncarnationId && current && exitIncarnationId !== current) {
+      return
+    }
+    return this.ptyExitRetirements.track(ptyId, exitIncarnationId ?? current ?? undefined, () =>
+      this.applyPtyExit(ptyId, exitCode, exitIncarnationId, options)
+    )
+  }
+
+  private applyPtyExit(
+    ptyId: string,
+    exitCode: number,
+    exitIncarnationId?: PtyIncarnationId,
+    options: PtyExitOptions = {}
   ): void | Promise<void> {
     const pty = this.ptysById.get(ptyId)
     const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
     const candidateIncarnation = pending ? pending.incarnationId : pty?.incarnationId
-    if (exitIncarnationId && candidateIncarnation && exitIncarnationId !== candidateIncarnation) {
-      return
-    }
     pending?.exitedIncarnations.add(exitIncarnationId ?? candidateIncarnation ?? null)
     // A stop's cleanup can report the exit again, after its stop request is spent.
     const priorExit = this.getPtyLivenessVerdict(ptyId)
@@ -324,20 +336,5 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.notePtyEndedOnItsOwn(pty)
     }
     return retirement
-  }
-
-  private notifyPtyExitListeners(ptyId: string): void {
-    const listeners = this.ptyExitListenersByPtyId.get(ptyId)
-    if (!listeners) {
-      return
-    }
-    this.ptyExitListenersByPtyId.delete(ptyId)
-    for (const listener of listeners) {
-      try {
-        listener()
-      } catch {
-        // A subscriber cannot change exit cleanup for other waiters.
-      }
-    }
   }
 }

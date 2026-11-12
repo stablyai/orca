@@ -1,5 +1,4 @@
 import { retireMobileSessionTabSelection } from './mobile-session-tab-selection'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from './mobile-session-publication-preservation'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
@@ -30,7 +29,6 @@ import type * as LayoutCommands from '../terminal/layout/runtime-layout-apply'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import {
-  captureStructuredSessionPresentation,
   capturedStructuredSessionSavedTabChanges,
   windowlessStructuredSessionTabSaveEligible
 } from './structured-session-tab-presentation'
@@ -259,14 +257,6 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     return attempted
   }
 
-  captureStructuredAgentSessionPresentation(sessionId: string) {
-    return captureStructuredSessionPresentation(sessionId, {
-      raw: this.currentLocalStructuredSessionPresentation(sessionId),
-      saved: this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.unifiedTabs ?? {},
-      pending: this.queueChatTabChanges.pendingOpens()
-    })
-  }
-
   removeCapturedStructuredSessionSavedTabs(
     sessionId: string,
     targets: readonly { worktreeId: string; tabId: string }[]
@@ -316,6 +306,10 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
       this.setWorkspaceSessionForWorktree(worktreeId, next)
     }
     return Promise.resolve()
+  }
+
+  protected pendingStructuredSessionTabChanges() {
+    return this.queueChatTabChanges.pendingOpens()
   }
 
   private readonly queueChatTabChanges = createChatTabLayoutQueue({

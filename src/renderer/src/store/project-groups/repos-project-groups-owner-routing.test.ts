@@ -70,6 +70,45 @@ describe('repos-project-groups-owner-routing', () => {
   })
 
   describe('project group mutations route to the owning host', () => {
+    it('does not request archives from an old host when the selected root has no folder path', async () => {
+      const store = createTestStore()
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: null } as never,
+        projectGroups: [
+          { ...folderScanGroup, parentPath: null, executionHostId: 'runtime:env-1' },
+          {
+            ...folderScanGroup,
+            id: 'child',
+            parentGroupId: folderScanGroup.id,
+            executionHostId: 'runtime:env-1'
+          }
+        ],
+        folderWorkspaces: [
+          { ...baseFolderWorkspace, projectGroupId: 'child', executionHostId: 'runtime:env-1' }
+        ]
+      })
+      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+        const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        if (status?.ok) {
+          status.result.capabilities = []
+          return status
+        }
+        if (args.method === 'projectGroup.delete') {
+          return { id: 'delete', ok: true, result: { deleted: true } }
+        }
+        throw new Error(`Unexpected call: ${args.method}`)
+      })
+      await expect(
+        store.getState().deleteProjectGroup(folderScanGroup.id, { hostId: 'runtime:env-1' })
+      ).resolves.toBe(true)
+      expect(runtimeEnvironmentTransportCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'projectGroup.delete',
+          params: { groupId: folderScanGroup.id }
+        })
+      )
+    })
+
     it('refuses, rather than following focus, when a colliding id has no unambiguous owner', async () => {
       projectGroupsDelete.mockResolvedValue(true)
       const store = createTestStore()

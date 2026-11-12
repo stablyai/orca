@@ -104,6 +104,8 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
   // Why: same ordering as the worktree path — gate first, then resume only when not deferring.
   const shouldGateAgentActivation =
     !opts?.startup &&
+    !opts?.setup &&
+    !opts?.backendStartupTerminalSpawned &&
     (workspaceHasSleepingAgentSessions(state, workspaceKey) ||
       (canInspectAgentActivationInventory() &&
         shouldAutoCreateInitialTerminal(
@@ -121,7 +123,9 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
   const primaryTabId = shouldGateAgentActivation
     ? null
     : ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup, providesInitialSurface, {
-        seedUserDefaultSurface
+        seedUserDefaultSurface,
+        setup: opts?.setup,
+        backendStartupTerminalSpawned: opts?.backendStartupTerminalSpawned
       })
 
   if (opts?.showWorkspaceList) {
@@ -135,7 +139,7 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
     })
   }
 
-  if (opts?.providesInitialSurface !== true) {
+  if (opts?.providesInitialSurface !== true && !opts?.backendStartupTerminalSpawned) {
     ensureWebRuntimeWorktreeTerminalAfterWake(workspaceKey, {
       runtimeEnvironmentId,
       startup: opts?.startup,

@@ -6,6 +6,27 @@ import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachment
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { DiffCommentSchema } from '../diff-comment-schema'
+import { sleepingAgentLaunchConfigSchema } from '../workspace-session/workspace-session-sleeping-agents'
+import { AgentArgs, LaunchPreferences } from './agent-session-params'
+import { LaunchSourceParam } from './launch-source-param'
+
+export const FolderWorkspaceHookCreateShape = {
+  runHooks: z.boolean().optional(),
+  setupDecision: z.enum(['run', 'skip', 'inherit']).optional(),
+  approvedSetupHash: z.string().max(128).optional(),
+  approvedSetupHashes: z.array(z.string().max(128)).max(64).optional(),
+  agentLaunchMode: z.literal('structured').optional(),
+  startupCommand: OptionalString,
+  startupEnv: z.record(z.string(), z.string()).optional(),
+  startupLaunchConfig: sleepingAgentLaunchConfigSchema,
+  startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
+  startupAgent: z.string().refine(isTuiAgent).optional(),
+  startupPrompt: OptionalString,
+  startupAgentArgs: AgentArgs.optional(),
+  startupSessionOptions: z.record(z.string(), z.string()).optional(),
+  startupLaunchPreferences: LaunchPreferences.optional(),
+  launchSource: LaunchSourceParam.optional()
+}
 
 export const FolderWorkspaceLinkedTask = WorkspaceLinkedItemSchema.nullable()
 
@@ -30,6 +51,7 @@ export function assertLinkedTaskSourceContextMatch(
 
 export const FolderWorkspaceCreate = z
   .object({
+    ...FolderWorkspaceHookCreateShape,
     projectGroupId: requiredString('Missing project group id'),
     name: OptionalString,
     folderPath: OptionalString.nullable().optional(),
@@ -79,6 +101,9 @@ export const FolderWorkspaceSelector = z.object({
 })
 
 export const FolderWorkspaceDelete = FolderWorkspaceSelector.extend({
+  runHooks: z.boolean().optional(),
+  skipArchive: z.boolean().optional(),
+  allowFailedArchiveHook: z.boolean().optional(),
   requireUniqueId: RequireUniqueId
 })
 

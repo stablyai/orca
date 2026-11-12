@@ -20,12 +20,12 @@ export const FOLDER_WORKSPACE_METHODS = [
     name: 'folderWorkspace.create',
     permission: 'workspace',
     params: FolderWorkspaceCreate,
-    handler: async (params, context) => ({
-      folderWorkspace: await context.runtime.createFolderWorkspace({
+    handler: async (params, context) =>
+      context.runtime.createFolderWorkspace({
         ...params,
+        signal: context.signal,
         creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
       })
-    })
   }),
   defineMethod({
     name: 'folderWorkspace.update',
@@ -45,6 +45,7 @@ export const FOLDER_WORKSPACE_METHODS = [
     params: FolderWorkspaceDelete,
     handler: async (params, { runtime }) =>
       runtime.deleteFolderWorkspace(params.folderWorkspaceId, {
+        ...params,
         requireUniqueId: params.requireUniqueId
       })
   }),

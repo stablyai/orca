@@ -49,6 +49,13 @@ export type PtyProviderBufferSnapshot = {
   terminalOwner?: TerminalOwner
 }
 
+export type PtyShutdownEvidence = { confirmed: boolean; allowAbsenceProof: boolean }
+export type EstablishedPtyShutdownOwner = {
+  provider: IPtyProvider
+  assertCurrent(allowAbsent?: boolean): void
+  release(): void
+}
+
 export type PtySpawnOptions = {
   cols: number
   rows: number
@@ -140,7 +147,15 @@ export type IPtyProvider = {
   /** Whether missing claim metadata in this PTY's process listing proves absence. */
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
   supportsFencedTermination?: (id: string) => boolean
-  killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
+  killFenced?: (
+    request: PtyFencedTerminationRequest,
+    assertCurrent?: (allowAbsent?: boolean) => void
+  ) => Promise<PtyFencedTerminationOutcome>
+  /** Snapshot removal uses established ownership; unknown routes must not discover or fall back. */
+  resolveEstablishedShutdownOwner?: (
+    id: string,
+    expectedIncarnationId: string
+  ) => EstablishedPtyShutdownOwner | null
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   attach(id: string): Promise<PtySpawnResult | void>
@@ -183,6 +198,8 @@ export type IPtyProvider = {
       keepHistory?: boolean
       deadlineMs?: number
       expectedIncarnationId?: PtyIncarnationId
+      /** In-process captured router authority, checked again after asynchronous owner work. */
+      assertCurrent?: (allowAbsent?: boolean) => void
       /** Require the host-attested creator and current authenticated client to match before destructive ownership-based stops.
        * Optional/ignored on older hosts; ordinary teardown and unattested revived PTYs may omit it. */
       expectedOwnerClientInstanceId?: string

@@ -205,6 +205,7 @@ export function RepositoryPane({
       <RepositoryHooksSection
         key="hooks"
         repo={repo}
+        gitRepo={repo}
         yamlHooks={yamlHooks}
         hasHooksFile={hasHooksFile}
         hooksInspectionReady={hooksInspectionReady}

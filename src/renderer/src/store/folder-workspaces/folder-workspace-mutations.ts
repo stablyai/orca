@@ -1,4 +1,5 @@
-import { launchDraftSource } from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import { createFolderWorkspaceDeleteAction } from './folder-workspace-removal'
+import type { FolderWorkspaceCreateResult } from '../../../../shared/folder-workspaces/folder-workspace-create'
 import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/workspace-links/runtime-workspace-attachment-capabilities'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import type { StateCreator } from 'zustand'
@@ -13,10 +14,7 @@ import {
 } from '../../runtime/rpc/targets/runtime-client-target'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/workspace/paths/folder-workspace-path-status'
-import {
-  findFolderWorkspaceOwner,
-  getExecutionHostIdForFolderWorkspace
-} from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
+import { findFolderWorkspaceOwner } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import { FolderWorkspaceUpdateCoordinator } from './folder-workspace-update-coordinator'
 import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
@@ -32,7 +30,6 @@ import {
 } from './folder-workspace-catalog'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
-import * as chatDrafts from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 
 export type FolderWorkspaceUpdateField = keyof FolderWorkspaceUpdates
 
@@ -79,17 +76,21 @@ export function createFolderWorkspaceMutationActions(
             'Update the remote runtime to link Jira'
           )
         }
-        const workspace =
+        const result =
           target.kind === 'local'
             ? await window.api.folderWorkspaces.create(args)
-            : (
-                await callRuntimeRpc<{ folderWorkspace: FolderWorkspace }>(
-                  target,
-                  'folderWorkspace.create',
-                  args,
-                  { timeoutMs: 15_000 }
-                )
-              ).folderWorkspace
+            : await callRuntimeRpc<FolderWorkspaceCreateResult>(
+                target,
+                'folderWorkspace.create',
+                args,
+                {
+                  timeoutMs: args.agentLaunchMode === 'structured' ? 120_000 : 15_000,
+                  ...(args.agentLaunchMode === 'structured'
+                    ? { signal: options.signal ?? new AbortController().signal }
+                    : {})
+                }
+              )
+        const workspace = result.folderWorkspace
         const { projectGroups } = get()
         const ownedWorkspace = adoptFromEndpoint(target, {
           kind: 'folderWorkspace',
@@ -101,7 +102,7 @@ export function createFolderWorkspaceMutationActions(
           folderWorkspacePathStatuses: {}
         }))
         holdCreatedSidebarWorkspace({ folderWorkspace: ownedWorkspace })
-        return ownedWorkspace
+        return { ...result, folderWorkspace: ownedWorkspace }
       } catch (err) {
         console.error('Failed to create folder workspace:', err)
         const { title, description } = formatFolderWorkspaceCreateError(err)
@@ -244,68 +245,6 @@ export function createFolderWorkspaceMutationActions(
       }
     },
 
-    deleteFolderWorkspace: async (folderWorkspaceId, options) => {
-      const state = get()
-      const executionHostId = options?.executionHostId
-      if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
-        return false
-      }
-      const ownerHostId = getExecutionHostIdForFolderWorkspace(
-        state,
-        folderWorkspaceId,
-        executionHostId
-      )
-      const target = folderWorkspaceOwnerTarget(state, folderWorkspaceId, executionHostId)
-      if (!target) {
-        return false
-      }
-      const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
-      // Why before the host call: its announcement can start a refresh that drops these tabs.
-      const chatDraftKeys = chatDrafts.captureWorkspaceChatDraftKeys(state, [
-        { workspaceId: workspaceKey, executionHostId: ownerHostId }
-      ])
-      try {
-        const deleted =
-          target.kind === 'local'
-            ? await window.api.folderWorkspaces.delete({ folderWorkspaceId })
-            : (
-                await callRuntimeRpc<{ deleted: boolean }>(
-                  target,
-                  'folderWorkspace.delete',
-                  { folderWorkspaceId },
-                  { timeoutMs: 15_000 }
-                )
-              ).deleted
-        if (!deleted) {
-          return false
-        }
-        set((s) => ({
-          folderWorkspaces: s.folderWorkspaces.filter(
-            (workspace) =>
-              workspace.id !== folderWorkspaceId ||
-              getFolderWorkspaceHostId(workspace, s.projectGroups) !== ownerHostId
-          ),
-          folderWorkspacePathStatuses: {}
-        }))
-        const origin = target.kind === 'local' ? 'local' : `runtime:${target.environmentId}`
-        chatDrafts.deleteWorkspaceChatDraftOwners(
-          chatDraftKeys,
-          (owner, scope) =>
-            owner.workspaceId === workspaceKey && launchDraftSource(scope)?.origin === origin
-        )
-        if (!get().folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
-          // Folder/worktree browser registry keys coincide; retire Chromium guests before renderer cleanup.
-          await Promise.resolve(get().shutdownWorktreeBrowsers(workspaceKey))
-          // Why here too: a server-hosted folder's local pages use this desktop's profile, which the server can't reach.
-          void get().deleteManagedBrowserSessionProfile({ kind: 'worktree', id: workspaceKey })
-          get().purgeWorktreeTerminalState([workspaceKey])
-          chatDrafts.deleteWorkspaceChatDrafts(chatDraftKeys)
-        }
-        return true
-      } catch (err) {
-        console.error('Failed to delete folder workspace:', err)
-        return false
-      }
-    }
+    deleteFolderWorkspace: createFolderWorkspaceDeleteAction(set, get)
   }
 }

@@ -1,3 +1,5 @@
+import type { ProjectGroupDeleteOptions } from '../../shared/project-group-removal'
+import type { GroupHookCheckResult } from '../../shared/project-group-hooks'
 import type { RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 import type { CloneTargetArgs, CloneTargetCheck } from '../../shared/git/clone/clone-target-check'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -124,6 +126,7 @@ export type ProjectsApi = {
 }
 
 export type ProjectGroupsApi = {
+  checkHooks: (args: { groupId: string; background?: boolean }) => Promise<GroupHookCheckResult>
   list: () => Promise<ProjectGroup[]>
   create: (args: {
     name: string
@@ -136,7 +139,11 @@ export type ProjectGroupsApi = {
   updateMany: (args: {
     mutations: readonly ProjectGroupMutation[]
   }) => Promise<ProjectGroup[] | null>
-  delete: (args: { groupId: string }) => Promise<boolean>
+  delete: (
+    args: {
+      groupId: string
+    } & ProjectGroupDeleteOptions
+  ) => Promise<boolean>
   moveProject: (args: {
     projectId: string
     groupId: string | null

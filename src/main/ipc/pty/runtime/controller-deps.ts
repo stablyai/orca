@@ -2,6 +2,7 @@ import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { ObservedPtyShutdownOptions } from '../provider/shutdown-detect'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/shell/launch/terminal-startup-cwd'
 import type {
@@ -49,7 +50,7 @@ export type PtyRuntimeControllerDeps = PtySpawnCodexResumeDeps & {
   shutdownProviderAndDetectExit: (
     provider: IPtyProvider,
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: ObservedPtyShutdownOptions
   ) => Promise<boolean>
   rememberSyntheticKillExit: (id: string, incarnationId?: string) => void
   rememberRetiredRejectedPty: (id: string) => void

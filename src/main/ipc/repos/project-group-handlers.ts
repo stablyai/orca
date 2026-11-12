@@ -1,3 +1,5 @@
+import { ProjectGroupHooksCheck } from '../../../shared/rpc-contract/repo-params'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
@@ -9,7 +11,7 @@ import {
   ProjectGroupCreateArgs,
   ProjectGroupMoveProjectArgs,
   ProjectGroupScanNestedArgs,
-  ProjectGroupSelectorArgs,
+  ProjectGroupDeleteArgs,
   ProjectGroupUpdateArgs,
   ProjectGroupUpdateManyArgs,
   parseProjectGroupIpcArgs
@@ -21,7 +23,19 @@ import {
 import { activeNestedRepoScans, runNestedRepoScanForIpc } from './nested-repo-scan-ipc'
 import { visibleProjectGroups } from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
 
-export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerProjectGroupHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  runtime: Pick<OrcaRuntimeService, 'deleteProjectGroup' | 'checkProjectGroupHooks'>
+): void {
+  ipcMain.handle('projectGroups:checkHooks', (_event, rawArgs: unknown) => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupHooksCheck,
+      rawArgs,
+      'invalid_project_group_hooks_check_args'
+    )
+    return runtime.checkProjectGroupHooks(args.groupId, { background: args.background })
+  })
   ipcMain.handle('projectGroups:list', () => visibleProjectGroups(store))
 
   ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
@@ -67,17 +81,13 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
     return updated
   })
 
-  ipcMain.handle('projectGroups:delete', (_event, rawArgs: unknown): boolean => {
+  ipcMain.handle('projectGroups:delete', async (_event, rawArgs: unknown): Promise<boolean> => {
     const args = parseProjectGroupIpcArgs(
-      ProjectGroupSelectorArgs,
+      ProjectGroupDeleteArgs,
       rawArgs,
       'invalid_project_group_delete_args'
     )
-    const deleted = store.deleteProjectGroup(args.groupId)
-    if (deleted) {
-      notifyReposChanged(mainWindow)
-    }
-    return deleted
+    return (await runtime.deleteProjectGroup(args.groupId, args)).deleted
   })
 
   ipcMain.handle('projectGroups:moveProject', (_event, rawArgs: unknown): Repo | null => {

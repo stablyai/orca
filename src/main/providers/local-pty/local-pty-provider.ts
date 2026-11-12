@@ -104,7 +104,7 @@ export class LocalPtyProvider implements IPtyProvider {
     return getLocalPtyAppliedSize(id)
   }
 
-  shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  shutdown(id: string, opts: Parameters<IPtyProvider['shutdown']>[1]): Promise<void> {
     return shutdownLocalPty(id, opts)
   }
 
@@ -223,7 +223,8 @@ export class LocalPtyProvider implements IPtyProvider {
 
   async listProcesses(opts?: { ptyIds?: readonly string[] }): Promise<PtyProcessInfo[]> {
     const rows = await listLocalPtyProcesses()
-    return opts?.ptyIds ? rows.filter((row) => opts.ptyIds?.includes(row.id)) : rows
+    const ids = opts?.ptyIds && new Set(opts.ptyIds)
+    return ids ? rows.filter((row) => ids.has(row.id)) : rows
   }
 
   getDefaultShell(): Promise<string> {

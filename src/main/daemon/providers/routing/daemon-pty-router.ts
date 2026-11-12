@@ -122,9 +122,11 @@ export class DaemonPtyRouter implements IPtyProvider {
     )
   }
 
-  supportsFencedTermination(id: string): boolean {
-    return this.ownerResolver.getVerifiedRoute(id)?.supportsFencedTermination?.(id) === true
-  }
+  supportsFencedTermination = (id: string): boolean =>
+    this.ownerResolver.getVerifiedRoute(id)?.supportsFencedTermination?.(id) === true
+
+  resolveEstablishedShutdownOwner = (id: string, expectedIncarnationId: string) =>
+    this.ownerResolver.captureEstablishedShutdownOwner(id, expectedIncarnationId)
 
   killFenced = (request: PtyFencedTerminationRequest) =>
     terminateResolvedDaemonSession(request, () =>

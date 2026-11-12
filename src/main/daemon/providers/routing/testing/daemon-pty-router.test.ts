@@ -1,6 +1,8 @@
 import { createAdapter } from './daemon-pty-router-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { DaemonPtyRouter } from '../daemon-pty-router'
+import { DegradedDaemonPtyProvider } from '../degraded-daemon-pty-provider'
+import { shutdownProviderWithExitEvidence } from '../../../../ipc/pty/provider/shutdown-detect'
 import { TerminalSessionOwnerUnverifiedError } from '../../../protocol/daemon-errors'
 import type { PtyProcessInfo } from '../../../../providers/pty-provider-contract'
 import {
@@ -9,6 +11,114 @@ import {
 } from '../../../protocol/daemon-protocol-version'
 
 describe('DaemonPtyRouter', () => {
+  it.each([false, true])(
+    'uses only established shutdown owners (degraded: %s)',
+    async (degraded) => {
+      for (const count of [10, 100]) {
+        const ids = Array.from({ length: count }, (_, i) => `selected-${i}`)
+        const current = createAdapter('current', [...ids], undefined, PROTOCOL_VERSION)
+        const legacy = createAdapter('legacy', ['legacy'], undefined, 1)
+        const fallback = createAdapter('fallback')
+        vi.mocked(current.listProcesses).mockResolvedValue(
+          ids.map((id) => ({ id, incarnationId: `inc-${id}`, cwd: '', title: '' }))
+        )
+        const router = degraded
+          ? new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+          : new DaemonPtyRouter({ current, legacy: [legacy] })
+        await router.listProcesses()
+        const stop = (id: string, expectedIncarnationId: string) =>
+          shutdownProviderWithExitEvidence(router, id, {
+            immediate: true,
+            expectedIncarnationId,
+            establishedOwnerOnly: true
+          })
+        for (const id of ids) {
+          await expect(stop(id, `inc-${id}`)).resolves.toMatchObject({ confirmed: true })
+        }
+        await expect(stop(ids[0]!, 'predecessor')).rejects.toThrow('unverified')
+        await expect(stop('unknown', 'inc')).rejects.toThrow('unverified')
+        await expect(stop('legacy', 'old-inc')).resolves.toMatchObject({
+          confirmed: false,
+          allowAbsenceProof: false
+        })
+        expect(legacy.shutdown).toHaveBeenCalledOnce()
+        expect(legacy.killFenced).not.toHaveBeenCalled()
+        expect(router.resolveEstablishedShutdownOwner('legacy', 'old-inc')).toBeNull()
+        expect(current.shutdown).not.toHaveBeenCalled()
+        expect(fallback.shutdown).not.toHaveBeenCalled()
+        expect(current.listProcesses).toHaveBeenCalledOnce()
+        expect(legacy.listProcesses).toHaveBeenCalledOnce()
+        current.killFenced = vi.fn(async () => ({
+          outcome: 'refused' as const,
+          reason: 'replaced' as const
+        }))
+        await expect(stop(ids[0]!, `inc-${ids[0]}`)).rejects.toThrow('replaced')
+        expect(current.shutdown).not.toHaveBeenCalled()
+        vi.mocked(current.listProcesses).mockResolvedValue([
+          { id: 'ambiguous', incarnationId: 'a', cwd: '', title: '' }
+        ])
+        vi.mocked(legacy.listProcesses).mockResolvedValue([
+          { id: 'ambiguous', incarnationId: 'b', cwd: '', title: '' }
+        ])
+        await expect(router.listProcesses()).rejects.toThrow()
+        await expect(stop('ambiguous', 'a')).rejects.toThrow('unverified')
+        expect(current.listProcesses).toHaveBeenCalledTimes(2)
+        expect(legacy.listProcesses).toHaveBeenCalledTimes(2)
+      }
+    }
+  )
+
+  it.each([false, true])(
+    'preserves a same-adapter legacy successor and failed shutdown route (degraded: %s)',
+    async (degraded) => {
+      const legacy = createAdapter('legacy', ['held', 'failed'], undefined, 1)
+      vi.mocked(legacy.listProcesses).mockResolvedValue([
+        { id: 'held', incarnationId: 'old', cwd: '', title: '' },
+        { id: 'failed', incarnationId: 'failed-inc', cwd: '', title: '' }
+      ])
+      const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+      const router = degraded
+        ? new DegradedDaemonPtyProvider({
+            current,
+            legacy: [legacy],
+            fallback: createAdapter('fallback')
+          })
+        : new DaemonPtyRouter({ current, legacy: [legacy] })
+      await router.listProcesses()
+      const { promise: gate, resolve } = Promise.withResolvers<void>()
+      const { promise: entered, resolve: started } = Promise.withResolvers<void>()
+      legacy.shutdown = vi.fn(async (id) => {
+        if (id === 'failed') {
+          throw new Error('stop failed')
+        }
+        started()
+        await gate
+      })
+      const stop = (id: string, expectedIncarnationId: string) =>
+        shutdownProviderWithExitEvidence(router, id, {
+          immediate: true,
+          expectedIncarnationId,
+          establishedOwnerOnly: true
+        })
+      const pending = expect(stop('held', 'old')).rejects.toThrow('owner changed')
+      await entered
+      legacy.spawn = vi.fn(async () => ({ id: 'held', incarnationId: 'new', isReattach: true }))
+      await router.spawn({
+        sessionId: 'held',
+        attachOnly: true,
+        expectedIncarnationId: 'old',
+        cols: 80,
+        rows: 24
+      })
+      resolve()
+      await pending
+      expect(router.resolveEstablishedShutdownOwner('held', 'new')?.provider).toBe(legacy)
+      expect(router.resolveEstablishedShutdownOwner('held', 'old')).toBeNull()
+      await expect(stop('failed', 'failed-inc')).rejects.toThrow('stop failed')
+      expect(router.resolveEstablishedShutdownOwner('failed', 'failed-inc')?.provider).toBe(legacy)
+    }
+  )
+
   describe('idle retirement', () => {
     it('retires every empty daemon generation and fences subsequent spawns', async () => {
       const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)

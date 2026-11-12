@@ -187,6 +187,40 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     return this.routeIncarnations.has(sessionId) ? this.routes.get(sessionId) : undefined
   }
 
+  captureEstablishedShutdownOwner(sessionId: string, expectedIncarnationId: string) {
+    const provider = this.getVerifiedRoute(sessionId)
+    const incarnationId = this.getRouteIncarnation(sessionId)
+    if (
+      !provider ||
+      (incarnationId && incarnationId !== expectedIncarnationId) ||
+      (provider.supportsFencedTermination?.(sessionId) === true &&
+        incarnationId !== expectedIncarnationId)
+    ) {
+      return null
+    }
+    return {
+      provider,
+      release: () => {
+        if (
+          this.getVerifiedRoute(sessionId) === provider &&
+          this.getRouteIncarnation(sessionId) === incarnationId
+        ) {
+          this.forgetRoute(sessionId)
+        }
+      },
+      assertCurrent: (allowAbsent = false) => {
+        const current = this.routes.get(sessionId)
+        if (
+          !(allowAbsent && !current) &&
+          (this.getVerifiedRoute(sessionId) !== provider ||
+            this.getRouteIncarnation(sessionId) !== incarnationId)
+        ) {
+          throw new Error('Terminal shutdown owner changed')
+        }
+      }
+    }
+  }
+
   private setRoute(sessionId: string, provider: T, incarnationId?: string): void {
     this.routes.set(sessionId, provider)
     this.routeIncarnations.set(sessionId, incarnationId)

@@ -123,10 +123,7 @@ export type AgentLaunchWorkspaceFactory = {
   }>
   /** Leave a usable workspace when chat creation has an indeterminate outcome. */
   createRecoveryShell?: (worktreeId: string) => Promise<void>
-  /** Folders have no startup terminal; the executor launches their agent after creation. */
-  createFolderWorkspace?(args: {
-    create: Readonly<Record<string, unknown>>
-  }): Promise<{ worktreeId: string; workspacePath?: string; connectionId: string | null }>
+  createFolderWorkspace?: AgentLaunchWorkspaceFactory['createWorktree']
 }
 
 /** The options a terminal leg starts with: a caller's saved chat choice applies to it too. */

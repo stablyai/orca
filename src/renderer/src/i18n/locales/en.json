@@ -1412,6 +1412,13 @@
       "settings": "Settings",
       "label": "Settings breadcrumb",
       "close": "Close settings"
+    },
+    "groupHooks": {
+      "title": "Project Settings > {{name}}",
+      "example": "Example: create a worktree in each repo (this machine only)",
+      "useExample": "Use this example",
+      "agentSetupFailed": "Could not start {{agent}} because Setup did not complete successfully. Check the Setup tab and try again.",
+      "removalUnconfirmed": "Group removal could not be confirmed. Refresh projects to check its status."
     }
   },
   "menu": {
@@ -23107,7 +23114,8 @@
   "common": {
     "retry": "Retry",
     "cancel": "Cancel",
-    "unassigned": "Unassigned"
+    "unassigned": "Unassigned",
+    "copy": "Copy"
   },
   "terminal": {
     "sessionSaveFailure": {

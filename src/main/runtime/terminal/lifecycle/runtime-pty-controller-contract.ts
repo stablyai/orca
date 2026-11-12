@@ -1,4 +1,5 @@
 import type { DaemonLaunchNoteChange } from '../../../daemon/protocol/daemon-launch-note-protocol'
+import type { WorktreePtyStopContext } from '../stop/worktree-terminal-stop-options'
 import type {
   TerminalLimitStatus,
   TerminalLimitUpdate
@@ -158,7 +159,12 @@ export type RuntimePtyController = {
   retireRejectedPty?(ptyId: string, stopConfirmed: boolean, incarnationId: string | undefined): void
   stopAndWait?(
     ptyId: string,
-    opts?: { keepHistory?: boolean; deadlineMs?: number }
+    opts?: WorktreePtyStopContext & {
+      keepHistory?: boolean
+      deadlineMs?: number
+      observeExitOnly?: boolean
+      expectedIncarnationId?: PtyIncarnationId
+    }
   ): Promise<boolean>
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>
