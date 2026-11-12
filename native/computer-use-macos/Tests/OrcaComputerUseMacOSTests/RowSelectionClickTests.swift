@@ -94,6 +94,16 @@ final class RowSelectionClickTests: XCTestCase {
         XCTAssertEqual(tree.writes, ["AXSelectedRows:1:3"])
     }
 
+    func testACellWrappedInAGroupIsSelectedThroughItsRow() throws {
+        let tree = outline()
+        tree.nodes[5] = .init(role: "AXGroup", parent: 3)
+        tree.nodes[4]?.parent = 5
+
+        XCTAssertTrue(RowSelectionClick.isUnselectedRow(4, ax: tree))
+        XCTAssertEqual(try RowSelectionClick.confirm(4, ax: tree), .selectedByWrite(attribute: "AXSelectedRows"))
+        XCTAssertEqual(tree.writes, ["AXSelectedRows:1:3"])
+    }
+
     func testSelectedChildrenTakesTheContainersOwnChild() throws {
         let tree = outline(containerSettable: ["AXSelectedChildren"])
 

@@ -87,15 +87,23 @@ public enum RowSelectionClick {
         return nil
     }
 
+    /// Walks up through wrappers such as AXGroup, stopping at a container or another cell.
     private static func enclosingRow<AX: RowSelectionAccessibility>(of element: AX.Element, ax: AX) -> AX.Element? {
-        guard ax.role(of: element) == "AXCell",
-              let parent = ax.parent(of: element),
-              let parentRole = ax.role(of: parent),
-              parentRole != "AXCell",
-              rowRoles.contains(parentRole)
-        else {
-            return nil
+        guard ax.role(of: element) == "AXCell" else { return nil }
+        var child = element
+        for _ in 0..<maxContainerDepth {
+            guard let parent = ax.parent(of: child),
+                  let role = ax.role(of: parent),
+                  role != "AXCell",
+                  !containerRoles.contains(role)
+            else {
+                return nil
+            }
+            if rowRoles.contains(role) {
+                return parent
+            }
+            child = parent
         }
-        return parent
+        return nil
     }
 }
