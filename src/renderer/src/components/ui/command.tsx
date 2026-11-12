@@ -326,7 +326,8 @@ function CommandOption({
       data-selected={selected}
       aria-disabled={disabled}
       data-disabled={disabled}
-      onPointerMove={disabled ? undefined : onHighlight}
+      // Like cmdk, moving over the already-highlighted option does no work.
+      onPointerMove={disabled || selected ? undefined : onHighlight}
       onClick={disabled ? undefined : onSelect}
       className={cn(
         COMMAND_ITEM_BASE_CLASS,

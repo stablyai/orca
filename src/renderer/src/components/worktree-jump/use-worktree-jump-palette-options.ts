@@ -2,7 +2,10 @@ import { useCallback, useId, useMemo } from 'react'
 import type { WorktreeJumpPaletteListEntries } from './use-worktree-jump-palette-list-entries'
 import type { WorktreeJumpPaletteSelectionLifecycle } from './use-worktree-jump-palette-selection-lifecycle'
 
-type WorktreeJumpPaletteOptionsInput = Pick<WorktreeJumpPaletteListEntries, 'selectionItemIds'> &
+type WorktreeJumpPaletteOptionsInput = Pick<
+  WorktreeJumpPaletteListEntries,
+  'listEntries' | 'listEntryRenderKeys'
+> &
   Pick<
     WorktreeJumpPaletteSelectionLifecycle,
     'commandSelectedItemId' | 'handleCommandSelectionChange'
@@ -10,14 +13,23 @@ type WorktreeJumpPaletteOptionsInput = Pick<WorktreeJumpPaletteListEntries, 'sel
 
 /** Listbox option state owned by the palette: the result list is windowed, so cmdk never registers its rows. */
 export function useWorktreeJumpPaletteOptions({
-  selectionItemIds,
+  listEntries,
+  listEntryRenderKeys,
   commandSelectedItemId,
   handleCommandSelectionChange
 }: WorktreeJumpPaletteOptionsInput) {
   const optionIdPrefix = `${useId()}option`
+  // Every rendered option counts, disabled ones included; headings are not options.
+  const optionIds = useMemo(
+    () =>
+      listEntries.flatMap((entry, index) =>
+        entry.type === 'section-header' ? [] : [listEntryRenderKeys[index] ?? entry.id]
+      ),
+    [listEntries, listEntryRenderKeys]
+  )
   const optionIndexById = useMemo(
-    () => new Map(selectionItemIds.map((id, index) => [id, index])),
-    [selectionItemIds]
+    () => new Map(optionIds.map((id, index) => [id, index])),
+    [optionIds]
   )
   const getOptionId = useCallback(
     (itemId: string): string | null => {
@@ -32,7 +44,7 @@ export function useWorktreeJumpPaletteOptions({
       return {
         id: index === undefined ? undefined : `${optionIdPrefix}-${index}`,
         'aria-posinset': index === undefined ? undefined : index + 1,
-        'aria-setsize': index === undefined ? undefined : selectionItemIds.length,
+        'aria-setsize': index === undefined ? undefined : optionIds.length,
         value: itemId,
         selected: itemId === commandSelectedItemId,
         onHighlight: () => handleCommandSelectionChange(itemId)
@@ -42,8 +54,8 @@ export function useWorktreeJumpPaletteOptions({
       commandSelectedItemId,
       handleCommandSelectionChange,
       optionIdPrefix,
-      optionIndexById,
-      selectionItemIds.length
+      optionIds.length,
+      optionIndexById
     ]
   )
   return {

@@ -11,6 +11,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { useCommandInputActiveDescendant } from '@/lib/list-interaction/windowed-command-navigation'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import {
   handleWorktreeJumpPaletteListKeyDown,
   WorktreeJumpPaletteResultList
@@ -64,6 +65,7 @@ export function WorktreeJumpPaletteSurface({
           if (
             selectedTask &&
             event.key === 'Enter' &&
+            !isImeOwnedKeyboardEvent(event) &&
             (navigator.userAgent.includes('Mac') ? event.metaKey : event.ctrlKey)
           ) {
             event.preventDefault()

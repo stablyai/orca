@@ -20,6 +20,10 @@ const WORKSPACE_OPTION_OVERSCAN = 8
 // Why: matches `max-h-72`; seeds the first paint before the popover measures.
 const WORKSPACE_LIST_MAX_HEIGHT = 288
 
+function estimateWorkspaceOptionSize(): number {
+  return WORKSPACE_OPTION_HEIGHT
+}
+
 /** cmdk's own ranking, run over every worktree so windowing never drops a match. */
 function filterWorkspaces(worktrees: readonly Worktree[], query: string): readonly Worktree[] {
   if (!query) {
@@ -61,8 +65,9 @@ function WorkspaceComboboxList({
   const virtualizer = useWindowedCommandVirtualizer({
     count: filtered.length,
     scrollElement: () => listRef.current,
-    estimateSize: () => WORKSPACE_OPTION_HEIGHT,
-    getItemKey: (index) => itemIds[index] ?? index,
+    estimateSize: estimateWorkspaceOptionSize,
+    // Stable per result list: TanStack rebuilds every row's geometry when the key getter changes.
+    getItemKey: React.useCallback((index: number) => itemIds[index] ?? index, [itemIds]),
     activeIndex,
     overscan: WORKSPACE_OPTION_OVERSCAN,
     initialRect: { width: 0, height: WORKSPACE_LIST_MAX_HEIGHT }

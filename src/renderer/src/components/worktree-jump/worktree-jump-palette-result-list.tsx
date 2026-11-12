@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   measureVirtualizedListScrollMargin,
   observeVirtualizedListScrollMargin,
@@ -93,12 +93,21 @@ export function WorktreeJumpPaletteResultList({
     return observeVirtualizedListScrollMargin(container, scrollElement, updateMargin)
   }, [scrollElement, windowed])
 
+  // Stable per result list: TanStack rebuilds every row's geometry when these getters change.
+  const estimateSize = useCallback(
+    (index: number) => estimateEntryHeight(listEntries[index]),
+    [listEntries]
+  )
+  const getItemKey = useCallback(
+    (index: number) => listEntryRenderKeys[index] ?? listEntries[index]?.id ?? index,
+    [listEntries, listEntryRenderKeys]
+  )
   const virtualizer = useWindowedCommandVirtualizer({
     count: listEntries.length,
     enabled: windowed && scrollElement !== null,
     scrollElement: () => scrollElement,
-    estimateSize: (index) => estimateEntryHeight(listEntries[index]),
-    getItemKey: (index) => listEntryRenderKeys[index] ?? listEntries[index]?.id ?? index,
+    estimateSize,
+    getItemKey,
     activeIndex,
     overscan: VIRTUALIZED_LIST_OVERSCAN,
     scrollMargin,

@@ -31,8 +31,12 @@ export type SkillInstallWorkspaceComboboxProps = {
   triggerClassName?: string
 }
 
-/** Opening on the current choice highlights it (or nothing when it is gone); typing highlights the first match. */
+/** Opening on the current choice highlights it (nothing when it is gone, the first choice when none is set); typing highlights the first match. */
 type ChoiceHighlight = { kind: 'choice'; key: string } | { kind: 'none' } | { kind: 'first-match' }
+
+function estimateChoiceOptionSize(): number {
+  return CHOICE_OPTION_HEIGHT
+}
 
 // Worktree and folder ids are separate namespaces; the kind keeps option keys injective.
 function choiceKey(choice: SkillInstallWorkspaceChoice): string {
@@ -97,8 +101,9 @@ function SkillInstallWorkspaceChoiceList({
   const virtualizer = useWindowedCommandVirtualizer({
     count: filteredChoices.length,
     scrollElement: () => listRef.current,
-    estimateSize: () => CHOICE_OPTION_HEIGHT,
-    getItemKey: (index) => choiceKeys[index] ?? index,
+    estimateSize: estimateChoiceOptionSize,
+    // Stable per result list: TanStack rebuilds every row's geometry when the key getter changes.
+    getItemKey: useCallback((index: number) => choiceKeys[index] ?? index, [choiceKeys]),
     activeIndex,
     overscan: CHOICE_OPTION_OVERSCAN,
     initialRect: { width: 0, height: CHOICE_LIST_MAX_HEIGHT }
@@ -282,11 +287,16 @@ export function SkillInstallWorkspaceCombobox({
     })
   }, [cancelFocusFrame])
 
+  // With no choice yet the first one is armed, as cmdk did; a stale choice highlights nothing.
   const highlightCurrentChoice = useCallback(() => {
     setHighlight(
-      selectedChoice ? { kind: 'choice', key: choiceKey(selectedChoice) } : { kind: 'none' }
+      selectedChoice
+        ? { kind: 'choice', key: choiceKey(selectedChoice) }
+        : value === ''
+          ? { kind: 'first-match' }
+          : { kind: 'none' }
     )
-  }, [selectedChoice])
+  }, [selectedChoice, value])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
