@@ -56,21 +56,32 @@ vi.mock('../platform/dictation-capture', () => {
 
 import { useMobileDictation, type UseMobileDictationResult } from './use-mobile-dictation'
 
-function settle(rpc: FakeRpcClient, sent: SentRequest[]): void {
+type ChunkReply = { audioLimitReached?: boolean }
+
+function settle(rpc: FakeRpcClient, sent: SentRequest[], chunkResult: ChunkReply = {}): void {
   for (const request of rpc.requests.splice(0)) {
     sent.push(request)
     request.resolve({
       id: 'desktop',
       ok: true,
-      result: request.method === 'speech.dictation.finish' ? { text: 'a sentence' } : {}
+      result:
+        request.method === 'speech.dictation.finish'
+          ? { text: 'a sentence' }
+          : request.method === 'speech.dictation.chunk'
+            ? chunkResult
+            : {}
     })
   }
 }
 
 // Drain chained requests; each reply can unblock the next.
-async function pump(rpc: FakeRpcClient, sent: SentRequest[]): Promise<void> {
+async function pump(
+  rpc: FakeRpcClient,
+  sent: SentRequest[],
+  chunkResult?: ChunkReply
+): Promise<void> {
   for (let round = 0; round < 8; round += 1) {
-    settle(rpc, sent)
+    settle(rpc, sent, chunkResult)
     await Promise.resolve()
     await Promise.resolve()
   }
@@ -96,7 +107,10 @@ function settleExcept(rpc: FakeRpcClient, sent: SentRequest[], method: string): 
 
 const held: { dictation: UseMobileDictationResult | null } = { dictation: null }
 
-function mount(client: FakeRpcClient, onTranscript: (text: string) => void = () => {}): void {
+function mount(
+  client: FakeRpcClient,
+  onTranscript: Parameters<typeof useMobileDictation>[0]['onTranscript'] = () => {}
+): void {
   function Probe(): null {
     held.dictation = useMobileDictation({
       client,
@@ -149,6 +163,25 @@ describe('the audio a capture hands over as it ends', () => {
     expect(methods.indexOf('speech.dictation.chunk')).toBeLessThan(
       methods.indexOf('speech.dictation.finish')
     )
+  })
+
+  it("marks the words cut short when the host's audio limit arrives for audio sent while finishing", async () => {
+    const rpc = createFakeRpcClient()
+    const sent: SentRequest[] = []
+    const partials: boolean[] = []
+    mount(rpc, (_text, heard) => partials.push(heard.partial))
+    await act(async () => {
+      const started = dictation().start()
+      await pump(rpc, sent)
+      await started
+    })
+    seam.tail = Uint8Array.from([7, 8, 9, 10])
+    await act(async () => {
+      const stopped = dictation().stop()
+      await pump(rpc, sent, { audioLimitReached: true })
+      await stopped
+    })
+    expect(partials).toEqual([true])
   })
 
   it('stops being accepted once the capture has ended', async () => {
