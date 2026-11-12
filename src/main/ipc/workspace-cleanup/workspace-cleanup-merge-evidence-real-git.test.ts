@@ -156,6 +156,17 @@ describe('workspace cleanup merge evidence against real Git', () => {
     expect((await readEvidence(undefined, 'main')).blockers).toEqual(['unpushed-commits'])
   })
 
+  it('never takes a tag as the base', async () => {
+    await commitFile(worktreePath, 'a.txt')
+    await git(['tag', 'release'], worktreePath)
+
+    expect(await readEvidence('release')).toEqual({
+      blockers: ['unpushed-commits'],
+      merge: { headInDefaultBranch: false, aheadOfDefault: 1 },
+      reasons: []
+    })
+  })
+
   it('keeps unpushed risk for local commits that never landed', async () => {
     await commitFile(worktreePath, 'a.txt')
 

@@ -125,7 +125,9 @@ async function resolveBranchBaseOid(
     ref,
     async (candidate) => (await resolveCommitOid(git, candidate)) !== null
   )
-  if (branchName && worktreeBaseRefFamily(qualified) === branchName) {
+  const family = worktreeBaseRefFamily(qualified)
+  // Only a branch can hold landed work; a tag or a name that resolves to nothing is not a base.
+  if (family === null || family === branchName) {
     return null
   }
   return resolveCommitOid(git, qualified)
