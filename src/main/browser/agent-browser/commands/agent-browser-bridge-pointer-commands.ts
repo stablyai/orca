@@ -111,7 +111,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueuePageAction(
+    return this.enqueueInertAction(
       worktreeId,
       browserPageId,
       async (sessionName, target) =>
@@ -191,7 +191,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueuePageAction(
+    return this.enqueueInertAction(
       worktreeId,
       browserPageId,
       async (sessionName, target) =>

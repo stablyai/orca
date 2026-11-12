@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../shared/native-chat/native-chat-types'
-import { AcpPromptContentError, acpPromptBlocks } from './acp-prompt-content'
+import { AcpPromptContentError, acpDispatchPrompt, acpPromptBlocks } from './acp-prompt-content'
 
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex')
 const dir = mkdtempSync(join(tmpdir(), 'acp-prompt-content-'))
@@ -26,6 +26,14 @@ async function refusal(body: AgentJournalMessageItem, images = true) {
 }
 
 describe('ACP prompt content', () => {
+  it('refuses a withheld command typed with arguments', async () => {
+    const result = await acpDispatchPrompt(message({ type: 'text', text: '/allow-all on' }), {
+      spec: { agent: 'copilot', dialect: { withheldCommands: ['allow-all'] } },
+      connection: { initialize: async () => ({ protocolVersion: 1 }) }
+    })
+    expect(Array.isArray(result)).toBe(false)
+  })
+
   it('keeps a host path when native encoding would exceed room reserved for later text', async () => {
     const path = join(dir, 'encoded.png')
     writeFileSync(path, Buffer.alloc(9 * 1024 * 1024))

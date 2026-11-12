@@ -1,10 +1,10 @@
 import type { RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import type { TerminalLiveInputSelection } from './terminal-live-text-commit'
 
 // RN Web refs are input/textarea nodes; reject future wrapper shapes before writing value.
 export function writeTerminalLiveInputText(
-  ref: RefObject<TextInput | null>,
+  ref: RefObject<TextInputInstance | null>,
   text: string,
   selection?: TerminalLiveInputSelection
 ): void {

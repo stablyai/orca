@@ -26,6 +26,9 @@ public static class OrcaDesktopWin32 {
         FocusReads = 0;
         WindowX = 100;
     }
+    public static bool IsIconic(IntPtr hwnd) {
+        return false;
+    }
     public static bool ShowWindow(IntPtr hwnd, int command) {
         Calls.Add("restore");
         return true;

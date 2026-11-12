@@ -4,9 +4,13 @@ import {
   resolveGitStatusLimit
 } from '../../../shared/git/status/git-status-limit'
 import { gitChangeListArgs, parseGitChangeList } from '../../../shared/git/diff/git-change-list'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
+
+import {
+  type GitRuntimeOptions,
+  gitOptionsForWorktree
+} from '../command-runner/git-runtime-options'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
+import { gitOptionalLocksDisabledEnv } from '../command-runner/git-environment/git-process-env'
 import type { GetStatusOptions } from './get-status-options'
 import { getStatus } from './status-read'
 import { resolveSubmoduleWorktreePath } from './submodule-paths'

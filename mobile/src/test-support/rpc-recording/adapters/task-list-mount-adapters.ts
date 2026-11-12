@@ -191,6 +191,7 @@ export function taskListMountAdapters(
         loadGenerationRef: { current: 0 },
         loadLinearContext: async () => {},
         loadTasks: async () => {},
+        loading: false,
         revalidating: false,
         selectedHostedRepos: [HOSTED_REPO],
         taskUiReady: true,

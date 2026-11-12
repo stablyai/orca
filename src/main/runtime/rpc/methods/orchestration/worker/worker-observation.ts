@@ -251,8 +251,6 @@ export function exposeFederatedWorkerObservation(
   }
 }
 
-export { resolvePinnedFederatedServer }
-
 export async function callFederatedWorkerShow(
   runtime: WorkerTerminalReleaseRuntime,
   federated: FederatedDispatchRow

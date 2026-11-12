@@ -1,9 +1,6 @@
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
 import { randomUUID } from 'node:crypto'
-import {
-  isNativeChatUsageLimitCutSchedulable,
-  NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE
-} from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import {
   USAGE_LIMIT_CONTINUE_CHAIN_LIMIT,
   usageLimitContinueIdentity as identity,
@@ -13,15 +10,17 @@ import {
 } from './structured-agent-session-usage-limit-chain'
 import { structuredAgentSessionMessageSendMutation } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
-import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
+import type { StructuredAgentSessionHostDeps as HostDeps } from '../host/structured-agent-session-host-types'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { sendStructuredAgentSessionTurn } from '../operations/structured-agent-session-host-mutations'
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
+import { UsageLimitAccountHolds } from './structured-agent-session-usage-limit-account-hold'
+import { UsageLimitColdCuts } from './structured-agent-session-usage-limit-cold-cuts'
 
 type Cut = HostUsageLimitCut & { resetsAt: number; turnEndedAt: number }
 type Attempt = { identity: string; count: number; at: number; unconfirmed?: boolean }
 type Deps = {
-  host: Pick<StructuredAgentSessionHostDeps, 'usageLimitAutoContinue' | 'logger'> & {
+  host: Pick<HostDeps, 'usageLimitAutoContinue' | 'logger' | 'launchAccountHome'> & {
     store: Pick<
       AgentSessionRecordStore,
       | 'listVisibleSessionIds'
@@ -49,13 +48,13 @@ export class StructuredAgentSessionUsageLimitContinue {
   private stopSettings: (() => void) | undefined
   private running = false
   private disposed = false
-  private readonly coldCuts = new Map<string, HostUsageLimitCut | null>()
-  /** Pass of each chat's last failed history read; failed reads wait behind unread chats. */
-  private readonly coldFailures = new Map<string, number>()
   private readonly attempts = new Map<string, Attempt>()
-  private passes = 0
+  private readonly holds = new UsageLimitAccountHolds()
+  private readonly cold: UsageLimitColdCuts
 
-  constructor(private readonly deps: Deps) {}
+  constructor(private readonly deps: Deps) {
+    this.cold = new UsageLimitColdCuts({ ...deps, logger: deps.host.logger })
+  }
 
   start(): void {
     this.timer = setInterval(() => void this.tick(), 10_000)
@@ -81,59 +80,39 @@ export class StructuredAgentSessionUsageLimitContinue {
     }
   }
 
-  /** At most three history reads per pass; a read that throws stays retryable without starving others. */
-  private readColdCuts(visible: readonly string[]): void {
-    const pass = ++this.passes
-    const unread = visible.filter((id) => !this.deps.sessions.has(id) && !this.coldCuts.has(id))
-    unread.sort((a, b) => (this.coldFailures.get(a) ?? 0) - (this.coldFailures.get(b) ?? 0))
-    for (const id of unread.slice(0, 3)) {
-      try {
-        this.readCut(id, true)
-        this.coldFailures.delete(id)
-      } catch (error) {
-        if (!this.coldFailures.has(id)) {
-          this.deps.host.logger.warn('usage-limit continue could not read a chat', {
-            scope: 'usage-limit-continue',
-            sessionId: id,
-            error
-          })
-        }
-        this.coldFailures.set(id, pass)
-      }
-    }
-  }
-
   dispose(): void {
     this.disposed = true
     clearInterval(this.timer)
     this.stopSettings?.()
-    this.coldCuts.clear()
-    this.coldFailures.clear()
+    this.cold.clear()
     this.attempts.clear()
+    this.holds.clear()
   }
 
+  /** An opened chat reads its cut from the loaded journal; its hold stays until it is hidden. */
   forget = (id: string): void => {
-    this.coldCuts.delete(id)
-    this.coldFailures.delete(id)
+    this.cold.forget(id)
   }
 
-  private readCut(id: string, cold = false): HostUsageLimitCut | null {
-    if (this.deps.sessions.has(id)) {
-      this.coldCuts.delete(id)
-      return this.deps.readLoadedCut(id)
+  /** Drops what the sweep keeps for chats no longer shown. */
+  private retainShown(visible: readonly string[]): void {
+    const shown = new Set(visible)
+    for (const id of this.attempts.keys()) {
+      if (!shown.has(id)) {
+        this.attempts.delete(id)
+      }
     }
-    if (!this.coldCuts.has(id) && cold) {
-      this.coldCuts.set(id, this.deps.readSavedCut(id))
-    }
-    return this.coldCuts.get(id) ?? null
+    this.cold.retain(shown)
+    this.holds.retain(shown)
   }
 
   readState = (id: string): AgentSessionStatusSummary['usageLimitContinue'] => {
-    const cut = this.readCut(id)
+    const cut = this.cold.read(id)
     // A cut Orca can never continue shows only the manual actions, whatever the setting.
-    if (!cut || !isNativeChatUsageLimitCutSchedulable(cut, this.deps.now())) {
+    if (!cut || !this.holds.schedulable(id, cut, this.deps.now())) {
       return undefined
     }
+    const hold = this.holds.verdict(id, cut, this.deps.now())
     const cancel = this.deps.host.store.getRecord(id)?.usageLimitContinueCancel
     const attempt = this.attempts.get(id)
     const state =
@@ -145,7 +124,17 @@ export class StructuredAgentSessionUsageLimitContinue {
           : this.eligible(id, cut)
             ? 'scheduled'
             : 'off'
-    return { turnItemId: cut.turnItemId, resetsAt: cut.resetsAt, state }
+    // An unknown reset has no time to promise, yet fresh room still releases it: say nothing.
+    if (hold.unknownReset && state === 'scheduled') {
+      return undefined
+    }
+    return {
+      turnItemId: cut.turnItemId,
+      resetsAt: cut.resetsAt,
+      // While the reset is unknown, `hold.resetsAt` is a reading time, not a reset.
+      ...(!hold.unknownReset && hold.resetsAt > cut.resetsAt ? { continueAt: hold.resetsAt } : {}),
+      state
+    }
   }
 
   private eligible(id: string, cut: HostUsageLimitCut): cut is Cut {
@@ -154,7 +143,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       !this.disposed &&
       cut.chain < USAGE_LIMIT_CONTINUE_CHAIN_LIMIT &&
       this.deps.host.usageLimitAutoContinue?.isEnabled() === true &&
-      isNativeChatUsageLimitCutSchedulable(cut, this.deps.now()) &&
+      this.holds.schedulable(id, cut, this.deps.now()) &&
       record !== null &&
       record.location.executionHostId === this.deps.host.store.hostId &&
       !this.deps.host.usageLimitAutoContinue?.isWorkspaceAsleep(record.location.workspaceId) &&
@@ -168,7 +157,7 @@ export class StructuredAgentSessionUsageLimitContinue {
 
   cancel = (input: { sessionId: string; turnItemId: string; resetsAt: number }): Promise<void> =>
     this.deps.serialize(input.sessionId, async () => {
-      const cut = this.readCut(input.sessionId, true)
+      const cut = this.cold.read(input.sessionId, true)
       if (!cut || identity(cut) !== identity(input)) {
         return
       }
@@ -180,40 +169,45 @@ export class StructuredAgentSessionUsageLimitContinue {
     })
 
   async tick(): Promise<void> {
+    if (this.running || this.disposed) {
+      return
+    }
     // Off, nothing can be scheduled; the settings listener publishes the switch itself.
-    if (this.running || this.disposed || !this.enabled()) {
+    if (!this.enabled()) {
+      if (this.holds.size + this.cold.size + this.attempts.size > 0) {
+        this.retainShown(this.deps.host.store.listVisibleSessionIds())
+      }
       return
     }
     this.running = true
     try {
       const visible = this.deps.host.store.listVisibleSessionIds()
-      const shown = new Set(visible)
-      for (const cache of [this.coldCuts, this.coldFailures, this.attempts]) {
-        for (const id of cache.keys()) {
-          if (!shown.has(id)) {
-            cache.delete(id)
-          }
-        }
-      }
+      this.retainShown(visible)
       // Visibility and workspace sleep can change without a journal or settings commit.
       this.publishScheduled()
-      this.readColdCuts(visible)
+      this.cold.readUnread(visible)
+      this.holds.beginPass()
       const due: { id: string; cut: Cut; at: number }[] = []
       for (const id of visible) {
-        if (!this.deps.sessions.has(id) && !this.coldCuts.has(id)) {
+        if (!this.deps.sessions.has(id) && !this.cold.has(id)) {
           continue
         }
-        const cut = this.readCut(id)
+        const cut = this.cold.read(id)
         const previous = this.attempts.get(id)
         if (!cut || previous?.identity !== identity(cut)) {
           this.attempts.delete(id)
+        }
+        // Before the overdue check: after a restart only the reading still knows a later reset.
+        // Only a reading taken after the cut's reset counts, so attribution waits for it.
+        if (cut?.resetsAt !== undefined && this.deps.now() >= cut.resetsAt) {
+          await this.holds.attribute(id, this.deps.host)
         }
         const attempt = this.attempts.get(id)
         if (!cut || !this.eligible(id, cut) || attempt?.unconfirmed || (attempt?.count ?? 0) >= 5) {
           continue
         }
         const retryAt = attempt ? attempt.at + 60_000 * 2 ** Math.max(0, attempt.count - 1) : 0
-        if (this.deps.now() >= Math.max(cut.resetsAt + 15_000, retryAt)) {
+        if (this.holds.ready(id, cut, this.deps.now(), retryAt)) {
           due.push({ id, cut, at: attempt?.at ?? 0 })
         }
       }
@@ -233,7 +227,7 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   private deferUnchangedCut(id: string, cut: Cut, at: number): void {
-    const current = this.readCut(id)
+    const current = this.cold.read(id)
     // Admission also refuses temporary backlog; yield the next passes without spending a failure.
     if (current && identity(current) === identity(cut)) {
       this.attempts.set(id, {
@@ -247,10 +241,25 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   private async send(id: string, cut: Cut): Promise<void> {
+    // Earlier sends take time; moved sources resolve again, once per new witness for every chat.
+    if (!this.holds.attributionCurrent(id, this.deps.host)) {
+      await this.holds.attribute(id, this.deps.host)
+    }
     const record = this.deps.host.store.getRecord(id)
     if (!record) {
       return
     }
+    // Still moving: yield without spending an attempt; a later pass resolves on settled sources.
+    if (!this.holds.attributionCurrent(id, this.deps.host)) {
+      this.deferUnchangedCut(id, cut, this.deps.now())
+      return
+    }
+    // The reading is live: one that arrived during earlier sends holds this one.
+    if (!this.holds.ready(id, cut, this.deps.now())) {
+      this.deps.publish(id)
+      return
+    }
+    const witness = this.holds.attributionWitness(id)
     const at = this.deps.now()
     const attempt: Attempt = {
       identity: identity(cut),
@@ -276,12 +285,14 @@ export class StructuredAgentSessionUsageLimitContinue {
           usageLimitContinuationOfTurnItemId: cut.turnItemId
         }),
         beforeRun: () => {
-          const current = this.readCut(id)
+          const current = this.cold.read(id)
+          // The reading may have moved since the pass: the account's later reset still holds the send.
           if (
             !current ||
             identity(current) !== identity(cut) ||
             !this.eligible(id, current) ||
-            this.deps.now() < cut.resetsAt + 15_000
+            !this.holds.witnessHolds(id, this.deps.host, witness) ||
+            !this.holds.ready(id, current, this.deps.now())
           ) {
             throw new RestartContinuationSupersededError()
           }

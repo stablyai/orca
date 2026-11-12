@@ -1,5 +1,5 @@
 import { useCallback, type RefObject } from 'react'
-import type { GestureResponderEvent, View } from 'react-native'
+import type { GestureResponderEvent, HostInstance } from 'react-native'
 import { measurePageBox, type PageBox } from '../platform/page-box'
 
 // A dragging finger lands less precisely than a tap, so the drop zone reaches past ✕.
@@ -16,7 +16,7 @@ function contains(box: PageBox, x: number, y: number): boolean {
 
 // Hold mode: letting go of the mic over ✕ cancels instead of inserting, like a voice note.
 export function useMobileDictationCancelDrop(
-  cancelRef: RefObject<View | null> | undefined,
+  cancelRef: RefObject<HostInstance | null> | undefined,
   onCancel: (() => void) | undefined,
   onRelease: (() => void) | undefined
 ): (event: GestureResponderEvent) => void {

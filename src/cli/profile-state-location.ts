@@ -1,4 +1,4 @@
-import { getActiveProfileStateLocation as resolveActiveProfileStateLocation } from '../main/persistence/profile-state/profile-state-active-location'
+import { getActiveProfileStateLocation as resolveActiveProfileStateLocation } from '../main/persistence/profile-state/offline-access/profile-state-active-location'
 import { RuntimeClientError, getDefaultUserDataPath } from './runtime-client'
 
 export function getActiveProfileStateLocation(userDataPath = getDefaultUserDataPath()) {

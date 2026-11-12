@@ -33,6 +33,6 @@ describe("the page's host OS", () => {
     agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 'MacIntel', 5)
     expect(hostOs()).toBe('ios')
     agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 'MacIntel', 0)
-    expect(hostOs()).toBe('web')
+    expect(hostOs()).toBe('macos')
   })
 })
