@@ -1,0 +1,248 @@
+{
+  "d2-3 activity and interval after 10 unchanged reads": {
+    "complete, empty (no CI) / open": {
+      "checksFinal": false,
+      "total": 0,
+      "pending": 0,
+      "checksStatus": "neutral",
+      "activity": "none",
+      "running": false,
+      "selectedIntervalMin": 30,
+      "visibleIntervalMin": 60
+    },
+    "complete, empty (no CI) / merged": {
+      "checksFinal": false,
+      "total": 0,
+      "pending": 0,
+      "checksStatus": "neutral",
+      "activity": "none",
+      "running": false,
+      "selectedIntervalMin": "none",
+      "visibleIntervalMin": "none"
+    },
+    "incomplete, empty (partial read) / open": {
+      "checksFinal": false,
+      "total": 0,
+      "pending": 0,
+      "checksStatus": "neutral",
+      "activity": "incomplete",
+      "running": true,
+      "selectedIntervalMin": 1,
+      "visibleIntervalMin": 2
+    },
+    "incomplete, empty (partial read) / merged": {
+      "checksFinal": false,
+      "total": 0,
+      "pending": 0,
+      "checksStatus": "neutral",
+      "activity": "incomplete",
+      "running": true,
+      "selectedIntervalMin": 1,
+      "visibleIntervalMin": 1
+    },
+    "complete, all passed / open": {
+      "checksFinal": true,
+      "total": 2,
+      "pending": 0,
+      "checksStatus": "success",
+      "activity": "settled",
+      "running": false,
+      "selectedIntervalMin": 30,
+      "visibleIntervalMin": 60
+    },
+    "complete, all passed / merged": {
+      "checksFinal": true,
+      "total": 2,
+      "pending": 0,
+      "checksStatus": "success",
+      "activity": "settled",
+      "running": false,
+      "selectedIntervalMin": "none",
+      "visibleIntervalMin": "none"
+    },
+    "complete, failed only / open": {
+      "checksFinal": true,
+      "total": 1,
+      "pending": 0,
+      "checksStatus": "failure",
+      "activity": "settled",
+      "running": false,
+      "selectedIntervalMin": 30,
+      "visibleIntervalMin": 60
+    },
+    "complete, failed only / merged": {
+      "checksFinal": true,
+      "total": 1,
+      "pending": 0,
+      "checksStatus": "failure",
+      "activity": "settled",
+      "running": false,
+      "selectedIntervalMin": "none",
+      "visibleIntervalMin": "none"
+    },
+    "failed + running / open": {
+      "checksFinal": false,
+      "total": 2,
+      "pending": 1,
+      "checksStatus": "failure",
+      "activity": "running",
+      "running": true,
+      "selectedIntervalMin": 1,
+      "visibleIntervalMin": 2
+    },
+    "failed + running / merged": {
+      "checksFinal": false,
+      "total": 2,
+      "pending": 1,
+      "checksStatus": "failure",
+      "activity": "running",
+      "running": true,
+      "selectedIntervalMin": 1,
+      "visibleIntervalMin": 1
+    },
+    "queued only / open": {
+      "checksFinal": false,
+      "total": 1,
+      "pending": 1,
+      "checksStatus": "pending",
+      "activity": "running",
+      "running": true,
+      "selectedIntervalMin": 1,
+      "visibleIntervalMin": 2
+    },
+    "queued only / merged": {
+      "checksFinal": false,
+      "total": 1,
+      "pending": 1,
+      "checksStatus": "pending",
+      "activity": "running",
+      "running": true,
+      "selectedIntervalMin": 1,
+      "visibleIntervalMin": 1
+    },
+    "awaiting approval / open": {
+      "checksFinal": false,
+      "total": 2,
+      "pending": 0,
+      "checksStatus": "failure",
+      "activity": "awaiting-approval",
+      "running": true,
+      "selectedIntervalMin": 1,
+      "visibleIntervalMin": 2
+    },
+    "awaiting approval / merged": {
+      "checksFinal": false,
+      "total": 2,
+      "pending": 0,
+      "checksStatus": "failure",
+      "activity": "awaiting-approval",
+      "running": true,
+      "selectedIntervalMin": 1,
+      "visibleIntervalMin": 1
+    },
+    "incomplete, passed so far / open": {
+      "checksFinal": false,
+      "total": 1,
+      "pending": 0,
+      "checksStatus": "success",
+      "activity": "incomplete",
+      "running": true,
+      "selectedIntervalMin": 1,
+      "visibleIntervalMin": 2
+    },
+    "incomplete, passed so far / merged": {
+      "checksFinal": false,
+      "total": 1,
+      "pending": 0,
+      "checksStatus": "success",
+      "activity": "incomplete",
+      "running": true,
+      "selectedIntervalMin": 1,
+      "visibleIntervalMin": 1
+    }
+  },
+  "fixed caps ladder": {
+    "selectedMinutes": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      30,
+      30,
+      30,
+      30
+    ],
+    "visibleMinutes": [
+      2,
+      4,
+      8,
+      16,
+      32,
+      60,
+      60,
+      60,
+      60
+    ],
+    "afterChangeVisibleMin": 2,
+    "selectedBeforeResetMin": 4,
+    "selectedAfterResetMin": 1,
+    "jitterNeverLengthens": true,
+    "noPRSelectedVisibleMinutes": [
+      [
+        1,
+        15
+      ],
+      [
+        2,
+        30
+      ],
+      [
+        4,
+        60
+      ],
+      [
+        8,
+        60
+      ]
+    ]
+  },
+  "stuck check decay": {
+    "0 min": {
+      "visibleMin": 2,
+      "selectedMin": 1
+    },
+    "29 min": {
+      "visibleMin": 2,
+      "selectedMin": 1
+    },
+    "31 min": {
+      "visibleMin": 4,
+      "selectedMin": 1
+    },
+    "41 min": {
+      "visibleMin": 8,
+      "selectedMin": 1
+    },
+    "51 min": {
+      "visibleMin": 16,
+      "selectedMin": 1
+    },
+    "61 min": {
+      "visibleMin": 32,
+      "selectedMin": 1
+    },
+    "71 min": {
+      "visibleMin": 60,
+      "selectedMin": 1
+    },
+    "90 min": {
+      "visibleMin": 60,
+      "selectedMin": 1
+    },
+    "180 min": {
+      "visibleMin": 60,
+      "selectedMin": 1
+    }
+  }
+}

@@ -1,0 +1,15 @@
+start 2026-11-12T20:49:15Z 12:49  up 4 days, 12:08, 132 users, load averages: 4.28 3.50 3.07
+after-probes 2026-11-12T20:49:32Z 12:49  up 4 days, 12:08, 132 users, load averages: 4.72 3.64 3.14
+after-smoke 2026-11-12T20:50:09Z 12:50  up 4 days, 12:09, 131 users, load averages: 5.12 3.86 3.23
+group D before 2026-11-12T20:50:21Z par=4 12:50  up 4 days, 12:09, 131 users, load averages: 5.01 3.90 3.26
+group D after 2026-11-12T20:52:12Z 12:52  up 4 days, 12:11, 130 users, load averages: 5.17 4.38 3.53
+group E before 2026-11-12T20:52:12Z par=4 12:52  up 4 days, 12:11, 130 users, load averages: 5.17 4.38 3.53
+group E after 2026-11-12T20:53:16Z 12:53  up 4 days, 12:12, 131 users, load averages: 5.67 4.71 3.71
+group C before 2026-11-12T20:53:16Z par=4 12:53  up 4 days, 12:12, 131 users, load averages: 5.67 4.71 3.71
+group C after 2026-11-12T20:57:01Z 12:57  up 4 days, 12:16, 131 users, load averages: 7.27 6.55 4.78
+group A before 2026-11-12T20:57:01Z par=4 12:57  up 4 days, 12:16, 131 users, load averages: 7.27 6.55 4.78
+group A after 2026-11-12T21:00:52Z 13:00  up 4 days, 12:19, 135 users, load averages: 6.85 6.77 5.31
+group B before 2026-11-12T21:00:52Z par=4 13:00  up 4 days, 12:19, 135 users, load averages: 6.85 6.77 5.31
+group B after 2026-11-12T21:01:38Z 13:01  up 4 days, 12:20, 134 users, load averages: 6.46 6.68 5.35
+group F before 2026-11-12T21:01:38Z par=4 13:01  up 4 days, 12:20, 134 users, load averages: 6.46 6.68 5.35
+group F after 2026-11-12T21:03:09Z 13:03  up 4 days, 12:22, 137 users, load averages: 5.51 6.33 5.35

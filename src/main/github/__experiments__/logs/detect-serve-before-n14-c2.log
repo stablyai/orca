@@ -1,0 +1,11 @@
+npm notice run orca@1.4.214 npx
+npm notice run 'vitest' run --config config/vitest.config.ts src/main/github/__experiments__/polling-d2.experiment.test.ts
+
+ RUN  v5.0.5 /Users/m4air/orca/workspaces/orca/sta-8667-d3-m4air-gate
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  13:02:15
+   Duration  10.19s (tests 77%, transform 19%, import 4%, setup 1%)
+

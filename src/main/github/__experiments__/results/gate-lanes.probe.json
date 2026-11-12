@@ -1,0 +1,2883 @@
+{
+  "neil-4sel-1vis": {
+    "what": "Neil's D2-2 probe: 4 selected identities every 60 s, 1 visible identity always due (period 120 s), 1 h",
+    "before": {
+      "summary": {
+        "gate": "d2",
+        "simulatedSeconds": 3600,
+        "lanes": {
+          "selected-own": {
+            "starts": 242,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 60
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 4,
+            "peak5min": 20
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 2,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 1,
+            "peak5min": 2
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 242,
+          "peak60s": 4,
+          "peak5min": 20
+        },
+        "budgeted": {
+          "starts": 244,
+          "peak60s": 5,
+          "peak5min": 20
+        },
+        "refusals": {
+          "selected": 2,
+          "visible": 31
+        },
+        "visibleIdentities": {
+          "seen": 1,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 0
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 61,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-1",
+          "starts": 61,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-2",
+          "starts": 60,
+          "firstStartS": 0,
+          "maxGapS": 120,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-3",
+          "starts": 60,
+          "firstStartS": 0,
+          "maxGapS": 120,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 1,
+        "served": 1,
+        "neverServed": 0,
+        "allServedByS": 0,
+        "worstMaxGapS": 120,
+        "worstTailWithoutStartS": 3480,
+        "firstStartsS": [
+          0
+        ]
+      }
+    },
+    "after": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 3600,
+        "lanes": {
+          "selected-own": {
+            "starts": 61,
+            "overdueAtStartS": {
+              "p50": 130,
+              "p90": 220,
+              "max": 220
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 130,
+              "p90": 220,
+              "max": 220
+            },
+            "peak60s": 4,
+            "peak5min": 5
+          },
+          "selected-borrowed": {
+            "starts": 60,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 20
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 20
+            },
+            "peak60s": 3,
+            "peak5min": 5
+          },
+          "visible": {
+            "starts": 30,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 10
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 10
+            },
+            "peak60s": 1,
+            "peak5min": 3
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 121,
+          "peak60s": 4,
+          "peak5min": 10
+        },
+        "budgeted": {
+          "starts": 151,
+          "peak60s": 5,
+          "peak5min": 13
+        },
+        "refusals": {
+          "selected": 51,
+          "visible": 2
+        },
+        "visibleIdentities": {
+          "seen": 1,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 0
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 28,
+          "firstStartS": 0,
+          "maxGapS": 280,
+          "tailWithoutStartS": 180
+        },
+        {
+          "key": "sel-1",
+          "starts": 29,
+          "firstStartS": 0,
+          "maxGapS": 280,
+          "tailWithoutStartS": 170
+        },
+        {
+          "key": "sel-2",
+          "starts": 28,
+          "firstStartS": 0,
+          "maxGapS": 280,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-3",
+          "starts": 36,
+          "firstStartS": 0,
+          "maxGapS": 190,
+          "tailWithoutStartS": 150
+        }
+      ],
+      "visible": {
+        "callers": 1,
+        "served": 1,
+        "neverServed": 0,
+        "allServedByS": 0,
+        "worstMaxGapS": 130,
+        "worstTailWithoutStartS": 100,
+        "firstStartsS": [
+          0
+        ]
+      }
+    },
+    "alt10x10": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 3600,
+        "lanes": {
+          "selected-own": {
+            "starts": 121,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 160,
+              "max": 190
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 160,
+              "max": 190
+            },
+            "peak60s": 4,
+            "peak5min": 10
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 31,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 1,
+            "peak5min": 3
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 121,
+          "peak60s": 4,
+          "peak5min": 10
+        },
+        "budgeted": {
+          "starts": 152,
+          "peak60s": 5,
+          "peak5min": 13
+        },
+        "refusals": {
+          "selected": 48,
+          "visible": 0
+        },
+        "visibleIdentities": {
+          "seen": 1,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 0
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 31,
+          "firstStartS": 0,
+          "maxGapS": 220,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-1",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 220,
+          "tailWithoutStartS": 210
+        },
+        {
+          "key": "sel-2",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 240,
+          "tailWithoutStartS": 180
+        },
+        {
+          "key": "sel-3",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 250,
+          "tailWithoutStartS": 170
+        }
+      ],
+      "visible": {
+        "callers": 1,
+        "served": 1,
+        "neverServed": 0,
+        "allServedByS": 0,
+        "worstMaxGapS": 120,
+        "worstTailWithoutStartS": 0,
+        "firstStartsS": [
+          0
+        ]
+      }
+    }
+  },
+  "4sel-50vis": {
+    "what": "4 selected identities every 60 s; 50 visible identities all due at minute 5, period 60 min; 2 h",
+    "before": {
+      "summary": {
+        "gate": "d2",
+        "simulatedSeconds": 7200,
+        "lanes": {
+          "selected-own": {
+            "starts": 484,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 4,
+            "peak5min": 20
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 484,
+          "peak60s": 4,
+          "peak5min": 20
+        },
+        "budgeted": {
+          "starts": 484,
+          "peak60s": 4,
+          "peak5min": 20
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 1309
+        },
+        "visibleIdentities": {
+          "seen": 50,
+          "neverServed": 50,
+          "worstWaitFromFirstSeenToFirstStartS": 6900
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 121,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-1",
+          "starts": 121,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-2",
+          "starts": 121,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-3",
+          "starts": 121,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 50,
+        "served": 0,
+        "neverServed": 50,
+        "allServedByS": null,
+        "worstMaxGapS": 0,
+        "worstTailWithoutStartS": 6900
+      }
+    },
+    "after": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 7200,
+        "lanes": {
+          "selected-own": {
+            "starts": 121,
+            "overdueAtStartS": {
+              "p50": 140,
+              "p90": 230,
+              "max": 230
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 140,
+              "p90": 230,
+              "max": 230
+            },
+            "peak60s": 4,
+            "peak5min": 5
+          },
+          "selected-borrowed": {
+            "starts": 91,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 20
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 20
+            },
+            "peak60s": 4,
+            "peak5min": 5
+          },
+          "visible": {
+            "starts": 100,
+            "overdueAtStartS": {
+              "p50": 30,
+              "p90": 700,
+              "max": 940
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 30,
+              "p90": 700,
+              "max": 940
+            },
+            "peak60s": 6,
+            "peak5min": 15
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 212,
+          "peak60s": 4,
+          "peak5min": 10
+        },
+        "budgeted": {
+          "starts": 312,
+          "peak60s": 10,
+          "peak5min": 20
+        },
+        "refusals": {
+          "selected": 99,
+          "visible": 146
+        },
+        "visibleIdentities": {
+          "seen": 50,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 940
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 53,
+          "firstStartS": 0,
+          "maxGapS": 290,
+          "tailWithoutStartS": 210
+        },
+        {
+          "key": "sel-1",
+          "starts": 53,
+          "firstStartS": 0,
+          "maxGapS": 290,
+          "tailWithoutStartS": 180
+        },
+        {
+          "key": "sel-2",
+          "starts": 53,
+          "firstStartS": 0,
+          "maxGapS": 290,
+          "tailWithoutStartS": 170
+        },
+        {
+          "key": "sel-3",
+          "starts": 53,
+          "firstStartS": 0,
+          "maxGapS": 290,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 50,
+        "served": 50,
+        "neverServed": 0,
+        "allServedByS": 1240,
+        "worstMaxGapS": 3760,
+        "worstTailWithoutStartS": 3300
+      }
+    },
+    "alt10x10": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 7200,
+        "lanes": {
+          "selected-own": {
+            "starts": 241,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 160,
+              "max": 190
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 160,
+              "max": 190
+            },
+            "peak60s": 4,
+            "peak5min": 10
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 100,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 1200,
+              "max": 1290
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 1200,
+              "max": 1290
+            },
+            "peak60s": 6,
+            "peak5min": 10
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 241,
+          "peak60s": 4,
+          "peak5min": 10
+        },
+        "budgeted": {
+          "starts": 341,
+          "peak60s": 10,
+          "peak5min": 20
+        },
+        "refusals": {
+          "selected": 96,
+          "visible": 138
+        },
+        "visibleIdentities": {
+          "seen": 50,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 1290
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 61,
+          "firstStartS": 0,
+          "maxGapS": 220,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-1",
+          "starts": 60,
+          "firstStartS": 0,
+          "maxGapS": 220,
+          "tailWithoutStartS": 210
+        },
+        {
+          "key": "sel-2",
+          "starts": 60,
+          "firstStartS": 0,
+          "maxGapS": 240,
+          "tailWithoutStartS": 180
+        },
+        {
+          "key": "sel-3",
+          "starts": 60,
+          "firstStartS": 0,
+          "maxGapS": 250,
+          "tailWithoutStartS": 170
+        }
+      ],
+      "visible": {
+        "callers": 50,
+        "served": 50,
+        "neverServed": 0,
+        "allServedByS": 1590,
+        "worstMaxGapS": 3600,
+        "worstTailWithoutStartS": 3300
+      }
+    }
+  },
+  "2sel-50vis": {
+    "what": "2 selected identities every 60 s (one PR + its Checks read); 50 visible due at minute 5, period 60 min; 2 h",
+    "before": {
+      "summary": {
+        "gate": "d2",
+        "simulatedSeconds": 7200,
+        "lanes": {
+          "selected-own": {
+            "starts": 242,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 2,
+            "peak5min": 10
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 100,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 1840,
+              "max": 2410
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 1840,
+              "max": 2410
+            },
+            "peak60s": 6,
+            "peak5min": 6
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 242,
+          "peak60s": 2,
+          "peak5min": 10
+        },
+        "budgeted": {
+          "starts": 342,
+          "peak60s": 8,
+          "peak5min": 16
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 427
+        },
+        "visibleIdentities": {
+          "seen": 50,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 2410
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 121,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-1",
+          "starts": 121,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 50,
+        "served": 50,
+        "neverServed": 0,
+        "allServedByS": 2710,
+        "worstMaxGapS": 3600,
+        "worstTailWithoutStartS": 3300
+      }
+    },
+    "after": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 7200,
+        "lanes": {
+          "selected-own": {
+            "starts": 121,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 170
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 170
+            },
+            "peak60s": 2,
+            "peak5min": 5
+          },
+          "selected-borrowed": {
+            "starts": 91,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 10
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 10
+            },
+            "peak60s": 2,
+            "peak5min": 5
+          },
+          "visible": {
+            "starts": 100,
+            "overdueAtStartS": {
+              "p50": 50,
+              "p90": 720,
+              "max": 940
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 50,
+              "p90": 720,
+              "max": 940
+            },
+            "peak60s": 6,
+            "peak5min": 15
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 212,
+          "peak60s": 2,
+          "peak5min": 10
+        },
+        "budgeted": {
+          "starts": 312,
+          "peak60s": 8,
+          "peak5min": 20
+        },
+        "refusals": {
+          "selected": 13,
+          "visible": 206
+        },
+        "visibleIdentities": {
+          "seen": 50,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 940
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 106,
+          "firstStartS": 0,
+          "maxGapS": 230,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-1",
+          "starts": 106,
+          "firstStartS": 0,
+          "maxGapS": 230,
+          "tailWithoutStartS": 50
+        }
+      ],
+      "visible": {
+        "callers": 50,
+        "served": 50,
+        "neverServed": 0,
+        "allServedByS": 1240,
+        "worstMaxGapS": 3660,
+        "worstTailWithoutStartS": 3300
+      }
+    },
+    "alt10x10": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 7200,
+        "lanes": {
+          "selected-own": {
+            "starts": 242,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 2,
+            "peak5min": 10
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 100,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 1200,
+              "max": 1290
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 1200,
+              "max": 1290
+            },
+            "peak60s": 6,
+            "peak5min": 10
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 242,
+          "peak60s": 2,
+          "peak5min": 10
+        },
+        "budgeted": {
+          "starts": 342,
+          "peak60s": 8,
+          "peak5min": 20
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 138
+        },
+        "visibleIdentities": {
+          "seen": 50,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 1290
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 121,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-1",
+          "starts": 121,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 50,
+        "served": 50,
+        "neverServed": 0,
+        "allServedByS": 1590,
+        "worstMaxGapS": 3600,
+        "worstTailWithoutStartS": 3300
+      }
+    }
+  },
+  "1sel-50vis-busy": {
+    "what": "1 selected identity every 60 s; 50 visible identities with running CI (period 120 s, permanently saturating); 1 h",
+    "before": {
+      "summary": {
+        "gate": "d2",
+        "simulatedSeconds": 3600,
+        "lanes": {
+          "selected-own": {
+            "starts": 61,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 1,
+            "peak5min": 5
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 134,
+            "overdueAtStartS": {
+              "p50": 1140,
+              "p90": 1330,
+              "max": 1330
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 1140,
+              "p90": 1330,
+              "max": 1330
+            },
+            "peak60s": 6,
+            "peak5min": 13
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 61,
+          "peak60s": 1,
+          "peak5min": 5
+        },
+        "budgeted": {
+          "starts": 195,
+          "peak60s": 7,
+          "peak5min": 18
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 897
+        },
+        "visibleIdentities": {
+          "seen": 50,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 1250
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 61,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 50,
+        "served": 50,
+        "neverServed": 0,
+        "allServedByS": 1250,
+        "worstMaxGapS": 1450,
+        "worstTailWithoutStartS": 1430
+      }
+    },
+    "after": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 3600,
+        "lanes": {
+          "selected-own": {
+            "starts": 61,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 1,
+            "peak5min": 5
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 181,
+            "overdueAtStartS": {
+              "p50": 830,
+              "p90": 980,
+              "max": 980
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 830,
+              "p90": 980,
+              "max": 980
+            },
+            "peak60s": 6,
+            "peak5min": 15
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 61,
+          "peak60s": 1,
+          "peak5min": 5
+        },
+        "budgeted": {
+          "starts": 242,
+          "peak60s": 7,
+          "peak5min": 20
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 574
+        },
+        "visibleIdentities": {
+          "seen": 50,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 940
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 61,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 50,
+        "served": 50,
+        "neverServed": 0,
+        "allServedByS": 940,
+        "worstMaxGapS": 1100,
+        "worstTailWithoutStartS": 1090
+      }
+    },
+    "alt10x10": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 3600,
+        "lanes": {
+          "selected-own": {
+            "starts": 61,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 1,
+            "peak5min": 5
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 121,
+            "overdueAtStartS": {
+              "p50": 1380,
+              "p90": 1380,
+              "max": 1380
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 1380,
+              "p90": 1380,
+              "max": 1380
+            },
+            "peak60s": 6,
+            "peak5min": 10
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 61,
+          "peak60s": 1,
+          "peak5min": 5
+        },
+        "budgeted": {
+          "starts": 182,
+          "peak60s": 7,
+          "peak5min": 15
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 528
+        },
+        "visibleIdentities": {
+          "seen": 50,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 1290
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 61,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 50,
+        "served": 50,
+        "neverServed": 0,
+        "allServedByS": 1290,
+        "worstMaxGapS": 1500,
+        "worstTailWithoutStartS": 1490
+      }
+    }
+  },
+  "8sel-checks-50vis": {
+    "what": "Checks demand: 4 clients, each a selected PR read and a Checks read every 60 s (8 selected identities); 50 visible due at minute 5, period 60 min; 2 h",
+    "before": {
+      "summary": {
+        "gate": "d2",
+        "simulatedSeconds": 7200,
+        "lanes": {
+          "selected-own": {
+            "starts": 488,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 180,
+              "max": 180
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 8,
+            "peak5min": 20
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 488,
+          "peak60s": 8,
+          "peak5min": 20
+        },
+        "budgeted": {
+          "starts": 488,
+          "peak60s": 8,
+          "peak5min": 20
+        },
+        "refusals": {
+          "selected": 192,
+          "visible": 1112
+        },
+        "visibleIdentities": {
+          "seen": 50,
+          "neverServed": 50,
+          "worstWaitFromFirstSeenToFirstStartS": 6900
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 73,
+          "firstStartS": 0,
+          "maxGapS": 180,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-1",
+          "starts": 73,
+          "firstStartS": 0,
+          "maxGapS": 180,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-2",
+          "starts": 73,
+          "firstStartS": 0,
+          "maxGapS": 180,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-3",
+          "starts": 73,
+          "firstStartS": 0,
+          "maxGapS": 180,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-4",
+          "starts": 49,
+          "firstStartS": 0,
+          "maxGapS": 240,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-5",
+          "starts": 49,
+          "firstStartS": 0,
+          "maxGapS": 240,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-6",
+          "starts": 49,
+          "firstStartS": 0,
+          "maxGapS": 240,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-7",
+          "starts": 49,
+          "firstStartS": 0,
+          "maxGapS": 240,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 50,
+        "served": 0,
+        "neverServed": 50,
+        "allServedByS": null,
+        "worstMaxGapS": 0,
+        "worstTailWithoutStartS": 6900
+      }
+    },
+    "after": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 7200,
+        "lanes": {
+          "selected-own": {
+            "starts": 120,
+            "overdueAtStartS": {
+              "p50": 230,
+              "p90": 510,
+              "max": 520
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 230,
+              "p90": 510,
+              "max": 520
+            },
+            "peak60s": 5,
+            "peak5min": 5
+          },
+          "selected-borrowed": {
+            "starts": 91,
+            "overdueAtStartS": {
+              "p50": 220,
+              "p90": 230,
+              "max": 270
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 220,
+              "p90": 230,
+              "max": 270
+            },
+            "peak60s": 5,
+            "peak5min": 5
+          },
+          "visible": {
+            "starts": 100,
+            "overdueAtStartS": {
+              "p50": 30,
+              "p90": 700,
+              "max": 940
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 30,
+              "p90": 700,
+              "max": 940
+            },
+            "peak60s": 6,
+            "peak5min": 15
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 211,
+          "peak60s": 8,
+          "peak5min": 10
+        },
+        "budgeted": {
+          "starts": 311,
+          "peak60s": 11,
+          "peak5min": 20
+        },
+        "refusals": {
+          "selected": 242,
+          "visible": 144
+        },
+        "visibleIdentities": {
+          "seen": 50,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 940
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 27,
+          "firstStartS": 0,
+          "maxGapS": 570,
+          "tailWithoutStartS": 170
+        },
+        {
+          "key": "sel-1",
+          "starts": 27,
+          "firstStartS": 0,
+          "maxGapS": 580,
+          "tailWithoutStartS": 200
+        },
+        {
+          "key": "sel-2",
+          "starts": 27,
+          "firstStartS": 0,
+          "maxGapS": 580,
+          "tailWithoutStartS": 160
+        },
+        {
+          "key": "sel-3",
+          "starts": 26,
+          "firstStartS": 0,
+          "maxGapS": 580,
+          "tailWithoutStartS": 220
+        },
+        {
+          "key": "sel-4",
+          "starts": 26,
+          "firstStartS": 0,
+          "maxGapS": 580,
+          "tailWithoutStartS": 180
+        },
+        {
+          "key": "sel-5",
+          "starts": 26,
+          "firstStartS": 0,
+          "maxGapS": 580,
+          "tailWithoutStartS": 190
+        },
+        {
+          "key": "sel-6",
+          "starts": 27,
+          "firstStartS": 10,
+          "maxGapS": 580,
+          "tailWithoutStartS": 150
+        },
+        {
+          "key": "sel-7",
+          "starts": 25,
+          "firstStartS": 20,
+          "maxGapS": 580,
+          "tailWithoutStartS": 210
+        }
+      ],
+      "visible": {
+        "callers": 50,
+        "served": 50,
+        "neverServed": 0,
+        "allServedByS": 1240,
+        "worstMaxGapS": 3760,
+        "worstTailWithoutStartS": 3300
+      }
+    },
+    "alt10x10": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 7200,
+        "lanes": {
+          "selected-own": {
+            "starts": 241,
+            "overdueAtStartS": {
+              "p50": 220,
+              "p90": 220,
+              "max": 290
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 220,
+              "p90": 220,
+              "max": 290
+            },
+            "peak60s": 8,
+            "peak5min": 10
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 100,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 1200,
+              "max": 1290
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 1200,
+              "max": 1290
+            },
+            "peak60s": 6,
+            "peak5min": 10
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 241,
+          "peak60s": 8,
+          "peak5min": 10
+        },
+        "budgeted": {
+          "starts": 341,
+          "peak60s": 14,
+          "peak5min": 20
+        },
+        "refusals": {
+          "selected": 254,
+          "visible": 138
+        },
+        "visibleIdentities": {
+          "seen": 50,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 1290
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 31,
+          "firstStartS": 0,
+          "maxGapS": 300,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-1",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 310,
+          "tailWithoutStartS": 270
+        },
+        {
+          "key": "sel-2",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 300,
+          "tailWithoutStartS": 260
+        },
+        {
+          "key": "sel-3",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 310,
+          "tailWithoutStartS": 250
+        },
+        {
+          "key": "sel-4",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 320,
+          "tailWithoutStartS": 240
+        },
+        {
+          "key": "sel-5",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 330,
+          "tailWithoutStartS": 230
+        },
+        {
+          "key": "sel-6",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 340,
+          "tailWithoutStartS": 220
+        },
+        {
+          "key": "sel-7",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 350,
+          "tailWithoutStartS": 210
+        }
+      ],
+      "visible": {
+        "callers": 50,
+        "served": 50,
+        "neverServed": 0,
+        "allServedByS": 1590,
+        "worstMaxGapS": 3600,
+        "worstTailWithoutStartS": 3300
+      }
+    }
+  },
+  "4sel-quiet": {
+    "what": "4 selected identities every 60 s and no visible demand at all (how far selected may borrow); 1 h",
+    "before": {
+      "summary": {
+        "gate": "d2",
+        "simulatedSeconds": 3600,
+        "lanes": {
+          "selected-own": {
+            "starts": 244,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 4,
+            "peak5min": 20
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 244,
+          "peak60s": 4,
+          "peak5min": 20
+        },
+        "budgeted": {
+          "starts": 244,
+          "peak60s": 4,
+          "peak5min": 20
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 0
+        },
+        "visibleIdentities": {
+          "seen": 0,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 0
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 61,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-1",
+          "starts": 61,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-2",
+          "starts": 61,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-3",
+          "starts": 61,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 0,
+        "served": 0,
+        "neverServed": 0,
+        "allServedByS": 0,
+        "worstMaxGapS": 0,
+        "worstTailWithoutStartS": 0,
+        "firstStartsS": []
+      }
+    },
+    "after": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 3600,
+        "lanes": {
+          "selected-own": {
+            "starts": 61,
+            "overdueAtStartS": {
+              "p50": 140,
+              "p90": 160,
+              "max": 170
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 140,
+              "p90": 160,
+              "max": 170
+            },
+            "peak60s": 4,
+            "peak5min": 5
+          },
+          "selected-borrowed": {
+            "starts": 60,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 20
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 20
+            },
+            "peak60s": 4,
+            "peak5min": 5
+          },
+          "visible": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 121,
+          "peak60s": 4,
+          "peak5min": 10
+        },
+        "budgeted": {
+          "starts": 121,
+          "peak60s": 4,
+          "peak5min": 10
+        },
+        "refusals": {
+          "selected": 51,
+          "visible": 0
+        },
+        "visibleIdentities": {
+          "seen": 0,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 0
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 31,
+          "firstStartS": 0,
+          "maxGapS": 220,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-1",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 220,
+          "tailWithoutStartS": 210
+        },
+        {
+          "key": "sel-2",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 230,
+          "tailWithoutStartS": 180
+        },
+        {
+          "key": "sel-3",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 230,
+          "tailWithoutStartS": 170
+        }
+      ],
+      "visible": {
+        "callers": 0,
+        "served": 0,
+        "neverServed": 0,
+        "allServedByS": 0,
+        "worstMaxGapS": 0,
+        "worstTailWithoutStartS": 0,
+        "firstStartsS": []
+      }
+    },
+    "alt10x10": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 3600,
+        "lanes": {
+          "selected-own": {
+            "starts": 121,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 160,
+              "max": 190
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 160,
+              "max": 190
+            },
+            "peak60s": 4,
+            "peak5min": 10
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 121,
+          "peak60s": 4,
+          "peak5min": 10
+        },
+        "budgeted": {
+          "starts": 121,
+          "peak60s": 4,
+          "peak5min": 10
+        },
+        "refusals": {
+          "selected": 48,
+          "visible": 0
+        },
+        "visibleIdentities": {
+          "seen": 0,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 0
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 31,
+          "firstStartS": 0,
+          "maxGapS": 220,
+          "tailWithoutStartS": 0
+        },
+        {
+          "key": "sel-1",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 220,
+          "tailWithoutStartS": 210
+        },
+        {
+          "key": "sel-2",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 240,
+          "tailWithoutStartS": 180
+        },
+        {
+          "key": "sel-3",
+          "starts": 30,
+          "firstStartS": 0,
+          "maxGapS": 250,
+          "tailWithoutStartS": 170
+        }
+      ],
+      "visible": {
+        "callers": 0,
+        "served": 0,
+        "neverServed": 0,
+        "allServedByS": 0,
+        "worstMaxGapS": 0,
+        "worstTailWithoutStartS": 0,
+        "firstStartsS": []
+      }
+    }
+  },
+  "0sel-200vis": {
+    "what": "no selected demand; 200 visible identities all due at once, period 60 min (visible-only saturation); 2 h",
+    "before": {
+      "summary": {
+        "gate": "d2",
+        "simulatedSeconds": 7200,
+        "lanes": {
+          "selected-own": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 385,
+            "overdueAtStartS": {
+              "p50": 220,
+              "p90": 3010,
+              "max": 3670
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 220,
+              "p90": 3010,
+              "max": 3670
+            },
+            "peak60s": 6,
+            "peak5min": 16
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 0,
+          "peak60s": 0,
+          "peak5min": 0
+        },
+        "budgeted": {
+          "starts": 385,
+          "peak60s": 6,
+          "peak5min": 16
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 1000
+        },
+        "visibleIdentities": {
+          "seen": 200,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 3670
+        }
+      },
+      "selected": [],
+      "visible": {
+        "callers": 200,
+        "served": 200,
+        "neverServed": 0,
+        "allServedByS": 3670,
+        "worstMaxGapS": 3820,
+        "worstTailWithoutStartS": 3810
+      }
+    },
+    "after": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 7200,
+        "lanes": {
+          "selected-own": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 361,
+            "overdueAtStartS": {
+              "p50": 500,
+              "p90": 3130,
+              "max": 3940
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 500,
+              "p90": 3130,
+              "max": 3940
+            },
+            "peak60s": 6,
+            "peak5min": 15
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 0,
+          "peak60s": 0,
+          "peak5min": 0
+        },
+        "budgeted": {
+          "starts": 361,
+          "peak60s": 6,
+          "peak5min": 15
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 1167
+        },
+        "visibleIdentities": {
+          "seen": 200,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 3940
+        }
+      },
+      "selected": [],
+      "visible": {
+        "callers": 200,
+        "served": 200,
+        "neverServed": 0,
+        "allServedByS": 3940,
+        "worstMaxGapS": 4100,
+        "worstTailWithoutStartS": 4090
+      }
+    },
+    "alt10x10": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 7200,
+        "lanes": {
+          "selected-own": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 241,
+            "overdueAtStartS": {
+              "p50": 2400,
+              "p90": 5150,
+              "max": 5790
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 2400,
+              "p90": 5150,
+              "max": 5790
+            },
+            "peak60s": 6,
+            "peak5min": 10
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 0,
+          "peak60s": 0,
+          "peak5min": 0
+        },
+        "budgeted": {
+          "starts": 241,
+          "peak60s": 6,
+          "peak5min": 10
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 1563
+        },
+        "visibleIdentities": {
+          "seen": 200,
+          "neverServed": 0,
+          "worstWaitFromFirstSeenToFirstStartS": 5790
+        }
+      },
+      "selected": [],
+      "visible": {
+        "callers": 200,
+        "served": 200,
+        "neverServed": 0,
+        "allServedByS": 5790,
+        "worstMaxGapS": 6000,
+        "worstTailWithoutStartS": 5990
+      }
+    }
+  },
+  "cancel-50-absent": {
+    "what": "cancellation: client 9 has 50 visible identities due at 0 and disappears at 60 s (claims left behind); client 8 has 5 visible identities due at 60 s; 1 selected; 30 min",
+    "before": {
+      "summary": {
+        "gate": "d2",
+        "simulatedSeconds": 1800,
+        "lanes": {
+          "selected-own": {
+            "starts": 31,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 1,
+            "peak5min": 5
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 11,
+            "overdueAtStartS": {
+              "p50": 50,
+              "p90": 480,
+              "max": 490
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 50,
+              "p90": 480,
+              "max": 490
+            },
+            "peak60s": 6,
+            "peak5min": 6
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 31,
+          "peak60s": 1,
+          "peak5min": 5
+        },
+        "budgeted": {
+          "starts": 42,
+          "peak60s": 7,
+          "peak5min": 11
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 59
+        },
+        "visibleIdentities": {
+          "seen": 55,
+          "neverServed": 44,
+          "worstWaitFromFirstSeenToFirstStartS": 1800
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 31,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 55,
+        "served": 11,
+        "neverServed": 44,
+        "allServedByS": null,
+        "worstMaxGapS": 0,
+        "worstTailWithoutStartS": 1800
+      }
+    },
+    "after": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 1800,
+        "lanes": {
+          "selected-own": {
+            "starts": 31,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 1,
+            "peak5min": 5
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 11,
+            "overdueAtStartS": {
+              "p50": 50,
+              "p90": 480,
+              "max": 490
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 50,
+              "p90": 480,
+              "max": 490
+            },
+            "peak60s": 6,
+            "peak5min": 6
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 31,
+          "peak60s": 1,
+          "peak5min": 5
+        },
+        "budgeted": {
+          "starts": 42,
+          "peak60s": 7,
+          "peak5min": 11
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 59
+        },
+        "visibleIdentities": {
+          "seen": 55,
+          "neverServed": 44,
+          "worstWaitFromFirstSeenToFirstStartS": 1800
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 31,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 55,
+        "served": 11,
+        "neverServed": 44,
+        "allServedByS": null,
+        "worstMaxGapS": 0,
+        "worstTailWithoutStartS": 1800
+      }
+    },
+    "alt10x10": {
+      "summary": {
+        "gate": "d3",
+        "simulatedSeconds": 1800,
+        "lanes": {
+          "selected-own": {
+            "starts": 31,
+            "overdueAtStartS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "peak60s": 1,
+            "peak5min": 5
+          },
+          "selected-borrowed": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          },
+          "visible": {
+            "starts": 11,
+            "overdueAtStartS": {
+              "p50": 50,
+              "p90": 480,
+              "max": 490
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": 50,
+              "p90": 480,
+              "max": 490
+            },
+            "peak60s": 6,
+            "peak5min": 6
+          },
+          "interactive": {
+            "starts": 0,
+            "overdueAtStartS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "waitedSinceFirstRefusalS": {
+              "p50": null,
+              "p90": null,
+              "max": null
+            },
+            "peak60s": 0,
+            "peak5min": 0
+          }
+        },
+        "selectedTotal": {
+          "starts": 31,
+          "peak60s": 1,
+          "peak5min": 5
+        },
+        "budgeted": {
+          "starts": 42,
+          "peak60s": 7,
+          "peak5min": 11
+        },
+        "refusals": {
+          "selected": 0,
+          "visible": 59
+        },
+        "visibleIdentities": {
+          "seen": 55,
+          "neverServed": 44,
+          "worstWaitFromFirstSeenToFirstStartS": 1800
+        }
+      },
+      "selected": [
+        {
+          "key": "sel-0",
+          "starts": 31,
+          "firstStartS": 0,
+          "maxGapS": 60,
+          "tailWithoutStartS": 0
+        }
+      ],
+      "visible": {
+        "callers": 55,
+        "served": 11,
+        "neverServed": 44,
+        "allServedByS": null,
+        "worstMaxGapS": 0,
+        "worstTailWithoutStartS": 1800
+      }
+    }
+  },
+  "20-selected-at-one-instant": {
+    "what": "selected starts admitted at a single instant out of 20 distinct identities",
+    "before": 20,
+    "after": 6
+  },
+  "4-selected-then-16-visible": {
+    "what": "Neil's reserve probe: 4 selected at once, then 16 visible 10 s apart",
+    "before": {
+      "selected": 4,
+      "visible": 12
+    },
+    "after": {
+      "selected": 4,
+      "visible": 15
+    }
+  }
+}

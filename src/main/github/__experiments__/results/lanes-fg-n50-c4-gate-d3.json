@@ -1,0 +1,356 @@
+{
+  "config": {
+    "scenario": "serve-after",
+    "host": "dotcom",
+    "n": 50,
+    "clients": 4,
+    "hours": 2,
+    "workload": "mixed",
+    "focus": "focused",
+    "idle": "pause",
+    "jitter": 0.1,
+    "events": false,
+    "staggerS": 25,
+    "disjoint": false,
+    "seed": 1,
+    "eventTargets": 7,
+    "noci": true,
+    "gate": "d3",
+    "selectedIds": 4,
+    "selectedRunning": false,
+    "checks": false,
+    "slowEvery": 0,
+    "slowMs": 25000,
+    "disconnectMin": null,
+    "allGoneMin": null,
+    "fgEveryS": 8
+  },
+  "simulatedSeconds": 7200,
+  "gh": {
+    "spawns": 3129,
+    "perHour": 1564.5,
+    "byKind": {
+      "graphql:sidebar": 3066,
+      "graphql:merge-metadata": 14,
+      "rest:pulls-by-head": 49
+    },
+    "apiRequestsByHost": {
+      "github.com": 3129
+    },
+    "apiRequestsPerHourByHost": {
+      "github.com": 1564.5
+    },
+    "firstHour": 1604,
+    "perHourCounts": [
+      1604,
+      1525
+    ],
+    "lastHourByKind": {
+      "graphql:sidebar": 1506,
+      "graphql:merge-metadata": 6,
+      "rest:pulls-by-head": 13
+    },
+    "lastHourRollingPeak60s": 35,
+    "first15min": 392,
+    "steadyPerHour": 1564,
+    "steadyPerMinute": 26.07,
+    "rollingPeak60s": 36,
+    "rollingPeak60sSteady": 36,
+    "worstPeakToMean15min": 1.34,
+    "timelinePerMinute": [
+      24,
+      27,
+      27,
+      21,
+      24,
+      31,
+      32,
+      25,
+      24,
+      21,
+      34,
+      30,
+      27,
+      21,
+      24,
+      30,
+      34,
+      25,
+      24,
+      21,
+      34,
+      31,
+      27,
+      21,
+      24,
+      28,
+      36,
+      24,
+      24,
+      21,
+      33,
+      31,
+      28,
+      21,
+      24,
+      29,
+      34,
+      24,
+      24,
+      21,
+      34,
+      32,
+      27,
+      21,
+      24,
+      28,
+      35,
+      25,
+      24,
+      21,
+      32,
+      26,
+      28,
+      23,
+      26,
+      27,
+      32,
+      26,
+      26,
+      22,
+      31,
+      29,
+      29,
+      23,
+      25,
+      23,
+      30,
+      24,
+      24,
+      21,
+      27,
+      24,
+      29,
+      21,
+      24,
+      23,
+      27,
+      26,
+      24,
+      21,
+      27,
+      24,
+      30,
+      22,
+      27,
+      22,
+      29,
+      30,
+      28,
+      24,
+      26,
+      26,
+      31,
+      26,
+      28,
+      22,
+      26,
+      25,
+      25,
+      23,
+      26,
+      22,
+      30,
+      22,
+      26,
+      22,
+      25,
+      25,
+      26,
+      24,
+      28,
+      22,
+      29,
+      24,
+      25,
+      22,
+      26,
+      25,
+      27,
+      23
+    ]
+  },
+  "git": {
+    "total": 2253
+  },
+  "serve": {
+    "gate": "d3",
+    "upstreamStarts": 3085,
+    "maxStartsPer5min": 134,
+    "maxStartsPer60s": 35,
+    "admits": {
+      "selected-own": 120,
+      "visible": 221,
+      "interactive": 2685,
+      "selected-borrowed": 59
+    },
+    "lanes": {
+      "gate": "d3",
+      "simulatedSeconds": 7200,
+      "lanes": {
+        "selected-own": {
+          "starts": 120,
+          "overdueAtStartS": {
+            "p50": 0,
+            "p90": 0,
+            "max": 50
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": 0,
+            "p90": 0,
+            "max": 50
+          },
+          "peak60s": 5,
+          "peak5min": 5
+        },
+        "selected-borrowed": {
+          "starts": 59,
+          "overdueAtStartS": {
+            "p50": 0,
+            "p90": 0,
+            "max": 0
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": 0,
+            "p90": 0,
+            "max": 0
+          },
+          "peak60s": 3,
+          "peak5min": 5
+        },
+        "visible": {
+          "starts": 221,
+          "overdueAtStartS": {
+            "p50": 320,
+            "p90": 700,
+            "max": 900
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": 320,
+            "p90": 700,
+            "max": 900
+          },
+          "peak60s": 6,
+          "peak5min": 15
+        },
+        "interactive": {
+          "starts": 2685,
+          "overdueAtStartS": {
+            "p50": 0,
+            "p90": 8,
+            "max": 83
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": 0,
+            "p90": 8,
+            "max": 83
+          },
+          "peak60s": 24,
+          "peak5min": 114
+        }
+      },
+      "selectedTotal": {
+        "starts": 179,
+        "peak60s": 6,
+        "peak5min": 10
+      },
+      "budgeted": {
+        "starts": 400,
+        "peak60s": 11,
+        "peak5min": 20
+      },
+      "refusals": {
+        "selected": 719,
+        "visible": 1606
+      },
+      "visibleIdentities": {
+        "seen": 49,
+        "neverServed": 0,
+        "worstWaitFromFirstSeenToFirstStartS": 900
+      }
+    },
+    "selectedIdentities": [
+      {
+        "identity": "pr:feat/wt-2",
+        "starts": 711,
+        "medianGapS": 8,
+        "maxGapS": 16
+      },
+      {
+        "identity": "pr:feat/wt-7",
+        "starts": 726,
+        "medianGapS": 8,
+        "maxGapS": 16
+      },
+      {
+        "identity": "pr:feat/wt-12",
+        "starts": 703,
+        "medianGapS": 8,
+        "maxGapS": 16
+      },
+      {
+        "identity": "pr:feat/wt-17",
+        "starts": 724,
+        "medianGapS": 8,
+        "maxGapS": 16
+      }
+    ],
+    "cacheHits": 406,
+    "lastGoodServedOverBudget": 1950,
+    "deferredCold": 375,
+    "replyDeadlineHits": 0,
+    "interactiveOverflow": 894,
+    "legacy": {
+      "hits": 0,
+      "upstreamReads": 0
+    },
+    "maxRpcSimulatedMs": 2400,
+    "rpcSimulatedMs": {
+      "p50": 400,
+      "p99": 800,
+      "over10s": 0
+    },
+    "queueAgeSecondsByClient": {
+      "1": {
+        "admits": 858,
+        "p50": 0,
+        "max": 900
+      },
+      "2": {
+        "admits": 737,
+        "p50": 0,
+        "max": 411
+      },
+      "3": {
+        "admits": 745,
+        "p50": 0,
+        "max": 801
+      },
+      "4": {
+        "admits": 745,
+        "p50": 0,
+        "max": 730
+      }
+    },
+    "clientRefreshCalls": 2880,
+    "clientFailures": 0,
+    "checksCalls": 0,
+    "foregroundCalls": 3579,
+    "hintsDroppedAsLate": 0,
+    "upstreamStartsAfterAllClientsGone": null
+  },
+  "detection": null,
+  "focusReturn": null,
+  "unknownGit": [],
+  "unknownGh": []
+}

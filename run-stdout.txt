@@ -1,0 +1,97 @@
+group D before 2026-11-12T20:50:21Z par=4 12:50  up 4 days, 12:09, 131 users, load averages: 5.01 3.90 3.26
+=== GROUP D regex=^lanes- parallel=4 start=2026-11-12T20:50:21Z
+lanes-4sel-checks-n50-c4-gate-d3 rc=0 wall=39s
+lanes-4sel-n50-c4-gate-d3 rc=0 wall=39s
+lanes-4sel-checks-n50-c4-gate-d2 rc=0 wall=39s
+lanes-4sel-n50-c4-gate-d2 rc=0 wall=40s
+lanes-2sel-n50-c2-gate-d3 rc=0 wall=38s
+lanes-1sel-checks-n14-c2-gate-d3 rc=0 wall=39s
+lanes-1sel-checks-n50-c2-gate-d3 rc=0 wall=39s
+lanes-2sel-n50-c2-gate-d2 rc=0 wall=40s
+lanes-2sel-checks-n14-c2-gate-d3 rc=0 wall=28s
+lanes-4sel-checks-n20-c4-gate-d3 rc=0 wall=30s
+lanes-fg-n50-c4-gate-d3 rc=0 wall=31s
+ALL DONE
+=== GROUP D wall=111s end=2026-11-12T20:52:12Z
+group D after 2026-11-12T20:52:12Z 12:52  up 4 days, 12:11, 130 users, load averages: 5.17 4.38 3.53
+group E before 2026-11-12T20:52:12Z par=4 12:52  up 4 days, 12:11, 130 users, load averages: 5.17 4.38 3.53
+=== GROUP E regex=^(timeout|cancel)- parallel=4 start=2026-11-12T20:52:12Z
+timeout-slow3-n14-c2 rc=0 wall=40s
+timeout-slow5-over-client-deadline-n14-c2 rc=0 wall=40s
+cancel-disconnect20-n50-c3 rc=0 wall=40s
+timeout-slow3-n50-c3 rc=0 wall=41s
+cancel-allgone30-n50-c3 rc=0 wall=23s
+cancel-hidden-n14-c2 rc=0 wall=23s
+ALL DONE
+=== GROUP E wall=64s end=2026-11-12T20:53:16Z
+group E after 2026-11-12T20:53:16Z 12:53  up 4 days, 12:12, 131 users, load averages: 5.67 4.71 3.71
+group C before 2026-11-12T20:53:16Z par=4 12:53  up 4 days, 12:12, 131 users, load averages: 5.67 4.71 3.71
+=== GROUP C regex=^serve- parallel=4 start=2026-11-12T20:53:16Z
+serve-after-n14-c2-settled rc=0 wall=42s
+serve-before-n14-c2 rc=0 wall=45s
+serve-after-n14-c2 rc=0 wall=45s
+serve-before-n14-c2-settled rc=0 wall=46s
+serve-after-n14-c2-unfocused rc=0 wall=50s
+serve-after-n14-c2-noci0 rc=0 wall=50s
+serve-after-ghes-n14-c2 rc=0 wall=51s
+serve-before-ghes-n14-c2 rc=0 wall=52s
+serve-after-n10-c3 rc=0 wall=49s
+serve-after-n50-c3 rc=0 wall=48s
+serve-before-n10-c3 rc=0 wall=50s
+serve-before-n50-c3 rc=0 wall=51s
+serve-after-n50-c3-j0 rc=0 wall=51s
+serve-after-n50-c3-disjoint rc=0 wall=51s
+serve-after-n200-c1 rc=0 wall=52s
+serve-before-n200-c1 rc=0 wall=56s
+serve-oldclient-n14-c2 rc=0 wall=19s
+ALL DONE
+=== GROUP C wall=225s end=2026-11-12T20:57:01Z
+group C after 2026-11-12T20:57:01Z 12:57  up 4 days, 12:16, 131 users, load averages: 7.27 6.55 4.78
+group A before 2026-11-12T20:57:01Z par=4 12:57  up 4 days, 12:16, 131 users, load averages: 7.27 6.55 4.78
+=== GROUP A regex=^ghes-desk- parallel=4 start=2026-11-12T20:57:01Z
+ghes-desk-after-n10-unfocused rc=0 wall=42s
+ghes-desk-before-n10-unfocused rc=0 wall=43s
+ghes-desk-before-n10-focused rc=0 wall=43s
+ghes-desk-after-n10-focused rc=0 wall=44s
+ghes-desk-before-n10-hidden rc=0 wall=44s
+ghes-desk-after-n10-unfocused-noidle rc=0 wall=44s
+ghes-desk-after-n10-hidden rc=0 wall=45s
+ghes-desk-after-n10-return rc=0 wall=46s
+ghes-desk-after-n10-focused-noci0 rc=0 wall=43s
+ghes-desk-before-n50-focused rc=0 wall=44s
+ghes-desk-after-n10-mixed rc=0 wall=44s
+ghes-desk-before-n10-mixed rc=0 wall=45s
+ghes-desk-after-n50-focused-j0 rc=0 wall=49s
+ghes-desk-after-n50-focused rc=0 wall=50s
+ghes-desk-after-n50-focused-j25 rc=0 wall=50s
+ghes-desk-before-n50-unfocused rc=0 wall=50s
+ghes-desk-after-n50-unfocused rc=0 wall=45s
+ghes-desk-after-n50-mixed rc=0 wall=45s
+ghes-desk-after-n50-return rc=0 wall=46s
+ghes-desk-before-n50-mixed rc=0 wall=46s
+ALL DONE
+=== GROUP A wall=231s end=2026-11-12T21:00:52Z
+group A after 2026-11-12T21:00:52Z 13:00  up 4 days, 12:19, 135 users, load averages: 6.85 6.77 5.31
+group B before 2026-11-12T21:00:52Z par=4 13:00  up 4 days, 12:19, 135 users, load averages: 6.85 6.77 5.31
+=== GROUP B regex=^dotcom- parallel=4 start=2026-11-12T21:00:52Z
+dotcom-desk-after-n50 rc=0 wall=45s
+dotcom-desk-before-n50 rc=0 wall=45s
+dotcom-desk-after-n10 rc=0 wall=45s
+dotcom-desk-before-n10 rc=0 wall=46s
+ALL DONE
+=== GROUP B wall=46s end=2026-11-12T21:01:38Z
+group B after 2026-11-12T21:01:38Z 13:01  up 4 days, 12:20, 134 users, load averages: 6.46 6.68 5.35
+group F before 2026-11-12T21:01:38Z par=4 13:01  up 4 days, 12:20, 134 users, load averages: 6.46 6.68 5.35
+=== GROUP F regex=^detect- parallel=4 start=2026-11-12T21:01:38Z
+detect-desk-after-n10-j0 rc=0 wall=39s
+detect-desk-after-n10 rc=0 wall=40s
+detect-serve-before-n14-c2 rc=0 wall=46s
+detect-desk-before-n10 rc=0 wall=47s
+detect-serve-after-n14-c2 rc=0 wall=40s
+detect-serve-after-n14-c2-j0 rc=0 wall=41s
+detect-serve-after-n14-c2-seed2 rc=0 wall=42s
+detect-serve-oldclient-n14-c2 rc=0 wall=43s
+ALL DONE
+=== GROUP F wall=91s end=2026-11-12T21:03:09Z
+group F after 2026-11-12T21:03:09Z 13:03  up 4 days, 12:22, 137 users, load averages: 5.51 6.33 5.35
+ALL GROUPS DONE

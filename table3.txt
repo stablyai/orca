@@ -1,0 +1,383 @@
+cancel-allgone30-n50-c3                        spawns/h=[110, 0] lastH: prReads=0 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=0 pk60=0 | pk60all=13 pk/mean15=15
+      gate=d3 starts=96 max5min=18 max60s=8 admits={'selected-own': 6, 'visible': 90} hits=12 lastGood=510 deferredCold=323 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 1000, 'over10s': 0} max=1800 calls=1120 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=0
+      lane selected-own       starts=    6 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=   90 pk60= 6 pk5min=15 overdueAtStartS={'p50': 620, 'p90': 826, 'max': 942} waitedS={'p50': 620, 'p90': 826, 'max': 942}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 833} visibleIdentities={'seen': 49, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 930}
+      selected identity pr:feat/wt-0             starts=   6 medianGapS=233 maxGapS=872
+      queueAgeByClient={'1': {'admits': 7, 'p50': 10, 'max': 40}, '2': {'admits': 17, 'p50': 360, 'max': 440}, '3': {'admits': 72, 'p50': 701, 'max': 942}}
+cancel-disconnect20-n50-c3                     spawns/h=[219, 96] lastH: prReads=75 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=96 pk60=9 | pk60all=14 pk/mean15=10
+      gate=d3 starts=273 max5min=20 max60s=9 admits={'selected-own': 18, 'visible': 255} hits=40 lastGood=485 deferredCold=240 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 2000, 'over10s': 0} max=3228 calls=1093 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   18 pk60= 3 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 72} waitedS={'p50': 0, 'p90': 0, 'max': 72}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  255 pk60= 6 pk5min=15 overdueAtStartS={'p50': 435, 'p90': 800, 'max': 1005} waitedS={'p50': 435, 'p90': 800, 'max': 1005}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=9 pk5min=20 selectedTotal pk5min=5 refusals={'selected': 1, 'visible': 724} visibleIdentities={'seen': 53, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 930}
+      selected identity pr:feat/wt-0             starts=   9 medianGapS=872 maxGapS=1795
+      selected identity pr:feat/other-0          starts=   9 medianGapS=915 maxGapS=1732
+      queueAgeByClient={'1': {'admits': 44, 'p50': 640, 'max': 930}, '2': {'admits': 196, 'p50': 390, 'max': 1005}, '3': {'admits': 33, 'p50': 72, 'max': 920}}
+cancel-hidden-n14-c2                           spawns/h=[5] lastH: prReads=3 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=5 pk60=5 | pk60all=5 pk/mean15=0
+      gate=d3 starts=3 max5min=3 max60s=3 admits={'selected-own': 1, 'visible': 2} hits=2 lastGood=0 deferredCold=1 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 1800, 'over10s': 0} max=1800 calls=6 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=    1 pk60= 1 pk5min= 1 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=    2 pk60= 2 pk5min= 2 overdueAtStartS={'p50': 25, 'p90': 25, 'max': 25} waitedS={'p50': 25, 'p90': 25, 'max': 25}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=3 pk5min=3 selectedTotal pk5min=1 refusals={'selected': 0, 'visible': 1} visibleIdentities={'seen': 2, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 25}
+      selected identity pr:feat/wt-0             starts=   1 medianGapS=0 maxGapS=0
+      queueAgeByClient={'1': {'admits': 2, 'p50': 0, 'max': 0}, '2': {'admits': 1, 'p50': 25, 'max': 25}}
+detect-desk-after-n10-j0                       spawns/h=[140, 92, 40, 117, 72, 72, 110, 87, 117, 127, 91, 99, 125, 133, 90, 120, 60, 82, 87, 123, 121, 55, 93, 74] lastH: prReads=20 auth=9 rateLimitProbes=0 reqLowerBound(auth x3)=92 pk60=17 | pk60all=25 pk/mean15=15
+      detection events=97 undetected=18 startSelected:15/700/1191/1455 startVisible:15/641/1375/1446 finishSelected:16/27/58/62 finishVisible:32/306/1847/2304 (samples/p50/p90/max s)
+detect-desk-after-n10                          spawns/h=[160, 71, 61, 137, 113, 49, 100, 73, 136, 143, 103, 106, 132, 174, 90, 87, 86, 127, 106, 101, 152, 115, 127, 110] lastH: prReads=31 auth=12 rateLimitProbes=0 reqLowerBound(auth x3)=134 pk60=11 | pk60all=25 pk/mean15=15
+      detection events=97 undetected=14 startSelected:16/725/1003/1182 startVisible:18/484/1165/1341 finishSelected:16/47/60/62 finishVisible:32/118/1779/1945 (samples/p50/p90/max s)
+detect-desk-before-n10                         spawns/h=[728, 723, 717, 717, 714, 722, 724, 722, 722, 711, 725, 723, 726, 720, 729, 725, 726, 726, 720, 729, 722, 728, 727, 722] lastH: prReads=228 auth=28 rateLimitProbes=0 reqLowerBound(auth x3)=778 pk60=18 | pk60all=25 pk/mean15=1.69
+      detection events=97 undetected=0 startSelected:16/41/60/62 startVisible:33/43/107/115 finishSelected:16/36/55/57 finishVisible:32/68/114/126 (samples/p50/p90/max s)
+detect-serve-after-n14-c2-j0                   spawns/h=[66, 39, 16, 42, 29, 28, 42, 32, 45, 48, 34, 38, 46, 51, 32, 32, 25, 35, 40, 53, 46, 23, 36, 31] lastH: prReads=24 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=31 pk60=5 | pk60all=11 pk/mean15=15
+      gate=d3 starts=771 max5min=18 max60s=7 admits={'selected-own': 321, 'visible': 450} hits=6 lastGood=98 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 2000, 'over10s': 0} max=2400 calls=1677 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  321 pk60= 1 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  450 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 10, 'max': 178} waitedS={'p50': 0, 'p90': 10, 'max': 178}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=7 pk5min=18 selectedTotal pk5min=5 refusals={'selected': 0, 'visible': 135} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts= 321 medianGapS=60 maxGapS=1801
+      queueAgeByClient={'1': {'admits': 771, 'p50': 0, 'max': 178}}
+      detection events=97 undetected=17 startSelected:32/909/1316/1456 startVisible:30/584/1446/1527 finishSelected:32/18/41/51 finishVisible:64/217/2085/2291 (samples/p50/p90/max s)
+detect-serve-after-n14-c2-seed2                spawns/h=[71, 61, 34, 20, 45, 21, 36, 44, 49, 30, 17, 31, 38, 23, 24, 51, 38, 26, 49, 49, 21, 46, 25, 29] lastH: prReads=23 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=29 pk60=2 | pk60all=12 pk/mean15=15
+      gate=d3 starts=740 max5min=18 max60s=8 admits={'selected-own': 240, 'visible': 496, 'selected-borrowed': 4} hits=6 lastGood=134 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 1800, 'over10s': 0} max=2394 calls=1651 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  240 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 10} waitedS={'p50': 0, 'p90': 0, 'max': 10}
+      lane selected-borrowed  starts=    4 pk60= 1 pk5min= 1 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane visible            starts=  496 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 10, 'max': 169} waitedS={'p50': 0, 'p90': 10, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=6 refusals={'selected': 2, 'visible': 169} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts= 244 medianGapS=60 maxGapS=1794
+      queueAgeByClient={'1': {'admits': 740, 'p50': 0, 'max': 169}}
+      detection events=93 undetected=17 startSelected:26/870/1492/1619 startVisible:34/456/860/1260 finishSelected:30/25/54/186 finishVisible:62/106/1480/1834 (samples/p50/p90/max s)
+detect-serve-after-n14-c2                      spawns/h=[68, 49, 23, 49, 31, 37, 44, 37, 51, 51, 44, 42, 48, 65, 19, 34, 45, 34, 38, 48, 52, 39, 62, 36] lastH: prReads=28 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=36 pk60=4 | pk60all=12 pk/mean15=15
+      gate=d3 starts=905 max5min=18 max60s=8 admits={'selected-own': 370, 'visible': 524, 'selected-borrowed': 11} hits=6 lastGood=124 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 1800, 'over10s': 0} max=4400 calls=1971 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  370 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=   11 pk60= 1 pk5min= 1 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane visible            starts=  524 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 10, 'max': 169} waitedS={'p50': 0, 'p90': 10, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=6 refusals={'selected': 0, 'visible': 161} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts= 381 medianGapS=60 maxGapS=1792
+      queueAgeByClient={'1': {'admits': 905, 'p50': 0, 'max': 169}}
+      detection events=97 undetected=13 startSelected:32/603/1036/1230 startVisible:38/505/1244/1610 finishSelected:32/40/54/57 finishVisible:62/108/1699/1906 (samples/p50/p90/max s)
+detect-serve-before-n14-c2                     spawns/h=[719, 644, 409, 381, 381, 383, 378, 380, 380, 381, 384, 379, 379, 377, 372, 380, 379, 382, 375, 380, 380, 379, 380, 367] lastH: prReads=320 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=367 pk60=14 | pk60all=32 pk/mean15=2.36
+      gate=none starts=15958 max5min=72 max60s=28 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 1400, 'over10s': 0} max=4000 calls=15958 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      queueAgeByClient={}
+      detection events=97 undetected=0 startSelected:32/31/45/56 startVisible:66/52/110/120 finishSelected:32/34/56/59 finishVisible:64/62/107/119 (samples/p50/p90/max s)
+detect-serve-oldclient-n14-c2                  spawns/h=[378, 376, 379, 375, 376, 376, 377, 367, 374, 378, 379, 376, 382, 375, 376, 366, 376, 375, 374, 376, 374, 376, 375, 371] lastH: prReads=326 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=371 pk60=14 | pk60all=18 pk/mean15=2.53
+      gate=d3 starts=7985 max5min=36 max60s=14 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 302, 'upstreamReads': 7985} rpcMs={'p50': 400, 'p99': 1200, 'over10s': 0} max=3000 calls=15970 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=0 pk5min=0 selectedTotal pk5min=0 refusals={'selected': 0, 'visible': 0} visibleIdentities={'seen': 0, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 0}
+      queueAgeByClient={}
+      detection events=97 undetected=0 startSelected:32/34/52/58 startVisible:66/65/117/120 finishSelected:32/19/49/50 finishVisible:64/72/116/119 (samples/p50/p90/max s)
+dotcom-desk-after-n10                          spawns/h=[58, 14, 13, 14] lastH: prReads=8 auth=0 rateLimitProbes=1 reqLowerBound(auth x3)=14 pk60=3 | pk60all=9 pk/mean15=15
+dotcom-desk-after-n50                          spawns/h=[232, 49, 50, 50] lastH: prReads=36 auth=0 rateLimitProbes=1 reqLowerBound(auth x3)=50 pk60=8 | pk60all=9 pk/mean15=15
+dotcom-desk-before-n10                         spawns/h=[362, 362, 362, 363] lastH: prReads=233 auth=0 rateLimitProbes=91 reqLowerBound(auth x3)=363 pk60=9 | pk60all=10 pk/mean15=1.53
+dotcom-desk-before-n50                         spawns/h=[361, 362, 362, 362] lastH: prReads=226 auth=0 rateLimitProbes=84 reqLowerBound(auth x3)=362 pk60=10 | pk60all=10 pk/mean15=1.72
+ghes-desk-after-n10-focused-noci0              spawns/h=[156, 44, 36, 41] lastH: prReads=9 auth=10 rateLimitProbes=0 reqLowerBound(auth x3)=61 pk60=9 | pk60all=25 pk/mean15=15
+ghes-desk-after-n10-focused                    spawns/h=[156, 44, 36, 42] lastH: prReads=9 auth=10 rateLimitProbes=0 reqLowerBound(auth x3)=62 pk60=8 | pk60all=25 pk/mean15=15
+ghes-desk-after-n10-hidden                     spawns/h=[0, 0] lastH: prReads=0 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=0 pk60=0 | pk60all=0 pk/mean15=0
+ghes-desk-after-n10-mixed                      spawns/h=[256, 43, 37, 37] lastH: prReads=8 auth=9 rateLimitProbes=0 reqLowerBound(auth x3)=55 pk60=8 | pk60all=25 pk/mean15=15
+ghes-desk-after-n10-return                     spawns/h=[147, 40] lastH: prReads=9 auth=10 rateLimitProbes=0 reqLowerBound(auth x3)=60 pk60=13 | pk60all=25 pk/mean15=15
+      return {'spawnsBeforeReturn': 71, 'spawnsFirst15minAfter': 49, 'catchUpBurstSeconds': 75}
+ghes-desk-after-n10-unfocused-noidle           spawns/h=[156, 44, 40, 36] lastH: prReads=8 auth=9 rateLimitProbes=0 reqLowerBound(auth x3)=54 pk60=8 | pk60all=25 pk/mean15=15
+ghes-desk-after-n10-unfocused                  spawns/h=[76, 15, 10, 10] lastH: prReads=2 auth=2 rateLimitProbes=0 reqLowerBound(auth x3)=14 pk60=5 | pk60all=25 pk/mean15=15
+ghes-desk-after-n50-focused-j0                 spawns/h=[708, 156, 156, 156] lastH: prReads=36 auth=41 rateLimitProbes=0 reqLowerBound(auth x3)=238 pk60=25 | pk60all=25 pk/mean15=15
+ghes-desk-after-n50-focused-j25                spawns/h=[710, 161, 202, 191] lastH: prReads=44 auth=49 rateLimitProbes=0 reqLowerBound(auth x3)=289 pk60=16 | pk60all=25 pk/mean15=15
+ghes-desk-after-n50-focused                    spawns/h=[710, 157, 157, 157] lastH: prReads=36 auth=41 rateLimitProbes=0 reqLowerBound(auth x3)=239 pk60=24 | pk60all=25 pk/mean15=15
+ghes-desk-after-n50-mixed                      spawns/h=[811, 190, 158, 158] lastH: prReads=36 auth=41 rateLimitProbes=0 reqLowerBound(auth x3)=240 pk60=16 | pk60all=25 pk/mean15=10.59
+ghes-desk-after-n50-return                     spawns/h=[599, 292] lastH: prReads=70 auth=73 rateLimitProbes=0 reqLowerBound(auth x3)=438 pk60=24 | pk60all=25 pk/mean15=15
+      return {'spawnsBeforeReturn': 206, 'spawnsFirst15minAfter': 210, 'catchUpBurstSeconds': 200}
+ghes-desk-after-n50-unfocused                  spawns/h=[211, 10, 10, 15] lastH: prReads=3 auth=3 rateLimitProbes=0 reqLowerBound(auth x3)=21 pk60=5 | pk60all=25 pk/mean15=15
+ghes-desk-before-n10-focused                   spawns/h=[731, 717, 717, 723] lastH: prReads=227 auth=32 rateLimitProbes=0 reqLowerBound(auth x3)=787 pk60=19 | pk60all=25 pk/mean15=1.62
+ghes-desk-before-n10-hidden                    spawns/h=[0, 0] lastH: prReads=0 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=0 pk60=0 | pk60all=0 pk/mean15=0
+ghes-desk-before-n10-mixed                     spawns/h=[728, 723, 714, 723] lastH: prReads=227 auth=32 rateLimitProbes=0 reqLowerBound(auth x3)=787 pk60=18 | pk60all=25 pk/mean15=1.53
+ghes-desk-before-n10-unfocused                 spawns/h=[731, 717, 717, 726] lastH: prReads=228 auth=32 rateLimitProbes=0 reqLowerBound(auth x3)=790 pk60=17 | pk60all=25 pk/mean15=1.62
+ghes-desk-before-n50-focused                   spawns/h=[831, 834, 833, 818] lastH: prReads=226 auth=120 rateLimitProbes=0 reqLowerBound(auth x3)=1058 pk60=25 | pk60all=25 pk/mean15=1.88
+ghes-desk-before-n50-mixed                     spawns/h=[831, 834, 833, 818] lastH: prReads=226 auth=120 rateLimitProbes=0 reqLowerBound(auth x3)=1058 pk60=25 | pk60all=25 pk/mean15=1.85
+ghes-desk-before-n50-unfocused                 spawns/h=[831, 834, 833, 818] lastH: prReads=226 auth=120 rateLimitProbes=0 reqLowerBound(auth x3)=1058 pk60=25 | pk60all=25 pk/mean15=1.86
+lanes-1sel-checks-n14-c2-gate-d3               spawns/h=[192, 139, 139] lastH: prReads=71 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=139 pk60=5 | pk60all=11 pk/mean15=2.21
+      gate=d3 starts=443 max5min=20 max60s=8 admits={'selected-own': 178, 'visible': 102, 'selected-borrowed': 163} hits=25 lastGood=152 deferredCold=36 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 1600, 'over10s': 0} max=2352 calls=720 fail=0 checks=372 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  178 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 178} waitedS={'p50': 0, 'p90': 0, 'max': 178}
+      lane selected-borrowed  starts=  163 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 10, 'max': 28} waitedS={'p50': 0, 'p90': 10, 'max': 28}
+      lane visible            starts=  102 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 90, 'max': 171} waitedS={'p50': 0, 'p90': 90, 'max': 171}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 56, 'visible': 132} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-2             starts= 170 medianGapS=60 maxGapS=239
+      selected identity checks:feat/wt-2         starts= 171 medianGapS=60 maxGapS=189
+      queueAgeByClient={'1': {'admits': 443, 'p50': 0, 'max': 178}}
+lanes-1sel-checks-n50-c2-gate-d3               spawns/h=[267, 184, 167] lastH: prReads=93 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=167 pk60=7 | pk60all=11 pk/mean15=2.76
+      gate=d3 starts=563 max5min=20 max60s=8 admits={'selected-own': 180, 'visible': 276, 'selected-borrowed': 107} hits=66 lastGood=804 deferredCold=227 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 1200, 'over10s': 0} max=2916 calls=1868 fail=0 checks=348 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  180 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 129, 'max': 178} waitedS={'p50': 0, 'p90': 129, 'max': 178}
+      lane selected-borrowed  starts=  107 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 20} waitedS={'p50': 0, 'p90': 0, 'max': 20}
+      lane visible            starts=  276 pk60= 6 pk5min=15 overdueAtStartS={'p50': 300, 'p90': 730, 'max': 942} waitedS={'p50': 300, 'p90': 730, 'max': 942}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 120, 'visible': 911} visibleIdentities={'seen': 49, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 930}
+      selected identity pr:feat/wt-2             starts= 141 medianGapS=60 maxGapS=239
+      selected identity checks:feat/wt-2         starts= 146 medianGapS=60 maxGapS=230
+      queueAgeByClient={'1': {'admits': 545, 'p50': 0, 'max': 942}, '2': {'admits': 18, 'p50': 360, 'max': 440}}
+lanes-2sel-checks-n14-c2-gate-d3               spawns/h=[194, 135, 137] lastH: prReads=71 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=137 pk60=6 | pk60all=13 pk/mean15=2.73
+      gate=d3 starts=441 max5min=20 max60s=10 admits={'selected-own': 180, 'visible': 93, 'selected-borrowed': 168} hits=59 lastGood=447 deferredCold=34 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 2000, 'over10s': 0} max=3000 calls=721 fail=0 checks=335 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  180 pk60= 4 pk5min= 5 overdueAtStartS={'p50': 77, 'p90': 179, 'max': 230} waitedS={'p50': 77, 'p90': 179, 'max': 230}
+      lane selected-borrowed  starts=  168 pk60= 3 pk5min= 5 overdueAtStartS={'p50': 10, 'p90': 128, 'max': 169} waitedS={'p50': 10, 'p90': 128, 'max': 169}
+      lane visible            starts=   93 pk60= 6 pk5min=15 overdueAtStartS={'p50': 11, 'p90': 99, 'max': 215} waitedS={'p50': 11, 'p90': 99, 'max': 215}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=10 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 334, 'visible': 147} visibleIdentities={'seen': 14, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 110}
+      selected identity pr:feat/wt-2             starts=  99 medianGapS=80 maxGapS=240
+      selected identity checks:feat/wt-2         starts=  87 medianGapS=81 maxGapS=270
+      selected identity pr:feat/wt-7             starts=  92 medianGapS=80 maxGapS=275
+      selected identity checks:feat/wt-7         starts=  83 medianGapS=80 maxGapS=290
+      queueAgeByClient={'1': {'admits': 227, 'p50': 10, 'max': 215}, '2': {'admits': 214, 'p50': 20, 'max': 230}}
+lanes-2sel-n50-c2-gate-d2                      spawns/h=[223, 212, 181] lastH: prReads=163 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=181 pk60=7 | pk60all=12 pk/mean15=1.84
+      gate=d2 starts=566 max5min=20 max60s=8 admits={'selected-own': 354, 'visible': 212} hits=103 lastGood=2656 deferredCold=585 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 1200, 'over10s': 0} max=2400 calls=4117 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  354 pk60= 2 pk5min=10 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 56} waitedS={'p50': 0, 'p90': 0, 'max': 25}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  212 pk60= 6 pk5min=12 overdueAtStartS={'p50': 928, 'p90': 1766, 'max': 2020} waitedS={'p50': 928, 'p90': 1766, 'max': 2020}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 2, 'visible': 3239} visibleIdentities={'seen': 49, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 1810}
+      selected identity pr:feat/wt-2             starts= 177 medianGapS=61 maxGapS=117
+      selected identity pr:feat/wt-7             starts= 177 medianGapS=61 maxGapS=93
+      queueAgeByClient={'1': {'admits': 226, 'p50': 0, 'max': 2010}, '2': {'admits': 340, 'p50': 0, 'max': 2020}}
+lanes-2sel-n50-c2-gate-d3                      spawns/h=[269, 175, 166] lastH: prReads=147 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=166 pk60=7 | pk60all=12 pk/mean15=2.76
+      gate=d3 starts=556 max5min=20 max60s=8 admits={'selected-own': 178, 'visible': 269, 'selected-borrowed': 109} hits=94 lastGood=824 deferredCold=221 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 2000, 'over10s': 0} max=3131 calls=1958 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  178 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 132, 'max': 162} waitedS={'p50': 0, 'p90': 132, 'max': 162}
+      lane selected-borrowed  starts=  109 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 10, 'max': 127} waitedS={'p50': 0, 'p90': 10, 'max': 127}
+      lane visible            starts=  269 pk60= 6 pk5min=15 overdueAtStartS={'p50': 259, 'p90': 730, 'max': 920} waitedS={'p50': 259, 'p90': 730, 'max': 920}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 76, 'visible': 969} visibleIdentities={'seen': 50, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 920}
+      selected identity pr:feat/wt-2             starts= 143 medianGapS=61 maxGapS=215
+      selected identity pr:feat/wt-7             starts= 144 medianGapS=61 maxGapS=223
+      queueAgeByClient={'1': {'admits': 279, 'p50': 10, 'max': 920}, '2': {'admits': 277, 'p50': 0, 'max': 822}}
+lanes-4sel-checks-n20-c4-gate-d3               spawns/h=[214, 142, 144] lastH: prReads=78 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=144 pk60=8 | pk60all=14 pk/mean15=4
+      gate=d3 starts=464 max5min=20 max60s=11 admits={'selected-own': 180, 'visible': 128, 'selected-borrowed': 156} hits=168 lastGood=877 deferredCold=77 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 1369, 'over10s': 0} max=2782 calls=1505 fail=0 checks=411 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  180 pk60= 5 pk5min= 5 overdueAtStartS={'p50': 230, 'p90': 250, 'max': 439} waitedS={'p50': 230, 'p90': 250, 'max': 439}
+      lane selected-borrowed  starts=  156 pk60= 5 pk5min= 5 overdueAtStartS={'p50': 139, 'p90': 239, 'max': 259} waitedS={'p50': 139, 'p90': 239, 'max': 259}
+      lane visible            starts=  128 pk60= 6 pk5min=15 overdueAtStartS={'p50': 60, 'p90': 231, 'max': 347} waitedS={'p50': 60, 'p90': 231, 'max': 347}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=11 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 492, 'visible': 462} visibleIdentities={'seen': 20, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 310}
+      selected identity pr:feat/wt-2             starts=  59 medianGapS=227 maxGapS=459
+      selected identity checks:feat/wt-2         starts=  41 medianGapS=300 maxGapS=480
+      selected identity pr:feat/wt-7             starts=  50 medianGapS=280 maxGapS=499
+      selected identity checks:feat/wt-7         starts=  41 medianGapS=290 maxGapS=325
+      selected identity pr:feat/wt-12            starts=  47 medianGapS=290 maxGapS=310
+      selected identity checks:feat/wt-12        starts=  42 medianGapS=290 maxGapS=310
+      selected identity pr:feat/wt-17            starts=  50 medianGapS=269 maxGapS=319
+      selected identity checks:feat/wt-17        starts=  45 medianGapS=290 maxGapS=500
+      queueAgeByClient={'1': {'admits': 120, 'p50': 170, 'max': 419}, '2': {'admits': 108, 'p50': 220, 'max': 437}, '3': {'admits': 121, 'p50': 220, 'max': 250}, '4': {'admits': 115, 'p50': 219, 'max': 439}}
+lanes-4sel-checks-n50-c4-gate-d2               spawns/h=[253, 248, 251] lastH: prReads=96 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=254 pk60=11 | pk60all=16 pk/mean15=2.62
+      gate=d2 starts=723 max5min=20 max60s=14 admits={'selected-own': 711, 'visible': 12} hits=155 lastGood=1776 deferredCold=6854 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 400, 'over10s': 0} max=1200 calls=8920 fail=0 checks=605 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  711 pk60= 8 pk5min=20 overdueAtStartS={'p50': 10, 'p90': 169, 'max': 190} waitedS={'p50': 0, 'p90': 0, 'max': 160}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=   12 pk60= 6 pk5min= 8 overdueAtStartS={'p50': 60, 'p90': 390, 'max': 690} waitedS={'p50': 60, 'p90': 390, 'max': 690}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=14 pk5min=20 selectedTotal pk5min=20 refusals={'selected': 863, 'visible': 7767} visibleIdentities={'seen': 50, 'neverServed': 34, 'worstWaitFromFirstSeenToFirstStartS': 10800}
+      selected identity pr:feat/wt-2             starts=  72 medianGapS=71 maxGapS=269
+      selected identity checks:feat/wt-2         starts= 107 medianGapS=60 maxGapS=240
+      selected identity pr:feat/wt-7             starts=  72 medianGapS=81 maxGapS=249
+      selected identity checks:feat/wt-7         starts= 106 medianGapS=60 maxGapS=230
+      selected identity pr:feat/wt-12            starts=  71 medianGapS=219 maxGapS=280
+      selected identity checks:feat/wt-12        starts= 106 medianGapS=60 maxGapS=250
+      selected identity pr:feat/wt-17            starts=  71 medianGapS=209 maxGapS=250
+      selected identity checks:feat/wt-17        starts= 106 medianGapS=60 maxGapS=240
+      queueAgeByClient={'1': {'admits': 184, 'p50': 0, 'max': 148}, '2': {'admits': 180, 'p50': 0, 'max': 690}, '3': {'admits': 180, 'p50': 0, 'max': 160}, '4': {'admits': 179, 'p50': 0, 'max': 380}}
+lanes-4sel-checks-n50-c4-gate-d3               spawns/h=[268, 173, 162] lastH: prReads=89 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=162 pk60=8 | pk60all=14 pk/mean15=3.43
+      gate=d3 starts=549 max5min=20 max60s=11 admits={'selected-own': 180, 'visible': 259, 'selected-borrowed': 110} hits=222 lastGood=1971 deferredCold=382 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 1400, 'over10s': 0} max=3000 calls=3535 fail=0 checks=353 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  180 pk60= 5 pk5min= 5 overdueAtStartS={'p50': 260, 'p90': 510, 'max': 524} waitedS={'p50': 260, 'p90': 510, 'max': 524}
+      lane selected-borrowed  starts=  110 pk60= 5 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 250, 'max': 510} waitedS={'p50': 0, 'p90': 250, 'max': 510}
+      lane visible            starts=  259 pk60= 6 pk5min=15 overdueAtStartS={'p50': 252, 'p90': 700, 'max': 910} waitedS={'p50': 252, 'p90': 700, 'max': 910}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=11 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 404, 'visible': 1949} visibleIdentities={'seen': 50, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 910}
+      selected identity pr:feat/wt-2             starts=  36 medianGapS=310 maxGapS=580
+      selected identity checks:feat/wt-2         starts=  37 medianGapS=300 maxGapS=575
+      selected identity pr:feat/wt-7             starts=  36 medianGapS=300 maxGapS=585
+      selected identity checks:feat/wt-7         starts=  37 medianGapS=290 maxGapS=580
+      selected identity pr:feat/wt-12            starts=  39 medianGapS=290 maxGapS=580
+      selected identity checks:feat/wt-12        starts=  37 medianGapS=300 maxGapS=570
+      selected identity pr:feat/wt-17            starts=  37 medianGapS=300 maxGapS=580
+      selected identity checks:feat/wt-17        starts=  34 medianGapS=300 maxGapS=580
+      queueAgeByClient={'1': {'admits': 149, 'p50': 220, 'max': 730}, '2': {'admits': 113, 'p50': 249, 'max': 740}, '3': {'admits': 151, 'p50': 240, 'max': 910}, '4': {'admits': 136, 'p50': 240, 'max': 754}}
+lanes-4sel-n50-c4-gate-d2                      spawns/h=[249, 243, 244] lastH: prReads=238 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=244 pk60=5 | pk60all=14 pk/mean15=1.27
+      gate=d2 starts=714 max5min=20 max60s=10 admits={'selected-own': 697, 'visible': 17} hits=360 lastGood=1423 deferredCold=7404 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 1000, 'over10s': 0} max=3000 calls=9932 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  697 pk60= 4 pk5min=20 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 98} waitedS={'p50': 0, 'p90': 0, 'max': 89}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=   17 pk60= 6 pk5min=10 overdueAtStartS={'p50': 80, 'p90': 710, 'max': 781} waitedS={'p50': 80, 'p90': 710, 'max': 781}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=10 pk5min=20 selectedTotal pk5min=20 refusals={'selected': 19, 'visible': 8808} visibleIdentities={'seen': 50, 'neverServed': 29, 'worstWaitFromFirstSeenToFirstStartS': 10800}
+      selected identity pr:feat/wt-2             starts= 175 medianGapS=61 maxGapS=188
+      selected identity pr:feat/wt-7             starts= 175 medianGapS=61 maxGapS=154
+      selected identity pr:feat/wt-12            starts= 173 medianGapS=61 maxGapS=210
+      selected identity pr:feat/wt-17            starts= 174 medianGapS=61 maxGapS=165
+      queueAgeByClient={'1': {'admits': 181, 'p50': 0, 'max': 781}, '2': {'admits': 178, 'p50': 0, 'max': 710}, '3': {'admits': 177, 'p50': 0, 'max': 89}, '4': {'admits': 178, 'p50': 0, 'max': 410}}
+lanes-4sel-n50-c4-gate-d3                      spawns/h=[268, 173, 163] lastH: prReads=147 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=163 pk60=7 | pk60all=14 pk/mean15=3.05
+      gate=d3 starts=551 max5min=20 max60s=10 admits={'selected-own': 181, 'visible': 258, 'selected-borrowed': 112} hits=268 lastGood=1804 deferredCold=361 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 2000, 'over10s': 0} max=4000 calls=3722 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  181 pk60= 4 pk5min= 5 overdueAtStartS={'p50': 115, 'p90': 220, 'max': 234} waitedS={'p50': 115, 'p90': 220, 'max': 234}
+      lane selected-borrowed  starts=  112 pk60= 3 pk5min= 5 overdueAtStartS={'p50': 10, 'p90': 157, 'max': 200} waitedS={'p50': 10, 'p90': 157, 'max': 200}
+      lane visible            starts=  258 pk60= 6 pk5min=15 overdueAtStartS={'p50': 218, 'p90': 690, 'max': 900} waitedS={'p50': 218, 'p90': 690, 'max': 900}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=10 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 335, 'visible': 1830} visibleIdentities={'seen': 50, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 900}
+      selected identity pr:feat/wt-2             starts=  81 medianGapS=80 maxGapS=288
+      selected identity pr:feat/wt-7             starts=  73 medianGapS=157 maxGapS=289
+      selected identity pr:feat/wt-12            starts=  68 medianGapS=189 maxGapS=280
+      selected identity pr:feat/wt-17            starts=  71 medianGapS=157 maxGapS=295
+      queueAgeByClient={'1': {'admits': 151, 'p50': 45, 'max': 801}, '2': {'admits': 151, 'p50': 139, 'max': 762}, '3': {'admits': 125, 'p50': 66, 'max': 750}, '4': {'admits': 124, 'p50': 140, 'max': 900}}
+lanes-fg-n50-c4-gate-d3                        spawns/h=[1604, 1525] lastH: prReads=1506 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=1525 pk60=35 | pk60all=36 pk/mean15=1.34
+      gate=d3 starts=3085 max5min=134 max60s=35 admits={'selected-own': 120, 'visible': 221, 'interactive': 2685, 'selected-borrowed': 59} hits=406 lastGood=1950 deferredCold=375 deadlineHits=0 fgOverflow=894 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=2400 calls=2880 fail=0 checks=0 fg=3579 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  120 pk60= 5 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 50} waitedS={'p50': 0, 'p90': 0, 'max': 50}
+      lane selected-borrowed  starts=   59 pk60= 3 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane visible            starts=  221 pk60= 6 pk5min=15 overdueAtStartS={'p50': 320, 'p90': 700, 'max': 900} waitedS={'p50': 320, 'p90': 700, 'max': 900}
+      lane interactive        starts= 2685 pk60=24 pk5min=114 overdueAtStartS={'p50': 0, 'p90': 8, 'max': 83} waitedS={'p50': 0, 'p90': 8, 'max': 83}
+      budgeted pk60=11 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 719, 'visible': 1606} visibleIdentities={'seen': 49, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 900}
+      selected identity pr:feat/wt-2             starts= 711 medianGapS=8 maxGapS=16
+      selected identity pr:feat/wt-7             starts= 726 medianGapS=8 maxGapS=16
+      selected identity pr:feat/wt-12            starts= 703 medianGapS=8 maxGapS=16
+      selected identity pr:feat/wt-17            starts= 724 medianGapS=8 maxGapS=16
+      queueAgeByClient={'1': {'admits': 858, 'p50': 0, 'max': 900}, '2': {'admits': 737, 'p50': 0, 'max': 411}, '3': {'admits': 745, 'p50': 0, 'max': 801}, '4': {'admits': 745, 'p50': 0, 'max': 730}}
+serve-after-ghes-n14-c2                        spawns/h=[322, 61, 57, 49] lastH: prReads=11 auth=12 rateLimitProbes=0 reqLowerBound(auth x3)=73 pk60=9 | pk60all=32 pk/mean15=15
+      gate=d3 starts=137 max5min=18 max60s=8 admits={'selected-own': 13, 'visible': 124} hits=34 lastGood=52 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 1200, 'p99': 2000, 'over10s': 0} max=2238 calls=391 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   13 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  124 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 70, 'max': 168} waitedS={'p50': 0, 'p90': 70, 'max': 168}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 89} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts=  13 medianGapS=1627 maxGapS=1767
+      queueAgeByClient={'1': {'admits': 137, 'p50': 0, 'max': 168}}
+serve-after-n10-c3                             spawns/h=[85, 15, 13, 12] lastH: prReads=8 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=12 pk60=3 | pk60all=12 pk/mean15=15
+      gate=d3 starts=101 max5min=18 max60s=8 admits={'selected-own': 13, 'visible': 88} hits=39 lastGood=51 deferredCold=17 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 2400, 'over10s': 0} max=4400 calls=398 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   13 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=   88 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 30, 'max': 80} waitedS={'p50': 0, 'p90': 30, 'max': 80}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 68} visibleIdentities={'seen': 9, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 80}
+      selected identity pr:feat/wt-0             starts=  13 medianGapS=1697 maxGapS=1764
+      queueAgeByClient={'1': {'admits': 7, 'p50': 10, 'max': 40}, '3': {'admits': 94, 'p50': 0, 'max': 80}}
+serve-after-n14-c2-noci0                       spawns/h=[108, 21, 16, 18] lastH: prReads=12 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=18 pk60=4 | pk60all=12 pk/mean15=15
+      gate=d3 starts=139 max5min=18 max60s=8 admits={'selected-own': 13, 'visible': 126} hits=30 lastGood=70 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 2018, 'over10s': 0} max=2224 calls=409 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   13 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  126 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 70, 'max': 169} waitedS={'p50': 0, 'p90': 70, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 107} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts=  13 medianGapS=1660 maxGapS=1795
+      queueAgeByClient={'1': {'admits': 139, 'p50': 0, 'max': 169}}
+serve-after-n14-c2-settled                     spawns/h=[68, 21, 19, 18] lastH: prReads=12 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=18 pk60=5 | pk60all=12 pk/mean15=15
+      gate=d3 starts=103 max5min=18 max60s=8 admits={'selected-own': 13, 'visible': 90} hits=6 lastGood=64 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 3400, 'over10s': 0} max=4400 calls=307 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   13 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=   90 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 110, 'max': 169} waitedS={'p50': 0, 'p90': 110, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 101} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts=  13 medianGapS=1627 maxGapS=1798
+      queueAgeByClient={'1': {'admits': 103, 'p50': 0, 'max': 169}}
+serve-after-n14-c2-unfocused                   spawns/h=[32, 4, 4, 4] lastH: prReads=2 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=4 pk60=2 | pk60all=12 pk/mean15=15
+      gate=d3 starts=31 max5min=18 max60s=8 admits={'selected-own': 13, 'visible': 18} hits=8 lastGood=20 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 1800, 'over10s': 0} max=1800 calls=118 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   13 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=   18 pk60= 6 pk5min=15 overdueAtStartS={'p50': 70, 'p90': 168, 'max': 169} waitedS={'p50': 70, 'p90': 168, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 57} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts=  13 medianGapS=1686 maxGapS=1800
+      queueAgeByClient={'1': {'admits': 28, 'p50': 10, 'max': 120}, '2': {'admits': 3, 'p50': 168, 'max': 169}}
+serve-after-n14-c2                             spawns/h=[107, 23, 17, 16] lastH: prReads=11 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=16 pk60=4 | pk60all=12 pk/mean15=15
+      gate=d3 starts=138 max5min=18 max60s=8 admits={'selected-own': 13, 'visible': 125} hits=32 lastGood=66 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 1800, 'over10s': 0} max=2398 calls=405 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   13 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  125 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 70, 'max': 169} waitedS={'p50': 0, 'p90': 70, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 103} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts=  13 medianGapS=1669 maxGapS=1798
+      queueAgeByClient={'1': {'admits': 138, 'p50': 0, 'max': 169}}
+serve-after-n200-c1                            spawns/h=[212, 211, 217, 217] lastH: prReads=169 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=217 pk60=10 | pk60all=12 pk/mean15=2.6
+      gate=d3 starts=734 max5min=18 max60s=8 admits={'selected-own': 13, 'visible': 721} hits=49 lastGood=2403 deferredCold=842 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 1800, 'over10s': 0} max=4000 calls=4028 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   13 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  721 pk60= 6 pk5min=15 overdueAtStartS={'p50': 2226, 'p90': 3510, 'max': 3947} waitedS={'p50': 2226, 'p90': 3510, 'max': 3947}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 3245} visibleIdentities={'seen': 199, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 3930}
+      selected identity pr:feat/wt-0             starts=  13 medianGapS=1691 maxGapS=1787
+      queueAgeByClient={'1': {'admits': 734, 'p50': 2217, 'max': 3947}}
+serve-after-n50-c3-disjoint                    spawns/h=[219, 96, 56, 57] lastH: prReads=42 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=57 pk60=6 | pk60all=14 pk/mean15=15
+      gate=d3 starts=367 max5min=20 max60s=9 admits={'selected-own': 26, 'visible': 341} hits=77 lastGood=784 deferredCold=240 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 1670, 'over10s': 0} max=4400 calls=1784 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   26 pk60= 3 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 72} waitedS={'p50': 0, 'p90': 0, 'max': 72}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  341 pk60= 6 pk5min=15 overdueAtStartS={'p50': 80, 'p90': 760, 'max': 1005} waitedS={'p50': 80, 'p90': 760, 'max': 1005}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=9 pk5min=20 selectedTotal pk5min=5 refusals={'selected': 1, 'visible': 1023} visibleIdentities={'seen': 53, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 930}
+      selected identity pr:feat/wt-0             starts=  13 medianGapS=1649 maxGapS=1770
+      selected identity pr:feat/other-0          starts=  13 medianGapS=1676 maxGapS=1735
+      queueAgeByClient={'1': {'admits': 305, 'p50': 26, 'max': 1005}, '2': {'admits': 17, 'p50': 360, 'max': 440}, '3': {'admits': 45, 'p50': 10, 'max': 920}}
+serve-after-n50-c3-j0                          spawns/h=[209, 72, 50, 50] lastH: prReads=36 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=50 pk60=8 | pk60all=12 pk/mean15=15
+      gate=d3 starts=322 max5min=18 max60s=7 admits={'selected-own': 12, 'visible': 310} hits=122 lastGood=901 deferredCold=323 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 1200, 'over10s': 0} max=2000 calls=2300 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   12 pk60= 1 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  310 pk60= 6 pk5min=15 overdueAtStartS={'p50': 110, 'p90': 710, 'max': 940} waitedS={'p50': 110, 'p90': 710, 'max': 940}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=7 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 1224} visibleIdentities={'seen': 49, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 930}
+      selected identity pr:feat/wt-0             starts=  12 medianGapS=1800 maxGapS=1801
+      queueAgeByClient={'1': {'admits': 6, 'p50': 20, 'max': 40}, '2': {'admits': 17, 'p50': 360, 'max': 440}, '3': {'admits': 299, 'p50': 10, 'max': 940}}
+serve-after-n50-c3                             spawns/h=[211, 76, 50, 52] lastH: prReads=36 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=52 pk60=7 | pk60all=13 pk/mean15=15
+      gate=d3 starts=328 max5min=18 max60s=8 admits={'selected-own': 13, 'visible': 315} hits=123 lastGood=966 deferredCold=323 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 1514, 'over10s': 0} max=2853 calls=2383 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   13 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  315 pk60= 6 pk5min=15 overdueAtStartS={'p50': 70, 'p90': 716, 'max': 942} waitedS={'p50': 70, 'p90': 716, 'max': 942}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 1289} visibleIdentities={'seen': 49, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 930}
+      selected identity pr:feat/wt-0             starts=  13 medianGapS=1635 maxGapS=1735
+      queueAgeByClient={'1': {'admits': 7, 'p50': 10, 'max': 40}, '2': {'admits': 17, 'p50': 360, 'max': 440}, '3': {'admits': 304, 'p50': 20, 'max': 942}}
+serve-before-ghes-n14-c2                       spawns/h=[1652, 1140, 1110, 1127] lastH: prReads=358 auth=35 rateLimitProbes=0 reqLowerBound(auth x3)=1197 pk60=45 | pk60all=85 pk/mean15=2.61
+      gate=none starts=2650 max5min=72 max60s=28 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 1200, 'p99': 2000, 'over10s': 0} max=3000 calls=2650 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      queueAgeByClient={}
+serve-before-n10-c3                            spawns/h=[839, 820, 652, 607] lastH: prReads=522 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=607 pk60=18 | pk60all=36 pk/mean15=1.85
+      gate=none starts=2920 max5min=78 max60s=30 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 600, 'p99': 2000, 'over10s': 0} max=4000 calls=2920 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      queueAgeByClient={}
+serve-before-n14-c2-settled                    spawns/h=[731, 670, 418, 377] lastH: prReads=328 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=377 pk60=14 | pk60all=33 pk/mean15=2.28
+      gate=none starts=2672 max5min=72 max60s=28 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 1200, 'over10s': 0} max=3000 calls=2672 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      queueAgeByClient={}
+serve-before-n14-c2                            spawns/h=[729, 597, 399, 380] lastH: prReads=328 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=380 pk60=14 | pk60all=33 pk/mean15=2.36
+      gate=none starts=2672 max5min=72 max60s=28 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 1800, 'over10s': 0} max=2800 calls=2672 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      queueAgeByClient={}
+serve-before-n200-c1                           spawns/h=[4958, 4918] lastH: prReads=4229 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=4918 pk60=176 | pk60all=221 pk/mean15=2.17
+      gate=none starts=8659 max5min=482 max60s=200 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 800, 'p99': 1600, 'over10s': 0} max=3200 calls=8659 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      queueAgeByClient={}
+serve-before-n50-c3                            spawns/h=[3793, 3761] lastH: prReads=3239 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=3761 pk60=124 | pk60all=168 pk/mean15=1.58
+      gate=none starts=6628 max5min=363 max60s=148 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 600, 'p99': 1400, 'over10s': 0} max=4600 calls=6628 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      queueAgeByClient={}
+serve-oldclient-n14-c2                         spawns/h=[379, 375] lastH: prReads=329 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=375 pk60=14 | pk60all=18 pk/mean15=2.39
+      gate=d3 starts=670 max5min=36 max60s=14 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 301, 'upstreamReads': 670} rpcMs={'p50': 400, 'p99': 1200, 'over10s': 0} max=2400 calls=1340 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=0 pk5min=0 selectedTotal pk5min=0 refusals={'selected': 0, 'visible': 0} visibleIdentities={'seen': 0, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 0}
+      queueAgeByClient={}
+timeout-slow3-n14-c2                           spawns/h=[106, 19] lastH: prReads=14 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=19 pk60=3 | pk60all=12 pk/mean15=15
+      gate=d3 starts=109 max5min=18 max60s=8 admits={'selected-own': 9, 'visible': 100} hits=37 lastGood=62 deferredCold=44 deadlineHits=70 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 10000, 'over10s': 0} max=10000 calls=422 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=    9 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  100 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 100, 'max': 158} waitedS={'p50': 0, 'p90': 100, 'max': 158}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 106} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts=   9 medianGapS=896 maxGapS=1758
+      queueAgeByClient={'1': {'admits': 107, 'p50': 0, 'max': 158}, '2': {'admits': 2, 'p50': 50, 'max': 50}}
+timeout-slow3-n50-c3                           spawns/h=[211, 74] lastH: prReads=56 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=74 pk60=7 | pk60all=13 pk/mean15=10
+      gate=d3 starts=243 max5min=18 max60s=8 admits={'selected-own': 9, 'visible': 234} hits=122 lastGood=943 deferredCold=323 deadlineHits=223 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 10000, 'over10s': 0} max=10000 calls=2328 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=    9 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  234 pk60= 6 pk5min=15 overdueAtStartS={'p50': 379, 'p90': 745, 'max': 934} waitedS={'p50': 379, 'p90': 745, 'max': 934}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 1266} visibleIdentities={'seen': 49, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 930}
+      selected identity pr:feat/wt-0             starts=   9 medianGapS=872 maxGapS=1735
+      queueAgeByClient={'1': {'admits': 7, 'p50': 10, 'max': 40}, '2': {'admits': 17, 'p50': 360, 'max': 440}, '3': {'admits': 219, 'p50': 379, 'max': 934}}
+timeout-slow5-over-client-deadline-n14-c2      spawns/h=[105, 18] lastH: prReads=13 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=18 pk60=3 | pk60all=12 pk/mean15=15
+      gate=d3 starts=107 max5min=18 max60s=8 admits={'selected-own': 9, 'visible': 98} hits=35 lastGood=54 deferredCold=37 deadlineHits=78 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 10000, 'over10s': 0} max=10000 calls=411 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=    9 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=   98 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 100, 'max': 169} waitedS={'p50': 0, 'p90': 100, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 91} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts=   9 medianGapS=900 maxGapS=1794
+      queueAgeByClient={'1': {'admits': 107, 'p50': 0, 'max': 169}}

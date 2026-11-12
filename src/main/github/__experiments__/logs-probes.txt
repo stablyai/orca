@@ -1,0 +1,11 @@
+npm notice run orca@1.4.214 npx
+npm notice run 'vitest' run --config config/vitest.config.ts src/main/github/__experiments__/gate-lanes.probe.test.ts src/main/github/__experiments__/scheduler-d3.probe.test.ts src/main/github/__experiments__/policy-d3.probe.test.ts src/main/github/__experiments__/rate-limit-d3.probe.test.ts
+
+ RUN  v5.0.5 /Users/m4air/orca/workspaces/orca/sta-8667-d3-m4air-gate
+
+
+ Test Files  4 passed (4)
+      Tests  17 passed (17)
+   Start at  12:49:32
+   Duration  284ms (transform 33%, setup 29%, tests 26%, worker 10%, import 2%)
+
