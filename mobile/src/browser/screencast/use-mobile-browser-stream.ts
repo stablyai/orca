@@ -1,12 +1,10 @@
-import { translate } from '../i18n/mobile-i18n'
+import { translate } from '../../i18n/mobile-i18n'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { PixelRatio } from 'react-native'
-import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { BrowserScreencastFrameMetadata } from './browser-screencast-protocol'
-import {
-  buildMobileBrowserScreencastRequest,
-  type MobileBrowserViewMode
-} from './browser-screencast-request'
+import { buildMobileBrowserScreencastRequest } from './browser-screencast-request'
+import type { MobileBrowserViewMode } from './browser-screencast-request-parameters'
 import {
   MAX_ZOOM,
   MIN_ZOOM,
@@ -19,15 +17,15 @@ import {
   computeBrowserFrameGeometry,
   type BrowserTouchLayout,
   type BrowserZoomState
-} from './browser-touch-geometry'
-import type { MobileBrowserTab } from '../session/tabs/mobile-session-tabs'
+} from '../page-interaction/browser-touch-geometry'
+import type { MobileBrowserTab } from '../../session/tabs/mobile-session-tabs'
 import {
   handleBrowserScreencastEvent,
   type BrowserDialogState,
   type ScreencastEvent
 } from './mobile-browser-stream-events'
 import { createBrowserFramePacer } from './browser-frame-pacer'
-import { useMobileBrowserRequest } from './use-mobile-browser-request'
+import { useMobileBrowserRequest } from '../page-interaction/use-mobile-browser-request'
 
 type MobileBrowserStreamArgs = {
   binaryScreencastGranted: boolean

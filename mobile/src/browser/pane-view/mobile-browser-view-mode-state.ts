@@ -1,4 +1,4 @@
-import type { MobileBrowserViewMode } from './browser-screencast-request'
+import type { MobileBrowserViewMode } from '../screencast/browser-screencast-request-parameters'
 
 const BROWSER_VIEW_MODE_STATE_LIMIT = 40
 const browserViewModeByPageKey = new Map<string, MobileBrowserViewMode>()

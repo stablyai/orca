@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, type Dispatch, type SetStateAction } from 'react'
-import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { BrowserScreencastFrameMetadata } from './browser-screencast-protocol'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { BrowserScreencastFrameMetadata } from '../screencast/browser-screencast-protocol'
 import { browserPointerMove, browserPointerWheel } from './mobile-browser-command-operations'
 import type { BrowserPageParams } from './use-mobile-browser-request'
 import {

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import { translate } from '../i18n/mobile-i18n'
-import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
-import type { BrowserScreencastFrameMetadata } from './browser-screencast-protocol'
+import { translate } from '../../i18n/mobile-i18n'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
+import type { BrowserScreencastFrameMetadata } from '../screencast/browser-screencast-protocol'
 import {
   browserDialogAccept,
   browserDialogDismiss,
@@ -22,8 +22,8 @@ import {
   type BrowserTouchLayout,
   type BrowserZoomState
 } from './browser-touch-geometry'
-import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
-import type { BrowserDialogState } from './mobile-browser-stream-events'
+import type { BrowserPointerModifier } from '../pane-view/MobileBrowserPointerModifiers'
+import type { BrowserDialogState } from '../screencast/mobile-browser-stream-events'
 import { useMobileBrowserWheelQueue } from './use-mobile-browser-wheel-queue'
 
 const TOUCH_CLICK_RADIUS_DIP = 14

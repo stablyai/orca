@@ -1,13 +1,13 @@
 import { StyleSheet, Text, View } from 'react-native'
-import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../src/shared/browser-workspace-types'
 import {
   describeBrowserLoadFailure,
   formatBrowserLoadFailureText,
   isBrowserNetworkLoadFailure
-} from '../../../src/shared/browser-load-failure'
-import { colors, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+} from '../../../../src/shared/browser-load-failure'
+import { colors, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
 /** The desktop failure page's words over the streamed frame, which shows only a blank page. */
 export function MobileBrowserLoadFailure({ loadError }: { loadError: BrowserLoadError }) {

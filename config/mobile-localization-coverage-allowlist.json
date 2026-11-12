@@ -7,35 +7,35 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserKeyRow.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserKeyRow.tsx",
     "kind": "jsx-expression",
     "text": "Esc",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
     "kind": "object-property:label",
     "text": "Alt",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
     "kind": "object-property:label",
     "text": "Cmd",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
     "kind": "object-property:label",
     "text": "Ctrl",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
     "kind": "object-property:label",
     "text": "Shift",
     "dynamic": false,

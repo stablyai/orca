@@ -16574,8 +16574,8 @@
       "operation": "browser.page-commands",
       "family": "browser.pointer-click",
       "sites": [
-        "mobile/src/browser/use-mobile-browser-request.ts",
-        "mobile/src/browser/use-mobile-browser-commands.ts"
+        "mobile/src/browser/page-interaction/use-mobile-browser-request.ts",
+        "mobile/src/browser/page-interaction/use-mobile-browser-commands.ts"
       ],
       "schedules": [],
       "steps": [
@@ -16659,8 +16659,8 @@
       "operation": "browser.page-commands",
       "family": "browser.pointer-click",
       "sites": [
-        "mobile/src/browser/use-mobile-browser-request.ts",
-        "mobile/src/browser/use-mobile-browser-commands.ts"
+        "mobile/src/browser/page-interaction/use-mobile-browser-request.ts",
+        "mobile/src/browser/page-interaction/use-mobile-browser-commands.ts"
       ],
       "schedules": [],
       "steps": [
@@ -16700,8 +16700,8 @@
       "operation": "browser.page-commands",
       "family": "browser.wheel",
       "sites": [
-        "mobile/src/browser/use-mobile-browser-request.ts",
-        "mobile/src/browser/use-mobile-browser-commands.ts"
+        "mobile/src/browser/page-interaction/use-mobile-browser-request.ts",
+        "mobile/src/browser/page-interaction/use-mobile-browser-commands.ts"
       ],
       "schedules": [],
       "steps": [
@@ -16753,8 +16753,8 @@
       "operation": "browser.page-commands",
       "family": "browser.keyboard",
       "sites": [
-        "mobile/src/browser/use-mobile-browser-request.ts",
-        "mobile/src/browser/use-mobile-browser-commands.ts"
+        "mobile/src/browser/page-interaction/use-mobile-browser-request.ts",
+        "mobile/src/browser/page-interaction/use-mobile-browser-commands.ts"
       ],
       "schedules": [],
       "steps": [

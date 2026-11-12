@@ -1,14 +1,14 @@
 import type { GestureResponderEvent } from 'react-native'
 import type { BrowserScreencastFrameMetadata } from './browser-screencast-protocol'
-import { colors } from '../theme/mobile-theme'
+import { colors } from '../../theme/mobile-theme'
 import {
   clampBrowserZoomState,
   readLocalTouchPoint,
   type BrowserFrameGeometry,
   type BrowserPoint,
   type BrowserZoomState
-} from './browser-touch-geometry'
-import type { MobileBrowserViewMode } from './browser-screencast-request'
+} from '../page-interaction/browser-touch-geometry'
+import type { MobileBrowserViewMode } from './browser-screencast-request-parameters'
 
 export type FrameLayer = 0 | 1
 export type PinchGesture = {

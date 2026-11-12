@@ -118,19 +118,19 @@
       "reason": "The shell renders this page for the session screen, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and the route manifest imports every route, so one throwing module takes the whole bundle down. Shorter than its siblings because the route body is MobileSessionRouteScreen, which the switch also needs as an element: useMobileSessionController opens the terminal, chat and tab subscriptions, and at the switch's top level it would open them behind the page too."
     },
     {
-      "file": "src/browser/browser-frame-layer-paint.web.ts",
+      "file": "src/browser/screencast/browser-frame-layer-paint.web.ts",
       "reason": "setNativeProps does not exist on React Native Web: an Image or View ref is the DOM node itself, so both native writes throw rather than paint and the pane never shows a frame. This file writes the same two things through the element — the frame as a background-image on the child RN Web sizes, the double buffer as one opacity write per layer — so the pane still never re-renders while it streams. It also answers whenBrowserFrameDisplayable, which is a no-op natively: a background write fires no load event, so the flip to the pending layer is armed from an image decode instead of the Image's onLoad."
     },
     {
-      "file": "src/browser/browser-frame-data-uri.web.ts",
+      "file": "src/browser/screencast/browser-frame-data-uri.web.ts",
       "reason": "The bridge hands the page its frame as base64 and the data URI wants base64, so the native file encodes the bytes back into the string they arrived as. The page resolves buffer to the JS shim rather than Node's native encoder, which makes that the largest per-frame cost the page pays. This file reads the base64 the bridge kept and falls back to the native encoding for a frame that carried none."
     },
     {
-      "file": "src/browser/use-browser-binary-screencast-grant.web.ts",
+      "file": "src/browser/screencast/use-browser-binary-screencast-grant.web.ts",
       "reason": "Natively the socket carries the binary screencast frame and this app is both halves of that path, so there is nothing to negotiate. In the page the frames come through a shell that may predate the encoder, and subscribing with wantsBinary against one leaves the pane on a stream no frame can arrive on. This file asks the shell through the grants init carried, per C6 ruling 5."
     },
     {
-      "file": "src/browser/browser-screencast-request.web.ts",
+      "file": "src/browser/screencast/browser-screencast-request.web.ts",
       "reason": "Not an RN Web API gap but a transport one that exists only in the page: a screencast frame crosses the bridge as one message under BRIDGE_MAX_MESSAGE_BYTES, and a phone's mobile view at the native device scale factor produces a worst-case JPEG larger than that. This file budgets the mobile view's area against the cap, the envelope it measures rather than names, and one worst-case bytes-per-pixel constant. Web view mode is untouched, because a letterboxed desktop viewport is not an area the page can predict."
     },
     {

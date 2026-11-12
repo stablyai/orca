@@ -1,4 +1,4 @@
-import type { BrowserScreencastFrameMetadata } from './browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../screencast/browser-screencast-protocol'
 
 export type BrowserTouchLayout = {
   width: number
