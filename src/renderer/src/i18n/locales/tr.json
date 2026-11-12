@@ -401,7 +401,8 @@
       "remove": "Kaldır…",
       "empty": "Bu profilde etkin eklenti yok",
       "visitWebStore": "Chrome Web Store'u ziyaret et",
-      "manage": "Eklentileri yönet"
+      "manage": "Eklentileri yönet",
+      "openWebStoreFailed": "Chrome Web Store açılamadı."
     },
     "history": {
       "clear": "Tarama geçmişini temizle",
@@ -17182,6 +17183,14 @@
                     "logins": {
                       "title": "Oturumunuz açık kalsın",
                       "body": "Mevcut oturumlarınızı Orca'ya aktararak oturum açmış halde hemen devam edin."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome eklentileri",
+                        "body": "Eklentileri Chrome Web Store’dan yükleyin ve adres çubuğunun yanına sabitleyin.",
+                        "action": "Chrome Web Store’u aç",
+                        "secondaryAction": "Anladım"
+                      }
                     }
                   },
                   "tasks": {
