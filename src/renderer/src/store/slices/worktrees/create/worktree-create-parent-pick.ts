@@ -110,9 +110,11 @@ export function resolveWorktreeCreateParent(
       isOnCreationHost
     )
   }
-  const usable =
-    picked && !picked.isArchived && !isWorktreeRetiredByRemoval(picked) ? picked.id : undefined
   const pickedDisplayName = picked ? resolveWorktreeDisplayName(picked).trim() : null
+  if (picked && isWorktreeRetiredByRemoval(picked)) {
+    return { pickedDisplayName, staleBeforeCreate: true }
+  }
+  const usable = picked && !picked.isArchived ? picked.id : undefined
   if (usable) {
     return {
       parentWorkspace: worktreeWorkspaceKey(usable),

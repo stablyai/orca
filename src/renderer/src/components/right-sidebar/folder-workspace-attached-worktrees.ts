@@ -108,7 +108,7 @@ export function getAttachedWorktreesForFolderWorkspace({
   const childrenByParent = new Map<string, Worktree[]>()
   for (const [identity, parent] of parentByIdentity) {
     const child = rows.get(identity)!
-    if (child.isArchived || isWorktreeRetiredByRemoval(child)) {
+    if (child.isArchived) {
       continue
     }
     const parentIdentity = getWorktreeHostIdentity(parent)
@@ -127,15 +127,20 @@ export function getAttachedWorktreesForFolderWorkspace({
     rootLineageByChildId.set(child.worktreeId, entries)
   }
   const members = new Map<string, AttachedWorktreeOwner>()
+  const visited = new Set<string>()
   const queue: Worktree[] = []
   const add = (worktree: Worktree, attachedAt: number) => {
     const identity = getWorktreeHostIdentity(worktree)
     if (
       worktree.isArchived ||
-      isWorktreeRetiredByRemoval(worktree) ||
-      members.has(identity) ||
+      visited.has(identity) ||
       selectedById.get(worktree.id) !== worktree
     ) {
+      return
+    }
+    visited.add(identity)
+    queue.push(worktree)
+    if (isWorktreeRetiredByRemoval(worktree)) {
       return
     }
     members.set(identity, {
@@ -145,7 +150,6 @@ export function getAttachedWorktreesForFolderWorkspace({
       worktree,
       attachedAt
     })
-    queue.push(worktree)
   }
   for (const row of rows.values()) {
     const lineage = rootLineageByChildId
@@ -222,7 +226,7 @@ export function getLineageChildrenByParentId(
   const queue = [...rootWorktreeIds]
   for (let index = 0; index < queue.length; index += 1) {
     for (const child of projectedChildrenByParentId.get(queue[index]) ?? []) {
-      if (child.isArchived || isWorktreeRetiredByRemoval(child) || includedIds.has(child.id)) {
+      if (child.isArchived || includedIds.has(child.id)) {
         continue
       }
       includedIds.add(child.id)
@@ -248,7 +252,7 @@ export function getLineageChildrenByParentId(
   return descendantsByParentId
 }
 
-/** Exported so the composer's parent picker offers exactly the roots this view attaches. */
+/** Resolve traversal roots even when retirement makes only their descendants selectable. */
 export function getLineageChildWorktree(
   lineage: WorkspaceLineage,
   worktreeById: Map<string, Worktree>
@@ -258,7 +262,7 @@ export function getLineageChildWorktree(
     return null
   }
   const worktree = worktreeById.get(childScope.worktreeId)
-  if (!worktree || worktree.isArchived || isWorktreeRetiredByRemoval(worktree)) {
+  if (!worktree || worktree.isArchived) {
     return null
   }
   if (lineage.childInstanceId && lineage.childInstanceId !== worktree.instanceId) {
