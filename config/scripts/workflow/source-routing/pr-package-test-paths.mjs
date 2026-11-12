@@ -129,7 +129,6 @@ export const LINUX_PACKAGE_TESTS = [
   'src/main/browser/guest-lifecycle/popups/presentation/popup-origin-chrome.electron.test.ts',
   'src/main/browser/guest-lifecycle/navigation/browser-link-materialization.electron.test.ts',
   'src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts',
-  'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-compatibility.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-native-compatibility.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-background-compatibility.electron.test.ts',
   'src/main/browser/extensions/api-runtime/browser-extension-api.electron.test.ts',
