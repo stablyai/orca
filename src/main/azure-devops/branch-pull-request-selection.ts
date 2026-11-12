@@ -74,8 +74,10 @@ async function shouldHideStaleCompletedPullRequest(
     localGitOptions: HostedReviewLocalGitOptions
   }
 ): Promise<boolean> {
+  // An explicit link exempts only its own PR; any other completed candidate
+  // stays an implicit match, so a stale sibling cannot shadow the linked review.
   if (
-    typeof input.linkedPRNumber === 'number' ||
+    (typeof input.linkedPRNumber === 'number' && raw.pullRequestId === input.linkedPRNumber) ||
     mapAzureDevOpsPullRequestState(raw) !== 'merged'
   ) {
     return false
@@ -86,7 +88,9 @@ async function shouldHideStaleCompletedPullRequest(
   }
   return shouldHideMergedImplicitReview(
     'merged',
-    input.linkedPRNumber,
+    // The linked number exempts only its own PR (handled above); a non-matching
+    // candidate reaching this point is an implicit match.
+    null,
     raw.lastMergeSourceCommit?.commitId?.trim() ?? null,
     await readCurrentReviewHead(input.repoPath, input.connectionId, input.localGitOptions)
   )

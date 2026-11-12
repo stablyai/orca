@@ -312,6 +312,59 @@ describe('Azure DevOps hosted review integration', () => {
     )
   })
 
+  it('does not let a stale completed PR shadow the explicitly linked PR', async () => {
+    await withAzureServerAndRepo(
+      [
+        completedPullRequest(78, '1111111111111111111111111111111111111111'),
+        {
+          pullRequestId: 79,
+          title: 'Linked branch review',
+          status: 'active',
+          creationDate: '2026-10-30T00:00:00Z',
+          mergeStatus: 'succeeded',
+          lastMergeSourceCommit: { commitId: '2222222222222222222222222222222222222222' }
+        }
+      ],
+      async (repoPath) => {
+        await expect(
+          getHostedReviewForBranch({
+            executionHostId: 'local',
+            repoPath,
+            branch: 'refs/heads/feature/azure',
+            linkedAzureDevOpsPR: 79
+          })
+        ).resolves.toMatchObject({ provider: 'azure-devops', number: 79, state: 'open' })
+      }
+    )
+  })
+
+  it('does not let a stale completed PR shadow a linked completed PR', async () => {
+    await withAzureServerAndRepo(
+      [
+        completedPullRequest(78, '1111111111111111111111111111111111111111'),
+        {
+          pullRequestId: 79,
+          title: 'Linked completed branch review',
+          status: 'completed',
+          creationDate: '2026-10-29T00:00:00Z',
+          closedDate: '2026-11-01T00:00:00Z',
+          mergeStatus: 'succeeded',
+          lastMergeSourceCommit: { commitId: '2222222222222222222222222222222222222222' }
+        }
+      ],
+      async (repoPath) => {
+        await expect(
+          getHostedReviewForBranch({
+            executionHostId: 'local',
+            repoPath,
+            branch: 'refs/heads/feature/azure',
+            linkedAzureDevOpsPR: 79
+          })
+        ).resolves.toMatchObject({ provider: 'azure-devops', number: 79, state: 'merged' })
+      }
+    )
+  })
+
   it('surfaces the active PR hidden behind a newer completed one on a reused branch', async () => {
     await withAzureServerAndRepo(
       [
