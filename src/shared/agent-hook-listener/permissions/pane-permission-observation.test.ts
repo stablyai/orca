@@ -139,4 +139,41 @@ describe('pane-permission-observation', () => {
     )
     expect(stopEvent?.providerSession?.permissionMode).toBeUndefined()
   })
+
+  it('does not apply a replacement session bypass observation to a superseded session hook', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
+    const state = createHookListenerState()
+    let callCount = 0
+    const reader: PaneAgentCommandLineReader = () => {
+      callCount += 1
+      return callCount === 1
+        ? new Promise<string | null>(() => {})
+        : Promise.resolve('zcode --mode yolo')
+    }
+
+    const bareBody = makeBody('UserPromptSubmit', 'sess-bare', { prompt: 'bare' })
+    const fullBody = makeBody('UserPromptSubmit', 'sess-full', { prompt: 'full' })
+
+    const bareWait = observePanePermissionBeforeHook(state, reader, 'zcode', bareBody, 'production')
+    const fullWait = observePanePermissionBeforeHook(state, reader, 'zcode', fullBody, 'production')
+    await fullWait
+    await vi.advanceTimersByTimeAsync(500)
+    await bareWait
+
+    const bareEvent = applyObservedPanePermission(
+      state,
+      normalizeHookPayload(state, 'zcode', bareBody, 'production'),
+      false
+    )
+    expect(bareEvent?.providerSession?.id).toBe('sess-bare')
+    expect(bareEvent?.providerSession?.permissionMode).toBeUndefined()
+
+    const fullEvent = applyObservedPanePermission(
+      state,
+      normalizeHookPayload(state, 'zcode', fullBody, 'production'),
+      false
+    )
+    expect(fullEvent?.providerSession?.id).toBe('sess-full')
+    expect(fullEvent?.providerSession?.permissionMode).toBe('bypassPermissions')
+  })
 })

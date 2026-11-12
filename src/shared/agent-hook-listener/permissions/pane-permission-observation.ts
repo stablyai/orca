@@ -3,6 +3,10 @@ import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { agentCommandLineBypassesPermissions } from '../../agent-launch/permissions/agent-command-line-permissions'
 import { YOLO_TUI_AGENT_ARGS } from '../../agent-launch/permissions/tui-agent-permissions'
 import {
+  agentProviderSessionsEqual,
+  type AgentProviderSessionMetadata
+} from '../../agent-session/lifecycle/agent-session-resume'
+import {
   readHookAgentProcess,
   type AgentProcessIdentity
 } from '../../agent-status/process/agent-process-presence'
@@ -10,6 +14,7 @@ import { beforeDeadline, monotonicNow } from '../../deadline-settle-notifier'
 import { parseHookEnvelope } from '../hook-envelope'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
+import { readPaneSessionContext } from '../pane-provider-session'
 import { hookRootAnswerDeadline } from '../presence/hook-root-attempts'
 import {
   isFreshSessionStartHook,
@@ -27,6 +32,7 @@ export type PaneAgentCommandLineReader = (
 
 export type PaneCliBypassObservation = {
   agent: TuiAgent
+  providerSession: AgentProviderSessionMetadata
   bypass?: boolean
   answerBy?: number
   inFlight?: Promise<void>
@@ -64,6 +70,15 @@ export function observePanePermissionBeforeHook(
   if (isSubagentHookPayload(hookPayload)) {
     return waitForObservation(state.paneCliBypassObservationByPaneKey.get(paneKey))
   }
+  const { providerSession } = readPaneSessionContext(
+    state,
+    source,
+    { paneKey, hookPayloadRecord: hookPayload },
+    envelope.eventName
+  )
+  if (!providerSession) {
+    return waitForObservation(state.paneCliBypassObservationByPaneKey.get(paneKey))
+  }
   if (readHookReportedPermissionMode(source, hookPayload) !== undefined) {
     state.paneCliBypassObservationByPaneKey.delete(paneKey)
     return undefined
@@ -73,10 +88,13 @@ export function observePanePermissionBeforeHook(
     isNewTurnEvent(source, envelope.eventName) ||
     isFreshSessionStartHook(source, hookPayload, envelope.eventName)
   if (cached?.agent === source && !boundary) {
-    return waitForObservation(cached)
+    return agentProviderSessionsEqual(source, cached.providerSession, providerSession)
+      ? waitForObservation(cached)
+      : undefined
   }
   const entry: PaneCliBypassObservation = {
     agent: source,
+    providerSession,
     answerBy: hookRootAnswerDeadline()
   }
   const sender = readHookAgentProcess(source, envelope.record.agentProcess)
@@ -106,7 +124,12 @@ export function applyObservedPanePermission(
     return event
   }
   const observed = state.paneCliBypassObservationByPaneKey.get(resolvePaneKey(event.paneKey))
-  if (!observed || observed.agent !== event.payload.agentType || observed.bypass === undefined) {
+  if (
+    !observed ||
+    observed.agent !== event.payload.agentType ||
+    observed.bypass === undefined ||
+    !agentProviderSessionsEqual(observed.agent, observed.providerSession, event.providerSession)
+  ) {
     return event
   }
   if (observed.bypass) {
