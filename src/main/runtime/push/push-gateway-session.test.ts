@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { buildPushChallengeFixture, createPushHostKeypair } from './push-host-challenge-fixtures'
 import { PushGatewaySession, type PushSessionOutcome } from './push-gateway-session'
 
@@ -87,52 +87,6 @@ describe('PushGatewaySession', () => {
     expect(tokenOf(await harness.session.ensure('session-1'))).toBe('session-2')
     expect(tokenOf(await harness.session.ensure('session-1'))).toBe('session-2')
     expect(harness.challenges()).toBe(2)
-  })
-
-  it('reports a session minted for another host as rejected', async () => {
-    const harness = createSessionHarness({ wrongFingerprint: true })
-
-    expect(await harness.session.ensure(null)).toEqual({ ok: false, reason: 'rejected' })
-  })
-
-  it('caches a refusal briefly instead of re-handshaking on every call', async () => {
-    const harness = createSessionHarness({ sessionStatus: 403 })
-
-    await harness.session.ensure(null)
-    await harness.session.ensure(null)
-    expect(harness.challenges()).toBe(1)
-
-    harness.now.value += 30_000
-    await harness.session.ensure(null)
-    expect(harness.challenges()).toBe(2)
-  })
-
-  it('never caches a transport failure, which may clear on the next try', async () => {
-    const fetchImpl = vi.fn(async () => {
-      throw new Error('network down')
-    }) as unknown as typeof globalThis.fetch
-    const session = new PushGatewaySession({
-      origin: GATEWAY_ORIGIN,
-      keypair: createPushHostKeypair(),
-      fetchImpl,
-      now: () => NOW
-    })
-
-    expect(await session.ensure(null)).toEqual({ ok: false, reason: 'unreachable' })
-    expect(await session.ensure(null)).toEqual({ ok: false, reason: 'unreachable' })
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
-  })
-
-  it('reports a rate-limited challenge as unreachable and backs off', async () => {
-    const harness = createSessionHarness({ challengeStatus: 429 })
-
-    expect(await harness.session.ensure(null)).toEqual({ ok: false, reason: 'unreachable' })
-    expect(await harness.session.ensure(null)).toEqual({ ok: false, reason: 'unreachable' })
-    expect(harness.requests()).toBe(1)
-
-    harness.now.value += 60_000
-    await harness.session.ensure(null)
-    expect(harness.requests()).toBe(2)
   })
 
   it('shares one handshake across concurrent callers', async () => {

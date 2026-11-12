@@ -5,7 +5,18 @@ import { checkIgnoredPaths } from './source-control/check-ignored-paths'
 import type { GitRuntimeOptions } from './git-runtime-options'
 
 // Offer common dependency/build folders when unignored content saturates status.
-const KNOWN_HUGE_FOLDER_NAMES = ['node_modules', '.next', 'dist', 'build', 'target', 'vendor']
+const KNOWN_HUGE_FOLDER_NAMES = [
+  'node_modules',
+  '.next',
+  'dist',
+  'build',
+  'target',
+  'vendor',
+  '.dart_tool',
+  '.gradle',
+  '.turbo',
+  'Pods'
+]
 
 export async function findKnownHugeFolderPathsToIgnore(
   worktreePath: string,

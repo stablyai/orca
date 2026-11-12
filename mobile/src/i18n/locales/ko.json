@@ -3361,6 +3361,12 @@
   },
   "tasks": {
     "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}}을(를) 병합하시겠습니까?",
+      "confirmGitHubSquash": "PR #{{number}}의 커밋을 합쳐서 병합하시겠습니까?",
+      "confirmGitHubRebase": "PR #{{number}}을(를) 리베이스한 후 병합하시겠습니까?",
+      "confirmGitLabMerge": "병합 요청 #{{number}}을(를) 병합하시겠습니까?",
+      "confirmGitLabSquash": "병합 요청 #{{number}}의 커밋을 합쳐서 병합하시겠습니까?",
+      "confirmGitLabRebase": "병합 요청 #{{number}}을(를) 리베이스한 후 병합하시겠습니까?",
       "merged": "병합됨",
       "closed": "닫힘",
       "conflicts": "충돌",

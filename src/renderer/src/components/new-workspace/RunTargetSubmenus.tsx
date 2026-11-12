@@ -1,7 +1,7 @@
 import React from 'react'
 import { ChevronDown, Cloud, Plus, Server } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { RunTargetRow } from './RunTargetComboboxRow'
 import {

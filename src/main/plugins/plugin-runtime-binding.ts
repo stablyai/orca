@@ -1,14 +1,15 @@
 import type { PluginEventName } from '../../shared/plugins/manifest/plugin-manifest'
+import { savedWorkspaceCatalog } from '../persistence/profile-save-domains'
 import type { PluginAgentStatusChangedPayload } from '../../shared/plugins/events/plugin-events'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/workers/plugin-host-api'
-import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
+import type { PluginRuntimeDelegate } from './workers/host-api/plugin-host-service-bindings'
 import type { PluginService } from './plugin-service'
 import { installPluginHookRunner } from './hooks/plugin-hook-participants'
-import { installPluginResidentWorkerWarmer } from './workers/plugin-resident-worker'
+import { installPluginResidentWorkerWarmer } from './workers/worker-admission/plugin-resident-worker'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
 import type { DispatcherOptions } from '../runtime/rpc/dispatcher'
-import type { PluginRuntimeRpc } from './workers/plugin-host-workspace-method-bindings'
+import type { PluginRuntimeRpc } from './workers/host-api/plugin-host-workspace-method-bindings'
 import {
   pluginTerminalTitle,
   projectPluginWorkspaceContext,
@@ -16,7 +17,7 @@ import {
   type PluginAgentStatusRow,
   type PluginWorkspaceContext,
   type PluginWorkspaceTerminal
-} from './workers/plugin-workspace-projection'
+} from './workers/host-api/plugin-workspace-projection'
 
 type PluginEvents = {
   emitEvent(event: PluginEventName, payload: unknown): void
@@ -166,6 +167,7 @@ export function watchPluginWorkspaceContext(input: {
   delegate: PluginRuntimeDelegate
   events: PluginEvents
   onSessionWritten: (listener: () => void) => () => void
+  onStateWritten: (listener: (domains: readonly string[] | undefined) => void) => () => void
   delayMs?: number
 }): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -183,11 +185,19 @@ export function watchPluginWorkspaceContext(input: {
       input.events.emitEvent('workspace.changed', change)
     }
   }
-  const stop = input.onSessionWritten(() => {
+  const schedule = (): void => {
     timer ??= setTimeout(() => void check(), input.delayMs ?? WORKSPACE_CHANGE_DEBOUNCE_MS)
+  }
+  const stopSession = input.onSessionWritten(schedule)
+  // A folder workspace rename reaches the context through the catalog, not the session.
+  const stopCatalog = input.onStateWritten((domains) => {
+    if (savedWorkspaceCatalog(domains)) {
+      schedule()
+    }
   })
   return () => {
-    stop()
+    stopSession()
+    stopCatalog()
     if (timer) {
       clearTimeout(timer)
     }

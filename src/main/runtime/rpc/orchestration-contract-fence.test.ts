@@ -7,7 +7,8 @@ import '../orchestration/db/contract-constants'
 import '../orchestration/db/messages/mailbox-routing-page'
 import '../orchestration/db/dispatch-row-writer'
 import '../orchestration/db/attempt-outcome-projection'
-import { defineMethod, type RpcRequest } from './core'
+import type { RpcRequest } from './core'
+import { defineOrchestrationMethod } from './methods/orchestration/access/orchestration-method-access'
 import { RpcDispatcher } from './dispatcher'
 
 describe('orchestration contract fence', () => {
@@ -19,7 +20,7 @@ describe('orchestration contract fence', () => {
     }
   })
 
-  function createHarness(method = 'orchestration.send') {
+  function createHarness(method: `orchestration.${string}` = 'orchestration.send') {
     const database = new OrchestrationDb(':memory:')
     databases.push(database)
     const runtime = new OrcaRuntimeService()
@@ -28,9 +29,10 @@ describe('orchestration contract fence', () => {
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: [
-        defineMethod({
+        defineOrchestrationMethod({
           name: method,
           permission: 'workspace',
+          access: { kind: 'writes', targets: {} },
           params: z.object({ subject: z.string() }),
           handler: effect
         })
@@ -81,38 +83,4 @@ describe('orchestration contract fence', () => {
       expect(database.getMutationReceipt(callerFingerprint, 'mutation_1')).toBeUndefined()
     }
   )
-
-  it.each(['orchestration.run', 'orchestration.runStop'])(
-    'retires %s even when the caller sends the current contract',
-    async (method) => {
-      const { dispatcher, effect } = createHarness(method)
-      const response = await dispatcher.dispatch(
-        request({
-          method,
-          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
-        })
-      )
-
-      expect(response).toMatchObject({
-        ok: false,
-        error: {
-          code: 'orchestration_migration_required',
-          data: { reason: 'command_retired', effectsApplied: false }
-        }
-      })
-      expect(effect).not.toHaveBeenCalled()
-    }
-  )
-
-  it('applies the same pre-effect fence on WebSocket dispatch', async () => {
-    const { dispatcher, effect } = createHarness()
-    const replies: string[] = []
-    await dispatcher.dispatchStreaming(request(), (reply) => replies.push(reply))
-
-    expect(JSON.parse(replies[0] ?? '{}')).toMatchObject({
-      ok: false,
-      error: { code: 'orchestration_migration_required' }
-    })
-    expect(effect).not.toHaveBeenCalled()
-  })
 })

@@ -1,4 +1,4 @@
-import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
+import { isEventTargetInsideFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import type { BrowserChromeShortcutScope } from './browser-page-types'
 
 export function browserOverlayOwnsShortcutTarget(

@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react'
-import { View } from 'react-native'
+import { View, type HostInstance } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
@@ -23,7 +23,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   const rail = useSessionTerminalKeyRail(controller)
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
   // The field's ✕, which the held mic may be released over.
-  const dictationCancelRef = useRef<View>(null)
+  const dictationCancelRef = useRef<HostInstance>(null)
   const {
     insets,
     dictationMode,

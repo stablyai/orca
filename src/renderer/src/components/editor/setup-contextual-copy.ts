@@ -14,6 +14,7 @@ import {
   setPrimarySelectionText
 } from '@/lib/clipboard/primary-selection/primary-selection'
 import { translate } from '@/i18n/i18n'
+import { createContextualCopyHintRefresh } from './contextual-copy-hint-refresh'
 
 export function setupContextualCopy({
   editorInstance,
@@ -32,7 +33,6 @@ export function setupContextualCopy({
   }>
   copyToastTimeoutRef: React.MutableRefObject<number | null>
 }): void {
-  let copyHintInterval: number | null = null
   let primarySelectionTimer: number | null = null
   let copyHintWidgetPosition: editor.IContentWidgetPosition | null = null
   let lastCopiedSelectionKey: string | null = null
@@ -97,7 +97,7 @@ export function setupContextualCopy({
     updateCopyHintLabel()
     const model = editorInstance.getModel()
     const selection = editorInstance.getSelection()
-    // Why: hint ticks need selection bounds; extracting the selected text scales with file size.
+    // Selection bounds avoid extracting text that scales with file size.
     if (!model || !selection || selection.isEmpty() || !canCopySelectionWithContext(selection)) {
       copyHintNode.style.display = 'none'
       copyHintWidgetPosition = null
@@ -163,34 +163,8 @@ export function setupContextualCopy({
 
   const isCopyHintVisible = (): boolean => copyHintNode.style.display === 'block'
 
-  const startCopyHintPolling = (): void => {
-    if (copyHintInterval !== null) {
-      return
-    }
-    copyHintInterval = window.setInterval(() => {
-      updateCopyHint()
-      if (!isCopyHintVisible()) {
-        stopCopyHintPolling()
-      }
-    }, 150)
-  }
-
-  const stopCopyHintPolling = (): void => {
-    if (copyHintInterval !== null) {
-      window.clearInterval(copyHintInterval)
-      copyHintInterval = null
-    }
-  }
-
-  const refreshCopyHintAndPolling = (): void => {
-    updateCopyHint()
-    if (editorInstance.hasTextFocus() && isCopyHintVisible()) {
-      // Poll only visible hints; selection-free focused editors otherwise burn idle CPU.
-      startCopyHintPolling()
-    } else {
-      stopCopyHintPolling()
-    }
-  }
+  const { refresh: refreshCopyHint, dispose: disposeCopyHintRefresh } =
+    createContextualCopyHintRefresh(editorInstance, isCopyHintVisible, updateCopyHint)
 
   const getContextualCopyText = (): string | null => {
     const model = editorInstance.getModel()
@@ -272,16 +246,15 @@ export function setupContextualCopy({
     if (getSelectionKey() !== lastCopiedSelectionKey) {
       lastCopiedSelectionKey = null
     }
-    refreshCopyHintAndPolling()
+    refreshCopyHint()
   })
   const scrollListener = editorInstance.onDidScrollChange(() => {
-    refreshCopyHintAndPolling()
+    refreshCopyHint()
   })
   const focusListener = editorInstance.onDidFocusEditorText(() => {
-    refreshCopyHintAndPolling()
+    refreshCopyHint()
   })
   const blurListener = editorInstance.onDidBlurEditorText(() => {
-    stopCopyHintPolling()
     copyHintNode.style.display = 'none'
     copyHintWidgetPosition = null
     editorInstance.layoutContentWidget(copyHintWidget)
@@ -299,9 +272,10 @@ export function setupContextualCopy({
     void copySelectionWithContext()
   }
   editorDomNode.addEventListener('keydown', handleKeyDown, true)
-  editorDomNode.addEventListener('mouseup', refreshCopyHintAndPolling, true)
-  editorDomNode.addEventListener('keyup', refreshCopyHintAndPolling, true)
+  editorDomNode.addEventListener('mouseup', refreshCopyHint, true)
+  editorDomNode.addEventListener('keyup', refreshCopyHint, true)
   editorInstance.onDidDispose(() => {
+    disposeCopyHintRefresh()
     selectionListener.dispose()
     scrollListener.dispose()
     focusListener.dispose()
@@ -317,13 +291,12 @@ export function setupContextualCopy({
       primarySelectionTimer = null
     }
     editorDomNode.removeEventListener('keydown', handleKeyDown, true)
-    editorDomNode.removeEventListener('mouseup', refreshCopyHintAndPolling, true)
-    editorDomNode.removeEventListener('keyup', refreshCopyHintAndPolling, true)
-    stopCopyHintPolling()
+    editorDomNode.removeEventListener('mouseup', refreshCopyHint, true)
+    editorDomNode.removeEventListener('keyup', refreshCopyHint, true)
     editorInstance.removeContentWidget(copyHintWidget)
   })
   if (editorInstance.hasTextFocus()) {
-    refreshCopyHintAndPolling()
+    refreshCopyHint()
   } else {
     updateCopyHint()
   }

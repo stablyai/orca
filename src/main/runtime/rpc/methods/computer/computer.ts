@@ -5,7 +5,7 @@ import {
   callComputerSidecarListWindows,
   callComputerSidecarSnapshot,
   resetComputerSidecarForTest
-} from '../../../../computer/sidecar-client'
+} from '../../../../computer/sidecar-transport/sidecar-client'
 import { defineMethod } from '../../core'
 import {
   Click,
@@ -54,7 +54,7 @@ export const COMPUTER_METHODS = [
     params: ComputerPermissions,
     handler: async (params) => {
       const { openComputerUsePermissions } =
-        await import('../../../../computer/macos-computer-use-permissions')
+        await import('../../../../computer/macos-permissions/macos-computer-use-permissions')
       return openComputerUsePermissions(params.id)
     }
   }),
@@ -64,7 +64,7 @@ export const COMPUTER_METHODS = [
     params: ComputerPermissionsStatusParams,
     handler: async () => {
       const { computerUsePermissionStatusGate } =
-        await import('../../../../computer/macos-computer-use-permission-status-gate')
+        await import('../../../../computer/macos-permissions/macos-computer-use-permission-status-gate')
       return computerUsePermissionStatusGate.read()
     }
   }),

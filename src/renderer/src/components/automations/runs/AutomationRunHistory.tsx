@@ -1,7 +1,7 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import {

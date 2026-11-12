@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { FolderGit2, MousePointer2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 function TerminalDots(): JSX.Element {
   return (

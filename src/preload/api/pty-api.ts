@@ -79,8 +79,6 @@ export type PtyApi = {
     spawnIntent?: SpawnIntent
     // A restore no user act asked for; main holds it for a stopped WSL distro. Older mains ignore it.
     wslPassiveRestore?: true
-    // The user's "let agents ask" answer for this launch; older mains ignore it.
-    skipAgentWorkspaceTrust?: true
     agentLaunch?: AgentPaneLaunchRequest
     // Main emits agent_started only after a successful spawn.
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
@@ -122,7 +120,7 @@ export type PtyApi = {
     id: string,
     data: string,
     inputKind: TerminalInputKind,
-    options?: { requireWriteSettlement?: true }
+    options?: { requireWriteSettlement?: true; requireStartupDialog?: string }
   ) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void

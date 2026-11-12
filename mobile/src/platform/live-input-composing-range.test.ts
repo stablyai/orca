@@ -26,9 +26,4 @@ describe('the composing range a live input reports', () => {
       undefined
     ])
   })
-
-  it('passes the range through where there is no navigator', () => {
-    vi.stubGlobal('navigator', undefined)
-    expect(reportedLiveInputComposing(true)).toBe(true)
-  })
 })

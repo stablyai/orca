@@ -5,7 +5,7 @@ import {
   buildWorkspaceFileContext,
   canClientOsOpenWorkspaceFile
 } from '@/runtime/files/workspace-file-host-routing'
-import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
+import { getRuntimeTargetForWorktreeOwner } from '@/lib/files/access/file-owner-runtime-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { parseWslUncPath, toWindowsWslPath } from '../../../../../shared/wsl-paths'

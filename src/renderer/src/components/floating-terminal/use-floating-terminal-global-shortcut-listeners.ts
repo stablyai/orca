@@ -3,7 +3,7 @@ import {
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspaceTerminalInputTarget,
   switchFloatingWorkspaceTab
-} from '@/lib/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '@/store'
 import {

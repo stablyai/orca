@@ -1,0 +1,14 @@
+id: claude-entrypoint-key-owner
+snapshots:
+  "env[CLAUDE_ENTRYPOINT_ENV] = 'orca'":
+    labels:
+      - source: CLAUDE_ENTRYPOINT_ENV
+        style: primary
+        start: 4
+        end: 25
+  "import { CLAUDE_ENTRYPOINT_ENV as key } from './claude-chat-entrypoint'":
+    labels:
+      - source: CLAUDE_ENTRYPOINT_ENV
+        style: primary
+        start: 9
+        end: 30

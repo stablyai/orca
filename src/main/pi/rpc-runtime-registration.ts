@@ -8,8 +8,8 @@ import {
   structuredAgentLaunchSources
 } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { PI_RPC_AGENT } from './rpc-agent-definition'
-import { piRpcLaunchPart } from './rpc-launch-resolution'
-import { PiRpcSessionAdapter } from './rpc-session-adapter'
+import { piRpcLaunchPart } from './rpc/launch/rpc-launch-resolution'
+import { PiRpcSessionAdapter } from './rpc/rpc-session-adapter'
 import { PI_RPC_RUNTIME_METADATA } from './rpc-runtime-metadata'
 import { reviseAgentSessionProviderResumePoint } from '../runtime/agent-session/ownership/agent-session-provider-handle-transition'
 

@@ -34,14 +34,13 @@ Every plugin frame on desktop is an Electron `<webview>`:
     nowhere to go; preconnect hints go through it and are never resolved.
   - `<link rel="dns-prefetch">` resolves on the system resolver, outside webRequest and the proxy, so
     `will-attach-webview` pins the guest renderer's `--blink-settings=dnsPrefetchingEnabled=false`
-    (`PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS`), covering static, script-inserted and child-frame hints
-    (`plugin-frame-guest-egress.electron.test.ts`). `X-DNS-Prefetch-Control: off`, the matching `<meta>`
+    (`PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS`), covering static, script-inserted and child-frame hints.
+    `X-DNS-Prefetch-Control: off`, the matching `<meta>`
     and the app-wide `dns-prefetch-disable` switch were measured and do not stop it.
 - **Storage**: uninstalling a plugin clears its partition (`clearStorageData` and `clearCache`).
   - Guest `setWebRTCIPHandlingPolicy('disable_non_proxied_udp')`.
   - Permission request/check handlers deny everything, so `navigator.clipboard` reads and writes are
-    refused; `document.execCommand('copy'|'cut')` works only inside a user gesture, as on any web page
-    (pinned by `plugin-frame-guest-clipboard.electron.test.ts`);
+    refused; `document.execCommand('copy'|'cut')` works only inside a user gesture, as on any web page;
     HID, serial, USB and Bluetooth choosers are cancelled.
   - `will-download` is cancelled; `setWindowOpenHandler` denies; navigation away from the plugin origin is
     cancelled.
@@ -72,7 +71,7 @@ Every plugin frame on desktop is an Electron `<webview>`:
   browser-page chords (address bar, find, reload, history, page zoom); a custom editor's save chord still
   rides `editor.keydown`, so it fires once. Editable fields get Orca's Cut/Copy/Paste context menu.
 - **Switch (default on)**: rolling back is the constant `PLUGIN_ISOLATED_FRAMES_DEFAULT` in
-  `src/main/plugins/panels/plugin-frame-isolation.ts`. `ORCA_PLUGIN_ISOLATED_FRAMES=0` turns guests off
+  `src/main/plugins/panels/guest-isolation/plugin-frame-isolation.ts`. `ORCA_PLUGIN_ISOLATED_FRAMES=0` turns guests off
   for one machine and `=1` on, overriding the
   `experimentalPluginIsolatedFrames` setting; all are main-process only. Off, frames use the `srcdoc` iframe
   (never offered `orca.shell`/`orca.files`), and components panels say they are not available.

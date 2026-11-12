@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   deferred,
   fixture
-} from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
+} from '../../src/main/persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { RuntimeClientSettingsController } from '../../src/main/runtime/client/settings/runtime-client-settings'
 import { HostAgentLaunchSettings } from '../../src/renderer/src/components/settings/agents/launch/HostAgentLaunchSettings'
 import { TooltipProvider } from '../../src/renderer/src/components/ui/tooltip'
@@ -78,11 +78,7 @@ describe('host form and committed-settings contract', () => {
     )
     await screen.findByDisplayValue('--host-marker')
     const label = getAgentCatalog().find((agent) => agent.id === 'claude')?.label
-    fireEvent.click(
-      within(screen.getByRole('radiogroup', { name: `${label} availability` })).getByRole('radio', {
-        name: 'Disabled'
-      })
-    )
+    fireEvent.click(screen.getByRole('switch', { name: `${label} availability` }))
     try {
       await started.promise
       expect(readState().settings.disabledTuiAgents).toContain('claude')

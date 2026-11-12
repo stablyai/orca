@@ -5,7 +5,7 @@ import { buildDispatchPreamble } from '../workers/launch/worker-dispatch-preambl
 import { sendAgentTurn } from '../turn-delivery/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../terminal/wait/launched-agent-write-guard'
 import { OrchestrationError } from '../orchestration-error'
-import { defineMethod } from '../../rpc/core'
+import { defineOrchestrationMethod } from '../../rpc/methods/orchestration/access/orchestration-method-access'
 import { assertOrchestrationWorktreeCreationSupported } from '../../rpc/methods/orchestration/worker/folder-worktree-placement'
 import type { FederationEffect } from './federation-effects'
 import { launchFederatedWorkerAgent } from './federated-worker-agent-launch'
@@ -29,8 +29,12 @@ import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/workspace-creato
 import { claimTerminalForRemoteAttach } from '../db/worker-dispatch/worker-terminal-claim'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.federationAttachStart',
+    access: {
+      kind: 'localOnly',
+      targets: { runId: 'run', dispatchId: 'dispatch', taskId: 'task', terminal: 'worker' }
+    },
     requires: ['accounts'],
     permission: 'workspace',
     params: FederationAttachStartParams,

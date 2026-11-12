@@ -17,6 +17,9 @@ export const prTabStyles = themedStyleSheet(() => ({
   header: { gap: spacing.xs },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
   badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: spacing.sm,
     paddingVertical: 1,
     borderRadius: radii.pill,

@@ -22,7 +22,12 @@ let repo: Repo
 const provisionManagedWorktreeTerminals = vi.fn()
 
 function runtimeFor() {
-  const worktree = { id: `repo::${worktreePath}`, repoId: 'repo', path: worktreePath }
+  const worktree = {
+    id: `repo::${worktreePath}`,
+    repoId: 'repo',
+    path: worktreePath,
+    displayName: 'w'
+  }
   return {
     showManagedWorktree: vi.fn(async () => worktree),
     requireStore: () => ({

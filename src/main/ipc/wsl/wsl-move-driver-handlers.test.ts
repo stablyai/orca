@@ -1,4 +1,4 @@
-import type * as WslMoveDriverPreviewModule from '../../persistence/moving-wsl-projects/wsl-move-driver-preview'
+import type * as WslMoveDriverPreviewModule from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-preview'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
 
@@ -16,17 +16,19 @@ const driver = vi.hoisted(() => ({
   moveProjectsToWslHost: vi.fn(async () => ({ outcome: 'moved' })),
   cancelWslMove: vi.fn(() => true)
 }))
-vi.mock('../../persistence/moving-wsl-projects/wsl-move-driver', () => driver)
+vi.mock('../../persistence/moving-wsl-projects/wsl-move-driver', () => ({
+  moveProjectsToWslHost: driver.moveProjectsToWslHost
+}))
 
 vi.mock(
-  '../../persistence/moving-wsl-projects/wsl-move-driver-preview',
+  '../../persistence/moving-wsl-projects/execution/wsl-move-driver-preview',
   async (importOriginal) => ({
     ...(await importOriginal<typeof WslMoveDriverPreviewModule>()),
     previewWslMove: driver.previewWslMove
   })
 )
 const running = vi.hoisted(() => ({ any: false }))
-vi.mock('../../persistence/moving-wsl-projects/wsl-move-running-moves', () => ({
+vi.mock('../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves', () => ({
   isAnyWslMoveRunning: () => running.any,
   cancelWslMove: driver.cancelWslMove
 }))

@@ -3,7 +3,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPasteSource } from '../input/paste/terminal-paste-model'
 import { copyTerminalSelection } from '../clipboard/terminal-selection-copy'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { createTerminalRightClickPasteCapture } from '../input/paste/create-terminal-right-click-paste-capture'
 
 type UseTerminalContextMenuTriggerDeps = {

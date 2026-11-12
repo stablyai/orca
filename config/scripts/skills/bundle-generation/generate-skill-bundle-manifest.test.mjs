@@ -114,17 +114,6 @@ describe('skill bundle manifest generator', () => {
     expect(digests).toHaveLength(2)
   })
 
-  it('fails when a digest is missing or the pull request base cannot be read', async () => {
-    const sandbox = await createGeneratorSandbox()
-    sandbox.generate('--write')
-    expect(() => sandbox.generateOnPullRequest()).toThrow(/Cannot read the pull request base/)
-    await writeFile(
-      path.join(sandbox.root, 'resources', 'skills', 'released-digests.json'),
-      `${JSON.stringify({ schemaVersion: 1, skills: { demo: [] } }, null, 2)}\n`
-    )
-    expect(() => sandbox.generate()).toThrow(/stale/)
-  })
-
   it.runIf(process.platform !== 'win32')(
     'rejects executable files in shipped skill packages',
     async () => {

@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
-import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 

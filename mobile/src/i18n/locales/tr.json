@@ -1461,11 +1461,11 @@
       "updateRequired": "PDF'leri açmak için Orca Mobile'ı güncelleyin"
     },
     "unsavedEditsOffer": {
-      "changedSince": "{{time}} tarihli düzenlemelerinizden sonra masaüstünde değişti",
+      "changedSince": "Düzenlemelerinizden ({{time}}) sonra masaüstünde değişti",
       "copyMyEdits": "Düzenlemelerimi kopyala",
       "discard": "Vazgeç",
       "restore": "Geri yükle",
-      "unsavedFrom": "{{time}} tarihli kaydedilmemiş düzenlemeler"
+      "unsavedFrom": "Kaydedilmemiş düzenlemeler ({{time}})"
     }
   },
   "home": {
@@ -3365,6 +3365,12 @@
   },
   "tasks": {
     "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} birleştirilsin mi?",
+      "confirmGitHubSquash": "PR #{{number}} commit’leri squash edilerek birleştirilsin mi?",
+      "confirmGitHubRebase": "PR #{{number}} yeniden temellendirilip birleştirilsin mi?",
+      "confirmGitLabMerge": "Birleştirme isteği #{{number}} birleştirilsin mi?",
+      "confirmGitLabSquash": "Birleştirme isteği #{{number}} commit’leri squash edilerek birleştirilsin mi?",
+      "confirmGitLabRebase": "Birleştirme isteği #{{number}} yeniden temellendirilip birleştirilsin mi?",
       "merged": "Birleştirildi",
       "closed": "Kapatıldı",
       "conflicts": "Çakışmalar",

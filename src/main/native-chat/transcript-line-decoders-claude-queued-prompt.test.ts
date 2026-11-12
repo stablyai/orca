@@ -37,4 +37,18 @@ describe('Claude queued_command attachment', () => {
       parentId: 'tool-result-row'
     })
   })
+
+  it('keeps inline images from a prompt absorbed mid-turn, which have no source row', () => {
+    const line = queuedCommand({
+      prompt: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0K' } },
+        { type: 'text', text: '[Image #3]' }
+      ],
+      commandMode: 'prompt'
+    })
+    expect(decodeClaudeTranscriptLine(line, 'fallback')?.blocks).toEqual([
+      { type: 'image-ref', url: 'data:image/png;base64,iVBORw0K' },
+      { type: 'text', text: '[Image #3]' }
+    ])
+  })
 })

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useContextWorkspaceStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
@@ -32,7 +32,7 @@ import {
   type PendingParentPicker
 } from '../parenting/use-worktree-parent-picker-transition'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { getWorktreeContextMenuBatchLabels } from './workspace-batch-action-labels'
 import { useTranslate } from '@/i18n/use-translate'
 

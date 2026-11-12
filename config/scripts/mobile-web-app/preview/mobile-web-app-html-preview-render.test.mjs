@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
 import { chromium, webkit } from 'playwright-core'
-import { lucideBarrelPlugin } from '../../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
+import { mobileWebRenderCheckPlugins } from '../../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
@@ -109,7 +109,7 @@ beforeAll(async () => {
     jsx: 'automatic',
     logLevel: 'silent',
     // Reuse shipped Lucide shim; barrel reexports missing LucideProvider and toolbar otherwise fails linking.
-    plugins: [lucideBarrelPlugin],
+    plugins: mobileWebRenderCheckPlugins,
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: { 'react-native': 'react-native-web' },
     // Prefer web siblings, including .web.jsx/.web.js; native WebView/Fabric SVG paths fail in browser.

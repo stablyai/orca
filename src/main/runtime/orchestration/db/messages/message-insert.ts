@@ -8,6 +8,7 @@ import { generateId } from '../generated-id'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
+import { notifyPeerMailQueued } from '../../federation/peer-mail/peer-mail-waiters'
 import { ORCHESTRATION_UNBOUND_RUN_ID as UNBOUND_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 
 const MESSAGE_INSERT_SAVEPOINT = 'message_insert_batch'
@@ -27,6 +28,8 @@ export type MessageInsert = {
   runId?: string
   answerSenderSnapshot?: string
   deliveryContract?: MessageDeliveryContract
+  /** The Dispatch whose worker sent this, as the sender's own check found it; kept for a peer Run's queue. */
+  senderDispatchId?: string
 }
 
 export function insertMessage(this: OrchestrationDb, msg: MessageInsert): MessageRow {
@@ -44,6 +47,16 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
   this.requireRun(runId)
   const id = msg.id ?? generateId('msg')
   const type = msg.type ?? 'status'
+  if (msg.senderDispatchId) {
+    // Before the insert, whose trigger queues a peer Run's mail home with it; immutable after.
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO message_dispatch_provenance (message_id, dispatch_id, task_id)
+         SELECT ?, d.id, d.task_id FROM dispatch_contexts d
+         WHERE d.id = ? AND d.run_id IN (SELECT run_id FROM peer_runs)`
+      )
+      .run(id, msg.senderDispatchId)
+  }
   // Heartbeats only record liveness: store them handled so they never reach a mailbox or wake it.
   const handled = type === 'heartbeat' ? 1 : 0
   const stmt = this.db.prepare(`
@@ -70,6 +83,8 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
     handled,
     handled
   )
+  // Mail filed in a peer Run is queued home by trigger in this statement.
+  notifyPeerMailQueued(this.db)
   return exposeMessageTimestamps(
     this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
   )

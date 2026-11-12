@@ -1,4 +1,5 @@
-import { defineMethod, type RpcContext } from '../../../core'
+import type { RpcContext } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isGeneratedId } from '../../../../orchestration/db/generated-id'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -34,22 +35,42 @@ function requireRuntimePairing(
   return ctx.authenticatedCallerFingerprint
 }
 
-function pendingReplies(db: OrchestrationDb, peerFingerprint: string): FederationRelayItemRow[] {
-  const items: FederationRelayItemRow[] = []
-  for (const conversationId of db.listPeerConversationIds(peerFingerprint)) {
-    if (items.length >= PULL_PAGE_SIZE) {
-      break
-    }
-    items.push(
-      ...db.listPendingFederationRelay(conversationId, 'to_home', PULL_PAGE_SIZE - items.length)
-    )
-  }
-  return items
+// Where each pairing's next page starts, per database, when more conversations are pending than a page holds.
+const pullRotations = new WeakMap<object, Map<string, number>>()
+
+/** Every conversation with pending items gets an equal share of the page, so an item the paired Orca
+ *  cannot import yet, which stays at its conversation's head, never starves another conversation. */
+function pendingReplies(
+  db: OrchestrationDb,
+  peerFingerprint: string,
+  holdBack: ReadonlySet<string>
+): FederationRelayItemRow[] {
+  const pending = db
+    .listPeerConversationIds(peerFingerprint)
+    .filter((id) => !holdBack.has(id) && db.listPendingFederationRelay(id, 'to_home', 1).length > 0)
+  const share = Math.max(1, Math.floor(PULL_PAGE_SIZE / pending.length))
+  const pullRotation = pullRotations.get(db.db) ?? new Map<string, number>()
+  pullRotations.set(db.db, pullRotation)
+  const start = pending.length > PULL_PAGE_SIZE ? (pullRotation.get(peerFingerprint) ?? 0) : 0
+  pullRotation.set(peerFingerprint, (start + PULL_PAGE_SIZE) % Math.max(1, pending.length))
+  return [...pending.slice(start), ...pending.slice(0, start)]
+    .slice(0, PULL_PAGE_SIZE)
+    .flatMap((id) => db.listPendingFederationRelay(id, 'to_home', share))
+    .slice(0, PULL_PAGE_SIZE)
 }
 
 export const ORCHESTRATION_PEER_MAIL_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.peerMailDeliver',
+    access: {
+      kind: 'localOnly',
+      targets: {
+        conversationId: 'conversation',
+        messageId: 'message',
+        to: 'party',
+        threadId: 'message'
+      }
+    },
     permission: 'workspace',
     params: PeerMailDeliverParams,
     handler: async (params, ctx) => {
@@ -134,31 +155,37 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       return { message: { id: params.messageId, to } }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.peerMailPull',
+    access: { kind: 'localOnly', targets: {} },
     permission: 'workspace',
     params: PeerMailPullParams,
     handler: async (params, ctx) => {
       const peerFingerprint = requireRuntimePairing(ctx)
       const db = ctx.runtime.getOrchestrationDb()
-      let items = pendingReplies(db, peerFingerprint)
+      const holdBack = new Set(params.holdBack)
+      let items = pendingReplies(db, peerFingerprint, holdBack)
       const waitMs = Math.min(Math.max(params.waitMs ?? 0, 0), MAX_PULL_WAIT_MS)
-      if (items.length === 0 && waitMs > 0) {
-        await waitForPeerMail(db, waitMs, ctx.signal)
-        items = pendingReplies(ctx.runtime.getOrchestrationDb(), peerFingerprint)
+      const deadline = Date.now() + waitMs
+      // A wake is any queued change on this Orca, so one that queued nothing for this peer waits on.
+      while (items.length === 0 && Date.now() < deadline && !ctx.signal?.aborted) {
+        await waitForPeerMail(db.db, deadline - Date.now(), ctx.signal)
+        items = pendingReplies(ctx.runtime.getOrchestrationDb(), peerFingerprint, holdBack)
       }
       return {
         items: items.map((item) => ({
           conversationId: item.dispatch_id,
           sequence: item.sequence,
           messageId: item.message_id,
+          kind: item.kind,
           payload: item.payload
         }))
       }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.peerMailAck',
+    access: { kind: 'localOnly', targets: {} },
     permission: 'workspace',
     params: PeerMailAckParams,
     handler: (params, ctx) => {

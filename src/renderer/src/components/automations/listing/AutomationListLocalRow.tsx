@@ -20,7 +20,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import { getAutomationRunRepoId } from '../../../../../shared/automations/history/automation-run-identity'
 import { formatUiAutomationSchedule } from '../details/automation-schedule-label'
@@ -50,8 +50,11 @@ import {
   LIST_TABLE_ROW_CLASS,
   LIST_TABLE_ROW_SELECTED_CLASS,
   LIST_TABLE_STICKY_ROW_CELL_CLASS
-} from '@/lib/list-table-layout'
-import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
+} from '@/lib/list-interaction/list-table-layout'
+import {
+  isPortaledRowMenuClick,
+  isRowActivationKey
+} from '@/lib/list-interaction/list-row-interaction'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'

@@ -20,7 +20,7 @@ import { prepareWorktreeCreateCheckout } from '../../../git/worktrees/creation/w
 import { queuePreparedWorktreeTipRefresh } from './worktree-preparation-refresh-queue'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { createPreparationActivity } from './worktree-create-preparation-activity'
-import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/profile-state-access-identity'
+import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/access/profile-state-access-identity'
 import type { PreparationActivity } from './worktree-create-preparation-activity'
 import {
   deferPreparationForClaim,
