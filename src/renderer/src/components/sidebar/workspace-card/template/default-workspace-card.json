@@ -2,6 +2,7 @@
   "version": 1,
   "facts": 1,
   "vars": {
+    "compactHeader": "options.compactHeader",
     "classic": "options.style == 'classic'",
     "compact": "options.style == 'compact'",
     "newStyle": "options.style == 'new'",
@@ -181,19 +182,23 @@
           "overflow": "=vars.inlineAgents || links.count > 1 ? 'visible' : 'clip'"
         },
         "children": [
+          { "el": "CompactHeader", "when": "vars.compactHeader" },
           {
             "el": "DetailsHover",
-            "when": "vars.hoverDetails && !ws.isRenaming",
+            "when": "!vars.compactHeader && vars.hoverDetails && !ws.isRenaming",
             "props": { "branchName": "=vars.hoverBranch", "workspaceTitle": "=vars.hoverTitle" },
             "children": [{ "el": "IdentityBlock" }]
           },
-          { "el": "IdentityBlock", "when": "!(vars.hoverDetails && !ws.isRenaming)" },
+          {
+            "el": "IdentityBlock",
+            "when": "!vars.compactHeader && !(vars.hoverDetails && !ws.isRenaming)"
+          },
           { "el": "RemoteBranchConflict", "when": "git.remoteBranchConflict != null" },
           { "el": "DeleteFailed", "when": "ws.removalError != null && !ws.isDeleting" },
           { "el": "LinearSetupPrompt", "when": "place.isActive && links.linearIssue" },
           {
             "el": "Agents",
-            "when": "vars.inlineAgents",
+            "when": "!vars.compactHeader && vars.inlineAgents",
             "props": { "tight": "=!(vars.hasMetaRow || git.remoteBranchConflict != null)" }
           },
           { "el": "ChildToggle", "when": "lineage.toggleable" }

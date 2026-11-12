@@ -19,10 +19,14 @@ import { WorktreeCreateButton } from './WorktreeCreateButton'
 
 export function WorktreeCardHeader({
   card,
-  presentation
+  presentation,
+  agentDisclosure,
+  branchLabel
 }: {
   card: WorktreeCardController
   presentation: WorktreeCardPresentation
+  agentDisclosure?: React.ReactNode
+  branchLabel?: string
 }): React.JSX.Element {
   const {
     worktree,
@@ -133,6 +137,15 @@ export function WorktreeCardHeader({
           />
         )}
 
+        {branchLabel && !titleRenaming && (
+          <span
+            className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+            data-compact-workspace-branch="true"
+          >
+            {branchLabel}
+          </span>
+        )}
+        {agentDisclosure}
         {showTitleRowIndicators && titleRowIndicators}
       </div>
 

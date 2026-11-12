@@ -479,6 +479,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   wslHostOfferDismissed?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
   compactWorktreeCards: boolean
+  /** One workspace header with an inline agent disclosure. */
+  compactWorktreeHeader?: boolean
   /** Legacy persisted key from the Experimental rollout; new writes use compactWorktreeCards. */
   experimentalCompactWorktreeCards?: boolean
   /** Active non-local runtime environment for client-routed RPC; null keeps local desktop behavior. */

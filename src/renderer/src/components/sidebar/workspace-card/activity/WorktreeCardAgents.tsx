@@ -14,7 +14,8 @@ import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
 import { cn } from '@/lib/class-names'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
-import { CompactAgentExpansion, CompactAgentSummaryButton } from './worktree-card-compact-agents'
+import { CompactAgentExpansion } from './worktree-card-compact-agents'
+import { WorktreeCardAgentList } from './worktree-card-agent-list'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
 import { revealCompactAgentCard } from '../../worktree-list/navigation/worktree-sidebar-reveal'
@@ -43,33 +44,44 @@ type Props = {
   worktreeId: string
   agents?: DashboardAgentRowData[]
   className?: string
+  renderHeader?: (summary: React.ReactNode) => React.ReactElement
 }
 
 const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   worktreeId,
   agents: precomputedAgents,
-  className
+  className,
+  renderHeader
 }: Props) {
   useUiLanguageRevision()
   const selectedAgents = useWorktreeAgentRows(worktreeId, precomputedAgents === undefined)
   const agents = precomputedAgents ?? selectedAgents
   if (agents.length === 0) {
-    return null
+    return renderHeader?.(null) ?? null
   }
   // Only non-empty bodies mount the 30s clock, avoiding timer cost for idle worktrees.
-  return <WorktreeCardAgentsBody worktreeId={worktreeId} agents={agents} className={className} />
+  return (
+    <WorktreeCardAgentsBody
+      worktreeId={worktreeId}
+      agents={agents}
+      className={className}
+      renderHeader={renderHeader}
+    />
+  )
 })
 
 type BodyProps = {
   worktreeId: string
   agents: DashboardAgentRowData[]
   className?: string
+  renderHeader?: Props['renderHeader']
 }
 
 const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   worktreeId,
   agents,
-  className
+  className,
+  renderHeader
 }: BodyProps) {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
@@ -370,53 +382,26 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     )
   }
 
-  if (agentActivityDisplayMode === 'compact') {
-    const summaryAgents = hasLineage ? rootAgents : agents
-    // Collapse compact multi-agent lists except when their rows are the send-target picker.
-    const shouldUseSummaryRow = summaryAgents.length > 1 && !isAgentSendTargetModeActive
-    const subjectLabel = t('sidebar.agentSummary.agentCount', '{{count}} agents', {
-      count: hasLineage ? rootAgents.length : agents.length,
-      defaultValue_one: '{{count}} agent'
-    })
-
+  if (renderHeader || agentActivityDisplayMode === 'compact') {
     return (
-      <div
-        ref={compactAgentListRootRef}
-        className={cn('flex flex-col mt-1 gap-0.5', className)}
-        onClick={stopBubble}
-        onDoubleClick={stopBubble}
-        onMouseDown={stopBubble}
-        onPointerDown={stopBubble}
-        role={hasLineage ? 'tree' : 'group'}
-        aria-label={t('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
-        data-compact-agent-list="true"
-      >
-        {agents.length === 0 ? null : shouldUseSummaryRow ? (
-          <div
-            className={cn(
-              'compact-agent-summary-panel',
-              compactRootListExpanded && 'compact-agent-summary-panel-expanded'
-            )}
-          >
-            <CompactAgentSummaryButton
-              agents={summaryAgents}
-              subjectLabel={subjectLabel}
-              expanded={compactRootListExpanded}
-              onToggle={() => {
-                dispatchSuppressScrollAdjustment()
-                toggleCompactRootList()
-              }}
-            />
-            <CompactAgentExpansion expanded={compactRootListExpanded}>
-              {rootAgents.map((rootAgent) =>
-                renderCompactAgentBranch(rootAgent, new Set(), compactRootListExpanded)
-              )}
-            </CompactAgentExpansion>
-          </div>
-        ) : (
-          rootAgents.map((rootAgent) => renderCompactAgentBranch(rootAgent))
-        )}
-      </div>
+      <WorktreeCardAgentList
+        agents={rootAgents}
+        hasLineage={hasLineage}
+        expanded={compactRootListExpanded}
+        sendTargetMode={isAgentSendTargetModeActive}
+        className={className}
+        rootRef={compactAgentListRootRef}
+        onToggle={() => {
+          dispatchSuppressScrollAdjustment()
+          toggleCompactRootList()
+        }}
+        renderHeader={renderHeader}
+        renderAgent={(agent, expanded) =>
+          agentActivityDisplayMode === 'compact'
+            ? renderCompactAgentBranch(agent, new Set(), expanded)
+            : renderAgentBranch(agent)
+        }
+      />
     )
   }
 

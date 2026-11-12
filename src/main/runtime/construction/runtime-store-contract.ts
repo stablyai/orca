@@ -168,6 +168,7 @@ export type RuntimeStore = {
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
+    compactWorktreeHeader?: GlobalSettings['compactWorktreeHeader']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     minimaxEndpoint?: GlobalSettings['minimaxEndpoint']

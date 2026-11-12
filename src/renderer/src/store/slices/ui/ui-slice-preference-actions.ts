@@ -182,7 +182,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
     _worktreeCardModeDefaulted: true,
     setWorktreeCardMode: (mode) => {
-      const updates = getWorktreeCardModeUpdates(mode)
+      const updates = getWorktreeCardModeUpdates(mode, get().settings ?? undefined)
       set((s) => ({
         settings: s.settings ? { ...s.settings, ...updates.settings } : s.settings,
         worktreeCardProperties: updates.ui.worktreeCardProperties,

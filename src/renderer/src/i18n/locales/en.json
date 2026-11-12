@@ -147,6 +147,9 @@
         "removalUnrecorded": "Orca couldn’t record what this Remove left running: {{detail}}"
       }
     },
+    "cardLayout": {
+      "compactHeader": "Compact header"
+    },
     "agentSummary": {
       "state": {
         "waiting": "waiting",

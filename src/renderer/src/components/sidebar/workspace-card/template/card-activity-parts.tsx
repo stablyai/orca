@@ -14,6 +14,7 @@ import {
 import { WorktreeCardStatusLane } from '../surface/worktree-card-status-lane'
 import { WorktreeLineageToggle } from '../identity/WorktreeLineageToggle'
 import { cardElement } from './card-template-compiler'
+import { CompactWorktreeCardContent } from '../surface/CompactWorktreeCardContent'
 
 type Card = WorktreeCardController
 const part = cardElement<Card>
@@ -47,6 +48,7 @@ function detailsHover(
 }
 
 export const CARD_ACTIVITY_PARTS = {
+  CompactHeader: part([], (_props, _children, card) => <CompactWorktreeCardContent card={card} />),
   StatusLane: part(['unreadAction'], (props, _children, card) => (
     <WorktreeCardStatusLane card={card} showUnreadAction={props.unreadAction === true} />
   )),

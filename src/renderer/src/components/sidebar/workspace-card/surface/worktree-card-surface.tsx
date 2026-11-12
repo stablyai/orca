@@ -64,7 +64,11 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     <div
       className={cn(
         'relative flex cursor-pointer flex-col pr-1.5 transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none',
-        titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5',
+        !newCardStyle && card.settings?.compactWorktreeHeader === true
+          ? 'py-0.5'
+          : titleOnlyCard
+            ? 'py-2'
+            : 'pt-1.25 pb-1.5',
         flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
         'overflow-hidden rounded-lg',
         // Navigation updates the live attribute before React; it must own the complete active style.

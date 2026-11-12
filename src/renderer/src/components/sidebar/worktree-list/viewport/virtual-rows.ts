@@ -7,10 +7,10 @@ import {
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
 
-export const GROUP_HEADER_ROW_HEIGHT = 28
+export const GROUP_HEADER_ROW_HEIGHT = 24
 // Why: HostSectionHeader wraps its h-8 (32px) card in pt-1 (4px), so the row is 36px.
 export const HOST_HEADER_ROW_HEIGHT = 36
-export const WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP = 6
+export const WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP = 2
 const SECONDARY_GROUP_HEADER_TOP_MARGIN = 4
 const IMPORTED_WORKTREES_LINE_ROW_HEIGHT = 36
 const PENDING_CREATION_ROW_HEIGHT = 56

@@ -232,7 +232,7 @@ export function renderWorktreeSectionHeaderRow(
           data-workspace-status={headerWorkspaceStatus ?? undefined}
           data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
           className={cn(
-            'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
+            'group relative flex h-6 w-full items-center gap-1.5 pr-2 text-left transition-all',
             !(isDraggableRepoHeader || isDraggableProjectGroupHeader) && 'cursor-pointer',
             ctx.highlightedRevealRowKey === row.key &&
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',

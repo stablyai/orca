@@ -104,9 +104,16 @@ export function WorktreeCardLayoutMenuItem({
   const t = useTranslate()
   const compact = useAppStore((s) => s.settings?.compactWorktreeCards === true)
   const setWorktreeCardMode = useAppStore((s) => s.setWorktreeCardMode)
-  const cardLayout = compact ? 'compact' : 'detailed'
-  const cardLayoutLabel =
-    CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
+  const compactHeader = useAppStore((s) => s.settings?.compactWorktreeHeader === true)
+  const layouts = [
+    ...CARD_LAYOUT_OPTIONS,
+    {
+      id: 'compact-header',
+      label: translate('sidebar.cardLayout.compactHeader', 'Compact header')
+    }
+  ]
+  const cardLayout = compactHeader ? 'compact-header' : compact ? 'compact' : 'detailed'
+  const cardLayoutLabel = layouts.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -125,10 +132,16 @@ export function WorktreeCardLayoutMenuItem({
           value={cardLayout}
           onValueChange={(value) => {
             // Apply layout presets so menu selection stays aligned with card-property defaults.
-            setWorktreeCardMode(value === 'compact' ? 'Compact' : 'Default')
+            setWorktreeCardMode(
+              value === 'compact-header'
+                ? 'CompactHeader'
+                : value === 'compact'
+                  ? 'Compact'
+                  : 'Default'
+            )
           }}
         >
-          {CARD_LAYOUT_OPTIONS.map((opt) => (
+          {layouts.map((opt) => (
             <DropdownMenuRadioItem key={opt.id} value={opt.id} onSelect={(e) => e.preventDefault()}>
               {opt.label}
             </DropdownMenuRadioItem>

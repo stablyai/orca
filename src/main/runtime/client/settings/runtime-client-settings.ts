@@ -92,6 +92,7 @@ export class RuntimeClientSettingsController {
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
+      compactWorktreeHeader: settings.compactWorktreeHeader === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       minimaxEndpoint: settings.minimaxEndpoint ?? 'overseas',
@@ -145,6 +146,12 @@ export class RuntimeClientSettingsController {
     this.store.updateSettings(
       {
         ...otherUpdates,
+        // An older client's layout picker cannot name the compact-header flag.
+        ...(beforeSettings.compactWorktreeHeader === true &&
+        updates.compactWorktreeCards !== undefined &&
+        updates.compactWorktreeHeader === undefined
+          ? { compactWorktreeHeader: false }
+          : {}),
         // An older client writes Arguments as it reads them, flag included.
         ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(

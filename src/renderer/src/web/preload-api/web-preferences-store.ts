@@ -1,4 +1,5 @@
 import * as chatSettings from './web-native-chat-settings'
+import { CARD_LAYOUT_SETTING_KEYS } from '../../../../shared/worktree/card-properties'
 import type { PreloadApi } from '../../../../preload/api-types'
 import {
   getDefaultSettings,
@@ -133,9 +134,10 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
         : null
       webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = visibilityDefaults ?? null
     }
-    for (const key of ['experimentalNewWorktreeCardStyle', 'compactWorktreeCards'] as const) {
-      if (typeof result.settings[key] === 'boolean') {
-        runtimeSettings[key] = result.settings[key]
+    // Older hosts must clear a compact-header preference carried from another host.
+    for (const key of CARD_LAYOUT_SETTING_KEYS) {
+      if (typeof result.settings[key] === 'boolean' || key === 'compactWorktreeHeader') {
+        runtimeSettings[key] = result.settings[key] === true
       }
     }
     if (typeof result.settings.minimaxGroupId === 'string') {
@@ -204,11 +206,10 @@ export async function syncRuntimeBackedSettings(
     if (visibilityDefaults) {
       runtimeUpdates.worktreeVisibilityDefaults = visibilityDefaults
     }
-    if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
-      runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
-    }
-    if (typeof updates.compactWorktreeCards === 'boolean') {
-      runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
+    for (const key of CARD_LAYOUT_SETTING_KEYS) {
+      if (typeof updates[key] === 'boolean') {
+        runtimeUpdates[key] = updates[key]
+      }
     }
     if (typeof updates.minimaxGroupId === 'string') {
       runtimeUpdates.minimaxGroupId = updates.minimaxGroupId
