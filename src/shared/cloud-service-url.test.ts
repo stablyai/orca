@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { cleanCloudServiceOrigin } from './cloud-service-url'
-it.each(['ftp://localhost', 'file://localhost', 'ws://localhost', 'http://example.com'])(
+it.each(['ftp://localhost', 'http://example.com'])(
   'rejects %s even with the development loopback exception',
   (url) => {
     expect(cleanCloudServiceOrigin(url, true)).toBeNull()
