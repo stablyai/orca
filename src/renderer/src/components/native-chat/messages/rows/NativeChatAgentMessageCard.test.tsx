@@ -63,9 +63,9 @@ it('renders and copies structured mail content without the agent envelope', asyn
 })
 
 it.each([
-  [true, 'Reopened worker'],
-  [false, 'Sent follow-up to worker']
-])(
+  [true, 'reopened-worker'],
+  [false, 'followed-up-worker']
+] as const)(
   'heads a reloaded follow-up start (reopened: %s) as %s, not a started worker',
   (reopened, heading) => {
     const reloaded: unknown = JSON.parse(
@@ -87,12 +87,10 @@ it.each([
       throw new Error('follow-up start item did not survive admission')
     }
     const message = projectStructuredAgentStartItem(reloaded)
-    if (!message) {
+    if (!message?.from) {
       throw new Error('follow-up start item did not project')
     }
-    render(card(message))
-    expect(screen.getByText(heading)).toBeInTheDocument()
-    expect(screen.queryByText('Started worker')).toBeNull()
+    expect(agentMessageHeading(message.from, message)).toBe(heading)
   }
 )
 
