@@ -41,6 +41,16 @@ describe('GET /v1/plans', () => {
       entitlements: { sandbox_hours_monthly: { value: 60, perSeat: true }, max_concurrent_sandboxes: { value: 3, perSeat: true } },
       checkout: { available: true, intervals: ['month', 'year'] }
     })
+    expect(team.version).toBe(2)
+    expect(team.features.map((feature: { id: string }) => feature.id)).toEqual([
+      'included_hours_per_seat',
+      'sandbox_spec',
+      'ready_in_seconds',
+      'agents_keep_running',
+      'idle_sleep',
+      'overage_optional'
+    ])
+    expect(team).toHaveProperty('supportUrl')
     expect(team.features[0]).toEqual({ id: 'included_hours_per_seat', params: { hours: 60 }, text: '60 sandbox hours per seat each month, pooled across your team' })
     expect(body.plans.find((plan: { id: string }) => plan.id === 'enterprise')).toMatchObject({ kind: 'contact_sales', contactUrl: 'https://onorca.dev/contact-sales' })
     expect(body.plans.find((plan: { id: string }) => plan.id === 'trial')).toMatchObject({ kind: 'trial', entitlements: { sandbox_hours_lifetime: { value: 2, perSeat: false } } })
@@ -191,7 +201,7 @@ describe('GET /v1/entitlements', () => {
       seats: 2,
       source: 'subscription',
       state: 'active',
-      plan: { id: 'team', version: 1 },
+      plan: { id: 'team', version: 2 },
       startsAt: PERIOD_START * 1000,
       endsAt: null
     })

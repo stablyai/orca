@@ -66,6 +66,12 @@ const PlanSchema = z
       .strict()
       .optional(),
     contactUrl: z.string().url().startsWith('https://').optional(),
+    // Where "Contact us" goes when something about this plan fails (e.g. Checkout can't sell it).
+    supportUrl: z
+      .string()
+      .max(300)
+      .regex(/^(https:\/\/[^\s]+|mailto:[^\s@]+@[^\s@]+)$/)
+      .optional(),
     priceLabel: z.string().max(40).optional(),
     versions: z.array(VersionSchema).min(1)
   })
@@ -83,6 +89,7 @@ export type CatalogFile = z.infer<typeof CatalogFileSchema>
 export type PlanConfig = {
   stripe?: { seatLookupKeys: { month?: string; year?: string }; overageLookupKey?: string }
   contactUrl?: string
+  supportUrl?: string
   priceLabel?: string
 }
 
@@ -198,6 +205,7 @@ export async function catalogStatements(file: CatalogFile, applied: readonly App
     const config: PlanConfig = {
       ...(plan.stripe ? { stripe: plan.stripe } : {}),
       ...(plan.contactUrl ? { contactUrl: plan.contactUrl } : {}),
+      ...(plan.supportUrl ? { supportUrl: plan.supportUrl } : {}),
       ...(plan.priceLabel ? { priceLabel: plan.priceLabel } : {})
     }
     statements.push({
