@@ -21,7 +21,7 @@ export async function readTerminalHistoryCheckpoint(
     return { status: 'missing' }
   }
   try {
-    const value = await readTerminalHistoryJsonAsync<unknown>(
+    const value = await readTerminalHistoryJsonAsync(
       path,
       TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
       signal

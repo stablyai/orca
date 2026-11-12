@@ -68,10 +68,12 @@ describe('OrcaRuntimeService', () => {
     })
 
     const firstCreate = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      agent: 'codex',
       activate: false,
       clientMutationId: 'mutation-1'
     })
     const secondCreate = runtime.createMobileSessionTerminal(`id:${otherWorktreeId}`, {
+      agent: 'codex',
       activate: false,
       clientMutationId: 'mutation-1'
     })
@@ -195,6 +197,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        agent: 'codex',
         activate: true,
         viewMode: 'terminal'
       })
@@ -249,6 +252,8 @@ describe('OrcaRuntimeService', () => {
         expect.objectContaining({
           cwd: TEST_WORKTREE_PATH,
           worktreeId: TEST_WORKTREE_ID,
+          launchAgent: 'codex',
+          command: expect.stringMatching(/codex/),
           tabId: 'tab-pending',
           leafId: pendingLeafId,
           persistHostSessionBinding: true,
@@ -302,6 +307,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        agent: 'codex',
         activate: true
       })
       const settled = create.then(
@@ -370,6 +376,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        agent: 'codex',
         activate: true,
         viewMode: 'chat'
       })
@@ -409,6 +416,7 @@ describe('OrcaRuntimeService', () => {
         tabId: 'tab-alive',
         leafId
       })
+      runtime.noteTerminalSpawnCommand('pty-alive', 'codex')
 
       await vi.advanceTimersByTimeAsync(50)
       const result = await settledCreate
@@ -442,6 +450,7 @@ describe('OrcaRuntimeService', () => {
           tabId: 'tab-early',
           leafId
         })
+        runtime.noteTerminalSpawnCommand('pty-early', 'codex')
         ipcMain.emit(
           'terminal:tabCreateReply',
           { sender: webContents },
@@ -457,6 +466,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        agent: 'codex',
         activate: true
       })
       let settled = false

@@ -33,12 +33,12 @@ export async function readTerminalHistoryTextAsync(
   return (await readTerminalHistoryBufferAsync(filePath, maxBytes, signal)).toString('utf8')
 }
 
-export async function readTerminalHistoryJsonAsync<T>(
+export async function readTerminalHistoryJsonAsync(
   filePath: string,
   maxBytes: number,
   signal?: AbortSignal
-): Promise<T> {
+): Promise<unknown> {
   const text = await readTerminalHistoryTextAsync(filePath, maxBytes, signal)
   signal?.throwIfAborted()
-  return JSON.parse(text) as T
+  return JSON.parse(text)
 }

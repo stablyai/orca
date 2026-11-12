@@ -2,8 +2,11 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeTerminalWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
-import { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
-import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
+import { createWebRuntimeSessionTerminalOnHost } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
+import {
+  getFloatingWorkspaceOperationRoute,
+  resolveWorktreeOperationRoute
+} from '@/lib/workspace/ownership/worktree-operation-route'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
@@ -42,7 +45,9 @@ export type FreshTerminalCreation = Pick<
 export async function createFreshTerminal(args: FreshTerminalCreation): Promise<boolean> {
   const { worktreeId } = args
   const state = useAppStore.getState()
-  const route = resolveTerminalWorktreeRoute(state, worktreeId)
+  const route =
+    getFloatingWorkspaceOperationRoute(worktreeId) ??
+    resolveWorktreeOperationRoute(state, worktreeId)
   if (!route) {
     return false
   }
@@ -57,7 +62,7 @@ export async function createFreshTerminal(args: FreshTerminalCreation): Promise<
       : sourceSize
     : grids?.singleGroupWorkspace
   if (route.runtimeEnvironmentId) {
-    const outcome = await createWebRuntimeSessionTerminal(
+    const outcome = await createWebRuntimeSessionTerminalOnHost(
       {
         ...args,
         environmentId: route.runtimeEnvironmentId,

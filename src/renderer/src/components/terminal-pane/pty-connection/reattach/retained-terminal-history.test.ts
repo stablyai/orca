@@ -15,11 +15,16 @@ import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixtu
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
-const calls = vi.hoisted(() => ({
-  rpc: vi.fn(),
-  proof: vi.fn(),
-  store: null as ReturnType<typeof createTestStore> | null
-}))
+const calls = vi.hoisted(
+  (): { store: ReturnType<typeof createTestStore> | null } & Record<
+    'rpc' | 'proof',
+    ReturnType<typeof vi.fn>
+  > => ({
+    rpc: vi.fn(),
+    proof: vi.fn(),
+    store: null
+  })
+)
 vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: () => calls.store!.getState(),

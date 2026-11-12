@@ -19,10 +19,15 @@ import {
 import { makeWorktree } from '../../../../renderer/src/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../../../renderer/src/store/repos/repo.test-fixture'
 
-const rendererHistory = vi.hoisted(() => ({
-  rpc: vi.fn(),
-  store: null as ReturnType<typeof createTestStore> | null
-}))
+const rendererHistory = vi.hoisted(
+  (): { store: ReturnType<typeof createTestStore> | null } & Record<
+    'rpc',
+    ReturnType<typeof vi.fn>
+  > => ({
+    rpc: vi.fn(),
+    store: null
+  })
+)
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: rendererHistory.rpc }))
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -381,7 +386,7 @@ it('discards changing history and respects explicit removal protection', async (
     status: 'unreadable'
   })
   session.closedTerminalTabTombstonesByTabId = {
-    'saved-tab': { worktreeId: 'repo::/bare', closedAt: Date.now(), reason: 'user' }
+    'saved-tab': { worktreeId: 'repo::/bare', closedAt: 1_794_268_800_000, reason: 'user' }
   }
   expect(await readHostTerminalHistory(store, historyPath, request)).toEqual({ status: 'absent' })
 })

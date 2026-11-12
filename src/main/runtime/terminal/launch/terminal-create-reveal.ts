@@ -1,5 +1,7 @@
-import type { RetainedTerminalStartError } from '../../../../shared/workspace-layout/retained-terminal-start'
-import type { RetainedTerminalStart } from '../../../../shared/workspace-layout/retained-terminal-start'
+import type {
+  RetainedTerminalStartError,
+  RetainedTerminalStart
+} from '../../../../shared/workspace-layout/retained-terminal-start'
 import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import { createTerminalRevealWarning, ownerSurfacing } from './terminal-presentation'

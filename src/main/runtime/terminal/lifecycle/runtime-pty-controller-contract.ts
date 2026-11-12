@@ -1,16 +1,17 @@
-import type { PreparedPtySpawnSettlement } from '../../../ipc/pty/spawn-outcome'
+import type { PreparedPtySpawnSettlement, PtySpawnOutcome } from '../../../ipc/pty/spawn-outcome'
 import type { PreparedPaneReplacement } from '../recovery/prepared-pane-replacement'
-import type { PaneSpawnReservation } from '../../../ipc/pty/pane/spawn-reservation'
+import type {
+  PaneSpawnReservation,
+  RuntimePaneCreateClaim
+} from '../../../ipc/pty/pane/spawn-reservation'
 import type { DaemonLaunchNoteChange } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type {
   TerminalLimitStatus,
   TerminalLimitUpdate
 } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
-import type { PtySpawnOutcome } from '../../../ipc/pty/spawn-outcome'
 import type { ReplacedPaneOwner } from '../../../ipc/pty/pane/replaced-pane-owner'
 import type { NewGroupSplit } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { RuntimePaneCreateClaim } from '../../../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'

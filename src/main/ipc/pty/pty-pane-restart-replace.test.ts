@@ -1,11 +1,13 @@
 import { PreparedPaneReplacement } from '../../runtime/terminal/recovery/prepared-pane-replacement'
 import { reservePaneSpawn, makePaneSpawnReservationKey } from './pane/spawn-reservation'
-import { cwd, worktreeId, paneKey } from './pty-pane-owner-swap.test-fixture'
 import { BareWorkspaceTerminalLaunchError } from '../../workspaces/catalog/workspace-git-storage'
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { WorktreeTerminalMutationLock } from '../../runtime/workspaces/lifecycle/worktree-terminal-mutation-lock'
 import {
+  cwd,
+  worktreeId,
+  paneKey,
   installRestartHarness,
   leafId,
   registerWithFakes,

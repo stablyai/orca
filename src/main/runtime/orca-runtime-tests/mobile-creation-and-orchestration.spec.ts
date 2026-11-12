@@ -105,6 +105,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        agent: 'codex',
         activate: true
       })
       let settled = false
@@ -149,6 +150,7 @@ describe('OrcaRuntimeService', () => {
         tabId: 'tab-guard',
         leafId
       })
+      runtime.noteTerminalSpawnCommand('pty-guard', 'codex')
       await vi.advanceTimersByTimeAsync(50)
       const result = await settledCreate
 
@@ -191,6 +193,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        agent: 'codex',
         activate: true
       })
       let settled = false
@@ -208,6 +211,7 @@ describe('OrcaRuntimeService', () => {
           tabId: 'tab-catch',
           leafId
         })
+        runtime.noteTerminalSpawnCommand('pty-catch', 'codex')
         await vi.advanceTimersByTimeAsync(50)
       }
       // Legacy graph-sync supplies identity without registration rescue, leaving surface unpublished.

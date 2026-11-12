@@ -1,11 +1,14 @@
 // Main writes/starts splits under the window pane ID; frame reconciliation draws and attaches its terminal.
 import type { TerminalPaneSplitSource } from '../../../../../../shared/feature-education-telemetry'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { mintStablePaneId } from '@/lib/pane-manager/pane-layout/mint-stable-pane-id'
 import { toast } from 'sonner'
-import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
-import { resolveTerminalCreatedShell } from '@/store/terminals/terminal-created-shell'
-import { getRemoteConnectionIdForWorktree } from '@/store/terminals/terminal-workspace-routing'
+import { translate } from '@/i18n/i18n'
+import {
+  getFloatingWorkspaceOperationRoute,
+  resolveWorktreeOperationRoute
+} from '@/lib/workspace/ownership/worktree-operation-route'
+import { resolveTerminalPaneOwnerContext } from '../../host-state/terminal-pane-owner-context'
+import { isEphemeralSetupTerminalWorktreeId } from '../../../../../../shared/ephemeral-setup-terminal-worktree-id'
 import {
   captureTerminalCreationNavigation,
   focusAcceptedTerminalPane
@@ -53,23 +56,24 @@ export type SplitInMainRequest = {
 
 /** Only the qualified local provider takes this route; direct SSH keeps its IPC provider. */
 export function splitPaneInMain(request: SplitInMainRequest, _asToday: () => void): boolean {
-  const state = useAppStore.getState()
-  const route = resolveTerminalWorktreeRoute(state, request.worktreeId)
-  if (!route) {
-    toast.error('The workspace host could not be resolved.')
-    return true
-  }
-  if (route.runtimeEnvironmentId) {
+  if (isEphemeralSetupTerminalWorktreeId(request.worktreeId)) {
     return false
   }
-  const { folder } = resolveTerminalCreatedShell(
-    state,
-    request.worktreeId,
-    undefined,
-    undefined,
-    undefined
-  )
-  if (folder?.connectionId || getRemoteConnectionIdForWorktree(state, request.worktreeId)) {
+  const state = useAppStore.getState()
+  const owner = resolveSplitPaneOwner(state, request)
+  if (!owner.tab || owner.unresolved) {
+    toast.error(
+      translate(
+        'auto.store.slices.editor.gitOperationTarget.unresolvedHost',
+        'The workspace host is unresolved. Refresh the workspace and retry.'
+      )
+    )
+    return true
+  }
+  if (owner.runtimeEnvironmentId) {
+    return false
+  }
+  if (owner.connectionId) {
     return false
   }
   sendPaneSplit({ kind: 'local' }, request, request.tabId)
@@ -78,9 +82,13 @@ export function splitPaneInMain(request: SplitInMainRequest, _asToday: () => voi
 
 /** Choose legacy or expanded pane semantics before dispatch, pinned to the serving host. */
 export function splitServerPane(request: SplitInMainRequest, asToday?: () => void): boolean {
+  if (isEphemeralSetupTerminalWorktreeId(request.worktreeId)) {
+    return false
+  }
   const state = useAppStore.getState()
-  const environmentId = runtimeEnvironmentIdUnlessTwin(state, request.worktreeId)
-  if (!environmentId) {
+  const owner = resolveSplitPaneOwner(state, request)
+  const environmentId = owner.runtimeEnvironmentId
+  if (!owner.tab || owner.unresolved || !environmentId) {
     return false
   }
   const route = serverLayoutApplyRoute(environmentId, request.worktreeId)
@@ -106,7 +114,12 @@ export function splitServerPane(request: SplitInMainRequest, asToday?: () => voi
         proof.pairingRevision !== intentOwner.pairingRevision
       ) {
         navigation.dispose()
-        toast.error('The workspace host changed before the split request.')
+        toast.error(
+          translate(
+            'auto.lib.dropFailureReason.hostUnreachable',
+            'The connection to the host changed or dropped. Try again.'
+          )
+        )
         return
       }
       if (!proof.supported && (!ORCA_LAYOUT_OWNER_IS_MAIN || !route)) {
@@ -129,6 +142,20 @@ export function splitServerPane(request: SplitInMainRequest, asToday?: () => voi
     }
   )
   return true
+}
+
+function resolveSplitPaneOwner(
+  state: ReturnType<typeof useAppStore.getState>,
+  request: SplitInMainRequest
+) {
+  return resolveTerminalPaneOwnerContext(
+    state,
+    request.worktreeId,
+    request.tabId,
+    getFloatingWorkspaceOperationRoute(request.worktreeId) ??
+      resolveWorktreeOperationRoute(state, request.worktreeId),
+    state.terminalLayoutsByTabId[request.tabId]?.ptyIdsByLeafId?.[request.sourceLeafId]
+  )
 }
 
 function sendPaneSplit(

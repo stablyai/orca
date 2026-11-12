@@ -11,6 +11,7 @@ import {
 import { reusedTerminalIdUnbinding } from '../../persistence/loading-store/terminal-bindings/reused-terminal-id-unbind'
 import { layoutContainsLeafId } from '../../../shared/workspace-layout/terminal-pane-tree'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import { admitFakePreparedSpawn } from './prepared-spawn-admission.test-fixture'
 
 export type BoundPane = {
   worktreeId: string
@@ -178,7 +179,7 @@ export function committingSpawn<
   hostId = 'local'
 ): (args: Args) => Promise<Result> {
   return async (args) => {
-    await args.admitPreparedSpawn?.()
+    await admitFakePreparedSpawn(args)
     const result = await spawn(args)
     if (args.worktreeId && args.tabId && args.leafId && typeof result?.id === 'string') {
       bindPaneFirst(
@@ -265,6 +266,9 @@ export function commitFakeSpawnsInRuntimeTests(prototype: PtyControllerRuntimePr
         let wrapped = committed.get(own)
         if (!wrapped) {
           wrapped = async (args) => {
+            if (args.admitPreparedSpawn) {
+              await admitFakePreparedSpawn(args)
+            }
             const result = await own.call(controller, args)
             commit(args, result)
             return result

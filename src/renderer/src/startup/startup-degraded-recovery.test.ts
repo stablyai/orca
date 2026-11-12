@@ -14,7 +14,9 @@ vi.mock('../components/terminal/terminal-provider-snapshot-capability', () => ({
 vi.mock('../components/terminal/terminal-provider-gone-sessions', () => ({
   probeTerminalProviderGoneSessions: async () => undefined
 }))
-const stores = vi.hoisted(() => ({ current: null as ReturnType<typeof createTestStore> | null }))
+const stores = vi.hoisted((): { current: ReturnType<typeof createTestStore> | null } => ({
+  current: null
+}))
 vi.mock('../store', () => ({
   useAppStore: {
     getState: () => stores.current!.getState(),

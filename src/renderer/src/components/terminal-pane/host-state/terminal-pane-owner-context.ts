@@ -1,6 +1,7 @@
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import type { TerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
@@ -49,10 +50,8 @@ export function resolveTerminalPaneOwnerContext(
         ? state.getKnownWorktreeById(worktreeId, selectedHost.id)
         : getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(worktreeId)
   const repos = worktree
-    ? state.repos.filter(
-        (repo) =>
-          repo.id === worktree.repoId &&
-          (!selectedHost || getRepoExecutionHostId(repo) === selectedHost.id)
+    ? getIndexedReposById(state.repos, worktree.repoId).filter(
+        (repo) => !selectedHost || getRepoExecutionHostId(repo) === selectedHost.id
       )
     : []
   const repo = repos.length === 1 ? repos[0] : undefined

@@ -434,6 +434,7 @@ describe('OrcaRuntimeService', () => {
         })
 
         const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+          agent: 'codex',
           activate: false,
           signal: abort.signal
         })
@@ -481,6 +482,7 @@ describe('OrcaRuntimeService', () => {
         })
 
         const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+          agent: 'codex',
           activate: false
         })
         const settled = create.then(
@@ -495,6 +497,7 @@ describe('OrcaRuntimeService', () => {
             tabId: 'tab-stall',
             leafId: '88888888-8888-4888-8888-888888888888'
           })
+          runtime.noteTerminalSpawnCommand('pty-stall', 'codex')
           await vi.advanceTimersByTimeAsync(50)
           expect(await settled).toEqual({ ok: true })
           expect(closeTerminal).not.toHaveBeenCalled()

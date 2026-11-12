@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, lstatSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { lstat, readdir } from 'node:fs/promises'
+import { errnoCodeOrUnknown } from '../../../../shared/errno-code'
 import {
   ensurePrivateDir,
   PRIVATE_FILE_MODE
@@ -116,7 +117,7 @@ export async function fingerprintTerminalHistorySessionAsync(
     }
     return fingerprint.digest('hex')
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if (errnoCodeOrUnknown(error) === 'ENOENT') {
       return null
     }
     throw error

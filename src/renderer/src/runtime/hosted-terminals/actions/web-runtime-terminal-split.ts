@@ -4,12 +4,9 @@ import { runtimeEnvironmentCapabilityProof } from '../../rpc/compatibility/runti
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { TERMINAL_FRESH_ADMISSION_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
 import type { TerminalPaneSplitSource } from '../../../../../shared/feature-education-telemetry'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
 import type { RuntimeTerminalSplit } from '../../../../../shared/runtime-terminal-contracts'
-import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
-  captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
   isWebRuntimeSessionActive,
   matchesWebSessionIntentOwner
@@ -60,15 +57,15 @@ export function splitWebRuntimeTerminal(
   const navigation = captureTerminalCreationNavigation()
   void (async () => {
     if (!launch) {
-      return unwrapRuntimeRpcResult(
-        (await captureRuntimeEnvironmentCall(
-          environmentId,
-          intentOwner.pairingRevision
-        )({
-          method: 'terminal.split',
-          params: { terminal: remote.handle, direction, telemetrySource },
-          timeoutMs: 15_000
-        })) as RuntimeRpcResponse<{ split: RuntimeTerminalSplit }>
+      return await callRuntimeRpc<{ split: RuntimeTerminalSplit }>(
+        { kind: 'environment', environmentId },
+        'terminal.split',
+        { terminal: remote.handle, direction, telemetrySource },
+        {
+          timeoutMs: 15_000,
+          expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
+          skipCompatibilityCheck: true
+        }
       )
     }
     const proof = await runtimeEnvironmentCapabilityProof(

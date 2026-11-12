@@ -17,7 +17,9 @@ import {
 import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import { TerminalStartupAttempt } from '@/store/terminals/terminal-startup-attempt'
-import type { AppState } from '@/store/types'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { makeTerminalTab } from '@/store/terminals/terminal-row.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { TerminalPaneStart } from '@/store/terminals/terminal-state'
 import type { PanePtyBinding } from '../pane-pty-binding'
 import {
@@ -45,6 +47,33 @@ function publish(patch: Partial<StartupState>): void {
   for (const listener of subscribers) {
     listener(state)
   }
+}
+
+function captureStartupAttempt(): TerminalStartupAttempt {
+  const store = createTestStore()
+  seedStore(store, {
+    activeWorktreeId: state.activeWorktreeId,
+    terminalStartupRestorationReady: state.terminalStartupRestorationReady,
+    worktreesByRepo: {
+      repo1: [
+        makeWorktree({ id: 'wt-1', repoId: 'repo1', path: '/tmp/wt-1', displayName: 'feat/notis' })
+      ]
+    },
+    tabsByWorktree: {
+      'wt-1': [
+        makeTerminalTab({
+          id: 'tab-1',
+          worktreeId: 'wt-1',
+          ptyId: state.tabsByWorktree['wt-1'][0].ptyId
+        })
+      ]
+    },
+    ptyIdsByTabId: state.ptyIdsByTabId ?? {},
+    terminalLayoutsByTabId: state.terminalLayoutsByTabId ?? {}
+  })
+  const attempt = new TerminalStartupAttempt()
+  attempt.capture(store.getState())
+  return attempt
 }
 
 function retainedStart(leafId: string, status: 'starting' | 'failed'): TerminalPaneStart {
@@ -109,8 +138,7 @@ beforeEach(async () => {
       }
     }
   }
-  const attempt = new TerminalStartupAttempt()
-  attempt.capture(state as unknown as AppState)
+  const attempt = captureStartupAttempt()
   state.terminalStartupAttempt = attempt
   bindPtyConnectionTestMocks({
     getState: () => state,
@@ -196,8 +224,7 @@ it('does not gate a newly created leaf in a restored tab when general startup de
   // The cohort originally contained only L1; L2 is a later user split.
   const current = state.terminalLayoutsByTabId!['tab-1']!
   state.terminalLayoutsByTabId = { 'tab-1': { ...current, root: { type: 'leaf', leafId: LEAF_1 } } }
-  state.terminalStartupAttempt = new TerminalStartupAttempt()
-  state.terminalStartupAttempt.capture(state as unknown as AppState)
+  state.terminalStartupAttempt = captureStartupAttempt()
   publish({ terminalStartupRestorationReady: true, terminalLayoutsByTabId: { 'tab-1': current } })
   const fresh = createMockTransport()
   await mount(2, fresh)

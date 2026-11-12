@@ -94,8 +94,8 @@ export function layoutPaneReplacementController() {
     typeof PtyBindingPersistenceOperations
   >[1]
   const bindings = new PtyBindingPersistenceOperations(bindingRuntime, sessions)
-  const runtimeStore = Object.assign(fixture.runtimeStore, {
-    getSettings: () => ({
+  const controllerStoreMembers = {
+    getSettings: (): ReturnType<Store['getSettings']> => ({
       ...state.settings,
       terminalDefaultShell: '/bin/zsh',
       terminalWindowsShell: 'powershell.exe',
@@ -104,7 +104,9 @@ export function layoutPaneReplacementController() {
     persistPtyBinding: vi.fn(bindings.persistPtyBinding.bind(bindings)),
     retirePtyBinding: bindings.retirePtyBinding.bind(bindings),
     getPtyBindingGeneration: ptyBindingGenerationOf.bind(null, bindingRuntime)
-  })
+  }
+  const runtimeStore: Omit<typeof fixture.runtimeStore, keyof typeof controllerStoreMembers> &
+    typeof controllerStoreMembers = Object.assign(fixture.runtimeStore, controllerStoreMembers)
   const durableSessions: ReturnType<typeof fixture.getSession>[] = []
   runtimeStore.flushOrThrow.mockImplementation(() => {
     durableSessions.push(structuredClone(fixture.getSession()))

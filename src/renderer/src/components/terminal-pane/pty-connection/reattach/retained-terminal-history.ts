@@ -1,6 +1,6 @@
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store/index'
-import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
+import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
 import { runtimeEnvironmentCapabilityProof } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import {
   getRuntimeEnvironmentRevision,
@@ -78,18 +78,21 @@ function localHistoryDestination(session: ConnectPanePtySession) {
   const leafId: string = session.pane.leafId
   const layout = state.terminalLayoutsByTabId[tabId]
   const hint: string | undefined = session.deps.restoredPtyIdByLeafId?.[leafId]
+  const executionHostId = normalizeExecutionHostId(session.executionHostId)
   const owner = resolveTerminalPaneOwnerContext(
     state,
     worktreeId,
     tabId,
-    resolveTerminalWorktreeRoute(state, worktreeId)
+    executionHostId
+      ? resolveWorktreeOperationRouteForHost(state, worktreeId, executionHostId)
+      : null
   )
   const tab = owner.tab
   if (
     !tab ||
     owner.unresolved ||
     owner.runtimeEnvironmentId ||
-    owner.executionHostId !== normalizeExecutionHostId(session.executionHostId) ||
+    owner.executionHostId !== executionHostId ||
     (tab.generation ?? 0) !== (session.tabGeneration ?? 0) ||
     state.getTerminalTabOwnerWorktreeId?.(tabId) !== worktreeId ||
     hasClosedTerminalTabRecord(state.closedTerminalTabTombstonesByTabId, tabId, worktreeId) ||

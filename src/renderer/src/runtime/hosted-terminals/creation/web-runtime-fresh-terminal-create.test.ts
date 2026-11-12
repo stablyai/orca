@@ -2,19 +2,33 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, seedStore } from '../../../store/testing/app-store-test-fixture'
 import { createStoreSessionMockApi } from '../../../store/testing/app-store-session-api.test-fixture'
 
-const mocks = vi.hoisted(() => ({
-  store: null as ReturnType<typeof createTestStore> | null,
-  call: vi.fn(),
-  proof: vi.fn(),
-  supports: vi.fn(),
-  focus: vi.fn(),
-  select: vi.fn(),
-  settle: vi.fn(),
-  current: vi.fn(),
-  ownerCurrent: vi.fn(),
-  paneFocus: vi.fn(),
-  notice: vi.fn()
-}))
+const mocks = vi.hoisted(
+  (): { store: ReturnType<typeof createTestStore> | null } & Record<
+    | 'call'
+    | 'proof'
+    | 'supports'
+    | 'focus'
+    | 'select'
+    | 'settle'
+    | 'current'
+    | 'ownerCurrent'
+    | 'paneFocus'
+    | 'notice',
+    ReturnType<typeof vi.fn>
+  > => ({
+    store: null,
+    call: vi.fn(),
+    proof: vi.fn(),
+    supports: vi.fn(),
+    focus: vi.fn(),
+    select: vi.fn(),
+    settle: vi.fn(),
+    current: vi.fn(),
+    ownerCurrent: vi.fn(),
+    paneFocus: vi.fn(),
+    notice: vi.fn()
+  })
+)
 function store() {
   if (!mocks.store) {
     throw new Error('Missing test store')
@@ -79,7 +93,13 @@ import { acceptSessionTabsRuntimeId } from '../../web-session-tabs-sync/publishe
 import { sessionTabsRuntimeHistoryByEnvironment } from '../../web-session-tabs-sync/state'
 import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
-import { splitServerPane } from '../../../components/terminal-pane/layout/split/terminal-pane-split-in-main'
+import {
+  splitPaneInMain,
+  splitServerPane,
+  type SplitInMainRequest
+} from '../../../components/terminal-pane/layout/split/terminal-pane-split-in-main'
+import { resolveTerminalPaneOwnerContext } from '../../../components/terminal-pane/host-state/terminal-pane-owner-context'
+import type { Repo } from '../../../../../shared/repo-types'
 import {
   createDeferred,
   flushAsyncTicks
@@ -244,9 +264,10 @@ it.each([
   'later navigation',
   'foreign runtime',
   're-paired',
-  'retired publisher'
+  'retired publisher',
+  'different selected host'
 ] as const)(
-  'qualifies the raw retained pane split before mapped projection: %s',
+  'keeps the source host after workspace selection changes and qualifies its raw retained split: %s',
   async (answer) => {
     const mirror = toWebTerminalSurfaceTabId('host-retained')
     const sourceLeafId = '22222222-2222-4222-8222-222222222222'
@@ -266,13 +287,30 @@ it.each([
         }
       })
     )
-    store().getState().createTab(WORKTREE, 'source', undefined, {
-      id: mirror,
-      initialLeafId: sourceLeafId,
-      mirroredHostTab: true,
-      activate: false,
-      layoutAlreadyAdmitted: true
-    })
+    store()
+      .getState()
+      .createTab(WORKTREE, 'source', undefined, {
+        id: mirror,
+        initialLeafId: sourceLeafId,
+        mirroredHostTab: true,
+        activate: false,
+        layoutAlreadyAdmitted: true,
+        initialPtyId:
+          answer === 'different selected host' ? 'remote:paired@@source-terminal' : undefined,
+        executionFacts:
+          answer === 'different selected host'
+            ? {
+                hostId: 'runtime:paired',
+                connectionId: null,
+                platform: 'linux',
+                isRemote: true,
+                isWsl: false
+              }
+            : undefined
+      })
+    if (answer === 'different selected host') {
+      store().setState({ activeWorkspaceExecutionHostId: 'runtime:rival' })
+    }
     replaceRuntimeEnvironmentRevisions([{ id: 'paired', createdAt: 7 }])
     setHostSessionTabIdMapping(
       { environmentId: 'paired', worktreeId: WORKTREE, tabId: mirror },
@@ -281,6 +319,12 @@ it.each([
     const reply = createDeferred<never>()
     mocks.call.mockReturnValueOnce(reply.promise)
     try {
+      expect(
+        splitPaneInMain(
+          { worktreeId: WORKTREE, tabId: mirror, sourceLeafId, direction: 'vertical' },
+          vi.fn()
+        )
+      ).toBe(false)
       expect(
         splitServerPane({
           worktreeId: WORKTREE,
@@ -317,7 +361,10 @@ it.each([
         })
       )
       await flushAsyncTicks()
-      const accepted = answer === 'current' || answer === 'later navigation'
+      const accepted =
+        answer === 'current' ||
+        answer === 'later navigation' ||
+        answer === 'different selected host'
       if (!accepted) {
         expect(store().getState().terminalLayoutsByTabId[mirror].root).toEqual({
           type: 'leaf',
@@ -342,7 +389,7 @@ it.each([
         retainedTerminalStart: { tabId: 'host-retained', leafId: newLeafId }
       })
       expect(store().getState().tabsByWorktree[WORKTREE]).toHaveLength(1)
-      if (answer === 'current') {
+      if (answer !== 'later navigation') {
         expect(mocks.paneFocus).toHaveBeenCalledExactlyOnceWith(mirror, newLeafId)
       } else {
         expect(mocks.paneFocus).not.toHaveBeenCalled()
@@ -446,5 +493,162 @@ it.each(['workspace', 'runtime', 'pairing', 'retired publisher'] as const)(
     expect(store().getState().terminalPaneStartsByPaneKey).toEqual({})
     expect(mocks.paneFocus).not.toHaveBeenCalled()
     expect(mocks.call).toHaveBeenCalledOnce()
+  }
+)
+
+it.each([12, 120])(
+  'keeps mapped source splits addressed after warming %i repositories and preserves exact row candidates',
+  async (repoCount) => {
+    const sourceRepo: Repo = {
+      id: 'repo1',
+      path: '/repo1',
+      displayName: 'Source repository',
+      badgeColor: '',
+      addedAt: 0,
+      executionHostId: 'runtime:paired',
+      worktreeBasePath: '../worktrees'
+    }
+    const localTwin: Repo = { ...sourceRepo, path: '/local/repo1', executionHostId: 'local' }
+    let unrelatedReads = 0
+    const unrelated = Array.from({ length: repoCount - 2 }, (_, index): Repo => ({
+      get id() {
+        unrelatedReads += 1
+        return `unrelated-${index}`
+      },
+      path: `/unrelated-${index}`,
+      displayName: 'Unrelated repository',
+      badgeColor: '',
+      addedAt: 0,
+      executionHostId: 'local'
+    }))
+    const repos = [sourceRepo, localTwin, ...unrelated]
+    seedStore(store(), {
+      repos,
+      activeWorkspaceExecutionHostId: 'runtime:paired',
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: WORKTREE,
+            repoId: 'repo1',
+            path: '/repo1/main',
+            hostId: 'runtime:paired'
+          })
+        ]
+      }
+    })
+    const mirror = toWebTerminalSurfaceTabId('host-retained')
+    const sourceLeafId = '22222222-2222-4222-8222-222222222222'
+    store()
+      .getState()
+      .createTab(WORKTREE, 'source', undefined, {
+        id: mirror,
+        initialLeafId: sourceLeafId,
+        mirroredHostTab: true,
+        layoutAlreadyAdmitted: true,
+        activate: false,
+        executionFacts: {
+          hostId: 'runtime:paired',
+          connectionId: null,
+          platform: 'linux',
+          isRemote: true,
+          isWsl: false
+        }
+      })
+    store().setState({ activeWorkspaceExecutionHostId: 'runtime:rival' })
+    const sourceUnifiedTabs = store().getState().unifiedTabsByWorktree
+    const request: SplitInMainRequest = {
+      worktreeId: WORKTREE,
+      tabId: mirror,
+      sourceLeafId,
+      direction: 'vertical'
+    }
+    const readOwner = () => {
+      const state = store().getState()
+      return resolveTerminalPaneOwnerContext(
+        state,
+        WORKTREE,
+        mirror,
+        null,
+        state.terminalLayoutsByTabId[mirror]?.ptyIdsByLeafId?.[sourceLeafId]
+      )
+    }
+    replaceRuntimeEnvironmentRevisions([{ id: 'paired', createdAt: 7 }])
+    setHostSessionTabIdMapping(
+      { environmentId: 'paired', worktreeId: WORKTREE, tabId: mirror },
+      'host-retained'
+    )
+    mocks.call.mockResolvedValue({
+      split: { handle: 'accepted-split', tabId: 'host-retained', paneRuntimeId: 41 }
+    })
+    const split = async () => {
+      expect(splitPaneInMain(request, vi.fn())).toBe(false)
+      expect(splitServerPane(request)).toBe(true)
+      await flushAsyncTicks()
+      expect(mocks.call).toHaveBeenLastCalledWith(
+        { kind: 'environment', environmentId: 'paired' },
+        'terminal.split',
+        expect.objectContaining({
+          pane: { worktreeId: WORKTREE, tabId: 'host-retained', leafId: sourceLeafId }
+        }),
+        { expectedEnvironmentPairingRevision: 7, expectedEnvironmentRuntimeId: 'runtime-7' }
+      )
+    }
+    try {
+      await split()
+      expect(unrelatedReads).toBeGreaterThan(0)
+      const warmedReads = unrelatedReads
+      await split()
+      await split()
+      expect(unrelatedReads).toBe(warmedReads)
+      expect(mocks.call).toHaveBeenCalledTimes(3)
+      expect(readOwner().repo).toBe(sourceRepo)
+      expect(readOwner().repo?.worktreeBasePath).toBe('../worktrees')
+      expect(readOwner().projectRuntimeTarget?.repo).toBe(sourceRepo)
+
+      store().setState({ repos: [sourceRepo, { ...sourceRepo }, localTwin, ...unrelated] })
+      expect(readOwner().repo).toBeUndefined()
+      expect(readOwner().projectRuntimeTarget).toBeUndefined()
+      expect(readOwner().runtimeEnvironmentId).toBe('paired')
+      store().setState({ repos: unrelated })
+      expect(readOwner().repo).toBeUndefined()
+      expect(readOwner().projectRuntimeTarget).toBeUndefined()
+
+      store().setState({
+        repos,
+        unifiedTabsByWorktree: {
+          ...sourceUnifiedTabs,
+          [WORKTREE]: sourceUnifiedTabs[WORKTREE].map((tab): typeof tab => ({
+            ...tab,
+            executionHostId: undefined
+          }))
+        }
+      })
+      expect(readOwner().repo).toBeUndefined()
+      store().setState({
+        unifiedTabsByWorktree: {
+          ...sourceUnifiedTabs,
+          [WORKTREE]: sourceUnifiedTabs[WORKTREE].map((tab): typeof tab => ({
+            ...tab,
+            executionHostId: 'runtime:'
+          }))
+        }
+      })
+      expect(readOwner().unresolved).toBe(true)
+      store().setState({ unifiedTabsByWorktree: sourceUnifiedTabs })
+      const layout = store().getState().terminalLayoutsByTabId[mirror]
+      store()
+        .getState()
+        .setTabLayout(mirror, {
+          ...layout,
+          ptyIdsByLeafId: { [sourceLeafId]: 'remote:rival@@foreign-terminal' }
+        })
+      expect(readOwner().unresolved).toBe(true)
+      expect(splitPaneInMain(request, vi.fn())).toBe(true)
+      expect(splitServerPane(request)).toBe(false)
+      expect(mocks.call).toHaveBeenCalledTimes(3)
+    } finally {
+      clearHostSessionTabIdMappings('paired', WORKTREE)
+      replaceRuntimeEnvironmentRevisions([])
+    }
   }
 )

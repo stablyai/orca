@@ -4,14 +4,19 @@ import { createStoreSessionMockApi } from '../testing/app-store-session-api.test
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../repos/repo.test-fixture'
 
-const mocks = vi.hoisted(() => ({
-  store: null as ReturnType<typeof createTestStore> | null,
-  call: vi.fn(),
-  focus: vi.fn(),
-  notice: vi.fn(),
-  uuid: vi.fn(),
-  main: false
-}))
+const mocks = vi.hoisted(
+  (): { store: ReturnType<typeof createTestStore> | null; main: boolean } & Record<
+    'call' | 'focus' | 'notice' | 'uuid',
+    ReturnType<typeof vi.fn>
+  > => ({
+    store: null,
+    call: vi.fn(),
+    focus: vi.fn(),
+    notice: vi.fn(),
+    uuid: vi.fn(),
+    main: false
+  })
+)
 function store() {
   if (!mocks.store) {
     throw new Error('Missing test store')
@@ -52,7 +57,11 @@ import {
   createRetainedTerminalStartupPreparation
 } from '../../startup/retained-terminal-startup-restoration'
 import { detachTerminalPaneToTab } from '../../components/terminal-pane/layout/detach/terminal-pane-tab-detach'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import {
+  FLOATING_TERMINAL_WORKTREE_ID,
+  getDefaultSettings,
+  getDefaultWorkspaceSession
+} from '../../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { TerminalStartupRestoration } from '../../../../shared/workspace-layout/retained-terminal-destination'
 
@@ -595,6 +604,33 @@ it('restores host-admitted split and new-group failures after hydration before e
 })
 
 describe.each([false, true])('fresh host terminal (main layout = %s)', (main) => {
+  it('keeps floating creation local while refusing an ordinary workspace with no owner', async () => {
+    setup(main)
+    store().setState({
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeWorkspaceExecutionHostId: null,
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'other-host' }
+    })
+    mocks.call.mockResolvedValueOnce({
+      terminal: { tabId: TAB, paneKey: `${TAB}:${LEAF}`, ptyId: 'floating-pty' }
+    })
+
+    expect(await createFreshTerminal({ worktreeId: FLOATING_TERMINAL_WORKTREE_ID })).toBe(true)
+    expect(mocks.call).toHaveBeenCalledExactlyOnceWith(
+      { kind: 'local' },
+      'terminal.create',
+      expect.objectContaining({ worktree: 'id:global-floating-terminal', tabId: TAB, leafId: LEAF })
+    )
+    expect(store().getState().tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      expect.objectContaining({ id: TAB, ptyId: 'floating-pty' })
+    ])
+
+    const before = store().getState()
+    expect(await createFreshTerminal({ worktreeId: 'missing-repo::/missing' })).toBe(false)
+    expect(store().getState().tabsByWorktree).toBe(before.tabsByWorktree)
+    expect(mocks.call).toHaveBeenCalledOnce()
+  })
+
   it('waits for host admission before publishing a shell tab or new group, and leaves refusal unchanged', async () => {
     setup(main)
     const before = store().getState()
