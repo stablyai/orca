@@ -9,10 +9,13 @@ import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/hosted
 const mocks = vi.hoisted(() => {
   const state: {
     coverage: 'notSetUp' | 'covered' | 'expired'
+    /** 'loading' with a failing read: Orca couldn't check the sign-in. */
+    load: 'ready' | 'loading'
     closed: string[]
     listeners: Set<() => void>
   } = {
     coverage: 'notSetUp',
+    load: 'ready',
     closed: [],
     listeners: new Set()
   }
@@ -24,8 +27,13 @@ vi.mock('./orca-cloud-environment-id', () => ({
   isOrcaCloudExecutionHostId: () => true
 }))
 vi.mock('./orca-cloud-agent-accounts-store', () => ({
-  readOrcaCloudAgentAccounts: () => ({ load: { kind: 'ready' }, keyKinds: {} }),
-  ensureFreshOrcaCloudAgentAccounts: async () => ({ load: { kind: 'ready' }, keyKinds: {} }),
+  readOrcaCloudAgentAccounts: () => ({ load: { kind: mocks.load }, keyKinds: {} }),
+  ensureFreshOrcaCloudAgentAccounts: async () => {
+    if (mocks.load === 'loading') {
+      throw new Error('read failed')
+    }
+    return { load: { kind: 'ready' }, keyKinds: {} }
+  },
   isOrcaCloudAgentAccountsFresh: () => true,
   subscribeOrcaCloudAgentAccounts: (listener: () => void) => {
     mocks.listeners.add(listener)
@@ -83,6 +91,7 @@ beforeEach(() => {
   localStorage.clear()
   mocks.coverage = 'notSetUp'
   mocks.closed = []
+  mocks.load = 'ready'
   mocks.listeners.clear()
   resetHeldCloudLaunchResumeForTest()
   useAppStore.setState({ activeOrcaProfileId: 'profile-a' })
@@ -183,6 +192,21 @@ describe('after a restart', () => {
     expect(readCloudAgentHold(cloudTabHoldKey(TAB))).toMatchObject({
       reason: 'awaitingStart',
       awaiting: 'covered'
+    })
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('a sign-in read that fails after restart waits as unread, never "not set up"', async () => {
+    mocks.load = 'loading'
+    remember()
+    setTabs([TAB])
+    const create = vi.fn(async () => created('host-agent'))
+    resumeHeldCloudLaunches(ENV, { create, waitMs: 5_000 })
+    await flush()
+    await flush()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))).toMatchObject({
+      reason: 'awaitingStart',
+      awaiting: 'unread'
     })
     expect(create).not.toHaveBeenCalled()
   })

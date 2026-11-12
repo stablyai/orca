@@ -7,6 +7,7 @@ import {
   cloudCardStateDetail,
   cloudCardUsageLine,
   cloudCardAttentionLabel,
+  cloudCardAttentionTone,
   mostUrgentAttention,
   pickWorkspaceAgentSignIn,
   signInAttention
@@ -118,5 +119,24 @@ describe('card attention for a running agent’s lapsed sign-in (n15)', () => {
   it('none: no row', () => {
     expect(row([{ tabId: 'a', signIn: null }])).toBeNull()
     expect(row([])).toBeNull()
+  })
+})
+
+describe('a launch put back after a restart that waits for Start (V3-01)', () => {
+  const notStarted = { kind: 'agentNotStarted' as const, agent: 'Claude', tabId: 't' }
+
+  it('reads "hasn’t started" in neutral colours, never "isn’t set up" or a warning', () => {
+    expect(cloudCardAttentionLabel(notStarted, t)).toBe('Claude hasn’t started')
+    expect(cloudCardAttentionTone(notStarted).text).toBe('text-foreground')
+    expect(cloudCardAttentionTone(notStarted).dot).toContain('bg-muted-foreground')
+    expect(
+      cloudCardAttentionTone({ kind: 'agentNotSetUp', agent: 'Claude', tabId: 't' }).text
+    ).toBe('text-status-warning-text')
+  })
+
+  it('ranks below an agent that can’t start, above commits and pushes being off', () => {
+    const expired = { kind: 'agentExpired' as const, agent: 'Claude', tabId: 't' }
+    expect(mostUrgentAttention([notStarted, expired])).toBe(expired)
+    expect(mostUrgentAttention([{ kind: 'gitSetupOff' }, notStarted])).toBe(notStarted)
   })
 })
