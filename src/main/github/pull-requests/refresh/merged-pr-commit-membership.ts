@@ -94,7 +94,7 @@ const forcePushTimelineSchema = z.object({
         pullRequest: z
           .object({
             timelineItems: z.object({
-              totalCount: z.number(),
+              pageInfo: z.object({ hasPreviousPage: z.boolean() }),
               nodes: z.array(
                 z.object({ beforeCommit: z.object({ oid: z.string() }).nullish() }).nullable()
               )
@@ -123,7 +123,7 @@ async function wasForcePushedAwayFromPR(
       'api',
       'graphql',
       '-f',
-      `query=query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $number) { timelineItems(itemTypes: [HEAD_REF_FORCE_PUSHED_EVENT], last: ${FORCE_PUSH_EVENTS_LIMIT}) { totalCount nodes { ... on HeadRefForcePushedEvent { beforeCommit { oid } } } } } } }`,
+      `query=query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $number) { timelineItems(itemTypes: [HEAD_REF_FORCE_PUSHED_EVENT], last: ${FORCE_PUSH_EVENTS_LIMIT}) { pageInfo { hasPreviousPage } nodes { ... on HeadRefForcePushedEvent { beforeCommit { oid } } } } } } }`,
       '-f',
       `owner=${ownerRepo.owner}`,
       '-f',
@@ -141,7 +141,7 @@ async function wasForcePushedAwayFromPR(
   if (timeline.nodes.some((node) => node?.beforeCommit?.oid.toLowerCase() === oid)) {
     return 'associated'
   }
-  return timeline.totalCount > timeline.nodes.length ||
+  return timeline.pageInfo.hasPreviousPage ||
     timeline.nodes.some((node) => !node?.beforeCommit?.oid)
     ? 'unknown'
     : 'not-contained'

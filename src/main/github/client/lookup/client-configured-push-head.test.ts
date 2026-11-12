@@ -157,10 +157,13 @@ describe('getPRForBranch configured push head', () => {
   })
 
   it('finds a fork PR through a remote that fetches upstream and pushes to the fork', async () => {
-    scriptGit({ 'remote.origin.url': 'git@github.com:stablyai/orca.git' }, [
-      'origin\tgit@github.com:stablyai/orca.git (fetch)',
-      'origin\tgit@github.com:contributor/orca.git (push)'
-    ])
+    scriptGit(
+      { 'remote.origin.url': 'git@github.com:stablyai/orca.git', 'push.default': 'current' },
+      [
+        'origin\tgit@github.com:stablyai/orca.git (fetch)',
+        'origin\tgit@github.com:contributor/orca.git (push)'
+      ]
+    )
     scriptGitHub('contributor', BRANCH)
 
     const pr = await getPRForBranch('/repo-root', BRANCH)
@@ -233,10 +236,13 @@ describe('getPRForBranch configured push head', () => {
       candidates: [enterprise],
       headRepo: enterprise
     })
-    scriptGit({ 'remote.origin.url': 'https://ghe.example/stablyai/orca.git' }, [
-      'origin\thttps://ghe.example/stablyai/orca.git (fetch)',
-      'origin\thttps://ghe.example/contributor/orca.git (push)'
-    ])
+    scriptGit(
+      { 'remote.origin.url': 'https://ghe.example/stablyai/orca.git', 'push.default': 'current' },
+      [
+        'origin\thttps://ghe.example/stablyai/orca.git (fetch)',
+        'origin\thttps://ghe.example/contributor/orca.git (push)'
+      ]
+    )
     scriptGitHub('contributor', BRANCH, 'ghe.example')
 
     const pr = await getPRForBranch('/repo-root', BRANCH)
@@ -266,7 +272,11 @@ it('keeps historical association visible without emitting merged containment pro
           data: {
             repository: {
               pullRequest: {
-                timelineItems: { totalCount: 1, nodes: [{ beforeCommit: { oid: oldHead } }] }
+                timelineItems: {
+                  totalCount: 1,
+                  pageInfo: { hasPreviousPage: false },
+                  nodes: [{ beforeCommit: { oid: oldHead } }]
+                }
               }
             }
           }

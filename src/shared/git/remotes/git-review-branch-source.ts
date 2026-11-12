@@ -132,6 +132,22 @@ export async function readGitReviewBranchSources(
         destinations.size === 0 && (specs.length > 0 || get('push.default') === 'nothing')
           ? null
           : branchName
+      const fetchRemote =
+        trackedRemote ??
+        (remotes.has('origin')
+          ? 'origin'
+          : remotes.size === 1
+            ? remotes.keys().next().value
+            : undefined)
+      if (
+        specs.length === 0 &&
+        (get('push.default') ?? 'simple') === 'simple' &&
+        !get(`branch.${branch}.merge`) &&
+        remote === fetchRemote &&
+        !/^(true|yes|on|1)$/i.test(get('push.autosetupremote') ?? '')
+      ) {
+        pushBranchName = null
+      }
       if (destinations.size === 0) {
         if (!localTracking && remote === trackedRemote) {
           const merge = get(`branch.${branch}.merge`)

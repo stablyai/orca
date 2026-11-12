@@ -43,7 +43,15 @@ vi.mock('../../repositories/github-api-repository-remote-probe', () => ({
 
 import { getConfiguredPushHead } from './branch-review-heads'
 
-it.each([
+type PushCase = {
+  name: string
+  config: string[][]
+  destination: string | null
+  pushSucceeds: boolean
+  noUpstream?: boolean
+  remoteName?: string
+}
+const cases: PushCase[] = [
   {
     name: 'nothing',
     config: [['push.default', 'nothing']],
@@ -85,13 +93,58 @@ it.each([
     ],
     destination: 'published',
     pushSucceeds: true
+  },
+  {
+    name: 'simple without upstream and with distinct origin push URL',
+    config: [['push.default', 'simple']],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true,
+    remoteName: 'origin'
+  },
+  {
+    name: 'named fork push remote without upstream',
+    config: [
+      ['push.default', 'simple'],
+      ['branch.feature.pushRemote', 'fork']
+    ],
+    destination: 'feature',
+    pushSucceeds: true,
+    noUpstream: true
+  },
+  {
+    name: 'named origin push remote still lacks upstream',
+    config: [
+      ['push.default', 'simple'],
+      ['branch.feature.pushRemote', 'origin']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true,
+    remoteName: 'origin'
+  },
+  {
+    name: 'automatic upstream setup',
+    config: [
+      ['push.default', 'simple'],
+      ['push.autoSetupRemote', 'true']
+    ],
+    destination: 'feature',
+    pushSucceeds: true,
+    noUpstream: true,
+    remoteName: 'origin'
   }
-])(
+]
+it.for(cases)(
   'matches real Git publication while keeping discovery usable: $name',
-  async ({ config, destination, pushSucceeds }) => {
+  async (
+    { config, destination, pushSucceeds, noUpstream = false, remoteName = 'fork' },
+    { skip }
+  ) => {
     const directory = await mkdtemp(path.join(tmpdir(), 'push-head-'))
     const repo = path.join(directory, 'checkout')
     const fork = path.join(directory, 'fork.git')
+    const base = path.join(directory, 'base.git')
     const run = (cwd: string, args: string[]) =>
       runProcess({
         program: 'git',
@@ -107,7 +160,16 @@ it.each([
       return result
     }
     try {
+      if (config.some(([key]) => key === 'push.autoSetupRemote')) {
+        const version = (await run(directory, ['--version'])).stdout.match(
+          /git version (\d+)\.(\d+)/
+        )
+        if (Number(version?.[1]) === 2 && Number(version?.[2]) < 37) {
+          skip()
+        }
+      }
       await run(directory, ['init', '--quiet', '--bare', fork])
+      await run(directory, ['init', '--quiet', '--bare', base])
       await run(directory, ['init', '--quiet', repo])
       await git(['checkout', '-b', 'feature'])
       await git([
@@ -122,14 +184,19 @@ it.each([
       ])
       await git(['branch', 'other'])
       await git(['remote', 'add', 'fork', fork])
-      await git(['config', 'branch.feature.remote', 'fork'])
-      await git(['config', 'branch.feature.merge', 'refs/heads/other'])
+      await git(['remote', 'add', 'origin', base])
+      await git(['remote', 'set-url', '--push', 'origin', fork])
+      if (!noUpstream) {
+        await git(['config', 'branch.feature.remote', 'fork'])
+        await git(['config', 'branch.feature.merge', 'refs/heads/other'])
+      }
       for (const [key, value] of config) {
         await git(['config', key, value])
       }
+      const configuredHead = await getConfiguredPushHead(repo, 'feature', null, {})
+      const source = (await readGitReviewBranchSources(git, ['feature'])).get('feature')
       const push = await run(repo, ['push'])
       expect(push.code === 0, push.stderr).toBe(pushSucceeds)
-      const source = (await readGitReviewBranchSources(git, ['feature'])).get('feature')
       if (destination === null) {
         const feature = await run(directory, [
           '--git-dir',
@@ -142,15 +209,14 @@ it.each([
         // GitLab can still discover a manually published branch despite a disabled plain push.
         expect(source).toMatchObject({
           branchName: 'feature',
-          trackedBranchName: 'other',
           pushBranchName: null
         })
-        await expect(getConfiguredPushHead(repo, 'feature', null, {})).resolves.toBeNull()
+        expect(configuredHead).toBeNull()
       } else {
         expect(push.code, push.stderr).toBe(0)
-        await expect(getConfiguredPushHead(repo, 'feature', null, {})).resolves.toMatchObject({
+        expect(configuredHead).toMatchObject({
           headRepo: { owner: 'contributor', repo: 'orca' },
-          branch: { remoteName: 'fork', branchName: destination }
+          branch: { remoteName, branchName: destination }
         })
       }
     } finally {

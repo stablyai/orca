@@ -26,7 +26,7 @@ function membership() {
   })
 }
 
-function scriptForcePushes(beforeOids: (string | null)[]): void {
+function scriptForcePushes(beforeOids: (string | null)[], hasPreviousPage = false): void {
   ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     if (args[1] === 'graphql') {
       return {
@@ -35,7 +35,8 @@ function scriptForcePushes(beforeOids: (string | null)[]): void {
             repository: {
               pullRequest: {
                 timelineItems: {
-                  totalCount: beforeOids.length,
+                  totalCount: 23,
+                  pageInfo: { hasPreviousPage },
                   nodes: beforeOids.map((oid) => ({ beforeCommit: oid ? { oid } : null }))
                 }
               }
@@ -50,6 +51,19 @@ function scriptForcePushes(beforeOids: (string | null)[]): void {
 }
 
 describe('getMergedPRHeadRelationship', () => {
+  it('proves absence from a complete filtered page despite an unfiltered total count', async () => {
+    scriptForcePushes([
+      '1111111111111111111111111111111111111111',
+      '2222222222222222222222222222222222222222'
+    ])
+    await expect(membership()).resolves.toBe('not-contained')
+  })
+
+  it('keeps absence unknown when a previous filtered page exists', async () => {
+    scriptForcePushes(['1111111111111111111111111111111111111111'], true)
+    await expect(membership()).resolves.toBe('unknown')
+  })
+
   it('preserves uncertainty when a force-push event has no prior commit', async () => {
     scriptForcePushes([null])
     await expect(membership()).resolves.toBe('unknown')
