@@ -47,6 +47,7 @@ export function SettingsGroup({
   collapse
 }: SettingsGroupProps): React.JSX.Element {
   const bodyId = useId()
+  const buttonId = useId()
   const card = (
     <div
       className={cn(
@@ -73,13 +74,14 @@ export function SettingsGroup({
           description={collapse && !collapse.open ? collapse.summary : description}
           action={action}
           onClick={onHeaderClick}
-          collapse={collapse ? { ...collapse, controls: bodyId } : undefined}
+          collapse={collapse ? { ...collapse, controls: bodyId, buttonId } : undefined}
         />
       ) : null}
       {collapse ? (
         <div
           id={bodyId}
           role="region"
+          aria-labelledby={title ? buttonId : undefined}
           className={cn(
             'grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none',
             collapse.open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
@@ -106,45 +108,50 @@ export function SettingsGroupHeader({
   collapse
 }: Pick<SettingsGroupProps, 'title' | 'description' | 'action' | 'className'> & {
   onClick?: (event: React.MouseEvent<HTMLDivElement>) => void
-  collapse?: SettingsGroupCollapse & { controls: string }
+  collapse?: SettingsGroupCollapse & { controls: string; buttonId: string }
 }): React.JSX.Element {
-  const heading = (
-    <div className="min-w-0 space-y-1">
-      <h3 data-settings-group-heading="" className="text-base font-semibold leading-tight">
-        {title}
-      </h3>
-      {description ? (
-        <p
-          data-settings-group-description=""
-          className={cn('text-xs text-muted-foreground', collapse && !collapse.open && 'truncate')}
-        >
-          {description}
-        </p>
-      ) : null}
-    </div>
-  )
+  const descriptionNode = description ? (
+    <p
+      data-settings-group-description=""
+      className={cn(
+        'text-xs text-muted-foreground',
+        // Aligns with the title past the chevron (size-4 + gap-2).
+        collapse && 'pl-6',
+        collapse && !collapse.open && 'truncate'
+      )}
+    >
+      {description}
+    </p>
+  ) : null
   return (
     <div className={cn('flex items-end justify-between gap-3 px-1', className)} onClick={onClick}>
-      {collapse ? (
-        <button
-          type="button"
-          aria-expanded={collapse.open}
-          aria-controls={collapse.controls}
-          onClick={collapse.onToggle}
-          disabled={collapse.disabled}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-default"
-        >
-          <ChevronRight
-            className={cn(
-              'size-4 shrink-0 text-muted-foreground transition-transform',
-              collapse.open && 'rotate-90 text-foreground'
-            )}
-          />
-          {heading}
-        </button>
-      ) : (
-        heading
-      )}
+      <div className={cn('min-w-0 space-y-1', collapse && 'flex-1')}>
+        <h3 data-settings-group-heading="" className="text-base font-semibold leading-tight">
+          {collapse ? (
+            // Accordion header pattern: the button lives inside the heading so it stays in heading navigation.
+            <button
+              type="button"
+              id={collapse.buttonId}
+              aria-expanded={collapse.open}
+              aria-controls={collapse.controls}
+              onClick={collapse.onToggle}
+              disabled={collapse.disabled}
+              className="flex w-full min-w-0 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-default"
+            >
+              <ChevronRight
+                className={cn(
+                  'size-4 shrink-0 text-muted-foreground transition-transform',
+                  collapse.open && 'rotate-90 text-foreground'
+                )}
+              />
+              <span className="min-w-0">{title}</span>
+            </button>
+          ) : (
+            title
+          )}
+        </h3>
+        {descriptionNode}
+      </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   )

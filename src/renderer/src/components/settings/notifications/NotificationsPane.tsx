@@ -246,7 +246,7 @@ export function NotificationsPane({
           }
         />
 
-        <div data-settings-row="" className="flex flex-wrap items-center gap-2">
+        <div data-settings-row="" className="flex flex-wrap items-center gap-2 py-2">
           <Button
             variant="outline"
             size="sm"
