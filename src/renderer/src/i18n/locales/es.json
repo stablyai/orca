@@ -24207,5 +24207,14 @@
       "dismiss": "Descartar",
       "cancelDownload": "Cancelar descarga"
     }
+  },
+  "usage": {
+    "failure": {
+      "unavailable": "El uso no está disponible. Pulsa Actualizar para reconectar.",
+      "setting": "No se pudo confirmar el cambio de seguimiento. Intenta cambiarlo de nuevo.",
+      "refresh": "No se pudo completar la actualización anterior. Pulsa Actualizar de nuevo.",
+      "read": "No se pudo cargar el uso. Pulsa Actualizar de nuevo.",
+      "retry": "Actualizar"
+    }
   }
 }

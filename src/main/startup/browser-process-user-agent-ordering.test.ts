@@ -1,3 +1,4 @@
+vi.mock('../backend-desktop/backend-supervisor')
 import { expect, it, vi } from 'vitest'
 import { runMainProcessPreflight } from './main-process-preflight'
 
@@ -181,9 +182,6 @@ vi.mock('../persistence/profile-state/offline-access/profile-state-active-locati
   getActiveProfileStateLocation: () => ({ profileId: 'active-profile' })
 }))
 vi.mock('../stats/collector')
-vi.mock('../claude-usage/store')
-vi.mock('../codex-usage/store')
-vi.mock('../opencode-usage/store')
 vi.mock('../browser/document-preview/doc-preview-protocol')
 vi.mock('../crash-reporting/capture/crashpad-capture')
 vi.mock('../crash-reporting/reports/crash-report-store')
