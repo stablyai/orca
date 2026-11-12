@@ -3232,12 +3232,15 @@ private enum TextInput {
         init?(into element: AXUIElement?, text: String) {
             guard let element,
                   !AXSnapshotReader().isSecureTextElement(element),
-                  let current = rawStringAttribute(element, kAXValueAttribute as String)
+                  let current = rawStringAttribute(element, kAXValueAttribute as String),
+                  // Why: settle re-reads the whole value every 25 ms; a terminal's scrollback or a long document is too costly.
+                  current.utf16.count <= 64 * 1024
             else {
                 return nil
             }
             let selection = TextInput.selectedTextRange(element).flatMap { range -> Range<Int>? in
-                range.location >= 0 && range.length >= 0 ? range.location..<(range.location + range.length) : nil
+                range.location >= 0 && range.length >= 0 && range.length <= Int.max - range.location
+                    ? range.location..<(range.location + range.length) : nil
             }
             guard let expected = TextInsertionReadback.expectedValue(current: current, selection: selection, inserting: text) else {
                 return nil
