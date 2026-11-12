@@ -137,6 +137,7 @@ function ComposerRunOnUbuntuFrame(): React.JSX.Element {
         projectDescriptionId="fixture-composer-project-desc"
         onAddProject={() => {}}
         onAddProjectEntryRequest={() => {}}
+        handleOpenRemoteHostDialog={() => {}}
         focusNameInput={() => {}}
         shouldShowRunTargetPicker
         projectHostSetupOptions={composerHosts}

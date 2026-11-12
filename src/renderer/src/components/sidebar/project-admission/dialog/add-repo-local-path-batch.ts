@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from 'react'
+import { toast } from 'sonner'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -43,6 +44,7 @@ export async function addLocalPathsForGeneration({
   const gitRepoIds: string[] = []
   const shouldDeferGitRepoReady = paths.length > 1
   let skippedCount = 0
+  let sawFailure = false
   for (const path of paths) {
     const result = await addLocalPathForGeneration(
       path,
@@ -55,7 +57,8 @@ export async function addLocalPathsForGeneration({
       continue
     }
     if (result.status === 'failed') {
-      return 'unsettled'
+      sawFailure = true
+      break
     }
     if (result.status === 'cancelled') {
       return 'cancelled'
@@ -81,7 +84,9 @@ export async function addLocalPathsForGeneration({
     )
     return 'completed'
   }
-  return shouldDeferGitRepoReady && gitRepoIds.length === 0 ? 'unsettled' : 'completed'
+  return sawFailure || (shouldDeferGitRepoReady && gitRepoIds.length === 0)
+    ? 'unsettled'
+    : 'completed'
 }
 
 async function runPickedLocalPathsBatch({
@@ -106,6 +111,11 @@ async function runPickedLocalPathsBatch({
   try {
     const outcome = await addPaths(paths, 'local_folder_picker', gen)
     if (outcome === 'unsettled' && isCurrentGen()) {
+      onUnsettled?.()
+    }
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : String(err))
+    if (isCurrentGen()) {
       onUnsettled?.()
     }
   } finally {

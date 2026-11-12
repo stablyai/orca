@@ -91,7 +91,9 @@ export function useAddRepoHostSelection({
       ? preferredHost.id
       : defaultHost &&
           selectableHostOptions.includes(defaultHost) &&
-          (canSelectAddRepoHost(defaultHost) || canConnectAddRepoHost(defaultHost))
+          (canSelectAddRepoHost(defaultHost) ||
+            canConnectAddRepoHost(defaultHost) ||
+            defaultHost.kind === 'ssh')
         ? defaultHost.id
         : focusedHost &&
             selectableHostOptions.includes(focusedHost) &&
@@ -120,13 +122,11 @@ export function useAddRepoHostSelection({
   const requestedHost =
     resolvedHost && selectableHostOptions.includes(resolvedHost) ? resolvedHost : undefined
   const requestedHostSelectable = requestedHost ? canSelectAddRepoHost(requestedHost) : false
-  // A connecting or unmerged SSH target must block actions rather than silently select this computer.
+  // A connecting, unavailable remote, or unmerged SSH target must block actions rather than silently select this computer.
   const requestedHostPending =
     requestedHost !== undefined &&
     !requestedHostSelectable &&
-    (requestedHost.kind === 'ssh' ||
-      requestedHost.wslDistro !== undefined ||
-      (requestedHost.aliasHostIds?.length ?? 0) > 0)
+    (requestedHost.id !== LOCAL_EXECUTION_HOST_ID || (requestedHost.aliasHostIds?.length ?? 0) > 0)
   const selectedHost = requestedHostSelectable
     ? requestedHost
     : requestedHostPending

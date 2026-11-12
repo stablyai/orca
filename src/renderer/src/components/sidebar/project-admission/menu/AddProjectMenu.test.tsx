@@ -216,6 +216,7 @@ function ComposerHostSyncHarness({
         projectDescriptionId="desc"
         onAddProject={vi.fn()}
         onAddProjectEntryRequest={onRequest}
+        handleOpenRemoteHostDialog={vi.fn()}
         focusNameInput={vi.fn()}
         shouldShowRunTargetPicker
         projectHostSetupOptions={hostOptions}

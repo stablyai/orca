@@ -98,6 +98,7 @@ function ProjectAndHostPreview({
         projectDescriptionId="fixture-project-description"
         onAddProject={() => {}}
         onAddProjectEntryRequest={() => {}}
+        handleOpenRemoteHostDialog={() => {}}
         focusNameInput={() => {}}
         shouldShowRunTargetPicker={!folderOnly}
         projectHostSetupOptions={hosts}

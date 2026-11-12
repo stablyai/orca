@@ -11,7 +11,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 export type ProjectComboboxAddProjectMenu = {
   defaultHostId?: ExecutionHostId | null
   onOpenEntryRequest: (request: AddRepoDialogEntryRequest) => void
-  onOpenRemoteHostDialog?: (mode: AddRemoteHostMode) => void
+  onOpenRemoteHostDialog: (mode: AddRemoteHostMode) => void
 }
 
 export function focusCascadedAddProjectMenuFirstItem(): void {

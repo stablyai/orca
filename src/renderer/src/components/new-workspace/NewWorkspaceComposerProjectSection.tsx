@@ -114,7 +114,7 @@ export function NewWorkspaceComposerProjectSection({
   )
   const comboboxAddProjectMenu = useMemo<ProjectComboboxAddProjectMenu | undefined>(
     () =>
-      onAddProjectEntryRequest
+      onAddProjectEntryRequest && handleOpenRemoteHostDialog
         ? {
             defaultHostId: defaultAddProjectHostId,
             onOpenEntryRequest: onAddProjectEntryRequest,
