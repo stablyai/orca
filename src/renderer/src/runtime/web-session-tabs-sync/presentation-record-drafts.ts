@@ -1,15 +1,28 @@
-import { recordDraft, type RecordDraft } from '@/store/keyed-record-transitions'
+import { recordDraft, tabBucketDraft, type RecordDraft } from '@/store/keyed-record-transitions'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 
 export type PresentationRecordKey =
   | 'ptyIdsByTabId'
   | 'terminalLayoutsByTabId'
   | 'runtimePaneTitlesByTabId'
+  | 'tabsByWorktree'
+  | 'unifiedTabsByWorktree'
 type PresentationValue<K extends PresentationRecordKey> = NonNullable<
   WebSessionTabsSyncState[K]
 >[string]
 type PresentationRecords = {
   [K in PresentationRecordKey]: Record<string, PresentationValue<K>>
+}
+const draftFactories: {
+  [K in PresentationRecordKey]: (
+    source: Readonly<Record<string, PresentationValue<K>>>
+  ) => RecordDraft<PresentationValue<K>>
+} = {
+  ptyIdsByTabId: recordDraft,
+  terminalLayoutsByTabId: recordDraft,
+  runtimePaneTitlesByTabId: recordDraft,
+  tabsByWorktree: tabBucketDraft,
+  unifiedTabsByWorktree: tabBucketDraft
 }
 export type PresentationRecordDrafts = Partial<{
   [K in PresentationRecordKey]: RecordDraft<PresentationValue<K>>
@@ -26,7 +39,7 @@ export function presentationRecordDraft<K extends PresentationRecordKey>(
     return cached
   }
   const records: Partial<PresentationRecords> = state
-  const draft = recordDraft<PresentationValue<K>>(records[key] ?? {})
+  const draft = draftFactories[key](records[key] ?? {})
   if (batch) {
     batch.presentationDrafts ??= {}
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the generic key and value share K; the indexed mapped type cannot retain that relation on assignment.
@@ -34,6 +47,28 @@ export function presentationRecordDraft<K extends PresentationRecordKey>(
     drafts[key] = draft
   }
   return draft
+}
+
+export function withWorktreeTabEntry<K extends 'tabsByWorktree' | 'unifiedTabsByWorktree'>(
+  state: WebSessionTabsSyncState,
+  key: K,
+  worktreeId: string,
+  value: PresentationValue<K> | null,
+  equal: (previous: PresentationValue<K> | undefined, next: PresentationValue<K> | null) => boolean,
+  batch?: WebSessionTabsBatchContext
+): Record<string, PresentationValue<K>> {
+  const records: Partial<PresentationRecords> = state
+  const source = records[key] ?? {}
+  if (equal(source[worktreeId], value)) {
+    return source
+  }
+  const draft = presentationRecordDraft(state, key, batch)
+  if (value === null) {
+    draft.delete(worktreeId)
+  } else {
+    draft.set(worktreeId, value)
+  }
+  return finishPresentationRecord(state, key, draft, batch)
 }
 
 export function finishPresentationRecord<K extends PresentationRecordKey>(
@@ -64,7 +99,9 @@ export function publishPresentationRecords(
   for (const key of [
     'ptyIdsByTabId',
     'terminalLayoutsByTabId',
-    'runtimePaneTitlesByTabId'
+    'runtimePaneTitlesByTabId',
+    'tabsByWorktree',
+    'unifiedTabsByWorktree'
   ] as const) {
     const draft = drafts[key]
     if (draft && batch.changedRecords.has(key)) {

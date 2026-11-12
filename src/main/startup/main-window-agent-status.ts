@@ -36,6 +36,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       structuredHost,
       programStatus,
       programStatusOnly,
+      paneSleep,
       agentPresence
     }) => {
       if (state.mainWindow?.isDestroyed()) {
@@ -90,6 +91,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(orchestration ? { orchestration } : {}),
         ...(programStatus ? { programStatus } : {}),
         ...(programStatusOnly === true ? { programStatusOnly: true } : {}),
+        ...(paneSleep ? { paneSleep } : {}),
         ...(agentPresence?.session && !agentPresence.ended
           ? { paneOwner: { agent: agentPresence.agent, session: agentPresence.session } }
           : {}),
