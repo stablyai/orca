@@ -246,6 +246,11 @@ export type FilesystemApi = {
     uploadPathsToAgentSessionAttachments: (
       args: AgentSessionAttachmentUploadTarget & { paths: string[] }
     ) => Promise<AgentSessionAttachmentPathUploadResult>
+    /** Uploads client-local files to a paired server's temp folder for a terminal-backed chat there. */
+    uploadPathsToRuntimeTempFiles: (args: {
+      environmentId: string
+      paths: string[]
+    }) => Promise<AgentSessionAttachmentPathUploadResult>
     watchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     unwatchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void

@@ -27,6 +27,7 @@ import type {
   NativeChatStructuredAttachmentSession
 } from '../uploads/native-chat-attachment-owner'
 import {
+  attachNativeChatRuntimeTempPaths,
   attachNativeChatSessionAttachmentPaths,
   reserveNativeChatAttachmentChips
 } from './native-chat-session-attachment-drop'
@@ -159,7 +160,8 @@ export function useNativeChatExternalAttachments({
         if (owner.kind === 'not-ready') {
           return owner.notice ?? nativeChatWorktreeNotReadyNotice()
         }
-        if (owner.kind === 'remote') {
+        // Only a server that runs the agent itself can take the file; nested SSH hosts still refuse.
+        if (owner.kind === 'remote' && !owner.clipboardImageEnvironmentId) {
           return nativeChatLocalAttachmentUnsupportedNotice()
         }
         // The picker shares the drop limit without partially attaching a batch.
@@ -170,6 +172,21 @@ export function useNativeChatExternalAttachments({
       }
       const claimedPaths = new Set<string>()
       const run = async (reserved: NativeChatReservedAttachment[]): Promise<void> => {
+        if (owner.kind === 'remote') {
+          if (!owner.clipboardImageEnvironmentId) {
+            return
+          }
+          await attachNativeChatRuntimeTempPaths({
+            pending: reserved,
+            environmentId: owner.clipboardImageEnvironmentId,
+            chips,
+            options,
+            isAbandoned: abandoned,
+            ownerStillCurrent,
+            setNotice
+          })
+          return
+        }
         if (owner.kind === 'runtime-session') {
           await attachNativeChatSessionAttachmentPaths({
             pending: reserved,
@@ -200,6 +217,7 @@ export function useNativeChatExternalAttachments({
         admitted: destination !== undefined,
         refusal,
         run,
+        serverOwned: owner.kind === 'remote',
         claimedPaths,
         preparationConsumer:
           owner.kind === 'local' && owner.structuredSessionId
@@ -225,7 +243,7 @@ export function useNativeChatExternalAttachments({
           setNotice(notice)
           return
         }
-        await intake.run(reserveNativeChatAttachmentChips(intake.chips, paths))
+        await intake.run(reserveNativeChatAttachmentChips(intake.chips, paths, intake.serverOwned))
       }
       // Deferred operations own their files until they apply or cancel.
       const deliver: CapturedNativeChatDrop = (paths) =>

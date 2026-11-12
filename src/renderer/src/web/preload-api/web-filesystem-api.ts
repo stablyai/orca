@@ -23,6 +23,7 @@ import {
 import { isMissingPathError, resolveRuntimeFilePath } from './web-runtime-worktree-catalog'
 import { noopUnsubscribe } from './web-storage'
 import { uploadBrowserFilesToWebAgentSessionAttachments } from './web-agent-session-attachment-upload'
+import { uploadBrowserFilesToWebRuntimeTempFiles } from './web-clipboard-api'
 
 export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
   const searches = new Map<string, AbortController>()
@@ -177,6 +178,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     },
     resolveDroppedPathsForAgent: async () => ({ resolvedPaths: [], skipped: [], failed: [] }),
     uploadPathsToAgentSessionAttachments: uploadBrowserFilesToWebAgentSessionAttachments,
+    uploadPathsToRuntimeTempFiles: uploadBrowserFilesToWebRuntimeTempFiles,
     // Why: the paired web client watches nothing, so there is no symlinked folder to add a watch for.
     hasSymlinkBelowRoot: () => Promise.resolve(false),
     watchWorktree: () => Promise.resolve(),

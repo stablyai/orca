@@ -43,6 +43,7 @@ vi.mock('../uploads/native-chat-session-attachment-upload', async (importOrigina
 
 import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
 import type { NativeChatPendingAttachmentChips } from './native-chat-session-attachment-drop'
+import type { AgentSessionAttachmentPathUploadResult } from '../../../../../../shared/agent-session/agent-session-attachments'
 import type { NativeChatStructuredAttachmentSession } from '../uploads/native-chat-attachment-owner'
 
 type HookApi = ReturnType<typeof useNativeChatExternalAttachments>
@@ -219,6 +220,48 @@ describe('useNativeChatExternalAttachments', () => {
       probe.latest().attachExternalPaths([token!])
     })
     expect(takeBrowserAttachmentFile(token!)).toBeNull()
+  })
+
+  it('uploads files dropped on a terminal chat to the paired server that runs it', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({
+      kind: 'remote',
+      clipboardImageEnvironmentId: 'env-1'
+    })
+    const upload = vi.fn(async (): Promise<AgentSessionAttachmentPathUploadResult> => ({
+      uploaded: [
+        { sourcePath: '/Users/me/shot.png', path: '/tmp/orca-paste-1/shot.png' },
+        { sourcePath: '/Users/me/notes.md', path: '/tmp/orca-paste-2/notes.md' }
+      ],
+      skipped: [],
+      failed: []
+    }))
+    vi.stubGlobal('api', { fs: { stat: mocks.stat, uploadPathsToRuntimeTempFiles: upload } })
+    const chips = noPendingChips()
+    const attachResolvedPaths = vi.fn()
+    const setNotice = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths, pendingChips: chips, setNotice })
+    await act(async () => {
+      probe.latest().attachExternalPaths(['/Users/me/shot.png', '/Users/me/notes.md'])
+    })
+    expect(upload).toHaveBeenCalledExactlyOnceWith({
+      environmentId: 'env-1',
+      paths: ['/Users/me/shot.png', '/Users/me/notes.md']
+    })
+    expect(chips.begin).toHaveBeenNthCalledWith(1, undefined, 'shot.png', true)
+    expect(chips.begin).toHaveBeenNthCalledWith(2, undefined, 'notes.md', true)
+    expect(chips.resolve).toHaveBeenCalledExactlyOnceWith(
+      '1',
+      '/tmp/orca-paste-1/shot.png',
+      null,
+      undefined
+    )
+    expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith(
+      [{ id: '2', path: '/tmp/orca-paste-2/notes.md' }],
+      undefined,
+      true
+    )
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+    expect(setNotice).not.toHaveBeenCalled()
   })
 
   it('releases browser files a picker returns to an already disabled composer', async () => {

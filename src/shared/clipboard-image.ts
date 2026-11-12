@@ -114,3 +114,25 @@ export function clipboardImageThumbnailSize({
 export function clipboardFormatsIncludeImage(formats: readonly string[]): boolean {
   return formats.some((format) => format.startsWith('image/'))
 }
+
+/** The most one drop or pick may send to a paired server's temp folder, across all its files. */
+export const RUNTIME_TEMP_UPLOAD_MAX_TOTAL_BYTES = 100 * 1024 * 1024
+
+/** Why a file is left out: it would take its drop past the total for one drop. */
+export function runtimeTempUploadTotalReason(name: string): string {
+  return `'${name}' would take this drop over the ${RUNTIME_TEMP_UPLOAD_MAX_TOTAL_BYTES / 1024 / 1024} MB limit for one drop`
+}
+
+const NAMED_TEMP_UPLOAD_FOLDER =
+  /^orca-paste-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * A named upload lands in its own `orca-paste-<uuid>` folder. A host too old to read `fileName` still
+ * takes the upload but saves it beside the others as `.png`, which would turn a document into an image.
+ */
+export function assertNamedTempUploadKeptName(savedPath: string): void {
+  const folder = savedPath.split(/[\\/]/).at(-2) ?? ''
+  if (!NAMED_TEMP_UPLOAD_FOLDER.test(folder)) {
+    throw new Error('The Orca server is too old to keep file names. Update it and try again.')
+  }
+}
