@@ -94,6 +94,7 @@ function Probe() {
           <div
             key={`${item.hostId ?? 'local'}|${item.id}`}
             role="option"
+            aria-selected={selected.selectedWorktreeIds.has(`${item.hostId ?? 'local'}|${item.id}`)}
             onClick={(e) => selected.updateSelectionForGesture(e, item)}
           >
             {item.id}
