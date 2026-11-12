@@ -17,6 +17,7 @@ import {
   sendHello,
   waitFor
 } from './testing/acp-structured-adapter.test-support'
+import type { AcpScriptedAgent } from '../process/testing/acp-scripted-agent.test-support'
 import { GrokFixtureReplay } from './testing/acp-structured-fixture-replay.test-support'
 import {
   readAcpFixture,
@@ -48,6 +49,135 @@ const expectedMeta = (rule: string) => ({
     systemPrompt: { append: expect.stringContaining(rule) }
   },
   other: { keep: true }
+})
+
+async function nativeOptionsRig({
+  loaded = true,
+  configOptions = fixture.session.configOptions,
+  modelConfigOptions = configOptions,
+  script
+}: {
+  loaded?: boolean
+  configOptions?: typeof fixture.session.configOptions
+  modelConfigOptions?: typeof fixture.session.configOptions
+  script?: (agent: AcpScriptedAgent) => void
+} = {}) {
+  return openAcpAdapterRig({
+    spec: ANTIGRAVITY,
+    initialize: fixture.initialize,
+    launch: loaded
+      ? {
+          resume: {
+            sessionId: PROVIDER_SESSION,
+            key: 'acp:antigravity:saved',
+            mayBeUnsaved: () => false,
+            unannouncedLosses: () => []
+          }
+        }
+      : undefined,
+    script: (agent) => {
+      for (const method of ['session/new', 'session/resume']) {
+        agent.on(method, (frame) =>
+          agent.reply(frame, { ...fixture.session, sessionId: PROVIDER_SESSION, configOptions })
+        )
+      }
+      agent.on('session/set_config_option', (frame) => {
+        const { configId, value } = z
+          .object({ configId: z.string(), value: z.string() })
+          .parse(frame.params)
+        agent.reply(frame, {
+          configOptions:
+            configId === 'thinking_level'
+              ? value === 'low'
+                ? fixture.low.configOptions
+                : fixture.high.configOptions
+              : configId === 'model'
+                ? modelConfigOptions
+                : configOptions
+        })
+      })
+      script?.(agent)
+    }
+  })
+}
+
+it('honors restored native effort while retaining changed, unknown, explicit and new choices', async () => {
+  const rigs = []
+  const unknown = fixture.session.configOptions.map((option) =>
+    option.category === 'thought_level' ? { ...option, currentValue: '' } : option
+  )
+  for (const scenario of [
+    { loaded: true, effort: 'high', writes: [] },
+    { loaded: true, effort: 'low', writes: ['low'] },
+    { loaded: true, effort: 'high', configOptions: unknown, writes: ['high'] },
+    { loaded: false, effort: 'high', writes: ['high'] }
+  ]) {
+    const rig = await nativeOptionsRig(scenario)
+    rigs.push(rig)
+    await rig.acquire()
+    await rig.adapter.dispatch({
+      sessionId: SESSION,
+      clientMessageId: 'restored-choice',
+      fence: 1,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      executionOptions: { model: 'gemini-3.8-flash', effort: scenario.effort }
+    })
+    const prompt = await rig.frame('session/prompt')
+    expect(
+      rig.sent('session/set_config_option').flatMap(({ params }) => {
+        const { configId, value } = z
+          .object({ configId: z.string(), value: z.string() })
+          .parse(params)
+        return configId === 'thinking_level' ? [value] : []
+      })
+    ).toEqual(scenario.writes)
+    rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+    await rig.settle()
+  }
+  const restored = rigs[0]!
+  await restored.adapter.setOption({ sessionId: SESSION, fence: 1, key: 'effort', value: 'high' })
+  expect(restored.sent('session/set_config_option').at(-1)?.params).toMatchObject({
+    configId: 'thinking_level',
+    value: 'high'
+  })
+})
+
+it('uses effort from a model response and never borrows it across a legacy model control', async () => {
+  for (const scenario of [
+    { model: 'gemini-3.8-flash-high', native: fixture.high, effortWrites: [], legacy: false },
+    { model: 'gemini-3.8-flash-low', native: fixture.low, effortWrites: ['high'], legacy: false },
+    { model: 'gemini-3.8-flash-low', native: fixture.high, effortWrites: ['high'], legacy: true }
+  ]) {
+    const { legacy } = scenario
+    const configOptions = fixture.session.configOptions.filter(
+      (option) => !legacy || option.category !== 'model'
+    )
+    const rig = await nativeOptionsRig({
+      configOptions,
+      modelConfigOptions: scenario.native.configOptions,
+      script: (agent) => agent.on('session/set_model', (frame) => agent.reply(frame, {}))
+    })
+    await rig.acquire()
+    await rig.adapter.dispatch({
+      sessionId: SESSION,
+      clientMessageId: 'model-choice',
+      fence: 1,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      executionOptions: { model: scenario.model, effort: 'high' }
+    })
+    await rig.frame('session/prompt')
+    expect(rig.sent('session/set_model').map(({ params }) => params)).toEqual(
+      legacy ? [{ sessionId: PROVIDER_SESSION, modelId: 'gemini-3.8-flash-low' }] : []
+    )
+    expect(
+      rig.sent('session/set_config_option').flatMap(({ params }) => {
+        const { configId, value } = z
+          .object({ configId: z.string(), value: z.string() })
+          .parse(params)
+        return configId === 'thinking_level' ? [value] : []
+      })
+    ).toEqual(scenario.effortWrites)
+  }
 })
 
 it.each(['load', 'resume'] as const)(
