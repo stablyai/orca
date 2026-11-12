@@ -241,7 +241,7 @@ export async function routePageTextInsertion(
         sendToFrameSession(webContents, send, sessionId, 'Input.insertText', insertParams)
     }
   }
-  if (route.kind === 'widget') {
+  if (route.kind === 'widget' && route.hasFocusedLocalFrame) {
     return {
       deliver: (insertParams) =>
         withAgentInputInjection(webContents, async () => {
@@ -249,11 +249,55 @@ export async function routePageTextInsertion(
           if (typeof insertParams.text !== 'string') {
             throw new BrowserError('invalid_argument', 'Browser text must be a string')
           }
-          await webContents.insertText(insertParams.text)
+          await insertGuestText(webContents, insertParams.text)
           await waitForPageToHandleInput(send)
           return {}
         })
     }
   }
-  throw pageInputRouteUnavailableError()
+  if (route.kind === 'unknown') {
+    throw pageInputRouteUnavailableError()
+  }
+  throw new BrowserError(
+    'browser_input_target_unavailable',
+    'The browser page has no focused element to receive text, so it was not sent. Focus a field first.'
+  )
+}
+
+const NATIVE_INSERT_TIMEOUT_MS = 10_000
+
+// Electron's insertText never settles if the renderer dies, so bound it to keep input queues moving.
+async function insertGuestText(webContents: WebContents, text: string): Promise<void> {
+  let stop = (): void => {}
+  const abandoned = new Promise<never>((_resolve, reject) => {
+    const fail = (): void =>
+      reject(
+        new BrowserError(
+          'browser_error',
+          'The browser page crashed or closed before it confirmed the text.'
+        )
+      )
+    const timer = setTimeout(
+      () =>
+        reject(
+          new BrowserError('browser_timeout', 'The browser page did not confirm the text in time.')
+        ),
+      NATIVE_INSERT_TIMEOUT_MS
+    )
+    webContents.once('render-process-gone', fail)
+    webContents.once('destroyed', fail)
+    stop = () => {
+      clearTimeout(timer)
+      webContents.removeListener('render-process-gone', fail)
+      webContents.removeListener('destroyed', fail)
+    }
+  })
+  const inserted = webContents.insertText(text)
+  // Settle a late rejection after the bound has already answered.
+  inserted.catch(() => undefined)
+  try {
+    await Promise.race([inserted, abandoned])
+  } finally {
+    stop()
+  }
 }

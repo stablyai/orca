@@ -78,6 +78,56 @@ test('page-bound input stays out of chat drafts across hidden tabs and stale tar
   }
 })
 
+test('text insertion needs a focused page target and never crashes or wedges the tab', async ({
+  orcaPage
+}) => {
+  test.setTimeout(120_000)
+  const server = await startProbeServer()
+  try {
+    const pageId = await openBackgroundProbeTab(orcaPage, server.url)
+    const insert = async (text: string): Promise<unknown> =>
+      orcaPage.evaluate((request) => window.api.runtime.call(request), {
+        method: 'browser.keyboardInsertText',
+        params: { page: pageId, text }
+      })
+    const expectRefused = (response: unknown): void => {
+      expect(readProperty(response, 'ok')).toBe(false)
+      expect(JSON.stringify(readProperty(response, 'error'))).toContain('no focused element')
+    }
+
+    // A tab nobody focused has no frame to receive native text; Electron crashes if asked anyway.
+    expectRefused(await insert('Fresh\ntab'))
+    expect(await evalInPage(orcaPage, pageId, 'document.getElementById("notes").value')).toBe('')
+
+    await expect
+      .poll(() => evalInPage(orcaPage, pageId, 'String(window.__frameReady)'))
+      .toBe('true')
+    await evalInPage(orcaPage, pageId, `document.getElementById('frame').focus()`)
+    await rpc(orcaPage, 'browser.keypress', { page: pageId, key: 'Z' })
+    await rpc(orcaPage, 'browser.keyboardInsertText', { page: pageId, text: 'Cross site 🙏' })
+    await expect
+      .poll(() => evalInPage(orcaPage, pageId, 'window.__frameValue'))
+      .toBe('ZCross site 🙏')
+
+    // A busy page cannot confirm where focus is; once it recovers, input must flow again.
+    await evalInPage(
+      orcaPage,
+      pageId,
+      'setTimeout(() => { const end = Date.now() + 6000; while (Date.now() < end) {} }, 0); "busy"'
+    )
+    expect(readProperty(await insert('Busy'), 'ok')).toBe(false)
+    await expect
+      .poll(() => evalInPage(orcaPage, pageId, '"responsive"'), { timeout: 20_000 })
+      .toBe('responsive')
+    await rpc(orcaPage, 'browser.keyboardInsertText', { page: pageId, text: ' ok' })
+    await expect
+      .poll(() => evalInPage(orcaPage, pageId, 'window.__frameValue'))
+      .toBe('ZCross site 🙏 ok')
+  } finally {
+    await server.close()
+  }
+})
+
 test('agent keys and text reach the page without leaving the user’s terminal', async ({
   orcaPage
 }) => {

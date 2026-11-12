@@ -11,6 +11,8 @@ function fakeGuest(): WebContents {
 type FrameModel = {
   // Document keys: '' = root, session ID = cross-site frame, 'frame:<id>' = same-site context.
   focusedFrameBySession: Record<string, string | null>
+  focusedElementBySession?: Record<string, boolean>
+  rootProbeFails?: boolean
   crossSiteTargets: string[]
   sessionForTarget: Record<string, string>
   deadSessions?: Set<string>
@@ -29,12 +31,20 @@ function frameSender(model: FrameModel) {
     }
     switch (method) {
       case 'Runtime.evaluate': {
+        if (model.rootProbeFails && session === '' && params.contextId === undefined) {
+          throw new Error('Execution context was destroyed')
+        }
         const contextFrame =
           typeof params.contextId === 'number' ? frameByContext.get(params.contextId) : undefined
         const documentKey = contextFrame ? `frame:${contextFrame}` : session
         const frameId = model.focusedFrameBySession[documentKey] ?? null
         if (!frameId) {
-          return { result: { type: 'object', subtype: 'null' } }
+          return {
+            result: {
+              type: 'boolean',
+              value: model.focusedElementBySession?.[documentKey] ?? false
+            }
+          }
         }
         const objectId = `object-${(nextObject += 1)}`
         frameByObject.set(objectId, frameId)
@@ -129,6 +139,35 @@ describe('resolveFocusedFrameRoute', () => {
     expect(await resolveFocusedFrameRoute(guest, frameSender(model))).toEqual({
       kind: 'session',
       sessionId: 'NEW'
+    })
+  })
+
+  it('confirms a focused local frame only when the probe proves one', async () => {
+    const route = (model: Partial<FrameModel>) =>
+      resolveFocusedFrameRoute(
+        fakeGuest(),
+        frameSender({
+          focusedFrameBySession: {},
+          crossSiteTargets: [],
+          sessionForTarget: {},
+          ...model
+        })
+      )
+
+    expect(await route({ focusedElementBySession: { '': true } })).toEqual({
+      kind: 'widget',
+      hasFocusedLocalFrame: true
+    })
+    // A fresh tab reports body as active while no frame holds focus.
+    expect(await route({})).toEqual({ kind: 'widget', hasFocusedLocalFrame: false })
+    expect(await route({ rootProbeFails: true, focusedElementBySession: { '': true } })).toEqual({
+      kind: 'widget',
+      hasFocusedLocalFrame: false
+    })
+    // A designMode frame keeps body active, but entering it through its owner proves focus.
+    expect(await route({ focusedFrameBySession: { '': 'SAME-SITE' } })).toEqual({
+      kind: 'widget',
+      hasFocusedLocalFrame: true
     })
   })
 })
