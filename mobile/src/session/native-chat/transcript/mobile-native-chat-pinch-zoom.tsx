@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import type { LegacyComposedGesture } from 'react-native-gesture-handler'
 import { quantizeFontScale } from './mobile-native-chat-message-text'
@@ -40,7 +40,10 @@ export function useMobileNativeChatPinchGesture(scopeKey: string): {
   return { fontScale, pinchGesture }
 }
 
-// Gesture handler 3 on web defaults the detector's view to touch-action: none, which froze the transcript's touch scrolling in phone web pages.
+// Web: gesture handler 3 defaults to touch-action: none (froze touch scrolling); auto would let a pinch zoom the page instead of the text.
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: valid CSS that the handler copies verbatim to style.touchAction; its union lists single keywords only.
+const PAN_WITHOUT_PAGE_ZOOM = 'pan-x pan-y' as ComponentProps<typeof GestureDetector>['touchAction']
+
 export function MobileNativeChatPinchZoom({
   gesture,
   children
@@ -49,7 +52,7 @@ export function MobileNativeChatPinchZoom({
   children: ReactNode
 }) {
   return (
-    <GestureDetector gesture={gesture} touchAction="auto">
+    <GestureDetector gesture={gesture} touchAction={PAN_WITHOUT_PAGE_ZOOM}>
       {children}
     </GestureDetector>
   )

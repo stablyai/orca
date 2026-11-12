@@ -11,7 +11,7 @@ import {
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import { createBundleServer, readShellCsp } from '../preview/mobile-web-app-render-harness.mjs'
 
-// The phone's web pages scroll the transcript by touch only while its pinch detector leaves the browser's panning on.
+// The phone's web pages must pan the transcript by touch and give a pinch to its text-size detector, not page zoom.
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
 
 const entry = `
@@ -25,8 +25,9 @@ import {
 } from './src/session/native-chat/transcript/mobile-native-chat-pinch-zoom'
 
 function Transcript() {
-  const { pinchGesture } = useMobileNativeChatPinchGesture('chat')
-  return <View style={{ height: 600 }}>
+  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture('chat')
+  return <View style={{ height: 600, width: '100%' }}>
+    <Text testID="font-scale">{fontScale}</Text>
     <GestureHandlerRootView style={{ flex: 1 }}>
       <MobileNativeChatPinchZoom gesture={pinchGesture}>
         <MobileNativeChatPageScroll testID="transcript">
@@ -65,7 +66,9 @@ beforeAll(async () => {
   })
   await writeFile(
     join(outDir, 'index.html'),
-    `<!doctype html><html><head><meta charset="utf-8">${MOBILE_WEB_APP_ROOT_RESET}</head>` +
+    '<!doctype html><html><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+      `${MOBILE_WEB_APP_ROOT_RESET}</head>` +
       '<body><div id="root"></div><script type="module" src="/transcript.js"></script></body></html>'
   )
   const served = await createBundleServer({ outDir, cspHeader: await readShellCsp() })
@@ -83,18 +86,56 @@ afterAll(async () => {
   }
 })
 
+async function touch(page, steps) {
+  const cdp = await page.context().newCDPSession(page)
+  const [first, ...rest] = steps
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: first })
+  for (const touchPoints of rest) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints })
+    await page.evaluate(() => new Promise(requestAnimationFrame))
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await cdp.detach()
+}
+
+const frames = (count, at) => Array.from({ length: count + 1 }, (_, step) => at(step / count))
+
+async function openTranscript() {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true
+  })
+  const page = await context.newPage()
+  await page.goto(`${origin}/`)
+  await page.getByTestId('transcript').waitFor()
+  return page
+}
+
 describeRender('native chat transcript in the phone web pages', () => {
-  it('leaves touch panning to the browser under the pinch detector', async () => {
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })
-    await page.goto(`${origin}/`)
-    const transcript = page.getByTestId('transcript')
-    await transcript.waitFor()
-    expect(
-      await transcript.evaluate((element) => [
-        element.scrollHeight > element.clientHeight,
-        getComputedStyle(element).touchAction
+  it('pans the transcript under one finger', async () => {
+    const page = await openTranscript()
+    await touch(
+      page,
+      frames(10, (t) => [{ x: 195, y: 200 + 300 * t }])
+    )
+    await expect
+      .poll(() => page.getByTestId('transcript').evaluate((element) => element.scrollTop))
+      .toBeLessThan(-100)
+    await page.context().close()
+  })
+
+  it('gives a pinch to the text size, not to page zoom', async () => {
+    const page = await openTranscript()
+    await touch(
+      page,
+      frames(10, (t) => [
+        { x: 195, y: 330 - 120 * t, id: 0 },
+        { x: 195, y: 370 + 120 * t, id: 1 }
       ])
-    ).toEqual([true, 'auto'])
-    await page.close()
+    )
+    await expect.poll(() => page.getByTestId('font-scale').textContent()).not.toBe('1')
+    expect(await page.evaluate(() => window.visualViewport.scale)).toBe(1)
+    await page.context().close()
   })
 })
