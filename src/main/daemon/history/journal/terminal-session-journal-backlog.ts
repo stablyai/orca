@@ -3,6 +3,13 @@ import type { PendingOutputRecord } from '../../protocol/daemon-rpc-contract'
 const JOURNAL_BATCH_BYTES = 64 * 1024
 const JOURNAL_COALESCE_CODE_UNITS = 64 * 1024
 
+/** How the queue will apply a record, decided by its one coalescing rule before it mutates. */
+export type TerminalJournalPush = {
+  readonly bytes: number
+  /** Absolute record index of the queued tail this coalesces into; null appends a new record. */
+  readonly coalesceIndex: number | null
+}
+
 export type TerminalJournalBatch = {
   data: PendingOutputRecord[]
   /** Head records fully covered by this batch. */
@@ -34,16 +41,22 @@ export class TerminalJournalBacklog {
     return this.queue.length
   }
 
-  /** Returns the bytes charged for this record. */
-  push(record: PendingOutputRecord): number {
+  plan(record: PendingOutputRecord): TerminalJournalPush {
     const bytes = record.kind === 'output' ? Buffer.byteLength(record.data, 'utf8') + 5 : 9
     const last = this.queue.at(-1)
-    if (
+    const coalesces =
       record.kind === 'output' &&
       last?.kind === 'output' &&
       this.queue.length > this.sealed &&
       last.data.length < JOURNAL_COALESCE_CODE_UNITS
-    ) {
+    return { bytes, coalesceIndex: coalesces ? this.committed + this.queue.length - 1 : null }
+  }
+
+  /** Returns the bytes charged for this record. */
+  push(record: PendingOutputRecord, plan: TerminalJournalPush = this.plan(record)): number {
+    const { bytes } = plan
+    const last = this.queue.at(-1)
+    if (plan.coalesceIndex !== null && record.kind === 'output' && last?.kind === 'output') {
       last.data += record.data
       this.charges[this.charges.length - 1] += bytes
     } else {

@@ -142,6 +142,11 @@ export class TerminalHistoryJournals {
         acquireReplay: (priority, signal) => this.replay.acquire(priority, signal),
         images: this.reads.images,
         charge: (owner, bytes) => this.charge(owner, bytes),
+        makeRoom: (bytes) => {
+          if (this.backlogBytes + this.reads.readSourceBytes + bytes > JOURNAL_HOST_BACKLOG_BYTES) {
+            this.reads.relievePressure()
+          }
+        },
         settled: (owner) => this.release(hold.sessionId, owner),
         log: (event, details) => this.logger?.log(event, details)
       },

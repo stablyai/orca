@@ -9,6 +9,8 @@ export type TerminalSessionJournalHost = {
   acquireReplay(priority: number, signal?: AbortSignal): Promise<() => void>
   readonly images: DerivedHistoryImageBudget
   charge(journal: TerminalSessionJournalReads, bytes: number): void
+  /** Before a write of this many bytes: frees reader-held backing if the host total needs it. */
+  makeRoom(bytes: number): void
   settled(journal: TerminalSessionJournalReads): void
   log(event: string, details: Record<string, unknown>): void
 }

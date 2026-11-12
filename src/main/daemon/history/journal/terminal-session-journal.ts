@@ -1,4 +1,5 @@
 import type { PendingOutputRecord } from '../../protocol/daemon-rpc-contract'
+import type { TerminalJournalPush } from './terminal-session-journal-backlog'
 import { updateTerminalHistoryMeta } from '../storage/terminal-history-metadata'
 import { hasReplayableTerminalHistorySessionFiles } from '../storage/terminal-history-session-files'
 import {
@@ -52,17 +53,15 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
       this.gap('applied_after_final_flush')
       return
     }
-    this.host.charge(this, this.queue.push(record))
+    const plan = this.queue.plan(record)
+    if (!opts.origin && !this.admitWrite(plan, record)) {
+      this.gap('backlog_exhausted')
+      return
+    }
+    this.host.charge(this, this.queue.push(record, plan))
     if (opts.origin) {
       // The seed stays whole so a predecessor-replacing checkpoint can cover exactly it.
       this.originRecords = this.queue.sealAll()
-    } else if (!this.withinSessionLimits()) {
-      // A frozen read yields first; only the writer's own backlog can exhaust the session.
-      this.frozen?.sever()
-      if (!this.withinSessionLimits()) {
-        this.gap('backlog_exhausted')
-        return
-      }
     }
     // The origin opens promptly; later output waits for its append window.
     if (this.writer) {
@@ -70,6 +69,26 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
     } else {
       this.kick()
     }
+  }
+
+  /**
+   * Before the queue mutates: a frozen read yields its backing first, then only the writer's own
+   * backlog can exhaust the session. A first replacement of the read's tail is charged here.
+   */
+  private admitWrite(plan: TerminalJournalPush, record: PendingOutputRecord): boolean {
+    const replacing = this.replacesFrozenTail(plan, record)
+    const frozenDelta = replacing ? this.frozenTailCharge : 0
+    this.host.makeRoom(plan.bytes + frozenDelta)
+    if (this.frozen && !this.withinSessionLimits(plan, replacing)) {
+      this.frozen.sever()
+    }
+    if (!this.withinSessionLimits(plan)) {
+      return false
+    }
+    if (replacing && this.frozen) {
+      this.frozen.tailReplaced = true
+    }
+    return true
   }
 
   /** Commit everything applied so far; a final flush also stops later clean-end marking. */

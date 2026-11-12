@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, promises as fsPromises, rmSync } from 'node:fs'
+import { vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PrioritySemaphore } from '../../../../../shared/priority-semaphore'
@@ -31,6 +32,7 @@ export function openReads(imageBudget?: number) {
         acquireReplay: (priority, signal) => replay.acquire(priority, signal),
         images,
         charge: () => {},
+        makeRoom: () => {},
         settled: () => {},
         log: () => {}
       },
@@ -89,5 +91,38 @@ export async function readDeep(
     return null
   } finally {
     consumer.release()
+  }
+}
+
+/** Holds this journal's reconstructions until released, counting them. */
+export function gateReconstruction(journal: TerminalSessionJournal) {
+  let gate = Promise.withResolvers<void>()
+  const readImage = journal.readImage.bind(journal)
+  const calls = vi.spyOn(journal, 'readImage').mockImplementation(async (...args) => {
+    await gate.promise
+    return readImage(...args)
+  })
+  return {
+    calls,
+    open: () => gate.resolve(),
+    close: () => {
+      gate = Promise.withResolvers<void>()
+    }
+  }
+}
+
+/** Holds every log append until released; pending output stays queued meanwhile. */
+export function gateAppends() {
+  let gate = Promise.withResolvers<void>()
+  const appendFile = fsPromises.appendFile
+  vi.spyOn(fsPromises, 'appendFile').mockImplementation(async (...args) => {
+    await gate.promise
+    return appendFile(...args)
+  })
+  return {
+    open: () => gate.resolve(),
+    close: () => {
+      gate = Promise.withResolvers<void>()
+    }
   }
 }

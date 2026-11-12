@@ -11,6 +11,8 @@ import { isDaemonGoneError } from '../../endpoint/identity/daemon-endpoint-error
 import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
 import { NdjsonLineTooLongError } from '../../../../shared/main-process-ndjson-framer'
+import { DaemonRequestTimeoutError } from '../../protocol/daemon-errors'
+import { TerminalHistoryUnavailableError } from '../../protocol/daemon-history-protocol'
 import {
   iterateTerminalHistorySeedChunks,
   measureTerminalHistorySeed,
@@ -150,7 +152,15 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
           ? { agentSessionEnsure: opts.agentSessionEnsure }
           : {})
       }
-      return opts.signal
+      // Decided at dispatch: a warm reattach to a host-owned PTY whose answer never came proves
+      // nothing about the PTY, so the settled timeout keeps that terminal's same-ID recovery.
+      const warmHostReattach =
+        this.hostHistory.enabled &&
+        (context.attachOnly ||
+          ((this.hostHistory.authority(context.sessionId) !== undefined ||
+            context.restoreSkippedForLiveSession) &&
+            opts.isNewSession !== true))
+      const request = opts.signal
         ? this.client.request<CreateOrAttachResult>(
             'createOrAttach',
             payload,
@@ -158,6 +168,13 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
             opts.signal
           )
         : this.client.request<CreateOrAttachResult>('createOrAttach', payload)
+      return warmHostReattach
+        ? request.catch((error: unknown) => {
+            throw error instanceof DaemonRequestTimeoutError
+              ? new TerminalHistoryUnavailableError()
+              : error
+          })
+        : request
     }
 
     let historySeedUnavailable = false

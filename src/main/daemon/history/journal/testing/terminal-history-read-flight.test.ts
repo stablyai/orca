@@ -111,7 +111,8 @@ describe('shared deep-history flight', () => {
       return
     }
     expect(found.capture()).toBe(true)
-    expect(reads.readSourceBytes).toBeGreaterThan(0)
+    // Still shared with the writer's queue, so the read adds nothing until pressure severs it.
+    expect(reads.readSourceBytes).toBe(0)
     reads.relievePressure()
     expect(reads.readSourceBytes).toBe(0)
     expect(await consumer.awaitFlight(found)).toBe(false)

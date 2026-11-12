@@ -43,6 +43,7 @@ function openJournal(
       acquireReplay: async () => () => {},
       images: new DerivedHistoryImageBudget(),
       charge: () => {},
+      makeRoom: () => {},
       settled: () => {},
       log: () => {}
     },

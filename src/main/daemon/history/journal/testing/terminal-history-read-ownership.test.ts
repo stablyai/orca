@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { promises as fsPromises } from 'node:fs'
 import { RevocablePendingSource } from '../terminal-history-pending-source'
-import type { TerminalSessionJournal } from '../terminal-session-journal'
-import { openReads, readDeep, removeReadFixtureRoots } from './terminal-history-read-fixture'
+import {
+  gateAppends,
+  gateReconstruction,
+  openReads,
+  readDeep,
+  removeReadFixtureRoots
+} from './terminal-history-read-fixture'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -10,39 +14,6 @@ afterEach(() => {
 })
 
 const nextTurn = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
-
-/** Holds this journal's reconstructions until released, counting them. */
-function gateReconstruction(journal: TerminalSessionJournal) {
-  let gate = Promise.withResolvers<void>()
-  const readImage = journal.readImage.bind(journal)
-  const calls = vi.spyOn(journal, 'readImage').mockImplementation(async (...args) => {
-    await gate.promise
-    return readImage(...args)
-  })
-  return {
-    calls,
-    open: () => gate.resolve(),
-    close: () => {
-      gate = Promise.withResolvers<void>()
-    }
-  }
-}
-
-/** Holds every log append until released; pending output stays queued meanwhile. */
-function gateAppends() {
-  let gate = Promise.withResolvers<void>()
-  const appendFile = fsPromises.appendFile
-  vi.spyOn(fsPromises, 'appendFile').mockImplementation(async (...args) => {
-    await gate.promise
-    return appendFile(...args)
-  })
-  return {
-    open: () => gate.resolve(),
-    close: () => {
-      gate = Promise.withResolvers<void>()
-    }
-  }
-}
 
 const chunk = (marker: string): string => `${marker}${'y'.repeat(64 * 1024 - 64)}\r\n`
 
@@ -96,7 +67,8 @@ describe('deep-history read ownership', () => {
     const severed = readDeep(reads, journal)
     // About 4.4 MiB is queued and frozen at once: one copy of shared strings, so it is admitted.
     await vi.waitFor(() => expect(reconstruction.calls).toHaveBeenCalledTimes(1))
-    expect(reads.readSourceBytes).toBeLessThan(128 * 1024)
+    // Unchanged queued strings are the writer's; capturing them adds no reader charge.
+    expect(reads.readSourceBytes).toBe(0)
 
     // The writer commits that prefix out of its queue; the read alone now holds it.
     appends.open()

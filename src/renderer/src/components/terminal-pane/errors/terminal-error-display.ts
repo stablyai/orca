@@ -207,7 +207,7 @@ export function humanizeTerminalError(
   humanized = humanized.replaceAll(TERMINAL_HISTORY_UNAVAILABLE_MARKER, () =>
     t(
       'auto.components.terminal.pane.TerminalErrorToast.historyUnavailable',
-      "Orca couldn't load this terminal's history from its host. The terminal is still running. Click Retry to reconnect it."
+      "Orca couldn't load this terminal's history from its host. Click Retry to reconnect it."
     )
   )
   humanized = humanized.replaceAll(PANE_OWNER_CHANGED_MARKER, () =>

@@ -1,9 +1,13 @@
 import { join } from 'node:path'
 import type { TerminalHistoryOutcome } from '../../protocol/daemon-history-protocol'
 import type { TerminalSnapshot } from '../../protocol/terminal-snapshot'
+import type { PendingOutputRecord } from '../../protocol/daemon-rpc-contract'
 import type { TerminalHistorySessionWriter } from '../storage/terminal-history-session-writer'
 import { LOG_HEADER_BYTES } from '../storage/terminal-history-log'
-import { TerminalJournalBacklog } from './terminal-session-journal-backlog'
+import {
+  TerminalJournalBacklog,
+  type TerminalJournalPush
+} from './terminal-session-journal-backlog'
 import type {
   TerminalHistoryCut,
   TerminalHistoryImage,
@@ -18,6 +22,11 @@ import {
 } from './terminal-session-journal-source'
 import { RevocablePendingSource } from './terminal-history-pending-source'
 import {
+  frozenReadCharge,
+  frozenReadSplit,
+  type FrozenReadSource
+} from './terminal-history-frozen-source'
+import {
   derivedImageCharge,
   type DerivedHistoryImage,
   type DerivedImageLease
@@ -26,9 +35,6 @@ import {
 export const JOURNAL_READ_PRIORITY = 1
 export const JOURNAL_SESSION_BACKLOG_BYTES = 8 * 1024 * 1024
 export const JOURNAL_SESSION_BACKLOG_RECORDS = 10_000
-
-/** A reader's frozen records: their charges as prefix sums and where the queue stood. */
-type FrozenReadSource = { base: number; cumulative: number[]; sever: () => void }
 
 type JournalState = 'open' | 'gap'
 
@@ -113,15 +119,20 @@ export class TerminalSessionJournalReads {
 
   /**
    * Holds the queue's current records for a reader before its copy. Records still queued share
-   * their strings with the writer and count once; records committed out of the queue, and the
-   * tail a later write may coalesce away from, count against this session's limits.
+   * their unchanged backing with the writer and add nothing. Records committed out of the queue,
+   * and a tail a later write actually replaced, stay the reader's until it lets go.
    */
   holdFrozenSource(sever: () => void, fitsHost: (bytes: number) => boolean): (() => void) | null {
     const cumulative = [0]
     for (const charge of this.queue.chargeSnapshot()) {
       cumulative.push(cumulative.at(-1)! + charge)
     }
-    const frozen: FrozenReadSource = { base: this.queue.committed, cumulative, sever }
+    const frozen: FrozenReadSource = {
+      base: this.queue.committed,
+      cumulative,
+      tailReplaced: false,
+      sever
+    }
     this.frozen = frozen
     if (!this.withinSessionLimits() || !fitsHost(this.frozenBytes)) {
       this.frozen = null
@@ -134,42 +145,50 @@ export class TerminalSessionJournalReads {
     }
   }
 
+  /** The captured tail's charge, which becomes the reader's alone once a write replaces it. */
+  protected get frozenTailCharge(): number {
+    const cumulative = this.frozen?.cumulative ?? [0]
+    return cumulative.length > 1 ? cumulative.at(-1)! - cumulative.at(-2)! : 0
+  }
+
   /** Frozen backing no longer shared with the writer's queue. */
   get frozenBytes(): number {
-    const frozen = this.frozen
-    if (!frozen) {
-      return 0
-    }
-    const { count, left } = this.frozenSplit(frozen)
-    const cumulative = frozen.cumulative
-    return cumulative[left] + (left < count ? cumulative[count] - cumulative[count - 1] : 0)
+    return this.frozenCharge(this.frozen?.tailReplaced === true).bytes
   }
 
-  protected get frozenRecords(): number {
+  /**
+   * Whether this push replaces the reader's captured tail for the first time: a nonempty
+   * coalesce into that exact queued record. The queue's own rule decides the coalesce.
+   */
+  protected replacesFrozenTail(plan: TerminalJournalPush, record: PendingOutputRecord): boolean {
     const frozen = this.frozen
-    if (!frozen) {
-      return 0
+    if (!frozen || frozen.tailReplaced || plan.coalesceIndex === null) {
+      return false
     }
-    const { count, left } = this.frozenSplit(frozen)
-    return left + (left < count ? 1 : 0)
-  }
-
-  /** The writer's backlog and a reader's frozen-only backing, counted once, within limits. */
-  protected withinSessionLimits(): boolean {
+    const { count, left } = frozenReadSplit(frozen, this.queue.committed, this.state === 'gap')
     return (
-      this.queue.bytes + this.frozenBytes <= JOURNAL_SESSION_BACKLOG_BYTES &&
-      this.queue.length + this.frozenRecords <= JOURNAL_SESSION_BACKLOG_RECORDS
+      left < count &&
+      plan.coalesceIndex === frozen.base + count - 1 &&
+      record.kind === 'output' &&
+      record.data.length > 0
     )
   }
 
-  private frozenSplit(frozen: FrozenReadSource): { count: number; left: number } {
-    const count = frozen.cumulative.length - 1
-    // A gap drops the queue: every frozen record is then the reader's alone.
-    const left =
-      this.state === 'gap'
-        ? count
-        : Math.min(count, Math.max(0, this.queue.committed - frozen.base))
-    return { count, left }
+  /** The writer's backlog and a reader's frozen-only backing, counted once, within limits. */
+  protected withinSessionLimits(
+    plan: TerminalJournalPush | null = null,
+    tailReplaced = this.frozen?.tailReplaced === true
+  ): boolean {
+    const frozen = this.frozenCharge(tailReplaced)
+    const records = this.queue.length + (plan && plan.coalesceIndex === null ? 1 : 0)
+    return (
+      this.queue.bytes + (plan?.bytes ?? 0) + frozen.bytes <= JOURNAL_SESSION_BACKLOG_BYTES &&
+      records + frozen.records <= JOURNAL_SESSION_BACKLOG_RECORDS
+    )
+  }
+
+  private frozenCharge(tailReplaced: boolean): { bytes: number; records: number } {
+    return frozenReadCharge(this.frozen, this.queue.committed, this.state === 'gap', tailReplaced)
   }
 
   /** A reader's cut; only the returned handle holds the copied pending records. */

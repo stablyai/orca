@@ -86,29 +86,32 @@ async function readDaemonHistorySnapshot(
   payload: GetSnapshotRequest['payload']
 ): Promise<GetSnapshotResult> {
   const { sessionId, expectedIncarnationId, scrollbackRows } = payload
+  const deep = scrollbackRows === undefined || scrollbackRows > resolveDaemonSessionScrollbackRows()
+  // Every deep reply, missing and stale owners included, is owned by one of the bounded consumers.
+  const consumer = deep ? journals.reads.admit(request.signal) : null
   const journal = journals.live(sessionId, expectedIncarnationId)
   const session = journal?.session
-  if (!journal || !session) {
-    return { snapshot: null, history: { kind: 'unavailable' } }
-  }
   const unavailable: GetSnapshotResult = {
     snapshot: null,
-    history: { kind: 'unavailable', incarnationId: session.incarnationId }
+    history: { kind: 'unavailable', ...(session ? { incarnationId: session.incarnationId } : {}) }
+  }
+  if (deep && !consumer) {
+    return withPreparedReply({ ...unavailable }, ABANDONED_REPLY)
+  }
+  const failed = (): GetSnapshotResult =>
+    consumer
+      ? withPreparedReply({ ...unavailable }, { release: () => consumer.release() })
+      : unavailable
+  if (!journal || !session) {
+    return failed()
   }
   // Public live0 never waits for deep admission, the cold lane or the cache.
-  if (scrollbackRows !== undefined && scrollbackRows <= resolveDaemonSessionScrollbackRows()) {
+  if (!consumer) {
     const snapshot = await host.getSettledSnapshot(sessionId, { scrollbackRows })
     return snapshot && journals.live(sessionId, session.incarnationId) === journal
       ? { snapshot, history: journal.outcome(snapshot.outputSequence ?? 0) }
       : unavailable
   }
-  // Every deep reply, refusals included, is owned by one of the bounded consumers.
-  const consumer = journals.reads.admit(request.signal)
-  if (!consumer) {
-    return withPreparedReply({ ...unavailable }, ABANDONED_REPLY)
-  }
-  const failed = (): GetSnapshotResult =>
-    withPreparedReply({ ...unavailable }, { release: () => consumer.release() })
   if (journal.gapped) {
     // Past a gap no deeper answer exists; the live window stays its own operation.
     return failed()
