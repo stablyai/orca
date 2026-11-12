@@ -35,6 +35,12 @@ vi.mock(
 )
 
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
+import { runtimeResultForObservation } from './runtime-worktree-catalog-read'
+import {
+  _resetWorktreeCatalogOwnerForTests,
+  readWorktreeCatalog
+} from '../../../workspaces/catalog/repo-worktree-catalog-owner'
+import { setWorktreeCatalogRouteResolver } from '../../../workspaces/catalog/repo-worktree-catalog-route'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   bumpLocalWorktreeScanGeneration,
@@ -323,5 +329,35 @@ describe('RuntimeManagedWorktreeQueries.listDetected overtaken scan', () => {
     expect(result.worktrees.map((worktree) => worktree.path)).toEqual([repo.path])
     expect(pruneLineageMock).not.toHaveBeenCalled()
     expect(pruneMetadataMock).not.toHaveBeenCalled()
+  })
+
+  it('never publishes owner rows as authoritative once the owner retired their route', async () => {
+    let live = true
+    setWorktreeCatalogRouteResolver(() =>
+      live ? { repoPath: repo.path, runtimeKey: 'local:default' } : null
+    )
+    try {
+      const { observation } = await readWorktreeCatalog(
+        repo,
+        'local:default',
+        { kind: 'runtime', maxAgeMs: 30_000 },
+        { scan: async () => ({ kind: 'rows', worktrees: rows([repo.path]) }) }
+      )
+      const ownerRows = runtimeResultForObservation(observation!)
+      const scanRepo = vi.fn(async () => {
+        live = false
+        return ownerRows
+      })
+
+      const result = await queries(gitStore(), { scanRepo }).listDetected(repo)
+
+      expect(result).toMatchObject({ authoritative: false, source: 'git' })
+      expect(result.worktrees.map((worktree) => worktree.path)).toEqual([repo.path])
+      expect(pruneLineageMock).not.toHaveBeenCalled()
+      expect(pruneMetadataMock).not.toHaveBeenCalled()
+    } finally {
+      setWorktreeCatalogRouteResolver(null)
+      _resetWorktreeCatalogOwnerForTests()
+    }
   })
 })
