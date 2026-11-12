@@ -6,20 +6,13 @@ import { writeFileAtomically } from '../../../filesystem/atomic-file-publication
 import { isPlainObject } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'
 import type { CodexHookAnswer, CodexHookHashes } from './codex-hook-trust-derivation'
-import {
-  CODEX_MANAGED_EVENT_LABELS,
-  CODEX_MANAGED_HOOK_STATUS_MESSAGE
-} from '../../hooks/definitions/codex-hook-definition'
+import { CODEX_MANAGED_EVENT_LABELS } from '../../hooks/definitions/codex-hook-definition'
 import type { CodexEventLabel } from '../toml/config-toml-trust'
 
 // Persist app-derived answers under userData so CLI status can read them without spawning Codex.
 type BinaryRecord = { fingerprint: string; codexVersion: string }
 
-// Codex hashes the status message too, so records from an earlier message are stale.
-type VersionRecord = { command: string; statusMessage?: string } & (
-  | { hashes: CodexHookHashes }
-  | { failure: string }
-)
+type VersionRecord = { command: string } & ({ hashes: CodexHookHashes } | { failure: string })
 
 type MemoFile = {
   binaries: Record<string, BinaryRecord>
@@ -69,18 +62,12 @@ function readVersions(value: unknown): Record<string, VersionRecord> {
           if (!isPlainObject(record) || typeof record.command !== 'string') {
             return []
           }
-          const identity = {
-            command: record.command,
-            ...(typeof record.statusMessage === 'string'
-              ? { statusMessage: record.statusMessage }
-              : {})
-          }
           const hashes = readHashes(record.hashes)
           if (hashes) {
-            return [[key, { ...identity, hashes }]]
+            return [[key, { command: record.command, hashes }]]
           }
           return typeof record.failure === 'string'
-            ? [[key, { ...identity, failure: record.failure }]]
+            ? [[key, { command: record.command, failure: record.failure }]]
             : []
         })
       )
@@ -121,7 +108,7 @@ export function readMemoizedVersionAnswer(
   memo: MemoFile = readMemo()
 ): MemoizedCodexHookAnswer | null {
   const record = memo.versions[codexVersion]
-  if (record?.command !== command || record.statusMessage !== CODEX_MANAGED_HOOK_STATUS_MESSAGE) {
+  if (record?.command !== command) {
     return null
   }
   return 'hashes' in record
@@ -146,11 +133,10 @@ export function memoizeCodexHookAnswer(
     const memo = readMemo()
     const key = codexBinaryKey(codexPath)
     const binary = { fingerprint, codexVersion: answer.codexVersion }
-    const identity = { command, statusMessage: CODEX_MANAGED_HOOK_STATUS_MESSAGE }
     const version: VersionRecord =
       answer.kind === 'hashes'
-        ? { ...identity, hashes: answer.hashes }
-        : { ...identity, failure: answer.failure }
+        ? { command, hashes: answer.hashes }
+        : { command, failure: answer.failure }
     if (
       isDeepStrictEqual(memo.binaries[key], binary) &&
       isDeepStrictEqual(memo.versions[answer.codexVersion], version)

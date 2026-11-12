@@ -84,19 +84,6 @@ describe('Codex hook trust memo', () => {
     ])
   })
 
-  it('ignores hashes saved for the unnamed hook but still recognizes them as Orca approvals', () => {
-    writeFileSync(
-      getCodexHookTrustMemoPath(),
-      JSON.stringify({
-        binaries: {},
-        versions: { 'codex-cli 0.150.1': { command: COMMAND, hashes: { stop: 'sha256:unnamed' } } }
-      })
-    )
-
-    expect(readMemoizedVersionAnswer('codex-cli 0.150.1', COMMAND)).toBeNull()
-    expect(readEveryMemoizedCodexHookHashes()).toEqual([{ stop: 'sha256:unnamed' }])
-  })
-
   it('drops hashes that are not strings, and events Orca does not hook', () => {
     writeFileSync(
       getCodexHookTrustMemoPath(),

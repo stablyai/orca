@@ -95,42 +95,15 @@ describe('deriveCodexHookHashes', () => {
       const home = JSON.parse(readFileSync(join(scratch.home, 'hooks.json'), 'utf-8'))
       expect(Object.keys(home.hooks).sort()).toEqual([...CODEX_EVENTS].sort())
       expect(home.hooks.Stop).toEqual([
-        {
-          hooks: [
-            {
-              type: 'command',
-              command: COMMAND,
-              timeout: 10,
-              statusMessage: 'Reporting status to Orca'
-            }
-          ]
-        },
+        { hooks: [{ type: 'command', command: COMMAND, timeout: 10 }] },
         { hooks: [{ type: 'command', command: 'exit 0' }] },
-        {
-          hooks: [
-            {
-              type: 'command',
-              command: COMMAND,
-              timeout: 10,
-              statusMessage: 'Reporting status to Orca'
-            }
-          ]
-        }
+        { hooks: [{ type: 'command', command: COMMAND, timeout: 10 }] }
       ])
       const project = JSON.parse(
         readFileSync(join(scratch.project, '.codex', 'hooks.json'), 'utf-8')
       )
       expect(project.hooks.Stop).toEqual([
-        {
-          hooks: [
-            {
-              type: 'command',
-              command: COMMAND,
-              timeout: 10,
-              statusMessage: 'Reporting status to Orca'
-            }
-          ]
-        }
+        { hooks: [{ type: 'command', command: COMMAND, timeout: 10 }] }
       ])
       return everyCopy(scratch, (label) => `sha256:${label}`)
     })

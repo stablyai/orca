@@ -60,8 +60,7 @@ function getManagedTrustEntry(
     groupIndex: 0,
     handlerIndex: 0,
     command,
-    timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS,
-    statusMessage: 'Reporting status to Orca'
+    timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
   }
 }
 
