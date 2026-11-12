@@ -205,5 +205,5 @@ export function managedRuntimeInstallPending(snapshot: ManagedRuntimeInstallSnap
   if (snapshot.state.source === 'external') {
     return view.action?.kind === 'cancel' || view.removing || view.error !== null
   }
-  return view.action !== null || view.error !== null
+  return view.action !== null || view.error !== null || view.removing
 }
