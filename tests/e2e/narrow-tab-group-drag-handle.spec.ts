@@ -103,4 +103,8 @@ test('a narrow tab group keeps a grabbable tab and can be dragged into another g
       )
     )
     .toBe(layout.leftGroupId)
+  // The user sees the tab move: the left strip gains it and the right strip no longer shows it.
+  const leftStrip = orcaPage.locator(`[data-tab-group-strip-id="${layout.leftGroupId}"]`)
+  await expect(leftStrip.locator('[data-tab-id]')).toHaveCount(2)
+  await expect(rightStrip.locator('[data-tab-id]')).toHaveCount(0)
 })
