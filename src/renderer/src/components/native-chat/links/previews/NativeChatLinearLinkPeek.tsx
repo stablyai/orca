@@ -8,6 +8,7 @@ import {
   linearLinkPreviewKey,
   loadLinearLinkPreview,
   readCachedLinearLinkPreview,
+  useLinearPreviewGeneration,
   type LinearChatLink
 } from './native-chat-linear-link-preview'
 import { useNativeChatHoverPreview, type HoverPreviewState } from './use-native-chat-hover-preview'
@@ -17,6 +18,8 @@ export function useLinearIssuePreview(link: LinearChatLink): {
   state: HoverPreviewState<LinearIssue>
   retry: () => void
 } {
+  // Re-renders on an account change, so the key below includes the new generation.
+  useLinearPreviewGeneration()
   return useNativeChatHoverPreview(
     linearLinkPreviewKey(link),
     () => readCachedLinearLinkPreview(link),

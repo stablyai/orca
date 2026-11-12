@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
 import { parseLinearIssueUrl } from '../../../../../../shared/linear/linear-reference-links'
@@ -8,9 +9,23 @@ export type LinearChatLink = { orgUrlKey: string; identifier: string }
 
 const previews = createHoverPreviewCache<LinearIssue>({ freshMs: 60_000, maxEntries: 200 })
 
+// Bumped on every account change, so keys from the last account never match again.
+let generation = 0
+const generationListeners = new Set<() => void>()
+
+function subscribeToGeneration(listener: () => void): () => void {
+  generationListeners.add(listener)
+  return () => generationListeners.delete(listener)
+}
+
+/** Re-renders the caller when the Linear account changes, so its preview key moves on. */
+export function useLinearPreviewGeneration(): number {
+  return useSyncExternalStore(subscribeToGeneration, () => generation)
+}
+
 /** Cache key for a Linear preview; two organizations can both have an `ENG-1`. */
 export function linearLinkPreviewKey(link: LinearChatLink): string {
-  return `linear:${link.orgUrlKey.toLowerCase()}:${link.identifier}`
+  return `linear:${generation}:${link.orgUrlKey.toLowerCase()}:${link.identifier}`
 }
 
 /** Lets a reopened card or a re-rendered chip paint its last answer without a loading frame. */
@@ -42,6 +57,10 @@ async function fetchIssue(link: LinearChatLink): Promise<LinearIssue | null> {
 /** Drops every Linear preview; a different Linear account must not see the last one's issues. */
 export function clearLinearLinkPreviews(): void {
   previews.clear()
+  generation += 1
+  for (const listener of generationListeners) {
+    listener()
+  }
 }
 
 /** Loads the issue a Linear link points to, or null when no connected workspace has it. */
