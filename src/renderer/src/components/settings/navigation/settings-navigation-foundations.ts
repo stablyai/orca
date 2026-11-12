@@ -14,9 +14,9 @@ export const SETTINGS_NAV_GROUPS = [
   {
     id: 'capabilities',
     titleKey: 'auto.components.settings.Settings.23c6874fdf',
-    titleDefault: 'AI Capabilities'
+    titleDefault: 'AI capabilities'
   },
-  { id: 'setup', titleKey: 'auto.components.settings.Settings.9abb9be3bc', titleDefault: 'Set Up' },
+  { id: 'setup', titleKey: 'auto.components.settings.Settings.9abb9be3bc', titleDefault: 'Set up' },
   {
     id: 'workflows',
     titleKey: 'auto.components.settings.Settings.e1578cd4bc',
@@ -30,12 +30,12 @@ export const SETTINGS_NAV_GROUPS = [
   {
     id: 'remote',
     titleKey: 'auto.components.settings.Settings.23931df7e8',
-    titleDefault: 'Remote Hosts'
+    titleDefault: 'Remote hosts'
   },
   {
     id: 'security',
     titleKey: 'auto.components.settings.Settings.084d8fac5b',
-    titleDefault: 'Privacy & Security'
+    titleDefault: 'Privacy & security'
   },
   {
     id: 'advanced',

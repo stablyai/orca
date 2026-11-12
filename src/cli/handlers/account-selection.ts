@@ -295,7 +295,7 @@ export async function selectAgentAccount(ctx: HandlerContext): Promise<void> {
   if (agent === 'claude' && query === 'system' && getWslAccountTarget(ctx.cwd)) {
     throw new RuntimeClientError(
       'invalid_argument',
-      'Select the Claude system default for a WSL distro in Orca Settings > AI Provider Accounts.'
+      'Select the Claude system default for a WSL distro in Orca Settings > Agent accounts.'
     )
   }
   const provider = providerAccounts(ctx, agent)

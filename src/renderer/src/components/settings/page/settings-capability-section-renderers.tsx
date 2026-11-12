@@ -1,4 +1,9 @@
 import { AccountsPane } from '../accounts/AccountsPane'
+import { AgentAccountsJumpRow } from '../accounts/AgentAccountsJumpRow'
+import {
+  AgentAccountsSubsection,
+  type AgentAccountsPart
+} from '../accounts/AgentAccountsSubsection'
 import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { AgentsPane } from '../agents/AgentsPane'
 import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfaceSection'
@@ -13,6 +18,9 @@ import { wslHostDistroForTarget } from '@/runtime/provider-accounts/ownership/ws
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
+
+/** The "This computer" / "Selected host" part of Settings → Agent accounts. */
+export const AGENT_ACCOUNTS_HOST_PART_ID = 'accounts-this-host'
 
 export function renderAgentsSettingsSection(
   context: SettingsRenderContext,
@@ -50,61 +58,105 @@ export function renderAgentsSettingsSection(
   )
 }
 
+/**
+ * Settings → Agent accounts: one page for agent sign-ins. "This computer" (or the host picked in the
+ * scope picker) holds provider accounts, switching and usage; `additionalParts` lets a build add
+ * more parts below it. With more than one part, a jump row under the description links to each.
+ */
 export function renderAccountsSettingsSection(
   context: SettingsRenderContext,
-  t: Translate = translate
+  t: Translate = translate,
+  additionalParts: readonly AgentAccountsPart[] = []
 ): React.JSX.Element {
-  const { model, navigation, terminal, view } = context
-  const wslHostDistro = wslHostDistroForTarget(
-    model.settingsHostScope.target,
-    model.runtimeEnvironments
-  )
+  const { model, navigation, view } = context
+  const isLocalScope = model.settingsHostScope.target.kind === 'local'
+  const hostPartTitle = isLocalScope
+    ? t('settings.agentAccounts.thisComputer', 'This computer')
+    : t('settings.agentAccounts.selectedHost', 'Selected host')
   return (
     <SettingsSection
       id="accounts"
       grouped
-      title={t('auto.components.settings.Settings.4198aae333', 'AI provider accounts')}
+      title={t('auto.components.settings.Settings.4198aae333', 'Agent accounts')}
       description={t(
-        'auto.components.settings.Settings.21f09426ea',
-        'Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them.'
+        'settings.agentAccounts.pageDescription',
+        'Sign-ins, account switching and usage for your agents.'
       )}
       searchEntries={navigation.getSectionSearchEntries('accounts')}
     >
-      {!view.isSectionMounted('accounts') ? null : !model.settingsHostScope.available ? (
-        <SettingsHostScopeUnavailableNotice />
-      ) : wslHostDistro ? (
-        // A WSL host's orcad has no account services; this desktop owns its distro's accounts.
-        <AccountsPane
-          key={wslHostDistro ?? getProviderAccountsOwnerKey(model.settingsHostScope.target)}
-          nativeAccounts={model.nativeAccounts}
-          onAccountLocationChange={model.releaseNativeAccounts}
-          settings={model.settings}
-          updateSettings={model.updateSettings}
-          updateSettingsOrThrow={model.updateSettingsOrThrow}
-          hostScope={LOCAL_SETTINGS_HOST_SCOPE}
-          wslHostDistro={wslHostDistro}
-          wslSupportedPlatform={terminal.localWslSupportedPlatform}
-          wslAvailable={terminal.localWindowsRuntimeCapabilities.wslAvailable}
-          wslDistros={terminal.localWindowsRuntimeCapabilities.wslDistros}
-          wslCapabilitiesLoading={terminal.localWindowsRuntimeCapabilities.isLoading}
-        />
-      ) : (
-        <AccountsPane
-          key={wslHostDistro ?? getProviderAccountsOwnerKey(model.settingsHostScope.target)}
-          nativeAccounts={model.nativeAccounts}
-          onAccountLocationChange={model.releaseNativeAccounts}
-          settings={model.settings}
-          updateSettings={model.updateSettings}
-          updateSettingsOrThrow={model.updateSettingsOrThrow}
-          hostScope={model.settingsHostScope}
-          wslSupportedPlatform={terminal.runtimeWslSupportedPlatform}
-          wslAvailable={terminal.windowsTerminalCapabilities.wslAvailable}
-          wslDistros={terminal.windowsTerminalCapabilities.wslDistros}
-          wslCapabilitiesLoading={terminal.windowsTerminalCapabilities.isLoading}
-          accountOwnerPlatform={terminal.windowsTerminalCapabilities.hostPlatform}
-        />
-      )}
+      {view.isSectionMounted('accounts') ? (
+        <>
+          <AgentAccountsJumpRow
+            links={[
+              { id: AGENT_ACCOUNTS_HOST_PART_ID, title: hostPartTitle },
+              ...additionalParts.map(({ id, title }) => ({ id, title }))
+            ]}
+          />
+          <AgentAccountsSubsection
+            id={AGENT_ACCOUNTS_HOST_PART_ID}
+            title={hostPartTitle}
+            description={t(
+              'auto.components.settings.Settings.21f09426ea',
+              'Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them.'
+            )}
+          >
+            {renderProviderAccountsPane(context)}
+          </AgentAccountsSubsection>
+          {additionalParts.map((part) => (
+            <AgentAccountsSubsection
+              key={part.id}
+              id={part.id}
+              title={part.title}
+              description={part.description}
+            >
+              {part.content}
+            </AgentAccountsSubsection>
+          ))}
+        </>
+      ) : null}
     </SettingsSection>
+  )
+}
+
+function renderProviderAccountsPane(context: SettingsRenderContext): React.JSX.Element {
+  const { model, terminal } = context
+  const wslHostDistro = wslHostDistroForTarget(
+    model.settingsHostScope.target,
+    model.runtimeEnvironments
+  )
+  return !model.settingsHostScope.available ? (
+    <SettingsHostScopeUnavailableNotice />
+  ) : wslHostDistro ? (
+    // A WSL host's orcad has no account services; this desktop owns its distro's accounts.
+    <AccountsPane
+      key={wslHostDistro ?? getProviderAccountsOwnerKey(model.settingsHostScope.target)}
+      nativeAccounts={model.nativeAccounts}
+      onAccountLocationChange={model.releaseNativeAccounts}
+      settings={model.settings}
+      updateSettings={model.updateSettings}
+      updateSettingsOrThrow={model.updateSettingsOrThrow}
+      hostScope={LOCAL_SETTINGS_HOST_SCOPE}
+      wslHostDistro={wslHostDistro}
+      wslSupportedPlatform={terminal.localWslSupportedPlatform}
+      wslAvailable={terminal.localWindowsRuntimeCapabilities.wslAvailable}
+      wslDistros={terminal.localWindowsRuntimeCapabilities.wslDistros}
+      wslCapabilitiesLoading={terminal.localWindowsRuntimeCapabilities.isLoading}
+    />
+  ) : (
+    <AccountsPane
+      key={wslHostDistro ?? getProviderAccountsOwnerKey(model.settingsHostScope.target)}
+      nativeAccounts={model.nativeAccounts}
+      onAccountLocationChange={model.releaseNativeAccounts}
+      settings={model.settings}
+      updateSettings={model.updateSettings}
+      updateSettingsOrThrow={model.updateSettingsOrThrow}
+      hostScope={model.settingsHostScope}
+      wslSupportedPlatform={terminal.runtimeWslSupportedPlatform}
+      wslAvailable={terminal.windowsTerminalCapabilities.wslAvailable}
+      wslDistros={terminal.windowsTerminalCapabilities.wslDistros}
+      wslCapabilitiesLoading={terminal.windowsTerminalCapabilities.isLoading}
+      accountOwnerPlatform={terminal.windowsTerminalCapabilities.hostPlatform}
+    />
   )
 }
 

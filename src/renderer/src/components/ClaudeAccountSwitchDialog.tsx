@@ -102,7 +102,7 @@ function SwitchPromptDialog({ prompt }: { prompt: ClaudeAccountSwitchPrompt }): 
               <span className="block text-xs text-muted-foreground">
                 {t(
                   'accounts.claude.switchSessions.dontAskAgainHint',
-                  'You can turn this off in Settings → AI Provider Accounts.'
+                  'You can turn this off in Settings → Agent accounts.'
                 )}
               </span>
             </span>

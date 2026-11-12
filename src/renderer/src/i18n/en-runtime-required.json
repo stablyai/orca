@@ -701,11 +701,11 @@
           "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy."
         },
         "Settings": {
-          "084d8fac5b": "Privacy & Security",
-          "23931df7e8": "Remote Hosts",
-          "23c6874fdf": "AI Capabilities",
+          "084d8fac5b": "Privacy & security",
+          "23931df7e8": "Remote hosts",
+          "23c6874fdf": "AI capabilities",
           "8bd117d669": "Interface",
-          "9abb9be3bc": "Set Up",
+          "9abb9be3bc": "Set up",
           "e1578cd4bc": "Workflows"
         },
         "SshPane": {

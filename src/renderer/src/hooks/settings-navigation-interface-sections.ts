@@ -66,7 +66,7 @@ export function buildInterfaceSettingsSections(
     },
     {
       id: 'input',
-      title: t('auto.hooks.useSettingsNavigationMetadata.0c6ee88a5f', 'Input & Editing'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.0c6ee88a5f', 'Input & editing'),
       description: t(
         'auto.hooks.useSettingsNavigationMetadata.1f452cbd4c',
         'Selection and editing behavior.'
@@ -106,7 +106,7 @@ export function buildInterfaceSettingsSections(
     },
     {
       id: 'stats',
-      title: t('auto.hooks.useSettingsNavigationMetadata.d72a58b5b9', 'Stats & Usage'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.d72a58b5b9', 'Stats & usage'),
       description: t(
         'auto.hooks.useSettingsNavigationMetadata.b351014180',
         'Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.'
