@@ -178,7 +178,7 @@ export async function subscribeSessionTabsInventory(
     },
     pairedDeviceId,
     context.clientKind,
-    { observation: 'caller' }
+    { observation: 'caller', acceptsWorktree: () => !closed }
   )
   const stopCapabilities = context.capabilitySource?.observe(() => {
     if (!initialized || closed) {

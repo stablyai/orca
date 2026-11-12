@@ -1,3 +1,4 @@
+import type { MobileSessionTabSubscription } from '../construction/runtime-identity-state'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import { RuntimeWorkspaceFileTargets } from '../workspaces/workspace-file-session-targets'
 export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorkspaceFileTargets {
@@ -5,7 +6,7 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
     listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void,
     clientNavigationId?: string,
     clientKind?: 'mobile' | 'runtime',
-    options?: { observation: 'caller' }
+    options?: Pick<MobileSessionTabSubscription, 'observation' | 'acceptsWorktree'>
   ): () => void {
     // Drain coalesced notifications before subscribing: the initial snapshot already includes them.
     this.mobileSessionTabsNotifyCoalescer.flushAll()
@@ -13,7 +14,8 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
       listener,
       clientNavigationId,
       clientKind,
-      observation: options?.observation
+      observation: options?.observation,
+      acceptsWorktree: options?.acceptsWorktree
     }
     this.mobileSessionTabListeners.add(subscription)
     return () => {
@@ -68,13 +70,23 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
     this.clientHostedPageReconciliation.forgetObservation(clientNavigationId, observer)
   }
 
-  protected hasMobileSessionTabsListenersForClient(clientNavigationId: string): boolean {
-    for (const subscription of this.mobileSessionTabListeners) {
-      if (subscription.clientNavigationId === clientNavigationId) {
-        return true
+  protected selectMobileSessionTabsListeners(
+    worktree?: string,
+    clientNavigationId?: string,
+    candidates: Iterable<MobileSessionTabSubscription> = this.mobileSessionTabListeners
+  ): MobileSessionTabSubscription[] {
+    const selected: MobileSessionTabSubscription[] = []
+    for (const subscription of candidates) {
+      if (
+        this.mobileSessionTabListeners.has(subscription) &&
+        (clientNavigationId === undefined ||
+          subscription.clientNavigationId === clientNavigationId) &&
+        (worktree === undefined || subscription.acceptsWorktree?.(worktree) !== false)
+      ) {
+        selected.push(subscription)
       }
     }
-    return false
+    return selected
   }
 
   protected hasAgentSenderListeners(): boolean {

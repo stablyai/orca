@@ -158,3 +158,35 @@ describe('session tab workspace path aliases', () => {
     runtime.cleanupSubscriptionsForConnection('alias-connection')
   })
 })
+
+it('rejects ambiguous later aliases while retaining an exact host spelling', async () => {
+  const runtime = new OrcaRuntimeService()
+  runtime.attachWindow(1)
+  const rpc = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+  const frames: { type?: string; worktree?: string }[] = []
+  try {
+    await rpc.dispatchStreaming(
+      {
+        id: 'ambiguous-alias',
+        authToken: 'test',
+        method: 'session.tabs.subscribe',
+        params: { worktree: `id:${ALIAS}` }
+      },
+      (reply) => frames.push(JSON.parse(reply).result),
+      { connectionId: 'ambiguous-alias' }
+    )
+    publishGraph(runtime, WORKTREE, [snapshot('repo::g:/git/example', 'pty-other')])
+    runtime.onMobileSessionTabsChanged(() => {}, undefined, 'mobile')()
+    expect(frames.filter((frame) => frame.type === 'updated')).toEqual([])
+    publishGraph(runtime, ALIAS, [
+      snapshot(WORKTREE),
+      snapshot('repo::g:/git/example', 'pty-other')
+    ])
+    runtime.onMobileSessionTabsChanged(() => {}, undefined, 'mobile')()
+    expect(
+      frames.filter((frame) => frame.type === 'updated').map((frame) => frame.worktree)
+    ).toEqual([ALIAS])
+  } finally {
+    runtime.cleanupSubscriptionsForConnection('ambiguous-alias')
+  }
+})

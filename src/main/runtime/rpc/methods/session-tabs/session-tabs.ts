@@ -248,39 +248,40 @@ export const SESSION_TAB_METHODS = [
         if (released) {
           return
         }
+        const acceptsWorktree = (worktree: string): boolean => {
+          if (released) {
+            return false
+          }
+          if (worktree !== subscribedWorktree && worktreeIdsEqual(worktree, subscribedWorktree)) {
+            // Subscribe can precede publication of the host's stored spelling.
+            try {
+              subscribedWorktree =
+                runtime.getExplicitSessionWorktreeIdSelector(`id:${initial.worktree}`) ??
+                subscribedWorktree
+            } catch {
+              // An ambiguous alias cannot authorize switching to either session.
+              return false
+            }
+          }
+          return worktree === subscribedWorktree
+        }
         stopListening = runtime.onMobileSessionTabsChanged(
           (snapshot) => {
             if (released) {
               return
             }
-            if (
-              snapshot.worktree !== subscribedWorktree &&
-              worktreeIdsEqual(snapshot.worktree, subscribedWorktree)
-            ) {
-              // Subscribe can precede publication of the host's stored spelling.
-              try {
-                subscribedWorktree =
-                  runtime.getExplicitSessionWorktreeIdSelector(`id:${initial.worktree}`) ??
-                  subscribedWorktree
-              } catch {
-                // An ambiguous alias cannot authorize switching to either session.
-                return
-              }
-            }
-            if (snapshot.worktree === subscribedWorktree) {
-              // Keep one stream spelling because clients index frames by worktree.
-              const streamSnapshot =
-                snapshot.worktree === initial.worktree
-                  ? snapshot
-                  : { ...snapshot, worktree: initial.worktree }
-              const { navigationIntent: _intent, ...retained } = streamSnapshot
-              currentSnapshot = retained
-              emitSnapshot(project(streamSnapshot), 'updated')
-            }
+            // Keep one stream spelling because clients index frames by worktree.
+            const streamSnapshot =
+              snapshot.worktree === initial.worktree
+                ? snapshot
+                : { ...snapshot, worktree: initial.worktree }
+            const { navigationIntent: _intent, ...retained } = streamSnapshot
+            currentSnapshot = retained
+            emitSnapshot(project(streamSnapshot), 'updated')
           },
           pairedDeviceId,
           clientKind,
-          { observation: 'caller' }
+          { observation: 'caller', acceptsWorktree }
         )
       } catch (error) {
         // A stream already ended by its release must not also report an error.

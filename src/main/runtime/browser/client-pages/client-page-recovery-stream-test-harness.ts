@@ -7,7 +7,8 @@ export function openRecoveryTabsStream(
   runtime: OrcaRuntimeService,
   id: string,
   worktree?: string,
-  deviceId = 'device-a'
+  deviceId = 'device-a',
+  clientKind: 'mobile' | 'runtime' = 'mobile'
 ) {
   const stopped = new AbortController()
   const frames: RuntimeMobileSessionTabsResult[] = []
@@ -42,7 +43,7 @@ export function openRecoveryTabsStream(
         initial.resolve()
       }
     },
-    { connectionId: id, pairedDeviceId: deviceId, clientKind: 'mobile', signal: stopped.signal }
+    { connectionId: id, pairedDeviceId: deviceId, clientKind, signal: stopped.signal }
   )
   return { frames, errors, initial: initial.promise, completion, stop: () => stopped.abort() }
 }
