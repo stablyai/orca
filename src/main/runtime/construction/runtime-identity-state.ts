@@ -71,6 +71,8 @@ import type { TerminalHandleAccess } from '../agent-senders/runtime-agent-sender
 
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
+export type ClientHostedPageObservation = MobileSessionTabSubscription | symbol
+
 export type MobileSessionTabSubscription = {
   listener: (
     snapshot: RuntimeMobileSessionTabsResult,

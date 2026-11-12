@@ -131,7 +131,7 @@ export const SESSION_TAB_METHODS = [
       },
       emit
     ) => {
-      const observation = {}
+      const observation = Symbol('session-tabs-stream')
       let subscriptionId: string | null = null
       let released = false
       let endOnRelease = true

@@ -28,7 +28,7 @@ export async function subscribeSessionTabsInventory(
   }
   const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
   const subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
-  const observation = {}
+  const observation = Symbol('session-tabs-stream')
   const inventoryController = new AbortController()
   // For the stream's whole life, not just the census: a desktop unsubscribe arrives as this abort.
   const onTransportAbort = (): void => runtime.cleanupSubscription(subscriptionId)

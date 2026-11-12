@@ -1,15 +1,15 @@
+import type { ClientHostedPageObservation } from '../../construction/runtime-identity-state'
 export const DEFAULT_CLIENT_HOSTED_RECONCILIATION_WINDOW_MS = 45_000
 
 /** A client with no paired-device identity, which no host attach can ever speak for. */
 const ANONYMOUS_CLIENT = '\0anonymous'
 const READ_REPLY = Symbol('read-reply')
-type Observation = object | symbol
 
 /** Restart snapshots precede host inventories; hold browser-row culling until each client's host reconciles.
  * One client's attach proves nothing about another; bound never-attached clients by the deadline. */
 export class ClientHostedPageReconciliationWindow {
   private readonly reconciledClients = new Set<string>()
-  private readonly observations = new Map<string, Map<Observation, Set<string>>>()
+  private readonly observations = new Map<string, Map<ClientHostedPageObservation, Set<string>>>()
 
   constructor(
     private readonly openedAt: number,
@@ -31,10 +31,11 @@ export class ClientHostedPageReconciliationWindow {
   observe(
     frames: readonly { worktree: string; clientHostedPagesUnreconciled?: true; removed?: true }[],
     pairedDeviceId?: string,
-    observer: Observation = READ_REPLY
+    observer: ClientHostedPageObservation = READ_REPLY
   ): void {
     const key = clientKey(pairedDeviceId)
-    const observations = this.observations.get(key) ?? new Map<Observation, Set<string>>()
+    const observations =
+      this.observations.get(key) ?? new Map<ClientHostedPageObservation, Set<string>>()
     const held = observations.get(observer) ?? new Set<string>()
     for (const frame of frames) {
       if (frame.clientHostedPagesUnreconciled && !frame.removed) {
@@ -55,7 +56,10 @@ export class ClientHostedPageReconciliationWindow {
     }
   }
 
-  forgetObservation(pairedDeviceId: string | undefined, observer: Observation): void {
+  forgetObservation(
+    pairedDeviceId: string | undefined,
+    observer: ClientHostedPageObservation
+  ): void {
     const key = clientKey(pairedDeviceId)
     const observations = this.observations.get(key)
     observations?.delete(observer)

@@ -1,4 +1,7 @@
-import type { MobileSessionTabSubscription } from '../construction/runtime-identity-state'
+import type {
+  ClientHostedPageObservation,
+  MobileSessionTabSubscription
+} from '../construction/runtime-identity-state'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import { RuntimeWorkspaceFileTargets } from '../workspaces/workspace-file-session-targets'
 export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorkspaceFileTargets {
@@ -55,14 +58,14 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
   observeClientHostedPageSnapshots(
     frames: readonly RuntimeMobileSessionTabsResult[],
     clientNavigationId?: string,
-    observer?: object
+    observer?: ClientHostedPageObservation
   ): void {
     this.clientHostedPageReconciliation.observe(frames, clientNavigationId, observer)
   }
 
   forgetClientHostedPageObservation(
     clientNavigationId: string | undefined,
-    observer: object
+    observer: ClientHostedPageObservation
   ): void {
     this.clientHostedPageReconciliation.forgetObservation(clientNavigationId, observer)
   }
