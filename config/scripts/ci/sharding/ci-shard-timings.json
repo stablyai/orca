@@ -7009,7 +7009,6 @@
       "src/wsl-guest/wsl-install-plugins-handler.test.ts": 283,
       "tests/e2e/SmartWorkspaceSourceResultList.linear-auth.unit.test.ts": 1976,
       "tests/e2e/SmartWorkspaceSourceResultList.linear-read-error.unit.test.ts": 3757,
-      "tests/e2e/agent-launch-cli.unit.test.ts": 2379,
       "tests/e2e/agent-launch-setup-choice.unit.test.ts": 2657,
       "tests/e2e/ai-vault-manual-name-clear.unit.test.ts": 21206,
       "tests/e2e/automation-chat-reopen.unit.test.ts": 6262,
