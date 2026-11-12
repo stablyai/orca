@@ -11,7 +11,10 @@ import {
 import { bundledSkillNames } from '../../../../../shared/bundled-skill-names'
 import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
-import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
+import {
+  runtimeEnvironmentCapabilityProof,
+  runtimeEnvironmentSupportsCapability
+} from '../../rpc/compatibility/runtime-capability-proof'
 
 const BUNDLED_SKILL_PLAN_TIMEOUT_MS = 60_000
 const BUNDLED_SKILL_EXECUTE_TIMEOUT_MS = 5 * 60_000
@@ -109,13 +112,12 @@ export async function autoUpdateBundledSkillsOnTarget(
   if (target.kind !== 'environment') {
     return window.api.skills.bundledAutoUpdate({ names })
   }
-  if (
-    !(await runtimeEnvironmentSupportsCapability(
-      target.environmentId,
-      BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY
-    )) ||
-    !(await supportsSelectedNames(target.environmentId, names))
-  ) {
+  // Why pinned: a re-pair while these probes await must not send this write to a different host.
+  const proof = await runtimeEnvironmentCapabilityProof(
+    target.environmentId,
+    BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY
+  )
+  if (!proof.supported || !(await supportsSelectedNames(target.environmentId, names))) {
     return null
   }
   return callRuntimeRpc<BundledSkillInstallResult>(
@@ -124,6 +126,8 @@ export async function autoUpdateBundledSkillsOnTarget(
     { names },
     {
       timeoutMs: BUNDLED_SKILL_EXECUTE_TIMEOUT_MS,
+      expectedEnvironmentRuntimeId: proof.runtimeId,
+      expectedEnvironmentPairingRevision: proof.pairingRevision,
       ...(options.onSent ? { beforeSend: options.onSent } : {})
     }
   )
