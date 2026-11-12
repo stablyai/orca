@@ -1254,6 +1254,13 @@ function Invoke-OrcaNamedAction($Element, [string]$Action) {
     }
 }
 
+function Test-OrcaRangeValueMatches([string]$Actual, [double]$Expected) {
+    # Why: compare numerically so "50.0" matches a control that reads back 50; snapping controls still show a mismatch.
+    $actualNumber = 0.0
+    [double]::TryParse($Actual, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$actualNumber) -and
+        [Math]::Abs($actualNumber - $Expected) -le 1e-9 * [Math]::Max(1.0, [Math]::Abs($Expected))
+}
+
 function Set-OrcaElementValue($Element, [string]$Value) {
     try {
         $pattern = $Element.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
@@ -1275,13 +1282,19 @@ function Set-OrcaElementValue($Element, [string]$Value) {
         throw "value $Value is outside this range control's $($minimum.ToString($culture))..$($maximum.ToString($culture))"
     }
     $range.SetValue($number)
-    # Why: compare numerically so "50.0" matches a control that reads back 50; snapping controls still show a mismatch.
-    $actual = Get-OrcaRangeValueText $Element
-    $actualNumber = 0.0
-    $matched = [double]::TryParse($actual, [Globalization.NumberStyles]::Float, $culture, [ref]$actualNumber) -and
-        [Math]::Abs($actualNumber - $number) -le 1e-9 * [Math]::Max(1.0, [Math]::Abs($number))
+    # Why: Chromium applies the write asynchronously, so poll briefly like macOS's settled readback.
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+        $actual = Get-OrcaRangeValueText $Element
+        $matched = Test-OrcaRangeValueMatches $actual $number
+        if ($matched -or $stopwatch.ElapsedMilliseconds -ge 500) { break }
+        Start-Sleep -Milliseconds 25
+    }
     $verification = if ($matched) {
         [pscustomobject]@{ state = "verified"; property = "value"; expected = $Value; actualPreview = $actual }
+    } elseif ([string]::IsNullOrEmpty($actual)) {
+        # Why: a failed read is not evidence the write failed; only a read-back number can contradict it.
+        [pscustomobject]@{ state = "unverified"; reason = "readback_unsupported"; expected = $Value }
     } else {
         [pscustomobject]@{ state = "unverified"; reason = "value_mismatch"; expected = $Value; actualPreview = $actual }
     }
@@ -1329,8 +1342,15 @@ function Invoke-OrcaScrollPattern($Element, $RootElement, [string]$Direction, [d
             # Why: a refusal before any page moved falls back to the wheel; after that it is the end of the content.
             return $page -gt 0
         }
-        $after = Get-OrcaScrollPercent $pattern $vertical
-        if ($null -ne $before -and $after -eq $before) { break }
+        if ($null -eq $before) { continue }
+        # Why: WPF and Chromium move the viewport after Scroll returns; an unmoved percent after the wait is the end.
+        $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+        while ($true) {
+            $after = Get-OrcaScrollPercent $pattern $vertical
+            if ($after -ne $before -or $stopwatch.ElapsedMilliseconds -ge 500) { break }
+            Start-Sleep -Milliseconds 25
+        }
+        if ($after -eq $before) { break }
         $before = $after
     }
     $true
