@@ -313,13 +313,13 @@ for (const theme of ['dark', 'light'] as const) {
       .filter({ hasText: 'A device tried to connect but is not paired' })
     const action = unpairedToast.getByRole('button', { name: 'Open Mobile Settings' })
     const mobilePane = page.getByText('Control terminals and agents from your phone.')
-    const dialog = page.getByRole('dialog', { name: 'New Browser Profile' })
+    const dialog = page.getByRole('dialog', { name: 'New browser profile' })
     const nameField = dialog.getByRole('textbox')
 
     // An older toast drops behind the modal's backdrop: visible but dimmed, and nothing in it is live.
     await showUnpairedDeviceToast(electronApp)
     await expect(action).toBeVisible()
-    await page.getByRole('button', { name: 'Add Profile', exact: true }).click()
+    await page.getByRole('button', { name: 'Add profile', exact: true }).click()
     await expect(dialog).toBeVisible()
     await nameField.fill('Draft profile name')
     await expect.poll(() => toasterZIndex(page)).toBe(49)
@@ -342,7 +342,7 @@ for (const theme of ['dark', 'light'] as const) {
     // Each modal starts lowered; a toast raised while it is open comes forward by itself.
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(dialog).toBeHidden()
-    await page.getByRole('button', { name: 'Add Profile', exact: true }).click()
+    await page.getByRole('button', { name: 'Add profile', exact: true }).click()
     await expect(dialog).toBeVisible()
     await nameField.fill('Second draft')
     await showUnpairedDeviceToast(electronApp)
