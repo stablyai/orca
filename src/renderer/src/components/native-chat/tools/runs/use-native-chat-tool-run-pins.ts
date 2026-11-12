@@ -33,12 +33,7 @@ export function useNativeChatToolRunPins({
   drawsEveryRow: boolean
   isVisible: boolean
   scrollerRef: React.RefObject<HTMLDivElement | null>
-}): {
-  rangeExtractor: (range: WindowRange) => number[]
-  retainInteractedRow: (event: React.SyntheticEvent) => void
-  onFocusCapture: (event: React.FocusEvent) => void
-  onBlurCapture: (event: React.FocusEvent) => void
-} {
+}) {
   const [interactionKeys, setInteractionKeys] = useState<readonly string[]>([])
   const [focusedKey, setFocusedKey] = useState<string | null>(null)
   const [selectionSpan, setSelectionSpan] = useState<readonly [number, number] | null>(null)

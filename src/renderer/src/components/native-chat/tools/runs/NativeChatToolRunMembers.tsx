@@ -271,6 +271,7 @@ export function NativeChatToolRunMembers({
       const anchor = anchorStaleRef.current
         ? anchorAtScrollOffset(virtualizer, rows)
         : anchorRef.current
+      anchorStaleRef.current = !recordsOnScroll
       if (anchor) {
         anchorRef.current = {
           key: anchor.key,
@@ -281,7 +282,7 @@ export function NativeChatToolRunMembers({
     } else if (followsEndRef.current) {
       followRef.current = { observedTail: false }
     }
-  }, [isVisible, rows, virtualizer])
+  }, [isVisible, recordsOnScroll, rows, virtualizer])
 
   // Before paint: new work starts a follow only if the reader was at the end before it. Each visible
   // pass re-pins; once the tail is really measured (now, on a later measurement, or when a hidden pane
