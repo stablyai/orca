@@ -3,6 +3,7 @@ import type { PluginMarketplaceHostListing } from '../../../../../preload/api-ty
 import { pluginListEntryFromListing, type PluginListEntry } from '../list/plugin-list-entries'
 import {
   PLUGIN_FEATURED_LIMIT,
+  pickCatalogHighlights,
   pickFeaturedPlugins,
   pickNewlyAddedPlugins
 } from './plugin-catalog-highlights'
@@ -196,5 +197,31 @@ describe('pickNewlyAddedPlugins', () => {
     expect(pickNewlyAddedPlugins(entries, null, NOW).map((item) => item.pluginKey)).toEqual(
       Array.from({ length: 9 }, (_, index) => `acme.p${index}`)
     )
+  })
+})
+
+describe('pickCatalogHighlights', () => {
+  const counts = { 'acme.ayu': 900, 'acme.excalidraw': 800 }
+
+  it('hides Featured with Newly added, so it never sits right on the catalogs it repeats', () => {
+    const entries = [entry('acme.ayu'), entry('acme.excalidraw', { categories: ['editors'] })]
+
+    expect(pickCatalogHighlights(entries, counts, null, NOW)).toEqual({
+      featured: [],
+      newlyAdded: []
+    })
+  })
+
+  it('shows Featured above Newly added when something is new', () => {
+    const entries = [
+      entry('acme.ayu'),
+      entry('acme.excalidraw', { categories: ['editors'] }),
+      entry('acme.fresh', { addedAt: '2026-11-09T19:00:00.000Z' })
+    ]
+
+    const picked = pickCatalogHighlights(entries, counts, null, NOW)
+
+    expect(picked.featured.map((item) => item.pluginKey)).toEqual(['acme.ayu', 'acme.excalidraw'])
+    expect(picked.newlyAdded.map((item) => item.pluginKey)).toEqual(['acme.fresh'])
   })
 })

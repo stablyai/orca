@@ -6,9 +6,9 @@ import { PluginListGroup } from '../list/PluginListGroup'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { pluginListedAt } from '../list/plugin-listed-at'
 import { CatalogCard, type CatalogCardHandlers } from './PluginCatalogGroups'
-import { pickFeaturedPlugins, pickNewlyAddedPlugins } from './plugin-catalog-highlights'
+import { pickCatalogHighlights } from './plugin-catalog-highlights'
 
-/** Featured and Newly added rows above the catalogs; each hides itself when it has nothing to show. */
+/** Featured and Newly added rows above the catalogs; Featured shows only alongside Newly added. */
 export function PluginCatalogHighlights({
   entries,
   orcaVersion,
@@ -23,8 +23,7 @@ export function PluginCatalogHighlights({
   const intlLocale = useIntlLocale()
   const installCounts = usePluginInstallCountsStore((state) => state.counts)
   const now = useNow(60_000)
-  const featured = pickFeaturedPlugins(entries, installCounts, orcaVersion)
-  const newlyAdded = pickNewlyAddedPlugins(entries, orcaVersion, now)
+  const { featured, newlyAdded } = pickCatalogHighlights(entries, installCounts, orcaVersion, now)
   if (featured.length === 0 && newlyAdded.length === 0) {
     return null
   }

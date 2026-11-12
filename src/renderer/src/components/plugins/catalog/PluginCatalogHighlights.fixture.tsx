@@ -1,8 +1,9 @@
 import type { PluginMarketplaceHostListing } from '../../../../../preload/api-types'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { usePluginInstallCountsStore } from '@/store/plugins/installation/plugin-install-counts'
+import { PluginListGroup } from '../list/PluginListGroup'
 import { pluginListEntryFromListing, type PluginListEntry } from '../list/plugin-list-entries'
-import type { CatalogCardHandlers } from './PluginCatalogGroups'
+import { CatalogCard, type CatalogCardHandlers } from './PluginCatalogGroups'
 import { PluginCatalogHighlights } from './PluginCatalogHighlights'
 
 const HOUR_MS = 60 * 60 * 1000
@@ -179,6 +180,49 @@ function render(): React.JSX.Element {
   )
 }
 
+// Why undated copies: a catalog with no estimated listing dates is the empty Newly added state.
+const undated = entries.map((item) =>
+  item.listing ? { ...item, listing: { ...item.listing, addedAt: undefined } } : item
+)
+
+/** Highlights over the catalog groups, as the plugins page lays them out. */
+function renderPage(pageEntries: readonly PluginListEntry[]): () => React.JSX.Element {
+  const groups = [
+    { id: 'official', title: 'Orca Official Plugins', detail: 'verified · stablyai' },
+    { id: 'community', title: 'Orca Community Plugins', detail: 'verified · stablyai' }
+  ]
+  return () => (
+    <div className="@container/plugin-catalog space-y-8 p-6">
+      <PluginCatalogHighlights
+        entries={pageEntries}
+        orcaVersion="1.4.256"
+        cardHandlers={handlers}
+      />
+      {groups.map((group) => (
+        <PluginListGroup key={group.id} layout="grid" title={group.title} detail={group.detail}>
+          {pageEntries
+            .filter((item) => item.listing?.marketplaceSourceId === group.id)
+            .map((item) => (
+              <CatalogCard key={item.pluginKey} entry={item} handlers={handlers} />
+            ))}
+        </PluginListGroup>
+      ))}
+    </div>
+  )
+}
+
 export const wide = defineFixture({ width: 1180, setup, render })
 
 export const narrow = defineFixture({ width: 640, setup, render })
+
+export const page1440 = defineFixture({ width: 1440, setup, render: renderPage(entries) })
+
+export const page600 = defineFixture({ width: 600, setup, render: renderPage(entries) })
+
+export const page390 = defineFixture({ width: 390, setup, render: renderPage(entries) })
+
+export const emptyNewlyAdded1440 = defineFixture({
+  width: 1440,
+  setup,
+  render: renderPage(undated)
+})

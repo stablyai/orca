@@ -91,3 +91,22 @@ export function pickNewlyAddedPlugins(
     now
   )
 }
+
+/**
+ * The highlight rows; Featured never shows without Newly added. Why: alone, Featured sits right on
+ * the catalogs, whose leading cards are the same popular plugins in the same columns, so the
+ * repeat reads as a render bug. Dropping those plugins from their catalog instead would move a
+ * card into the catalog the moment it's installed, and skew the catalog's "N of M".
+ */
+export function pickCatalogHighlights(
+  entries: readonly PluginListEntry[],
+  installCounts: Readonly<Record<string, number>>,
+  orcaVersion: string | null,
+  now: number
+): { featured: PluginListEntry[]; newlyAdded: PluginListEntry[] } {
+  const newlyAdded = pickNewlyAddedPlugins(entries, orcaVersion, now)
+  return {
+    featured: newlyAdded.length > 0 ? pickFeaturedPlugins(entries, installCounts, orcaVersion) : [],
+    newlyAdded
+  }
+}
