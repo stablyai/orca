@@ -16,15 +16,14 @@ body:
     id: where
     attributes:
       label: Where were you using Orca?
-      description: Pick the closest match. For mobile/web, this is the app you were in — mention the paired host in Details if it matters.
+      description: Where you saw the bug.
       options:
-        - Desktop (this computer)
-        - Desktop + SSH
-        - Desktop + Orca remote server
+        - Desktop only
+        - Desktop + SSH host
+        - Desktop + Orca server
         - Desktop + WSL
-        - Mobile (iOS)
-        - Mobile (Android)
-        - Web / browser
+        - Mobile app
+        - Web browser
         - Other
     validations:
       required: true
@@ -33,7 +32,7 @@ body:
     id: os
     attributes:
       label: Operating system
-      description: OS of the machine or phone where you hit the bug (your local desktop or mobile device).
+      description: 'The device you were using. WSL: pick Windows. Phone: pick iOS or Android.'
       options:
         - macOS
         - Windows
@@ -48,7 +47,7 @@ body:
     id: remote_os
     attributes:
       label: Remote host operating system
-      description: Only if you selected Desktop + SSH or Desktop + Orca remote server. Leave blank otherwise.
+      description: Only for SSH, Orca server or web.
       options:
         - Linux
         - macOS
@@ -62,8 +61,8 @@ body:
     id: orca_version
     attributes:
       label: Orca version
-      description: Desktop/web — `Orca > About Orca`. Mobile — app version from Settings or the store listing.
-      placeholder: v0.14.2 / mobile 0.0.32
+      description: 'macOS: Orca > About Orca. Windows/Linux: Help > About Orca. Mobile: Settings > About.'
+      placeholder: v1.4.2
     validations:
       required: false
 
