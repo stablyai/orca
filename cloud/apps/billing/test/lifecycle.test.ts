@@ -68,6 +68,18 @@ describe('a price change never orphans existing subscribers (planForPrice)', () 
     expect(h.raw.prepare("SELECT plan_id, role, interval FROM plan_prices WHERE stripe_price_id = 'price_team_month_v3'").get()).toEqual({ plan_id: 'team', role: 'seat', interval: 'month' })
   })
 
+  it('maps a price by its metadata.orca_plan join key (no lookup key, unknown product)', async () => {
+    const h = await createHarness({ ENTITLEMENTS_MODE: 'on' })
+    h.stripe.prices.set('price_team_tagged', { id: 'price_team_tagged', active: true, currency: 'usd', unit_amount: 4000, product: 'prod_team_promo', metadata: { orca_plan: 'team' }, recurring: { interval: 'year', usage_type: 'licensed' } })
+    const token = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner', email: 'a@example.com' })
+    const auth = { authorization: `Bearer ${token}` }
+    await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', seats: 1 }, headers: auth })
+    const customer = [...h.stripe.customers.keys()][0]!
+    const subscription = h.stripe.putSubscription({ customer, accountId: 'org:o1', basePrice: 'price_team_tagged', quantity: 1, periodStart: PERIOD_START, periodEnd: PERIOD_END })
+    expect((await h.webhook(checkoutCompleted({ customer, subscription: subscription.id, accountId: 'org:o1' }))).body).toEqual({ received: true })
+    expect(await entitlement(h, auth)).toMatchObject({ plan: 'team', interval: 'year', canStartSandbox: true })
+  })
+
   it('still applies status for a known subscriber on an unmappable price', async () => {
     const { h, auth, subscription } = await subscribed('on')
     subscription.items.data[0]!.price = { id: 'price_mystery', recurring: { usage_type: 'licensed' } }
