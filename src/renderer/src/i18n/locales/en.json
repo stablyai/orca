@@ -21749,7 +21749,10 @@
             "dirty": "Dirty",
             "unpushed": "Unpushed",
             "unknown": "Unknown"
-          }
+          },
+          "ignoredFilesBlocker": "Ignored local files",
+          "ignoredFilesNamed": "Ignored files: {{value0}}",
+          "ignoredFilesUnchecked": "Ignored files not fully checked"
         },
         "confirm": {
           "deletingTitle_one": "Deleting {{count}} workspace",
@@ -21783,7 +21786,13 @@
           "closedToast_other": "Closed {{count}} files with unsaved edits from {{workspace}}",
           "reopen": "Reopen",
           "reopenFailed": "Some files couldn't be reopened. Open a workspace and try Reopen again."
-        }
+        },
+        "ignoredFilesLost": "Ignored files will be lost: {{names}}",
+        "ignoredFilesUnchecked": "Ignored files could not be fully checked"
+      },
+      "atRiskLocalFiles": {
+        "namesWithCount": "{{names}} +{{value0}}",
+        "namesAndMore": "{{names}} and more"
       }
     },
     "agentSessionContinuation": {
