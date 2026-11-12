@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Platform, StyleSheet, View, type LayoutRectangle } from 'react-native'
+import { Platform, StyleSheet, View, useWindowDimensions, type LayoutRectangle } from 'react-native'
 import Animated, {
   useAnimatedRef,
   useSharedValue,
@@ -9,10 +9,15 @@ import Animated, {
 import { spacing } from '../../../theme/mobile-theme'
 import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { useMobileNativeChatLowerRegion } from '../mobile-native-chat-lower-region-context'
+import { QUEUED_ROW_NARROW_WIDTH } from './mobile-native-chat-queued-message-styles'
 
-/** Desktop's `max-h-40`: three one-line cards and part of a fourth, whose cut-off edge is the
- *  sign that the list scrolls. */
-export const QUEUE_LIST_MAX_HEIGHT = 160
+/**
+ * Three 60pt message rows and part of a fourth, whose cut-off edge is the sign that the list scrolls;
+ * room too for three when one carries a two-line failure caption, so three are never cut.
+ */
+export const QUEUE_LIST_MAX_HEIGHT = 212
+/** The same below the narrow width, where each message takes two lines and a row grows to about 73pt. */
+export const QUEUE_LIST_NARROW_MAX_HEIGHT = 264
 
 export type MobileQueueDragViewport = {
   scrollRef: AnimatedRef<Animated.ScrollView>
@@ -38,6 +43,7 @@ export function MobileQueuedMessageScrollList({
   children: (reveal: (row: LayoutRectangle) => void, drag: MobileQueueDragViewport) => ReactNode
 }): React.JSX.Element {
   const scrollRef = useAnimatedRef<Animated.ScrollView>()
+  const narrow = useWindowDimensions().width < QUEUED_ROW_NARROW_WIDTH
   const lowerRegion = useMobileNativeChatLowerRegion()
   const scrollOffsetY = useSharedValue(0)
   const scrollContentHeight = useSharedValue(0)
@@ -89,10 +95,12 @@ export function MobileQueuedMessageScrollList({
     }
   }
   return (
-    <View style={inlineEditorActive && styles.inline}>
+    // Always shrinkable: under a height limit the list gives up rows (and scrolls) before the box
+    // clips the fold row below it.
+    <View style={styles.inline}>
       <Animated.ScrollView
         ref={scrollRef}
-        style={inlineEditorActive ? styles.inline : styles.scroll}
+        style={inlineEditorActive ? styles.inline : narrow ? styles.scrollNarrow : styles.scroll}
         scrollEnabled={!dragging}
         nestedScrollEnabled
         showsVerticalScrollIndicator
@@ -123,6 +131,7 @@ export function MobileQueuedMessageScrollList({
 }
 
 const styles = StyleSheet.create({
-  scroll: { maxHeight: QUEUE_LIST_MAX_HEIGHT },
+  scroll: { maxHeight: QUEUE_LIST_MAX_HEIGHT, flexShrink: 1, minHeight: 0 },
+  scrollNarrow: { maxHeight: QUEUE_LIST_NARROW_MAX_HEIGHT, flexShrink: 1, minHeight: 0 },
   inline: { flexShrink: 1, minHeight: 0 }
 })
