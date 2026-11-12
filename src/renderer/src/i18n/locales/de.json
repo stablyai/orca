@@ -23647,7 +23647,7 @@
     "toggleArguments": "Argumente ein-/ausblenden",
     "argumentsTerminalHint": "Gilt nur für Terminalstarts (CLI)",
     "searchAgentModels": "{{agent}}-Modelle suchen…",
-    "legacyModelsWithCount": "Ältere Modelle ({{total}})",
+    "moreModelsWithCount": "Weitere Modelle ({{total}})",
     "search": "Suchen, z. B. Opus 5.5…",
     "configure": "{{agent}} konfigurieren",
     "arguments": "Argumente",

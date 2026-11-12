@@ -35,7 +35,7 @@ it.each([false, true])(
     const itemRole = row ? 'menuitemradio' : 'option'
     open()
     await screen.findByRole(itemRole, { name: 'GPT 5.6 Terra' })
-    fireEvent.click(screen.getByRole(row ? 'menuitem' : 'option', { name: 'Legacy models (1)' }))
+    fireEvent.click(screen.getByRole(row ? 'menuitem' : 'option', { name: 'More models (1)' }))
     expect(screen.queryByRole(itemRole, { name: 'GPT 5.6 Terra' })).toBeNull()
     fireEvent.keyDown(document, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole(row ? 'menu' : 'listbox')).toBeNull())

@@ -23200,7 +23200,7 @@
     "toggleArguments": "切换参数显示",
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
-    "legacyModelsWithCount": "旧版模型 ({{total}})",
+    "moreModelsWithCount": "更多模型 ({{total}})",
     "use": "使用",
     "select": "选择智能体",
     "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",

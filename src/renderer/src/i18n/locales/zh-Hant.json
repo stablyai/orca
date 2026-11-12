@@ -23313,7 +23313,7 @@
     "toggleArguments": "切換引數顯示",
     "argumentsTerminalHint": "僅適用於終端機（CLI）啟動",
     "searchAgentModels": "搜尋 {{agent}} 模型…",
-    "legacyModelsWithCount": "舊版模型 ({{total}})",
+    "moreModelsWithCount": "更多模型 ({{total}})",
     "search": "搜尋，例如 Opus 5.5…",
     "configure": "設定 {{agent}}",
     "arguments": "引數",

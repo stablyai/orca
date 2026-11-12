@@ -6,7 +6,7 @@ export type SessionOptionSelectChoice = {
   value: string
   label: string
   description?: string
-  /** Folded under Legacy models; a matching search still lists it. */
+  /** Folded under More models; a matching search still lists it. */
   legacy?: true
 }
 

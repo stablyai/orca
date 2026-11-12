@@ -24388,7 +24388,7 @@
     "toggleArguments": "Показать или скрыть аргументы",
     "argumentsTerminalHint": "Применяется только при запуске в терминале (CLI)",
     "searchAgentModels": "Поиск моделей {{agent}}…",
-    "legacyModelsWithCount": "Устаревшие модели ({{total}})",
+    "moreModelsWithCount": "Другие модели ({{total}})",
     "search": "Поиск, например Opus 5.5…",
     "configure": "Настроить {{agent}}",
     "arguments": "Аргументы",

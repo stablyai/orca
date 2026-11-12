@@ -80,7 +80,7 @@ const NO_LEGACY: ReadonlySet<string> = new Set()
 // Why weak and per list: native chat rebuilds its options on every streamed render; catalogs are replaced, never mutated.
 const classified = new WeakMap<readonly ListedModel[], Map<string, ReadonlySet<string>>>()
 
-/** Rows every model picker folds under Legacy models; the default and unrecognized ids stay listed. */
+/** Rows every model picker folds under More models; the default and unrecognized ids stay listed. */
 export function legacyAgentModelIds(
   agent: string,
   models: readonly ListedModel[]

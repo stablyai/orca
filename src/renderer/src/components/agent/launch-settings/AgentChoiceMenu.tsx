@@ -57,7 +57,7 @@ export function AgentChoiceMenu({
   const toggleBody = (
     <>
       <span className="min-w-0 truncate py-0.5">
-        {t('agentPicker.legacyModelsWithCount', 'Legacy models ({{total}})', {
+        {t('agentPicker.moreModelsWithCount', 'More models ({{total}})', {
           total: legacyChoices.length
         })}
       </span>

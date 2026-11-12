@@ -23617,7 +23617,7 @@
     "toggleArguments": "Argümanları göster veya gizle",
     "argumentsTerminalHint": "Yalnızca terminal (CLI) başlatmaları için geçerlidir",
     "searchAgentModels": "{{agent}} modellerini ara…",
-    "legacyModelsWithCount": "Eski modeller ({{total}})",
+    "moreModelsWithCount": "Daha fazla model ({{total}})",
     "search": "Ara, ör. Opus 5.5…",
     "configure": "{{agent}} yapılandır",
     "arguments": "Argümanlar",

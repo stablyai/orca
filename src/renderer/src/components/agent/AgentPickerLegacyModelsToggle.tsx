@@ -30,7 +30,7 @@ export function AgentPickerLegacyModelsToggle({
       aria-expanded={expanded}
       onSelect={onToggle}
     >
-      {t('agentPicker.legacyModelsWithCount', 'Legacy models ({{total}})', { total })}
+      {t('agentPicker.moreModelsWithCount', 'More models ({{total}})', { total })}
       <ChevronRight
         className={cn(
           'ml-auto size-3.5 text-muted-foreground transition-transform',
