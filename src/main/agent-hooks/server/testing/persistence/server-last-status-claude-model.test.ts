@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
-import { buildBody, postHookEvent } from '../server.test-fixtures'
+import { buildBody, ingestProgramStatusOsc, postHookEvent } from '../server.test-fixtures'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({
@@ -23,11 +23,13 @@ describe('The Claude model across a restart', () => {
   })
 
   it.each([
-    { saved: 'working', next: 'Stop' },
-    { saved: 'done', next: 'UserPromptSubmit' }
+    { saved: 'working', next: 'Stop', osc: false },
+    { saved: 'done', next: 'UserPromptSubmit', osc: false },
+    // Claude reports OSC 7501 `working` just before UserPromptSubmit.
+    { saved: 'done', next: 'UserPromptSubmit', osc: true }
   ])(
-    'keeps the SessionStart model when the next hook after a $saved restart omits it',
-    async ({ saved, next }) => {
+    'keeps the SessionStart model after a $saved restart (OSC first: $osc)',
+    async ({ saved, next, osc }) => {
       const firstServer = new AgentHookServer()
       await firstServer.start({ env: 'production', userDataPath })
       await postHookEvent(
@@ -47,6 +49,9 @@ describe('The Claude model across a restart', () => {
       const server = new AgentHookServer()
       await server.start({ env: 'production', userDataPath })
       try {
+        if (osc) {
+          ingestProgramStatusOsc(server, '\x1b]7501;state=working:app=claude-code\x1b\\')
+        }
         await postHookEvent(server, buildBody({ hook_event_name: next, prompt: 'next' }))
         expect(server.getStatusSnapshot()[0]?.model).toBe('claude-opus-5-5')
       } finally {

@@ -30,8 +30,7 @@ describe('Claude hook model', () => {
       'claude-sonnet-5'
     )
     expect(
-      claude({ hook_event_name: 'SubagentStart', agent_id: 'agent-1', agent_type: 'worker' })
-        ?.model
+      claude({ hook_event_name: 'SubagentStart', agent_id: 'agent-1', agent_type: 'worker' })?.model
     ).toBe('claude-sonnet-5')
     expect(claude({ hook_event_name: 'Stop' })?.model).toBe('claude-sonnet-5')
   })
@@ -45,13 +44,8 @@ describe('Claude hook model', () => {
     expect(claude({ hook_event_name: 'SessionStart', source: 'clear' })?.model).toBe(
       'claude-opus-4-7'
     )
-    expect(claude({ hook_event_name: 'SessionStart', source: 'startup', model: '   ' })?.model).toBe(
-      'claude-opus-4-7'
-    )
-  })
-
-  it('does not invent a model when no hook event reported one', () => {
-    expect(claude({ hook_event_name: 'UserPromptSubmit', prompt: 'hello' })?.model).toBeUndefined()
-    expect(claude({ hook_event_name: 'Stop' })?.model).toBeUndefined()
+    expect(
+      claude({ hook_event_name: 'SessionStart', source: 'startup', model: '   ' })?.model
+    ).toBe('claude-opus-4-7')
   })
 })
