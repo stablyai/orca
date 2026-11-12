@@ -111,7 +111,7 @@ export function MobileNativeChatQueuedMessages({
   const [showRowId, setShowRowId] = useState(
     () => cards?.slice(1).find((card) => card.needsAttention)?.messageId ?? null
   )
-  const measureRow = useQueuedRowShow(showRowId, setShowRowId)
+  const measureRow = useQueuedRowShow(showRowId, setShowRowId, liveIds)
   // A choice made in one placement never comes back in a later one (a new prompt folds again);
   // checked first, so a choice this render makes below wins.
   if (openChoice !== null && openChoice.abovePrompt !== abovePrompt) {

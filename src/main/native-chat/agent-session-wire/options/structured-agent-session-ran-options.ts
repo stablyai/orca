@@ -27,7 +27,6 @@ const childRuns = new WeakMap<
   StructuredAgentSessionProviderChild,
   {
     reported?: RanOptions
-    reportedModel?: string
     owed?: StructuredAgentSessionHandedOptions
     permission?: string | null
   }
@@ -36,12 +35,6 @@ const childRuns = new WeakMap<
 function currentChild(context: RanOptionsContext, sessionId: string, fence: number) {
   const child = context.sessions.get(sessionId)?.child
   return child?.fence === fence ? child : null
-}
-
-export function structuredAgentSessionRuntimeModel(
-  child: StructuredAgentSessionProviderChild
-): string | undefined {
-  return child.phase === 'ready' ? childRuns.get(child)?.reportedModel : undefined
 }
 
 /** The current child's startup report or applied evidence; never saved intent or send authority. */
@@ -58,9 +51,6 @@ export function noteStructuredAgentSessionRuntimeOptions(
   initial = false
 ): void {
   const previous = childRuns.get(child)
-  if (!initial || previous?.reportedModel === undefined) {
-    childRuns.set(child, { ...previous, reportedModel: reported.reportedModel ?? reported.model })
-  }
   if (
     reported.reportedPermissionMode !== undefined &&
     (!initial || previous?.permission === undefined)

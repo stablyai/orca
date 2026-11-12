@@ -20,13 +20,16 @@ import {
   setMacMenuBarIconVisible,
   type SystemTrayOptions
 } from '../../tray/system-tray'
-import { ensureAutoUpdaterConfigured } from '../../window/main-window-updater'
-import { focusExistingMainWindow, safelyRevealWindow } from '../../window/focus-existing-window'
+import { ensureAutoUpdaterConfigured } from '../../updater/lifecycle/main-window-updater'
+import {
+  focusExistingMainWindow,
+  safelyRevealWindow
+} from '../../window/activation/focus-existing-window'
 import { mainProcessState as state } from '../main-process-state'
 import { quitTeardownStartGate } from '../quit/quit-teardown-start-gate'
 import { getDashboardPopoutWindow } from '../../window/dashboard-popout-window'
 import { getWorkspaceSpaceWindow } from '../../window/workspace-space-window'
-import { markUserQuitWindowClose } from '../../window/user-quit-window-close'
+import { markUserQuitWindowClose } from '../../window/main-window/user-quit-window-close'
 import { loadMainWindow } from '../../window/createMainWindow'
 import {
   describeInstallDirAclPoison,
@@ -35,8 +38,8 @@ import {
 import {
   presentRendererRecoveryPrompt,
   type RendererRecoveryPromptFailure
-} from '../../window/renderer-recovery-prompt'
-import { probeRendererLaunchCapacity } from '../../window/renderer-launch-failure-probe'
+} from '../../window/renderer-recovery/renderer-recovery-prompt'
+import { probeRendererLaunchCapacity } from '../../window/renderer-recovery/renderer-launch-failure-probe'
 import {
   confirmQuitAndStopAllSessions,
   explainStopAllSessionsUnavailable

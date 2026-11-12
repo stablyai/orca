@@ -40,10 +40,10 @@ vi.mock('../../tray/system-tray', () => ({
   createSystemTray: vi.fn(),
   setMacMenuBarIconVisible: vi.fn()
 }))
-vi.mock('../../window/main-window-updater', () => ({
+vi.mock('../../updater/lifecycle/main-window-updater', () => ({
   ensureAutoUpdaterConfigured: vi.fn()
 }))
-vi.mock('../../window/focus-existing-window', () => ({
+vi.mock('../../window/activation/focus-existing-window', () => ({
   focusExistingMainWindow: vi.fn(),
   safelyRevealWindow: vi.fn()
 }))
@@ -53,12 +53,14 @@ vi.mock('../windows-install-permissions/windows-install-dir-acl-recovery', () =>
   describeInstallDirAclPoison: vi.fn(),
   isBlockingInstallDirAclRepairInFlight: vi.fn()
 }))
-vi.mock('../../window/renderer-recovery-prompt', () => ({ presentRendererRecoveryPrompt: vi.fn() }))
-vi.mock('../../window/renderer-launch-failure-probe', () => ({
+vi.mock('../../window/renderer-recovery/renderer-recovery-prompt', () => ({
+  presentRendererRecoveryPrompt: vi.fn()
+}))
+vi.mock('../../window/renderer-recovery/renderer-launch-failure-probe', () => ({
   probeRendererLaunchCapacity: vi.fn()
 }))
 
-import { safelyRevealWindow } from '../../window/focus-existing-window'
+import { safelyRevealWindow } from '../../window/activation/focus-existing-window'
 import {
   consumeQuitAndStopAllSessionsRequest,
   quitAfterRendererStoppedAllSessions,

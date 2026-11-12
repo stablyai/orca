@@ -1,8 +1,5 @@
 import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
-import {
-  structuredAgentSessionRuntimeModel,
-  structuredAgentSessionRuntimePermission
-} from '../options/structured-agent-session-ran-options'
+import { structuredAgentSessionRuntimePermission } from '../options/structured-agent-session-ran-options'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import {
@@ -88,9 +85,6 @@ export function structuredAgentSessionStatusSummary({
       ? { rewindBlockedReason: 'outcome-unknown' as const }
       : {}),
     ...(model ? { model } : {}),
-    ...(session.params.provider === 'claude' && session.child
-      ? { reportedModel: structuredAgentSessionRuntimeModel(session.child) }
-      : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),

@@ -35,13 +35,22 @@ type ShowRow = (row: LayoutRectangle) => void
  * Scrolls the queue to one row (a failure that opened the list) once that row has laid out again.
  * A row whose height never changes reports no layout, so the request settles shortly after either way.
  */
-export function useQueuedRowShow(showId: string | null, setShowId: (messageId: null) => void) {
+export function useQueuedRowShow(
+  showId: string | null,
+  setShowId: (messageId: null) => void,
+  /** The queue's current order; a reorder moves rows by transform and lays none of them out. */
+  messageIds: readonly string[]
+) {
   const heights = useRef(new Map<string, number>())
   // Rows that reported since the current request, so an old height never places the row asked for.
   const fresh = useRef(new Set<string>())
   const lastShow = useRef<ShowRow | null>(null)
-  // The list as its rows last laid out; only shown rows lay out, so this is what the person sees.
-  const latest = useRef<{ messageIds: readonly string[]; showAll: boolean } | null>(null)
+  // Whether the list was open when its rows last laid out; only shown rows lay out.
+  const shownAll = useRef(false)
+  const order = useRef(messageIds)
+  useLayoutEffect(() => {
+    order.current = messageIds
+  })
   useLayoutEffect(() => {
     fresh.current.clear()
   }, [showId])
@@ -50,10 +59,7 @@ export function useQueuedRowShow(showId: string | null, setShowId: (messageId: n
       return
     }
     const timer = setTimeout(() => {
-      const current = latest.current
-      const frame = current?.showAll
-        ? queuedRowFrame(current.messageIds, heights.current, showId)
-        : null
+      const frame = shownAll.current ? queuedRowFrame(order.current, heights.current, showId) : null
       setShowId(null)
       if (frame) {
         lastShow.current?.(frame)
@@ -67,15 +73,15 @@ export function useQueuedRowShow(showId: string | null, setShowId: (messageId: n
     height: number,
     show: ShowRow
   ) => {
-    const { messageIds, showAll } = list
-    latest.current = list
+    const { showAll } = list
+    shownAll.current = showAll
     heights.current.set(messageId, height)
     fresh.current.add(messageId)
     lastShow.current = show
     if (showId === null || !showAll || !fresh.current.has(showId)) {
       return
     }
-    const frame = queuedRowFrame(messageIds, heights.current, showId)
+    const frame = queuedRowFrame(list.messageIds, heights.current, showId)
     if (frame) {
       setShowId(null)
       show(frame)

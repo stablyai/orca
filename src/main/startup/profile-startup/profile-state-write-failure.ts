@@ -2,8 +2,8 @@ import { app, dialog, type BrowserWindow, type MessageBoxOptions } from 'electro
 import { translateMain } from '../../i18n/main-i18n'
 import { profileStateWriterFailureOutcome } from '../../persistence/profile-state/writer/profile-state-writer-errors'
 import { recordProfileStateWriteFailureReport } from '../../persistence/profile-state/writer/profile-state-writer-diagnostics'
-import { isBackgroundLaunch } from '../../window/foreground-activation-policy'
-import { waitForWindowToShow } from '../../window/wait-for-window-to-show'
+import { isBackgroundLaunch } from '../../window/activation/foreground-activation-policy'
+import { waitForWindowToShow } from '../../window/visibility/wait-for-window-to-show'
 import { mainProcessState } from '../main-process-state'
 
 let presenting = false

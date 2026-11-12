@@ -1,5 +1,5 @@
 import { app, session } from 'electron'
-import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
+import { applyBackgroundActivationPolicy } from '../window/activation/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
 import { handleElectronProxyLogin } from '../network/electron-proxy-credentials'

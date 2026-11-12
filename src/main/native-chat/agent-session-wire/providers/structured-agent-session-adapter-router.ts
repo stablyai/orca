@@ -205,8 +205,6 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     this.liveOwnerOrNull(input.sessionId)?.captureMessageSteeringInputs?.(input) ?? {
       kind: 'codex-unavailable'
     }
-  noteOptionPick: Adapter['noteOptionPick'] = (input) =>
-    this.liveOwnerOrNull(input.sessionId)?.noteOptionPick?.(input)
 
   projectOptions: Adapter['projectOptions'] = (sessionId, options) =>
     this.liveOwnerOrNull(sessionId)?.projectOptions?.(sessionId, options)

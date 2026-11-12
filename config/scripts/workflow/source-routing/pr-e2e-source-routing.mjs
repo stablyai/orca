@@ -151,7 +151,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/file-explorer-copy-file-windows.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/window\/clipboard-(?:file-copy|ipc-handlers)|renderer\/src\/components\/right-sidebar\/file-explorer\/panel\/file-explorer-row-file-transfer)\.ts$/.test(
+      /^src\/(?:main\/window\/clipboard\/clipboard-(?:file-copy|ipc-handlers)|renderer\/src\/components\/right-sidebar\/file-explorer\/panel\/file-explorer-row-file-transfer)\.ts$/.test(
         file
       )
   },

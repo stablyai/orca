@@ -15,7 +15,7 @@ import {
   startWindowsInstallDirAclRepairIfPoisoned
 } from '../windows-install-permissions/windows-install-dir-acl-recovery'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
-import { notifyMainWindowBecameVisible } from '../../window/main-window-visibility'
+import { notifyMainWindowBecameVisible } from '../../window/visibility/main-window-visibility'
 import { setTrayAttention } from '../../tray/system-tray'
 import { createSystemTrayDeferred, showRendererRecoveryPrompt } from './main-window-actions'
 import { attachMainWindowCoreServices } from './main-window-core-services'
@@ -37,14 +37,14 @@ import {
   stopSyntheticTitleSpinnerTimer
 } from './synthetic-title-runtime'
 import { requireMainWindowServices } from './main-window-service-readiness'
-import { recordRendererLaunchFailureProbe } from '../../window/renderer-launch-failure-probe'
+import { recordRendererLaunchFailureProbe } from '../../window/renderer-recovery/renderer-launch-failure-probe'
 import { trackBrowserExtensionMainWindow } from '../../browser/extensions/tabs-and-windows/browser-extension-window-model'
 
-import { isResourceWindowVisible } from '../../window/resource-view-admission'
+import { isResourceWindowVisible } from '../../window/visibility/resource-view-admission'
 import {
   applyBackgroundActivationPolicy,
   applyServeDesktopWindowActivationPolicy
-} from '../../window/foreground-activation-policy'
+} from '../../window/activation/foreground-activation-policy'
 
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000

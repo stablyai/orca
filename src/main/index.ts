@@ -1,8 +1,14 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { isRoutedOrcaDeepLink } from './startup/open-routing/orca-deep-link-url'
-import { createMacAppActivationHandler } from './window/macos-app-activation'
-import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
-import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
+import { createMacAppActivationHandler } from './window/activation/macos-app-activation'
+import {
+  isBackgroundLaunch,
+  isOrcadSidecarLaunch
+} from './window/activation/foreground-activation-policy'
+import {
+  createDesktopHandoff,
+  desktopHandoffArguments
+} from './window/activation/macos-desktop-handoff'
 import {
   focusExistingWindow as focusExistingWindowAction,
   setMainWindowOpener
