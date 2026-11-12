@@ -2,34 +2,9 @@
 
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 
-const ESC = String.fromCharCode(27)
-const ANSI_ESCAPE_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, 'g')
-const OSC_SEQUENCE_PATTERN = new RegExp(`${ESC}\\][^\\u0007]*(?:\\u0007|${ESC}\\\\)`, 'g')
-const SINGLE_ESCAPE_PATTERN = new RegExp(`${ESC}(?:[@-Z\\\\-_]|[()*+\\-./][0-~]|c)`, 'g')
+import { stripScrollbackAnsi } from '../../../../../../../shared/terminal/output/terminal-safe-text'
 
-function stripUnsupportedControlCharacters(value: string): string {
-  let result = ''
-  for (const char of value) {
-    const code = char.charCodeAt(0)
-    // Drop C0 control chars except tab (9) and newline (10); keep DEL (127) out.
-    if (code <= 8 || code === 11 || code === 12 || (code >= 14 && code <= 31) || code === 127) {
-      continue
-    }
-    result += char
-  }
-  return result
-}
-
-export function stripScrollbackAnsi(value: string): string {
-  return stripUnsupportedControlCharacters(
-    value
-      .replace(OSC_SEQUENCE_PATTERN, '')
-      .replace(ANSI_ESCAPE_PATTERN, '')
-      .replace(SINGLE_ESCAPE_PATTERN, '')
-  )
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-}
+export { stripScrollbackAnsi } from '../../../../../../../shared/terminal/output/terminal-safe-text'
 
 // Without per-agent parsing, leading shell/prompt markers are only a best-effort user-role heuristic.
 const USER_PROMPT_MARKERS = ['$', '%', '>', '#', '❯', '➜', '»']
