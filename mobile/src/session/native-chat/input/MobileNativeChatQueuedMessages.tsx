@@ -112,6 +112,11 @@ export function MobileNativeChatQueuedMessages({
     () => cards?.slice(1).find((card) => card.needsAttention)?.messageId ?? null
   )
   const measureRow = useQueuedRowShow(showRowId, setShowRowId)
+  // A choice made in one placement never comes back in a later one (a new prompt folds again);
+  // checked first, so a choice this render makes below wins.
+  if (openChoice !== null && openChoice.abovePrompt !== abovePrompt) {
+    setOpenChoice(null)
+  }
   if (liveKey !== seen.key) {
     setSeen({ key: liveKey, ids: liveIds, attentionIds })
     const newest = cards?.at(-1)
@@ -139,10 +144,6 @@ export function MobileNativeChatQueuedMessages({
     if ([...expandedIds].some((messageId) => !liveIds.includes(messageId))) {
       setExpandedIds(new Set([...expandedIds].filter((messageId) => liveIds.includes(messageId))))
     }
-  }
-  // A choice made in one placement never comes back in a later one (a new prompt folds again).
-  if (openChoice !== null && openChoice.abovePrompt !== abovePrompt) {
-    setOpenChoice(null)
   }
   if (!cards || cards.length === 0) {
     if (openChoice !== null) {

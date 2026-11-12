@@ -234,6 +234,17 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(rows(mounted)).toHaveLength(1)
   })
 
+  it('opens for a message queued in the same render a prompt arrives', async () => {
+    const mounted = await mount({ cards: three() })
+    // Folded by hand above the composer, then a prompt and a new own message arrive together.
+    await act(async () => foldToggle(mounted).props.onPress())
+    expect(rows(mounted)).toHaveLength(1)
+    await act(async () =>
+      mounted.update(element({ cards: [...three(), card({ messageId: 'd' })] }, true))
+    )
+    expect(rows(mounted)).toHaveLength(4)
+  })
+
   it('scrolls a message the person queues into a folded list into view', async () => {
     const scrollTo = vi.fn()
     const mounted = create(createElement('View'), {
