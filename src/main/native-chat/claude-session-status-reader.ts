@@ -89,8 +89,10 @@ export function createClaudeSessionStatusReader(maxFiles = DEFAULT_MAX_FILES): {
       return null
     }
     try {
-      const { size, dev, ino } = await handle.stat()
-      const identity = `${dev}:${ino}`
+      // Bigint keeps device and inode numbers past 2^53 distinct.
+      const stats = await handle.stat({ bigint: true })
+      const size = Number(stats.size)
+      const identity = `${stats.dev}:${stats.ino}`
       let file = files.get(filePath)
       if (!file || file.identity !== identity || size < file.offset) {
         file = trackFile(identity)
