@@ -28,10 +28,8 @@ import { initSshHostKeyStoreFile } from '../ssh/host-keys/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../managed-server/activation/orcad-held-fence-tokens'
 import { neutralizeLegacyTerminalShimDir } from '../pty/shell-startup/legacy-terminal-shim-dir'
 import { createWindowsShellPathHydration } from './windows-shell-path-hydration'
-import {
-  configureWindowsHostGitEnvironmentReadiness,
-  setDefaultWslDistroOverride
-} from '../git/runner'
+import { configureWindowsHostGitEnvironmentReadiness } from '../git/command-runner/host-routing/windows-host-git-environment'
+import { setDefaultWslDistroOverride } from '../git/command-runner/host-routing/wsl-command-resolution'
 import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import {

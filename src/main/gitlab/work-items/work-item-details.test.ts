@@ -39,7 +39,7 @@ vi.mock('../issues/gitlab-issue-source-resolution', () => ({
   resolveIssueSource: resolveIssueSourceMock
 }))
 
-vi.mock('../../git/command-runner/glab-exec-file', () => ({
+vi.mock('../../git/command-runner/hosted-cli/glab-exec-file', () => ({
   glabExecFileAsync: glabExecFileAsyncMock
 }))
 

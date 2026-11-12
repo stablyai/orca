@@ -8,7 +8,7 @@ import { resolveIssueGitHubApiRepositorySource } from '../../github-api-reposito
 import type { MainWorkItem } from './../map/work-item-field-coercion'
 import { normalizeWorkItemPage, resolvePrWorkItemSource } from './work-item-list-request'
 import { listRecentWorkItems, listQueriedWorkItems } from './work-item-pages'
-import { isTaskRepositoryIneligible } from '../../../git/task-repository-eligibility'
+import { isTaskRepositoryIneligible } from '../../../git/remotes/task-repository-eligibility'
 export async function listWorkItems(
   repoPath: string,
   limit = 24,

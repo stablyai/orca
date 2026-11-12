@@ -1,3 +1,4 @@
+import type { NativeChatTimedRow } from './conversation/slots/native-chat-timed-rows'
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
@@ -37,8 +38,8 @@ export type NativeChatMessageListProps = {
   /** Host durations by prompt id; otherwise fall back to a duration observed locally. */
   settledTurns?: NativeChatSettledTurns
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
-  /** Rows after the conversation that are not part of it, such as workers' open approvals. */
-  trailing?: React.ReactNode
+  /** Rows that are not part of the conversation but happened during it, such as workers' approvals. */
+  timedRows?: readonly NativeChatTimedRow[]
   /** Set while the turn waits on the reader; the live activity line yields to it. */
   awaitingInput?: NativeChatAwaitingInput | null
   turnActivity?: NativeChatTurnActivity | null

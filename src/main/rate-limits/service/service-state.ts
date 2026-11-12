@@ -94,6 +94,10 @@ export abstract class RateLimitServiceState {
   protected lastClaudeCheckCompletedAt: number | null = null
   // Capture account attribution once per cycle instead of rerunning auth preparation on every post.
   protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
+  /** Where the applied host-runtime Claude/Codex readings were taken. */
+  protected usageReadingAccounts: Partial<
+    Record<'claude' | 'codex', { home: string; provenance: string }>
+  > = {}
   protected opencodeFetchGeneration = 0
   protected minimaxFetchGeneration = 0
   protected zcodeFetchGeneration = 0
@@ -173,6 +177,22 @@ export abstract class RateLimitServiceState {
       }
     }
     return result
+  }
+
+  protected rememberUsageReadingAccount(
+    provider: 'claude' | 'codex',
+    target: { runtime: 'host' | 'wsl' },
+    home: string | null | undefined,
+    provenance: string | null
+  ): void {
+    const previous = this.usageReadingAccounts[provider]
+    // The same object while unchanged: its identity is how readers see the reading's source move.
+    this.usageReadingAccounts[provider] =
+      target.runtime !== 'host' || !home || provenance === null
+        ? undefined
+        : previous?.home === home && previous.provenance === provenance
+          ? previous
+          : { home, provenance }
   }
 
   protected updateState(next: InternalRateLimitState): void {

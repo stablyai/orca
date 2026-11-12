@@ -28,7 +28,7 @@ export async function archiveWorkerOutputBeforeStop(args: {
     if (
       !resource ||
       resource.ownership_state !== 'owned' ||
-      db.getWorkerTerminalArchive(dispatchId)
+      db.hasWorkerTerminalArchive(dispatchId)
     ) {
       return
     }

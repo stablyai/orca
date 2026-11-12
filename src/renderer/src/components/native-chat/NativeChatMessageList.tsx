@@ -76,7 +76,7 @@ export function NativeChatMessageList({
   workingStartedAt,
   settledTurns,
   deliveryNotices,
-  trailing,
+  timedRows,
   awaitingInput = null,
   turnActivity,
   stopping = false,
@@ -348,6 +348,7 @@ export function NativeChatMessageList({
                 >
                   <NativeChatTranscriptItems
                     slots={slots}
+                    timedRows={timedRows}
                     loadedMessageIds={loadedMessageIds}
                     context={rowContext}
                     window={transcriptWindow}
@@ -360,7 +361,6 @@ export function NativeChatMessageList({
                     <NativeChatAwaitingInputRow subject={null} pending />
                   ) : null}
                   <NativeChatWaitingTranscriptItems slots={waitingSlots} context={rowContext} />
-                  {trailing}
                 </div>
               </div>
             </div>
