@@ -11,8 +11,10 @@ const killAllPty = idle()
 
 // Every teardown member settles except the profile store, so only the writer can hold quit.
 const dependencies: Record<string, Record<string, unknown>> = {
-  '../../ipc/filesystem-watcher': { closeAllWatchers: settled() },
-  '../../ipc/worktree-base-directory-watcher': { disposeWorktreeBaseDirectoryWatchers: settled() },
+  '../../ipc/filesystem/watchers/filesystem-watcher-shutdown': { closeAllWatchers: settled() },
+  '../../ipc/worktrees/creation/worktree-base-directory-watcher': {
+    disposeWorktreeBaseDirectoryWatchers: settled()
+  },
   '../../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
   '../../ipc/pty/kill-all': { killAllPty },
   '../../daemon/providers/lifecycle/daemon-provider-state': {
@@ -42,7 +44,9 @@ const dependencies: Record<string, Record<string, unknown>> = {
     shutdownPairedRuntimeBrowserClientHosts: settled()
   },
   '../../ipc/browser/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
-  '../../orca-profiles/profile-cloud-session-owner': { flushUnsavedCloudSessions: idle() },
+  '../../orca-profiles/cloud-session/profile-cloud-session-owner': {
+    flushUnsavedCloudSessions: idle()
+  },
   '../../browser/guest-lifecycle/manager/browser-manager': {
     browserManager: { setBrowserGuestStateChangedListener: idle(), setOffscreenTabOpener: idle() }
   },
@@ -50,18 +54,24 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../../browser/routing/local-host-partitions/local-ssh-browser-route': {
     closeAllLocalSshBrowserRoutes: settled()
   },
-  '../../codex/codex-state-db-backfill-recovery': { stopCodexStateDbBackfillRecoveries: settled() },
-  '../../codex/codex-account-session-bridge': { stopCodexAccountSessionBridges: idle() },
+  '../../codex/history/index/codex-state-db-backfill-recovery': {
+    stopCodexStateDbBackfillRecoveries: settled()
+  },
+  '../../codex/history/bridges/codex-account-session-bridge': {
+    stopCodexAccountSessionBridges: idle()
+  },
   '../../git/refs/maintenance/local-repo-ref-maintenance': {
     awaitPackedRefsLockRelease: settled()
   },
-  '../../worktree-background-removal': { stopBackgroundWorktreeRemovals: idle() },
+  '../../workspaces/removal/worktree-background-removal': {
+    stopBackgroundWorktreeRemovals: idle()
+  },
   '../../dock/unread-badge': { setUnreadDockBadgeCount: idle() },
   '../../tray/system-tray': { destroySystemTray: idle() },
   '../../telemetry/client': { shutdownTelemetry: settled() },
   '../../observability/index': { shutdownObservability: settled() },
-  '../../updater': { isQuittingForUpdate: vi.fn(() => false) },
-  '../../updater-lifecycle-diagnostics': { recordUpdaterLifecycle: idle() },
+  '../../updater/updater-service': { isQuittingForUpdate: vi.fn(() => false) },
+  '../../updater/updater-lifecycle-diagnostics': { recordUpdaterLifecycle: idle() },
   '../../macos-permissions/macos-tcc-prompt-notice': { stopTccPromptNotice: idle() },
   '../../pty/history/terminal-history-gc': { cancelHistoryGc: idle() },
   './window-all-closed-quit-policy': { shouldQuitWhenAllWindowsClosed: vi.fn(() => false) },

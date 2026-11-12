@@ -2,15 +2,18 @@ import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
 
 const dependencyExports: [string, string[]][] = [
-  ['../../ipc/filesystem-watcher', ['closeAllWatchers']],
-  ['../../ipc/worktree-base-directory-watcher', ['disposeWorktreeBaseDirectoryWatchers']],
+  ['../../ipc/filesystem/watchers/filesystem-watcher-shutdown', ['closeAllWatchers']],
+  [
+    '../../ipc/worktrees/creation/worktree-base-directory-watcher',
+    ['disposeWorktreeBaseDirectoryWatchers']
+  ],
   ['../../ipc/folder-repo-git-upgrade', ['stopFolderRepoGitUpgradeWatch']],
   ['../../ipc/pty/kill-all', ['killAllPty']],
   [
     '../../daemon/providers/lifecycle/daemon-provider-state',
     ['disconnectDaemon', 'shutdownDaemon']
   ],
-  ['../../ipc/ssh-shutdown-drain', ['beginSshShutdown']],
+  ['../../ipc/ssh/ssh-shutdown-drain', ['beginSshShutdown']],
   ['../../agent-hooks/server/agent-hook-server', ['agentHookServer']],
   ['../../agent-hooks/wsl-relay/wsl-hook-relay-manager', ['wslHookRelayManager']],
   ['../../agent-hooks/installation/managed-agent-hook-controls', ['removeManagedAgentHooksAsync']],
@@ -29,21 +32,24 @@ const dependencyExports: [string, string[]][] = [
     ['shutdownPairedRuntimeBrowserClientHosts']
   ],
   ['../../ipc/browser/desktop-browser-bridge-wiring', ['disposeDesktopBrowserBridge']],
-  ['../../orca-profiles/profile-cloud-session-owner', ['flushUnsavedCloudSessions']],
+  ['../../orca-profiles/cloud-session/profile-cloud-session-owner', ['flushUnsavedCloudSessions']],
   ['../../browser/guest-lifecycle/manager/browser-manager', ['browserManager']],
   ['../../browser/sessions/profiles/browser-session-registry', ['browserSessionRegistry']],
-  ['../../codex/codex-state-db-backfill-recovery', ['stopCodexStateDbBackfillRecoveries']],
-  ['../../codex/codex-account-session-bridge', ['stopCodexAccountSessionBridges']],
+  [
+    '../../codex/history/index/codex-state-db-backfill-recovery',
+    ['stopCodexStateDbBackfillRecoveries']
+  ],
+  ['../../codex/history/bridges/codex-account-session-bridge', ['stopCodexAccountSessionBridges']],
   ['../../git/refs/maintenance/local-repo-ref-maintenance', ['awaitPackedRefsLockRelease']],
-  ['../../worktree-background-removal', ['stopBackgroundWorktreeRemovals']],
+  ['../../workspaces/removal/worktree-background-removal', ['stopBackgroundWorktreeRemovals']],
   ['./quit-teardown-deadline', ['settleTeardownWithinDeadline', 'settleWithinMs']],
   ['./quit-teardown-start-gate', ['quitTeardownStartGate']],
   ['../../dock/unread-badge', ['setUnreadDockBadgeCount']],
   ['../../tray/system-tray', ['destroySystemTray']],
   ['../../telemetry/client', ['shutdownTelemetry']],
   ['../../observability/index', ['shutdownObservability']],
-  ['../../updater', ['isQuittingForUpdate']],
-  ['../../updater-lifecycle-diagnostics', ['recordUpdaterLifecycle']],
+  ['../../updater/updater-service', ['isQuittingForUpdate']],
+  ['../../updater/updater-lifecycle-diagnostics', ['recordUpdaterLifecycle']],
   ['../../macos-permissions/macos-tcc-prompt-notice', ['stopTccPromptNotice']],
   ['../../pty/history/terminal-history-gc', ['cancelHistoryGc']],
   ['./window-all-closed-quit-policy', ['shouldQuitWhenAllWindowsClosed']],
