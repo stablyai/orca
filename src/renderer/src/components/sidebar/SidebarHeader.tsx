@@ -14,13 +14,15 @@ type SidebarHeaderProps = {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   activityOptionsTarget?: React.Ref<HTMLDivElement>
   projectsCollapseTarget?: React.Ref<HTMLDivElement>
+  newProjectGroupTarget?: React.Ref<HTMLDivElement>
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
   activityBadgeTarget,
   onWorkspaceBoardMenuOpenChange,
   activityOptionsTarget,
-  projectsCollapseTarget
+  projectsCollapseTarget,
+  newProjectGroupTarget
 }: SidebarHeaderProps) {
   const t = useTranslate()
   // Subscribe this memoized header to locale changes before using translate().
@@ -145,6 +147,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
           onWorkspaceBoardMenuOpenChange={onWorkspaceBoardMenuOpenChange}
           agentsViewActive={agentsViewActive}
           activityOptionsTarget={activityOptionsTarget}
+          newProjectGroupTarget={newProjectGroupTarget}
         />
       </div>
     </div>

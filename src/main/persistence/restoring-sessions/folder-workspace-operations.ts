@@ -299,12 +299,16 @@ export class FolderWorkspacePersistenceOperations {
       groupId && (this.state.projectGroups ?? []).some((group) => group.id === groupId)
         ? groupId
         : null
-    const siblingRepos = this.state.repos.filter((entry) => entry !== repo)
+    if ((repo.projectGroupId ?? null) !== normalizedGroupId) {
+      repo.isPinned = false
+    }
     repo.projectGroupId = normalizedGroupId
     repo.projectGroupOrder =
       typeof order === 'number' && Number.isFinite(order)
         ? order
-        : getNextProjectGroupOrder(siblingRepos, normalizedGroupId)
+        : getNextProjectGroupOrder(this.state.repos, normalizedGroupId, this.state.projectGroups, {
+            excludeRepo: repo
+          })
     this.scheduleSave(['repos'])
     return this.hydrateRepo(repo)
   }

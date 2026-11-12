@@ -1415,7 +1415,13 @@
           "pendingRemovalRefused": "Сервер сохранил проект, который вы удалили, пока сервер был недоступен",
           "removeProjectHostUnreachable": "Сервер недоступен. Удалите проект с этого компьютера сейчас — Orca удалит его с сервера, когда соединение восстановится.",
           "removeProjectLocallyNow": "Удалить с этого компьютера сейчас",
-          "removeProjectHostDisconnected": "Соединение с сервером разорвано. Удалите проект с этого компьютера сейчас — Orca удалит его с сервера при следующем подключении."
+          "removeProjectHostDisconnected": "Соединение с сервером разорвано. Удалите проект с этого компьютера сейчас — Orca удалит его с сервера при следующем подключении.",
+          "moveProjectGroupFailed": "Не удалось переместить группу проектов",
+          "moveProjectGroupFailedDesc": "Компьютер группы не применил новую родительскую группу. Обновите Orca на этом компьютере и повторите попытку.",
+          "pinProjectGroupFailed": "Не удалось обновить закрепление группы",
+          "pinProjectGroupFailedDesc": "Компьютер группы не применил настройку закрепления. Обновите Orca на этом компьютере и повторите попытку.",
+          "pinProjectFailed": "Не удалось обновить закрепление проекта",
+          "pinProjectFailedDesc": "Компьютер проекта не применил настройку закрепления. Обновите Orca на этом компьютере и повторите попытку."
         },
         "settings": {
           "e12dab333b": "Не удалось переключить сервер"
@@ -6594,7 +6600,10 @@
         },
         "SidebarHeader": {
           "92154beb7e": "Новое рабочее пространство",
-          "addProject": "Добавить проект"
+          "addProject": "Добавить проект",
+          "newProjectGroup": "Новая группа",
+          "expandAllProjects": "Развернуть все проекты",
+          "collapseAllProjects": "Свернуть все проекты"
         },
         "SidebarNav": {
           "80611a8b10": "Поиск",
@@ -6944,7 +6953,21 @@
           "groupProjectsRemained_few": "Проектов группы, оставшихся после её удаления: {{remaining}} из {{count}}.",
           "groupProjectsRemained_many": "Проектов группы, оставшихся после её удаления: {{remaining}} из {{count}}.",
           "groupProjectsRemained_other": "Проектов группы, оставшихся после её удаления: {{remaining}} из {{count}}.",
-          "hostServerReplaced": "Другой сервер: забудьте его и подключитесь снова"
+          "hostServerReplaced": "Другой сервер: забудьте его и подключитесь снова",
+          "refreshProjectGroup": "Обновить проекты",
+          "newSubgroup": "Новая подгруппа",
+          "newSubgroupTitle": "Новая подгруппа",
+          "newSubgroupDesc": "Создайте подгруппу внутри «{{group}}».",
+          "newEmptyGroupDesc": "Создайте пустую группу в боковой панели.",
+          "groupCreateFailed": "Не удалось создать группу",
+          "groupCreateFailedDesc": "Orca не удалось подтвердить создание группы на её компьютере. Проверьте подключение и повторите попытку.",
+          "moveProjectToParentGroup": "Переместить в родительскую группу ({{group}})",
+          "moveGroupToTopLevel": "Переместить на верхний уровень",
+          "unpinGroup": "Открепить группу",
+          "pinGroup": "Закрепить группу",
+          "unpinProject": "Открепить проект",
+          "pinProject": "Закрепить проект",
+          "unpinItemAriaLabel": "Открепить {{value0}}"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Отмена",

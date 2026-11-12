@@ -1,23 +1,40 @@
 import type { RootProjectHeaderDrag } from './root-project-header-drop'
 import type { PointerEvent } from 'react'
 
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { HostHeaderRect } from './host-header-drag-dom'
+import type { ProjectGroupChildItemId } from './project-group-child-slot-order'
 import type {
   ProjectGroupHeaderDragBucketKey,
   ProjectGroupHeaderDragRect
 } from './project-group-header-drop'
 import { REPO_HEADER_ACTION_SELECTOR } from './project-header-drag-contract'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { ProjectHeaderDragRect } from './project-header-drop'
+
+export const ROOT_INTERLEAVED_GROUP_BUCKET_KEY = 'root-interleaved'
 
 export type ProjectGroupDragState = {
   draggingGroupId: string | null
   dropIndex: number | null
   dropIndicatorY: number | null
+  dropTargetGroupId: string | null
+  dropTargetCatalogHostId: ExecutionHostId | null
 }
 
 export const INITIAL_PROJECT_GROUP_DRAG_STATE: ProjectGroupDragState = {
   draggingGroupId: null,
   dropIndex: null,
-  dropIndicatorY: null
+  dropIndicatorY: null,
+  dropTargetGroupId: null,
+  dropTargetCatalogHostId: null
+}
+
+export type ProjectGroupHeaderUpdatePatch = {
+  tabOrder?: number
+  parentGroupId?: string | null
+  rootProjectOrder?: number | null
 }
 
 export type UseProjectGroupHeaderDragArgs = RootProjectHeaderDrag & {
@@ -25,8 +42,23 @@ export type UseProjectGroupHeaderDragArgs = RootProjectHeaderDrag & {
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
   >
+  sidebarGroupChildItemIdsByGroupId?: ReadonlyMap<string, readonly ProjectGroupChildItemId[]>
+  allowMixedProjectReorder?: boolean
   projectGroupById: ReadonlyMap<string, ProjectGroup>
-  onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
+  repoById?: ReadonlyMap<string, Repo>
+  pinnedRepoHeaderIds?: ReadonlySet<string>
+  orderedRepoIds?: readonly string[]
+  projectGroupOwnerHostIdByGroupId?: ReadonlyMap<string, ExecutionHostId | null>
+  getLiveRepos?: () => readonly Repo[]
+  onCommitProjectGroupUpdate: (
+    groupId: string,
+    updates: ProjectGroupHeaderUpdatePatch
+  ) => Promise<boolean> | boolean | void
+  onCommitProjectGroupOrder?: (
+    project: Repo,
+    projectGroupId: string | null,
+    order: number
+  ) => Promise<boolean> | boolean | void
   getScrollContainer: () => HTMLElement | null
 }
 
@@ -41,8 +73,12 @@ export type ProjectGroupHeaderDragSession = {
   sidebarProjectGroupHeaderIds: readonly string[]
   rootProjectHeaderKeys?: readonly string[]
   rootProjectHeaderHostId?: string
+  rootHeaderRects?: ProjectGroupHeaderDragRect[]
+  reparentableGroupIds: ReadonlySet<string>
   pointerId: number
   headerRects: ProjectGroupHeaderDragRect[]
+  repoHeaderRects?: ProjectHeaderDragRect[]
+  hostHeaderRects: HostHeaderRect[]
   handleEl: HTMLElement
   startX: number
   startY: number

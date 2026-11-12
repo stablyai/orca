@@ -43,6 +43,7 @@ export type ProjectSectionRepo = {
   addedAt?: number
   connectionId?: string | null
   executionHostId?: ExecutionHostId | null
+  isPinned?: boolean
 }
 
 /** One project section: its rows, the repo that anchors its header, and every repo it holds. */
@@ -271,6 +272,7 @@ export function buildProjectSections<
   pendingRepoIds?: Iterable<string>
   repoOrder: ReadonlyMap<string, number> | undefined
   projectOrderBy: ProjectOrderBy
+  pinnedRepoIds?: ReadonlySet<string>
 }): [string, ProjectSectionEntry<Item, R>][] {
   const { repoMap, projectIndex } = args
   const sections = new Map<string, ProjectSectionEntry<Item, R>>()
@@ -300,5 +302,11 @@ export function buildProjectSections<
   for (const [key, section] of sections) {
     section.activityItems = ownership.get(key)?.items ?? []
   }
-  return orderProjectSections(sections, repoMap, args.repoOrder, args.projectOrderBy)
+  return orderProjectSections(
+    sections,
+    repoMap,
+    args.repoOrder,
+    args.projectOrderBy,
+    args.pinnedRepoIds
+  )
 }

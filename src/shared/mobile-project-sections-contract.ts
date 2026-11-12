@@ -13,7 +13,12 @@ export type MobileProjectSectionRepo = Pick<Repo, 'id' | 'displayName' | 'path' 
   Partial<
     Pick<
       Repo,
-      'addedAt' | 'connectionId' | 'executionHostId' | 'projectGroupId' | 'projectGroupOrder'
+      | 'addedAt'
+      | 'connectionId'
+      | 'executionHostId'
+      | 'projectGroupId'
+      | 'projectGroupOrder'
+      | 'isPinned'
     >
   > & { repoIcon?: RepoIcon }
 
@@ -44,6 +49,7 @@ function sectionRepo(repo: Repo): MobileProjectSectionRepo {
     ...(typeof repo.projectGroupOrder === 'number'
       ? { projectGroupOrder: repo.projectGroupOrder }
       : {}),
+    ...(repo.isPinned ? { isPinned: true } : {}),
     // Exclude uploaded data URLs: each repo icon can add hundreds of KB to every read.
     ...(repo.repoIcon && !(repo.repoIcon.type === 'image' && repo.repoIcon.src.startsWith('data:'))
       ? { repoIcon: repo.repoIcon }

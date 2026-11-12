@@ -30,33 +30,44 @@ function findNextHeaderRenderRowIndex(rows: readonly RenderRow[], startIndex: nu
   return rows.length
 }
 
-export function getRepoHeaderSectionEndByRepoId(args: {
+export function getRepoHeaderSectionEndIndexByRepoId(args: {
   rows: readonly RenderRow[]
-  firstHeaderIndex: number
+  sidebarRepoHeaderIdsByBucket?: ReadonlyMap<string, readonly string[]>
+  repoHeaderBucketByRepoId?: ReadonlyMap<string, string>
 }): Map<string, number> {
-  const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
-  const sectionEndByRepoId = new Map<string, number>()
+  const sectionEndIndexByRepoId = new Map<string, number>()
   for (let index = 0; index < args.rows.length; index++) {
     const row = args.rows[index]
     const repoId = row?.type === 'header' ? getHeaderDragRepo(row)?.id : undefined
-    if (!repoId) {
+    if (!repoId || sectionEndIndexByRepoId.has(repoId)) {
       continue
     }
-    const endIndex = findNextHeaderRenderRowIndex(args.rows, index + 1)
-    sectionEndByRepoId.set(
-      repoId,
-      rowStarts[endIndex >= 0 ? endIndex : args.rows.length] ?? rowStarts[args.rows.length] ?? 0
-    )
+    sectionEndIndexByRepoId.set(repoId, findNextHeaderRenderRowIndex(args.rows, index + 1))
+  }
+  return sectionEndIndexByRepoId
+}
+
+export function getRepoHeaderSectionEndByRepoId(args: {
+  rows: readonly RenderRow[]
+  firstHeaderIndex: number
+  sidebarRepoHeaderIdsByBucket?: ReadonlyMap<string, readonly string[]>
+  repoHeaderBucketByRepoId?: ReadonlyMap<string, string>
+}): Map<string, number> {
+  const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
+  const endIndexes = getRepoHeaderSectionEndIndexByRepoId(args)
+  const sectionEndByRepoId = new Map<string, number>()
+  for (const [repoId, endIndex] of endIndexes) {
+    sectionEndByRepoId.set(repoId, rowStarts[endIndex] ?? rowStarts[args.rows.length] ?? 0)
   }
   return sectionEndByRepoId
 }
 
-export function getProjectGroupHeaderSectionEndByGroupId(args: {
+export function getProjectGroupHeaderSectionEndIndexByGroupId(args: {
   rows: readonly RenderRow[]
-  firstHeaderIndex: number
+  sidebarProjectGroupHeaderIdsByBucket?: ReadonlyMap<string, readonly string[]>
+  projectGroupHeaderBucketByGroupId?: ReadonlyMap<string, string>
 }): Map<string, number> {
-  const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
-  const sectionEndByGroupId = new Map<string, number>()
+  const sectionEndIndexByGroupId = new Map<string, number>()
   const pendingGroups: { groupId: string; depth: number }[] = []
   for (let index = 0; index < args.rows.length; index++) {
     const row = args.rows[index]
@@ -73,15 +84,75 @@ export function getProjectGroupHeaderSectionEndByGroupId(args: {
         break
       }
       pendingGroups.pop()
-      sectionEndByGroupId.set(pending.groupId, rowStarts[index])
+      sectionEndIndexByGroupId.set(pending.groupId, index)
     }
     if (row.type === 'header' && !row.repo && !row.repeated && row.projectGroup?.id) {
       const groupId = row.projectGroup.id
-      sectionEndByGroupId.set(groupId, rowStarts[args.rows.length])
+      sectionEndIndexByGroupId.set(groupId, args.rows.length)
       pendingGroups.push({ groupId, depth: row.projectGroupDepth ?? 0 })
     }
   }
+  return sectionEndIndexByGroupId
+}
+
+export function getProjectGroupHeaderSectionEndByGroupId(args: {
+  rows: readonly RenderRow[]
+  firstHeaderIndex: number
+  sidebarProjectGroupHeaderIdsByBucket?: ReadonlyMap<string, readonly string[]>
+  projectGroupHeaderBucketByGroupId?: ReadonlyMap<string, string>
+}): Map<string, number> {
+  const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
+  const endIndexes = getProjectGroupHeaderSectionEndIndexByGroupId(args)
+  const sectionEndByGroupId = new Map<string, number>()
+  for (const [groupId, endIndex] of endIndexes) {
+    sectionEndByGroupId.set(groupId, rowStarts[endIndex] ?? rowStarts[args.rows.length] ?? 0)
+  }
   return sectionEndByGroupId
+}
+
+export function getHeaderSectionEndIndexByRowIndex(args: {
+  rows: readonly RenderRow[]
+}): Map<number, number> {
+  const sectionEndIndexByRowIndex = new Map<number, number>()
+  const pendingGroups: { rowIndex: number; depth: number }[] = []
+  for (let index = 0; index < args.rows.length; index++) {
+    const row = args.rows[index]
+    if (row.type !== 'header' && row.type !== 'host-header') {
+      continue
+    }
+    const depth =
+      row.type === 'host-header' || (!row.repo && !row.projectGroup)
+        ? Number.NEGATIVE_INFINITY
+        : (row.projectGroupDepth ?? 0)
+    while (pendingGroups.length > 0) {
+      const pending = pendingGroups.at(-1)
+      if (!pending || pending.depth < depth) {
+        break
+      }
+      pendingGroups.pop()
+      sectionEndIndexByRowIndex.set(pending.rowIndex, index)
+    }
+    if (row.type === 'header' && row.repo) {
+      sectionEndIndexByRowIndex.set(index, findNextHeaderRenderRowIndex(args.rows, index + 1))
+    } else if (row.type === 'header' && !row.repo && row.projectGroup?.id) {
+      sectionEndIndexByRowIndex.set(index, args.rows.length)
+      pendingGroups.push({ rowIndex: index, depth: row.projectGroupDepth ?? 0 })
+    }
+  }
+  return sectionEndIndexByRowIndex
+}
+
+export function getHeaderSectionEndByRowIndex(args: {
+  rows: readonly RenderRow[]
+  firstHeaderIndex: number
+}): Map<number, number> {
+  const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
+  const endIndexes = getHeaderSectionEndIndexByRowIndex(args)
+  const sectionEndByRowIndex = new Map<number, number>()
+  for (const [rowIndex, endIndex] of endIndexes) {
+    sectionEndByRowIndex.set(rowIndex, rowStarts[endIndex] ?? rowStarts[args.rows.length] ?? 0)
+  }
+  return sectionEndByRowIndex
 }
 
 export function getRootProjectHeaderSectionEndByKey(

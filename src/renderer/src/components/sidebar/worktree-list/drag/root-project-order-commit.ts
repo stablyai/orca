@@ -12,6 +12,7 @@ export async function saveRootProjectOrderForSidebarDrop(args: {
   visibleKeys: readonly string[]
   draggedKey: string
   dropIndex: number
+  hostId?: string
   onCommit: () => void
 }): Promise<boolean> {
   const { state } = args

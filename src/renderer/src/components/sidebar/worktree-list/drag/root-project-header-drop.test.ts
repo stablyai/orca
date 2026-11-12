@@ -165,6 +165,25 @@ describe('root project header drops', () => {
       { entry: { kind: 'group', group: { id: 'b' } }, rootProjectOrder: -1000, tabOrder: -1000 }
     ])
   })
+
+  it('does not sweep legacy groups from another host section when reordering root entries on one host', () => {
+    const updates = getRootProjectOrderUpdatesForSidebarDrop({
+      projectGroups: [
+        group('local-a', { executionHostId: 'local' }),
+        group('remote-b', { executionHostId: 'runtime:remote', tabOrder: 1 })
+      ],
+      repos: [repo('local-x', { executionHostId: 'local', projectGroupOrder: 0 })],
+      visibleKeys: ['group:local-a', 'repo:local-x'],
+      draggedKey: 'repo:local-x',
+      dropIndex: 0
+    })
+
+    expect(updates).toHaveLength(2)
+    expect(updates).toMatchObject([
+      { entry: { kind: 'repo', repo: { id: 'local-x' } }, rootProjectOrder: 0 },
+      { entry: { kind: 'group', group: { id: 'local-a' } }, rootProjectOrder: 1000 }
+    ])
+  })
   it('uses the actual host occurrence when repeated logical headers span sections', () => {
     const host = (hostId: HostHeaderRow['hostId']): HostHeaderRow => ({
       type: 'host-header',

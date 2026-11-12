@@ -881,7 +881,13 @@
           "pendingRemovalRefused": "オフライン中に削除したプロジェクトがサーバーに残っています",
           "removeProjectHostUnreachable": "サーバーに接続できません。今すぐこのデスクトップから削除すると、再接続時に Orca がサーバーからも削除します。",
           "removeProjectLocallyNow": "今すぐこのデスクトップから削除",
-          "removeProjectHostDisconnected": "サーバーとの接続が切断されています。今すぐこのデスクトップから削除すると、再接続時に Orca がサーバーからも削除します。"
+          "removeProjectHostDisconnected": "サーバーとの接続が切断されています。今すぐこのデスクトップから削除すると、再接続時に Orca がサーバーからも削除します。",
+          "moveProjectGroupFailed": "プロジェクトグループを移動できませんでした",
+          "moveProjectGroupFailedDesc": "グループのホストが新しい親グループを適用しませんでした。そのコンピュータの Orca を更新してからもう一度お試しください。",
+          "pinProjectGroupFailed": "グループの固定設定を更新できませんでした",
+          "pinProjectGroupFailedDesc": "グループのホストが固定設定を適用しませんでした。そのコンピュータの Orca を更新してからもう一度お試しください。",
+          "pinProjectFailed": "プロジェクトの固定設定を更新できませんでした",
+          "pinProjectFailedDesc": "プロジェクトのホストが固定設定を適用しませんでした。そのコンピュータの Orca を更新してからもう一度お試しください。"
         },
         "settings": {
           "e12dab333b": "サーバーの切り替えに失敗しました"
@@ -5639,7 +5645,8 @@
         },
         "SidebarHeader": {
           "92154beb7e": "新規ワークスペース",
-          "addProject": "プロジェクトを追加"
+          "addProject": "プロジェクトを追加",
+          "newProjectGroup": "新しいグループ"
         },
         "SidebarNav": {
           "80611a8b10": "検索",
@@ -5954,7 +5961,20 @@
           "hideChildWorkspaces_other": "{{count}} 件の子ワークスペースを非表示",
           "childCount_other": "子 {{count}} 件",
           "groupProjectsRemained_other": "グループの削除後も、含まれていた {{count}} 件のプロジェクトのうち {{remaining}} 件が残りました。",
-          "hostServerReplaced": "別のサーバー：登録を解除してから接続"
+          "hostServerReplaced": "別のサーバー：登録を解除してから接続",
+          "newSubgroup": "新しいサブグループ",
+          "newSubgroupTitle": "新しいサブグループ",
+          "newSubgroupDesc": "{{group}} 内にサブグループを作成します。",
+          "newEmptyGroupDesc": "サイドバーに空のグループを作成します。",
+          "groupCreateFailed": "グループを作成できませんでした",
+          "groupCreateFailedDesc": "ホスト側で新しいグループを確認できませんでした。接続を確認してもう一度お試しください。",
+          "moveProjectToParentGroup": "親グループへ移動 ({{group}})",
+          "moveGroupToTopLevel": "最上位へ移動",
+          "unpinGroup": "グループの固定を解除",
+          "pinGroup": "グループを固定",
+          "unpinProject": "プロジェクトの固定を解除",
+          "pinProject": "プロジェクトを固定",
+          "unpinItemAriaLabel": "{{value0}} の固定を解除"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",

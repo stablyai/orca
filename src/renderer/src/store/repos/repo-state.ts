@@ -60,6 +60,7 @@ export type RepoUpdate = Partial<
     | 'customWorktreeVisibilitySources'
     | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
+    | 'isPinned'
   >
 > & {
   projectGroupOrder?: number | null
@@ -231,8 +232,12 @@ export type RepoSlice = {
     runtimeEnvironmentId: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
-  /** `hostId` is the host of the project that seeds the group. */
-  createProjectGroup: (name: string, hostId: ExecutionHostId) => Promise<ProjectGroup | null>
+  /** `hostId` is the host that owns the new group (or its parent group). */
+  createProjectGroup: (
+    name: string,
+    hostId: ExecutionHostId,
+    options?: { parentGroupId?: string | null; onParentMoveRejected?: () => void }
+  ) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
     args: {
       projectGroupId: string

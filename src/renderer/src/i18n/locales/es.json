@@ -889,7 +889,13 @@
           "pendingRemovalRefused": "El servidor conservó un proyecto que eliminaste mientras estaba sin conexión",
           "removeProjectHostUnreachable": "No se puede acceder a su servidor. Elimínalo ahora de este escritorio y Orca lo eliminará del servidor cuando se vuelva a conectar.",
           "removeProjectLocallyNow": "Eliminar de este escritorio ahora",
-          "removeProjectHostDisconnected": "Su servidor está desconectado. Elimínalo ahora de este escritorio y Orca lo eliminará del servidor cuando te vuelvas a conectar."
+          "removeProjectHostDisconnected": "Su servidor está desconectado. Elimínalo ahora de este escritorio y Orca lo eliminará del servidor cuando te vuelvas a conectar.",
+          "moveProjectGroupFailed": "No se pudo mover el grupo de proyectos",
+          "moveProjectGroupFailedDesc": "El equipo del grupo no aplicó el nuevo grupo superior. Actualiza Orca en ese equipo e inténtalo de nuevo.",
+          "pinProjectGroupFailed": "No se pudo actualizar la fijación del grupo",
+          "pinProjectGroupFailedDesc": "El equipo del grupo no aplicó el ajuste de fijación. Actualiza Orca en ese equipo e inténtalo de nuevo.",
+          "pinProjectFailed": "No se pudo actualizar la fijación del proyecto",
+          "pinProjectFailedDesc": "El equipo del proyecto no aplicó el ajuste de fijación. Actualiza Orca en ese equipo e inténtalo de nuevo."
         },
         "settings": {
           "e12dab333b": "No se pudo cambiar de servidor"
@@ -5880,7 +5886,8 @@
         },
         "SidebarHeader": {
           "92154beb7e": "Nuevo espacio de trabajo",
-          "addProject": "Agregar proyecto"
+          "addProject": "Agregar proyecto",
+          "newProjectGroup": "Nuevo grupo"
         },
         "SidebarNav": {
           "80611a8b10": "Buscar",
@@ -6213,7 +6220,20 @@
           "groupProjectsRemained_one": "Proyectos del grupo que quedan tras eliminarlo: {{remaining}} de {{count}}.",
           "groupProjectsRemained_other": "Proyectos del grupo que quedan tras eliminarlo: {{remaining}} de {{count}}.",
           "groupProjectsRemained_many": "Proyectos del grupo que quedan tras eliminarlo: {{remaining}} de {{count}}.",
-          "hostServerReplaced": "Servidor diferente: olvídalo y vuelve a conectar"
+          "hostServerReplaced": "Servidor diferente: olvídalo y vuelve a conectar",
+          "newSubgroup": "Nuevo subgrupo",
+          "newSubgroupTitle": "Nuevo subgrupo",
+          "newSubgroupDesc": "Crea un subgrupo dentro de {{group}}.",
+          "newEmptyGroupDesc": "Crea un grupo vacío en la barra lateral.",
+          "groupCreateFailed": "No se pudo crear el grupo",
+          "groupCreateFailedDesc": "Orca no pudo confirmar el nuevo grupo con su equipo. Revisa la conexión e inténtalo de nuevo.",
+          "moveProjectToParentGroup": "Mover al grupo superior ({{group}})",
+          "moveGroupToTopLevel": "Mover al nivel superior",
+          "unpinGroup": "Desanclar grupo",
+          "pinGroup": "Fijar grupo",
+          "unpinProject": "Desanclar proyecto",
+          "pinProject": "Fijar proyecto",
+          "unpinItemAriaLabel": "Desanclar {{value0}}"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",

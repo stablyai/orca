@@ -93,11 +93,13 @@ function NewWorkspaceButton({
 export function SidebarHeaderActions({
   onWorkspaceBoardMenuOpenChange,
   agentsViewActive = false,
-  activityOptionsTarget
+  activityOptionsTarget,
+  newProjectGroupTarget
 }: {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   agentsViewActive?: boolean
   activityOptionsTarget?: React.Ref<HTMLDivElement>
+  newProjectGroupTarget?: React.Ref<HTMLDivElement>
 }): React.JSX.Element {
   const openMenusRef = useRef({ options: false, addProject: false })
   const updateMenuOpen = useCallback(
@@ -120,6 +122,9 @@ export function SidebarHeaderActions({
           />
         )}
       </div>
+      {agentsViewActive ? null : (
+        <div ref={newProjectGroupTarget} className="flex shrink-0 items-center empty:hidden" />
+      )}
       <AddProjectButton
         preserveWorkspaceBoardOpen
         onMenuOpenChange={(open) => updateMenuOpen('addProject', open)}

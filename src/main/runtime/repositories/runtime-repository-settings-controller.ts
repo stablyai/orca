@@ -52,6 +52,7 @@ type RepositoryUpdates = Partial<
     | 'customWorktreeVisibilitySources'
     | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
+    | 'isPinned'
   >
 > & {
   projectGroupOrder?: number | null

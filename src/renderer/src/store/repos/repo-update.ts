@@ -18,6 +18,7 @@ import type { RepoSlice, RepoUpdate } from './repo-state'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { getProjectSetupRuntimeTarget } from '../projects/project-host-routing'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
+import { notifyProjectPinRejected } from '../project-groups/project-group-mutation-toasts'
 
 export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   const sanitized = { ...updates }
@@ -164,6 +165,15 @@ export function createRepoUpdateActions(
             JSON.stringify(updatedRepo?.dictationTerms ?? []) !==
               JSON.stringify(sanitizedUpdates.dictationTerms)
           ) {
+            return false
+          }
+          if (
+            sanitizedUpdates.isPinned !== undefined &&
+            (!updatedRepo || updatedRepo.isPinned !== sanitizedUpdates.isPinned)
+          ) {
+            if (updatedRepo) {
+              notifyProjectPinRejected()
+            }
             return false
           }
           set((s) => {

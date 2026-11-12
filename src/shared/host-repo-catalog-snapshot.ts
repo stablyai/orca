@@ -4,7 +4,7 @@ import { DEFAULT_REPO_BADGE_COLOR } from './constants'
 /** The fields a sidebar project row needs; the host stamp is re-applied on read. */
 export type HostRepoCatalogSnapshotRepo = Pick<
   Repo,
-  'id' | 'path' | 'displayName' | 'badgeColor' | 'addedAt' | 'kind' | 'connectionId'
+  'id' | 'path' | 'displayName' | 'badgeColor' | 'addedAt' | 'kind' | 'connectionId' | 'isPinned'
 >
 
 /** A WSL host's last answered `repo.list`, kept on the desktop so a stopped distro still lists its projects. */
@@ -34,7 +34,8 @@ function snapshotRepo(value: unknown): HostRepoCatalogSnapshotRepo | null {
     addedAt: typeof value.addedAt === 'number' ? value.addedAt : 0,
     ...(value.kind === 'git' || value.kind === 'folder' ? { kind: value.kind } : {}),
     // Part of row identity: on a host's row it names that host's nested SSH target.
-    ...(typeof value.connectionId === 'string' ? { connectionId: value.connectionId } : {})
+    ...(typeof value.connectionId === 'string' ? { connectionId: value.connectionId } : {}),
+    ...(value.isPinned === true ? { isPinned: true } : {})
   }
 }
 

@@ -7,14 +7,13 @@ import type { SidebarLineageParentIdentities } from './worktree-lineage-projecti
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './group-keys'
-import { appendOrderedGroups, type SectionAppendContext } from './group-sections'
-
 import {
-  getLaneHostWorktreeCounts,
-  getLaneHostWorktreeIds,
-  getMixedWorktreeHostContextLabels,
-  getNoticeHostContextLabels
-} from './host-labels'
+  appendFlatAllWorkspacesSection,
+  appendOrderedGroups,
+  type SectionAppendContext
+} from './group-sections'
+
+import { getMixedWorktreeHostContextLabels, getNoticeHostContextLabels } from './host-labels'
 import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo,
@@ -33,7 +32,7 @@ import {
 } from './project-group-sections'
 import { getSidebarLineageChildren } from './pinned-section-worktrees'
 import { emitPinnedGroup } from './pinned-group-rows'
-import { appendWorktreeRows, buildPendingCreationRow } from './row-builders'
+import { buildPendingCreationRow } from './row-builders'
 import { getRenderableFolderWorkspaces } from './folder-workspace-lanes'
 import {
   getFolderLaneSections,
@@ -65,6 +64,7 @@ export type SidebarRowPlanInputs = {
   /** Visible worktrees in the frozen sort order. */
   worktrees: Worktree[]
   repoMap: Map<string, Repo>
+  repos?: readonly Repo[]
   /** Defaults to repoMap's registration for the row's repo id. */
   repoOfWorktree?: RepoOfWorktree
   prGroupOf: SidebarPRGroupReader
@@ -96,6 +96,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     sortBy,
     worktrees,
     repoMap,
+    repos,
     repoOfWorktree,
     prGroupOf,
     repoOrder,
@@ -118,6 +119,12 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     filterRepoIds
   } = inputs
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
+  const pinnedRepoIds = new Set<string>()
+  for (const candidate of repos ?? repoMap.values()) {
+    if (candidate.isPinned === true) {
+      pinnedRepoIds.add(candidate.id)
+    }
+  }
   const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
   // Resolve folder membership before groupBy; every mode renders the same set (#15362).
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
@@ -174,6 +181,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               pendingByRepo,
               repoOrder,
               projectOrderBy,
+              pinnedRepoIds,
               folderWorkspaces: renderableFolderWorkspaces
             })
       if (pinned.length > 0) {
@@ -246,36 +254,17 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       appendImportedWorktreeLines(rows, { importedWorktreesByRepo, defaultHostId, hostLabelById })
     if (groupBy === 'none') {
       // Folder-only accounts must still render flat rows (#15362).
-      if (naturalWorktrees.length > 0 || renderableFolderWorkspaces.length > 0) {
-        result.push({
-          type: 'header',
-          key: ALL_GROUP_KEY,
-          count: naturalWorktrees.length + renderableFolderWorkspaces.length,
-          icon: { kind: 'all' },
-          hostWorktreeCounts: getLaneHostWorktreeCounts(
-            naturalWorktrees,
-            renderableFolderWorkspaces,
-            repoOf,
-            defaultHostId
-          ),
-          hostWorktreeIds: getLaneHostWorktreeIds(
-            naturalWorktrees,
-            renderableFolderWorkspaces,
-            repoOf,
-            defaultHostId
-          ),
-          worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
-        })
-        if (!collapsedGroups.has(ALL_GROUP_KEY)) {
-          appendWorktreeRows(result, repoOf, occurrencePlan, {
-            collapsedGroups,
-            groupDepth: 0,
-            sectionKey: ALL_GROUP_KEY,
-            hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
-            folderPairByIdentity: folders.pairByIdentity
-          })
-        }
-      }
+      appendFlatAllWorkspacesSection({
+        result,
+        naturalWorktrees,
+        renderableFolderWorkspaces,
+        repoOf,
+        defaultHostId,
+        collapsedGroups,
+        occurrencePlan,
+        mixedWorktreeHostContextLabels,
+        folderPairByIdentity: folders.pairByIdentity
+      })
       return withImportedLines(result)
     }
 
@@ -285,6 +274,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       collapsedGroups,
       workspaceStatuses,
       repoMap,
+      repos,
+      pinnedRepoIds,
       repoOf,
       defaultHostId,
       hostLabelById,

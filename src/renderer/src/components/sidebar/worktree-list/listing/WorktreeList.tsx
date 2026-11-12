@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo } from 'react'
-import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store/index'
 import { selectCrossStoreFolderChildrenById } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useShallow } from 'zustand/react/shallow'
@@ -18,10 +17,6 @@ import {
 } from '../../../../../../shared/execution-host'
 import { getActiveSidebarWorkspaceId } from '../../../../../../shared/workspace-scope'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import {
-  getProjectGroupHeaderKey,
-  isProjectSectionGroupKey
-} from '../../../../../../shared/sidebar-list/group-keys'
 import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { SidebarWorktreeListDialogs } from '../rows/ProjectGroupDialogs'
@@ -32,6 +27,7 @@ import { EMPTY_PROJECT_GROUPS } from '../viewport/viewport-props'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from '../drag/drop-commit-context'
 import { useAgentSendTargetWorktreeId } from './use-agent-send-target'
 import { useProjectGroupDialogs } from '../rows/use-project-group-dialogs'
+import { useHeaderPinActions } from '../rows/use-header-pin-actions'
 import { useSidebarRevealRequests } from '../navigation/use-reveal-requests'
 import { useSidebarWorktreeFilters } from './use-filters'
 import { useSidebarWorktreeSelection } from '../navigation/use-selection'
@@ -43,14 +39,8 @@ import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from '../drag/worktree-manual-order-catalog'
 import { useWorkspaceBoardStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
-import { ProjectsCollapseAllButton } from '../controls/ProjectsCollapseAllButton'
-import { useProjectsCollapseShortcut } from '../controls/use-projects-collapse-shortcut'
-import { useProjectsCollapseAllAnnouncement } from '../controls/use-projects-collapse-all-announcement'
-import {
-  areAllProjectsCollapsed,
-  getRenderedProjectCollapseKeys,
-  setAllProjectsCollapsed
-} from './project-collapse-all'
+import { WorktreeListHeaderPortals } from '../controls/WorktreeListHeaderPortals'
+import { useProjectSectionCollapseControls } from './use-project-section-collapse'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces
@@ -65,6 +55,7 @@ type WorktreeListProps = {
   onWorkspaceBoardDragPreviewCommit?: () => void
   onWorkspaceBoardDragPreviewCancel?: () => void
   projectsCollapseTarget?: HTMLElement | null
+  newProjectGroupTarget?: HTMLElement | null
 }
 
 // Desktop windows consume main’s sidebar inputs; paired web clients derive their own view.
@@ -81,7 +72,8 @@ const WorktreeList = React.memo(function WorktreeList({
   onWorkspaceBoardDragPreviewStart = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
   onWorkspaceBoardDragPreviewCommit = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
   onWorkspaceBoardDragPreviewCancel = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
-  projectsCollapseTarget
+  projectsCollapseTarget,
+  newProjectGroupTarget
 }: WorktreeListProps) {
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
@@ -112,8 +104,6 @@ const WorktreeList = React.memo(function WorktreeList({
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
   const clearPendingRevealSidebarRow = useAppStore((s) => s.clearPendingRevealSidebarRow)
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
-  const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
-  const setCollapsedGroups = useAppStore((s) => s.setCollapsedGroups)
   const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const settings = useAppStore((s) => s.settings)
@@ -165,34 +155,36 @@ const WorktreeList = React.memo(function WorktreeList({
     () => new Map(rowModel.occurrencePlan.sections.map(({ key, group }) => [key, group.repoIds])),
     [rowModel.occurrencePlan]
   )
+  const occurrenceSectionKeys = useMemo(
+    () => rowModel.occurrencePlan.sections.map(({ key }) => key),
+    [rowModel.occurrencePlan]
+  )
   const effectiveCollapsedGroups = rowModel.effectiveCollapsedGroups
-  const projectCollapseKeys = useMemo(
-    () => (groupBy === 'repo' ? getRenderedProjectCollapseKeys(rowModel.sectionRows) : []),
-    [groupBy, rowModel.sectionRows]
-  )
-  const projectSectionCount = useMemo(
-    () =>
-      new Set([
-        ...rowModel.occurrencePlan.sections.map(({ key }) => key).filter(isProjectSectionGroupKey),
-        ...visibleScope.visibleProjectGroupsForRows.map(({ id }) => getProjectGroupHeaderKey(id))
-      ]).size,
-    [rowModel.occurrencePlan, visibleScope.visibleProjectGroupsForRows]
-  )
-  const allProjectsCollapsed = areAllProjectsCollapsed(
+  const filtersHideAllRows = shouldFiltersHideAllRows({
+    hasFilters,
+    totalWorkspaceCount: allWorktrees.length + folderWorkspaces.length,
+    visibleWorktreeCount: visibleWorktrees.length,
+    visibleFolderWorkspaceCount: visibleScope.visibleFolderWorkspacesForRows.length,
+    placeholderRepoCount: rowModel.placeholderRepoIds.size,
+    importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size,
+    visibleProjectGroupCount:
+      groupBy === 'repo' ? visibleScope.visibleProjectGroupsForRows.length : 0
+  })
+  const {
     projectCollapseKeys,
-    effectiveCollapsedGroups
-  )
-  const handleToggleAllProjects = useCallback(() => {
-    void useAppStore.getState().recordFeatureInteraction('projects-collapse-all')
-    // Direction follows what is displayed, which may differ from stored state while a picker forces sections open.
-    setCollapsedGroups(
-      setAllProjectsCollapsed(
-        useAppStore.getState().collapsedGroups,
-        projectCollapseKeys,
-        !allProjectsCollapsed
-      )
-    )
-  }, [allProjectsCollapsed, projectCollapseKeys, setCollapsedGroups])
+    allProjectsCollapsed,
+    handleToggleAllProjects,
+    handleExpandGroupKey,
+    handleToggleGroup
+  } = useProjectSectionCollapseControls({
+    groupBy,
+    sectionRows: rowModel.sectionRows,
+    occurrenceSectionKeys,
+    visibleProjectGroups: visibleScope.visibleProjectGroupsForRows,
+    effectiveCollapsedGroups,
+    filtersHideAllRows,
+    hasCollapseTarget: Boolean(projectsCollapseTarget)
+  })
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy
@@ -202,7 +194,15 @@ const WorktreeList = React.memo(function WorktreeList({
     workspaceStatuses: boardStatuses,
     sortBy
   })
-  const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups })
+  const rootCreationHostId = activeWorkspaceExecutionHostId ?? defaultHostId
+  const projectGroupDialogs = useProjectGroupDialogs({
+    repos,
+    repoMap,
+    projectGroups,
+    defaultHostId: rootCreationHostId,
+    onExpandGroupKey: handleExpandGroupKey
+  })
+  const { handleTogglePinProject, handleTogglePinProjectGroup } = useHeaderPinActions()
 
   const handleImmediateWorktreeActivate = useCallback((worktreeId: string, rowKey?: string) => {
     // Update the active row directly on pointer input to avoid virtualized rerender latency; store state reconciles afterward.
@@ -259,46 +259,20 @@ const WorktreeList = React.memo(function WorktreeList({
     revealWorkspaceFilters
   })
 
-  const filtersHideAllRows = shouldFiltersHideAllRows({
-    hasFilters,
-    visibleWorktreeCount: visibleWorktrees.length,
-    visibleFolderWorkspaceCount: visibleScope.visibleFolderWorkspacesForRows.length,
-    placeholderRepoCount: rowModel.placeholderRepoIds.size,
-    importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
-  })
-  useProjectsCollapseShortcut(
-    projectCollapseKeys.length > 0 && !filtersHideAllRows,
-    handleToggleAllProjects
-  )
-  const announceProjectCollapse = useProjectsCollapseAllAnnouncement(
-    Boolean(projectsCollapseTarget) &&
-      groupBy === 'repo' &&
-      projectSectionCount > 1 &&
-      !filtersHideAllRows
-  )
-  const handleToggleGroup = useCallback(
-    (groupKey: string) => {
-      toggleGroup(groupKey)
-      announceProjectCollapse(groupKey)
-    },
-    [announceProjectCollapse, toggleGroup]
-  )
   // Clear Filters must outrank empty project headers when filtering hides every workspace.
-  if (rowModel.rows.length === 0 || filtersHideAllRows) {
-    return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
-  }
+  const showEmptyState = rowModel.rows.length === 0 || filtersHideAllRows
 
   return (
     <>
-      {projectsCollapseTarget && projectCollapseKeys.length > 0
-        ? createPortal(
-            <ProjectsCollapseAllButton
-              allCollapsed={allProjectsCollapsed}
-              onToggle={handleToggleAllProjects}
-            />,
-            projectsCollapseTarget
-          )
-        : null}
+      <WorktreeListHeaderPortals
+        projectsCollapseTarget={projectsCollapseTarget}
+        showProjectsCollapseToggle={!showEmptyState && projectCollapseKeys.length > 0}
+        allProjectsCollapsed={allProjectsCollapsed}
+        onToggleAllProjects={handleToggleAllProjects}
+        newProjectGroupTarget={newProjectGroupTarget}
+        showNewProjectGroupButton={groupBy === 'repo'}
+        onCreateProjectGroup={projectGroupDialogs.handleCreateEmptyProjectGroup}
+      />
       <SidebarWorktreeListDialogs
         dialogs={projectGroupDialogs}
         repos={repos}
@@ -317,91 +291,100 @@ const WorktreeList = React.memo(function WorktreeList({
         }}
         onOpenWorktreeVisibility={handleOpenWorktreeVisibility}
       />
-      <VirtualizedWorktreeViewport
-        // Wake moves status headers; preserve viewport identity across those changes.
-        key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
-        rows={rowModel.sectionRows}
-        hostOptions={rowModel.hostOptions}
-        occurrencePlan={rowModel.occurrencePlan}
-        visibleProjectRepoIdsBySection={visibleProjectRepoIdsBySection}
-        // Full-page Tasks/Activity views have no selected worktree card.
-        activeWorktreeId={
-          activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
-        }
-        activeWorkspaceExecutionHostId={activeWorkspaceExecutionHostId}
-        currentWorktreeId={currentSidebarWorktreeId}
-        groupBy={groupBy}
-        pinnedDisplayPolicy={pinnedDisplayPolicy}
-        projectOrderBy={projectOrderBy}
-        toggleGroup={handleToggleGroup}
-        onToggleAllProjects={projectCollapseKeys.length > 0 ? handleToggleAllProjects : undefined}
-        collapsedGroups={effectiveCollapsedGroups}
-        handleCreateForRepo={openHeaderCreateComposer}
-        handleOpenRepoSettings={handleOpenRepoSettings}
-        handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
-        handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}
-        handleKeepImportedWorktreesHidden={externalWorktreeCards.handleKeepImportedWorktreesHidden}
-        importedWorktreeCardActionState={externalWorktreeCards.importedWorktreeCardActionState}
-        handleOpenSuppressExternalWorktreeInbox={
-          externalWorktreeCards.handleOpenSuppressExternalWorktreeInbox
-        }
-        newExternalWorktreeInboxActionState={
-          externalWorktreeCards.newExternalWorktreeInboxActionState
-        }
-        handleRemoveProject={handleRemoveProject}
-        handleCreateGroupFromRepo={projectGroupDialogs.handleCreateGroupFromRepo}
-        handleMoveProjectToGroup={projectGroupDialogs.handleMoveProjectToGroup}
-        handleRemoveProjectFromGroup={projectGroupDialogs.handleRemoveProjectFromGroup}
-        handleRenameProjectGroup={projectGroupDialogs.handleRenameProjectGroup}
-        handleDeleteProjectGroup={projectGroupDialogs.handleDeleteProjectGroup}
-        handleRefreshProjectGroup={projectGroupDialogs.handleRefreshProjectGroup}
-        handleCreateFolderWorkspace={handleCreateFolderWorkspace}
-        activeModal={activeModal}
-        pendingRevealWorktree={pendingRevealWorktree}
-        pendingRevealSidebarRow={pendingRevealSidebarRow}
-        clearPendingRevealWorktreeId={clearPendingRevealWorktreeId}
-        clearPendingRevealSidebarRow={clearPendingRevealSidebarRow}
-        agentSendTargetWorktreeId={agentSendTargetWorktreeId}
-        worktrees={visibleWorktrees}
-        folderWorkspaces={folderWorkspaces}
-        selectedWorktreeIds={selection.selectedWorktreeIds}
-        selectedWorktrees={selection.selectedWorktrees}
-        onSelectionGesture={selection.updateSelectionForGesture}
-        onImmediateWorktreeActivate={handleImmediateWorktreeActivate}
-        onContextMenuSelect={selection.selectForContextMenu}
-        repoMap={repoMap}
-        defaultHostId={defaultHostId}
-        worktreeMap={worktreeMap}
-        worktreeLineageById={worktreeLineageById}
-        workspaceLineageByChildKey={workspaceLineageByChildKey}
-        crossStoreChildrenByFolderId={crossStoreChildrenByFolderId}
-        allRepoIds={rowModel.allRepoIds}
-        onReorderHostSections={rowModel.handleReorderHostSections}
-        onHostDragActiveChange={rowModel.setHostDragActive}
-        prCache={prCache}
-        hostedReviewCache={hostedReviewCache}
-        workspaceStatuses={boardStatuses}
-        projectGrouping={projectGrouping}
-        projectGroups={projectGroups}
-        visibleProjectGroups={visibleScope.visibleProjectGroupsForRows}
-        onMoveWorktreeToStatus={statusMutations.moveWorktreeToStatus}
-        onMoveWorktreesToStatus={statusMutations.moveWorktreesToStatus}
-        onMoveWorktreesToStatusAtIndex={statusMutations.moveWorktreesToStatusAtIndex}
-        onPinWorktree={statusMutations.pinWorktree}
-        onPinWorktrees={statusMutations.pinWorktrees}
-        onDropWorktreesOnWorkspaceBoard={statusMutations.dropWorktreesOnWorkspaceBoard}
-        workspaceBoardOpen={workspaceBoardOpen}
-        onWorktreeCardClick={onWorktreeCardClick}
-        onWorkspaceBoardDragPreviewStart={onWorkspaceBoardDragPreviewStart}
-        onWorkspaceBoardDragPreviewCommit={onWorkspaceBoardDragPreviewCommit}
-        onWorkspaceBoardDragPreviewCancel={onWorkspaceBoardDragPreviewCancel}
-        shouldShowWorkspaceBoardDropIndicator={
-          statusMutations.shouldShowWorkspaceBoardDropIndicator
-        }
-        onReorderWorktrees={statusMutations.reorderWorktrees}
-        scrollOffsetRef={scrollOffsetRef}
-        scrollAnchorRef={scrollAnchorRef}
-      />
+      {showEmptyState ? (
+        <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
+      ) : (
+        <VirtualizedWorktreeViewport
+          // Wake moves status headers; preserve viewport identity across those changes.
+          key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
+          rows={rowModel.sectionRows}
+          hostOptions={rowModel.hostOptions}
+          occurrencePlan={rowModel.occurrencePlan}
+          visibleProjectRepoIdsBySection={visibleProjectRepoIdsBySection}
+          // Full-page Tasks/Activity views have no selected worktree card.
+          activeWorktreeId={
+            activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
+          }
+          activeWorkspaceExecutionHostId={activeWorkspaceExecutionHostId}
+          currentWorktreeId={currentSidebarWorktreeId}
+          groupBy={groupBy}
+          pinnedDisplayPolicy={pinnedDisplayPolicy}
+          projectOrderBy={projectOrderBy}
+          toggleGroup={handleToggleGroup}
+          onToggleAllProjects={projectCollapseKeys.length > 0 ? handleToggleAllProjects : undefined}
+          collapsedGroups={effectiveCollapsedGroups}
+          handleCreateForRepo={openHeaderCreateComposer}
+          handleOpenRepoSettings={handleOpenRepoSettings}
+          handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
+          handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}
+          handleKeepImportedWorktreesHidden={
+            externalWorktreeCards.handleKeepImportedWorktreesHidden
+          }
+          importedWorktreeCardActionState={externalWorktreeCards.importedWorktreeCardActionState}
+          handleOpenSuppressExternalWorktreeInbox={
+            externalWorktreeCards.handleOpenSuppressExternalWorktreeInbox
+          }
+          newExternalWorktreeInboxActionState={
+            externalWorktreeCards.newExternalWorktreeInboxActionState
+          }
+          handleRemoveProject={handleRemoveProject}
+          handleTogglePinProject={handleTogglePinProject}
+          handleTogglePinProjectGroup={handleTogglePinProjectGroup}
+          handleCreateGroupFromRepo={projectGroupDialogs.handleCreateGroupFromRepo}
+          handleCreateProjectSubgroup={projectGroupDialogs.handleCreateProjectSubgroup}
+          handleMoveProjectToGroup={projectGroupDialogs.handleMoveProjectToGroup}
+          handleRemoveProjectFromGroup={projectGroupDialogs.handleRemoveProjectFromGroup}
+          handleRenameProjectGroup={projectGroupDialogs.handleRenameProjectGroup}
+          handleDeleteProjectGroup={projectGroupDialogs.handleDeleteProjectGroup}
+          handleRefreshProjectGroup={projectGroupDialogs.handleRefreshProjectGroup}
+          handleCreateFolderWorkspace={handleCreateFolderWorkspace}
+          activeModal={activeModal}
+          pendingRevealWorktree={pendingRevealWorktree}
+          pendingRevealSidebarRow={pendingRevealSidebarRow}
+          clearPendingRevealWorktreeId={clearPendingRevealWorktreeId}
+          clearPendingRevealSidebarRow={clearPendingRevealSidebarRow}
+          agentSendTargetWorktreeId={agentSendTargetWorktreeId}
+          worktrees={visibleWorktrees}
+          folderWorkspaces={folderWorkspaces}
+          selectedWorktreeIds={selection.selectedWorktreeIds}
+          selectedWorktrees={selection.selectedWorktrees}
+          onSelectionGesture={selection.updateSelectionForGesture}
+          onImmediateWorktreeActivate={handleImmediateWorktreeActivate}
+          onContextMenuSelect={selection.selectForContextMenu}
+          repoMap={repoMap}
+          defaultHostId={defaultHostId}
+          worktreeMap={worktreeMap}
+          worktreeLineageById={worktreeLineageById}
+          workspaceLineageByChildKey={workspaceLineageByChildKey}
+          crossStoreChildrenByFolderId={crossStoreChildrenByFolderId}
+          allRepoIds={rowModel.allRepoIds}
+          onReorderHostSections={rowModel.handleReorderHostSections}
+          onHostDragActiveChange={rowModel.setHostDragActive}
+          prCache={prCache}
+          hostedReviewCache={hostedReviewCache}
+          workspaceStatuses={boardStatuses}
+          projectGrouping={projectGrouping}
+          projectGroups={projectGroups}
+          visibleProjectGroups={visibleScope.visibleProjectGroupsForRows}
+          onMoveWorktreeToStatus={statusMutations.moveWorktreeToStatus}
+          onMoveWorktreesToStatus={statusMutations.moveWorktreesToStatus}
+          onMoveWorktreesToStatusAtIndex={statusMutations.moveWorktreesToStatusAtIndex}
+          onPinWorktree={statusMutations.pinWorktree}
+          onPinWorktrees={statusMutations.pinWorktrees}
+          onDropWorktreesOnWorkspaceBoard={statusMutations.dropWorktreesOnWorkspaceBoard}
+          workspaceBoardOpen={workspaceBoardOpen}
+          onWorktreeCardClick={onWorktreeCardClick}
+          onWorkspaceBoardDragPreviewStart={onWorkspaceBoardDragPreviewStart}
+          onWorkspaceBoardDragPreviewCommit={onWorkspaceBoardDragPreviewCommit}
+          onWorkspaceBoardDragPreviewCancel={onWorkspaceBoardDragPreviewCancel}
+          shouldShowWorkspaceBoardDropIndicator={
+            statusMutations.shouldShowWorkspaceBoardDropIndicator
+          }
+          onReorderWorktrees={statusMutations.reorderWorktrees}
+          scrollOffsetRef={scrollOffsetRef}
+          scrollAnchorRef={scrollAnchorRef}
+        />
+      )}
     </>
   )
 })
