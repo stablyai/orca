@@ -2,6 +2,7 @@ import { claudeProfileHistoryDirs } from '../claude-accounts/profiles/routing/cl
 import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
+import { ANTIGRAVITY_HISTORY_ROOTS } from '../../shared/antigravity-session-origin'
 import {
   resolveNativeChatTranscriptAgent,
   type NativeChatTranscriptAgent
@@ -27,6 +28,7 @@ import {
 } from './host-readable-transcript-path'
 import { SESSION_FILE_ID_LAYOUTS, type SessionIdLookupAgent } from './session-file-id-layouts'
 import { findWslSessionPath } from './wsl-session-path-scan'
+import { findAntigravityBrainTranscript } from './session-file-resolver-antigravity-probe'
 import { findClaudeSessionFile } from './session-file-resolver-claude-probe'
 import { parseSshTranscriptPath } from './ssh-transcript-path'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
@@ -56,8 +58,19 @@ function grokSessionsDir(): string {
   return resolveGrokSessionsDir(process.env, homedir())
 }
 
+function antigravityBrainDirs(): string[] {
+  return ANTIGRAVITY_HISTORY_ROOTS.map((origin) => join(homedir(), '.gemini', origin, 'brain'))
+}
+
+function antigravityFullTranscriptSibling(transcriptPath: string): string | null {
+  return /([\\/])transcript\.jsonl$/i.test(transcriptPath)
+    ? transcriptPath.replace(/([\\/])transcript\.jsonl$/i, '$1transcript_full.jsonl')
+    : null
+}
+
 export type ResolveSessionFileOptions = {
   strictErrors?: boolean
+  antigravityBrainDir?: string
   claudeProjectsDir?: string
   /** Claude only: probe this cwd's project bucket first in each root. */
   cwd?: string
@@ -92,12 +105,23 @@ export async function resolveSessionFilePath(
   }
   if (jsonlHookPath) {
     try {
-      const hostReadable = await toHostReadableTranscriptPath(jsonlHookPath, {
-        signal,
-        wslDistro: options.wslDistro
-      })
-      if (hostReadable) {
-        return hostReadable
+      const candidates = [
+        ...(transcriptAgent === 'antigravity'
+          ? [antigravityFullTranscriptSibling(jsonlHookPath)]
+          : []),
+        jsonlHookPath
+      ]
+      for (const candidate of candidates) {
+        if (!candidate) {
+          continue
+        }
+        const hostReadable = await toHostReadableTranscriptPath(candidate, {
+          signal,
+          wslDistro: options.wslDistro
+        })
+        if (hostReadable) {
+          return hostReadable
+        }
       }
     } catch (error) {
       signal?.throwIfAborted()
@@ -107,15 +131,7 @@ export async function resolveSessionFilePath(
   }
 
   // Guest hook paths remain authoritative without attestation; never cross to host/other-distro ID matches.
-  if (hookPath && needsWslHostResolution(hookPath)) {
-    if (unavailable) {
-      throw unavailable
-    }
-    return null
-  }
-
-  // Attested WSL sessions cannot fall back to host or other-distro ID matches.
-  if (options.wslDistro?.trim()) {
+  if ((hookPath && needsWslHostResolution(hookPath)) || options.wslDistro?.trim()) {
     if (unavailable) {
       throw unavailable
     }
@@ -123,12 +139,11 @@ export async function resolveSessionFilePath(
   }
 
   // Host hook paths prove a host-launched agent, so its transcript cannot be in a guest.
-  const wslTier = !jsonlHookPath
   const resolved = await resolveSessionFileById(
     transcriptAgent,
     sessionId,
     options,
-    wslTier,
+    !jsonlHookPath,
     signal
   )
   if (!resolved && unavailable) {
@@ -144,47 +159,47 @@ async function resolveSessionFileById(
   wslTier: boolean,
   signal?: AbortSignal
 ): Promise<string | null> {
-  if (transcriptAgent === 'opencode') {
-    return null
-  }
   const trimmedId = sessionId.trim()
-  if (!trimmedId) {
+  if (transcriptAgent === 'opencode' || !trimmedId) {
     return null
   }
-
+  const base = { signal, strictErrors: options.strictErrors }
+  if (transcriptAgent === 'antigravity') {
+    const override = options.antigravityBrainDir
+    return resolveTiered('antigravity', trimmedId, override ? [override] : antigravityBrainDirs(), {
+      ...base,
+      wslTier: wslTier && !override
+    })
+  }
   // Explicit roots pin an account; fallback could silently read another account’s transcript.
   if (transcriptAgent === 'claude') {
     const override = options.claudeProjectsDir
     return resolveTiered('claude', trimmedId, override ? [override] : claudeProjectsDirs(), {
+      ...base,
       wslTier: wslTier && !override,
-      cwd: options.cwd,
-      signal,
-      strictErrors: options.strictErrors
+      cwd: options.cwd
     })
   }
   if (transcriptAgent === 'codex') {
     const override = options.codexSessionsDirs
     return resolveTiered('codex', trimmedId, override ?? codexSessionsDirs(), {
+      ...base,
       wslTier: wslTier && !override,
-      ...(override ? {} : { accountDirs: codexAccountSessionsDirs }),
-      signal,
-      strictErrors: options.strictErrors
+      ...(override ? {} : { accountDirs: codexAccountSessionsDirs })
     })
   }
   if (transcriptAgent === 'grok') {
     const override = options.grokSessionsDir
     return resolveTiered('grok', trimmedId, [override ?? grokSessionsDir()], {
-      wslTier: wslTier && !override,
-      signal,
-      strictErrors: options.strictErrors
+      ...base,
+      wslTier: wslTier && !override
     })
   }
   if (transcriptAgent === 'omp') {
     const override = options.ompSessionsDir
     return resolveTiered('omp', trimmedId, ompSessionsRootDirs({ ompSessionsDir: override }), {
-      wslTier: wslTier && override === undefined,
-      signal,
-      strictErrors: options.strictErrors
+      ...base,
+      wslTier: wslTier && override === undefined
     })
   }
   transcriptAgent satisfies never
@@ -262,6 +277,9 @@ async function findHostSessionFile(
   options: HostLookupOptions
 ): Promise<string | null> {
   const { signal, strictErrors } = options
+  if (agent === 'antigravity' && !strictErrors) {
+    return findAntigravityBrainTranscript(root, sessionId, signal)
+  }
   if (agent === 'grok' && !strictErrors) {
     // Bound main-thread work with direct-layout async lookup rather than a recursive scan.
     signal?.throwIfAborted()
@@ -303,5 +321,6 @@ async function findHostSessionFile(
     }
   }
   signal?.throwIfAborted()
-  return hit
+  const fullSibling = hit && agent === 'antigravity' ? antigravityFullTranscriptSibling(hit) : null
+  return fullSibling ? ((await toHostReadableTranscriptPath(fullSibling, { signal })) ?? hit) : hit
 }

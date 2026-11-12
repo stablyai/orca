@@ -50,6 +50,11 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     skillSourceOwner: 'claude',
     expandsSlashCommandsFromText: true
   },
+  antigravity: {
+    skillPrefix: '/',
+    skillSourceOwner: 'antigravity',
+    expandsSlashCommandsFromText: true
+  },
   opencode: OPENCODE_PROFILE,
   opencode2: OPENCODE_PROFILE,
   grok: {

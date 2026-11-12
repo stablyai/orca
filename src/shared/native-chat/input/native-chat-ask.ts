@@ -43,7 +43,9 @@ function parseCanonicalQuestionsInput(input: unknown): AskPrompt | null {
     const multiSelect =
       'multiSelect' in raw
         ? raw.multiSelect === true
-        : ('multiple' in raw && raw.multiple === true) || ('multi' in raw && raw.multi === true)
+        : ('is_multi_select' in raw && raw.is_multi_select === true) ||
+          ('multiple' in raw && raw.multiple === true) ||
+          ('multi' in raw && raw.multi === true)
     const options = parseOptions(rawOptions, multiSelect)
     if (text || options.length > 0) {
       questions.push({
@@ -93,7 +95,7 @@ function parseOptions(raw: unknown, multiSelect: boolean): AskOption[] {
     .filter((option): option is AskOption => option !== null)
 }
 
-for (const name of ['AskUserQuestion', 'ask_user_question', 'askUserQuestion']) {
+for (const name of ['AskUserQuestion', 'ask_user_question', 'askUserQuestion', 'ask_question']) {
   QUESTION_TOOL_PARSERS.set(name, parseCanonicalQuestionsInput)
 }
 

@@ -1,9 +1,13 @@
 import { win32 } from 'node:path'
 import { GROK_CHAT_HISTORY_FILE } from '../../shared/grok-session-paths'
+import {
+  antigravityConversationIdFromTranscriptPath,
+  shouldDescendAntigravityBrainDirectory
+} from '../ai-vault/scanners/antigravity/session-scanner-antigravity-paths'
 import { isClaudeProjectBucketDirectory } from '../ai-vault/scanners/claude/claude-project-dir-encoding'
 import { isOmpConversationDirectory } from '../ai-vault/scanners/omp/session-scanner-omp-subagent-transcripts'
 
-export type SessionIdLookupAgent = 'claude' | 'codex' | 'grok' | 'omp'
+export type SessionIdLookupAgent = 'antigravity' | 'claude' | 'codex' | 'grok' | 'omp'
 
 export type SessionFileIdLayout = {
   fileMatchesId: (path: string, sessionId: string) => boolean
@@ -17,6 +21,11 @@ function stem(path: string): string {
 }
 
 export const SESSION_FILE_ID_LAYOUTS: Record<SessionIdLookupAgent, SessionFileIdLayout> = {
+  antigravity: {
+    fileMatchesId: (path, id) => antigravityConversationIdFromTranscriptPath(path) === id,
+    directoryPredicate: (name, depth, wanted) =>
+      depth === 0 ? wanted(name) : shouldDescendAntigravityBrainDirectory(name, depth)
+  },
   claude: {
     fileMatchesId: (path, id) => win32.basename(path) === `${id}.jsonl`,
     directoryPredicate: isClaudeProjectBucketDirectory

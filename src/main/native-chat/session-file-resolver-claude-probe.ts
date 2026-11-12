@@ -1,17 +1,7 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { encodeClaudeProjectPaths } from '../ai-vault/scanners/claude/claude-project-dir-encoding'
-
-// Ids become path segments here; a separator or dot segment would escape the bucket.
-function isSafeClaudeSessionId(sessionId: string): boolean {
-  return (
-    sessionId !== '.' &&
-    sessionId !== '..' &&
-    !sessionId.includes('/') &&
-    !sessionId.includes('\\') &&
-    !sessionId.includes('\0')
-  )
-}
+import { isSafeSessionIdPathSegment } from './session-id-path-segment'
 
 function isMissingPathError(error: unknown): boolean {
   const code =
@@ -52,7 +42,7 @@ export async function findClaudeSessionFile(
   sessionId: string,
   options: ProbeOptions & { cwd?: string }
 ): Promise<string | null> {
-  if (!isSafeClaudeSessionId(sessionId)) {
+  if (!isSafeSessionIdPathSegment(sessionId)) {
     return null
   }
   const fileName = `${sessionId}.jsonl`

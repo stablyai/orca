@@ -2,7 +2,6 @@ import { UNFLUSHED_SETTLE_MS } from './transcript-watch-contract'
 import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode-subscribe'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { extname } from 'node:path'
-import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   needsWslHostResolution,
   toHostReadableTranscriptPath,
@@ -14,7 +13,7 @@ import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
-import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
+import { nativeChatLineDecoderForAgent, type NativeChatLineDecoder } from './transcript-tail-reader'
 import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 import { observeRunningWslDistros } from './wsl-transcript-running-observer'
 
@@ -28,7 +27,7 @@ export type {
 /** Unresolved files retry; native watch failure still permits reconciliation-only mode. */
 async function attemptInstall(
   args: SubscribeNativeChatTranscriptArgs,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  decode: NativeChatLineDecoder,
   signal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription | null> {
   const filePath =
@@ -61,7 +60,7 @@ function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | 
 /** Return a live subscription while resolve/install retries; pending feedback must not claim settled history. */
 function subscribeViaResolvePoll(
   args: SubscribeNativeChatTranscriptArgs,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  decode: NativeChatLineDecoder,
   initialRefusal: WslTranscriptFsError | null = null
 ): NativeChatTranscriptSubscription {
   let closed = false

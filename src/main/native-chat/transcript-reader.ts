@@ -11,12 +11,13 @@ import { resolveSessionFilePath, type ResolveSessionFileOptions } from './sessio
 import { openTranscriptReadStream } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 import {
+  decodeAntigravityTranscriptLine,
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
-import { decodeTranscriptStream } from './transcript-stream-lines'
+import { decodeTranscriptStream, type TranscriptDecoderResult } from './transcript-stream-lines'
 
 export type ReadTranscriptResult =
   | {
@@ -59,6 +60,15 @@ export async function readNativeChatTranscript(
   }
   try {
     const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+    if (transcriptAgent === 'antigravity') {
+      return {
+        messages: await readTranscript(
+          filePath,
+          decodeAntigravityTranscriptLine,
+          options.sourceOrder
+        )
+      }
+    }
     if (transcriptAgent === 'claude') {
       return {
         messages: await readTranscript(filePath, decodeClaudeTranscriptLine, options.sourceOrder)
@@ -91,7 +101,7 @@ export async function readNativeChatTranscript(
 
 async function readTranscript(
   filePath: string,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  decode: (line: string, fallbackId: string) => TranscriptDecoderResult,
   sourceOrder = false
 ): Promise<NativeChatMessage[]> {
   const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact')

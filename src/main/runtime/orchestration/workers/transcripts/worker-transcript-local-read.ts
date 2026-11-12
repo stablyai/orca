@@ -6,6 +6,7 @@ import {
   type NativeChatLineDecoder
 } from '../../../../native-chat/transcript-tail-reader'
 import { TAIL_CHUNK_BYTES } from '../../../../native-chat/transcript-tail-boundary'
+import { decodedTranscriptMessages } from '../../../../native-chat/transcript-stream-lines'
 import { transcriptFallbackId } from '../../../../native-chat/transcript-fallback-id'
 import {
   localTranscriptOffsetStartsInsideRecord,
@@ -229,8 +230,10 @@ async function scanForwardPage(args: {
       malformedRecordCount++
       return
     }
-    const message = args.decode(line, transcriptFallbackId(args.filePath, pendingStart))
-    if (message) {
+    const batch = decodedTranscriptMessages(
+      args.decode(line, transcriptFallbackId(args.filePath, pendingStart))
+    )
+    for (const message of batch) {
       messages.push(message)
     }
   }

@@ -8,11 +8,13 @@ import type {
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
+  decodeAntigravityTranscriptLine,
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
+import { decodedTranscriptMessages, type TranscriptDecoderResult } from './transcript-stream-lines'
 import { transcriptFallbackId } from './transcript-fallback-id'
 import { inTranscriptFileOrder } from './transcript-file-order'
 import { extendTranscriptBoundary } from './transcript-file-version'
@@ -35,23 +37,21 @@ import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 
-export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
+export type NativeChatLineDecoder = (line: string, fallbackId: string) => TranscriptDecoderResult
+
+const LINE_DECODERS: Partial<
+  Record<ReturnType<typeof resolveNativeChatTranscriptAgent> & string, NativeChatLineDecoder>
+> = {
+  antigravity: decodeAntigravityTranscriptLine,
+  claude: decodeClaudeTranscriptLine,
+  codex: decodeCodexTranscriptLine,
+  grok: decodeGrokTranscriptLine,
+  omp: decodeOmpTranscriptLine
+}
 
 export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  if (transcriptAgent === 'claude') {
-    return decodeClaudeTranscriptLine
-  }
-  if (transcriptAgent === 'codex') {
-    return decodeCodexTranscriptLine
-  }
-  if (transcriptAgent === 'grok') {
-    return decodeGrokTranscriptLine
-  }
-  if (transcriptAgent === 'omp') {
-    return decodeOmpTranscriptLine
-  }
-  return null
+  return transcriptAgent ? (LINE_DECODERS[transcriptAgent] ?? null) : null
 }
 
 export async function readNativeChatTranscriptTailFile(
@@ -165,7 +165,14 @@ export async function readNativeChatTranscriptTailFile(
       return { message: ordered.message, offset: entry.offset }
     })
     // slice(-0) returns everything; non-positive limits must explicitly select nothing.
-    const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
+    let selectStart = limit > 0 ? Math.max(0, chronological.length - limit) : chronological.length
+    while (
+      selectStart > 0 &&
+      chronological[selectStart - 1]?.offset === chronological[selectStart]?.offset
+    ) {
+      selectStart -= 1
+    }
+    const selected = limit > 0 ? chronological.slice(selectStart) : []
     return {
       messages: selected.map((entry) => entry.message),
       ...(lifecycle ? { lifecycle } : {}),
@@ -227,9 +234,9 @@ export async function readNativeChatTranscriptTailFile(
     const fallbackId = transcriptFallbackId(filePath, lineOffset)
     // Use provider lifecycle records from the same window; visible assistant text cannot prove completion.
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
-    const message = decode(line, fallbackId)
-    if (message) {
-      messages.push({ message, offset: lineOffset })
+    const batch = decodedTranscriptMessages(decode(line, fallbackId))
+    for (let index = batch.length - 1; index >= 0; index -= 1) {
+      messages.push({ message: batch[index]!, offset: lineOffset })
     }
   }
 }
@@ -262,7 +269,6 @@ export async function readNativeChatTranscriptTail(
     )
   }
   const decode = nativeChatLineDecoderForAgent(args.agent)
-  const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
   if (!decode) {
     return { error: 'Transcript unavailable' }
   }
@@ -287,7 +293,7 @@ export async function readNativeChatTranscriptTail(
       decode,
       true,
       args.beforeOffset,
-      decodeLifecycle,
+      nativeChatTurnLifecycleDecoderForAgent(args.agent),
       signal,
       undefined,
       args.sourceOrder

@@ -153,3 +153,47 @@ it.each([
     expect(prepared.ok && prepared.sourceEmpty).toBe(sourceEmpty)
   }
 )
+
+it('assigns distinct legacy recordIds when Antigravity step_index values repeat', async () => {
+  const filePath = await writeFixture('transcript_full.jsonl', [
+    {
+      step_index: 2,
+      source: 'USER_EXPLICIT',
+      type: 'USER_INPUT',
+      content: '<USER_REQUEST>\nFirst user turn\n</USER_REQUEST>'
+    },
+    {
+      step_index: 3,
+      source: 'MODEL',
+      type: 'PLANNER_RESPONSE',
+      status: 'DONE',
+      thinking: 'Thinking step 3',
+      content: 'First reply'
+    },
+    {
+      step_index: 2,
+      source: 'USER_EXPLICIT',
+      type: 'USER_INPUT',
+      content: '<USER_REQUEST>\nSecond user turn with duplicate step_index\n</USER_REQUEST>'
+    }
+  ])
+  const imported = await prepareLegacyTranscriptImport({
+    agent: 'antigravity',
+    sessionId: 'agy-dup-step',
+    options: { filePath }
+  })
+  if (!imported.ok) {
+    throw new Error(imported.error)
+  }
+  expect(imported.items.map((item) => item.identity)).toEqual([
+    { provider: 'legacy', agent: 'antigravity', sessionId: 'agy-dup-step', recordId: 'step-2' },
+    {
+      provider: 'legacy',
+      agent: 'antigravity',
+      sessionId: 'agy-dup-step',
+      recordId: 'step-3:reasoning'
+    },
+    { provider: 'legacy', agent: 'antigravity', sessionId: 'agy-dup-step', recordId: 'step-3' },
+    { provider: 'legacy', agent: 'antigravity', sessionId: 'agy-dup-step', recordId: 'step-2#2' }
+  ])
+})

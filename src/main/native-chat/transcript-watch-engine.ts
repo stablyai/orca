@@ -1,7 +1,4 @@
-import type {
-  NativeChatMessage,
-  NativeChatTurnLifecycle
-} from '../../shared/native-chat/native-chat-types'
+import type { NativeChatTurnLifecycle } from '../../shared/native-chat/native-chat-types'
 import {
   boundaryFingerprint,
   readTranscriptFileVersion,
@@ -14,7 +11,10 @@ import {
   readIncrementalTranscriptMessages,
   resetIncrementalTranscriptState
 } from './transcript-incremental-reader'
-import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
+import {
+  readNativeChatTranscriptTailFile,
+  type NativeChatLineDecoder
+} from './transcript-tail-reader'
 import { emitTranscriptUnavailableSnapshot } from './transcript-unavailable-snapshot'
 import { transcriptWatcherPathIsInstallable } from './transcript-watcher-install-probe'
 import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-turn-lifecycle'
@@ -34,7 +34,7 @@ import { trackActiveNativeChatWatcher } from './transcript-watcher-count'
 
 export async function installTranscriptWatcher(
   filePath: string,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  decode: NativeChatLineDecoder,
   args: SubscribeNativeChatTranscriptArgs,
   signal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription | null> {

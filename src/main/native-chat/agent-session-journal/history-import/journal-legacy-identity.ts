@@ -10,6 +10,40 @@ export type LegacyIdentityTracker = {
   identify(line: string, lineIndex: number): AgentJournalItemIdentity
 }
 
+export function resolveDecodedLegacyMessageIdentity(
+  tracker: LegacyIdentityTracker,
+  line: string,
+  lineIndex: number,
+  input: {
+    agent: AgentType
+    sessionId: string
+    messageId: string
+    role: string
+    splitLine: boolean
+    recordId?: string
+    decodedMessageIdentities?: true
+  }
+): AgentJournalItemIdentity {
+  if (input.recordId || input.decodedMessageIdentities) {
+    return {
+      provider: 'legacy',
+      agent: input.agent,
+      sessionId: input.sessionId,
+      recordId: input.recordId ?? input.messageId
+    }
+  }
+  const tracked = tracker.identify(line, lineIndex)
+  if (
+    input.splitLine &&
+    tracked.provider === 'legacy' &&
+    input.role === 'reasoning' &&
+    !tracked.recordId.endsWith(':reasoning')
+  ) {
+    return { ...tracked, recordId: `${tracked.recordId}:reasoning` }
+  }
+  return tracked
+}
+
 export function createLegacyIdentityTracker(input: {
   transcriptAgent: NativeChatTranscriptAgent
   agent: AgentType
@@ -18,13 +52,27 @@ export function createLegacyIdentityTracker(input: {
   if (input.transcriptAgent === 'claude') {
     return { identify: (line, index) => claudeIdentity(line, index, input.agent, input.sessionId) }
   }
+  const seenRecordIds = new Set<string>()
+  let cachedLineIndex = -1
+  let cachedRecordId = ''
   return {
-    identify: (line, index) => ({
-      provider: 'legacy',
-      agent: input.agent,
-      sessionId: input.sessionId,
-      recordId: legacyRecordId(line, index, input.transcriptAgent === 'codex')
-    })
+    identify: (line, index) => {
+      if (index !== cachedLineIndex) {
+        cachedLineIndex = index
+        cachedRecordId = uniqueLegacyRecordId(
+          line,
+          index,
+          input.transcriptAgent === 'codex',
+          seenRecordIds
+        )
+      }
+      return {
+        provider: 'legacy',
+        agent: input.agent,
+        sessionId: input.sessionId,
+        recordId: cachedRecordId
+      }
+    }
   }
 }
 
@@ -43,17 +91,31 @@ function claudeIdentity(
   return { provider: 'claude', sessionId: stringField(record, 'sessionId') ?? sessionId, uuid }
 }
 
-/** Line position is stable only within a given import; prefer stored IDs when available. */
+function uniqueLegacyRecordId(
+  line: string,
+  lineIndex: number,
+  nestedItem: boolean,
+  seenRecordIds: Set<string>
+): string {
+  const baseId = legacyRecordId(line, lineIndex, nestedItem)
+  const recordId = seenRecordIds.has(baseId) ? `${baseId}#${lineIndex}` : baseId
+  seenRecordIds.add(recordId)
+  return recordId
+}
 function legacyRecordId(line: string, lineIndex: number, nestedItem: boolean): string {
   const record = parseRecord(line)
   const payload = record?.payload
   const item =
     nestedItem && payload && typeof payload === 'object' && 'item' in payload ? payload.item : null
+  const stepIndex = record?.step_index
   const id =
     stringField(item, 'id') ??
     stringField(payload, 'id') ??
     stringField(record, 'id') ??
-    stringField(record, 'uuid')
+    stringField(record, 'uuid') ??
+    (typeof stepIndex === 'number' && Number.isSafeInteger(stepIndex) && stepIndex >= 0
+      ? `step-${stepIndex}`
+      : null)
   return id ?? `#${lineIndex}`
 }
 
