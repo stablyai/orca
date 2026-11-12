@@ -1,3 +1,4 @@
+import type { AutomationUsageClient } from '../../shared/backend-service-contract'
 import {
   AutomationDispatchCancelledError,
   requestAutomationDispatch,
@@ -11,8 +12,6 @@ import {
   type AutomationRun
 } from '../../shared/automations/history/automation-run'
 import type { Automation } from '../../shared/automations/automation-definition'
-import type { ClaudeUsageStore } from '../claude-usage/store'
-import type { CodexUsageStore } from '../codex-usage/store'
 import {
   captureLegacyRunTarget,
   resolveAutomationRunTarget,
@@ -20,7 +19,7 @@ import {
 } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
 import type { AutomationLauncher, AutomationTerminalLauncher } from './automation-launch'
-import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { clearAutomationDispatchTokens } from './dispatch-tokens'
 import {
   AutomationRunCompletionWatcher,
@@ -50,8 +49,8 @@ export class AutomationService {
   private evaluating = false
   private stopped = false
   private dispatchGeneration = 0
-  private readonly claudeUsage: ClaudeUsageStore | null
-  private readonly codexUsage: CodexUsageStore | null
+  private readonly claudeUsage: AutomationUsageClient | null
+  private readonly codexUsage: AutomationUsageClient | null
   private readonly allowRemoteHostScheduling: boolean
   private readonly terminalLauncher: AutomationTerminalLauncher | null
   private readonly chatDispatcher: AutomationLauncher | null
@@ -69,8 +68,8 @@ export class AutomationService {
     store: Store,
     opts: {
       tickMs?: number
-      claudeUsage?: ClaudeUsageStore
-      codexUsage?: CodexUsageStore
+      claudeUsage?: AutomationUsageClient
+      codexUsage?: AutomationUsageClient
       allowRemoteHostScheduling?: boolean
       terminalLauncher?: AutomationTerminalLauncher
       chatDispatcher?: AutomationLauncher

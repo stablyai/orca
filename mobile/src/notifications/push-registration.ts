@@ -1,31 +1,36 @@
-import { ensureDesktopNotificationChannel } from './desktop-notification-channel'
+import { ensureDesktopNotificationChannel } from './foreground-delivery/desktop-notification-channel'
 import {
   createHostPushSupportCompletion,
   createHostPushState,
   type HostPushState,
   type HostPushSupportCompletion
-} from './host-push-registration-state'
+} from './push-registration/host-push-registration-state'
 import { AppState } from 'react-native'
-import { startMobilePushLeaseRenewal } from './mobile-push-lease-renewal'
+import { startMobilePushLeaseRenewal } from './push-registration/mobile-push-lease-renewal'
 import {
   loadNotificationDeliveryPreferences,
   notificationPreferencesFilter,
   saveNotificationDeliveryPreferences,
   type NotificationDeliveryPreferences
-} from './notification-delivery-preferences'
-import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+} from './delivery-policy/notification-delivery-preferences'
+import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY as NOTIFICATIONS_REMOTE_PUSH_CAPABILITY } from '../../../src/shared/mobile-runtime-capabilities'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-capability-probe'
-import { sendRegister, sendUnregister } from './mobile-push-registration-operations'
+import {
+  sendRegister,
+  sendUnregister
+} from './push-registration/mobile-push-registration-operations'
 import {
   loadPushNotificationsEnabled,
   loadRemotePushHostRegistrations,
   savePushNotificationsEnabled,
   saveRemotePushHostRegistrations
 } from '../storage/preferences'
-import { addPushTokenListener, getDevicePushToken, type MobilePushToken } from './push-token'
-
-export const NOTIFICATIONS_REMOTE_PUSH_CAPABILITY = NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY
+import {
+  addPushTokenListener,
+  getDevicePushToken,
+  type MobilePushToken
+} from './push-registration/push-token'
 
 const REQUEST_TIMEOUT_MS = 5_000
 const REMOVAL_TIMEOUT_MS = 2_000

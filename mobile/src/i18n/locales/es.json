@@ -2524,8 +2524,7 @@
     "tabStrip": {
       "checkingCapabilities": "Comprobando las funciones del escritorio. Inténtalo de nuevo en un momento.",
       "newTab": "Nueva pestaña",
-      "quickCommandsUpdateRequired": "Actualiza el escritorio para usar los comandos rápidos.",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Actualiza el escritorio para usar los comandos rápidos."
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Limpiar terminal",
@@ -2568,6 +2567,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "No se pudo adjuntar (reconectando)"
+    },
+    "useCloseActions": {
+      "closeFailed": "No se pudo cerrar la pestaña. Inténtalo de nuevo.",
+      "closeFailedDesktopNotReady": "No se pudo cerrar la pestaña. Orca todavía se está cargando en tu ordenador. Vuelve a intentarlo en un momento."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "No se pudo ejecutar el comando del navegador",

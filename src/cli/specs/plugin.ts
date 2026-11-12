@@ -1,6 +1,6 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS, LOCAL_COMMAND_FLAGS } from '../args'
-import { PLUGIN_TEMPLATE_NAMES } from '../plugin-authoring/plugin-template-names'
+import { PLUGIN_TEMPLATE_NAMES } from '../plugins/authoring/plugin-template-names'
 import { PLUGIN_DEV_HOOK_COMMAND_SPEC, PLUGIN_DEV_REQUEST_COMMAND_SPEC } from './plugin-dev-request'
 
 const TEMPLATES = PLUGIN_TEMPLATE_NAMES.join('|')
@@ -162,7 +162,9 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca plugin disable <plugin-key> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'plugin'],
     positionalArgs: ['plugin'],
-    notes: ['Never needs approval.'],
+    notes: [
+      'Never needs approval. Pauses the automations the plugin created; enabling it again does not resume them.'
+    ],
     examples: ['orca plugin disable acme.notes']
   },
   {
@@ -182,7 +184,8 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca plugin system off [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
-      'Stops every plugin and keeps installs, approvals and development folders. Never needs approval.'
+      'Stops every plugin and keeps installs, approvals and development folders. Never needs approval.',
+      'Pauses the automations plugins created; they stay paused when plugins are turned back on.'
     ],
     examples: ['orca plugin system off']
   },

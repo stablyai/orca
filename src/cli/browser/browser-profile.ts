@@ -13,7 +13,7 @@ import {
   formatTabProfileClone,
   formatTabProfileShow
 } from './browser-format'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { RuntimeClientError } from '../runtime/types'
 import { getBrowserCommandTarget } from './browser-command-target'
 

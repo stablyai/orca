@@ -1,4 +1,4 @@
-import { waitForStartupPhases } from '../../rpc/startup-phase-wait'
+import { waitForStartupPhases } from '../../rpc/startup/startup-phase-wait'
 
 // Long enough for a desktop renderer to reattach its terminals; well inside the CLI's 60 s request timeout.
 export const STARTUP_IDENTITY_WAIT_MS = 30_000

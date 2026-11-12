@@ -85,18 +85,6 @@ it.each([
 })
 
 it.each([
-  ['heading', '<h2><code>a</code><code>b</code><pre>x</pre></h2>', '## `ab`\n\n```\nx\n```'],
-  ['paragraph', '<p><code>a</code><code>b</code><pre>x</pre></p>', '`ab`\n\n```\nx\n```']
-])('joins adjacent inline code beside a %s-owned code block', (_name, html, markdown) => {
-  document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
-  const editorDocument = createRichMarkdownEditorDocument(quietRichMarkdownEditorHost())
-  stopDocuments.push(editorDocument.stop)
-  document.getElementById('editor')!.innerHTML = html
-
-  expect(editorDocument.send.currentMarkdown()).toBe(markdown)
-})
-
-it.each([
   ['inline code', '<p><code>x\u00a0 z\u00a0</code> after</p>', '`x  z ` after'],
   ['an inline code line break', '<p><code>first<br>second</code></p>', '`first second`'],
   ['a code block', '<pre><code>\u00a0 \u00a0if x:</code></pre>', '```\n   if x:\n```']

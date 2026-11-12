@@ -1,5 +1,5 @@
 import type { HandlerContext } from '../../dispatch'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import { formatOrchestrationErrorLine } from '../../cli-error'
 import { renderCommand } from '../../orchestration-mutation-recovery'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'

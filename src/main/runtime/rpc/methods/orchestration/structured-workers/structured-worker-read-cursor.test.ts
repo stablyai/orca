@@ -6,7 +6,7 @@ import { agentSessionConversationView } from '../../../../../../shared/agent-ses
 /** Mutate journals between reads to catch in-place revisions and mid-array insertions missed by oldest-item-only cursor identity; both can silently omit or duplicate output. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildStructuredJournalArchive } from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
+import { boundStructuredJournalTail } from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
 import { projectSavedChatContextItems } from '../../../../../native-chat/agent-session-saved-prompt-text'
 import { formatWorkerTranscriptMessage } from '../../../../../../shared/worker-transcript-text'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -97,7 +97,7 @@ describe('the structured worker-read cursor over a mutating journal', () => {
     hostRef.current = null
   })
 
-  it('omits creation facts from worker output, consumed prefixes, saved context and archives', async () => {
+  it('omits creation facts from worker output, consumed prefixes, saved context and terminal views', async () => {
     const start: AgentJournalRenderItem = {
       itemId: 'i2',
       revision: 1,
@@ -132,13 +132,7 @@ describe('the structured worker-read cursor over a mutating journal', () => {
     expect(textsOf(await read(first.cursor))).toEqual(['answer'])
     const saved = projectSavedChatContextItems(items).map(formatWorkerTranscriptMessage).join('\n')
     expect(saved).toBe('[assistant] first\n[assistant] answer')
-    const archive = buildStructuredJournalArchive({
-      agent: 'claude',
-      processIncarnation: 'fixture',
-      items,
-      hasOlder: false
-    })
-    expect(archive.messages.map(formatWorkerTranscriptMessage)).toEqual([
+    expect(boundStructuredJournalTail(items).messages.map(formatWorkerTranscriptMessage)).toEqual([
       '[assistant] first',
       '[assistant] answer'
     ])

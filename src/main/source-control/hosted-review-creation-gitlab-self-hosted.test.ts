@@ -25,12 +25,12 @@ vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../git/command-runner/glab-exec-file', async (importOriginal) => ({
+vi.mock('../git/command-runner/hosted-cli/glab-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   glabExecFileAsync: glabExecFileAsyncMock
 }))
 
-vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+vi.mock('../git/command-runner/hosted-cli/gh-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ghExecFileAsync: ghExecFileAsyncMock
 }))
@@ -63,11 +63,14 @@ vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
 
-import { _resetKnownHostsCache, _resetProjectRefCache } from '../gitlab/gl-utils'
-import { diagnoseAuth } from '../gitlab/client'
+import {
+  _resetKnownHostsCache,
+  rememberGlabKnownHosts
+} from '../gitlab/projects/gitlab-known-host-probe'
+import { _resetProjectRefCache } from '../gitlab/projects/gitlab-project-ref-resolution'
+import { diagnoseAuth } from '../gitlab/requests/gitlab-auth-and-rate-limit'
 import { getHostedReviewCreationEligibility } from './hosted-review-creation'
 import { detectHostedReviewProvider } from './forge-provider-detection'
-import { rememberGlabKnownHosts } from '../gitlab/gitlab-known-host-probe'
 
 function resetMocks(): void {
   for (const mock of [

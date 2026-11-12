@@ -13,7 +13,7 @@ import { planCommitMessageGeneration } from '../../shared/source-control/ai/gene
 import { withPlatform } from './commit-message-text-generation-test-harness'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
 import './source-control-local-generation'
-import { resolveCommand } from '../git/command-runner/wsl-command-resolution'
+import { resolveCommand } from '../git/command-runner/host-routing/wsl-command-resolution'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 vi.mock('node:child_process', async (original) => {
