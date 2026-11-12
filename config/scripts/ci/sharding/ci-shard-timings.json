@@ -7142,7 +7142,6 @@
       "tests/e2e/helpers/remote-skill-cloud-fixture.unit.test.ts": 269,
       "tests/e2e/helpers/wsl-terminate-retry.unit.test.ts": 60,
       "tests/e2e/host-agent-launch-preferences-work.unit.test.ts": 3882,
-      "tests/e2e/host-agent-launch-settings-hook-bookkeeping.unit.test.ts": 21972,
       "tests/e2e/host-cold-park-remote-subscriber.unit.test.ts": 5314,
       "tests/e2e/launch-agent-background-session-remote.unit.test.ts": 1016,
       "tests/e2e/linear-cli-recovery.unit.test.ts": 7592,
