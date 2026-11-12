@@ -44,6 +44,7 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     loginCommand: ['kimi', 'login'],
     installCommand: 'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash'
   },
+  { agent: 'cursor', loginCommand: ['cursor-agent', 'login'] },
   // An `agy` login does not sign its chats in: they keep their own sign-in.
   { agent: 'antigravity', loginCommand: [] }
 ] as const
