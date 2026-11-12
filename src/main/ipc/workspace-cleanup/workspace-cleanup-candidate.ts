@@ -79,7 +79,8 @@ export async function buildWorkspaceCleanupCandidate(args: {
       upstreamAhead: gitEvidence.upstreamAhead,
       upstreamBehind: gitEvidence.upstreamBehind,
       checkedAt: gitEvidence.checkedAt,
-      ...(gitEvidence.merge ? { merge: gitEvidence.merge } : {})
+      ...(gitEvidence.merge ? { merge: gitEvidence.merge } : {}),
+      atRiskLocalFiles: gitEvidence.atRiskLocalFiles
     },
     fingerprint: ''
   }

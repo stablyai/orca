@@ -3,7 +3,7 @@ import type { AppState } from '../../types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import {
   canQueueWorkspaceCleanupCandidate,
-  shouldForceWorkspaceCleanupRemoval,
+  needsWorkspaceCleanupRemovalApproval,
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupScanError,
@@ -282,7 +282,7 @@ export function evaluateWorkspaceCleanupPreflight(
       failure: getWorkspaceCleanupGitUnavailableFailure(target, candidate)
     }
   }
-  if (!target.approvedCandidate && shouldForceWorkspaceCleanupRemoval(candidate)) {
+  if (!target.approvedCandidate && needsWorkspaceCleanupRemovalApproval(candidate)) {
     return failure(
       translate(
         'auto.store.slices.workspace.cleanup.forceNeedsApproval',

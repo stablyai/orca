@@ -20,6 +20,7 @@ const GIT_SORT_FIELDS: ReadonlySet<WorkspaceCleanupSortField> = new Set(['git', 
 
 const GIT_DERIVED_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'dirty-files',
+  'ignored-files',
   'unpushed-commits',
   'git-status-error',
   'unknown-base'

@@ -14,7 +14,8 @@ import {
   getNoUnpushedCommitsLabel,
   getUncommittedChangesLabel,
   getUnpushedCommitsLabel,
-  getWorkspaceCleanupBlockerLabel
+  getWorkspaceCleanupBlockerLabel,
+  formatWorkspaceCleanupIgnoredFilesLabel
 } from './workspace-cleanup-candidate-labels'
 
 export type StatusPillTone = 'neutral' | 'ready' | 'review' | 'destructive'
@@ -36,7 +37,7 @@ export function getCandidateFactStatuses(
 ): CandidateFactStatus[] {
   const landed = getLandedFactStatus(candidate, t)
   if (candidate.blockers.length > 0) {
-    return [...candidate.blockers.map(getBlockerFactStatus), ...(landed ? [landed] : [])]
+    return [...candidate.blockers.map((blocker) => getBlockerFactStatus(candidate, blocker, t)), ...(landed ? [landed] : [])]
   }
   if (landed) {
     return [landed]
@@ -103,24 +104,28 @@ function getLandedFactStatus(
 
 const GIT_SAFETY_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'dirty-files',
+  'ignored-files',
   'unpushed-commits',
   'unknown-base',
   'git-status-error'
 ])
 
-function getBlockerFactStatus(blocker: WorkspaceCleanupBlocker): CandidateFactStatus {
+function getBlockerFactStatus(
+  candidate: WorkspaceCleanupCandidate,
+  blocker: WorkspaceCleanupBlocker,
+  t: Translate
+): CandidateFactStatus {
   return {
     label:
       blocker === 'dismissed'
-        ? translate(
-            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e8b3741ff7',
-            'Ignored'
-          )
-        : getWorkspaceCleanupBlockerLabel(blocker),
+        ? t('auto.components.workspace.cleanup.WorkspaceCleanupDialog.e8b3741ff7', 'Ignored')
+        : blocker === 'ignored-files'
+          ? formatWorkspaceCleanupIgnoredFilesLabel(candidate.git.atRiskLocalFiles, t)
+          : getWorkspaceCleanupBlockerLabel(blocker),
     tone:
       blocker === 'git-status-error' || blocker === 'unknown-base'
         ? 'destructive'
-        : blocker === 'dirty-files' || blocker === 'unpushed-commits'
+        : blocker === 'dirty-files' || blocker === 'ignored-files' || blocker === 'unpushed-commits'
           ? 'review'
           : 'neutral',
     git: GIT_SAFETY_BLOCKERS.has(blocker)

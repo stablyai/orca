@@ -3,6 +3,7 @@ import type { WorkspaceCleanupBrowseState } from './workspace-cleanup-browse-sta
 import type { ExecutionHostId } from '../execution-host'
 import type { HostedReviewProvider } from '../source-control/hosted-review/hosted-review-contracts'
 import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
+import type { WorktreeAtRiskLocalFiles } from '../worktree/at-risk-local-files'
 
 export const WORKSPACE_CLEANUP_CLASSIFIER_VERSION = 2
 export const WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS = 7 * 24 * 60 * 60 * 1000
@@ -42,6 +43,7 @@ export type WorkspaceCleanupBlocker =
   | 'ssh-disconnected'
   | 'git-status-error'
   | 'dirty-files'
+  | 'ignored-files'
   | 'unpushed-commits'
   | 'unknown-base'
   | 'dismissed'
@@ -89,6 +91,8 @@ export type WorkspaceCleanupCandidate = {
     checkedAt: number | null
     /** Absent when Git was not read or the base ref could not be resolved. */
     merge?: WorkspaceCleanupMergeEvidence
+    /** Absent from older hosts, which never checked ignored files. */
+    atRiskLocalFiles?: WorktreeAtRiskLocalFiles | null
   }
   fingerprint: string
 }
@@ -179,6 +183,15 @@ export function shouldForceWorkspaceCleanupRemoval(
     candidate.git.clean !== true ||
     candidate.git.checkedAt === null ||
     candidate.blockers.some((blocker) => WORKSPACE_CLEANUP_FORCE_REMOVE_BLOCKERS.has(blocker))
+  )
+}
+
+/** Rows the user must review before removal; ignored files never make git refuse, so they need no force. */
+export function needsWorkspaceCleanupRemovalApproval(
+  candidate: Pick<WorkspaceCleanupCandidate, 'blockers' | 'git'>
+): boolean {
+  return (
+    shouldForceWorkspaceCleanupRemoval(candidate) || candidate.blockers.includes('ignored-files')
   )
 }
 
