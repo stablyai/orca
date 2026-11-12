@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
 import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime-environment-subscriptions'
@@ -19,6 +19,10 @@ const { localIpc } = await vi.hoisted(async () => {
   return { localIpc: new EventEmitter() }
 })
 vi.mock('electron', () => ({ ipcRenderer: localIpc }))
+const now = 1_767_225_600_000
+beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(now)
+})
 const initialState = useAppStore.getState()
 const cleanups: (() => void)[] = []
 afterEach(() => {
@@ -165,7 +169,7 @@ function harness(rows: Worktree[]) {
       ['host-a', 'host-b'].map(
         (id): [string, { status: typeof status.result; checkedAt: number }] => [
           id,
-          { status: status.result, checkedAt: Date.now() }
+          { status: status.result, checkedAt: now }
         ]
       )
     ),
@@ -526,7 +530,7 @@ it.each([10, 100])(
           getLinearReadScope(null, workspace.linkedTaskSourceContext),
           'all::list::assigned::20::'
         ),
-        { fetchedAt: Date.now(), data: { items: [{ ...issue('eng-1'), workspaceId: 'w1' }] } }
+        { fetchedAt: now, data: { items: [{ ...issue('eng-1'), workspaceId: 'w1' }] } }
       ])
     )
     useAppStore.setState({ linearListCache: lists })
@@ -600,9 +604,9 @@ it.each(['missing', 'ambiguous'])(
       settings: null,
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'w2' },
       linearListCache: {
-        'w1::list::assigned::20::': { fetchedAt: Date.now(), data: { items: [issue('ENG-1')] } },
-        'all::list::assigned::20::': { fetchedAt: Date.now(), data: { items: [issue('ENG-1')] } },
-        'w2::list::assigned::20::': { fetchedAt: Date.now(), data: { items: [issue('OTHER-2')] } }
+        'w1::list::assigned::20::': { fetchedAt: now, data: { items: [issue('ENG-1')] } },
+        'all::list::assigned::20::': { fetchedAt: now, data: { items: [issue('ENG-1')] } },
+        'w2::list::assigned::20::': { fetchedAt: now, data: { items: [issue('OTHER-2')] } }
       }
     })
     h.start()
@@ -659,9 +663,9 @@ it('does not inherit a spent W1 detail obligation for a later W2 collection-only
   const cached = useAppStore.getState().linearIssueCache[key]
   const scope = getLinearReadScope(null, workspace.linkedTaskSourceContext)
   const listKey = scopedLinearCacheKey(scope, 'w2::list::assigned::20::')
-  const lists = { [listKey]: { fetchedAt: Date.now(), data: { items: [issue('OTHER-2')] } } }
+  const lists = { [listKey]: { fetchedAt: now, data: { items: [issue('OTHER-2')] } } }
   useAppStore.setState({
-    linearIssueCache: { [key]: { ...cached, fetchedAt: Date.now() - 61_000 } },
+    linearIssueCache: { [key]: { ...cached, fetchedAt: now - 61_000 } },
     linearListCache: lists
   })
   h.request.mockClear()
