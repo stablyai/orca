@@ -428,4 +428,106 @@ test.describe('Combined diff scroll restore', () => {
       rmSync(fixture.repoPath, { recursive: true, force: true })
     }
   })
+  test('keeps a note selection focused while its bounded editor scrolls away', async ({
+    orcaPage
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = createCombinedDiffScrollRepo()
+    try {
+      const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+      await openCombinedDiff(orcaPage, worktreeId, fixture.repoPath)
+      const viewport = orcaPage.locator('[data-combined-diff-viewport]')
+      await expect(viewport).toBeVisible()
+      const line = orcaPage
+        .locator('.modified-in-monaco-diff-editor .view-line')
+        .filter({ hasText: 'export const changed_0_5 = 5' })
+        .first()
+      await expect(line).toBeVisible()
+      await line.hover({ position: { x: 4, y: 8 } })
+      await orcaPage.locator('.orca-diff-comment-add-btn:visible').click()
+
+      for (const kind of ['draft', 'saved'] as const) {
+        const card = orcaPage.locator(
+          kind === 'draft' ? '.orca-diff-comment-draft-card' : '.orca-diff-comment-card'
+        )
+        if (kind === 'saved') {
+          await card.getByTitle('Edit note').click()
+        }
+        const textarea = card.locator('textarea')
+        await expect(textarea).toBeFocused()
+        await textarea.fill('alpha beta gamma')
+        await textarea.press('Home')
+        for (let step = 0; step < 6; step++) {
+          await orcaPage.keyboard.press('ArrowRight')
+        }
+        for (let step = 0; step < 4; step++) {
+          await orcaPage.keyboard.press('Shift+ArrowRight')
+        }
+        const input = await textarea.elementHandle()
+        if (!input) {
+          throw new Error('note textarea missing')
+        }
+        const selection = () =>
+          input.evaluate((element) => ({
+            focused: document.activeElement === element,
+            start: element.selectionStart,
+            end: element.selectionEnd,
+            body: element.value
+          }))
+        await expect.poll(selection).toEqual({
+          focused: true,
+          start: 6,
+          end: 10,
+          body: 'alpha beta gamma'
+        })
+        const bounds = await viewport.boundingBox()
+        if (!bounds) {
+          throw new Error('combined viewport bounds missing')
+        }
+        await viewport.hover({ position: { x: 8, y: 100 } })
+        const distance = kind === 'draft' ? 1600 : 6000
+        await orcaPage.mouse.wheel(0, distance)
+        await expect(textarea).not.toBeInViewport()
+        await expect.poll(selection).toEqual({
+          focused: true,
+          start: 6,
+          end: 10,
+          body: 'alpha beta gamma'
+        })
+        await orcaPage.mouse.wheel(0, -distance)
+        await expect(textarea).toBeInViewport()
+        await expect.poll(selection).toEqual({
+          focused: true,
+          start: 6,
+          end: 10,
+          body: 'alpha beta gamma'
+        })
+        await orcaPage.keyboard.insertText('FOCUS')
+        await expect(textarea).toHaveValue('alpha FOCUS gamma')
+        await testInfo.attach(`${kind}-focus-after-return`, {
+          body: await orcaPage.screenshot(),
+          contentType: 'image/png'
+        })
+        if (kind === 'draft') {
+          await card.getByRole('button', { name: /add note/i }).click()
+          await expect(orcaPage.locator('.orca-diff-comment-card')).toContainText(
+            'alpha FOCUS gamma'
+          )
+        } else {
+          await viewport.hover({ position: { x: 8, y: 100 } })
+          await orcaPage.mouse.wheel(0, distance)
+          await expect(textarea).not.toBeInViewport()
+          await viewport.click({ position: { x: 8, y: 100 } })
+          await expect(textarea).not.toBeFocused()
+          await orcaPage.mouse.wheel(0, -distance)
+          await expect(textarea).toBeInViewport()
+          await expect(textarea).not.toBeFocused()
+          await card.getByRole('button', { name: /cancel/i }).click()
+          await expect(textarea).toHaveCount(0)
+        }
+      }
+    } finally {
+      rmSync(fixture.repoPath, { recursive: true, force: true })
+    }
+  })
 })

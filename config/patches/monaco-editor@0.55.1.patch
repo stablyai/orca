@@ -154,6 +154,45 @@ diff --git a/esm/vs/editor/browser/viewParts/viewZones/viewZones.js b/esm/vs/edi
      changeViewZones(callback) {
          let zonesHaveChanged = false;
          this._context.viewModel.changeWhitespace((whitespaceAccessor) => {
+@@ -282,6 +302,19 @@
+             visibleZones[visibleWhitespace.id] = visibleWhitespace;
+             hasVisibleZone = true;
+         }
++        let focusedZone;
++        for (let node = this.domNode.domNode.ownerDocument.activeElement; node; node = node.parentElement) {
++            if (node === this.domNode.domNode || node === this.marginDomNode.domNode) {
++                break;
++            }
++            const zone = this._zones[node.getAttribute('monaco-view-zone')];
++            if (zone && (zone.domNode.domNode === node || zone.marginDomNode?.domNode === node)) {
++                focusedZone = zone;
++                break;
++            }
++        }
++        const focusedBounds = focusedZone && !focusedZone.isInHiddenArea && !visibleZones.hasOwnProperty(focusedZone.whitespaceId)
++            ? this._context.viewLayout.getWhitespaceBounds(focusedZone.whitespaceId) : null;
+         const keys = Object.keys(this._zones);
+         for (let i = 0, len = keys.length; i < len; i++) {
+             const id = keys[i];
+@@ -305,7 +338,17 @@
+                     zone.domNode.removeAttribute('monaco-visible-view-zone');
+                     zone.isVisible = false;
+                 }
+-                this._safeCallOnDomNodeTop(zone.delegate, ctx.getScrolledTopFromAbsoluteTop(-1e6));
++                // Clipping a focused zone preserves its live control and caret; display:none blurs it.
++                if (zone === focusedZone && focusedBounds && focusedBounds.height > 0) {
++                    newTop = focusedBounds.top - ctx.bigNumbersDelta;
++                    newHeight = focusedBounds.height;
++                    newDisplay = 'block';
++                    hasVisibleZone = true;
++                    this._safeCallOnDomNodeTop(zone.delegate, ctx.getScrolledTopFromAbsoluteTop(focusedBounds.top));
++                }
++                else {
++                    this._safeCallOnDomNodeTop(zone.delegate, ctx.getScrolledTopFromAbsoluteTop(-1e6));
++                }
+             }
+             zone.domNode.setTop(newTop);
+             zone.domNode.setHeight(newHeight);
 diff --git a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js b/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js
 --- a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js
 +++ b/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js
