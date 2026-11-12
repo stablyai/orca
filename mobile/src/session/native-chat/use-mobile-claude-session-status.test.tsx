@@ -148,6 +148,26 @@ it('keeps a newer answer when an older one for the same chat lands later', async
   expect(latest?.usedTokens).toBe(20000)
 })
 
+it('keeps an older answer when the newer request for the same chat failed', async () => {
+  let answerFirst: (reply: Reply) => void = () => {}
+  const replies: Array<Reply | Promise<Reply>> = [
+    new Promise<Reply>((resolve) => {
+      answerFirst = resolve
+    }),
+    rpcRefusal('internal_error')
+  ]
+  const { client, sendRequest } = clientWith(() => replies.shift() ?? new Promise<Reply>(() => {}))
+  await mount(args(client))
+  await update(args(client, { refreshKey: 'r1' }))
+  await advance(2_000)
+  expect(sendRequest).toHaveBeenCalledTimes(2)
+  await act(async () => {
+    answerFirst(rpcSuccess({ status: STATUS }))
+  })
+  await flush()
+  expect(latest).toEqual(STATUS)
+})
+
 it('does not show the previous chat while the new one loads', async () => {
   const { client } = clientWith((sessionId) =>
     sessionId === 'a' ? rpcSuccess({ status: STATUS }) : new Promise<Reply>(() => {})
