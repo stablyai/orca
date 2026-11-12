@@ -66,6 +66,42 @@ export function areWorktreePathsEqual(
   return canonicalWorktreePath(leftPath, platform) === canonicalWorktreePath(rightPath, platform)
 }
 
+export function createWorktreePathMembership(
+  paths: Iterable<string>,
+  platform = process.platform
+): (pathValue: string) => boolean {
+  const posixKeys = new Set<string>()
+  const windowsKeys = new Set<string>()
+  const relativeKeys = new Set<string>()
+  const nonPosixWindowsKeys = new Set<string>()
+  for (const pathValue of paths) {
+    if (looksLikePosixAbsolutePath(pathValue)) {
+      posixKeys.add(canonicalWorktreePath(pathValue, platform))
+      continue
+    }
+    const windowsKey = canonicalWorktreePath(pathValue, 'win32')
+    nonPosixWindowsKeys.add(windowsKey)
+    if (platform === 'win32' || isWindowsAbsolutePathLike(pathValue)) {
+      windowsKeys.add(windowsKey)
+    } else {
+      relativeKeys.add(canonicalWorktreePath(pathValue, platform))
+    }
+  }
+  // Relative paths compare in Windows syntax only when the other path requires it.
+  return (pathValue) => {
+    if (looksLikePosixAbsolutePath(pathValue)) {
+      return posixKeys.has(canonicalWorktreePath(pathValue, platform))
+    }
+    if (platform === 'win32' || isWindowsAbsolutePathLike(pathValue)) {
+      return nonPosixWindowsKeys.has(canonicalWorktreePath(pathValue, 'win32'))
+    }
+    return (
+      (relativeKeys.size > 0 && relativeKeys.has(canonicalWorktreePath(pathValue, platform))) ||
+      (windowsKeys.size > 0 && windowsKeys.has(canonicalWorktreePath(pathValue, 'win32')))
+    )
+  }
+}
+
 export function dedupeWorktreesByPath<T extends { path: string }>(
   worktrees: readonly T[],
   platform = process.platform
