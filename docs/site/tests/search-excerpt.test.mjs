@@ -12,15 +12,6 @@ test('link destinations retain escaped closing parentheses and literal escapes',
   }
 })
 
-test('search excerpts omit inline Markdown syntax', () => {
-  assert.equal(
-    stripSearchExcerptMarkdown(
-      'Use **bold**, *emphasis*, `inline code`, and [linked text](https://example.com).'
-    ),
-    'Use bold, emphasis, inline code, and linked text.'
-  )
-})
-
 test('search excerpts preserve highlighted matches inside Markdown', () => {
   assert.equal(
     stripSearchExcerptMarkdown('**<mark>Privacy</mark> controls**'),

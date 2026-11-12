@@ -2056,9 +2056,7 @@
     },
     "queuedCardText": {
       "showLessHint": "Shows less of the message",
-      "showMoreHint": "Shows the whole message",
-      "showLess": "Show less",
-      "showMore": "Show more"
+      "showMoreHint": "Shows the whole message"
     },
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
@@ -2068,9 +2066,8 @@
       "sendHint": "Send this message",
       "steer": "Steer",
       "send": "Send",
-      "deleteHint": "Delete this queued message",
       "moreActions": "More actions",
-      "showLessHint": "Shows less of the message"
+      "you": "You"
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Commands can't be saved in a queued message.",
@@ -3027,10 +3024,16 @@
       "clearAll": "Clear all",
       "resumeSending": "Resume sending the queued messages",
       "resume": "Resume",
-      "title": "Queued messages",
       "pausedState": "Paused",
       "queuedState": "Queued",
-      "editMessage": "Edit message"
+      "editMessage": "Edit message",
+      "showLess": "Show less",
+      "moreCount_one": "{{count}} more",
+      "moreCount_other": "{{count}} more",
+      "deleteMessage": "Delete message",
+      "queuedCount_one": "{{count}} queued message",
+      "queuedCount_other": "{{count}} queued messages",
+      "foldNeedsAttention": "{{more}}, a message needs attention"
     },
     "offlineQueue": {
       "failed": "Couldn't send — tap Send to retry",

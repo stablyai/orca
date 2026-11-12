@@ -3,7 +3,7 @@ import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
 import {
   isWorkspaceCleanupHeadLanded,

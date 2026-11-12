@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PRComment } from '../../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
 import { restorePRCommentThreadSnapshot } from './pr-comment-thread-resolution'
 
 function comment(overrides: Partial<PRComment>): PRComment {

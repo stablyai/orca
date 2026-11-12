@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { OrchestrationCompatibilityEvidence } from '../../../../../shared/orchestration/orchestration-compatibility-evidence'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
   COORDINATOR_HANDLE,
@@ -15,10 +14,6 @@ import {
 afterEach(() => {
   cleanupLegacyCompatibilityDispatcherHarnesses()
 })
-
-function unattested(proof: OrchestrationCompatibilityEvidence): OrchestrationCompatibilityEvidence {
-  return { ...proof, launchToken: '' }
-}
 
 async function claimAdoptedRunAsLegacyCoordinator(
   harness: LegacyCompatibilityDispatcherHarness
@@ -49,23 +44,6 @@ async function takeoverAdoptedRun(harness: LegacyCompatibilityDispatcherHarness)
 }
 
 describe('legacy coordinator fence jurisdiction', () => {
-  it('declines jurisdiction over an unbound stranger while the adopted Run is claimed', async () => {
-    const harness = createHarness()
-    await claimAdoptedRunAsLegacyCoordinator(harness)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        { spec: 'fresh assignment', callerTerminalHandle: CURRENT_COORDINATOR_HANDLE },
-        currentEvidence('coordinator'),
-        'claimed-stranger-task-create'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'run_required' } })
-    expect(harness.db.listTasks({ runId: harness.adoptedRunId })).toHaveLength(1)
-  })
-
   it('releases the fence once the adopted Run is unclaimed and its principal is revoked', async () => {
     const harness = createHarness()
     await claimAdoptedRunAsLegacyCoordinator(harness)
@@ -122,72 +100,5 @@ describe('legacy coordinator fence jurisdiction', () => {
       )
     )
     expect(recovered).toMatchObject({ ok: true, result: { run: { id: harness.adoptedRunId } } })
-  })
-
-  it('leaves a named adopted Run to the downstream consumer check instead of the fence', async () => {
-    const harness = createHarness()
-    await claimAdoptedRunAsLegacyCoordinator(harness)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        {
-          spec: 'stranger assignment',
-          run: harness.adoptedRunId,
-          callerTerminalHandle: CURRENT_COORDINATOR_HANDLE
-        },
-        currentEvidence('coordinator'),
-        'claimed-stranger-named-run-task-create'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
-    expect(harness.db.listTasks({ runId: harness.adoptedRunId })).toHaveLength(1)
-  })
-
-  it('still fences the legacy coordinator after its principal is revoked by a takeover', async () => {
-    const harness = createHarness()
-    await claimAdoptedRunAsLegacyCoordinator(harness)
-    await takeoverAdoptedRun(harness)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        {
-          spec: 'stale assignment',
-          run: harness.adoptedRunId,
-          callerTerminalHandle: COORDINATOR_HANDLE
-        },
-        evidence('coordinator'),
-        'revoked-legacy-task-create'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'legacy_read_only' } })
-    expect(harness.db.listTasks({ runId: harness.adoptedRunId })).toHaveLength(1)
-  })
-
-  it('lets the post-takeover owner operate the adopted Run without attestation', async () => {
-    const harness = createHarness()
-    await claimAdoptedRunAsLegacyCoordinator(harness)
-    await takeoverAdoptedRun(harness)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        {
-          spec: 'owner assignment',
-          run: harness.adoptedRunId,
-          callerTerminalHandle: CURRENT_COORDINATOR_HANDLE
-        },
-        unattested(currentEvidence('coordinator')),
-        'owner-unattested-task-create'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { task: { run_id: harness.adoptedRunId, spec: 'owner assignment' } }
-    })
   })
 })

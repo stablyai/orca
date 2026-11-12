@@ -228,6 +228,30 @@
       "existingTitle": "Add on the {{distro}} host (recommended)",
       "existingWhy": "{{distro}} already runs as a host, so Git, files and terminals run natively in Linux instead of across the Windows file share.",
       "existingAccept": "Add on host"
+    },
+    "hiddenProjects": {
+      "hidden": "{{name}} hidden",
+      "hiddenDescription": "Its terminals and agents keep running. Show it again from Hidden projects below the list.",
+      "undo": "Undo",
+      "hideFailed": "Couldn't hide {{name}}. Its host may need an Orca update.",
+      "showFailed": "Couldn't show {{name}} again.",
+      "listLabel": "Hidden projects",
+      "show": "Show",
+      "showAriaLabel": "Show {{name}} in the sidebar",
+      "settingsTitle": "Hide from sidebar",
+      "settingsDescription": "Hides this host's copy of the project from the sidebar, project pickers and the workspace switcher. Its terminals, agents and automations keep running. On a paired Orca server, this hides it for everyone connected to that server.",
+      "settingsToggleLabel": "Hide {{name}} from the sidebar",
+      "keywordHide": "hide",
+      "keywordHidden": "hidden",
+      "keywordSidebar": "sidebar",
+      "hideFromSidebar": "Hide from Sidebar",
+      "sectionTitle": "Hidden projects ({{count}})",
+      "allHidden": "Every project is hidden. Show one from Hidden projects below.",
+      "undoGone": "{{name}} was removed from Orca.",
+      "settingsGroup": "Sidebar",
+      "showOnHostAriaLabel": "Show {{name}} on {{host}} in the sidebar",
+      "keywordShow": "show",
+      "keywordUnhide": "unhide"
     }
   },
   "app": {
@@ -12780,7 +12804,8 @@
           "title": "Remove {{value0}}?",
           "description": "Its data is removed too.",
           "cancel": "Cancel",
-          "remove": "Remove"
+          "remove": "Remove",
+          "pausesAutomations": "Automations it created are paused, and stay paused if you install it again."
         },
         "PluginRollbackDialog": {
           "title": "Roll back {{value0}}?",
@@ -13926,7 +13951,8 @@
           "dataLoadFailed": "Couldn’t load its files"
         },
         "PluginSettingsOverview": {
-          "offTitle": "Plugins are off"
+          "offTitle": "Plugins are off",
+          "offAutomations": "Automations plugins created are paused, and stay paused when plugins are turned back on."
         },
         "PluginFilterPopover": {
           "kind": "Category",
@@ -18509,7 +18535,10 @@
           "missedRunGrace": "Missed-run grace",
           "execution": "Execution",
           "notRunYet": "Not run yet",
-          "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported"
+          "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported",
+          "createdBy": "Created by",
+          "createdByPluginTitle": "Plugin {{plugin}}",
+          "createdByEnded": "Plugin removed or disabled; it must ask before changing this automation"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -23267,7 +23296,6 @@
       "description": "Agents there use the distro's default Claude and Codex accounts until Orca in WSL is updated."
     },
     "antigravity": {
-      "chatTitle": "Antigravity chats",
       "chatSignIn": "Sign in",
       "chatChangeAccount": "Change account",
       "chatRetry": "Retry sign-in",
@@ -23285,23 +23313,14 @@
       "chatFailed": "Sign-in failed. Try again.",
       "chatOtherClient": "Sign-in is in progress in another client.",
       "chatReadFailed": "Could not check the sign-in on {{host}}.",
-      "signIn": "Start agy on this host and complete its browser sign-in, then save the current account. To add a different account, use /logout in agy and sign in again.",
-      "docs": "Sign-in instructions",
       "retry": "Retry",
-      "identityUnknown": "Signed-in identity unavailable",
-      "signedOut": "No native agy account is signed in.",
       "changed": "The native account changed. Select a saved account again before launching agy.",
-      "save": "Save current account",
       "refresh": "Refresh accounts",
       "usage": "Refresh usage",
-      "working": "Updating account",
+      "usageWithReading": "Refresh usage ({{reading}})",
       "usageReading": "Session: {{session}} · Weekly: {{weekly}}",
       "saved": "Saved Google account",
-      "nativeActive": "Native account",
-      "selected": "Selected",
-      "select": "Select",
       "remove": "Remove",
-      "sessions": "Selection applies to new agy sessions on this host. Existing sessions may keep their previous account.",
       "searchDescription": "Save and select native agy Google accounts on the execution host.",
       "title": "Antigravity",
       "keyword": {
@@ -23311,12 +23330,10 @@
         "accounts": "accounts"
       },
       "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
-      "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.",
       "authMethod": "Sign in with",
       "personal": "Google account",
       "enterprise": "Gemini Enterprise",
       "gcpProject": "Google Cloud project",
-      "gcpLocation": "Google Cloud location",
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
       "settingsIncomplete": "Choose an Antigravity account type and enter its Google Cloud project and location.",
@@ -23324,9 +23341,8 @@
       "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
       "lastReading": "{{reading}} · Read {{time}}",
       "noReading": "Usage unknown: not read yet",
-      "personalDescription": "Uses your personal Google AI plan.",
-      "enterpriseDescription": "Uses your organization's Gemini Enterprise license.",
       "chatSeparate": "Separate from your agy terminal account.",
+      "chatAccount": "Chat account",
       "chatBadgeSigningIn": "Signing in",
       "chatBadgeSignedIn": "Signed in",
       "chatBadgeSignedOut": "Not signed in",
@@ -23334,7 +23350,25 @@
       "chatPasteOpen": "Browser page didn't load?",
       "chatSwitchMethod": "Sign in again to switch to {{method}}.",
       "enterpriseFieldsNeeded": "Enter a Google Cloud project and location.",
-      "fd47b5a5dd": "Antigravity accounts"
+      "fd47b5a5dd": "Antigravity accounts",
+      "personalOption": "Your personal Google AI plan",
+      "enterpriseOption": "Your organization's license",
+      "location": "Location",
+      "enterpriseFieldsShort": "Enter a project and location.",
+      "chatUseMethod": "Sign in again to use {{method}}",
+      "terminalInfoWindows": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Selecting applies to the host default agy credential.",
+      "terminalInfo": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Applies to new agy sessions.",
+      "loadFailed": "Couldn't load agy accounts",
+      "loading": "Loading accounts…",
+      "notSignedIn": "Not signed in",
+      "runAgy": "Run agy on this host to sign in",
+      "signInHelp": "Sign-in help",
+      "currentLogin": "Current agy login",
+      "currentNotSaved": "Current agy login · not saved",
+      "noEmailNotSaved": "agy didn't report an email · not saved",
+      "saveShort": "Save",
+      "readAt": "Read {{time}}",
+      "active": "Active"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -25190,6 +25224,20 @@
       "cancel": "Cancel",
       "message": "{{plugin}} wants to open {{host}}",
       "alwaysAllow": "Always allow {{host}} for this plugin"
+    },
+    "actionConfirmation": {
+      "cancel": "Cancel",
+      "deleteAutomation": "{{plugin}} wants to delete the automation “{{automation}}”",
+      "deleteAutomationDetail": "The plugin did not create it. Its schedule stops and it is removed from Automations.",
+      "delete": "Delete",
+      "changeAutomation": "{{plugin}} wants to change the automation “{{automation}}”",
+      "changeAutomationDetail": "The plugin did not create it. It would change: {{fields}}.",
+      "change": "Change",
+      "changeElevatedAutomationDetail": "It runs its agent with extra settings you chose (arguments, a permission mode or a precheck command). It would change: {{fields}}.",
+      "newPrompt": "New prompt: “{{prompt}}”",
+      "unknownProject": "an unknown project",
+      "automationNewWorkspaces": "Automation {{id}}: a new workspace of {{project}} each run, on {{schedule}}.",
+      "automationInWorkspace": "Automation {{id}}: in {{project}} / {{workspace}}, on {{schedule}}."
     }
   },
   "checks": {

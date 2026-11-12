@@ -102,7 +102,7 @@ describe('async question send ownership', () => {
     ).toBe(false)
     act(() =>
       [...container.querySelectorAll('button')]
-        .find((node) => node.textContent === 'Submit')!
+        .find((node) => node.textContent?.startsWith('Submit'))!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }))
     )
     act(() => completions[0]!())

@@ -1,4 +1,4 @@
-import type { GitHubWorkItem } from '../github/work-item-types'
+import type { GitHubWorkItem } from '../github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../gitlab-types'
 import type { JiraIssue } from '../jira/jira-types'
 import type { LinearIssue } from '../linear/issue-types'
@@ -7,7 +7,7 @@ import type { BaseRefSearchResult } from '../repo-types'
 import { branchRefLabel, branchRefLabels } from '../git/refs/branch-ref-label'
 import { parseJiraIssueUrl } from '../jira/jira-issue-url'
 import { buildJiraTextMatchJql } from '../jira/jira-search-input-jql'
-import type { GitHubIssueOrPRLink } from '../github/links'
+import type { GitHubIssueOrPRLink } from '../github/repositories/links'
 import {
   buildSmartWorkspaceUrlSourceRows,
   type SmartWorkspaceGitLabUrlIntent

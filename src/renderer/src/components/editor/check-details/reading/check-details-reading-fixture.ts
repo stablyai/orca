@@ -5,7 +5,7 @@ import type {
   PRCheckDetail,
   PRCheckJob,
   PRCheckRunDetails
-} from '../../../../../../shared/github/check-types'
+} from '../../../../../../shared/github/checks/check-types'
 import { createCheckDetailsReadingOwner } from './check-details-reading-owner'
 import {
   checkJobIdentities,

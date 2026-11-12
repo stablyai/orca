@@ -134,15 +134,21 @@ export function* encodeUsageCacheJson(value: unknown): Generator<string> {
 }
 
 /** EOF validation precedes exposing any of the privately assembled records. */
-export async function readUsageCacheJson<T>(path: string): Promise<T | null> {
+export async function parseUsageCacheJson<T>(chunks: AsyncIterable<string>): Promise<T | null> {
   const assembler = new Assembler<T>()
   const reader = createJsonTokenReader((token) => assembler.consume(token))
-  for await (const text of createReadStream(path, {
-    encoding: 'utf8',
-    highWaterMark: TEXT_BATCH_CHARS
-  })) {
+  for await (const text of chunks) {
     reader.write(text)
   }
   reader.end()
   return assembler.current
+}
+
+export function readUsageCacheJson<T>(path: string): Promise<T | null> {
+  return parseUsageCacheJson<T>(
+    createReadStream(path, {
+      encoding: 'utf8',
+      highWaterMark: TEXT_BATCH_CHARS
+    })
+  )
 }

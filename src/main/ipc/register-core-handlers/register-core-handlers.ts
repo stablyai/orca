@@ -78,11 +78,9 @@ import { registerMiniMaxCredentialsHandlers } from '../minimax-credentials'
 import { registerZcodePlanCredentialsHandlers } from '../zcode-plan-credentials'
 import { registerGrokAccountHandlers } from '../grok-accounts'
 import { registerCursorAccountHandlers } from '../cursor-accounts'
-import { registerUpdaterHandlers } from '../../window/attach-main-window-services'
-import {
-  registerClipboardHandlers,
-  setTrustedClipboardRendererWebContentsId
-} from '../../window/clipboard-ipc-handlers'
+import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
+import { registerClipboardHandlers } from '../../window/clipboard/clipboard-ipc-handlers'
+import { setTrustedClipboardRendererWebContentsId } from '../../window/clipboard/clipboard-ipc-sender-trust'
 import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexAccountService } from '../../codex-accounts/service'
@@ -101,8 +99,8 @@ import {
   prepareRuntimeAiVaultSessionResume,
   resolveRuntimeAiVaultSessionTitles,
   scanRuntimeAiVaultSessions
-} from '../../ai-vault/runtime-session-scanner'
-import { callRuntimeSessionSearch } from '../../ai-vault/runtime-session-search-call'
+} from '../../ai-vault/runtime-hosts/runtime-session-scanner'
+import { callRuntimeSessionSearch } from '../../ai-vault/runtime-hosts/runtime-session-search-call'
 import { configureRuntimeAiVaultSessionDelete } from '../ai-vault/ai-vault-delete'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'

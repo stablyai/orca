@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { SidebarProjectFilterPanel } from './SidebarProjectFilterPanel'
 import type { Repo } from '../../../../../../shared/repo-types'
+import { withoutHiddenRepos } from '../../../../../../shared/hidden-projects'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -39,18 +40,25 @@ type SidebarRepositoryFilterSectionProps = {
   // Agents inject their own persisted filter; workspace navigation supplies the defaults.
   filterRepoIds?: readonly string[]
   setFilterRepoIds?: (ids: string[]) => void
+  /** Lists hidden projects too, for views (Agents) that still show their work. */
+  includeHidden?: boolean
 }
 
 const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilterSection({
   preserveWorkspaceBoardOpen = false,
   filterRepoIds: filterRepoIdsProp,
-  setFilterRepoIds: setFilterRepoIdsProp
+  setFilterRepoIds: setFilterRepoIdsProp,
+  includeHidden = false
 }: SidebarRepositoryFilterSectionProps) {
   const t = useTranslate()
   useUiLanguageRevision()
   const workspaceFilterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setWorkspaceFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
-  const repos = useAppStore((s) => s.repos)
+  const allRepos = useAppStore((s) => s.repos)
+  const repos = useMemo(
+    () => (includeHidden ? allRepos : withoutHiddenRepos(allRepos)),
+    [allRepos, includeHidden]
+  )
   const filterRepoIds = filterRepoIdsProp ?? workspaceFilterRepoIds
   const setFilterRepoIds = setFilterRepoIdsProp ?? setWorkspaceFilterRepoIds
 

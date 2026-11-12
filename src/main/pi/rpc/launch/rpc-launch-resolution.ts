@@ -27,7 +27,7 @@ import {
 } from '../../../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import { isWindowsProcessStartTimeAvailable } from '../../../windows/windows-process-table'
-import { sessionIdFromFileName } from '../../../ai-vault/session-scanner-accumulator'
+import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import {
   PI_RPC_SESSION_ENV_TO_DELETE,
   withoutPiCallerEnv,

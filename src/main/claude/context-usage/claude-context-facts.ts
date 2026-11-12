@@ -28,12 +28,18 @@ const CONVERSATION_FRAME_TYPES = new Set(['assistant', 'user', 'stream_event'])
 /** Null targets the newest journal turn when no turn was open at request time. */
 export type ClaudeContextReportTarget = AgentJournalItemIdentity | null
 
-export type ClaudeContextReportPart = 'report' | 'window'
+/** `askedAt` returns with the answer to `recordReport`. */
+export type ClaudeContextReportListener = (
+  target: ClaudeContextReportTarget,
+  askedAt: number
+) => void
 
 const STALE = Symbol('stale-window')
 
 export class ClaudeContextFacts {
   private activity = 0
+  /** Advances on every newer used count, written or held back; a report asked for earlier must not replace it. */
+  private usedCounts = 0
   private mainModel: ClaudeMainThreadModel = { initModel: null, responseModel: null }
   /** Null adopts the next response model; STALE blocks estimates until a fresh window arrives. */
   private servedModel: string | null | typeof STALE = null
@@ -44,7 +50,7 @@ export class ClaudeContextFacts {
   /** Check the journal before seeding a configured window hint. */
   private journalMayLackWindow = true
   private lastResponse: string | null = null
-  private readonly requestListeners = new Set<(target: ClaudeContextReportTarget) => void>()
+  private readonly requestListeners = new Set<ClaudeContextReportListener>()
 
   constructor(
     private readonly turn: ClaudeOpenTurn,
@@ -111,6 +117,7 @@ export class ClaudeContextFacts {
     if (this.servedModel === STALE) {
       // After a model change, only a configured hint can serve estimates before the report.
       if (!hint) {
+        this.usedCounts += 1
         return
       }
       window = hint
@@ -157,28 +164,25 @@ export class ClaudeContextFacts {
     this.requestReport(settled)
   }
 
-  /** Reports overtaken by activity retain only the window; full reports also replace usage. */
+  /** A report asked for before a newer used count retains only the window; otherwise it also replaces usage. */
   recordReport(
     target: ClaudeContextReportTarget,
     report: AgentSessionContextReport,
-    part: ClaudeContextReportPart
+    askedAt: number
   ): void {
     const window = { tokens: report.windowTokens, capturedAt: report.capturedAt }
     this.servedModel = null
     this.windowReported = true
     // Before the first turn exists, retain the report's window for the first response.
     this.windowHint = report.windowTokens
-    const contextUsage: AgentSessionContextUsage =
-      part === 'report' ? { used: { kind: 'report', ...report }, window } : { window }
-    writeAgentJournalTurnRow(
-      this.sink,
-      target === null ? { newest: true } : { identity: target },
-      { contextUsage },
-      { publish: true }
+    this.write(
+      askedAt === this.usedCounts ? { used: { kind: 'report', ...report }, window } : { window },
+      undefined,
+      target
     )
   }
 
-  subscribeReportRequests(listener: (target: ClaudeContextReportTarget) => void): () => void {
+  subscribeReportRequests(listener: ClaudeContextReportListener): () => void {
     this.requestListeners.add(listener)
     return () => this.requestListeners.delete(listener)
   }
@@ -189,9 +193,12 @@ export class ClaudeContextFacts {
 
   private write(
     contextUsage: AgentSessionContextUsage,
-    windowIfNoneHeld?: AgentSessionContextWindow
+    windowIfNoneHeld?: AgentSessionContextWindow,
+    identity: ClaudeContextReportTarget = this.turn.identity
   ): void {
-    const identity = this.turn.identity
+    if (contextUsage.used) {
+      this.usedCounts += 1
+    }
     const target: AgentJournalTurnRowTarget = identity ? { identity } : { newest: true }
     // No later frame may arrive to publish this fact.
     writeAgentJournalTurnRow(
@@ -213,7 +220,7 @@ export class ClaudeContextFacts {
 
   private requestReport(target: ClaudeContextReportTarget): void {
     for (const listener of this.requestListeners) {
-      listener(target)
+      listener(target, this.usedCounts)
     }
   }
 }

@@ -4,7 +4,7 @@ import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import {
   parseGitHubIssueOrPRLink,
   parseGitHubIssueOrPRNumber
-} from '../../../../shared/github/links'
+} from '../../../../shared/github/repositories/links'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName

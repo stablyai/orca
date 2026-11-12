@@ -241,7 +241,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session-record',
   'src/shared/agent-session-provider-handle',
   'src/shared/agent-session/journal/',
-  'src/main/ai-vault/structured-session-ownership.ts',
+  'src/main/ai-vault/structured-sessions/structured-session-ownership.ts',
   'src/main/native-chat/agent-session-journal/',
   'src/main/native-chat/agent-session-wire/',
   // The released phone contract runs the current discovery owner and Claude producer.
