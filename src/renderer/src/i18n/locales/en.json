@@ -23928,7 +23928,8 @@
         "rowPublic": "{{repo}}, cloud only",
         "privateLabel": "Private",
         "menuGroup": "Orca Cloud",
-        "addRepositoryMenu": "Add a GitHub repository…"
+        "addRepositoryMenu": "Add a GitHub repository…",
+        "waitingForGitHub": "Waiting for GitHub…"
       },
       "agentLabel": "Agent"
     },

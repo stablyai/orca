@@ -239,6 +239,15 @@ export function NewWorkspaceComposerProjectSection({
               <p id={projectDescriptionId} className="text-[11px] text-destructive">
                 {projectError}
               </p>
+            ) : cloudOnly?.waitingForGitHub ? (
+              // REPO-ACCESS-REFRESH: back from GitHub's access page, until the repository shows up.
+              <p
+                role="status"
+                className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+              >
+                <LoaderCircle className="size-3 animate-spin motion-reduce:animate-none" />
+                {t('components.newWorkspace.cloudOnly.waitingForGitHub', 'Waiting for GitHub…')}
+              </p>
             ) : needsRepo ? (
               <OrcaCloudNeedsRepoLine
                 hasRepos={needsRepo.hasRepos}
