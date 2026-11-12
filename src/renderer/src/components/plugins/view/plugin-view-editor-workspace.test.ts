@@ -52,17 +52,22 @@ it('still registers a genuinely unowned file folder and opens it', async () => {
     path: '/new/folder',
     hostId: 'local'
   })
-  const addRepoPath = vi.fn(async () => {
+  const addRepoPath = vi.fn<typeof initialState.addRepoPath>(async () => {
     useAppStore.setState({ worktreesByRepo: { added: [row] } })
-    return { id: 'added' }
+    return {
+      id: 'added',
+      path: '/new/folder',
+      displayName: 'added',
+      badgeColor: 'blue',
+      addedAt: 1
+    }
   })
-  const fetchWorktrees = vi.fn(async () => {})
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the action reads only the returned repo id; production store actions are not invoked.
+  const fetchWorktrees = vi.fn().mockResolvedValue(true)
   useAppStore.setState({
     worktreesByRepo: {},
     folderWorkspaces: [],
     activeWorktreeId: null,
-    addRepoPath: addRepoPath as typeof initialState.addRepoPath,
+    addRepoPath,
     fetchWorktrees
   })
   await expect(

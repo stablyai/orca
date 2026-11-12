@@ -126,7 +126,7 @@ describe('durable worktree removal records', () => {
     })
     const job = interruptedJob()
     void startBackgroundWorktreeRemoval({ removal, ...job })
-    const initial = [{ id: removal.worktreeId }]
+    const initial: { id: string; hostId?: 'local' }[] = [{ id: removal.worktreeId }]
     expect(
       projectPendingWorktreeRemovals(
         initial,
@@ -228,7 +228,7 @@ describe('durable worktree removal records', () => {
     )
     const refusal = expect(retried).rejects.toThrow('Could not start deletion')
     expect(
-      projectPendingWorktreeRemovals(
+      projectPendingWorktreeRemovals<{ id: string; hostId?: 'local' }>(
         [{ id: removal.worktreeId }],
         (row) => row.id,
         true,

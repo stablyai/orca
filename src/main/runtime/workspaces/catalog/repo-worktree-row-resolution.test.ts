@@ -327,7 +327,9 @@ it.each([
       const enumerateWitnesses = vi.spyOn(witnesses, Symbol.iterator)
       const enumerateGlobal = vi.spyOn(pendingWorktreeRemovals, Symbol.iterator)
       try {
-        deps.metaById[records[0].worktreeId] = { displayName: 'changed metadata' } as WorktreeMeta
+        deps.metaById[records[0].worktreeId] = mergeWorktreeMetaForWrite(undefined, {
+          displayName: 'changed metadata'
+        })
         joinResolvedWorktreeScans(deps.store, () => deps, scans)
         // Unrelated metadata cannot invalidate removal membership: no witness entries need copying.
         expect(enumerateWitnesses).not.toHaveBeenCalled()

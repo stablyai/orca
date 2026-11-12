@@ -59,7 +59,7 @@ export function waitForPendingWorktreeRemoval(
   return settlementsByWorktreeId.get(worktreeId)?.result
 }
 
-function assertAcceptedBranchChoice(
+export function assertAcceptedBranchChoice(
   record: WorktreeRemovalRecord | undefined,
   deleteBranch: boolean | undefined
 ): void {

@@ -5,7 +5,8 @@ import {
   splitWorktreeIdForFilesystem,
   worktreeIdentityKey
 } from '../../../../shared/worktree/id'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   readAllWorktreeMetaForHost,
   readWorktreeMetaForHost
@@ -37,7 +38,6 @@ import {
   type WorktreeRemovalWitnessScan
 } from '../../../workspaces/removal/worktree-removal-listing'
 import { pendingWorktreeRemovals } from '../../../workspaces/removal/worktree-removal-table'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 type RepoWorktreeRowStore = Pick<
   RuntimeStore,
