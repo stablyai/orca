@@ -100,18 +100,22 @@ it.each([
   }
 )
 
-it.each([
+const incompatibleBypasses: Record<string, string>[] = [
   { No_Proxy: 'corp.example' },
   { NO_PROXY: 'upper.example', No_proxy: 'corp.example' },
   { NO_PROXY: 'upper.example', no_proxy: 'lower.example' },
   { NO_PROXY: 'corp.example', no_proxy: '' },
   { NO_PROXY: '', no_proxy: 'corp.example' },
   { no_proxy: 'lower.example', No_proxy: 'corp.example' }
-])('leaves incompatible external proxy selections unchanged: %j', async (bypass) => {
-  const env: Record<string, string> = { socks_proxy: 'socks5h://127.0.0.1:9090', ...bypass }
-  await prepareAntigravityAcpProxyEnvironment(env, {})
-  expect(env).toEqual({ socks_proxy: 'socks5h://127.0.0.1:9090', ...bypass })
-})
+]
+it.each(incompatibleBypasses)(
+  'leaves incompatible external proxy selections unchanged: %j',
+  async (bypass) => {
+    const env: Record<string, string> = { socks_proxy: 'socks5h://127.0.0.1:9090', ...bypass }
+    await prepareAntigravityAcpProxyEnvironment(env, {})
+    expect(env).toEqual({ socks_proxy: 'socks5h://127.0.0.1:9090', ...bypass })
+  }
+)
 
 it.each([
   DEFAULT_SYSTEM_PROXY.replace('*.local', 'googleapis.com'),
