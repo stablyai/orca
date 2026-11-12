@@ -24,6 +24,8 @@ export type CloneMethod = 'apfs' | 'reflink'
 
 const CLONE_BATCH_SIZE = 256
 const CLONE_CONCURRENCY = 8
+// Own bound: clearing must still run after the clone deadline or a cancel has fired.
+const CLEAR_FLAGS_TIMEOUT_MS = 30_000
 const LIST_MAX_BUFFER = 512 * 1024 * 1024
 const REGULAR_FILE_MODES = new Set(['100644', '100755'])
 // A checkout runs these, so a fresh file can differ from main's bytes that clean to the same blob.
@@ -306,10 +308,20 @@ export async function cloneMainCheckoutIntoWorktree(
       ...options,
       signal: options.signal ? AbortSignal.any([options.signal, deadline]) : deadline
     }
-    await cloneFiles(method, repoPath, worktreePath, paths, cloneOptions)
-    if (method === 'apfs') {
-      // APFS clones keep file flags; a checkout never sets the ones that block editing or deleting.
-      await runTool('/usr/bin/chflags', ['-R', 'nouchg,nouappnd', worktreePath], cloneOptions)
+    let cloned = false
+    try {
+      await cloneFiles(method, repoPath, worktreePath, paths, cloneOptions)
+      cloned = true
+    } finally {
+      if (method === 'apfs') {
+        // APFS clones keep file flags; a checkout never sets the ones that block editing or
+        // deleting. Clear them after partial clones too, so the fallback and rollback can rewrite.
+        const clearing = runTool('/usr/bin/chflags', ['-R', 'nouchg,nouappnd', worktreePath], {
+          ...options,
+          signal: AbortSignal.timeout(CLEAR_FLAGS_TIMEOUT_MS)
+        })
+        await (cloned ? clearing : clearing.catch(() => {}))
+      }
     }
     // Skips Git's re-read for clones of files it already knows are clean.
     await transferCleanIndexStats(repoPath, worktreePath, options).catch(() => 0)
