@@ -113,10 +113,9 @@ export function CreateFromPicker({
     : effectiveDefault
       ? branchRefLabel(effectiveDefault)
       : projectDefaultLabel
-  const { options: branchOptions, labels } = createBranchOptions(
-    effectiveDefault,
-    searchResults,
-    worktrees
+  const { options: branchOptions, labels } = React.useMemo(
+    () => createBranchOptions(effectiveDefault, searchResults, worktrees),
+    [effectiveDefault, searchResults, worktrees]
   )
 
   function renderBranchContextMenu(branch: string, row: React.ReactNode): React.ReactNode {
@@ -169,7 +168,7 @@ export function CreateFromPicker({
         cancelFocusFrame(focusFrameRef)
       }
     },
-    [focusFrameRef]
+    [focusFrameRef, setOpen]
   )
 
   React.useEffect(() => {
