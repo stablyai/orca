@@ -13,6 +13,7 @@ import {
 } from './terminal-paste-target-state'
 import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import { resolveTerminalKeyboardPane } from '../keyboard/terminal-keyboard-pane-resolution'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { scheduleImagePasteWebglAtlasRecovery } from '../../render-health/terminal-webgl-atlas-recovery'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
@@ -63,12 +64,17 @@ export function createTerminalPanePasteExecution(
     text: string,
     options?: TerminalPasteTextOptions
   ): Promise<void> => {
-    const transport = paneTransportsRef.current.get(pane.id)
-    const ptyId = transport?.getPtyId() ?? null
     const keyboardOwnedPaste =
       source === 'keyboard' || source === 'paste-event' || source === 'app-menu'
+    // Why: menu accelerators and native paste events never run keydown's active-pane repair, so aim a keyboard-owned paste at the pane owning the dispatch focus instead of a stale active pane that would cancel it as a focus change (#41352).
+    const targetPane =
+      keyboardOwnedPaste && activeElementAtDispatch instanceof Element && managerRef.current
+        ? (resolveTerminalKeyboardPane(managerRef.current, activeElementAtDispatch) ?? pane)
+        : pane
+    const transport = paneTransportsRef.current.get(targetPane.id)
+    const ptyId = transport?.getPtyId() ?? null
     const execution = await pasteTextIntoTerminalPane({
-      pane,
+      pane: targetPane,
       text,
       source,
       ptyId,
@@ -81,16 +87,16 @@ export function createTerminalPanePasteExecution(
       transport,
       inputKind: 'driving',
       isTargetCurrent: () => {
-        if (!isPanePasteTargetMounted(pane, transport, ptyId)) {
+        if (!isPanePasteTargetMounted(targetPane, transport, ptyId)) {
           return false
         }
         return isTerminalPanePasteFocusCurrent({
           requireSameFocusedElement: keyboardOwnedPaste,
           activeElementAtDispatch,
-          paneContainer: pane.container
+          paneContainer: targetPane.container
         })
       },
-      canContinue: () => isPanePasteTargetMounted(pane, transport, ptyId),
+      canContinue: () => isPanePasteTargetMounted(targetPane, transport, ptyId),
       planOptions: options
     })
     if (execution.status !== 'pasted') {
@@ -98,7 +104,7 @@ export function createTerminalPanePasteExecution(
       return
     }
     if (text) {
-      recordTerminalUserInputForLeaf(tabId, pane.leafId)
+      recordTerminalUserInputForLeaf(tabId, targetPane.leafId)
     }
     if (options?.recoverImagePasteWebglAtlas) {
       scheduleImagePasteWebglAtlasRecovery()
