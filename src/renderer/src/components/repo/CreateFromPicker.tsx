@@ -29,7 +29,6 @@ import {
   searchRuntimeRepoBaseRefs
 } from '@/runtime/source-control/references/runtime-repo-client'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/source-control/references/runtime-repo-search-bounds'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
 
@@ -135,8 +134,8 @@ export function CreateFromPicker({
           >
             <Star className="size-3.5" />
             {isDefault
-              ? translate('auto.components.agent.AgentCombobox.1b0d6965fa', 'Current default')
-              : translate('auto.components.agent.AgentCombobox.9c6b59fe58', 'Set as default')}
+              ? t('auto.components.agent.AgentCombobox.1b0d6965fa', 'Current default')
+              : t('auto.components.agent.AgentCombobox.9c6b59fe58', 'Set as default')}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
