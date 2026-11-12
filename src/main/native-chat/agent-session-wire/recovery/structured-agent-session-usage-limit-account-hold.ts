@@ -79,7 +79,10 @@ export class UsageLimitAccountHolds {
   /** The source witness each chat's attribution was computed under. */
   private readonly witnesses = new Map<string, string | undefined>()
   /** When each chat was first seen continuing on another account than the one its cut hit. */
-  private readonly movedSince = new Map<string, { cut: string; at: number }>()
+  private readonly movedSince = new Map<
+    string,
+    { cut: string; to: AgentSessionAccountHome; at: number }
+  >()
   /** Shared by every chat of a pass and keyed by source witness: work scales with accounts and
    *  their changes, not chats. */
   private launchHomes = new Map<string, Promise<AgentSessionAccountHome | null>>()
@@ -107,7 +110,7 @@ export class UsageLimitAccountHolds {
     const read = host.usageLimitAutoContinue?.accountUsage
     const witness = record ? liveWitness(host, record.provider) : undefined
     let scope: UsageLimitAccountScope | undefined
-    let moved = false
+    let movedTo: AgentSessionAccountHome | null = null
     try {
       // WSL readings never reach this host, so a WSL launch keeps the cut's own reset.
       if (record && record.location.wslDistro === null) {
@@ -119,7 +122,7 @@ export class UsageLimitAccountHolds {
           this.launchHomes.set(target, launch)
         }
         const home = (await launch) ?? record.accountHome
-        moved = !!hit?.home && !sameAccountHome(home, hit.home)
+        movedTo = hit?.home && !sameAccountHome(home, hit.home) ? home : null
         const path = agentSessionAccountHomePath(home)
         if (read && home && path) {
           const key = JSON.stringify([witness, record.provider, path])
@@ -142,10 +145,12 @@ export class UsageLimitAccountHolds {
     }
     this.scopes.set(id, scope)
     this.witnesses.set(id, witness)
-    if (!moved || !hit) {
+    const since = this.movedSince.get(id)
+    if (!movedTo || !hit) {
       this.movedSince.delete(id)
-    } else if (this.movedSince.get(id)?.cut !== hit.cut) {
-      this.movedSince.set(id, { cut: hit.cut, at: now })
+    } else if (since?.cut !== hit.cut || !sameAccountHome(since.to, movedTo)) {
+      // Each destination counts from when it was chosen, so an older reading of it never releases.
+      this.movedSince.set(id, { cut: hit.cut, to: movedTo, at: now })
     }
   }
 
