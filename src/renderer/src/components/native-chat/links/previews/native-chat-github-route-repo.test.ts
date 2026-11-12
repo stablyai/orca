@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
+import { clearRepoSlugCacheValues } from '@/lib/workspace/catalog/repo-slug-cache'
 
 const mocks = vi.hoisted(() => {
   const repos: Repo[] = []
@@ -10,9 +11,20 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => ({ repos: mocks.repos }) }
 }))
-vi.mock('@/lib/workspace/catalog/repo-slug-index', () => ({
-  resolveRepoSlug: async (repo: Repo) => mocks.slugs.get(repo.id) ?? null
-}))
+vi.mock('@/lib/workspace/catalog/repo-slug-index', async () => {
+  const { rememberRepoSlug, repoSlugCacheKey } =
+    await import('@/lib/workspace/catalog/repo-slug-cache')
+  return {
+    resolveRepoSlug: async (repo: Repo) => {
+      const slug = mocks.slugs.get(repo.id) ?? null
+      const key = repoSlugCacheKey(repo)
+      if (key) {
+        rememberRepoSlug(key, slug)
+      }
+      return slug
+    }
+  }
+})
 vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemByOwnerRepoForSource: mocks.lookup
 }))
@@ -32,6 +44,7 @@ describe('GitHub preview routing for a chat without a repo of its own', () => {
   beforeEach(() => {
     mocks.repos = []
     mocks.slugs.clear()
+    clearRepoSlugCacheValues()
     mocks.lookup.mockReset()
   })
 
@@ -136,5 +149,23 @@ describe('GitHub preview routing for a chat without a repo of its own', () => {
     mocks.repos = [{ ...alice, ghAccount: { host: 'github.com', user: 'bob' } }]
     expect(readCachedRoutedGitHubLinkPreview('local', link)).toBeNull()
     await expect(loadRoutedGitHubLinkPreview('local', link)).resolves.toBeNull()
+  })
+
+  it('uses a newly resolved exact clone instead of the previously cached fallback', async () => {
+    const link = parseGitHubIssueOrPRLink('https://github.com/acme/private/pull/704')!
+    mocks.repos = [repo('alice'), repo('bob')]
+    mocks.slugs.set('bob', 'acme/bob')
+    mocks.lookup.mockImplementation(async ({ repoId }) => ({ title: `${repoId}'s preview` }))
+
+    await expect(loadRoutedGitHubLinkPreview('local', link)).resolves.toEqual({
+      title: "bob's preview"
+    })
+    mocks.slugs.set('alice', 'acme/private')
+    await expect(loadRoutedGitHubLinkPreview('local', link)).resolves.toEqual({
+      title: "alice's preview"
+    })
+    expect(readCachedRoutedGitHubLinkPreview('local', link)).toEqual({
+      title: "alice's preview"
+    })
   })
 })

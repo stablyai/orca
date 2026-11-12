@@ -1,5 +1,6 @@
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { useAppStore } from '@/store/index'
+import { readRepoSlugCache, repoSlugCacheKey } from '@/lib/workspace/catalog/repo-slug-cache'
 import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -77,15 +78,20 @@ export function routedGitHubLinkPreviewKey(
   link: GitHubIssueOrPRLink,
   repos: readonly Repo[] = useAppStore.getState().repos
 ): string {
-  const routes = githubPreviewRouteCandidates(repos, hostId).map((repo) => [
-    repo.id,
-    repo.path,
-    repo.connectionId ?? null,
-    repo.ghAccount?.host ?? null,
-    repo.ghAccount?.user ?? null,
-    repo.upstream ?? null,
-    repo.gitRemoteIdentity ?? null
-  ])
+  const routes = githubPreviewRouteCandidates(repos, hostId).map((repo) => {
+    const cacheKey = repoSlugCacheKey(repo)
+    const slug = cacheKey ? readRepoSlugCache(cacheKey) : null
+    return [
+      repo.id,
+      repo.path,
+      repo.connectionId ?? null,
+      repo.ghAccount?.host ?? null,
+      repo.ghAccount?.user ?? null,
+      repo.upstream ?? null,
+      repo.gitRemoteIdentity ?? null,
+      slug?.hit ? slug.value : null
+    ]
+  })
   return `${hostId}:routed:${githubRepoIdentityKey(link.slug)}#${link.number}:${link.type}:${JSON.stringify(routes)}`
 }
 
@@ -96,12 +102,13 @@ export function readCachedRoutedGitHubLinkPreview(
   return previews.read(routedGitHubLinkPreviewKey(hostId, link))
 }
 
-export function loadRoutedGitHubLinkPreview(
+export async function loadRoutedGitHubLinkPreview(
   hostId: string,
   link: GitHubIssueOrPRLink
 ): Promise<GitHubWorkItem | null> {
-  return previews.load(routedGitHubLinkPreviewKey(hostId, link), async () => {
-    const repo = await findGitHubPreviewRouteRepo(useAppStore.getState().repos, hostId, link)
-    return repo ? fetchPreview(repo, link) : null
-  })
+  const repos = useAppStore.getState().repos
+  const repo = await findGitHubPreviewRouteRepo(repos, hostId, link)
+  return repo
+    ? previews.load(routedGitHubLinkPreviewKey(hostId, link, repos), () => fetchPreview(repo, link))
+    : null
 }
