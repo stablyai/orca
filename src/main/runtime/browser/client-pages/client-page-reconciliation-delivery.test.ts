@@ -89,6 +89,22 @@ it.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'])(
 
 it('delivers a cleared snapshot when authenticated empty adoption completes without another workspace change', async () => {
   const h = createReconciliationDeliveryRuntime()
+  h.hostRuntime.attachWindow(1)
+  h.hostRuntime.syncWindowGraph(1, {
+    tabs: [],
+    leaves: [],
+    mobileSessionTabs: [
+      {
+        worktree: WORKSPACE,
+        publicationEpoch: 'renderer',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }
+    ]
+  })
   const stream = openRecoveryTabsStream(h.hostRuntime, 'empty-adoption-consumer')
   try {
     await stream.initial
