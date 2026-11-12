@@ -58,6 +58,7 @@ function installHost(current: AgentSessionRecord, attached: boolean) {
   const host = {
     deps: {
       store: {
+        getRecord: () => current,
         getConversation: () => agentSessionConversationView(current),
         listConversations: () => [agentSessionConversationView(current)],
         getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [SESSION] })

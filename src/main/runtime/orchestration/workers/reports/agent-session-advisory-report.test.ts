@@ -1,6 +1,7 @@
 import { agentSessionAdvisoryPolicyFingerprint } from '../../../../../shared/agent-session/agent-session-advisory-policy'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createAdvisoryReportPublisher } from './agent-session-advisory-report'
+import { readStructuredWorkerSettings } from '../../../rpc/methods/orchestration/worker/session-worker-observation'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
@@ -163,6 +164,45 @@ function publisher() {
     currentGeneration: () => generation
   })
 }
+
+it('exposes the bound policy limits without snapshots or a qualification claim', async () => {
+  vi.spyOn(rig.host, 'hasSession').mockReturnValue(true)
+  vi.spyOn(rig.host, 'readOptions').mockResolvedValue({ models: [], current: {} })
+  const settings = await readStructuredWorkerSettings(
+    { ensureStructuredAgentSessionHost: async () => {} },
+    db,
+    dispatchId
+  )
+  expect(settings).toMatchObject({
+    kind: 'options',
+    advisory: {
+      sourcePin: 'a'.repeat(40),
+      dataScope: 'published',
+      deadlineAt: 1_800_000_300_000,
+      maxModelCalls: 4,
+      qualification: 'unqualified'
+    }
+  })
+  expect(JSON.stringify(settings)).not.toContain('hello')
+})
+
+it('discards a readback whose private advisory policy changed during the read', async () => {
+  vi.spyOn(rig.host, 'hasSession').mockReturnValue(true)
+  vi.spyOn(rig.host, 'readOptions').mockImplementation(async () => {
+    await rig.store.transitionHandoff(HOST_TEST_SESSION, (record) => ({
+      ...record,
+      advisoryPolicy: { ...record.advisoryPolicy!, maxModelCalls: 3 }
+    }))
+    return { models: [], current: {} }
+  })
+  expect(
+    await readStructuredWorkerSettings(
+      { ensureStructuredAgentSessionHost: async () => {} },
+      db,
+      dispatchId
+    )
+  ).toEqual({ kind: 'unknown', reason: 'identity_changed' })
+})
 
 it('settles only the captured advisory Dispatch and delivers its host-bound report', async () => {
   await publisher()({ status: 'inconclusive' })

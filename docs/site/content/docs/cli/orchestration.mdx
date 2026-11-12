@@ -58,6 +58,8 @@ The version 1 policy contains `schema: 1`, `dataScope: "published"`, `sourcePin`
 
 **Advisory execution is disabled pending native qualification.** The `orchestration.worker-advisory-policy.v1` capability means that the runtime understands and refuses unsupported policies. It does not prove account eligibility, disabled overages, actual provider request limits, process teardown, privacy isolation or advice quality. No production provider adapter currently advertises advisory execution support.
 
+A detailed `worker-show --full --json` can return `settings.advisory` for the exact live consultation. It contains the source pin, policy fingerprint and declared limits with `qualification: "unqualified"`; it never includes snapshot text or invents observed model-call counts. A changed policy or worker identity invalidates the read.
+
 After starting workers, end your turn. Orca wakes the coordinator when a worker reports, asks, or stops; run the `check` command the wake gives you and handle every message it prints:
 
 ```bash

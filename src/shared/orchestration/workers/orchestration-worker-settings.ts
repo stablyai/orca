@@ -1,4 +1,5 @@
 import type { AgentSessionOptionsResult } from '../../agent-session/options/agent-session-options-result'
+import type { AgentSessionAdvisoryPolicy } from '../../agent-session/agent-session-advisory-policy'
 
 /** Option facts retain their input/default/confirmation labels; this is no execution attestation. */
 export type OrchestrationWorkerSettings =
@@ -7,6 +8,13 @@ export type OrchestrationWorkerSettings =
       sessionId: string
       runtimeFence: number
       agent: string
+      advisory?: Pick<
+        AgentSessionAdvisoryPolicy,
+        'sourcePin' | 'dataScope' | 'deadlineAt' | 'maxModelCalls'
+      > & {
+        policyFingerprint: string
+        qualification: 'unqualified'
+      }
       current: AgentSessionOptionsResult['current']
     }
   | {

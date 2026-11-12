@@ -12,6 +12,8 @@ import {
 import { resolveStructuredWorkerForDispatch } from '../structured-workers/orchestration-structured-worker-lifecycle'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrchestrationWorkerSettings } from '../../../../../../shared/orchestration/workers/orchestration-worker-settings'
+import { agentSessionAdvisoryPolicyFingerprint } from '../../../../../../shared/agent-session/agent-session-advisory-policy'
+import { workerStartOptionsAdvisoryPolicyFingerprint } from '../../../../orchestration/workers/launch/worker-launch-observation'
 
 export type SessionWorkerObservation = {
   terminal: null
@@ -112,16 +114,25 @@ export async function readStructuredWorkerSettings(
     if (!before || observeStructuredSession(sessionId).status !== 'live') {
       return { kind: 'unknown', reason: 'not_live' }
     }
+    const policy = host.deps.store.getRecord(sessionId)?.advisoryPolicy
+    const policyFingerprint = policy && agentSessionAdvisoryPolicyFingerprint(policy)
     const options = await host.readOptions(sessionId, { readsWithoutModel: true })
     if (getStructuredAgentSessionHost() !== host) {
       return { kind: 'unknown', reason: 'identity_changed' }
     }
     const after = host.deps.store.getConversation(sessionId)
+    const currentPolicy = host.deps.store.getRecord(sessionId)?.advisoryPolicy
     const currentHold = holdStructuredWorker(identity, db)
     if (
       currentHold.kind !== 'held' ||
       currentHold.running.sessionId !== sessionId ||
       after?.currentFence !== before.currentFence ||
+      (currentPolicy && agentSessionAdvisoryPolicyFingerprint(currentPolicy)) !==
+        policyFingerprint ||
+      (policyFingerprint &&
+        workerStartOptionsAdvisoryPolicyFingerprint(
+          db.getWorkerDispatch(dispatchId)?.start_options ?? ''
+        ) !== policyFingerprint) ||
       observeStructuredSession(sessionId).status !== 'live' ||
       !db.isDispatchProcessCurrent({
         dispatchId,
@@ -151,6 +162,18 @@ export async function readStructuredWorkerSettings(
       sessionId,
       runtimeFence: before.currentFence,
       agent: before.provider,
+      ...(policy && policyFingerprint
+        ? {
+            advisory: {
+              sourcePin: policy.sourcePin,
+              dataScope: policy.dataScope,
+              deadlineAt: policy.deadlineAt,
+              maxModelCalls: policy.maxModelCalls,
+              policyFingerprint,
+              qualification: 'unqualified' as const
+            }
+          }
+        : {}),
       current: {
         model,
         reportedModel,
