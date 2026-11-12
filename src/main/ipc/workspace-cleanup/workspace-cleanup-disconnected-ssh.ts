@@ -4,7 +4,6 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
-  applyWorkspaceCleanupPolicy,
   createWorkspaceCleanupFingerprint,
   type WorkspaceCleanupCandidate
 } from '../../../shared/workspace-cleanup/workspace-cleanup'
@@ -85,7 +84,7 @@ function createDisconnectedSshCandidate(
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   const path = parsed?.worktreePath ?? worktreeId
   const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(meta, scannedAt)
-  return applyWorkspaceCleanupPolicy({
+  return {
     worktreeId,
     repoId: repo.id,
     repoName: repo.displayName,
@@ -118,5 +117,5 @@ function createDisconnectedSshCandidate(
       gitClean: null,
       lastActivityAt: meta.lastActivityAt
     })
-  })
+  }
 }

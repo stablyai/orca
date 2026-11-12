@@ -11,9 +11,9 @@ describe('workspace last active with the switch on', () => {
   it('a newer visit only drops the idle reasons it disproves', () => {
     const archived = candidate({
       lastActivityAt: NOW - 40 * DAY_MS,
-      reasons: ['archived', 'idle-clean']
+      reasons: ['archived', 'inactive']
     })
-    // Ten days ago: still archived-idle (7 d), no longer idle-clean (30 d).
+    // Ten days ago: still archived-idle (7 d), no longer inactive (30 d).
     expect(withCleanupVisitEvidence(archived, NOW - 10 * DAY_MS, NOW)).toMatchObject({
       lastActivityAt: NOW - 10 * DAY_MS,
       reasons: ['archived']

@@ -3624,7 +3624,6 @@
             "runningTerminalBlocker": "Processus de terminal en cours",
             "terminalLivenessUnknownBlocker": "Activité du terminal inconnue",
             "dirtyEditorBufferBlocker": "Tampon d'éditeur non enregistré",
-            "volatileLocalContextBlocker": "Contexte local volatil",
             "recentVisibleContextBlocker": "Onglets visités récemment",
             "liveAgentBlocker": "Agent actif",
             "sshDisconnectedBlocker": "Distant indisponible",

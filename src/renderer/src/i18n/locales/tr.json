@@ -3832,7 +3832,6 @@
             "runningTerminalBlocker": "Çalışan terminal işlemi",
             "terminalLivenessUnknownBlocker": "Terminal canlılık durumu bilinmiyor",
             "dirtyEditorBufferBlocker": "Kaydedilmemiş düzenleyici arabelleği",
-            "volatileLocalContextBlocker": "Geçici yerel bağlam",
             "recentVisibleContextBlocker": "Son ziyaret edilen sekmeler",
             "liveAgentBlocker": "Aktif ajan",
             "sshDisconnectedBlocker": "Uzak sunucu kullanılamıyor",
