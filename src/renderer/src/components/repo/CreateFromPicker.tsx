@@ -59,6 +59,13 @@ function createBranchOptions(
   return { options: merged, labels }
 }
 
+function cancelFocusFrame(frame: { current: number | null }): void {
+  if (frame.current !== null) {
+    cancelAnimationFrame(frame.current)
+    frame.current = null
+  }
+}
+
 export function CreateFromPicker({
   repoId,
   repoMap,
@@ -112,67 +119,57 @@ export function CreateFromPicker({
     worktrees
   )
 
-  const renderBranchContextMenu = React.useCallback(
-    (branch: string, row: React.ReactNode): React.ReactNode => {
-      if (!onSetDefault || !branch) {
-        return row
-      }
-      const isDefault = effectiveDefault === branch
-      return (
-        <ContextMenu key={branch}>
-          <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
-          <ContextMenuContent className="z-[70]">
-            <ContextMenuItem
-              disabled={isDefault}
-              onSelect={() => {
-                void onSetDefault(branch)
-              }}
-            >
-              <Star className="size-3.5" />
-              {isDefault
-                ? translate('auto.components.agent.AgentCombobox.1b0d6965fa', 'Current default')
-                : translate('auto.components.agent.AgentCombobox.9c6b59fe58', 'Set as default')}
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
-      )
-    },
-    [effectiveDefault, onSetDefault]
-  )
-
-  const cancelFocusFrame = React.useCallback((): void => {
-    if (focusFrameRef.current !== null) {
-      cancelAnimationFrame(focusFrameRef.current)
-      focusFrameRef.current = null
+  function renderBranchContextMenu(branch: string, row: React.ReactNode): React.ReactNode {
+    if (!onSetDefault || !branch) {
+      return row
     }
-  }, [])
+    const isDefault = effectiveDefault === branch
+    return (
+      <ContextMenu key={branch}>
+        <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+        <ContextMenuContent className="z-[70]">
+          <ContextMenuItem
+            disabled={isDefault}
+            onSelect={() => {
+              void onSetDefault(branch)
+            }}
+          >
+            <Star className="size-3.5" />
+            {isDefault
+              ? translate('auto.components.agent.AgentCombobox.1b0d6965fa', 'Current default')
+              : translate('auto.components.agent.AgentCombobox.9c6b59fe58', 'Set as default')}
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+    )
+  }
 
   const setInputNode = React.useCallback(
     (node: HTMLInputElement | null): void => {
       if (node === null) {
-        cancelFocusFrame()
+        cancelFocusFrame(focusFrameRef)
       }
       inputRef.current = node
     },
-    [cancelFocusFrame]
+    [focusFrameRef, inputRef]
   )
 
   const focusSearchInput = React.useCallback(() => {
-    cancelFocusFrame()
+    cancelFocusFrame(focusFrameRef)
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       inputRef.current?.focus()
     })
-  }, [cancelFocusFrame])
+  }, [focusFrameRef, inputRef])
 
   const handleOpenChange = React.useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
       if (!nextOpen) {
-        cancelFocusFrame()
+        cancelFocusFrame(focusFrameRef)
       }
     },
-    [cancelFocusFrame]
+    [focusFrameRef]
   )
 
   React.useEffect(() => {

@@ -6,7 +6,10 @@ import { create } from 'zustand'
 import { AppStateViewContext } from '@/store/retained-views/app-state-view'
 import { BaseRefPicker } from './BaseRefPicker'
 
-const refs = vi.hoisted(() => ({ values: [] as string[], defaultRef: null as string | null }))
+const refs = vi.hoisted<{ values: string[]; defaultRef: string | null }>(() => ({
+  values: [],
+  defaultRef: null
+}))
 vi.mock('@/runtime/source-control/references/runtime-repo-client', () => ({
   watchRuntimeRepoBaseRefDefault: (_host, _repo, handlers) => {
     handlers.onResult({ defaultBaseRef: refs.defaultRef, remoteCount: 1 })

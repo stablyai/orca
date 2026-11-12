@@ -73,12 +73,12 @@ it('does not publish a capture that finishes after a ref change', async () => {
     return old.promise
   })
   mocks.read.mockResolvedValue(snapshot('new'))
-  const result = value.search(identity, '', 20, true)
+  const result = value.search(identity, '', 20)
   await started.promise
   publishGitRefChange(identity.commonDir)
   old.resolve(snapshot('old'))
   expect(await result).toEqual([{ refName: 'refs/heads/old', localBranchName: 'old' }])
-  expect(await value.search(identity, 'OLD', 20, true)).toEqual([])
+  expect(await value.search(identity, 'OLD', 20)).toEqual([])
 })
 
 it('serves a post-fence caller from the next physical read without making the earlier caller retry', async () => {
@@ -94,10 +94,10 @@ it('serves a post-fence caller from the next physical read without making the ea
     publishGitRefChange(identity.commonDir)
     return Promise.resolve(snapshot('fresh'))
   })
-  const before = value.search(identity, '', 20, true)
+  const before = value.search(identity, '', 20)
   await started.promise
   publishGitRefChange(identity.commonDir)
-  const after = value.search(identity, '', 20, true)
+  const after = value.search(identity, '', 20)
   old.resolve(snapshot('old'))
   expect(await before).toEqual([{ refName: 'refs/heads/old', localBranchName: 'old' }])
   expect(await after).toEqual([{ refName: 'refs/heads/fresh', localBranchName: 'fresh' }])
@@ -112,10 +112,10 @@ it('starts the new generation after an obsolete physical read fails', async () =
     return old.promise
   })
   mocks.read.mockResolvedValue(snapshot('fresh'))
-  const before = expect(value.search(identity, '', 20, true)).rejects.toThrow('obsolete failure')
+  const before = expect(value.search(identity, '', 20)).rejects.toThrow('obsolete failure')
   await started.promise
   publishGitRefChange(identity.commonDir)
-  const after = value.search(identity, '', 20, true)
+  const after = value.search(identity, '', 20)
   await new Promise<void>(setImmediate)
   old.reject(new Error('obsolete failure'))
   await before
@@ -180,9 +180,9 @@ it('bounds concurrent capture retention and admits a temporarily pressured repos
     onRef(snapshot('pressured').snapshot.refs[0])
     return { snapshot: null, oversized: false }
   })
-  const first = value.search(identity, '', 20, true)
+  const first = value.search(identity, '', 20)
   await started.promise
-  expect(await value.search(other, '', 20, true)).toEqual([
+  expect(await value.search(other, '', 20)).toEqual([
     { refName: 'refs/heads/pressured', localBranchName: 'pressured' }
   ])
   held.resolve()
@@ -191,11 +191,11 @@ it('bounds concurrent capture retention and admits a temporarily pressured repos
     expect(lease.reserve(40 * 1024 * 1024)).toBe(true)
     return snapshot('retained')
   })
-  expect(await value.search(other, '', 20, true)).toEqual([
+  expect(await value.search(other, '', 20)).toEqual([
     { refName: 'refs/heads/retained', localBranchName: 'retained' }
   ])
   mocks.read.mockRejectedValue(new Error('a retained repeat must not reread'))
-  expect(await value.search(other, '', 20, true)).toEqual([
+  expect(await value.search(other, '', 20)).toEqual([
     { refName: 'refs/heads/retained', localBranchName: 'retained' }
   ])
 })
@@ -208,8 +208,8 @@ it('shares a fill while independently projecting each caller query', async () =>
     started.resolve()
     return fill.promise
   })
-  const matching = value.search(identity, 'TOPIC', 20, true)
-  const absent = value.search(identity, 'unmatched', 20, true)
+  const matching = value.search(identity, 'TOPIC', 20)
+  const absent = value.search(identity, 'unmatched', 20)
   await started.promise
   fill.resolve(snapshot('topic'))
   expect(await matching).toEqual([{ refName: 'refs/heads/topic', localBranchName: 'topic' }])
@@ -219,15 +219,15 @@ it('shares a fill while independently projecting each caller query', async () =>
 it('retries failed fills and refreshes an expired snapshot', async () => {
   const value = store()
   mocks.read.mockRejectedValueOnce(new Error('temporary read error'))
-  await expect(value.search(identity, '', 20, true)).rejects.toThrow('temporary read error')
+  await expect(value.search(identity, '', 20)).rejects.toThrow('temporary read error')
   mocks.read.mockResolvedValue(snapshot('first'))
-  expect(await value.search(identity, '', 20, true)).toEqual([
+  expect(await value.search(identity, '', 20)).toEqual([
     { refName: 'refs/heads/first', localBranchName: 'first' }
   ])
   const now = Date.now()
   vi.spyOn(Date, 'now').mockReturnValue(now + 120_001)
   mocks.read.mockResolvedValue(snapshot('second'))
-  expect(await value.search(identity, '', 20, true)).toEqual([
+  expect(await value.search(identity, '', 20)).toEqual([
     { refName: 'refs/heads/second', localBranchName: 'second' }
   ])
 })
@@ -241,12 +241,12 @@ it('does not resurrect a retired fill after a store reset', async () => {
     return old.promise
   })
   mocks.read.mockResolvedValue(snapshot('fresh'))
-  const result = value.search(identity, '', 20, true)
+  const result = value.search(identity, '', 20)
   await started.promise
   value.reset()
   old.resolve(snapshot('retired'))
   expect(await result).toEqual([{ refName: 'refs/heads/retired', localBranchName: 'retired' }])
-  expect(await value.search(identity, '', 20, true)).toEqual([
+  expect(await value.search(identity, '', 20)).toEqual([
     { refName: 'refs/heads/fresh', localBranchName: 'fresh' }
   ])
 })

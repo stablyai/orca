@@ -17,9 +17,7 @@ import {
 import {
   BRANCH_SNAPSHOT_MAX_BYTES,
   readBranchRefSnapshot,
-  readBranchRemoteNames,
-  readLegacyBranchPage,
-  LegacyBranchSnapshotTooLarge
+  readBranchRemoteNames
 } from './branch-ref-snapshot-read'
 export { BranchSnapshotIdentityChanged } from './branch-ref-snapshot-owners'
 
@@ -132,43 +130,14 @@ export class BranchRefSnapshotStore {
     identity: BranchSnapshotIdentity,
     query: string,
     limit: number,
-    includeQualifiedRefs: boolean,
     remoteOnly = false
   ): Promise<BaseRefSearchResult[]> {
     const owner = this.cache.owner(identity)
     const context = owner ? this.metadata.context(owner, identity) : undefined
     const remotes = await (context?.remotes ?? readBranchRemoteNames(identity.cwd, identity.git))
-    const legacy = includeQualifiedRefs
-      ? undefined
-      : owner && context && !context.legacyOversized
-        ? await this.metadata.legacy(owner, context, identity).catch((error: unknown) => {
-            if (error instanceof LegacyBranchSnapshotTooLarge) {
-              return null
-            }
-            throw error
-          })
-        : null
-    if (legacy === null) {
-      const page = await readLegacyBranchPage(
-        identity.cwd,
-        identity.git,
-        remotes,
-        query,
-        limit,
-        remoteOnly
-      )
-      await this.cache.validate(identity, owner ?? undefined)
-      return page
-    }
-    const request = JSON.stringify([
-      identity.checkoutKey,
-      query,
-      limit,
-      includeQualifiedRefs,
-      remoteOnly
-    ])
+    const request = JSON.stringify([identity.checkoutKey, query, limit, remoteOnly])
     const page: BaseRefSearchResult[] = []
-    const project = createBranchRefProjection(remotes, query, remoteOnly, legacy)
+    const project = createBranchRefProjection(remotes, query, remoteOnly)
     const collect = (ref: BranchRef): boolean => {
       if (page.length < limit) {
         const row = project(ref)
@@ -180,7 +149,7 @@ export class BranchRefSnapshotStore {
     }
     const capture = await this.capture(owner, identity, request, collect, page, null)
     if (capture.snapshot) {
-      return projectBranchRefs(capture.snapshot.refs, remotes, query, limit, remoteOnly, legacy)
+      return projectBranchRefs(capture.snapshot.refs, remotes, query, limit, remoteOnly)
     }
     if (capture.request === request) {
       return capture.page

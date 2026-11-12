@@ -1,11 +1,6 @@
 import type { BranchSnapshotIdentity } from './branch-ref-snapshot-identity'
-import type { BranchSnapshotOwners } from './branch-ref-snapshot-owners'
-import type { Owner, Context } from './branch-ref-snapshot-owners'
-import {
-  readBranchRemoteNames,
-  readLegacyBranchSelectors,
-  LegacyBranchSnapshotTooLarge
-} from './branch-ref-snapshot-read'
+import type { BranchSnapshotOwners, Owner, Context } from './branch-ref-snapshot-owners'
+import { readBranchRemoteNames } from './branch-ref-snapshot-read'
 
 const MAX_CONTEXTS = 64
 
@@ -53,45 +48,5 @@ export class BranchSnapshotMetadata {
     return owner
       ? this.context(owner, identity).remotes
       : readBranchRemoteNames(identity.cwd, identity.git)
-  }
-
-  async legacy(
-    owner: Owner,
-    context: Context,
-    identity: BranchSnapshotIdentity
-  ): Promise<ReadonlyMap<string, string>> {
-    if (context.legacy) {
-      return context.legacy
-    }
-    if (context.legacyFlight) {
-      return context.legacyFlight
-    }
-    const valid = () => !owner.disposed && owner.contexts.get(identity.checkoutKey) === context
-    const lease = this.cache.lease(owner, valid)
-    const promise = readLegacyBranchSelectors(identity.cwd, identity.git, lease)
-      .then(async (selectors) => {
-        await this.cache.validate(identity, owner)
-        if (valid()) {
-          context.leases.add(lease)
-          context.legacy = selectors
-        } else {
-          lease.release()
-        }
-        return selectors
-      })
-      .catch((error: unknown) => {
-        lease.release()
-        if (error instanceof LegacyBranchSnapshotTooLarge && error.intrinsic && valid()) {
-          context.legacyOversized = true
-        }
-        throw error
-      })
-      .finally(() => {
-        if (context.legacyFlight === promise) {
-          context.legacyFlight = undefined
-        }
-      })
-    context.legacyFlight = promise
-    return promise
   }
 }

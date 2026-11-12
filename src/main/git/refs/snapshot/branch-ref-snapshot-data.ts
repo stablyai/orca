@@ -76,11 +76,10 @@ export function projectBranchRefs(
   remotes: string[],
   query: string,
   limit: number,
-  remoteOnly = false,
-  legacySelectors?: ReadonlyMap<string, string>
+  remoteOnly = false
 ): BaseRefSearchResult[] {
   const results: BaseRefSearchResult[] = []
-  const project = createBranchRefProjection(remotes, query, remoteOnly, legacySelectors)
+  const project = createBranchRefProjection(remotes, query, remoteOnly)
   for (const ref of refs) {
     const result = project(ref)
     if (result) {
@@ -96,8 +95,7 @@ export function projectBranchRefs(
 export function createBranchRefProjection(
   remotes: string[],
   query: string,
-  remoteOnly = false,
-  legacySelectors?: ReadonlyMap<string, string>
+  remoteOnly = false
 ): (ref: BranchRef) => BaseRefSearchResult | null {
   const normalized = query
     .trim()
@@ -111,12 +109,8 @@ export function createBranchRefProjection(
     ) {
       return null
     }
-    const refName = legacySelectors ? legacySelectors.get(ref.refName) : ref.refName
-    if (!refName || (legacySelectors && refName.startsWith('refs/'))) {
-      return null
-    }
     return {
-      refName,
+      refName: ref.refName,
       localBranchName: resolveLocalBranchName(ref.refName, ref.label, longestFirst)
     }
   }

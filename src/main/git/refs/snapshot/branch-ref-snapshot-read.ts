@@ -7,9 +7,6 @@ import {
   parseBranchRef,
   type BranchRef
 } from './branch-ref-snapshot-data'
-import { resolveBaseRefSearchSelector } from '../resolution/base-ref-search-selector'
-import { createBranchRefProjection } from './branch-ref-snapshot-data'
-import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 
 export const BRANCH_SNAPSHOT_MAX_BYTES = 64 * 1024 * 1024
 
@@ -20,12 +17,6 @@ export type BranchRefSnapshot = {
 export type BranchSnapshotRetention = {
   reserve(bytes: number): boolean
   release(): void
-}
-
-export class LegacyBranchSnapshotTooLarge extends Error {
-  constructor(readonly intrinsic: boolean) {
-    super('Branch selectors cannot be retained')
-  }
 }
 
 export async function readBranchRefSnapshot(
@@ -85,72 +76,6 @@ export async function readBranchRemoteNames(
     .split(/\r?\n/)
     .map((name) => name.trim())
     .filter(Boolean)
-}
-
-export async function readLegacyBranchSelectors(
-  path: string,
-  git: LocalGitExecOptions,
-  retention?: BranchSnapshotRetention
-): Promise<Map<string, string>> {
-  const selectors = new Map<string, string>()
-  let estimatedBytes = 128
-  if (retention && !retention.reserve(estimatedBytes)) {
-    throw new LegacyBranchSnapshotTooLarge(false)
-  }
-  await readRefLines(
-    ['for-each-ref', '--format=%(refname)%00%(refname:short)', 'refs/heads', 'refs/remotes'],
-    path,
-    git,
-    (line) => {
-      const [full, short] = line.replace(/\r$/, '').split('\0')
-      if (!full || !short) {
-        return
-      }
-      const bytes = 96 + 2 * (full.length + short.length)
-      estimatedBytes += bytes
-      if (estimatedBytes > BRANCH_SNAPSHOT_MAX_BYTES || (retention && !retention.reserve(bytes))) {
-        throw new LegacyBranchSnapshotTooLarge(estimatedBytes > BRANCH_SNAPSHOT_MAX_BYTES)
-      }
-      selectors.set(full, resolveBaseRefSearchSelector(full, short))
-    }
-  ).catch((error: unknown) => {
-    retention?.release()
-    throw error
-  })
-  return selectors
-}
-
-export async function readLegacyBranchPage(
-  path: string,
-  git: LocalGitExecOptions,
-  remotes: string[],
-  query: string,
-  limit: number,
-  remoteOnly: boolean
-): Promise<BaseRefSearchResult[]> {
-  const page: BaseRefSearchResult[] = []
-  const project = createBranchRefProjection(remotes, query, remoteOnly)
-  await readRefLines(
-    BRANCH_REF_SNAPSHOT_ARGS.map((arg) =>
-      arg.startsWith('--format=') ? `${arg}%00%(refname:short)` : arg
-    ),
-    path,
-    git,
-    (line) => {
-      const ref = parseBranchRef(line)
-      if (!ref) {
-        return
-      }
-      const row = project(ref)
-      const short = line.replace(/\r$/, '').split('\0')[4]
-      const selector = short ? resolveBaseRefSearchSelector(ref.refName, short) : null
-      if (row && selector && !selector.startsWith('refs/')) {
-        page.push({ ...row, refName: selector })
-      }
-      return page.length >= limit
-    }
-  )
-  return page
 }
 
 async function readRefLines(

@@ -18,9 +18,6 @@ export type Lease = BranchSnapshotRetention & { bytes: number }
 export type Context = {
   remotes: Promise<string[]>
   leases: Set<Lease>
-  legacy?: ReadonlyMap<string, string>
-  legacyFlight?: Promise<ReadonlyMap<string, string>>
-  legacyOversized?: boolean
 }
 export type Capture = {
   snapshot: BranchRefSnapshot | null

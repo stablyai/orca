@@ -171,6 +171,23 @@ it('keeps ordinary branches available to a client without qualified-ref support'
   expect(result.refs).not.toContain('refs/heads/collision')
   expect(result.refs).not.toContain('refs/heads/Feature/emoji😀')
   expect(result.refs.some((ref) => ref.startsWith('refs/'))).toBe(false)
+  await git(root, 'update-ref', 'refs/heads/origin/a', 'HEAD')
+  await git(root, 'update-ref', 'refs/remotes/origin/a', 'HEAD')
+  await git(root, 'update-ref', 'refs/remotes/origin/b', 'HEAD')
+  const remoteResponse = await dispatcher.dispatch(
+    makeRequest('repo.searchRefs', {
+      repo: 'snapshot-test',
+      query: '',
+      limit: 1,
+      namespace: 'remote'
+    }),
+    { clientCapabilities: [] }
+  )
+  expect(
+    z
+      .object({ result: z.object({ refs: z.array(z.string()), truncated: z.boolean() }) })
+      .parse(remoteResponse).result
+  ).toEqual({ refs: [], truncated: true })
 })
 
 it('fences prior results even when our mutating command fails', async () => {

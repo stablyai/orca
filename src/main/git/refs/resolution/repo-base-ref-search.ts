@@ -6,6 +6,7 @@ import {
   isRepoSearchRefsRequestLimit
 } from '../../../../shared/repo-search-limits'
 import { searchBranchRefSnapshot, snapshotRemoteNames } from '../snapshot/branch-ref-snapshot'
+import { searchLegacyBaseRefDetails } from './repo-legacy-ref-search'
 import type { LocalGitExecOptions } from './repo-default-base-ref'
 
 export async function searchBaseRefs(
@@ -30,14 +31,11 @@ export async function searchBaseRefDetails(
   if (!isRepoSearchRefsRequestLimit(limit)) {
     return []
   }
+  if (!includeQualifiedRefs) {
+    return searchLegacyBaseRefDetails(path, query, limit, git)
+  }
   try {
-    return await searchBranchRefSnapshot(
-      path,
-      query,
-      clampRepoSearchRefsScanLimit(limit),
-      includeQualifiedRefs,
-      git
-    )
+    return await searchBranchRefSnapshot(path, query, clampRepoSearchRefsScanLimit(limit), git)
   } catch (err) {
     console.warn('[searchBaseRefs] branch snapshot failed', { path, err })
     return []

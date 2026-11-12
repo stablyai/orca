@@ -1,3 +1,4 @@
+import { searchLegacyRemoteRefPage } from './repo-legacy-ref-search'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import {
   clampRepoSearchRefsLimit,
@@ -11,12 +12,14 @@ export async function searchRemoteRefPage(
   limit: number,
   includeQualifiedRefs = true
 ): Promise<{ refDetails: BaseRefSearchResult[]; truncated: boolean }> {
+  if (!includeQualifiedRefs) {
+    return searchLegacyRemoteRefPage(path, query, limit)
+  }
   const bounded = clampRepoSearchRefsLimit(limit)
   const candidates = await searchBranchRefSnapshot(
     path,
     query,
     getRepoSearchRefsProbeLimit(bounded),
-    includeQualifiedRefs,
     {},
     true
   )

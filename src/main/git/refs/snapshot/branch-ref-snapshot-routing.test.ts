@@ -78,7 +78,7 @@ it('keeps a live host snapshot across expiry of the filesystem-only linked-route
     },
     oversized: false
   })
-  expect(await searchBranchRefSnapshot(cwd, 'topic', 20, true, { wslDistro: 'Ubuntu' })).toEqual([
+  expect(await searchBranchRefSnapshot(cwd, 'topic', 20, { wslDistro: 'Ubuntu' })).toEqual([
     { refName: 'refs/heads/topic', localBranchName: 'topic' }
   ])
   clock.mockReturnValue(40_001)
@@ -86,7 +86,7 @@ it('keeps a live host snapshot across expiry of the filesystem-only linked-route
     commonDir,
     gitDir
   })
-  expect(await searchBranchRefSnapshot(cwd, 'topic', 20, true, { wslDistro: 'Ubuntu' })).toEqual([
+  expect(await searchBranchRefSnapshot(cwd, 'topic', 20, { wslDistro: 'Ubuntu' })).toEqual([
     { refName: 'refs/heads/topic', localBranchName: 'topic' }
   ])
   expect(io.remote).toHaveBeenCalledTimes(1)

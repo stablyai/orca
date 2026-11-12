@@ -37,13 +37,10 @@ export function searchBranchRefSnapshot(
   path: string,
   query: string,
   limit: number,
-  includeQualifiedRefs = true,
   git: LocalGitExecOptions = {},
   remoteOnly = false
 ): Promise<BaseRefSearchResult[]> {
-  return withIdentity(path, git, (identity) =>
-    snapshots.search(identity, query, limit, includeQualifiedRefs, remoteOnly)
-  )
+  return withIdentity(path, git, (identity) => snapshots.search(identity, query, limit, remoteOnly))
 }
 
 export function snapshotRemoteNames(
