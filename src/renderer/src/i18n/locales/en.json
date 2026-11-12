@@ -6221,7 +6221,8 @@
           "updateAvailable": "Update available",
           "repairAvailable": "Repair available",
           "installAvailable": "Install available",
-          "otherBuild": "Installed by another Orca version"
+          "otherBuild": "Installed by another Orca version",
+          "otherBuildKept": "Kept: written by another Orca version"
         },
         "installResult": {
           "installed": "Installed and verified.",

@@ -99,18 +99,19 @@ export async function executeBundledSkillsOnTarget(
 
 /**
  * Silently updates hash-verified copies of `names`; null when the host predates it, so the caller asks instead.
- * `onSent` fires once the request leaves for a paired host, so a later lost reply may follow a write.
+ * `recordOnly` only records copies already at the host's bytes and never updates a skill.
  */
 export async function autoUpdateBundledSkillsOnTarget(
   target: BundledSkillTarget,
   names: string[],
-  options: { onSent?: () => void } = {}
+  options: { recordOnly?: boolean } = {}
 ): Promise<BundledSkillInstallResult | null> {
   if (target.kind === 'ssh') {
     return null
   }
+  const request = { names, ...(options.recordOnly ? { recordOnly: true as const } : {}) }
   if (target.kind !== 'environment') {
-    return window.api.skills.bundledAutoUpdate({ names })
+    return window.api.skills.bundledAutoUpdate(request)
   }
   // Why pinned: a re-pair while these probes await must not send this write to a different host.
   const proof = await runtimeEnvironmentCapabilityProof(
@@ -123,12 +124,11 @@ export async function autoUpdateBundledSkillsOnTarget(
   return callRuntimeRpc<BundledSkillInstallResult>(
     { kind: 'environment', environmentId: target.environmentId },
     'skills.autoUpdateBundledOrca',
-    { names },
+    request,
     {
       timeoutMs: BUNDLED_SKILL_EXECUTE_TIMEOUT_MS,
       expectedEnvironmentRuntimeId: proof.runtimeId,
-      expectedEnvironmentPairingRevision: proof.pairingRevision,
-      ...(options.onSent ? { beforeSend: options.onSent } : {})
+      expectedEnvironmentPairingRevision: proof.pairingRevision
     }
   )
 }

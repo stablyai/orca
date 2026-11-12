@@ -80,6 +80,8 @@ describe("another Orca build's copy on the same host", () => {
       // Claude's link into the shared copy is already right.
       ['keep', undefined]
     ])
+    // Replacing it may downgrade it, so the dialog and setup button never offer to.
+    expect(plan.skills[0].ops[0].replaceable).toBe(false)
     expect(bundledSkillPlanState(plan.skills[0])).toBe('current')
     expect(bundledSkillNudgeEntries(plan)).toEqual([])
     expect(bundledSkillNudgeKey('local', plan)).toBeNull()
@@ -135,6 +137,21 @@ describe("another Orca build's copy on the same host", () => {
     await appendFile(join(home.home, '.agents', 'skills', FORMER_NAME, 'SKILL.md'), '\nmy note\n')
     const edited = await previewBundledSkillInstall({ ...renamed, installedOnly: true })
     expect(bundledSkillNudgeEntries(edited).map((entry) => entry.name)).toEqual([NAME])
+  })
+
+  it('records a current copy on a record-only request but never updates a released one', async () => {
+    const home = await makeSkillHome()
+    await writeCopy(home.shared, NEW_TEXT)
+    const recordOnly = { ...asBuild(home, NEW_SOURCE), names: [NAME], recordOnly: true }
+
+    expect((await autoUpdateInstalledBundledSkills(recordOnly)).skills).toEqual([])
+    expect(await hasMarker(home, NEW_TEXT)).toBe(true)
+
+    // A copy at an older release text would be silently updated, but not by a record-only request.
+    await writeCopy(home.shared, OLD_TEXT)
+    expect((await autoUpdateInstalledBundledSkills(recordOnly)).skills).toEqual([])
+    expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(OLD_TEXT)
+    expect(await hasMarker(home, OLD_TEXT)).toBe(false)
   })
 
   it('writes no marker from a preview alone', async () => {

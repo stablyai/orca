@@ -15,7 +15,6 @@ import {
 } from '@/lib/skills/runtime/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
 import { autoUpdateBundledSkillsOnTarget } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
-import { RuntimeConnectionChangedBeforeSendError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useAppStore } from '@/store/index'
 import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-store'
 
@@ -24,9 +23,9 @@ type AttemptState = 'running' | 'settled'
 // Keyed by target; each scan prunes what it no longer observes, so the map stays plan-sized.
 const attemptsByTarget = new Map<string, Map<string, AttemptState>>()
 // Current copies asked to record their marker this session; one per target, skill and bytes.
-// Why never released on failure: every call ends in a plan refresh, so a retry would re-run on each
-// refresh while the host stays busy or unreachable. A missing marker is best effort; the next
-// session, a manual update, or any later write of the skill records it.
+// Why never released on failure: a retry would re-run on every plan refresh while the host stays
+// busy or unreachable. A missing marker is best effort; the next session, a manual update, or any
+// later write of the skill records it.
 const markedCopies = new Set<string>()
 
 /** Drop settled attempts for states this scan no longer sees; running ones still own their skills. */
@@ -128,15 +127,6 @@ function reportUncertainOutcome(target: BundledSkillTarget, plan: BundledSkillPl
 }
 
 /**
- * Once the request is on its way to the host, any rejection may hide a committed update: a paired
- * host's lost reply or timeout also arrives as an RPC error, and failure codes do not say whether
- * the host ran the method. Only a refusal before sending proves nothing was written.
- */
-function mayHaveWritten(sent: boolean, error: unknown): boolean {
-  return sent && !(error instanceof RuntimeConnectionChangedBeforeSendError)
-}
-
-/**
  * Silently updates each skill's hash-verified Orca copies, at most once per observed state.
  * Returns the skills a running update owns, so the nudge asks only about the rest.
  */
@@ -160,15 +150,6 @@ export function autoUpdateUnmodifiedSkills(
   }
   const started: string[] = []
   const keys: string[] = []
-  // Why: a copy already at this build's digest plans keep-only, so no update ever runs to mark it.
-  const marking = canStart
-    ? entries.flatMap(({ entry, key }) => {
-        const mark = `${targetKey}:${entry.name}@${entry.digest}`
-        return !key && !markedCopies.has(mark) && holdsCurrentBundledSkillCopy(entry)
-          ? [{ name: entry.name, mark }]
-          : []
-      })
-    : []
   for (const { entry, key } of entries) {
     const attempt = key ? attempts.get(key) : undefined
     if (!key || attempt === 'settled' || (!attempt && !canStart)) {
@@ -181,27 +162,33 @@ export function autoUpdateUnmodifiedSkills(
       keys.push(key)
     }
   }
+  // Why: a copy already at this build's digest plans keep-only, so no update ever runs to mark it.
+  // Asked when no update starts, as a record-only call that can never write a skill.
+  const recordOnly = started.length === 0
+  const marking =
+    canStart && recordOnly
+      ? entries.flatMap(({ entry, key }) => {
+          const mark = `${targetKey}:${entry.name}@${entry.digest}`
+          return !key && !markedCopies.has(mark) && holdsCurrentBundledSkillCopy(entry)
+            ? [{ name: entry.name, mark }]
+            : []
+        })
+      : []
   for (const { mark } of marking) {
     markedCopies.add(mark)
   }
-  // Marking-only names are not owned; the host re-plans and may still update a copy that became released.
-  const names = [...started, ...marking.map(({ name }) => name)]
+  const names = recordOnly ? marking.map(({ name }) => name) : started
   if (names.length > 0) {
-    let sent = false
     // The host re-plans under its locks and re-checks each location right before writing.
     void runAutomaticSkillUpdate(target, names, () =>
-      autoUpdateBundledSkillsOnTarget(target, names, {
-        onSent: () => {
-          sent = true
-        }
-      })
+      autoUpdateBundledSkillsOnTarget(target, names, { recordOnly })
     )
       .then(
         (ran) => reportPreservedEdits(ran?.value ?? null),
         // Settling the keys below means the same state is never retried; the nudge takes over.
-        (error: unknown) => {
-          // A marking-only call can write only if it reached the host and its reply was lost.
-          if (started.length > 0 || mayHaveWritten(sent, error)) {
+        // A record-only call writes no skill, so its failure has nothing to warn about.
+        () => {
+          if (!recordOnly) {
             reportUncertainOutcome(target, plan)
           }
         }
@@ -213,7 +200,10 @@ export function autoUpdateUnmodifiedSkills(
         for (const key of keys) {
           settled.set(key, 'settled')
         }
-        notifyInstalledAgentSkillsChanged()
+        // Markers never change this build's own plan, so only an update needs a re-plan.
+        if (!recordOnly) {
+          notifyInstalledAgentSkillsChanged()
+        }
       })
   }
   return owned

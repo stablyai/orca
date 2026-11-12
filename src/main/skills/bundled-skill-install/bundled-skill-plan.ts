@@ -181,10 +181,10 @@ async function planTarget(
         : leave('shared-not-current', false)
     }
     if (context.force !== 'all' && !context.force.has(bundledSkillPathKey(path))) {
-      return leave(
-        folderClass === 'edited' || folderClass === 'other-build' ? folderClass : 'other',
-        true
-      )
+      // Replacing another build's copy may downgrade it, so only an explicit --force offers that.
+      return folderClass === 'other-build'
+        ? leave('other-build', false)
+        : leave(folderClass === 'edited' ? 'edited' : 'other', true)
     }
     return shared?.current && filesystem.supportsLinks
       ? linkToShared('replace', shared)

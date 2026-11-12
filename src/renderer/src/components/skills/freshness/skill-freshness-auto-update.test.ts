@@ -19,8 +19,7 @@ vi.mock('@/hooks/skills/discovery/installed-agent-skill-discovery', () => ({
 const { _resetSkillFreshnessAutoUpdate, autoUpdateUnmodifiedSkills } =
   await import('./skill-freshness-auto-update')
 const { getSkillUpdateRun } = await import('./skill-update-run-store')
-const { RuntimeConnectionChangedBeforeSendError, RuntimeRpcCallError } =
-  await import('@/runtime/rpc/calls/runtime-rpc-result')
+const { RuntimeRpcCallError } = await import('@/runtime/rpc/calls/runtime-rpc-result')
 
 const DIGEST = 'a'.repeat(64)
 
@@ -63,14 +62,26 @@ describe('startup scan of an already-current host', () => {
 
     expect(autoUpdateUnmodifiedSkills(target, currentPlan).size).toBe(0)
     await vi.waitFor(() =>
-      expect(autoUpdate).toHaveBeenCalledWith(target, ['orca-cli'], expect.anything())
+      expect(autoUpdate).toHaveBeenCalledWith(target, ['orca-cli'], { recordOnly: true })
     )
     autoUpdateUnmodifiedSkills(target, currentPlan)
     expect(autoUpdate).toHaveBeenCalledTimes(1)
   })
 
   it.each<[string, () => Promise<unknown>]>([
-    ['the marking call keeps failing', () => Promise.reject(new Error('offline'))],
+    ['the record-only call keeps failing', () => Promise.reject(new Error('offline'))],
+    [
+      'a sent record-only call times out',
+      () =>
+        Promise.reject(
+          new RuntimeRpcCallError({
+            id: '1',
+            ok: false,
+            error: { code: 'timeout', message: 'Timed out waiting for the remote Orca runtime' },
+            _meta: { runtimeId: 'r' }
+          })
+        )
+    ],
     [
       'the host keeps reporting the skill busy',
       () =>
@@ -79,76 +90,79 @@ describe('startup scan of an already-current host', () => {
           skills: [{ name: 'orca-cli', status: 'busy', ops: [] }]
         })
     ]
-  ])(
-    'asks only once per session when %s, though every call refreshes the plan',
-    async (_, reply) => {
-      const target: BundledSkillTarget = { kind: 'local' }
-      autoUpdate.mockImplementation(reply)
-      // The nudge re-plans on every skills-changed signal and scans the fresh plan, as in the app.
-      // The scan runs inline so any new call starts before the assertion; capped so a regression
-      // fails instead of spinning forever.
-      let refreshes = 0
-      skillsChanged.mockImplementation(() => {
-        refreshes += 1
-        if (refreshes < 5) {
-          autoUpdateUnmodifiedSkills(target, currentPlan)
-        }
-      })
-
-      autoUpdateUnmodifiedSkills(target, currentPlan)
-      await vi.waitFor(() => expect(refreshes).toBeGreaterThan(0))
-
-      expect(getSkillUpdateRun('local').state).toBe('idle')
-      expect(autoUpdate).toHaveBeenCalledTimes(1)
-      expect(refreshes).toBe(1)
-    }
-  )
-
-  it.each<[string, (options: { onSent?: () => void }) => Promise<never>, boolean]>([
-    [
-      'warns when the reply to a sent marking call is lost',
-      async (options) => {
-        options.onSent?.()
-        throw new Error('timed out')
-      },
-      true
-    ],
-    [
-      'stays quiet when the marking call is refused before sending',
-      async () => {
-        throw new Error('server unreachable')
-      },
-      false
-    ],
-    [
-      // A paired host's lost reply or timeout reaches the renderer as an RPC error, not proof of no write.
-      'warns when a sent marking call fails with an RPC error',
-      async (options) => {
-        options.onSent?.()
-        throw new RuntimeRpcCallError({
-          id: '1',
-          ok: false,
-          error: { code: 'timeout', message: 'Timed out waiting for the remote Orca runtime' },
-          _meta: { runtimeId: 'r' }
-        })
-      },
-      true
-    ],
-    [
-      'stays quiet when the connection changed before the marking call was sent',
-      async (options) => {
-        options.onSent?.()
-        throw new RuntimeConnectionChangedBeforeSendError('connection changed')
-      },
-      false
-    ]
-  ])('%s', async (_, reject, warns) => {
+  ])('asks only once per session, without a warning or re-plan, when %s', async (_, reply) => {
     const target: BundledSkillTarget = { kind: 'environment', environmentId: 'server-1' }
-    autoUpdate.mockImplementationOnce((_target, _names, options) => reject(options))
+    autoUpdate.mockImplementation(reply)
+    // The nudge re-plans on every skills-changed signal and scans the fresh plan, as in the app.
+    // Capped so a regression fails instead of spinning forever.
+    let refreshes = 0
+    skillsChanged.mockImplementation(() => {
+      refreshes += 1
+      if (refreshes < 5) {
+        autoUpdateUnmodifiedSkills(target, currentPlan)
+      }
+    })
 
     autoUpdateUnmodifiedSkills(target, currentPlan)
+    // The run is marked running synchronously, so this first passes after the call has settled.
     await vi.waitFor(() => expect(getSkillUpdateRun('runtime:server-1').state).toBe('idle'))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(toastWarning).toHaveBeenCalledTimes(warns ? 1 : 0)
+    autoUpdateUnmodifiedSkills(target, currentPlan)
+
+    expect(autoUpdate).toHaveBeenCalledTimes(1)
+    expect(refreshes).toBe(0)
+    // A record-only call can never write a skill, so no failure of it is worth a warning.
+    expect(toastWarning).not.toHaveBeenCalled()
+  })
+})
+
+describe('silent update of a released copy', () => {
+  const RELEASED = 'b'.repeat(64)
+  const releasedPlan: BundledSkillPlan = {
+    ...currentPlan,
+    skills: [
+      {
+        name: 'orca-cli',
+        digest: DIGEST,
+        ops: [
+          {
+            kind: 'update',
+            path: '/home/me/.agents/skills/orca-cli',
+            role: 'shared',
+            agents: [],
+            observed: { kind: 'folder', entries: ['SKILL.md:file'], skillDigest: RELEASED },
+            cleanup: []
+          }
+        ]
+      },
+      {
+        name: 'orchestration',
+        digest: DIGEST,
+        ops: [
+          {
+            kind: 'keep',
+            path: '/home/me/.agents/skills/orchestration',
+            role: 'shared',
+            agents: [],
+            observed: { kind: 'folder', entries: ['SKILL.md:file'], skillDigest: DIGEST },
+            cleanup: []
+          }
+        ]
+      }
+    ]
+  }
+
+  it('updates without a record-only request in the same scan, and warns when the reply is lost', async () => {
+    const target: BundledSkillTarget = { kind: 'environment', environmentId: 'server-1' }
+    autoUpdate.mockRejectedValueOnce(new Error('timed out'))
+    autoUpdate.mockResolvedValue({ scope: 'global', skills: [] })
+
+    expect([...autoUpdateUnmodifiedSkills(target, releasedPlan)]).toEqual(['orca-cli'])
+    expect(autoUpdate).toHaveBeenCalledWith(target, ['orca-cli'], { recordOnly: false })
+    await vi.waitFor(() => expect(toastWarning).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(skillsChanged).toHaveBeenCalledTimes(1))
+
+    // The re-plan after the update records the current copy on its own.
+    autoUpdateUnmodifiedSkills(target, releasedPlan)
+    expect(autoUpdate).toHaveBeenLastCalledWith(target, ['orchestration'], { recordOnly: true })
   })
 })

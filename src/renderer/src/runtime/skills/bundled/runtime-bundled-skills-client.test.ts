@@ -14,6 +14,7 @@ const target = { kind: 'environment' as const, environmentId: ENVIRONMENT_ID }
 type CallArgs = {
   selector: string
   method: string
+  params?: unknown
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId?: string
 }
@@ -52,11 +53,12 @@ describe('silent skill update on a paired server', () => {
         : { id: 'u', ok: true, result: { scope: 'global', skills: [] }, _meta: {} }
     )
 
-    await autoUpdateBundledSkillsOnTarget(target, ['orca-cli'])
+    await autoUpdateBundledSkillsOnTarget(target, ['orca-cli'], { recordOnly: true })
 
     expect(call).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'skills.autoUpdateBundledOrca',
+        params: { names: ['orca-cli'], recordOnly: true },
         expectedEnvironmentPairingRevision: 41,
         expectedEnvironmentRuntimeId: 'runtime-a'
       })

@@ -93,13 +93,19 @@ export function locationStateText(location: BundledSkillLocation): string {
     'keep-link': () =>
       translate('auto.components.skills.skillPlanOpCopy.keepLink', 'Link, no change'),
     leave: () =>
-      translate(
-        'auto.components.skills.skillPlanOpCopy.updateSkipped',
-        'Update skipped: {{value0}}',
-        {
-          value0: leaveReasonText(location.reason)
-        }
-      ),
+      // Another build's copy was never meant to update, so it is kept rather than skipped.
+      location.reason === 'other-build'
+        ? translate(
+            'auto.components.skills.skillPlanOpCopy.otherBuildKept',
+            'Kept: written by another Orca version'
+          )
+        : translate(
+            'auto.components.skills.skillPlanOpCopy.updateSkipped',
+            'Update skipped: {{value0}}',
+            {
+              value0: leaveReasonText(location.reason)
+            }
+          ),
     unknown: () =>
       translate('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
   }

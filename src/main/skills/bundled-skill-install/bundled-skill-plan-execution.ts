@@ -271,10 +271,11 @@ export async function executeBundledSkillPlan(
 /**
  * Plans each named installed skill under its locks and applies only hash-verified released-copy
  * updates; edited, foreign or interrupted locations are never touched. Each write re-checks its
- * location, and one skill's failure leaves the others' outcomes intact.
+ * location, and one skill's failure leaves the others' outcomes intact. `recordOnly` skips every
+ * update and only records copies that already hold this build's bytes.
  */
 export async function autoUpdateBundledSkills(
-  input: BundledSkillExecuteInput & { names: readonly string[] }
+  input: BundledSkillExecuteInput & { names: readonly string[]; recordOnly?: boolean }
 ): Promise<BundledSkillInstallResult> {
   const unrun = (status: 'changed' | 'busy'): BundledSkillInstallResult => ({
     scope: input.destination.scope,
@@ -289,7 +290,7 @@ export async function autoUpdateBundledSkills(
       const ops = entry.ops.filter(
         (op) => safe.includes(op) || (op.kind === 'keep' && required.has(op.path))
       )
-      if (ops.length > 0) {
+      if (ops.length > 0 && !input.recordOnly) {
         const source = findBundledSkillSource(input.sources, entry.name)
         skills.push(await runSkill({ input, entry: { ...entry, ops }, source }))
       }
