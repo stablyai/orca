@@ -2,7 +2,7 @@ import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/r
 import type { ghRepoExecOptions } from '../../repositories/github-repository-identity'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import { mergedPRHeadMembership } from '../../pull-requests/refresh/merged-pr-head-membership'
-import type { MergedReviewCommitMembership as MergedPRCommitMembership } from '../../../source-control/merged-review-membership-memo'
+import type { MergedPRHeadRelationship } from '../../pull-requests/refresh/merged-pr-commit-membership'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../../../source-control/repo-default-branch'
 import { resolveGitHubApiRepositoryCandidates } from '../../repositories/github-api-repository'
 import { exactRepositoryCandidates } from '../pull-request-lookup-candidates'
@@ -89,11 +89,11 @@ export async function resolvePRForBranchOutcome(input: {
       ? options.currentHeadOid.trim()
       : null
   let confirmedContainedHeadOid: string | null = null
-  const mergedPRContainsHead = async (
+  const mergedPRHeadRelationship = async (
     candidate: PullRequestLookupData,
     candidateRepo: OwnerRepo | null,
     headOid: string | null
-  ): Promise<MergedPRCommitMembership> => {
+  ): Promise<MergedPRHeadRelationship> => {
     if (!candidateRepo || !headOid) {
       return 'unknown'
     }
@@ -128,10 +128,9 @@ export async function resolvePRForBranchOutcome(input: {
     if (!shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)) {
       return false
     }
-    // PR-history membership preserves merged work after web commits or update-branch merges.
-    return (
-      (await mergedPRContainsHead(candidate, candidateRepo, currentHeadOidForMergedImplicit)) !==
-      'contained'
+    // Historical association keeps the review visible without granting cleanup containment proof.
+    return !['contained', 'associated'].includes(
+      await mergedPRHeadRelationship(candidate, candidateRepo, currentHeadOidForMergedImplicit)
     )
   }
 
@@ -234,12 +233,14 @@ export async function resolvePRForBranchOutcome(input: {
     data,
     linkedPRNumber,
     explicitCurrentHeadOid,
-    (candidate, headOid) =>
-      mergedPRContainsHead(
+    async (candidate, headOid) => {
+      const relationship = await mergedPRHeadRelationship(
         candidate,
         dataRepo ?? ownerRepoFromPullRequestUrl(candidate.url),
         headOid
       )
+      return relationship === 'associated' ? 'unknown' : relationship
+    }
   )
   const fallbackConfirmedMergedBranch =
     typeof fallbackPRNumber === 'number' &&
@@ -248,7 +249,9 @@ export async function resolvePRForBranchOutcome(input: {
   const explicitHeadHidesMergedImplicitPR =
     explicitCurrentHeadOid !== null &&
     shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid) &&
-    (await mergedPRContainsHead(data, dataRepo, explicitCurrentHeadOid)) !== 'contained'
+    !['contained', 'associated'].includes(
+      await mergedPRHeadRelationship(data, dataRepo, explicitCurrentHeadOid)
+    )
   // Fallback preservation already checked head identity; repeating lazy-HEAD checks could hide valid deleted heads.
   const shouldPreserveMergedFallback =
     !explicitHeadHidesMergedImplicitPR &&

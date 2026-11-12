@@ -11,14 +11,14 @@ vi.mock('../../api/rate-limit', () => ({
 }))
 
 import {
-  isCommitPartOfMergedPR,
+  getMergedPRHeadRelationship,
   resetMergedPRCommitMembershipCacheForTest
 } from './merged-pr-commit-membership'
 
 const REBASED_AWAY = '6ada46e391c5e4025d13d0304c4c0729af13a923'
 
 function membership() {
-  return isCommitPartOfMergedPR({
+  return getMergedPRHeadRelationship({
     ownerRepo: { owner: 'stablyai', repo: 'orca' },
     prNumber: 41082,
     commitOid: REBASED_AWAY,
@@ -49,7 +49,7 @@ function scriptForcePushes(beforeOids: (string | null)[]): void {
   })
 }
 
-describe('isCommitPartOfMergedPR', () => {
+describe('getMergedPRHeadRelationship', () => {
   it('preserves uncertainty when a force-push event has no prior commit', async () => {
     scriptForcePushes([null])
     await expect(membership()).resolves.toBe('unknown')
@@ -60,8 +60,8 @@ describe('isCommitPartOfMergedPR', () => {
     resetMergedPRCommitMembershipCacheForTest()
   })
 
-  it('counts a head the PR was force-pushed away from, as after a rebase pushed elsewhere', async () => {
+  it('treats a force-pushed-away head as association without claiming its changes landed', async () => {
     scriptForcePushes([null, REBASED_AWAY])
-    await expect(membership()).resolves.toBe('contained')
+    await expect(membership()).resolves.toBe('associated')
   })
 })

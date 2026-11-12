@@ -125,6 +125,9 @@ export async function readGitReviewBranchSources(
       if (destinations.size > 1) {
         throw new Error('Review push destination is ambiguous')
       }
+      if (destinations.size === 0 && (specs.length > 0 || get('push.default') === 'nothing')) {
+        throw new Error('Review push destination is not configured for this branch')
+      }
       let branchName = destinations.values().next().value ?? branch
       if (destinations.size === 0) {
         if (!localTracking && remote === trackedRemote) {

@@ -193,11 +193,27 @@ describe('getPRForBranch configured push head', () => {
     expect(pr).toMatchObject({ number: 91, headRepo: { owner: 'contributor', repo: 'orca' } })
   })
 
+  it.each([
+    ['remote.origin.push', 'refs/heads/other:refs/heads/other'],
+    ['push.default', 'nothing']
+  ])(
+    'does not invent a fork head when this branch has no configured push destination: %j',
+    async (key, value) => {
+      scriptGit({ 'remote.origin.url': 'git@github.com:stablyai/orca.git', [key]: value }, [
+        'origin\tgit@github.com:stablyai/orca.git (fetch)',
+        'origin\tgit@github.com:contributor/orca.git (push)'
+      ])
+      scriptGitHub('contributor', BRANCH)
+      await expect(getPRForBranch('/repo-root', BRANCH)).resolves.toBeNull()
+    }
+  )
+
   it('finds a PR whose head is the remote branch a push refspec publishes to', async () => {
     scriptGit(
       {
         'remote.origin.url': 'git@github.com:stablyai/orca.git',
-        'remote.origin.push': `refs/heads/${BRANCH}:refs/heads/published-name`
+        'remote.origin.push': `refs/heads/${BRANCH}:refs/heads/published-name`,
+        'push.default': 'nothing'
       },
       [
         'origin\tgit@github.com:stablyai/orca.git (fetch)',
@@ -230,4 +246,57 @@ describe('getPRForBranch configured push head', () => {
       headRepo: { owner: 'contributor', repo: 'orca', host: 'ghe.example' }
     })
   })
+})
+
+it('keeps historical association visible without emitting merged containment proof', async () => {
+  resetPRForBranchMocks(clientMocks)
+  getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+  scriptGit({}, [])
+  scriptGitHub('stablyai', BRANCH)
+  const oldHead = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  const replacement = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+  const original = ghExecFileAsyncMock.getMockImplementation()!
+  ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    if (args[1]?.includes('/commits/')) {
+      return { stdout: '[]' }
+    }
+    if (args.some((arg) => arg.includes('HEAD_REF_FORCE_PUSHED_EVENT'))) {
+      return {
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                timelineItems: { totalCount: 1, nodes: [{ beforeCommit: { oid: oldHead } }] }
+              }
+            }
+          }
+        })
+      }
+    }
+    const result = await original(args)
+    const parsed = JSON.parse(result.stdout)
+    return {
+      stdout: JSON.stringify(
+        Array.isArray(parsed)
+          ? parsed.map((pr) => ({
+              ...pr,
+              state: 'closed',
+              merged_at: '2026-11-10T00:00:00Z',
+              head: { ...pr.head, sha: replacement }
+            }))
+          : {
+              ...parsed,
+              state: 'MERGED',
+              headRefOid: replacement,
+              mergedAt: '2026-11-10T00:00:00Z'
+            }
+      )
+    }
+  })
+  const pr = await getPRForBranch('/repo-root', BRANCH, null, null, null, {
+    currentHeadOid: oldHead,
+    includeDerivedData: false
+  })
+  expect(pr).toMatchObject({ number: 91, state: 'merged' })
+  expect(pr?.confirmedContainedHeadOid).toBeUndefined()
 })

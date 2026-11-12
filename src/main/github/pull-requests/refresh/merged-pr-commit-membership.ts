@@ -13,19 +13,20 @@ import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/g
 
 const COMMIT_PULLS_PAGE_SIZE = 100
 const COMMIT_PULLS_MAX_PAGES = 5
-const membershipMemo = new MergedReviewMembershipMemo()
+export type MergedPRHeadRelationship = MergedPRCommitMembership | 'associated'
+const membershipMemo = new MergedReviewMembershipMemo<MergedPRHeadRelationship>()
 
 export function resetMergedPRCommitMembershipCacheForTest(): void {
   membershipMemo.clear()
 }
 
-/** Check PR-history membership rather than branch-name reuse; failures return unknown. */
-export async function isCommitPartOfMergedPR(args: {
+/** Force-push history proves association only; it cannot prove those changes landed. */
+export async function getMergedPRHeadRelationship(args: {
   ownerRepo: OwnerRepo
   prNumber: number
   commitOid: string
   ghOptions: GitHubRepoExecOptions
-}): Promise<MergedPRCommitMembership> {
+}): Promise<MergedPRHeadRelationship> {
   const oid = args.commitOid.trim().toLowerCase()
   if (!/^[0-9a-f]{4,64}$/.test(oid) || !Number.isInteger(args.prNumber)) {
     return 'unknown'
@@ -112,7 +113,7 @@ async function wasForcePushedAwayFromPR(
   prNumber: number,
   oid: string,
   ghOptions: GitHubRepoExecOptions
-): Promise<MergedPRCommitMembership> {
+): Promise<MergedPRHeadRelationship> {
   if (repositoryRateLimitGuard(ownerRepo, 'graphql', ghOptions).blocked) {
     return 'unknown'
   }
@@ -137,8 +138,8 @@ async function wasForcePushedAwayFromPR(
   if (!timeline) {
     return 'unknown'
   }
-  if (timeline.nodes.some((node) => node?.beforeCommit?.oid.toLowerCase().startsWith(oid))) {
-    return 'contained'
+  if (timeline.nodes.some((node) => node?.beforeCommit?.oid.toLowerCase() === oid)) {
+    return 'associated'
   }
   return timeline.totalCount > timeline.nodes.length ||
     timeline.nodes.some((node) => !node?.beforeCommit?.oid)

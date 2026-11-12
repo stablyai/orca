@@ -45,11 +45,10 @@ it('resolves real Git tracking, triangular publication, local tracking and expli
     await git(['config', 'remote.origin.push', 'HEAD'])
     expect((await snapshot()).get('feature')).toMatchObject({ branchName: 'feature' })
     await git(['config', 'remote.origin.push', 'refs/heads/main:refs/heads/main'])
-    expect((await snapshot()).get('feature')).toMatchObject({
-      branchName: 'feature',
-      trackedBranchName: 'main'
-    })
+    expect((await snapshot()).get('feature')).toBeInstanceOf(Error)
     await git(['config', '--unset', 'remote.origin.push'])
+    await git(['config', 'push.default', 'nothing'])
+    expect((await snapshot()).get('feature')).toBeInstanceOf(Error)
     await git(['config', 'branch.feature.merge', 'refs/tags/v1'])
     await git(['config', 'push.default', 'upstream'])
     expect((await snapshot()).get('feature')).toEqual({
