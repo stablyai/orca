@@ -412,7 +412,8 @@ describe('coordinator approvals: every outcome', () => {
             return { ok: false, code: 'approval_not_open', message: 'gone' }
           case 'refuses it':
             return { ok: false, code: 'approval_refused', message: 'refused' }
-          default: {
+          case 'is a person-only check':
+          case 'drops the allow': {
             // The real person-only check runs before any chat is reached; past it, the answer lands.
             const checked = await answerChatWorkerApproval({
               ...input,
