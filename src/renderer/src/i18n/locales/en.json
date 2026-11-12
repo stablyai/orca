@@ -1350,6 +1350,11 @@
         "tooLarge": "Repo icon image must be 256KB or smaller."
       }
     },
+    "sidebarOpacity": {
+      "title": "Sidebar opacity",
+      "description": "Lets the window material show through the left and right sidebars.",
+      "fieldDescription": "Needs Background opacity below 1 and a Window material other than Opaque. 1 is fully opaque, 0 is fully transparent."
+    },
     "windowMaterial": {
       "description": "What shows behind translucent terminals. Requires restart.",
       "off": "Opaque",

@@ -1037,6 +1037,24 @@ body[data-modal-overlay-open]
   background-color: var(--background);
 }
 
+/* Sidebar Opacity (app-shell/appearance/sidebar-glass.ts) thins both sidebars so the window material shows through. */
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='worktree-sidebar'] {
+  background-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar) var(--orca-sidebar-opacity, 100%),
+    transparent
+  );
+}
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='sidebar'] {
+  background-color: color-mix(
+    in srgb,
+    var(--sidebar) var(--orca-sidebar-opacity, 100%),
+    transparent
+  );
+}
+
 /* The modal blur samples transparent pixels past the window edge; keep it over an opaque base. */
 :root[data-window-material] body:is([data-modal-overlay-open], [data-onboarding-overlay-open]) {
   background-color: var(--background);
