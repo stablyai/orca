@@ -187,7 +187,7 @@ function describeNextStep(
 }
 
 /** Tell the coordinator once that a worker is at rest or gone without reporting; never settles its Dispatch.
- *  True when this call sent the report. */
+ *  True when the report is in the coordinator's mail. */
 export function reportWorkerTurnStop(
   db: OrchestrationDb,
   target: WorkerTurnStopDispatch,
@@ -226,7 +226,7 @@ export function reportWorkerTurnStop(
   }
   if (target.kind === 'local') {
     const { dispatch } = target
-    const sent = escalateWorkerFailure(
+    escalateWorkerFailure(
       db,
       dispatch,
       {
@@ -248,7 +248,8 @@ export function reportWorkerTurnStop(
       },
       deps.notify
     )
-    return sent !== null
+    // Stored is sent: a failed wake or an earlier send of this stop still reached the mailbox.
+    return db.getMessageById(id) !== undefined
   }
   // The Run home imports relayed worker mail into the coordinator's Run and wakes it.
   const { attachment } = target
