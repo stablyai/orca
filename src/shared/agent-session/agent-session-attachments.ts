@@ -7,6 +7,10 @@ export const AGENT_SESSION_ATTACHMENTS_DIR_NAME = 'agent-session-attachments'
 
 export const AGENT_SESSION_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024
 
+// Agents shrink images before their APIs see them, so these bound host memory, not API limits.
+export const AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT = 20
+export const AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES = 64 * 1024 * 1024
+
 /** 384 KiB of bytes is 512 KiB of base64 on the wire, the same frame size file imports use. */
 export const AGENT_SESSION_ATTACHMENT_CHUNK_BYTES = 384 * 1024
 
