@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
 import { createPreviousNativeHangReport } from './previous-native-hang-report'
 import {
@@ -52,9 +52,12 @@ function artifact(time: number): NativeHangArtifact {
 
 let directory: string
 beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime('2026-11-12T01:00:00.000Z')
   directory = await fs.mkdtemp(join(tmpdir(), 'orca-native-hang-'))
 })
 afterEach(async () => {
+  vi.useRealTimers()
   await fs.rm(directory, { recursive: true, force: true })
 })
 
@@ -185,7 +188,7 @@ it('keeps an intact large capture with both log sources inside the attachment li
   const daemon = join(directory, 'daemon.log')
   await fs.writeFile(
     trace,
-    `${JSON.stringify({ name: 'important-main-span', ts: new Date().toISOString(), value: 't'.repeat(16_000) })}\n`
+    `${JSON.stringify({ name: 'important-main-span', ts: '2026-11-12T00:59:00.000Z', value: 't'.repeat(16_000) })}\n`
   )
   await fs.writeFile(
     daemon,

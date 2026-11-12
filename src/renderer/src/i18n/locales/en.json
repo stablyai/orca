@@ -25330,5 +25330,18 @@
       "read": "Usage could not be loaded. Try Refresh again.",
       "retry": "Refresh"
     }
+  },
+  "crashReport": {
+    "freeze": {
+      "attach": "Attach saved freeze report and diagnostic logs",
+      "attachDescription": "Sends the saved freeze report with a capped, redacted log bundle.",
+      "description": "Send the saved freeze report to help us understand what happened.",
+      "notes": "Optional: what were you doing before Orca froze?",
+      "sent": "Freeze report sent.",
+      "showFailed": "Orca couldn't open the saved freeze report. Try again from Help.",
+      "showFile": "Show file",
+      "summary": "Orca stopped responding",
+      "title": "Orca froze last time"
+    }
   }
 }
