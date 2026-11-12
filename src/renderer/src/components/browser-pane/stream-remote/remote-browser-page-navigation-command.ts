@@ -94,7 +94,7 @@ export async function runRemoteBrowserNavigationCommand(
   setPaneBusy(true)
   setPaneNotice(null)
   // A standing failure stays visible until the native outcome is observed.
-  onUpdatePageState(browserTab.id, { loading: true })
+  lifecycle.session.setPageLoading(operationToken, true, onUpdatePageState)
   try {
     pageId = await lifecycle.session.resolveNavigationPage(operationToken)
     if (!pageId || !ownsAction()) {
@@ -159,7 +159,7 @@ export async function runRemoteBrowserNavigationCommand(
     reportFailure(error)
   } finally {
     if (ownsAction()) {
-      onUpdatePageState(browserTab.id, { loading: false })
+      lifecycle.session.setPageLoading(operationToken, false, onUpdatePageState)
       setPaneBusy(false)
     }
   }

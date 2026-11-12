@@ -12,9 +12,8 @@ import {
   readRemoteBrowserPage,
   readRemoteBrowserPageObservation
 } from './remote-browser-page-observation'
-import { RemoteBrowserPageSession } from './remote-browser-page-session'
-import { RemoteBrowserOperationTokens } from './remote-browser-stream-tokens'
-import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
+import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
+import type { RemoteBrowserScreencastSubscribe } from './remote-browser-screencast-subscription'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: vi.fn() }))
 
@@ -94,18 +93,26 @@ function renderNavigation(count = 1) {
     }
   })
   const identity = { mounted: true, active: true, environmentId: 'environment-a' }
-  const tokens = new RemoteBrowserOperationTokens({
+  const paneIdentity = {
     isMounted: () => identity.mounted,
     isActive: () => identity.active,
     getTabId: () => 'page-a',
     getEnvironmentId: () => identity.environmentId,
     browserPageExists: (pageId) =>
       Boolean(readRemoteBrowserPage(useAppStore.getState(), 'workspace-a', pageId))
-  })
-  tokens.setRemotePage('remote-page-a')
+  }
   let project: (tab: BrowserTabInfo) => void = () => {}
-  const session = new RemoteBrowserPageSession({
-    tokens,
+  const subscribe = vi.fn<RemoteBrowserScreencastSubscribe>(async () => ({ unsubscribe: vi.fn() }))
+  const lifecycle = new RemoteBrowserStreamLifecycle({
+    identity: paneIdentity,
+    subscribeScreencast: subscribe,
+    waitForViewportSize: async () => ({ width: 800, height: 600 }),
+    readViewportSize: () => ({ width: 800, height: 600 }),
+    syncViewport: async () => {},
+    getDeviceScaleFactor: () => 1,
+    setStatus: vi.fn(),
+    clearFrame: vi.fn(),
+    handleFrameBytes: vi.fn(),
     callRpc: callRuntimeRpc,
     getWorktreeSelector: () => 'worktree-a',
     getCurrentUrl: () => currentPage().url,
@@ -117,6 +124,8 @@ function renderNavigation(count = 1) {
     applyTabInfo: (tab) => project(tab),
     closeMissingRemotePage: vi.fn()
   })
+  const { session, tokens } = lifecycle
+  tokens.setRemotePage('remote-page-a')
   const closeMissing = vi.fn()
   const busy = vi.fn()
   const notice = vi.fn()
@@ -126,8 +135,7 @@ function renderNavigation(count = 1) {
       stagedPage: false,
       addressBarValue: 'about:blank',
       setAddressBarValueFromPage: vi.fn(),
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this hook reads only the real session; stream transport is outside this fixture.
-      lifecycle: { session } as unknown as RemoteBrowserStreamLifecycle,
+      lifecycle,
       runtimeWorktree: 'worktree-a',
       runtimeTarget: () => ({ kind: 'environment', environmentId: identity.environmentId }),
       createRemoteOperationToken: () => tokens.createOperationToken(),
@@ -140,7 +148,7 @@ function renderNavigation(count = 1) {
     })
   )
   project = (tab) => hook.result.current.applyRemoteTabInfo(tab)
-  return { ...hook, session, tokens, identity, busy, notice, closeMissing }
+  return { ...hook, lifecycle, subscribe, session, tokens, identity, busy, notice, closeMissing }
 }
 
 function currentPage(): BrowserPage {
@@ -162,7 +170,10 @@ function expectPending(challengeId = 'challenge-x') {
 }
 
 beforeEach(() => vi.mocked(callRuntimeRpc).mockReset())
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 describe('remote browser authoritative page state', () => {
   it('projects a pending host challenge through local actions and clears an old full snapshot without fields', () => {
@@ -267,6 +278,158 @@ describe('remote browser authoritative page state', () => {
     expect(busy.mock.calls.length).toBe(publications)
     expect(notice).not.toHaveBeenCalledWith(expect.objectContaining({ kind: 'consequence' }))
   })
+
+  it.each(['older-first', 'newer-first', 'newer-fails'] as const)(
+    'retains current outcomes across command cleanup with %s settlement',
+    async (order) => {
+      const { result, session, tokens } = renderNavigation()
+      act(() => result.current.applyRemoteTabInfo(failedTab()))
+      const older = deferred<{ tab: BrowserTabInfo }>()
+      const newer = deferred<{ tab: BrowserTabInfo }>()
+      vi.mocked(callRuntimeRpc)
+        .mockResolvedValueOnce({ url: 'https://selfsigned.test/', title: 'Reload' })
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise)
+      let command!: Promise<void>
+      await act(async () => {
+        command = result.current.runRemoteNavigation('browser.reload')
+      })
+      const refresh = session.refreshTabInfo(tokens.createOperationToken('remote-page-a')!)
+      if (order === 'newer-fails') {
+        await act(async () => {
+          newer.reject(new Error('input read unavailable'))
+          await expect(refresh).rejects.toThrow('input read unavailable')
+        })
+      } else if (order === 'newer-first') {
+        await act(async () => {
+          newer.resolve({ tab: { ...failedTab('challenge-z'), title: 'Current input' } })
+          await refresh
+        })
+      }
+      await act(async () => {
+        older.resolve({ tab: { ...failedTab('challenge-y'), title: 'Reload outcome' } })
+        await command
+      })
+      if (order === 'older-first') {
+        await act(async () => {
+          newer.resolve({ tab: { ...failedTab('challenge-z'), title: 'Current input' } })
+          await refresh
+        })
+      }
+      expectPending(order === 'newer-fails' ? 'challenge-y' : 'challenge-z')
+      expect(currentPage().title).toBe(order === 'newer-fails' ? 'Reload outcome' : 'Current input')
+      expect(currentPage().loading).toBe(false)
+    }
+  )
+
+  it('releases retired Reload loading before failed Proceed without a native wake', async () => {
+    const { result } = renderNavigation()
+    act(() => result.current.applyRemoteTabInfo(failedTab()))
+    const reload = deferred<unknown>()
+    vi.mocked(callRuntimeRpc).mockReturnValue(reload.promise)
+    let pending!: Promise<void>
+    await act(async () => {
+      pending = result.current.runRemoteNavigation('browser.reload')
+    })
+    expect(currentPage().loading).toBe(true)
+    act(() => result.current.prepareCertificateProceed())
+    expect(currentPage().loading).toBe(false)
+    await act(async () => {
+      reload.reject(new Error('connection lost before reaching host'))
+      await pending
+    })
+    expectPending()
+    expect(currentPage().loading).toBe(false)
+  })
+
+  it('does not bless external ABA or clear native-owned loading during local cleanup', async () => {
+    const { session, tokens, result } = renderNavigation()
+    act(() => result.current.applyRemoteTabInfo(failedTab()))
+    const token = tokens.createOperationToken('remote-page-a')!
+    act(() => session.setPageLoading(token, true, useAppStore.getState().updateBrowserPageState))
+    const response = deferred<{ tab: BrowserTabInfo }>()
+    vi.mocked(callRuntimeRpc).mockReturnValue(response.promise)
+    const pending = session.refreshTabInfo(token)
+    act(() => {
+      useAppStore.getState().updateBrowserPageState('page-a', { loadError: null })
+      result.current.applyRemoteTabInfo(failedTab())
+      useAppStore.getState().updateBrowserPageState('page-a', { loading: true })
+      session.setPageLoading(token, false, useAppStore.getState().updateBrowserPageState)
+    })
+    await act(async () => {
+      response.resolve({ tab: failedTab('stale') })
+      await pending
+    })
+    expectPending()
+    expect(currentPage().loading).toBe(true)
+  })
+
+  it.each(['initial-open', 'restart'] as const)(
+    'preserves command failure when %s fails before ready',
+    async (phase) => {
+      vi.useFakeTimers()
+      const { lifecycle, subscribe, result } = renderNavigation()
+      const status = deferred<{ capabilities: string[] }>()
+      const read = deferred<{ tab: BrowserTabInfo }>()
+      let held = phase === 'initial-open'
+      let commandStarted = false
+      vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method) => {
+        if (method === 'status.get') {
+          return held ? status.promise : { capabilities: ['browser.screencast.v1'] }
+        }
+        if (method === 'browser.goto') {
+          commandStarted = true
+          throw new Error('ERR_NAME_NOT_RESOLVED (-105)')
+        }
+        return commandStarted ? read.promise : { tab: failedTab() }
+      })
+      try {
+        lifecycle.open()
+        await act(() => vi.advanceTimersByTimeAsync(0))
+        if (phase === 'restart') {
+          const callbacks = subscribe.mock.calls[0][1]
+          callbacks.onResponse({
+            id: 'stream-1',
+            ok: true,
+            result: {
+              type: 'ready',
+              subscriptionId: 'stream-1',
+              browserPageId: 'remote-page-a',
+              format: 'jpeg',
+              tab: failedTab()
+            },
+            _meta: { runtimeId: 'host-a' }
+          })
+          held = true
+          callbacks.onClose?.()
+          await act(() => vi.runOnlyPendingTimersAsync())
+        }
+        let command!: Promise<void>
+        await act(async () => {
+          command = result.current.runRemoteNavigation('browser.goto', 'https://missing.test/')
+        })
+        subscribe.mockRejectedValueOnce(
+          Object.assign(new Error('stream unavailable'), { code: 'browser_screencast_unsupported' })
+        )
+        await act(async () => {
+          status.resolve({ capabilities: ['browser.screencast.v1'] })
+          await vi.advanceTimersByTimeAsync(0)
+        })
+        await act(async () => {
+          read.reject(new Error('outcome read unavailable'))
+          await command
+        })
+        expect(currentPage().loadError).toEqual({
+          code: -105,
+          description: 'ERR_NAME_NOT_RESOLVED',
+          validatedUrl: 'https://missing.test/'
+        })
+        expect(currentPage().loading).toBe(false)
+      } finally {
+        lifecycle.dispose()
+      }
+    }
+  )
 
   it('rejects a late read after native replacement/clear, another action, host switch, or unmount, then accepts a current read', async () => {
     const { result, session, tokens, identity } = renderNavigation()

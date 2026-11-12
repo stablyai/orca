@@ -38,6 +38,10 @@ export type RemoteBrowserPageSessionDeps = {
 export class RemoteBrowserPageSession {
   private tabRefreshTimer: ReturnType<typeof setTimeout> | null = null
   private observationGeneration = 0
+  private nextObservationId = 0
+  private appliedObservationId = 0
+  private observationAnchor: readonly unknown[] | null = null
+  private loadingGeneration: number | null = null
 
   constructor(private readonly deps: RemoteBrowserPageSessionDeps) {}
 
@@ -46,22 +50,64 @@ export class RemoteBrowserPageSession {
     this.cancelTabInfoRefresh()
   }
 
+  private observeExternalChanges(): void {
+    const current = this.deps.readCurrentObservation()
+    if (
+      this.observationAnchor &&
+      (this.observationAnchor.length !== current.length ||
+        this.observationAnchor.some((value, index) => value !== current[index]))
+    ) {
+      this.observationGeneration += 1
+      this.loadingGeneration = null
+    }
+    this.observationAnchor = current
+  }
+
+  private applyObservedWrite(write: () => void): void {
+    try {
+      write()
+    } finally {
+      this.observationAnchor = this.deps.readCurrentObservation()
+    }
+  }
+
+  setPageLoading(
+    token: RemoteBrowserOperationToken,
+    loading: boolean,
+    update: (pageId: string, state: { loading: boolean }) => void
+  ): void {
+    if (!this.deps.tokens.isCurrent(token)) {
+      return
+    }
+    this.observeExternalChanges()
+    if (!loading && this.loadingGeneration !== this.observationGeneration) {
+      return
+    }
+    this.applyObservedWrite(() => update(token.tabId, { loading }))
+    this.loadingGeneration = loading ? this.observationGeneration : null
+  }
+
   captureTabInfoAdmission(token: RemoteBrowserOperationToken): {
     isCurrent: () => boolean
     apply: (tab: BrowserTabInfo, onApplied?: (tab: BrowserTabInfo) => void) => boolean
   } {
-    const generation = ++this.observationGeneration
-    const observed = this.deps.tokens.isCurrent(token) ? this.deps.readCurrentObservation() : null
+    const id = ++this.nextObservationId
+    const active = this.deps.tokens.isCurrent(token)
+    if (active) {
+      this.observeExternalChanges()
+    }
+    const generation = this.observationGeneration
     const isCurrent = (): boolean => {
       if (
         generation !== this.observationGeneration ||
-        !observed ||
+        !active ||
+        id < this.appliedObservationId ||
         !this.deps.tokens.isCurrent(token)
       ) {
         return false
       }
-      const current = this.deps.readCurrentObservation()
-      return observed.every((value, index) => value === current[index])
+      this.observeExternalChanges()
+      return generation === this.observationGeneration
     }
     return {
       isCurrent,
@@ -69,8 +115,12 @@ export class RemoteBrowserPageSession {
         if (!isCurrent()) {
           return false
         }
-        this.deps.applyTabInfo(tab)
-        onApplied?.(tab)
+        this.applyObservedWrite(() => {
+          this.deps.applyTabInfo(tab)
+          this.appliedObservationId = id
+          this.loadingGeneration = null
+          onApplied?.(tab)
+        })
         return true
       }
     }
@@ -92,7 +142,7 @@ export class RemoteBrowserPageSession {
         return null
       }
       if (callbacks.onError) {
-        callbacks.onError(error)
+        this.applyObservedWrite(() => callbacks.onError?.(error))
         return null
       }
       throw error

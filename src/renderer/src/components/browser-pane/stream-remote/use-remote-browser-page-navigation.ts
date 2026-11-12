@@ -111,10 +111,14 @@ export function useRemoteBrowserPageNavigation({
 
   const prepareCertificateProceed = useCallback((): void => {
     navigationSequence.current += 1
+    const token = createRemoteOperationToken()
+    if (token) {
+      lifecycle.session.setPageLoading(token, false, onUpdatePageState)
+    }
     lifecycle.session.invalidateTabInfoReads()
     setPaneBusy(false)
     setPaneNotice(null)
-  }, [lifecycle, setPaneBusy, setPaneNotice])
+  }, [createRemoteOperationToken, lifecycle, onUpdatePageState, setPaneBusy, setPaneNotice])
 
   const scheduleRemoteTabInfoRefresh = useCallback(
     (token: RemoteBrowserOperationToken, delayMs = 250): void => {
