@@ -20,7 +20,7 @@ export function computerUseErrorRecoveryData(
       )
     case 'system_shortcut_blocked':
       return recoverWith(
-        'Do not retry this shortcut to close a window or quit an app; use a semantic action such as clicking its close button or menu item, or ask the user to do it.',
+        'Do not retry this shortcut; the error says what it would do. Reach the same goal with a semantic action such as a button or menu item, or ask the user to do it.',
         'Retry with `--allow-system-shortcut` only when the user explicitly asked for this exact shortcut.'
       )
     case 'window_not_found':

@@ -91,7 +91,7 @@ const LINUX_RULES: PlatformKeyRules = {
   // Xlib and GDK resolve 0x/U hex keysyms and drop an optional XF86 prefix; xdotool reads any
   // other token starting with a digit as a raw keycode (atoi ignores trailing text).
   canonicalKey: (key) =>
-    /^(\d.+|u[0-9a-f]+)$/.test(key) ? NUMERIC_KEYSYM : key.replace(/^xf86_?/, ''),
+    /^(\d[\s\S]+|u[0-9a-f]+)$/.test(key) ? NUMERIC_KEYSYM : key.replace(/^xf86_?/, ''),
   blocked: [
     {
       modifiers: [],

@@ -37,6 +37,7 @@ const BLOCKED: [NodeJS.Platform, 'hotkey' | 'pressKey', string][] = [
   ['linux', 'hotkey', 'Alt+0xffc1'],
   ['linux', 'hotkey', 'Alt+70'],
   ['linux', 'hotkey', 'Alt+70suffix'],
+  ['linux', 'hotkey', 'Alt+70\rsuffix'],
   ['linux', 'hotkey', 'Ctrl+Alt+L1'],
   ['linux', 'hotkey', 'Ctrl+XF86Switch_VT_1'],
   ['linux', 'pressKey', 'XF86_Switch_VT_2'],
