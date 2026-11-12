@@ -198,6 +198,28 @@ describe('Codex structured child-work producer', () => {
     ])
   })
 
+  it('records the model and reasoning effort the spawn asked the child to run on', async () => {
+    const { send, byDescription } = await producer()
+    send(turn('turn/started', THREAD_ID, 'p1'))
+    send(
+      item('item/completed', THREAD_ID, 'p1', {
+        type: 'collabAgentToolCall',
+        id: 'call-spawn',
+        tool: 'spawnAgent',
+        status: 'completed',
+        receiverThreadIds: [REVIEWER],
+        prompt: 'Review the diff',
+        model: 'gpt-5.5',
+        reasoningEffort: 'high',
+        agentsStates: { [REVIEWER]: { status: 'pendingInit', message: null } }
+      })
+    )
+    send(turn('turn/started', REVIEWER, 'r1'))
+    expect(byDescription('Review the diff')).toEqual(
+      expect.objectContaining({ model: 'gpt-5.5', effort: 'high' })
+    )
+  })
+
   it('ends an approval left unanswered when its turn ends: Codex never ran the command', async () => {
     const { adapter, codex, send, records, recordedLiveness, display, byDescription } =
       await producer()

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Bot, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { useNow } from '@/hooks/use-now'
 import {
   formatSubagentTokens,
@@ -8,6 +9,10 @@ import {
   subagentStateLabel
 } from '../../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
 import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/native-chat-subagent-summary'
+import {
+  subagentEntryDetail,
+  subagentEntryRunsOn
+} from '../../../../../shared/native-chat/transcript/native-chat-subagent-entry-detail'
 import type {
   NativeChatSubagentEntry,
   NativeChatSubagentGroupBlock,
@@ -87,51 +92,115 @@ export function NativeChatSubagentEntries({
       {agents.map((agent) => {
         const state = normalizeSubagentState(agent.state)
         const sectionOpen = sections?.get(agent.id)
+        const detail = subagentEntryDetail(agent)
+        const runsOn = subagentEntryRunsOn(agent)
         const entry = (
-          <>
-            <StatusDot state={state} pulsing={state === 'working'} />
-            <span
-              className={cn(
-                'min-w-0 truncate font-sans text-sm',
-                state === 'idle' ? 'text-chat-foreground-faint' : 'text-chat-foreground'
-              )}
-            >
-              {agent.label}
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <StatusDot state={state} pulsing={state === 'working'} />
+              <span
+                className={cn(
+                  'min-w-0 truncate font-sans text-sm',
+                  state === 'idle' ? 'text-chat-foreground-faint' : 'text-chat-foreground'
+                )}
+              >
+                {agent.label}
+              </span>
+              {runsOn ? (
+                <span className="min-w-0 shrink truncate rounded-full border border-border px-1.5 font-mono text-3xs text-chat-foreground-faint">
+                  {runsOn}
+                </span>
+              ) : null}
+              <span className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint">
+                {subagentStateLabel(state, 1, 1, say)}
+                {typeof agent.tokens === 'number'
+                  ? ` · ${formatSubagentTokens(agent.tokens)}`
+                  : null}
+              </span>
             </span>
-            <span className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint">
-              {subagentStateLabel(state, 1, 1, say)}
-              {typeof agent.tokens === 'number' ? ` · ${formatSubagentTokens(agent.tokens)}` : null}
-            </span>
-          </>
+            {detail ? (
+              <span className="truncate pl-3 font-sans text-xs text-chat-foreground-faint">
+                {detail}
+              </span>
+            ) : null}
+          </span>
         )
         return (
           // Named so a reveal from the agents strip can bring this entry into view.
           <li key={agent.id} data-native-chat-subagent-entry={agent.id}>
-            {sectionOpen === undefined ? (
-              <div className="flex items-center gap-1.5 py-0.5">{entry}</div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onSetSectionOpen?.(agent.id, !sectionOpen)}
-                aria-expanded={sectionOpen}
-                className="group/subagent-entry flex w-full items-center gap-1.5 rounded-md py-0.5 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-              >
-                {entry}
-                <ChevronRight
-                  aria-hidden
-                  className={cn(
-                    'size-3.5 shrink-0 text-chat-foreground-faint transition-all motion-reduce:transition-none',
-                    sectionOpen
-                      ? 'rotate-90 opacity-100'
-                      : 'opacity-0 group-hover/subagent-entry:opacity-100'
-                  )}
-                />
-              </button>
-            )}
+            <SubagentEntryPreview agent={agent} state={state} detail={detail} runsOn={runsOn}>
+              {sectionOpen === undefined ? (
+                <div className="flex items-start gap-1.5 py-0.5">{entry}</div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onSetSectionOpen?.(agent.id, !sectionOpen)}
+                  aria-expanded={sectionOpen}
+                  className="group/subagent-entry flex w-full items-start gap-1.5 rounded-md py-0.5 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  {entry}
+                  <ChevronRight
+                    aria-hidden
+                    className={cn(
+                      'mt-1 size-3.5 shrink-0 text-chat-foreground-faint transition-all motion-reduce:transition-none',
+                      sectionOpen
+                        ? 'rotate-90 opacity-100'
+                        : 'opacity-0 group-hover/subagent-entry:opacity-100'
+                    )}
+                  />
+                </button>
+              )}
+            </SubagentEntryPreview>
           </li>
         )
       })}
     </ul>
+  )
+}
+
+/** Hover preview: role, model, timing and the longer text the row truncates. */
+function SubagentEntryPreview({
+  agent,
+  state,
+  detail,
+  runsOn,
+  children
+}: {
+  agent: NativeChatSubagentEntry
+  state: NativeChatSubagentState
+  detail: string | null
+  runsOn: string | null
+  children: React.ReactElement
+}): React.JSX.Element {
+  const role = [agent.agentType, runsOn].filter(Boolean).join(' · ')
+  const text = state === 'working' && agent.operation ? detail : (agent.lastMessage?.trim() ?? null)
+  return (
+    <HoverCard openDelay={300} closeDelay={100}>
+      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardContent side="top" align="start" className="w-72 space-y-1 p-3 text-xs">
+        <div className="truncate text-sm font-medium text-foreground">{agent.label}</div>
+        {role ? <div className="truncate text-muted-foreground">{role}</div> : null}
+        <div className="tabular-nums text-muted-foreground">
+          {subagentStateLabel(state, 1, 1, say)}
+          {agent.startedAt !== undefined ? (
+            <>
+              {' · '}
+              <SubagentElapsed
+                startedAt={agent.startedAt}
+                settledAt={agent.settledAt ?? null}
+                counting={state === 'working'}
+              />
+            </>
+          ) : null}
+          {typeof agent.tokens === 'number' ? ` · ${formatSubagentTokens(agent.tokens)}` : null}
+        </div>
+        {text ? (
+          <p className="line-clamp-6 whitespace-pre-wrap break-words pt-1 text-foreground">
+            {text}
+          </p>
+        ) : null}
+      </HoverCardContent>
+    </HoverCard>
   )
 }
 

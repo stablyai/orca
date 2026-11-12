@@ -61,7 +61,11 @@ export type CodexSubagentAnnouncement = {
   label: string | null
   /** Only spawn items establish the carrying thread as the parent. */
   spawned: boolean
+  launch?: CodexChildLaunch
 }
+
+/** What a spawn asked the child to run on. */
+export type CodexChildLaunch = { model?: string; effort?: string }
 
 /** Collab references recover compacted-out spawns; even failed spawns can name a runnable child. */
 export function readCodexSubagentAnnouncements(
@@ -91,7 +95,13 @@ function readAnnouncements(item: CodexThreadItem): CodexSubagentAnnouncement[] {
   const spawned = call.tool === 'spawnAgent'
   // Follow-up prompts are messages, not the child's task label.
   const label = spawned ? codexCollabHelperLabel(call.prompt) : null
-  return call.helperThreadIds.map((agentThreadId) => ({ agentThreadId, label, spawned }))
+  const launch: CodexChildLaunch | undefined = spawned
+    ? {
+        ...(call.model ? { model: call.model } : {}),
+        ...(call.reasoningEffort ? { effort: call.reasoningEffort } : {})
+      }
+    : undefined
+  return call.helperThreadIds.map((agentThreadId) => ({ agentThreadId, label, spawned, launch }))
 }
 
 export type CodexThreadTokenTotal = { threadId: string; totalTokens: number }

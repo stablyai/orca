@@ -32,7 +32,12 @@ export function subagentEntryOf(
     state: block.state,
     ...(block.tokens !== undefined ? { tokens: block.tokens } : {}),
     ...(block.startedAt !== undefined ? { startedAt: block.startedAt } : {}),
-    ...(block.settledAt !== undefined ? { settledAt: block.settledAt } : {})
+    ...(block.settledAt !== undefined ? { settledAt: block.settledAt } : {}),
+    ...(block.agentType !== undefined ? { agentType: block.agentType } : {}),
+    ...(block.model !== undefined ? { model: block.model } : {}),
+    ...(block.effort !== undefined ? { effort: block.effort } : {}),
+    ...(block.operation !== undefined ? { operation: block.operation } : {}),
+    ...(block.lastMessage !== undefined ? { lastMessage: block.lastMessage } : {})
   }
 }
 
