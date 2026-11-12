@@ -25,6 +25,7 @@ import {
   hasWorkspaceCleanupRiskEscalated
 } from './workspace-cleanup-preflight-failures'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { scanWorkspaceCleanupHosts } from './workspace-cleanup-host-scan'
 
 /** Distinct from every ExecutionHostId, so a hostless row cannot alias one. */
 const UNQUALIFIED_HOST_BUCKET = Symbol('unqualified-cleanup-host')
@@ -167,11 +168,10 @@ export async function preflightWorkspaceCleanupCandidates(
   const worktreeIds = targets.map((target) => target.worktreeId)
   for (let start = 0; start < worktreeIds.length; start += WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT) {
     const chunk = worktreeIds.slice(start, start + WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT)
-    const scan = await window.api.workspaceCleanup.scan({
-      worktreeIds: [...chunk],
-      scanId: createBrowserUuid(),
-      refreshActivity: true
-    })
+    const scan = await scanWorkspaceCleanupHosts(
+      { worktreeIds: [...chunk], scanId: createBrowserUuid(), refreshActivity: true },
+      getState()
+    )
     const enriched = await enrich(scan.candidates, getState())
     scanErrors.push(...scan.errors)
     for (const candidate of enriched) {

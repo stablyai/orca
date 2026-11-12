@@ -38,6 +38,7 @@ import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-me
 import { waitsForWorktreeRemoval } from '../../worktree-removal-marker-projection'
 import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
+import { WORKSPACE_CLEANUP_SCAN_METHOD } from './workspace-cleanup-scan-method'
 import { WORKTREE_SET_METHOD } from './worktree-set-method'
 import { runApprovedCreatedWorktreeSetup } from '../../../workspaces/creation/created-worktree-approved-setup'
 
@@ -97,6 +98,7 @@ export const WORKTREE_METHODS = [
     })
   }),
   WORKTREE_SLEEP_METHOD,
+  WORKSPACE_CLEANUP_SCAN_METHOD,
   defineMethod({
     name: 'worktree.activate',
     permission: 'workspace',
