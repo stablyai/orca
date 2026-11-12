@@ -1,19 +1,18 @@
 import { pruneGitWorktrees } from './worktree-prune-guard'
-import {
-  branchHasNoUnmergedChangesWithLazyTargetRefresh,
-  getBranchCleanupTargetRefs,
-  type GitBranchCleanupExecOptions
-} from '../../../../shared/git/branches/git-branch-cleanup'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/host-routing/git-capability-state'
 import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { createLocalGitObjectQuarantine } from '../../local-git-object-quarantine'
+import { localBranchHasNoUnmergedChanges } from '../../refs/resolution/local-branch-merge-proof'
 import { isBranchReservedByWorktreeOperation } from '../../../../shared/git/worktrees/git-worktree-admin'
 import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
 import { isBranchCheckedOutInWorktreeError } from '../../../../shared/git/branches/git-branch-delete-refusal'
-import type { GitWorktreeExecOptions, RemoveWorktreeOptions } from '../worktree-operation-options'
-import { gitExecOptions, normalizeLocalBranchRef } from '../worktree-operation-options'
+
+import {
+  type GitWorktreeExecOptions,
+  type RemoveWorktreeOptions,
+  gitExecOptions,
+  normalizeLocalBranchRef
+} from '../worktree-operation-options'
 
 export async function deleteBranchAfterWorktreeRemoval(
   repoPath: string,
@@ -110,23 +109,13 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
   branchHead: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<boolean> {
-  const quarantine = createLocalGitObjectQuarantine(repoPath, options)
-  const runGit = (args: string[], execOptions?: GitBranchCleanupExecOptions) => {
-    const run = (env: NodeJS.ProcessEnv | undefined) =>
-      gitExecFileAsync(args, {
-        ...gitExecOptions(repoPath, options),
-        ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {}),
-        ...(env ? { env } : {})
-      })
-    return execOptions?.discardWrittenObjects ? quarantine.run(run) : run(undefined)
-  }
-  const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
   // Squash merges change OIDs; delete only after proving no unmerged tree changes.
-  const hasNoUnmergedChanges = await withLocalGitCapabilityCacheForExecution(
-    { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
-    (capabilities) =>
-      branchHasNoUnmergedChangesWithLazyTargetRefresh(runGit, branchName, targetRefs, capabilities)
-  )
+  const hasNoUnmergedChanges = await localBranchHasNoUnmergedChanges({
+    cwd: repoPath,
+    branchName,
+    refreshRemoteTargets: true,
+    options
+  })
   if (!hasNoUnmergedChanges) {
     return false
   }

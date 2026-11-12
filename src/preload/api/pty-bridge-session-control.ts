@@ -13,7 +13,7 @@ import type { TerminalInputKind } from '../../shared/terminal/input/terminal-inp
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../shared/workspace-layout/terminal-leaf-move'
+} from '../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type {
   SavedResumeDecision,
   TerminalLaunchResult,
@@ -33,7 +33,7 @@ import type { TerminalViewAttributes } from '../../shared/terminal/protocol/quer
 import type { PtyMainDeliveryDiagnostics } from '../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { PreloadApi } from '../api-types'
-import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { AgentPaneLaunchRequest } from '../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export const ptySessionControlApi = {

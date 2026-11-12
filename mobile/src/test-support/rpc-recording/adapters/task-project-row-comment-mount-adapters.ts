@@ -1,3 +1,5 @@
+import type * as UseMobileTasksProjectThreadReplyActionsModule from '../../../tasks/project-board/use-mobile-tasks-project-thread-reply-actions'
+import type * as UseMobileTasksProjectWorkspaceCommentActionsModule from '../../../tasks/project-board/use-mobile-tasks-project-workspace-comment-actions'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -149,7 +151,6 @@ function mountModelHook<Actions>(
 export function taskProjectRowCommentMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   const boardFixture = {
     activeGitHubProjectHost: PROJECT_HOST,
     findProjectRowRepo: () => PROJECT_REPO,
@@ -161,9 +162,9 @@ export function taskProjectRowCommentMountAdapters(
     projectRowDetailRefreshSeq: 0
   }
   const rowThreads: MountAdapter = (context) => {
-    const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-thread-reply-actions')
-    >('use-mobile-tasks-project-thread-reply-actions.tsx').useMobileTasksProjectThreadReplyActions
+    const useActions = modules.load<typeof UseMobileTasksProjectThreadReplyActionsModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-thread-reply-actions.tsx'
+    ).useMobileTasksProjectThreadReplyActions
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
       fixture: {
@@ -200,9 +201,11 @@ export function taskProjectRowCommentMountAdapters(
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(context, {
         useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-project-workspace-comment-actions')>(
-            'use-mobile-tasks-project-workspace-comment-actions.tsx'
-          ).useMobileTasksProjectWorkspaceCommentActions(model),
+          modules
+            .load<typeof UseMobileTasksProjectWorkspaceCommentActionsModule>(
+              'mobile/src/tasks/project-board/use-mobile-tasks-project-workspace-comment-actions.tsx'
+            )
+            .useMobileTasksProjectWorkspaceCommentActions(model),
         fixture: {
           ...boardFixture,
           projectRowItem: row,

@@ -1,7 +1,7 @@
 name: Release Mirror (R2)
 
-# Copy published release downloads to the public R2 bucket behind https://downloads.onorca.dev.
-# onorca.dev keeps GitHub as the default download and offers this as an opt-in "mirror link"
+# Copy published release downloads to the public R2 bucket behind https://downloads.orca.dev.
+# orca.dev keeps GitHub as the default download and offers this as an opt-in "mirror link"
 # for when GitHub release downloads return 5xx. Called by release-cut (stable desktop tags) and
 # mobile-android-release after publishing; dispatch manually to backfill a tag.
 
@@ -13,7 +13,7 @@ on:
         required: true
         type: string
       assets:
-        description: Space-separated asset names (blank = the onorca.dev download assets)
+        description: Space-separated asset names (blank = the orca.dev download assets)
         required: false
         default: ''
         type: string
@@ -24,7 +24,7 @@ on:
         required: true
         type: string
       assets:
-        description: Space-separated asset names (blank = the onorca.dev download assets)
+        description: Space-separated asset names (blank = the orca.dev download assets)
         required: false
         default: ''
         type: string

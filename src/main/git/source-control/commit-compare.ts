@@ -1,7 +1,10 @@
 import type { GitCommitCompareResult } from '../../../shared/git/diff/git-diff-compare-types'
 import { parseGitRevListFirstParentOid } from '../../../shared/git/refs/git-rev-list-output'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitOptionsForWorktree } from '../git-runtime-options'
+
+import {
+  type GitRuntimeOptions,
+  gitOptionsForWorktree
+} from '../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { loadCommitChanges } from './branch-change-entries'
 import { resolveRefOid } from './compare-ref-oids'

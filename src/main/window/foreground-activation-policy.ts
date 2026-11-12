@@ -117,7 +117,11 @@ function stopAwaitingAppActive(): void {
   electronApp.off('did-become-active', revealWindowsAwaitingAppActive)
 }
 
-function revealWindowsAwaitingAppActive(): void {
+/** The user is back in Orca. Origin-bar popups (plain BaseWindows) call this on focus, since only BrowserWindows raise `browser-window-focus`. */
+export function revealWindowsAwaitingAppActive(): void {
+  if (windowsAwaitingAppActive.size === 0) {
+    return
+  }
   stopAwaitingAppActive()
   for (const window of windowsAwaitingAppActive) {
     if (!window.isDestroyed()) {
@@ -138,7 +142,7 @@ export function showWhenAppActive(window: BaseWindow, env: PolicyEnv = process.e
     return
   }
   if (windowsAwaitingAppActive.size === 0) {
-    // macOS reports the app's return through any window; elsewhere only BrowserWindows report focus.
+    // macOS reports the app's return through any window; elsewhere BrowserWindows and origin-bar popups report focus.
     electronApp.on('browser-window-focus', revealWindowsAwaitingAppActive)
     electronApp.on('did-become-active', revealWindowsAwaitingAppActive)
   }

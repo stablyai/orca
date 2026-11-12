@@ -1,5 +1,5 @@
 import { addWslEnvKeys } from '../../../../shared/wsl-env'
-import { extractExecError, parseRetryAfterMs } from '../../exec-error'
+import { extractExecError, parseRetryAfterMs } from '../process-capture/exec-error'
 import { resolveCommand } from '../host-routing/wsl-command-resolution'
 import { resolveDefaultWslCliFallback } from './default-wsl-cli-fallback'
 import { isHostCommandMissing } from './github-cli-host-fallback'

@@ -3,7 +3,7 @@ import {
   resolveGitFetchHeadCommand,
   runWithGitFetchHeadLock
 } from '../../../shared/git/fetch/git-fetch-head-lock'
-import { pendingWslDriveCheckoutGitRouting } from '../wsl-drive-checkout-git-routing'
+import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { annotateWslHostFailure, isTransientWslFailure } from './host-routing/wsl-host-failure'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'

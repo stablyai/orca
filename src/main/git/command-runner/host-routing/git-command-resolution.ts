@@ -10,9 +10,9 @@ import {
   isWslGitReadEnvironmentSettled,
   peekWslGitReadEnvironment,
   WSL_GIT_READ_ENVIRONMENT_WAIT_MS
-} from '../../wsl-git-read-environment'
+} from './wsl-git-read-environment'
 import { usesHostGitForWslLinkedWorktree } from './wsl-linked-worktree-git-routing'
-import { withWslWindowsCheckoutGitConfig } from '../../wsl-windows-checkout-git-config'
+import { withWslWindowsCheckoutGitConfig } from './wsl-windows-checkout-git-config'
 import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
 import type { GitExecOptions } from '../git-exec-options'
 

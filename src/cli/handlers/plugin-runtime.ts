@@ -204,7 +204,7 @@ async function setSystemEnabled(ctx: HandlerContext, enabled: boolean): Promise<
     result,
     enabled
       ? ['Plugins are on. Only plugins approved earlier run.', ...rows].join('\n')
-      : 'Plugins are off. No plugin runs; installs and approvals are kept.'
+      : 'Plugins are off. No plugin runs; installs and approvals are kept. Automations plugins created are paused.'
   )
 }
 

@@ -25,7 +25,7 @@ import {
 } from '../../../../shared/orchestration/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../../rpc/methods/orchestration/worker/worker-start-prompt-budget'
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
-import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/workspace-creator-context'
+import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/callers/workspace-creator-context'
 import { claimTerminalForRemoteAttach } from '../db/worker-dispatch/worker-terminal-claim'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [

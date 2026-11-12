@@ -129,7 +129,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected abstract openLinkInOrcaTab(
     browserTabId: string,
     rawUrl: string,
-    activate?: boolean
+    activate?: boolean,
+    agentOpened?: boolean
   ): boolean
 
   protected settingsResolver: (() => BrowserManagerSettings) | null = null

@@ -3,7 +3,10 @@ import { promisify } from 'node:util'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
 // Import pure parsing outside runner so runner-mocked tests retain the real implementation.
-import { extractExecError, parseRetryAfterMs } from '../git/exec-error'
+import {
+  extractExecError,
+  parseRetryAfterMs
+} from '../git/command-runner/process-capture/exec-error'
 
 // Repo-scoped operations need the WSL-aware runner; this legacy wrapper serves generic commands.
 export const execFileAsync = promisify(execFile)

@@ -80,14 +80,12 @@ vi.mock('../git/command-runner/git-environment/git-process-env', async (importOr
 
 vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
-vi.mock('../git/repo', () => ({}))
-
 vi.mock('../../shared/git/refs/git-default-base-ref', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock
 }))
 
-vi.mock('../git/exact-ref-probe', () => ({
+vi.mock('../git/refs/resolution/exact-ref-probe', () => ({
   probeAnyExactRef: probeAnyExactRefMock
 }))
 

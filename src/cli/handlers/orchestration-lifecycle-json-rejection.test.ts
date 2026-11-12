@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { reportCliError } from '../format'
+import { reportCliError } from '../cli-error'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
 afterEach(() => {

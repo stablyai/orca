@@ -7,11 +7,11 @@ import {
   claudeProjectBucketNameBelowScope,
   mayBeHashedClaudeProjectBucketName
 } from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
-import { CLAUDE_CWD_BUCKET_LAYOUT } from '../../../ai-vault/session-cwd-bucket-layouts'
+import { CLAUDE_CWD_BUCKET_LAYOUT } from '../../../ai-vault/scope/session-cwd-bucket-layouts'
 import {
   cachedProjectDirCwd,
   cwdBucketScopePrefixes
-} from '../../../ai-vault/session-scanner-scope-discovery'
+} from '../../../ai-vault/scope/session-scanner-scope-discovery'
 import { wslGatedReaddir, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'

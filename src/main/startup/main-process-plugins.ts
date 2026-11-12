@@ -298,7 +298,7 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   // Filter hook/worktree events server-side by each plugin subscription.
   const forwardAgentStatus = createPluginAgentStatusForwarder(pluginDelegate, pluginService)
   agentHookServer.subscribeEnrichedStatus((enriched) => {
-    const payload = projectPluginAgentStatusChangedPayload(enriched)
+    const payload = projectPluginAgentStatusChangedPayload(enriched, store)
     if (payload) {
       forwardAgentStatus(payload, enriched.terminalHandle)
     }
