@@ -192,11 +192,18 @@ export function managedRuntimeInstallView(
   )
 }
 
-/** Whether Orca's copy still needs the user: missing, outdated, damaged, failed, or installing. */
+/** Whether Orca's copy still needs the user: missing, outdated, damaged, failed, installing, or unreadable. */
 export function managedRuntimeInstallPending(snapshot: ManagedRuntimeInstallSnapshot): boolean {
-  if (snapshot.kind !== 'known' || snapshot.state.source === 'external') {
+  if (snapshot.kind === 'readFailed') {
+    return true
+  }
+  if (snapshot.kind !== 'known') {
     return false
   }
   const view = managedRuntimeInstallView(snapshot, '')
+  // A working external copy needs nothing unless Orca's own install is running or failed.
+  if (snapshot.state.source === 'external') {
+    return view.action?.kind === 'cancel' || view.removing || view.error !== null
+  }
   return view.action !== null || view.error !== null
 }
