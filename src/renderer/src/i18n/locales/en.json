@@ -7540,7 +7540,8 @@
           "copyNameOption": "Worktree Name",
           "lineageSubmenu": "Parent & Children",
           "projectGroupSubmenu": "Project Group",
-          "moveToThisComputer": "Move to this computer"
+          "moveToThisComputer": "Move to this computer",
+          "deleteCloudWorkspace": "Delete workspace…"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -27858,6 +27859,9 @@
       "definition": "Archive keeps a snapshot of this workspace (its files, chats and terminal history) for 30 days, then deletes it. Unarchive it from its menu before then. Like a sleeping workspace, it doesn’t use sandbox hours.",
       "archivedUntil": "A read-only snapshot of its files, chats and terminal history. Unarchive before {{date}} to open terminals and agents again; after that it’s deleted.",
       "archived": "A read-only snapshot of its files, chats and terminal history. Unarchive within 30 days of archiving to open terminals and agents again; after that it’s deleted."
+    },
+    "primaryDelete": {
+      "noSandbox": "Orca couldn't find this workspace's sandbox. Delete it from Cloud workspaces."
     }
   },
   "cloudAgentSetup": {

@@ -14,6 +14,7 @@ import {
 import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
 import { WorktreeCardHostMark } from '../host/WorktreeCardHostMark'
 import { CloudAgentHeldMark } from '@/components/orca-cloud/CloudAgentHeldMark'
+import { useIsCloudHostRow } from '@/lib/orca-cloud/cloud-host-rows'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 
@@ -51,6 +52,8 @@ export function WorktreeCardHeader({
     isFolder,
     handleWorkspaceQuickAction
   } = card
+  // "primary" is a local checkout's role; on a cloud row it only means the default branch (design-squad).
+  const cloudRow = useIsCloudHostRow(worktree)
   const {
     showPinnedRepoIcon,
     showInlineRepoBadge,
@@ -124,7 +127,7 @@ export function WorktreeCardHeader({
             onOpen={handleOpenRenameErrorDialog}
           />
         ) : null}
-        {!compactCards && worktree.isMainWorktree && !isFolder && (
+        {!compactCards && worktree.isMainWorktree && !isFolder && !cloudRow && (
           <WorktreeCardPrimaryBadge card={card} hasHoverDetails={hasHoverDetails} />
         )}
 
@@ -141,7 +144,7 @@ export function WorktreeCardHeader({
 
       {showHeaderActions && (
         <div className="ml-auto flex shrink-0 items-center justify-center gap-1 pr-1.5">
-          {showTitleRowPrimary && <WorktreeCardPrimaryStar />}
+          {showTitleRowPrimary && !cloudRow && <WorktreeCardPrimaryStar />}
 
           {showDeleteQuickAction && (
             <WorktreeCardDeleteQuickAction
