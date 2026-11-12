@@ -11,7 +11,7 @@ import {
   findGitHubPreviewRouteRepo,
   githubPreviewRepoAuthorityKey,
   githubPreviewRepoIdentity,
-  githubPreviewRouteCatalogKey,
+  githubPreviewRouteCandidates,
   readGitHubPreviewRouteRepo
 } from './native-chat-github-route-repo'
 
@@ -125,15 +125,24 @@ async function loadPreviewFromCatalog(
   read: (repos: readonly Repo[]) => Repo | null
 ): Promise<GitHubWorkItem | null> {
   const repos = useAppStore.getState().repos
-  const catalog = githubPreviewRouteCatalogKey(repos, routeAuthority)
-  let invalidated = false
+  const captured = new Set(
+    githubPreviewRouteCandidates(repos, routeAuthority).map(githubPreviewRepoIdentity)
+  )
+  const retired = new Set<string>()
   const stop = useAppStore.subscribe((state) => {
-    // Remember transient changes too: Alice -> Bob -> Alice cannot revive an in-flight request.
-    invalidated ||= githubPreviewRouteCatalogKey(state.repos, routeAuthority) !== catalog
+    const live = new Set(
+      githubPreviewRouteCandidates(state.repos, routeAuthority).map(githubPreviewRepoIdentity)
+    )
+    // Restoring a retired binding cannot revive its old request.
+    for (const identity of captured) {
+      if (!live.has(identity)) {
+        retired.add(identity)
+      }
+    }
   })
   try {
     const repo = await select(repos)
-    if (!repo || invalidated) {
+    if (!repo) {
       return null
     }
     const identity = githubPreviewRepoIdentity(repo)
@@ -141,8 +150,8 @@ async function loadPreviewFromCatalog(
       const currentRepos = useAppStore.getState().repos
       const currentRepo = read(currentRepos)
       return (
-        !invalidated &&
-        githubPreviewRouteCatalogKey(currentRepos, routeAuthority) === catalog &&
+        captured.has(identity) &&
+        !retired.has(identity) &&
         currentRepo !== null &&
         githubPreviewRepoIdentity(currentRepo) === identity
       )

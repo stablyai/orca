@@ -59,15 +59,6 @@ export function githubPreviewRouteCandidates(
   )
 }
 
-export function githubPreviewRouteCatalogKey(
-  repos: readonly Repo[],
-  routeAuthority: HostAuthorityKey
-): string {
-  return JSON.stringify(
-    githubPreviewRouteCandidates(repos, routeAuthority).map(githubPreviewRepoIdentity)
-  )
-}
-
 export function readGitHubPreviewRouteRepo(
   repos: readonly Repo[],
   routeAuthority: HostAuthorityKey,

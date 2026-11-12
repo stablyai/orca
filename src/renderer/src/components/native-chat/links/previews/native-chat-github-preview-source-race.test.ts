@@ -132,6 +132,31 @@ it('rejects an in-flight response even if Alice is restored before it settles', 
   })
 })
 
+it('keeps a valid request alive when an unrelated candidate is removed', async () => {
+  mocks.store.setState({ repos: [alice, { ...bob, id: 'unrelated' }] })
+  const gate = Promise.withResolvers<void>()
+  const sent = Promise.withResolvers<void>()
+  mocks.endpoint.mockImplementationOnce(async ({ number }: { number: number }) => {
+    sent.resolve()
+    await gate.promise
+    return {
+      type: 'pr',
+      number,
+      title: 'alice response',
+      url: `https://github.com/acme/private/pull/${number}`
+    }
+  })
+  const link = parseGitHubIssueOrPRLink('https://github.com/acme/private/pull/805')!
+  const pending = loadRoutedGitHubLinkPreview('local', link)
+  await sent.promise
+  mocks.store.setState({ repos: [alice] })
+  gate.resolve()
+  await expect(pending).resolves.toMatchObject({ title: 'alice response' })
+  expect(readCachedRoutedGitHubLinkPreview('local', link)).toMatchObject({
+    title: 'alice response'
+  })
+})
+
 it('keeps endpoint-local, nested T and nested U lookups on their own repo/account', async () => {
   const endpoint: Repo = { ...alice, id: 'endpoint', executionHostId: 'runtime:env' }
   const targetT: Repo = {
