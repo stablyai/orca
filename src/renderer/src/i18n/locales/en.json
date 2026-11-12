@@ -7454,7 +7454,8 @@
             "failure": {
               "archive": {
                 "waiver": "Delete Anyway"
-              }
+              },
+              "tryAgain": "Try again"
             }
           }
         },

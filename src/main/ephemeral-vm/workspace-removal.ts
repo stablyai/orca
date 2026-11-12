@@ -8,6 +8,10 @@ import {
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import {
+  CLOUD_DELETE_NOT_SENT,
+  CLOUD_DELETE_NOT_SENT_IN_USE,
+  CLOUD_DELETE_NOT_SENT_NO_DESTROY,
+  CLOUD_DELETE_NOT_SENT_UNCHECKED,
   RecipeWorkspaceRemovalError,
   type RecipeEnvironmentDescription,
   type RecipeHostRemovalState
@@ -167,6 +171,7 @@ export async function removeRecipeWorkspace(
     throw new Error('Recipe workspace ownership changed. Refresh and try again.')
   }
   const environmentId = runtime.runtimeEnvironmentId
+  const isOrcaCloud = runtime.recipe?.provider === 'orca-cloud'
   const { destroyHost: _destroyHost, ...forwarded } = params
   let checkoutResult: Record<string, unknown> = {}
   // A provisioned root is the VM's primary checkout, protected from ordinary Git deletion.
@@ -215,6 +220,15 @@ export async function removeRecipeWorkspace(
           )
         : undefined
     if (!remaining || remaining.length > 0) {
+      // REG-12: deleting an Orca Cloud workspace means deleting its sandbox. Keeping the sandbox
+      // must never read as "Deleted": fail visibly (nothing destroyed, so Try again is safe).
+      if (isOrcaCloud) {
+        throw new RecipeWorkspaceRemovalError(
+          CLOUD_DELETE_NOT_SENT,
+          remaining ? CLOUD_DELETE_NOT_SENT_IN_USE : CLOUD_DELETE_NOT_SENT_UNCHECKED,
+          { runtimeId: runtime.id }
+        )
+      }
       return { ...checkoutResult, removed: true, host: { runtimeId: runtime.id, state: 'kept' } }
     }
   }
@@ -225,6 +239,12 @@ export async function removeRecipeWorkspace(
       `${cleaned.cleanupLastError ?? 'Environment destroy failed.'} The environment (runtime ${runtime.id}) may still be running; retry the cleanup from Settings > Cloud VMs in Orca.`,
       { runtimeId: runtime.id }
     )
+  }
+  if (isOrcaCloud && cleaned.cleanupStatus === 'disabled') {
+    // Orca Cloud always destroys; a "cleaned" record without a destroy is not a delete.
+    throw new RecipeWorkspaceRemovalError(CLOUD_DELETE_NOT_SENT, CLOUD_DELETE_NOT_SENT_NO_DESTROY, {
+      runtimeId: runtime.id
+    })
   }
   return {
     ...checkoutResult,

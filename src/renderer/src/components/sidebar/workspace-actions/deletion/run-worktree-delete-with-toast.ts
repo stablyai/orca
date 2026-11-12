@@ -63,6 +63,8 @@ export function runWorktreeDeleteWithToast(
       // Waive archive-hook failure only after explicit refusal review; force alone does not imply consent.
       onDeleteAnyway: () =>
         retryFromToast({ force: options.force === true, allowFailedArchiveHook: true }),
+      // Nothing was destroyed yet (an Orca Cloud delete that couldn't go out): the same delete again.
+      onRetry: () => retryFromToast({ force: options.force === true }),
       // The explicit Force Delete retry may waive an unverified PTY-stop proof.
       onForceDelete: () =>
         retryFromToast({
