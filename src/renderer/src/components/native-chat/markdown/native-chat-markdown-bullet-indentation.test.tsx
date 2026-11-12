@@ -5,6 +5,35 @@ import { NativeChatMarkdown } from './NativeChatMarkdown'
 
 afterEach(cleanup)
 
+it('keeps separated literal bullet items out of code blocks without reclassifying code samples', () => {
+  const { container } = render(
+    <NativeChatMarkdown
+      variant="document"
+      preserveBulletIndentation
+      content={
+        '• Parent\n\n    • **Child**\n\n        • [Grandchild](https://example.com)\n\nCode sample:\n\n    • literal code\n\n• Another parent\n\n```text\n    • fenced code\n```\n\n• Code example\n\n    const value = 1'
+      }
+    />
+  )
+  expect([...container.querySelectorAll('p')].map((paragraph) => paragraph.textContent)).toEqual([
+    '• Parent',
+    '    • Child',
+    '        • Grandchild',
+    'Code sample:',
+    '• Another parent',
+    '• Code example'
+  ])
+  expect(container.querySelector('strong')?.textContent).toBe('Child')
+  expect(within(container).getByRole('link', { name: 'Grandchild' }).getAttribute('href')).toBe(
+    'https://example.com'
+  )
+  expect([...container.querySelectorAll('pre code')].map((code) => code.textContent)).toEqual([
+    '• literal code\n',
+    '    • fenced code\n',
+    'const value = 1\n'
+  ])
+})
+
 it('preserves literal bullet indentation with inline formatting while leaving fenced code intact', () => {
   const { container } = render(
     <NativeChatMarkdown
