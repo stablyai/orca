@@ -66,6 +66,11 @@ export function NativeChatAgentMessageSenders({
         </Fragment>
       ))}
       {more > 0 ? <span className="shrink-0">+{more}</span> : null}
+      {from.link ? (
+        <span className="ml-2 max-w-64 truncate text-xs text-muted-foreground">
+          · {t('components.sessionLink.link', 'Link')}: {from.link.title}
+        </span>
+      ) : null}
     </div>
   )
 }

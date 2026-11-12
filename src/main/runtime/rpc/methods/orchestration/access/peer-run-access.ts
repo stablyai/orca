@@ -120,6 +120,7 @@ export function resolveSubjectRunId(
     case 'party':
       return partyRunId(db, subject, peer)
     case 'conversation':
+    case 'sessionLink':
       return undefined
   }
 }

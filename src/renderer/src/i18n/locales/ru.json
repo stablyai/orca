@@ -21677,6 +21677,23 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "Остановлено после {{seconds}} с тишины"
+    },
+    "sessionLink": {
+      "addParticipants": "Добавить агентов",
+      "addSelected": "Добавить выбранных агентов",
+      "chooseParticipants": "Выберите чаты для совместной работы.",
+      "chooseAgents": "Выбрать агентов",
+      "groupSameWorkspace": "Некоторые участники используют одну рабочую папку. Согласуйте изменения файлов.",
+      "groupOptionalNote": "Необязательная заметка всем участникам",
+      "groupOwnerMessage": "Ваше сообщение всем участникам",
+      "groupHostDescription": "Свяжите существующие чаты на этом сервере. Вы задаёте цель, разрешения и условия продолжения.",
+      "sendAll": "Отправить всем",
+      "linkedGroup": "Связанные агенты: {{agents}}",
+      "groupOwnerAnswer": "Ваше решение для всех участников",
+      "participants": "Участники",
+      "availableEmpty": "Нет доступных чатов на этом сервере.",
+      "participantsAdded": "Владелец добавил агентов",
+      "reasonParticipants": "Чат закрыт или его контекст изменился. Перед продолжением проверьте чаты участников."
     }
   },
   "dashboardPopout": {

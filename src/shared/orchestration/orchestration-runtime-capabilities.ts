@@ -1,3 +1,10 @@
+export const SESSION_LINK_PAIRED_DESKTOP_CAPABILITY =
+  'orchestration.session-links-paired-desktop.v1' as const
+export const SESSION_LINK_OWNER_CHOICES_CAPABILITY =
+  'orchestration.session-link-owner-choices.v1' as const
+export const SESSION_LINK_POLICY_CAPABILITY = 'orchestration.session-link-policy.v1' as const
+export const SESSION_LINK_CAPABILITY = 'orchestration.session-links.v1' as const
+export const SESSION_LINK_GROUP_CAPABILITY = 'orchestration.session-link-groups.v1' as const
 export const ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY = 'orchestration.federation.v1' as const
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY =
   'orchestration.federation-control-mail.v1' as const
@@ -45,6 +52,11 @@ export const ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY =
   'orchestration.remote-owned-workers.v1' as const
 
 export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
+  SESSION_LINK_CAPABILITY,
+  SESSION_LINK_GROUP_CAPABILITY,
+  SESSION_LINK_PAIRED_DESKTOP_CAPABILITY,
+  SESSION_LINK_POLICY_CAPABILITY,
+  SESSION_LINK_OWNER_CHOICES_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,

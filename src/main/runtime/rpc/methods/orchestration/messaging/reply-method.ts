@@ -1,3 +1,4 @@
+import { assertSessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
 import { acceptedAnswerSender } from '../../../../orchestration/mailbox/senders/accepted-answer-sender'
 import { answerSenderRelayReport } from '../../../../orchestration/mailbox/senders/answer-sender-relay-report'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
@@ -48,6 +49,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   ) => {
     const db = runtime.getOrchestrationDb()
     const { original } = access
+    assertSessionLinkMailBoundary(db, orchestrationCaller?.orcaSessionId, original.from_handle)
     if (access.kind === 'helper') {
       const { question, answerer } = access
       const answered = db.answerQuestion({

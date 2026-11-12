@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 
+import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../../shared/native-chat/input/native-chat-question-auto-advance'
 import type { AskPrompt } from '../../../../../shared/native-chat/input/native-chat-ask-types'
 
 // Answers must use option indices; labels can be duplicated and a non-first choice must retain its position.
@@ -85,6 +86,38 @@ describe('NativeChatQuestionCard', () => {
     expect(document.activeElement).toBe(rows[1])
     expect(pressAt(10, 10, 'ArrowDown')).toBe(true)
     expect(document.activeElement).toBe(rows[0])
+  })
+  it('focuses a question inside a dialog and keeps number keys scoped to that dialog', () => {
+    vi.useFakeTimers()
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    container.before(dialog)
+    dialog.append(container)
+    const onAnswer = vi.fn()
+    const dialogControl = dialog.appendChild(document.createElement('button'))
+    act(() => dialogControl.focus())
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={tabsOrSpaces}
+          onAnswer={onAnswer}
+          onCancel={() => {}}
+          shouldFocus
+        />
+      )
+    })
+    const option = container.querySelector<HTMLButtonElement>('button[aria-pressed]')!
+    expect(document.activeElement).toBe(option)
+    expect(pressKey({ key: '2' }, option).defaultPrevented).toBe(true)
+    act(() => vi.advanceTimersByTime(NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS))
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [1], other: '' }])
+    const outside = document.body.appendChild(document.createElement('button'))
+    act(() => outside.focus())
+    expect(pressKey({ key: '1' }, outside).defaultPrevented).toBe(false)
+    act(() => vi.advanceTimersByTime(NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS))
+    expect(onAnswer).toHaveBeenCalledTimes(1)
+    outside.remove()
+    dialog.replaceWith(container)
   })
 
   it('shows a picked preview, keeps it on a second click, and confirms the digit-named option with Enter', () => {

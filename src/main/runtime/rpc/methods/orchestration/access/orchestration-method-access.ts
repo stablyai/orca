@@ -29,6 +29,7 @@ export type OrchestrationSubjectKind =
   | 'session'
   | 'request'
   | 'conversation'
+  | 'sessionLink'
 
 /** A field naming who is calling, as opposed to what the call acts on. */
 export type OrchestrationCallerField = 'from' | 'terminal' | 'callerTerminalHandle'

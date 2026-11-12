@@ -23,7 +23,7 @@ import { NativeChatMessageList } from '@/components/native-chat/NativeChatMessag
 import { NativeChatContextClearFade } from '@/components/native-chat/conversation/projection/NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from '@/components/native-chat/pane/actions/use-structured-native-chat-submit-reveal'
 import { useStructuredPromptResponseHold } from '@/components/native-chat/prompts/use-structured-prompt-response-hold'
-import { nativeChatStructuredAsyncQuestion } from '@/components/native-chat/prompts/NativeChatStructuredAsyncQuestion'
+import { nativeChatStructuredQuestions } from '@/components/native-chat/prompts/NativeChatStructuredAsyncQuestion'
 import {
   selectNativeChatViewState,
   structuredChatHistoryPhase
@@ -381,7 +381,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
             answerInputRef={questionAnswerInputRef}
           />
-          {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
+          {nativeChatStructuredQuestions(props, controller, session, transport, submits)}
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (
             <NativeChatComposer

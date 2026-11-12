@@ -28,6 +28,7 @@ export const styles = themedStyleSheet(() => ({
   compactMultipleSenderHeading: { maxWidth: '25%' },
   compactSenderArrow: { flexShrink: 0 },
   compactMoreSenders: { flexShrink: 0 },
+  compactLink: { minWidth: 0, flexShrink: 1 },
   compactSenders: { flex: 1, minWidth: 0, flexWrap: 'nowrap', alignItems: 'center' },
   compactSender: { minWidth: 0, flexShrink: 1, minHeight: 44 },
   compactBody: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm, gap: spacing.xs },
