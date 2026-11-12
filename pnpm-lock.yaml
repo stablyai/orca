@@ -214,7 +214,7 @@ patchedDependencies:
   minimatch@10.2.6: 4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6
   minimatch@9.0.9: c356feccb9147b4d6a1cc72b10270defcb95d14cb42ee74ddfe7219341417161
   monaco-editor@0.55.1: 53b71f7d8a7c00b76ffdb73ce83d18e31692f193f5fafa6a390e48f5b3fdd636
-  node-pty@1.1.0: 37dc98d9a4bcfc67153fa2fbf30689563ff49dcf8e6f0578484cbacdf1e38af5
+  node-pty@1.1.0: 2657a6f06336a61e815a918647c31dbb5825e69e390f5fdd38bc9a308249342e
   oxlint-plugin-anti-slop@0.1.2: c10c871702365a0c2c59e9f1c5fb92df97cae5755d534c0a3d83c6368f6feafe
   pdfjs-dist@6.3.289: 424fde648e16c965ce45c55bdda49ecb3a4aa992c856900714c841c3f13f8415
   prosemirror-view@1.42.3: 3340ccbcc4e3302f3ae1c0eda3911015966add2e7e0df76abd89fbef4f3902f7
@@ -267,7 +267,7 @@ importers:
         version: 3.0.2
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=37dc98d9a4bcfc67153fa2fbf30689563ff49dcf8e6f0578484cbacdf1e38af5)
+        version: 1.1.0(patch_hash=2657a6f06336a61e815a918647c31dbb5825e69e390f5fdd38bc9a308249342e)
       posthog-node:
         specifier: ^5.52.5
         version: 5.52.5
@@ -14147,7 +14147,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0(patch_hash=37dc98d9a4bcfc67153fa2fbf30689563ff49dcf8e6f0578484cbacdf1e38af5):
+  node-pty@1.1.0(patch_hash=2657a6f06336a61e815a918647c31dbb5825e69e390f5fdd38bc9a308249342e):
     dependencies:
       node-addon-api: 7.1.1
 

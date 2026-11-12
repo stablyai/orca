@@ -4,7 +4,11 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { checkNodePtyPrecondition, classifyNodePtyProbeResult } from './node-pty-precondition'
+import {
+  buildNodePtyLoadProbeScript,
+  checkNodePtyPrecondition,
+  classifyNodePtyProbeResult
+} from './node-pty-precondition'
 
 const require = createRequire(import.meta.url)
 const REAL_NODE_PTY = dirname(require.resolve('node-pty/package.json'))
@@ -75,6 +79,19 @@ describe('classifyNodePtyProbeResult', () => {
       reason: 'unknown',
       detail: 'the node-pty load probe did not finish in time, so nothing was established'
     })
+  })
+})
+
+describe('buildNodePtyLoadProbeScript', () => {
+  it('uses build 17763 only when the bundled ConPTY DLL is on', () => {
+    const dir = '/opt/app/node_modules/node-pty'
+    const withDll = buildNodePtyLoadProbeScript(dir, { useConptyDll: true })
+    const withoutDll = buildNodePtyLoadProbeScript(dir, { useConptyDll: false })
+    expect(withDll).toContain('>=17763?')
+    expect(withDll).not.toContain('18309')
+    expect(withoutDll).toContain('>=18309?')
+    expect(withoutDll).not.toContain('17763')
+    expect(buildNodePtyLoadProbeScript(dir)).toBe(withoutDll)
   })
 })
 
