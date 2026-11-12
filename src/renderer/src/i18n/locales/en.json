@@ -24764,7 +24764,8 @@
       "remove": "Remove",
       "removeTitle": "Remove managed account?",
       "removeDescription": "Stop agents using this profile first. Removal deletes its saved credentials and conversation data. Your system login stays unchanged.",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "useCli": "Use from the command line"
     },
     "hostSignIn": {
       "copied": "Copied",
@@ -28421,13 +28422,27 @@
       "invalid": "Its name or files can’t be copied",
       "keptHost": "The sandbox has its own {{name}}, so it’s left alone",
       "noProject": "The sandbox has no project checkout for it",
-      "failed": "Couldn’t write it in the sandbox"
+      "failed": "Couldn’t write it in the sandbox",
+      "offPending": "Off. Removed from the sandbox at the next sync"
     },
     "state": {
       "synced": "Synced",
       "pending": "Not synced yet",
-      "skipped": "Not synced"
-    }
+      "skipped": "Not synced",
+      "offPending": "Off, removed at the next sync"
+    },
+    "empty": {
+      "enabled": "No enabled skills.",
+      "disabled": "No disabled skills.",
+      "all": "No skills yet."
+    },
+    "filter": {
+      "label": "Show skills and commands",
+      "all": "All {{count}}",
+      "enabled": "Enabled {{count}}",
+      "disabled": "Disabled {{count}}"
+    },
+    "listLabel": "Skills and commands"
   },
   "orcaCloudAgentPicker": {
     "status": {

@@ -4,7 +4,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { HostGlyph } from '@/components/host-row-icon'
 import { FOCUS_RING } from './cloud-focus'
-import { cloudStateLabel } from './cloud-state-copy'
+import { cloudGlyphStateLabel } from './cloud-state-copy'
+import type { CloudGlyphState } from './CloudStatusGlyph'
+import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
 import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
 import { useCloudStatusPolling, useCloudWorkspaceView } from './use-cloud-workspace-view'
 import { useCloudPanelActions } from './use-cloud-panel-actions'
@@ -50,6 +52,23 @@ export function CloudWorkspaceMark({
   return (
     <CloudWorkspaceMarkInner workspaceId={workspaceId} view={view} onPointerDown={onPointerDown} />
   )
+}
+
+const PROBLEM: ReadonlySet<CloudGlyphState> = new Set(['failed', 'wakeFailed'])
+
+/** The view's state plus the two transitions the cloud shows: going to sleep and restarting. */
+function useCloudGlyphState(
+  workspaceId: string,
+  view: ReturnType<typeof useCloudWorkspaceView>
+): CloudGlyphState {
+  const goingToSleep = useIsWorktreeGoingToSleep(workspaceId)
+  if (PROBLEM.has(view.state)) {
+    return view.state
+  }
+  if (goingToSleep) {
+    return 'goingToSleep'
+  }
+  return view.pending === 'restart' ? 'restarting' : view.state
 }
 
 function CloudWorkspaceMarkInner({
@@ -104,8 +123,10 @@ function CloudWorkspaceMarkInner({
     clearTimer()
     setOpen((current) => (current === 'hover' ? 'pinned' : current))
   }, [clearTimer])
+  const glyphState = useCloudGlyphState(workspaceId, view)
+  // The state's name: what the cloud's fill and colour show, said out loud (the card's header shows it too).
   const label = t('orcaCloudWorkspace.cloudMarkLabel', 'Cloud workspace · {{state}}', {
-    state: cloudStateLabel(view.state, t)
+    state: cloudGlyphStateLabel(glyphState, t)
   })
   return (
     <Popover
@@ -143,11 +164,10 @@ function CloudWorkspaceMarkInner({
           className={cn(
             // 24px hit area around the 12px glyph, without changing the row's layout.
             "relative inline-flex size-3 shrink-0 items-center rounded-sm text-muted-foreground after:absolute after:-inset-1.5 after:content-['']",
-            'hover:text-foreground',
             FOCUS_RING
           )}
         >
-          <HostGlyph kind="orca-cloud" size={12} state={view.state} className="text-inherit" />
+          <HostGlyph kind="orca-cloud" size={12} state={glyphState} />
         </button>
       </PopoverTrigger>
       <PopoverContent

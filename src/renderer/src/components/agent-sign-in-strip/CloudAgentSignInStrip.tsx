@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { BANNER_BODY_TEXT, BANNER_TONE, type BannerSeverity } from '@/components/ui/banner-tone'
 import { useReservePaneTopSpace } from '../terminal-pane/appearance/pane-top-banner/PaneTopWarningBanner'
 import type {
   CloudStripModel,
@@ -97,27 +98,32 @@ export type CloudStripActions = {
   cancel: () => void
 }
 
+/** GA-P3t: the strip's severity look; anything that isn't a warning or an error reads as info. */
+export function stripSeverity(status: CloudStripStatus): BannerSeverity {
+  return status === 'warning' ? 'warning' : status === 'error' ? 'error' : 'info'
+}
+
 function StatusSlot({ status }: { status: CloudStripStatus }): React.JSX.Element {
   const base = 'size-4 shrink-0'
   switch (status) {
     case 'need':
-      return <CircleDashed aria-hidden className={cn(base, 'text-muted-foreground')} />
+      return <CircleDashed aria-hidden className={cn(base, BANNER_TONE.info.icon)} />
     // Not set up yet (or pasting the setup token): neutral, like the agent sheet; nothing is loading.
     case 'setup':
-      return <Info aria-hidden className={cn(base, 'text-muted-foreground')} />
+      return <Info aria-hidden className={cn(base, BANNER_TONE.info.icon)} />
     case 'warning':
-      return <TriangleAlert aria-hidden className={cn(base, 'text-status-warning-text')} />
+      return <TriangleAlert aria-hidden className={cn(base, BANNER_TONE.warning.icon)} />
     case 'busy':
       return (
         <Loader2
           aria-hidden
-          className={cn(base, 'text-muted-foreground motion-safe:animate-spin')}
+          className={cn(base, BANNER_TONE.info.icon, 'motion-safe:animate-spin')}
         />
       )
     case 'error':
-      return <CircleAlert aria-hidden className={cn(base, 'text-destructive')} />
+      return <CircleAlert aria-hidden className={cn(base, BANNER_TONE.error.icon)} />
     case 'done':
-      return <CircleCheck aria-hidden className={cn(base, 'text-muted-foreground')} />
+      return <CircleCheck aria-hidden className={cn(base, BANNER_TONE.info.icon)} />
   }
 }
 
@@ -200,7 +206,11 @@ export function CloudAgentSignInStrip({
         }
       }}
       className={cn(
-        'grid gap-2.5 border-b border-border bg-card px-3 text-foreground outline-none',
+        // GA-P3t: a severity fill and a 1px bottom border that clear contrast on white panes and
+        // separate the strip from the terminal below it.
+        'grid gap-2.5 border-b px-3 text-foreground outline-none',
+        BANNER_TONE[stripSeverity(model.status)].surface,
+        BANNER_TONE[stripSeverity(model.status)].border,
         wraps ? 'min-h-14 items-start py-2.5 [&>svg]:mt-0.5' : 'h-14 items-center',
         setupCode ? 'grid-cols-[16px_minmax(0,1fr)_auto]' : GRID[width]
       )}
@@ -221,7 +231,8 @@ export function CloudAgentSignInStrip({
               id={detailId}
               className={cn(
                 lineFit,
-                'text-xs leading-4 text-muted-foreground',
+                'text-xs leading-4',
+                BANNER_BODY_TEXT,
                 quietDetail && 'sr-only'
               )}
             >

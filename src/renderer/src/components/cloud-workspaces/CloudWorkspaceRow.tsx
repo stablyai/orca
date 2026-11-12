@@ -1,3 +1,4 @@
+import { CloudStatusGlyph } from '@/components/orca-cloud/CloudStatusGlyph'
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { GitBranch, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,7 +9,6 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
-import { CloudStateDot } from '../orca-cloud/CloudStateDot'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { MemberAvatar, PresenceStack } from './CloudMemberAvatars'
 import {
@@ -228,13 +228,18 @@ export function CloudWorkspaceRow({
         aria-describedby={descriptionId}
         className="flex min-w-0 flex-1 cursor-default items-center gap-3 rounded-lg py-2 pl-3 text-left outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
       >
-        <span
-          role="img"
-          aria-label={status}
-          className={cn('inline-flex shrink-0', archived && 'opacity-60')}
-        >
-          <CloudStateDot state={dotState(w)} size="md" />
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              role="img"
+              aria-label={status}
+              className={cn('inline-flex shrink-0', archived && 'opacity-60')}
+            >
+              <CloudStatusGlyph state={dotState(w)} size={16} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">{status}</TooltipContent>
+        </Tooltip>
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-1.5">
             {/* Archived rows dim only the title and dot, so cost, time and actions stay legible. */}

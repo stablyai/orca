@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { TriangleAlert, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { BANNER_BODY_TEXT, BANNER_TONE } from '@/components/ui/banner-tone'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -63,14 +64,14 @@ export function PaneBannerLearnMore({ onClick }: { onClick: () => void }): React
 type PaneTopBannerTone = 'warning' | 'neutral' | 'accent'
 
 const TONE_CLASSES: Record<PaneTopBannerTone, { stripClass: string; iconClass: string }> = {
+  // GA-P3t: the shared banner severity look (fills and borders that hold up on white panes).
   warning: {
-    stripClass:
-      'border-status-warning-border bg-background bg-[linear-gradient(var(--status-warning-background),var(--status-warning-background))]',
-    iconClass: 'text-status-warning'
+    stripClass: cn(BANNER_TONE.warning.surface, BANNER_TONE.warning.border),
+    iconClass: BANNER_TONE.warning.icon
   },
   neutral: {
-    stripClass: 'border-border bg-card',
-    iconClass: 'text-muted-foreground'
+    stripClass: cn(BANNER_TONE.info.surface, BANNER_TONE.info.border),
+    iconClass: BANNER_TONE.info.icon
   },
   accent: {
     stripClass:
@@ -139,7 +140,7 @@ export function PaneTopWarningBanner({
               ) : null}
               {title}
             </p>
-            {body ? <p className="text-muted-foreground">{body}</p> : null}
+            {body ? <p className={BANNER_BODY_TEXT}>{body}</p> : null}
           </div>
         </div>
         <div

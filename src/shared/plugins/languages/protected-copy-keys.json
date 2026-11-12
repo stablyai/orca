@@ -12,6 +12,7 @@
     "accounts.managedData.select",
     "accounts.managedData.system",
     "accounts.managedData.upgrade",
+    "accounts.managedData.useCli",
     "auto.components.TaskPageJiraSavedFilters.0ab71bb840",
     "auto.components.TaskPageJiraSavedFilters.19af906d12",
     "auto.components.TaskPageJiraSavedFilters.42ce360813",

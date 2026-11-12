@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { archivedSnapshotLine } from './archive-snapshot-copy'
+import type { CloudGlyphState } from './CloudStatusGlyph'
 
 export function cloudStateLabel(state: CloudDotState, t: Translate = translate): string {
   switch (state) {
@@ -24,6 +25,17 @@ export function cloudStateLabel(state: CloudDotState, t: Translate = translate):
     case 'unknown':
       return t('orcaCloudWorkspace.state.unknown', 'Checking…')
   }
+}
+
+/** The cloud glyph's state name: the dot's states plus its two transitions. */
+export function cloudGlyphStateLabel(state: CloudGlyphState, t: Translate = translate): string {
+  if (state === 'goingToSleep') {
+    return t('orcaCloudWorkspace.state.goingToSleep', 'Going to sleep…')
+  }
+  if (state === 'restarting') {
+    return t('orcaCloudWorkspace.state.restarting', 'Restarting')
+  }
+  return cloudStateLabel(state, t)
 }
 
 /** One line under the state in the status panel; null where the state says enough on its own. */
