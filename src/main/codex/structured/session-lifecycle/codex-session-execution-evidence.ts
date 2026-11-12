@@ -4,6 +4,7 @@ import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-s
 import type { AgentSessionExecutionEvidence } from '../../../../shared/agent-session/agent-session-execution-evidence'
 import type { CodexSession } from './codex-structured-session-state'
 import { readCodexSandboxPolicy } from '../launch/codex-structured-sandbox-policy'
+import { agentSessionExecutionPolicyFingerprint } from '../../../../shared/agent-session/agent-session-execution-policy'
 
 const INCLUDED_PLANS = new Set(['pro', 'promax', 'plus', 'business', 'team', 'enterprise', 'edu'])
 const text = (value: unknown): value is string =>
@@ -79,6 +80,8 @@ export function readCodexSessionExecutionEvidence(
     const native = session?.nativeExecutionSettings
     const settings = session?.appliedSettings?.read()
     const permissions = session && sandboxEvidence(session)
+    const execution = session?.execution
+    const workspaceRoots = execution?.openedWorkspaceRoots ?? native?.runtimeWorkspaceRoots
     const cwd = native ? native.cwd : session?.permissions?.reportedCwd
     const provider = native ? native.modelProvider : session?.modelProvider
     if (
@@ -93,6 +96,7 @@ export function readCodexSessionExecutionEvidence(
       !text(settings.effort) ||
       !permissions ||
       !text(cwd) ||
+      (execution && (!execution.toolsIsolated || !execution.controls.isOpen())) ||
       signal?.aborted
     ) {
       return null
@@ -104,6 +108,7 @@ export function readCodexSessionExecutionEvidence(
       sessions.get(sessionId) === session &&
       !session.ended &&
       !session.connection.closed &&
+      (!execution || execution.controls.isOpen()) &&
       session.nativeExecutionSettings === native &&
       session.authRevision === revision &&
       session.acquisitionGeneration === generation &&
@@ -137,8 +142,20 @@ export function readCodexSessionExecutionEvidence(
         acquisitionGeneration: generation,
         observedAt: now(),
         cwd,
+        ...(roots(workspaceRoots) ? { runtimeWorkspaceRoots: [...workspaceRoots] } : {}),
         model: settings.model,
         effort: settings.effort,
+        ...(execution
+          ? {
+              bounded: {
+                policyFingerprint: agentSessionExecutionPolicyFingerprint(execution.policy),
+                deadlineAt: execution.policy.deadlineAt,
+                toolsIsolated: execution.toolsIsolated,
+                inputAdmitted: execution.inputAdmitted,
+                workspaceRootsSource: 'thread-open' as const
+              }
+            }
+          : {}),
         account: {
           type: 'chatgpt',
           plan: account.planType,

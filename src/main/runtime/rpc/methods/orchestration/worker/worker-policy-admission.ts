@@ -7,6 +7,7 @@ import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { WorkerStartInput } from './worker-start-schema'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 
 function refuse(): never {
   throw new OrchestrationError(
@@ -16,10 +17,16 @@ function refuse(): never {
   )
 }
 
-export function assertBoundedWorkerRequest(params: WorkerStartInput, followUp: boolean) {
+export function assertBoundedWorkerRequest(
+  params: WorkerStartInput,
+  followUp: boolean,
+  db: OrchestrationDb
+) {
   if (
     (params.advisoryPolicy || params.executionPolicy) &&
-    (followUp || !WorkerStartParams.safeParse(params).success)
+    (followUp ||
+      !WorkerStartParams.safeParse(params).success ||
+      (params.executionPolicy && params.task && db.getDispatchContext(params.task)))
   ) {
     refuse()
   }

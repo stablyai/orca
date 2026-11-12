@@ -27,6 +27,9 @@ export function codexAcquisitionNotificationHandler(input: {
   return (method, params) => {
     if (method === 'account/updated') {
       input.acquisition.authRevision += 1
+      if (input.acquisition.execution?.inputAdmitted) {
+        input.acquisition.execution.controls.stop()
+      }
     }
     const observedAt = CODEX_RECEIPT_TIMED_METHODS.has(method) ? input.now() : undefined
     const dispatchSequenceAtReceipt =
@@ -38,6 +41,24 @@ export function codexAcquisitionNotificationHandler(input: {
     }
     if (method === 'thread/settings/updated' && threadId && threadId === input.primaryThreadId()) {
       const settings = readRecord(readRecord(params).threadSettings)
+      const execution = input.acquisition.execution
+      const previous = input.acquisition.nativeExecutionSettings
+      const sandbox = readRecord(settings.sandboxPolicy)
+      if (
+        execution?.inputAdmitted &&
+        (settings.model !== execution.policy.model ||
+          settings.effort !== execution.policy.effort ||
+          settings.cwd !== previous?.cwd ||
+          settings.modelProvider !== 'openai' ||
+          readRecord(settings.activePermissionProfile).id !== execution.profileId ||
+          settings.approvalPolicy !== 'never' ||
+          settings.approvalsReviewer !== 'user' ||
+          sandbox.networkAccess !== false ||
+          sandbox.type !==
+            (execution.policy.access === 'workspace' ? 'workspaceWrite' : 'readOnly'))
+      ) {
+        execution.controls.stop()
+      }
       input.acquisition.nativeExecutionSettings = settings
       if (
         typeof settings.model === 'string' &&

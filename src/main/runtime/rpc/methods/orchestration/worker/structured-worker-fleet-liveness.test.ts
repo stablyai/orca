@@ -314,6 +314,28 @@ describe('worker-list liveness for chat-mode workers', () => {
     ).toEqual({ kind: 'unknown', reason: 'identity_changed' })
   })
 
+  it('refuses bounded settings without the dispatch policy binding', async () => {
+    const dispatchId = seed()
+    const current = record('codex')
+    current.executionPolicy = {
+      schema: 1,
+      sourcePin: 'a'.repeat(40),
+      accountFingerprint: `codex:${'b'.repeat(64)}`,
+      model: 'gpt-live',
+      effort: 'low',
+      access: 'read-only',
+      deadlineAt: 1_800_000_120_000
+    }
+    installHost(current, true)
+    expect(
+      await readStructuredWorkerSettings(
+        { ensureStructuredAgentSessionHost: async () => {} },
+        db,
+        dispatchId
+      )
+    ).toEqual({ kind: 'unknown', reason: 'identity_changed' })
+  })
+
   it('discards settings when the runtime replaces the session host during the read', async () => {
     const dispatchId = seed()
     const host = installHost(record('codex'), true)

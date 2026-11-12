@@ -43,14 +43,12 @@ export const WorkerStartParams = z
     if (
       params.executionPolicy &&
       (params.advisoryPolicy ||
-        !params.spec ||
-        !params.parent ||
+        (!params.task && (!params.spec || !params.parent)) ||
         !params.worktree?.startsWith('id:') ||
         params.agent !== 'codex' ||
         params.model !== params.executionPolicy.model ||
         params.effort !== params.executionPolicy.effort ||
         [
-          params.task,
           params.on,
           params.terminal,
           params.retryOf,

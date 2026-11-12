@@ -1,6 +1,7 @@
 import { copyCodexConversation } from '../../codex-conversation-copy'
 import { readCodexSessionAccountUsage } from './codex-session-account-usage'
 import { readCodexSessionExecutionEvidence } from './codex-session-execution-evidence'
+import { supportsCodexExecutionPolicy } from '../launch/codex-execution-controls'
 import * as permission from '../turns/codex-structured-turn-permission'
 import { projectCodexSessionOptions } from '../catalog/codex-structured-service-tier'
 import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
@@ -92,6 +93,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   )
 
   supportsLocation = supportsCodexStructuredLocation
+  supportsExecutionPolicy = supportsCodexExecutionPolicy
 
   readCommands: NonNullable<SessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.skillReport?.read()
@@ -250,7 +252,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
         await prepareCodexMessageDispatch(
           session,
           input,
-          () => this.sessions.get(input.sessionId) === session
+          () => this.sessions.get(input.sessionId) === session,
+          this.readExecutionEvidence
         ),
         this.deps.requestTimeoutMs
       )

@@ -2,12 +2,37 @@ import { CodexAppliedSettings } from '../catalog/codex-structured-applied-settin
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import '../prompts/codex-structured-prompt-replies'
 import { CodexPromptRegistry } from '../prompts/codex-prompt-registry'
+import { createCodexExecutionControls } from '../launch/codex-execution-controls'
+import type { AgentSessionExecutionPolicy } from '../../../../shared/agent-session/agent-session-execution-policy'
 
 // Bound events retained before a session can route them.
 export const MAX_CODEX_ACQUISITION_BUFFER_OPERATIONS = 1024
 export const MAX_CODEX_ACQUISITION_BUFFER_BYTES = 4 * 1024 * 1024
 
 export class CodexAcquisitionWindow {
+  execution?: {
+    policy: AgentSessionExecutionPolicy
+    profileId: string
+    controls: ReturnType<typeof createCodexExecutionControls>
+    inputAdmitted: boolean
+    toolsIsolated: boolean
+    openedWorkspaceRoots?: string[]
+  }
+
+  startExecution(
+    input: { policy: AgentSessionExecutionPolicy; profileId: string } | undefined,
+    close: () => Promise<boolean>,
+    onFault: (reason: Error) => void
+  ): void {
+    if (input) {
+      this.execution = {
+        ...input,
+        controls: createCodexExecutionControls(input.policy, close, onFault),
+        inputAdmitted: false,
+        toolsIsolated: false
+      }
+    }
+  }
   nativeExecutionSettings?: Record<string, unknown>
   authRevision = 0
   readonly appliedSettings = new CodexAppliedSettings()

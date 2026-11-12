@@ -1,3 +1,5 @@
+import type { acquireCodexStructuredSession } from './codex-structured-session-acquire'
+import type { CodexStructuredLaunch } from '../session-lifecycle/codex-structured-session-state'
 import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionAcquisitionExitUnprovenError,
@@ -60,4 +62,44 @@ export async function closeFailedCodexAcquisition(input: {
     throw new AgentSessionAcquisitionRootExitObservedError(input.cause, 'kill-delivered')
   }
   throw input.cause
+}
+
+export function bindCodexExecutionDeadline(
+  input: Parameters<typeof acquireCodexStructuredSession>[0],
+  execution: CodexStructuredLaunch['execution'],
+  attempt: CodexAcquisitionAttempt,
+  generation: string
+): void {
+  const sessionId = input.input.identity.sessionId
+  const acquisition = attempt.window
+  acquisition.startExecution(
+    execution,
+    async () => {
+      attempt.cancelled = true
+      attempt.requestedClose = false
+      const connection = acquisition.connection
+      if (!connection) {
+        return false
+      }
+      const closed =
+        input.sessions.get(sessionId)?.connection === connection
+          ? await input.forceCloseUnexpected(
+              sessionId,
+              input.input.fence,
+              generation,
+              new Error('Bounded Codex deadline reached.')
+            )
+          : await connection.close()
+      return (
+        closed &&
+        connection.closeResult?.root === 'exited' &&
+        connection.closeResult.tree === 'exited'
+      )
+    },
+    () =>
+      input.deps.logger?.warn('Bounded Codex process exit unproven.', {
+        scope: 'codex.execution',
+        sessionId
+      })
+  )
 }

@@ -30,7 +30,11 @@ afterEach(async () => {
   process.exitCode = undefined
 })
 
-async function invoke(raw: string, advisorySupported: boolean) {
+async function invoke(
+  raw: string,
+  advisorySupported: boolean,
+  kind: 'advisory' | 'execution' = 'advisory'
+) {
   const dir = await mkdtemp(join(tmpdir(), 'orca-advisory-cli-'))
   scratch.push(dir)
   await writeFile(join(dir, 'policy.json'), raw)
@@ -42,7 +46,7 @@ async function invoke(raw: string, advisorySupported: boolean) {
       return okFixture('status', {
         capabilities: [
           'orchestration.worker-launch-preferences.v1',
-          ...(advisorySupported ? ['orchestration.worker-advisory-policy.v1'] : [])
+          ...(advisorySupported ? [`orchestration.worker-${kind}-policy.v1`] : [])
         ]
       })
     }
@@ -67,11 +71,11 @@ async function invoke(raw: string, advisorySupported: boolean) {
         ['spec', 'Which existing test distinguishes the two hypotheses?'],
         ['parent', 'owner-task'],
         ['from', 'term_coord'],
-        ['agent', 'claude'],
+        ['agent', kind === 'execution' ? 'codex' : 'claude'],
         ['model', 'test-model'],
         ['effort', 'medium'],
         ['worktree', 'id:folder::advisor'],
-        ['advisory-policy-file', 'policy.json']
+        [`${kind}-policy-file`, 'policy.json']
       ])
     })
   return { run, mutations }
@@ -81,6 +85,24 @@ it('refuses an older runtime before any advisory worker mutation', async () => {
   const { run, mutations } = await invoke(JSON.stringify(policy), false)
   await expect(run()).rejects.toMatchObject({ code: 'incompatible_runtime' })
   expect(mutations).toEqual([])
+})
+
+it('carries an execution policy only when the connected runtime supports it', async () => {
+  const executionPolicy = {
+    schema: 1,
+    sourcePin: 'a'.repeat(40),
+    accountFingerprint: `codex:${'b'.repeat(64)}`,
+    model: 'test-model',
+    effort: 'medium',
+    access: 'read-only',
+    deadlineAt: 1_800_000_300_000
+  }
+  const unsupported = await invoke(JSON.stringify(executionPolicy), false, 'execution')
+  await expect(unsupported.run()).rejects.toMatchObject({ code: 'incompatible_runtime' })
+  expect(unsupported.mutations).toEqual([])
+  const supported = await invoke(JSON.stringify(executionPolicy), true, 'execution')
+  await supported.run()
+  expect(supported.mutations).toEqual([expect.objectContaining({ executionPolicy })])
 })
 
 it('refuses malformed private policy without echoing its content', async () => {

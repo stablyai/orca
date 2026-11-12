@@ -13,6 +13,10 @@ import type { CodexAppServerConnection } from '../../app-server/codex-app-server
 import type { CodexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
 import { readCodexThreadId } from '../../app-server/codex-structured-thread-facts'
 import {
+  codexExecutionThreadConfig,
+  assertCodexExecutionToolsDisabled
+} from '../launch/codex-execution-thread-controls'
+import {
   readCodexSandboxPolicy,
   type CodexSandboxPolicy
 } from '../launch/codex-structured-sandbox-policy'
@@ -21,6 +25,7 @@ export type CodexOpenedThread = {
   activePermissionProfile?: { id: string }
   modelProvider?: string
   cwd?: string
+  runtimeWorkspaceRoots?: string[]
   approvalPolicy?: string
   approvalsReviewer?: string
   threadId: string
@@ -72,16 +77,33 @@ export async function openCodexThread(
     model?: string
     threadConfig?: Record<string, unknown>
     commandEnv?: Record<string, string>
+    execution?: { profileId: string }
   },
   /** null: no deadline; the start that opens the thread bounds it (`signal`). */
   timeoutMs: number | null | undefined,
   signal?: AbortSignal
 ): Promise<CodexOpenedThread> {
   const resumeThreadId = launch.resumeThreadId
-  const config = { ...launch.threadConfig, ...shellEnvironmentSetConfig(launch.commandEnv) }
+  if (launch.execution && resumeThreadId) {
+    throw new Error('A bounded Codex thread cannot resume.')
+  }
+  const config = {
+    ...launch.threadConfig,
+    ...shellEnvironmentSetConfig(launch.execution ? undefined : launch.commandEnv),
+    ...(launch.execution ? await codexExecutionThreadConfig(connection, launch.cwd) : {})
+  }
   const threadSettings = {
     cwd: launch.cwd,
-    ...launch.permissionPolicy,
+    ...(launch.execution
+      ? {
+          permissions: launch.execution.profileId,
+          runtimeWorkspaceRoots: [launch.cwd],
+          approvalPolicy: 'never',
+          approvalsReviewer: 'user',
+          allowProviderModelFallback: false,
+          modelProvider: 'openai'
+        }
+      : launch.permissionPolicy),
     ...(Object.keys(config).length > 0 ? { config } : {})
   }
   const startThread = (): Promise<unknown> => {
@@ -146,6 +168,9 @@ export async function openCodexThread(
   if (!threadId) {
     throw new Error('codex app-server did not name the thread it opened')
   }
+  if (launch.execution) {
+    await assertCodexExecutionToolsDisabled(connection, threadId)
+  }
   if (supersededThreadId === undefined && resumeThreadId && threadId !== resumeThreadId) {
     throw new Error(`codex app-server resumed ${threadId} instead of ${resumeThreadId}`)
   }
@@ -164,6 +189,11 @@ export async function openCodexThread(
   const approvalPolicy = nonEmptyString(result.approvalPolicy ?? result.approval_policy)
   const approvalsReviewer = nonEmptyString(result.approvalsReviewer ?? result.approvals_reviewer)
   return {
+    ...(Array.isArray(result.runtimeWorkspaceRoots) &&
+    result.runtimeWorkspaceRoots.length <= 64 &&
+    result.runtimeWorkspaceRoots.every((value) => typeof value === 'string')
+      ? { runtimeWorkspaceRoots: [...result.runtimeWorkspaceRoots] }
+      : {}),
     ...(profile && typeof profile === 'object' && 'id' in profile && typeof profile.id === 'string'
       ? { activePermissionProfile: { id: profile.id } }
       : {}),

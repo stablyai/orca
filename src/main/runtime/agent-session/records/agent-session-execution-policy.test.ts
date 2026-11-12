@@ -27,7 +27,7 @@ const request = () => ({
   },
   provider: 'codex',
   accountHome: { variable: 'CODEX_HOME' as const, path: '/account' },
-  options: { model: 'gpt-live', effort: 'low' },
+  options: { model: 'gpt-live', effort: 'low', permissionMode: 'full-access', fastMode: 'true' },
   executionPolicy: {
     schema: 1 as const,
     sourcePin: 'a'.repeat(40),
@@ -58,7 +58,12 @@ it('persists bounded Codex intent and quarantines it if a reader loses its polic
   const reopened = await openTestAgentSessionRecordStore(directory, { hostId: 'local' })
   expect(reopened.getRecord('session-bounded')).toMatchObject({
     schemaVersion: 4,
+    permissionMode: 'own',
     executionPolicy: { model: 'gpt-live', deadlineAt: 1_800_000_120_000 }
+  })
+  expect(reopened.getRecord('session-bounded')?.options).toEqual({
+    model: 'gpt-live',
+    effort: 'low'
   })
   expect(reopened.getConversation('session-bounded')).not.toHaveProperty('executionPolicy')
   await editPersistedTestAgentSessionStore(directory, (persisted) => {

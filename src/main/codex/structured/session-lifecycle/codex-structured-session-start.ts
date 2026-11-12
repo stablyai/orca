@@ -78,6 +78,7 @@ export async function openCodexStructuredSession(
     throw new Error('codex open does not match the spawned child')
   }
   const current = (): void => {
+    attempt.window.execution?.controls.assertOpen()
     throwIfSignalAborted(openInput.signal)
     if (attempt.exitError) {
       throw attempt.exitError
@@ -157,12 +158,17 @@ export async function openCodexStructuredSession(
         : undefined
       : (opened.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
   const catalogAccess = codexAcquireCatalogAccess(deps, launch, sessionId)
+  if (attempt.window.execution) {
+    attempt.window.execution.toolsIsolated = true
+    attempt.window.execution.openedWorkspaceRoots = opened.runtimeWorkspaceRoots
+  }
   attempt.window.nativeExecutionSettings = {
     ...opened,
     modelProvider: opened.modelProvider ?? opened.thread?.modelProvider,
     sandboxPolicy: opened.sandbox
   }
   const session: CodexSession = {
+    ...(attempt.window.execution ? { execution: attempt.window.execution } : {}),
     get nativeExecutionSettings() {
       return attempt.window.nativeExecutionSettings
     },

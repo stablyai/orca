@@ -30,6 +30,7 @@ import type { AgentModelCatalogSessionAccess } from '../../../native-chat/agent-
 import type { StructuredAgentSessionProviderOpen } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { NativeChatVisualsLaunch } from '../../../native-chat/native-chat-visuals-delivery'
 import type { CodexSessionPermissions } from '../turns/codex-structured-turn-permission'
+import type { codexExecutionLaunch } from '../launch/codex-execution-controls'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 
 export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
@@ -38,6 +39,7 @@ export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
 }
 
 export type CodexStructuredLaunch = {
+  execution?: Pick<NonNullable<ReturnType<typeof codexExecutionLaunch>>, 'policy' | 'profileId'>
   prefixArgs?: readonly string[]
   command: string
   args: string[]
@@ -133,6 +135,7 @@ export type CodexStructuredSessionAdapterDeps = {
 }
 
 export type CodexSession = {
+  execution?: CodexAcquisitionWindow['execution']
   readonly nativeExecutionSettings?: Record<string, unknown>
   modelProvider?: string
   readonly authRevision?: number

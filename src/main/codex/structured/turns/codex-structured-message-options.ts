@@ -1,4 +1,5 @@
 import { pickedSkillsInText } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { prepareCodexExecutionInput } from './codex-execution-input'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import type { CodexTurnHost } from './codex-structured-turn-start'
@@ -81,7 +82,8 @@ export function readCodexAppliedInputOptions(
 export async function prepareCodexMessageDispatch(
   session: CodexSession,
   input: Parameters<StructuredAgentSessionAdapter['dispatch']>[0],
-  registered: () => boolean
+  registered: () => boolean,
+  readExecution: NonNullable<StructuredAgentSessionAdapter['readExecutionEvidence']>
 ) {
   const checkAbort = () => {
     if (input.signal?.aborted) {
@@ -104,9 +106,17 @@ export async function prepareCodexMessageDispatch(
     throw error
   })
   checkAbort()
+  const beforeWrite = await prepareCodexExecutionInput(
+    session,
+    input,
+    turnOptions,
+    registered,
+    readExecution
+  )
   return {
     ...input,
     turnOptions,
+    ...(beforeWrite ? { beforeWrite } : {}),
     isCurrent: () =>
       registered() &&
       !session.ended &&

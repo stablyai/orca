@@ -8,8 +8,16 @@ export type AgentSessionExecutionEvidence = {
   acquisitionGeneration: string
   observedAt: number
   cwd: string
+  runtimeWorkspaceRoots?: string[]
   model: string
   effort: string
+  bounded?: {
+    policyFingerprint: string
+    deadlineAt: number
+    toolsIsolated: boolean
+    inputAdmitted: boolean
+    workspaceRootsSource: 'thread-open'
+  }
   account: { type: 'chatgpt'; fingerprint: string; plan: string }
   permissions: {
     activeProfile?: { id: string }

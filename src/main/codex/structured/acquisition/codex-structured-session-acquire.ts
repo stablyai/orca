@@ -9,10 +9,7 @@ import type {
   StructuredAgentSessionAcquireInput
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { launchPreparationFailure } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
-import {
-  closeFailedCodexAcquisition,
-  stopSupersededCodexAcquisition
-} from './codex-structured-acquisition-lifecycle'
+import * as lifecycle from './codex-structured-acquisition-lifecycle'
 import { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
 import { createCodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import { createCodexSessionJournalTranslator } from '../session-lifecycle/codex-structured-session-journal'
@@ -99,7 +96,7 @@ export async function acquireCodexStructuredSession(input: {
   const open = deps.openConnection ?? spawnCodexAppServerConnection
   const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
   try {
-    await stopSupersededCodexAcquisition({
+    await lifecycle.stopSupersededCodexAcquisition({
       sessionId,
       registry: acquisitions,
       replacement: attempt,
@@ -136,6 +133,7 @@ export async function acquireCodexStructuredSession(input: {
           }
     acquisitions.assertCurrent(sessionId, attempt)
     account = launch.codexHome ? deps.resolveAccountKind?.(launch.codexHome) : undefined
+    lifecycle.bindCodexExecutionDeadline(input, launch.execution, attempt, acquisitionGeneration)
     const connection = await open(
       {
         command: launch.command,
@@ -170,6 +168,7 @@ export async function acquireCodexStructuredSession(input: {
           ),
         onSpawned: spawnIdentity.onSpawned,
         onExit: (error, exit) => {
+          acquisition.execution?.controls.end()
           acquisition.appliedSettings.end()
           try {
             // Orca's own close or cancel ends no start; Codex ending on its own does, from the
@@ -230,6 +229,7 @@ export async function acquireCodexStructuredSession(input: {
       }
     )
     acquisition.connection = connection
+    acquisition.execution?.controls.assertOpen()
     if (connection.pauseReading && connection.resumeReading) {
       unbindReadingControl = acquireInput.events?.bindReadingControl?.({
         pauseReading: connection.pauseReading,
@@ -284,7 +284,7 @@ export async function acquireCodexStructuredSession(input: {
   } catch (error) {
     acquisitions.endings.retire(sessionId, acquisitionGeneration)
     if (sessions.get(sessionId)?.connection !== acquisition.connection) {
-      return await closeFailedCodexAcquisition({
+      return await lifecycle.closeFailedCodexAcquisition({
         sessionId,
         registry: acquisitions,
         attempt,

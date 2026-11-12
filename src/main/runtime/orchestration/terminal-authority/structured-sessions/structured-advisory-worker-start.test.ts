@@ -4,6 +4,7 @@ import { expect, it, vi } from 'vitest'
 import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import * as sessionCreate from '../../../rpc/methods/structured-sessions/creation/structured-agent-session-create'
+import { assertBoundedWorkerRequest } from '../../../rpc/methods/orchestration/worker/worker-policy-admission'
 import { resultOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import {
   COORDINATOR,
@@ -17,6 +18,37 @@ import {
   root,
   runtime
 } from './structured-chat-coordinator-mail-rig.test-fixture'
+
+it('refuses an existing task after its first dispatch without reopening an actor', async () => {
+  await openChat(COORDINATOR)
+  const { taskId } = await coordinatorRunAndTask()
+  const task = db.createTask({ runId: db.getTask(taskId)!.run_id, spec: 'One bounded task' })
+  const params = {
+    task: task.id,
+    from: 'orca-session:owner',
+    worktree: 'id:folder:task',
+    agent: 'codex',
+    model: 'test-model',
+    effort: 'low',
+    executionPolicy: {
+      schema: 1 as const,
+      sourcePin: 'a'.repeat(40),
+      accountFingerprint: `codex:${'b'.repeat(64)}`,
+      model: 'test-model',
+      effort: 'low',
+      access: 'read-only' as const,
+      deadlineAt: 1_800_000_120_000
+    }
+  }
+  expect(() => assertBoundedWorkerRequest(params, false, db)).not.toThrow()
+  db.createStartingWorkerDispatch({
+    taskId: task.id,
+    startOptions: {},
+    creator: { kind: 'system' },
+    maxDepth: 9
+  })
+  expect(() => assertBoundedWorkerRequest(params, false, db)).toThrow('Bounded workers')
+})
 
 it.each(['unsupported', 'git-workspace', 'nonempty-folder', 'admitted', 'cold-host'])(
   'enforces %s consultation admission before actor launch',

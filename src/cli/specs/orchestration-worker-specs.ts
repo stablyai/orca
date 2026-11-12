@@ -5,7 +5,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'worker-start'],
     summary: 'Start one supervised worker on the Run home or a connected Orca server',
     usage:
-      'orca orchestration worker-start (--task <task_id> | --spec <text> | --spec-file <path|->) [--keep-open] [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--agent <agent> | --terminal <handle>) [--task-title <text>] [--deps <json_array>] [--parent <task_id>] [--model <id>] [--effort <level>] [--advisory-policy-file <path>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--request-id <uuid> | --retry-request <id>] [--json]',
+      'orca orchestration worker-start (--task <task_id> | --spec <text> | --spec-file <path|->) [--keep-open] [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--agent <agent> | --terminal <handle>) [--task-title <text>] [--deps <json_array>] [--parent <task_id>] [--model <id>] [--effort <level>] [--advisory-policy-file <path> | --execution-policy-file <path>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--request-id <uuid> | --retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'task',
@@ -27,6 +27,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'model',
       'effort',
       'advisory-policy-file',
+      'execution-policy-file',
       'terminal',
       'retry-of',
       'timeout-ms',
@@ -37,6 +38,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     ],
     identityFlagRoles: { from: 'caller', terminal: 'target' },
     notes: [
+      '--execution-policy-file admits one fresh local folder Codex actor for an undispatched task, or a new child spec, with explicit model/effort, included-account fingerprint, named access and a finite deadline. It forbids reuse, retry, remote routing, setup and terminal fallback. Capability support alone does not qualify a route.',
       '--advisory-policy-file reads a private bounded snapshot policy from a local JSON file. It requires a fresh child --spec, --parent, exact existing local folder workspace, and explicit Claude model/effort. Unsupported native routes refuse before effects; the parser capability is not qualification. Reuse, remote routing, setup and worktree creation are refused.',
       'With --spec and no bound Run, a coordinator gets a new Run bound to it, named after the Task title; the receipt names the Run it created or joined.',
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',

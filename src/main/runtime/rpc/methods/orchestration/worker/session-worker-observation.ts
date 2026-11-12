@@ -13,7 +13,11 @@ import { resolveStructuredWorkerForDispatch } from '../structured-workers/orches
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrchestrationWorkerSettings } from '../../../../../../shared/orchestration/workers/orchestration-worker-settings'
 import { agentSessionAdvisoryPolicyFingerprint } from '../../../../../../shared/agent-session/agent-session-advisory-policy'
-import { workerStartOptionsAdvisoryPolicyFingerprint } from '../../../../orchestration/workers/launch/worker-launch-observation'
+import {
+  workerStartOptionsAdvisoryPolicyFingerprint,
+  workerStartOptionsExecutionPolicyFingerprint
+} from '../../../../orchestration/workers/launch/worker-launch-observation'
+import { agentSessionExecutionPolicyFingerprint } from '../../../../../../shared/agent-session/agent-session-execution-policy'
 
 export type SessionWorkerObservation = {
   terminal: null
@@ -120,6 +124,9 @@ export async function readStructuredWorkerSettings(
       return { kind: 'unknown', reason: 'identity_changed' }
     }
     const policy = host.deps.store.getRecord(sessionId)?.advisoryPolicy
+    const executionPolicy = host.deps.store.getRecord(sessionId)?.executionPolicy
+    const executionFingerprint =
+      executionPolicy && agentSessionExecutionPolicyFingerprint(executionPolicy)
     const policyFingerprint = policy && agentSessionAdvisoryPolicyFingerprint(policy)
     const options = await host.readOptions(sessionId, { readsWithoutModel: true })
     const execution = await host.deps.adapter?.readExecutionEvidence?.({
@@ -131,6 +138,7 @@ export async function readStructuredWorkerSettings(
     }
     const after = host.deps.store.getConversation(sessionId)
     const currentPolicy = host.deps.store.getRecord(sessionId)?.advisoryPolicy
+    const currentExecutionPolicy = host.deps.store.getRecord(sessionId)?.executionPolicy
     const currentHold = holdStructuredWorker(identity, db)
     if (
       currentHold.kind !== 'held' ||
@@ -138,6 +146,13 @@ export async function readStructuredWorkerSettings(
       !ownsDispatch() ||
       currentHold.running.sessionId !== sessionId ||
       after?.currentFence !== before.currentFence ||
+      (currentExecutionPolicy && agentSessionExecutionPolicyFingerprint(currentExecutionPolicy)) !==
+        executionFingerprint ||
+      (executionFingerprint &&
+        (workerStartOptionsExecutionPolicyFingerprint(
+          db.getWorkerDispatch(dispatchId)?.start_options ?? ''
+        ) !== executionFingerprint ||
+          execution?.evidence.bounded?.policyFingerprint !== executionFingerprint)) ||
       (currentPolicy && agentSessionAdvisoryPolicyFingerprint(currentPolicy)) !==
         policyFingerprint ||
       (policyFingerprint &&

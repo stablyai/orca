@@ -1,4 +1,5 @@
 import { steerCodexTurn } from './codex-structured-turn-steer'
+import { codexExecutionTurnSettings, refuseCodexExecutionInput } from './codex-execution-input'
 import { checkDispatchAuthority } from './codex-structured-dispatch-authority'
 import {
   StructuredAgentSessionInputNotAdmitted,
@@ -33,6 +34,7 @@ import {
 import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
 
 export type CodexTurnHost = {
+  execution?: CodexSession['execution']
   account?: AgentSessionAccountKind
   skillReport?: Pick<CodexSkillReport, 'hasSkillPath'>
   connection: Pick<CodexAppServerConnection, 'request'>
@@ -63,6 +65,7 @@ export async function startCodexTurn(
     isCurrent?: () => boolean
     admitFreshInput?: StructuredAgentSessionAdmitFreshInput
     onReply?: () => void
+    beforeWrite?: () => void
   }
 ): Promise<{ turnId: string | null; via: AgentJournalTurnJoin } | false> {
   // Arm before writing: echoes and turn/started can arrive before the reply.
@@ -75,6 +78,9 @@ export async function startCodexTurn(
   let runningTurnId: string | null
   try {
     runningTurnId = await codexRunningOrOpeningTurn(host, input.signal)
+    if (host.execution && runningTurnId !== null) {
+      refuseCodexExecutionInput()
+    }
   } catch (error) {
     host.dispatchEchoes.disarm(input.clientMessageId)
     checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
@@ -119,6 +125,7 @@ export async function startCodexTurn(
     }
     requested = { interactionMode: 'default', ...codexTurnRequestOptions(host) }
     const { interactionMode, ...nativeOptions } = requested
+    const bounded = codexExecutionTurnSettings(host, nativeOptions)
     const collaborationMode = {
       mode: interactionMode,
       settings: {
@@ -132,6 +139,7 @@ export async function startCodexTurn(
     for (const key of Object.keys(requested)) {
       delete known[key]
     }
+    input.beforeWrite?.()
     host.appliedTurnOptions = known
     discardSettingsAttempt = host.appliedSettings?.attempt(requested)
     enqueued = true
@@ -154,7 +162,7 @@ export async function startCodexTurn(
             threadId: host.threadId,
             clientUserMessageId: input.clientMessageId,
             input: turnInputFor(host, body),
-            ...permission,
+            ...(bounded ?? permission),
             ...nativeOptions,
             collaborationMode
           },
@@ -230,6 +238,7 @@ export async function dispatchCodexTurn(
     signal?: AbortSignal
     isCurrent?: () => boolean
     admitFreshInput?: StructuredAgentSessionAdmitFreshInput
+    beforeWrite?: () => void
   },
   timeoutMs: number | undefined
 ): Promise<AgentSessionDispatchOutcome> {

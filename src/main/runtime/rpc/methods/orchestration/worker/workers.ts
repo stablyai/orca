@@ -125,7 +125,7 @@ export async function prepareWorkerStart(
   }: Omit<WorkerStartContext, 'orchestrationMutation'>,
   followUp?: WorkerFollowUp
 ) {
-  assertBoundedWorkerRequest(params, Boolean(followUp))
+  assertBoundedWorkerRequest(params, Boolean(followUp), runtime.getOrchestrationDb())
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
       'invalid_argument',

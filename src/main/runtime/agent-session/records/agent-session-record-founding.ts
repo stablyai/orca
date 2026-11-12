@@ -52,6 +52,7 @@ export function agentSessionRecordIdentityFields(
     : advisory
       ? AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION
       : AGENT_SESSION_RECORD_SCHEMA_VERSION
+  const savedOptions = execution ? { model: execution.model, effort: execution.effort } : options
   return {
     schemaVersion,
     sessionId: identity.sessionId,
@@ -59,10 +60,10 @@ export function agentSessionRecordIdentityFields(
     provider: identity.provider,
     accountHome: identity.accountHome,
     ...(identity.forkedFrom ? { forkedFrom: identity.forkedFrom } : {}),
-    ...(Object.keys(options).length > 0 ? { options } : {}),
+    ...(Object.keys(savedOptions).length > 0 ? { options: savedOptions } : {}),
     ...(advisory?.success ? { advisoryPolicy: advisory.data } : {}),
     ...(execution ? { executionPolicy: execution } : {}),
-    ...(permissionMode ? { permissionMode } : {}),
+    ...(execution ? { permissionMode: 'own' } : permissionMode ? { permissionMode } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
     // /clear retains its tab and launch directory.
     ...(identity.launchDirectory ? { launchDirectory: identity.launchDirectory } : {}),
