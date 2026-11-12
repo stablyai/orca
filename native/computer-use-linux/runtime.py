@@ -1793,6 +1793,8 @@ def insert_text(node, value, verified_property):
     action = {"path": "accessibility", "actionName": "insertText", "fallbackReason": None}
     if attempt(lambda: Atspi.Text.get_text(text, start, caret)) == value:
         action["verification"] = {"state": "verified", "property": verified_property}
+    else:
+        action["verification"] = {"state": "unverified", "reason": "accessibility_action_unasserted"}
     return action
 
 
