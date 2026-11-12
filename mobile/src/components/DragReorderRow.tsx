@@ -229,7 +229,8 @@ export function DragReorderRow({
     </Animated.View>
   )
   // Lifting from the whole row puts the one gesture there; the grip then only shows and moves by actions.
-  const rowLifts = liftFromRow && movable
+  // Only the plain row carries the row gesture; a settings row keeps it on the grip.
+  const rowLifts = liftFromRow && movable && presentation === 'plain'
   const handle = !movable ? null : rowLifts ? (
     grip
   ) : (

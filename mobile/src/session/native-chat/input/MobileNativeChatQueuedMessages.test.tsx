@@ -225,6 +225,41 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(rows(mounted)).toHaveLength(1)
   })
 
+  it('folds again for a later prompt after the person opened the list above an earlier one', async () => {
+    const mounted = await mount({ cards: three() }, true)
+    await act(async () => foldToggle(mounted).props.onPress())
+    expect(rows(mounted)).toHaveLength(3)
+    await act(async () => mounted.update(element({ cards: three() })))
+    await act(async () => mounted.update(element({ cards: three() }, true)))
+    expect(rows(mounted)).toHaveLength(1)
+  })
+
+  it('scrolls a message the person queues into a folded list into view', async () => {
+    const scrollTo = vi.fn()
+    const mounted = create(createElement('View'), {
+      createNodeMock: (node) =>
+        node.type === 'ScrollView'
+          ? { scrollTo, scrollToEnd: vi.fn(), flashScrollIndicators: vi.fn() }
+          : null
+    })
+    renderer = mounted
+    await act(async () => mounted.update(element({ cards: three() }, true)))
+    await act(async () =>
+      mounted.update(element({ cards: [...three(), card({ messageId: 'd' })] }, true))
+    )
+    expect(rows(mounted)).toHaveLength(4)
+    const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+    await act(async () => {
+      rows(mounted).forEach((row) =>
+        row.props.onLayout({ nativeEvent: { layout: { height: 60 } } })
+      )
+      scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } })
+      scroll.props.onContentSizeChange(0, 240)
+    })
+    // The new last row spans 180–240 of a 100pt list.
+    expect(scrollTo).toHaveBeenLastCalledWith({ y: 140, animated: false })
+  })
+
   it("opens a folded list for a message the person queues, not for an agent's or a delete", async () => {
     const mounted = await mount({ cards: three() }, true)
     await act(async () =>

@@ -124,6 +124,7 @@ export function MobileNativeChatQueuedMessages({
       seen.ids.some((messageId) => liveIds.includes(messageId))
     ) {
       setOpenChoice({ open: true, abovePrompt })
+      setShowRowId(newest.messageId)
     }
     // A card that newly needs attention (failed or returned) behind the fold opens the list,
     // so its own Send is in reach.
@@ -138,6 +139,10 @@ export function MobileNativeChatQueuedMessages({
     if ([...expandedIds].some((messageId) => !liveIds.includes(messageId))) {
       setExpandedIds(new Set([...expandedIds].filter((messageId) => liveIds.includes(messageId))))
     }
+  }
+  // A choice made in one placement never comes back in a later one (a new prompt folds again).
+  if (openChoice !== null && openChoice.abovePrompt !== abovePrompt) {
+    setOpenChoice(null)
   }
   if (!cards || cards.length === 0) {
     if (openChoice !== null) {
