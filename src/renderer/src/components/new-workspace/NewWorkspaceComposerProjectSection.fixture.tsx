@@ -88,7 +88,7 @@ const orcaCloudRecipe: EphemeralVmRecipeOption = {
   create: 'orca-cloud create'
 }
 
-const waitingCloudStart: CloudStartView = {
+const handoffCloudStart = (githubHandoff: 'waiting' | 'timed-out'): CloudStartView => ({
   onSelectOrcaCloud: () => {},
   onUserPick: () => {},
   cloudOnly: {
@@ -100,25 +100,26 @@ const waitingCloudStart: CloudStartView = {
     pick: () => {},
     clear: () => {},
     moreAccess: () => {},
-    waitingForGitHub: true,
+    githubHandoff,
+    checkGitHubAgain: () => {},
     start: async () => false
   }
-}
+})
 
 function ProjectAndHostPreview({
   folderOnly = false,
   orcaCloud,
-  waitingForGitHub = false
+  githubHandoff
 }: {
   folderOnly?: boolean
   /** Back from GitHub's access page (REPO-ACCESS-REFRESH). */
-  waitingForGitHub?: boolean
+  githubHandoff?: 'waiting' | 'timed-out'
   /** Offers Orca Cloud with this entitlement. */
   orcaCloud?: OrcaCloudRunTargetAccess
 }): React.JSX.Element {
   const [project, setProject] = useState(folderOnly ? 'folder' : 'orca')
   const [host, setHost] = useState('local')
-  const [recipe, setRecipe] = useState<string | null>(waitingForGitHub ? 'cloud' : null)
+  const [recipe, setRecipe] = useState<string | null>(githubHandoff ? 'cloud' : null)
   return (
     <div className="space-y-4 rounded-xl border border-border bg-background p-4">
       <h1 className="text-base font-semibold">Create workspace</h1>
@@ -150,7 +151,7 @@ function ProjectAndHostPreview({
         selectedEphemeralVmRecipeId={recipe}
         onEphemeralVmRecipeChange={setRecipe}
         {...(orcaCloud ? { orcaCloudAccess: orcaCloud } : {})}
-        {...(waitingForGitHub ? { cloudStart: waitingCloudStart } : {})}
+        {...(githubHandoff ? { cloudStart: handoffCloudStart(githubHandoff) } : {})}
         handleAddSshHost={() => {}}
         handleAddRemoteServer={() => {}}
         handleConnectRunTargetHost={async () => {}}
@@ -240,10 +241,9 @@ export const hostMenuOrcaCloudNoPlanMember = defineFixture({
 
 export const waitingForGitHub = defineFixture({
   ...closed,
-  render: () => (
-    <ProjectAndHostPreview
-      orcaCloud={{ state: 'entitled', remainingSeconds: 41 * 3600 }}
-      waitingForGitHub
-    />
-  )
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} githubHandoff="waiting" />
+})
+export const githubHandoffTimedOut = defineFixture({
+  ...closed,
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} githubHandoff="timed-out" />
 })

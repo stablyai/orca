@@ -1,4 +1,5 @@
 import { OrcaCloudNeedsRepoLine } from './run-on/OrcaCloudNeedsRepoLine'
+import { GitHubHandoffLine } from './run-on/GitHubHandoffLine'
 import { ORCA_CLOUD_NEEDS_REPO_ID } from './run-on/cloud-start-view'
 import React, { useMemo } from 'react'
 import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
@@ -239,15 +240,11 @@ export function NewWorkspaceComposerProjectSection({
               <p id={projectDescriptionId} className="text-[11px] text-destructive">
                 {projectError}
               </p>
-            ) : cloudOnly?.waitingForGitHub ? (
-              // REPO-ACCESS-REFRESH: back from GitHub's access page, until the repository shows up.
-              <p
-                role="status"
-                className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-              >
-                <LoaderCircle className="size-3 animate-spin motion-reduce:animate-none" />
-                {t('components.newWorkspace.cloudOnly.waitingForGitHub', 'Waiting for GitHub…')}
-              </p>
+            ) : cloudOnly && cloudOnly.githubHandoff !== 'idle' ? (
+              <GitHubHandoffLine
+                phase={cloudOnly.githubHandoff}
+                onCheckAgain={cloudOnly.checkGitHubAgain}
+              />
             ) : needsRepo ? (
               <OrcaCloudNeedsRepoLine
                 hasRepos={needsRepo.hasRepos}

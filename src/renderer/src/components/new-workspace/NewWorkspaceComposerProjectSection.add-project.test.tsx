@@ -10,7 +10,11 @@ import type { CloudOnlyRepo } from './run-on/use-cloud-only-repo'
 
 afterEach(cleanup)
 
-function cloudOnly(moreAccess: () => void, waitingForGitHub = false): CloudOnlyRepo {
+function cloudOnly(
+  moreAccess: () => void,
+  githubHandoff: CloudOnlyRepo['githubHandoff'] = 'idle',
+  checkGitHubAgain: () => void = () => {}
+): CloudOnlyRepo {
   return {
     repos: [],
     showMore: null,
@@ -20,12 +24,18 @@ function cloudOnly(moreAccess: () => void, waitingForGitHub = false): CloudOnlyR
     pick: () => {},
     clear: () => {},
     moreAccess,
-    waitingForGitHub,
+    githubHandoff,
+    checkGitHubAgain,
     start: async () => false
   }
 }
 
-function renderSection(recipeId: string | null, moreAccess: () => void, waiting = false): void {
+function renderSection(
+  recipeId: string | null,
+  moreAccess: () => void,
+  githubHandoff: CloudOnlyRepo['githubHandoff'] = 'idle',
+  checkGitHubAgain: () => void = () => {}
+): void {
   render(
     <TooltipProvider>
       <NewWorkspaceComposerProjectSection
@@ -51,7 +61,7 @@ function renderSection(recipeId: string | null, moreAccess: () => void, waiting 
         cloudStart={{
           onSelectOrcaCloud: () => {},
           onUserPick: () => {},
-          cloudOnly: cloudOnly(moreAccess, waiting)
+          cloudOnly: cloudOnly(moreAccess, githubHandoff, checkGitHubAgain)
         }}
         handleAddSshHost={() => {}}
         handleAddRemoteServer={() => {}}
@@ -95,8 +105,19 @@ describe('the Add project button beside Project (PROJ-MENU part 2, n29)', () => 
 })
 
 describe('back from GitHub (REPO-ACCESS-REFRESH)', () => {
-  it('says "Waiting for GitHub…" under Project while the list re-reads', () => {
-    renderSection(ORCA_CLOUD_RECIPE_ID, vi.fn(), true)
-    expect(screen.getByRole('status').textContent).toBe('Waiting for GitHub…')
+  it('says "Waiting for GitHub access…" under Project while the list re-reads', () => {
+    renderSection(ORCA_CLOUD_RECIPE_ID, vi.fn(), 'waiting')
+    expect(screen.getByRole('status').textContent).toBe('Waiting for GitHub access…')
+  })
+
+  it('when the wait runs out, says so and offers one more look; the list stays usable', async () => {
+    const user = userEvent.setup()
+    const checkAgain = vi.fn()
+    renderSection(ORCA_CLOUD_RECIPE_ID, vi.fn(), 'timed-out', checkAgain)
+    expect(screen.getByRole('status').textContent).toContain('No new repository yet.')
+    expect(screen.queryByText('Waiting for GitHub access…')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Check again' }))
+    expect(checkAgain).toHaveBeenCalledOnce()
+    expect(screen.getByRole('combobox', { name: 'Project' })).toBeTruthy()
   })
 })

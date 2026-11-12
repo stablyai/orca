@@ -11,7 +11,7 @@ import {
 } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
 import { startCloudWorkspaceFromGitHub } from '@/lib/orca-cloud/start-cloud-workspace-from-github'
 import type { CloudSetupStep } from './cloud-start-model'
-import { useGitHubAccessHandoff } from './use-github-access-handoff'
+import { useGitHubAccessHandoff, type GitHubAccessHandoffPhase } from './use-github-access-handoff'
 
 export type CloudOnlyRepo = {
   repos: readonly OrcaCloudGitHubRepository[] | null
@@ -26,7 +26,9 @@ export type CloudOnlyRepo = {
   clear: () => void
   moreAccess: () => void
   /** Back from GitHub's access page: the list re-reads until the new repository shows up. */
-  waitingForGitHub: boolean
+  githubHandoff: GitHubAccessHandoffPhase
+  /** After the wait ran out with nothing new: read once more and wait again. */
+  checkGitHubAgain: () => void
   start: (request: { prompt: string; agent: string | null }) => Promise<boolean>
 }
 
@@ -118,7 +120,8 @@ export function useCloudOnlyRepo({
     pick,
     clear,
     moreAccess,
-    waitingForGitHub: enabled && handoff.waiting,
+    githubHandoff: enabled ? handoff.phase : 'idle',
+    checkGitHubAgain: handoff.checkAgain,
     start
   }
 }
