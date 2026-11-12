@@ -340,6 +340,25 @@ describe('WAKE-SCROLLBACK', () => {
     expect(active.getLine(active.viewportY)!.translateToString(true).trimEnd()).toBe('row 12')
   })
 
+  // REG-13: the preview the person scrolled had 33 more rows above their line than the restore
+  // writes back (1922 came back as 1955); the line they read is found again by its text.
+  it('a scroll made while waking stays on the same line when the restore shifts rows', async () => {
+    const lines = Array.from({ length: 2000 }, (_, index) => String(index + 1))
+    const slept = pane(10)
+    await write(slept, `${lines.join('\r\n')}\r\n`)
+    capture(slept, 'leaf-1')
+    armWakeScrollback(['leaf-1'])
+    const preview = pane(10)
+    const extra = Array.from({ length: 33 }, (_, index) => `preview ${index}`)
+    await write(preview, `${[...extra, ...lines].join('\r\n')}\r\n`)
+    const top = 33 + 1921
+    preview.scrollToLine(top)
+    expect(preview.buffer.active.getLine(top)!.translateToString(true).trimEnd()).toBe('1922')
+    expect(await wake(preview, 'leaf-1', '$ ')).toBe(true)
+    const active = preview.buffer.active
+    expect(active.getLine(active.viewportY)!.translateToString(true).trimEnd()).toBe('1922')
+  })
+
   it('a person who had scrolled up keeps their place instead of jumping', async () => {
     const terminal = pane(5)
     await write(terminal, Array.from({ length: 50 }, (_, index) => `row ${index}`).join('\r\n'))
