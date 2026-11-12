@@ -40,7 +40,7 @@ describe('noticeSurfaceTokens', () => {
   })
 
   // Popover pairs the theme validator accepts; lifted as-is they dropped card text under 4.5:1.
-  it.each([
+  it.each<Record<string, string>>([
     { '--popover': '#444444' },
     { '--popover': '#303030', '--popover-foreground': '#a0a0a0' },
     { '--popover': '#ffffff', '--popover-foreground': '#111111' }

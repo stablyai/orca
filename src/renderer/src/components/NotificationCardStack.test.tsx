@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NotificationCardStack } from './NotificationCardStack'
 
 /** A ResizeObserver that reports only what it observes, when the test resizes an element. */
-class FakeResizeObserver {
+class FakeResizeObserver implements ResizeObserver {
   static all: FakeResizeObserver[] = []
   private readonly targets = new Set<Element>()
 
@@ -27,10 +27,18 @@ class FakeResizeObserver {
   static resize(target: Element): void {
     for (const observer of FakeResizeObserver.all) {
       if (observer.targets.has(target)) {
-        observer.callback([], observer as unknown as ResizeObserver)
+        observer.callback([], observer)
       }
     }
   }
+}
+
+function stackOf(card: HTMLElement): HTMLElement {
+  const stack = card.parentElement
+  if (!stack) {
+    throw new Error('card is not in a stack')
+  }
+  return stack
 }
 
 /** Pins the stack's scroll metrics; its box stays capped at 220px while content grows. */
@@ -57,7 +65,7 @@ describe('NotificationCardStack', () => {
       </NotificationCardStack>
     )
     const card = screen.getByTestId('card')
-    const stack = card.parentElement as HTMLElement
+    const stack = stackOf(card)
     const content = { height: 220 }
     capStack(stack, content)
     act(() => FakeResizeObserver.resize(stack))
@@ -75,7 +83,7 @@ describe('NotificationCardStack', () => {
         <div data-testid="first" />
       </NotificationCardStack>
     )
-    const stack = screen.getByTestId('first').parentElement as HTMLElement
+    const stack = stackOf(screen.getByTestId('first'))
     const content = { height: 200 }
     capStack(stack, content)
     rerender(
