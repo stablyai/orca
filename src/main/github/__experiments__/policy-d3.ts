@@ -4,7 +4,7 @@
  * Automatic only: there is no cadence setting. Module-level state on purpose (one host).
  */
 
-export const POLICY_D3 = {
+export const POLICY_D3: Record<string, number> = {
   SELECTED_BASE_MS: 60_000,
   VISIBLE_BASE_MS: 120_000,
   NO_REVIEW_VISIBLE_BASE_MS: 15 * 60_000,
@@ -14,7 +14,14 @@ export const POLICY_D3 = {
   STUCK_AFTER_MS: 30 * 60_000,
   STUCK_STEP_MS: 10 * 60_000,
   UNFOCUSED_PAUSE_AFTER_MS: 5 * 60_000
-} as const
+}
+
+/** D3r: cap overrides for the option table (EXP_CAP_SELECTED_MIN / EXP_CAP_VISIBLE_MIN). The
+ *  defaults are the D3 contract; nothing calls this unless a spec line asks for other caps. */
+export function setCaps(selectedMin: number, visibleMin: number): void {
+  POLICY_D3.SELECTED_CAP_MS = selectedMin * 60_000
+  POLICY_D3.VISIBLE_CAP_MS = visibleMin * 60_000
+}
 
 /** What the checks of a PR are doing, for scheduling only. `checksFinal` keeps its own meaning
  *  (complete AND non-empty AND nothing pending); it is not the inverse of "running" (D2-3). */

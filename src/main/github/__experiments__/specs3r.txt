@@ -1,0 +1,121 @@
+# STA-8667 D3r run list (automatic-only; no cadence setting). Supersedes specs3.txt (kept for the record). One scenario per line: <name> ENV=VALUE ...
+# "before" = code as checked out. "after" = D3 proposal (policy-d3.ts, gate-d3.ts, scheduler d3 patch).
+# Cost scenarios run 4 simulated hours: the backoff ladder needs 62 min to reach the 60 min cap, so hour 4 is the warm hour.
+
+# --- A. Desktop app, GHES host ---
+ghes-desk-before-n10-focused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_HOURS=4
+ghes-desk-after-n10-focused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4
+ghes-desk-before-n10-unfocused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_FOCUS=unfocused EXP_HOURS=4
+ghes-desk-after-n10-unfocused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=4
+ghes-desk-after-n10-unfocused-noidle EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=unfocused EXP_IDLE=none EXP_JITTER=0.1 EXP_HOURS=4
+ghes-desk-before-n10-hidden EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_FOCUS=hidden EXP_HOURS=2
+ghes-desk-after-n10-hidden EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=hidden EXP_JITTER=0.1 EXP_HOURS=2
+ghes-desk-after-n10-return EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=return EXP_JITTER=0.1 EXP_HOURS=2
+ghes-desk-before-n10-mixed EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_WORKLOAD=mixed EXP_HOURS=4
+ghes-desk-after-n10-mixed EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=4
+ghes-desk-after-n10-focused-noci0 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_NOCI=0 EXP_HOURS=4
+ghes-desk-before-n50-focused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=50 EXP_FOCUS=focused EXP_HOURS=4
+ghes-desk-after-n50-focused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4
+ghes-desk-after-n50-focused-j0 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=focused EXP_JITTER=0 EXP_HOURS=4
+ghes-desk-after-n50-focused-j25 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=focused EXP_JITTER=0.25 EXP_HOURS=4
+ghes-desk-before-n50-unfocused EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=50 EXP_FOCUS=unfocused EXP_HOURS=4
+ghes-desk-after-n50-unfocused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=4
+ghes-desk-after-n50-return EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=return EXP_JITTER=0.1 EXP_HOURS=2
+ghes-desk-before-n50-mixed EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=50 EXP_WORKLOAD=mixed EXP_HOURS=4
+ghes-desk-after-n50-mixed EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=4
+
+# --- B. Desktop app, github.com ---
+dotcom-desk-before-n10 EXP_SCENARIO=desktop-before EXP_HOST=dotcom EXP_N=10 EXP_HOURS=4
+dotcom-desk-after-n10 EXP_SCENARIO=desktop-after EXP_HOST=dotcom EXP_N=10 EXP_JITTER=0.1 EXP_HOURS=4
+dotcom-desk-before-n50 EXP_SCENARIO=desktop-before EXP_HOST=dotcom EXP_N=50 EXP_HOURS=4
+dotcom-desk-after-n50 EXP_SCENARIO=desktop-after EXP_HOST=dotcom EXP_N=50 EXP_JITTER=0.1 EXP_HOURS=4
+
+# --- C. Serve / paired clients, cost ---
+serve-before-n14-c2 EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_HOURS=4
+serve-after-n14-c2 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=4
+serve-before-n14-c2-settled EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=4
+serve-after-n14-c2-settled EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_JITTER=0.1 EXP_HOURS=4
+serve-after-n14-c2-noci0 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_NOCI=0 EXP_HOURS=4
+serve-after-n14-c2-unfocused EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=4
+serve-before-ghes-n14-c2 EXP_SCENARIO=serve-before EXP_HOST=ghes EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_HOURS=4
+serve-after-ghes-n14-c2 EXP_SCENARIO=serve-after EXP_HOST=ghes EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=4
+serve-before-n10-c3 EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=10 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_HOURS=4
+serve-after-n10-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=10 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=4
+serve-before-n50-c3 EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_HOURS=2
+serve-after-n50-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=4
+serve-after-n50-c3-j0 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_JITTER=0 EXP_HOURS=4
+serve-after-n50-c3-disjoint EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_DISJOINT=1 EXP_JITTER=0.1 EXP_HOURS=4
+serve-before-n200-c1 EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=200 EXP_CLIENTS=1 EXP_WORKLOAD=mixed EXP_HOURS=2
+serve-after-n200-c1 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=200 EXP_CLIENTS=1 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=4
+serve-oldclient-n14-c2 EXP_SCENARIO=serve-after-oldclient EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_HOURS=2
+
+# --- D. Lanes: several selected identities against visible rows (finding D2-2). d2 gate = before, d3 gate = after ---
+lanes-4sel-n50-c4-gate-d2 EXP_SCENARIO=serve-after EXP_GATE=d2 EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=4 EXP_SELECTED_IDS=4 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=3
+lanes-4sel-n50-c4-gate-d3 EXP_SCENARIO=serve-after EXP_GATE=d3 EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=4 EXP_SELECTED_IDS=4 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=3
+lanes-4sel-checks-n50-c4-gate-d2 EXP_SCENARIO=serve-after EXP_GATE=d2 EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=4 EXP_SELECTED_IDS=4 EXP_CHECKS=1 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=3
+lanes-4sel-checks-n50-c4-gate-d3 EXP_SCENARIO=serve-after EXP_GATE=d3 EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=4 EXP_SELECTED_IDS=4 EXP_CHECKS=1 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=3
+lanes-2sel-n50-c2-gate-d2 EXP_SCENARIO=serve-after EXP_GATE=d2 EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=2 EXP_SELECTED_IDS=2 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=3
+lanes-2sel-n50-c2-gate-d3 EXP_SCENARIO=serve-after EXP_GATE=d3 EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=2 EXP_SELECTED_IDS=2 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=3
+lanes-1sel-checks-n14-c2-gate-d3 EXP_SCENARIO=serve-after EXP_GATE=d3 EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_SELECTED_IDS=1 EXP_SELECTED_RUNNING=1 EXP_CHECKS=1 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=3
+lanes-1sel-checks-n50-c2-gate-d3 EXP_SCENARIO=serve-after EXP_GATE=d3 EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=2 EXP_SELECTED_IDS=1 EXP_SELECTED_RUNNING=1 EXP_CHECKS=1 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=3
+lanes-2sel-checks-n14-c2-gate-d3 EXP_SCENARIO=serve-after EXP_GATE=d3 EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_SELECTED_IDS=2 EXP_CHECKS=1 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=3
+lanes-4sel-checks-n20-c4-gate-d3 EXP_SCENARIO=serve-after EXP_GATE=d3 EXP_HOST=dotcom EXP_N=20 EXP_CLIENTS=4 EXP_SELECTED_IDS=4 EXP_CHECKS=1 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=3
+lanes-fg-n50-c4-gate-d3 EXP_SCENARIO=serve-after EXP_GATE=d3 EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=4 EXP_SELECTED_IDS=4 EXP_FG_EVERY_S=8 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=2
+
+# --- E. Timeouts and cancellation ---
+timeout-slow3-n14-c2 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_SLOW_EVERY=3 EXP_SLOW_MS=25000 EXP_JITTER=0.1 EXP_HOURS=2
+timeout-slow5-over-client-deadline-n14-c2 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_SLOW_EVERY=5 EXP_SLOW_MS=45000 EXP_JITTER=0.1 EXP_HOURS=2
+timeout-slow3-n50-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_SLOW_EVERY=3 EXP_SLOW_MS=25000 EXP_JITTER=0.1 EXP_HOURS=2
+cancel-disconnect20-n50-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_DISJOINT=1 EXP_DISCONNECT_MIN=20 EXP_JITTER=0.1 EXP_HOURS=2
+cancel-allgone30-n50-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_ALL_GONE_MIN=30 EXP_JITTER=0.1 EXP_HOURS=1.5
+cancel-hidden-n14-c2 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_FOCUS=hidden EXP_JITTER=0.1 EXP_HOURS=1
+
+# --- F. Detection of external CI start/finish (long) ---
+detect-desk-before-n10 EXP_SCENARIO=desktop-before EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3
+detect-desk-after-n10 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1
+detect-desk-after-n10-j0 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0
+detect-serve-before-n14-c2 EXP_SCENARIO=serve-before EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3
+detect-serve-after-n14-c2 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1
+detect-serve-after-n14-c2-seed2 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_SEED=2
+detect-serve-after-n14-c2-j0 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0
+detect-serve-oldclient-n14-c2 EXP_SCENARIO=serve-after-oldclient EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3
+
+# ===================== added in D3r =====================
+# --- D (added). The N=30 lanes scenarios D3 quoted as "471-491 s" were local-only; now on the list ---
+lanes-4sel-n30-c4-gate-d2 EXP_SCENARIO=serve-after EXP_GATE=d2 EXP_HOST=dotcom EXP_N=30 EXP_CLIENTS=4 EXP_SELECTED_IDS=4 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=1.5
+lanes-4sel-n30-c4-gate-d3 EXP_SCENARIO=serve-after EXP_GATE=d3 EXP_HOST=dotcom EXP_N=30 EXP_CLIENTS=4 EXP_SELECTED_IDS=4 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=1.5
+lanes-4sel-checks-n30-c4-gate-d2 EXP_SCENARIO=serve-after EXP_GATE=d2 EXP_HOST=dotcom EXP_N=30 EXP_CLIENTS=4 EXP_SELECTED_IDS=4 EXP_CHECKS=1 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=1.5
+lanes-4sel-checks-n30-c4-gate-d3 EXP_SCENARIO=serve-after EXP_GATE=d3 EXP_HOST=dotcom EXP_N=30 EXP_CLIENTS=4 EXP_SELECTED_IDS=4 EXP_CHECKS=1 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=1.5
+
+# --- E (added). Small disconnect pair: same line with and without the disconnect ---
+cancel-ref-n20-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=20 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_DISJOINT=1 EXP_JITTER=0.1 EXP_HOURS=1.5
+cancel-disconnect15-n20-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=20 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_DISJOINT=1 EXP_DISCONNECT_MIN=15 EXP_JITTER=0.1 EXP_HOURS=1.5
+cancel-ref-n50-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_DISJOINT=1 EXP_JITTER=0.1 EXP_HOURS=2
+
+# --- F (added). More seeds, and the cap options of the product decision PD-1 (24 h each) ---
+detect-desk-after-n10-seed2 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_SEED=2
+detect-desk-after-n10-seed3 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_SEED=3
+detect-serve-after-n14-c2-seed3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_SEED=3
+detect-desk-after-n10-sel15 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=15
+detect-desk-after-n10-sel10 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=10
+detect-desk-after-n10-sel5 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=5
+detect-desk-after-n10-vis30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_VISIBLE_MIN=30
+detect-desk-after-n10-vis20 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_VISIBLE_MIN=20
+detect-desk-after-n10-sel10-vis20 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=10 EXP_CAP_VISIBLE_MIN=20
+
+# --- H (new). Cost of the PD-1 cap options in a quiet world (4 h; compare with ghes-desk-after-n10-focused / -n50-focused) ---
+capcost-ghes-n10-sel15 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=15
+capcost-ghes-n10-sel10 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=10
+capcost-ghes-n10-sel5 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=5
+capcost-ghes-n10-vis30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_VISIBLE_MIN=30
+capcost-ghes-n10-vis20 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_VISIBLE_MIN=20
+capcost-ghes-n10-sel10-vis20 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=10 EXP_CAP_VISIBLE_MIN=20
+capcost-ghes-n50-sel10 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=10
+capcost-ghes-n50-vis30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_VISIBLE_MIN=30
+capcost-ghes-n50-vis20 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_VISIBLE_MIN=20
+
+# --- F (added). Runs longer than the 30-minute stuck-check hold (40-50 min): the finish bound on a non-selected row is the stuck ladder, not 130 s ---
+detect-desk-after-n10-longrun EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_RUN_MIN_MIN=40 EXP_RUN_MAX_MIN=50
+detect-serve-after-n14-c2-longrun EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_RUN_MIN_MIN=40 EXP_RUN_MAX_MIN=50
+# --- F (added). Short runs (5-10 min), the case most often never shown as running ---
+detect-desk-after-n10-shortrun EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_RUN_MIN_MIN=5 EXP_RUN_MAX_MIN=10

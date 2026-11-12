@@ -38,6 +38,7 @@
  *      EXP_OUT
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { it, vi } from 'vitest'
 import type {
@@ -69,7 +70,14 @@ const cfg = vi.hoisted(() => ({
   slowMs: Number(process.env.EXP_SLOW_MS ?? 25_000),
   disconnectMin: process.env.EXP_DISCONNECT_MIN ? Number(process.env.EXP_DISCONNECT_MIN) : null,
   allGoneMin: process.env.EXP_ALL_GONE_MIN ? Number(process.env.EXP_ALL_GONE_MIN) : null,
-  fgEveryS: Number(process.env.EXP_FG_EVERY_S ?? 0)
+  fgEveryS: Number(process.env.EXP_FG_EVERY_S ?? 0),
+  // D3r: length of an external CI run and of the quiet gap after it, minutes (defaults = D3).
+  runMinMin: Number(process.env.EXP_RUN_MIN_MIN ?? 20),
+  runMaxMin: Number(process.env.EXP_RUN_MAX_MIN ?? 30),
+  gapMinMin: Number(process.env.EXP_GAP_MIN_MIN ?? 50),
+  gapMaxMin: Number(process.env.EXP_GAP_MAX_MIN ?? 80),
+  capSelectedMin: Number(process.env.EXP_CAP_SELECTED_MIN ?? 30),
+  capVisibleMin: Number(process.env.EXP_CAP_VISIBLE_MIN ?? 60)
 }))
 
 const IDLE_AFTER_MS = 5 * 60_000
@@ -92,7 +100,18 @@ const rec = vi.hoisted(() => {
     prs: new Map<number, PRWorld>(),
     branchToPR: new Map<string, number>(),
     prReads: 0,
-    t0: 0
+    t0: 0,
+    // D3r: every upstream read of a PR's checks state. `startAt` = first gh spawn of the read,
+    // `sampledAt` = when the fixture answered (the world state is read at that instant),
+    // `slotWaitMs` = how long the read waited for a slot after it was due (see noteSlot*).
+    samples: new Map<number, { startAt: number; sampledAt: number; slotWaitMs: number }[]>(),
+    readStart: new Map<number, number>(),
+    // Desktop: when the policy said the next timed read of this PR is due.
+    due: new Map<number, number>(),
+    // Serve: slot wait of the gate start that is about to spawn a read of this PR.
+    gateWait: new Map<number, number>(),
+    // Serve: last stored host read per PR (to report the interval in force at an event).
+    hostEntry: new Map<number, { key: string; fetchedAt: number }>()
   }
 })
 
@@ -253,7 +272,24 @@ async function fakeGh(argv: string[], options: { host?: string; env?: Record<str
     rec.prReads += 1
     if (cfg.slowEvery > 0 && rec.prReads % cfg.slowEvery === 0) took = cfg.slowMs
   }
+  // D3r: which PR this spawn reads, and whether it is the spawn that carries the checks state
+  // (github.com: the sidebar query; GHES: `pr view` starts the read, the checks query samples).
+  const prOfRead =
+    kind === 'graphql:sidebar' || kind === 'graphql:checks' ? Number(flag(argv, 'number')) : kind === 'pr:view' ? Number(argv[2]) : null
+  const startsRead = kind === 'graphql:sidebar' || kind === 'pr:view'
+  const samplesChecks = kind === 'graphql:sidebar' || (kind === 'graphql:checks' && cfg.host === 'ghes')
+  if (prOfRead !== null && startsRead) rec.readStart.set(prOfRead, Date.now())
   await new Promise((r) => setTimeout(r, took))
+  if (prOfRead !== null && samplesChecks) {
+    const startAt = rec.readStart.get(prOfRead) ?? Date.now()
+    const due = rec.due.get(prOfRead)
+    const gateWait = rec.gateWait.get(prOfRead)
+    rec.gateWait.delete(prOfRead)
+    const list = rec.samples.get(prOfRead) ?? []
+    list.push({ startAt, sampledAt: Date.now(), slotWaitMs: gateWait ?? (due === undefined ? 0 : Math.max(0, startAt - due)) })
+    if (list.length > 64) list.shift()
+    rec.samples.set(prOfRead, list)
+  }
   switch (kind) {
     case 'api:rate_limit': {
       const reset = Math.floor(Date.now() / 1000 / 3600) * 3600 + 3600
@@ -395,8 +431,24 @@ vi.mock('../pr-refresh-renderer-port', () => ({
 // (cachedFields whitelist) cannot drop it. Idle pause is applied here too.
 vi.mock('../pr-refresh-candidate-policy', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../pr-refresh-candidate-policy')>()
+  // D3r: remember when the policy says each PR is next due, so the harness can tell how long a
+  // read waited for a slot (start minus due). Recorded for "before" and "after" alike.
+  const noteDue = (next: GitHubPRRefreshCandidate, intervalMs: number): void => {
+    if (next.linkedPRNumber != null && next.cachedFetchedAt != null && Number.isFinite(intervalMs)) {
+      rec.due.set(next.linkedPRNumber, next.cachedFetchedAt + intervalMs)
+    } else if (next.linkedPRNumber != null) {
+      rec.due.delete(next.linkedPRNumber)
+    }
+  }
   if (cfg.scenario !== 'desktop-after') {
-    return actual
+    return {
+      ...actual,
+      visibleCandidateAfterOutcome: (c: GitHubPRRefreshCandidate, o: PRRefreshOutcome) => {
+        const next = actual.visibleCandidateAfterOutcome(c, o)
+        noteDue(next, actual.refreshIntervalForCandidate(next))
+        return next
+      }
+    }
   }
   const d2 = await import('./policy-d3')
   const interval = (c: GitHubPRRefreshCandidate): number => {
@@ -420,7 +472,9 @@ vi.mock('../pr-refresh-candidate-policy', async (importOriginal) => {
       if (o.kind !== 'upstream-error') {
         d2.note(actual.refreshKey(c), o as never)
       }
-      return actual.visibleCandidateAfterOutcome(c, o)
+      const next = actual.visibleCandidateAfterOutcome(c, o)
+      noteDue(next, interval(next))
+      return next
     }
   }
 })
@@ -459,6 +513,7 @@ import { createHintStore, schedulerFactory, type SchedulerFactory } from './sche
 
 const OUT = process.env.EXP_OUT ?? `/tmp/d2-${cfg.scenario}.json`
 const SECONDS = Math.round(cfg.hours * 3600)
+d2.setCaps(cfg.capSelectedMin, cfg.capVisibleMin)
 
 let rngState = cfg.seed * 7919 + 13
 function rng(): number {
@@ -511,21 +566,79 @@ function seedWorld(): GitHubPRRefreshCandidate[] {
 }
 
 // ---------- detection events ----------
-type Detection = { pr: number; kind: 'start' | 'finish'; selected: boolean; at: number; host?: number; clients: Record<string, number> }
+// D3r. An observer (the desktop host, or one paired client) "covers" an event when it receives data
+// whose checks state was sampled at or after the event. The first covering read is recorded with
+// its slot wait, so "bound + slot wait" is decidable per event. `host` / `clients` keep the D3
+// meaning (first time the observer saw the state the event produced) but now also require that
+// the data was sampled after the event: D3 could count a cache hit older than the event.
+type Cover = { atMs: number; latencyMs: number; slotWaitMs: number; sawRunning: boolean }
+type Detection = {
+  pr: number
+  kind: 'start' | 'finish'
+  selected: boolean
+  at: number
+  /** start: how long the run lasted. */
+  runMs?: number
+  /** How far away the row's next timed read was when the event happened (host view); null = unknown. */
+  nextDueInMs: number | null
+  host?: number
+  clients: Record<string, number>
+  covers: Record<string, Cover>
+  /** finish: observers that had seen this run running before it finished. */
+  startSeenBy: string[]
+  /** finish: how long the run had been seen running (by whoever saw it first) when it finished. */
+  runSeenForMs?: number
+}
 const detections: Detection[] = []
 let openEvents = new Map<number, Detection>()
+const eventsByPR = new Map<number, Detection[]>()
 
 function isRunningOutcome(o: PRRefreshOutcome): boolean | null {
   if (o.kind !== 'found') return null
   return d2.describe(o as never).running
 }
 
-function noteObservation(who: string, prNumber: number, o: PRRefreshOutcome): void {
-  const ev = openEvents.get(prNumber)
+function nextDueIn(prNumber: number, selected: boolean): number | null {
+  const due = rec.due.get(prNumber)
+  if (due !== undefined) return due - Date.now()
+  const entry = rec.hostEntry.get(prNumber)
+  if (!entry) return null
+  const iv = d2.interval(entry.key, selected, entry.fetchedAt, cfg.jitter)
+  return Number.isFinite(iv) ? entry.fetchedAt + iv - Date.now() : null
+}
+
+function pushEvent(ev: Detection): void {
+  detections.push(ev)
+  openEvents.set(ev.pr, ev)
+  const list = eventsByPR.get(ev.pr) ?? []
+  list.push(ev)
+  eventsByPR.set(ev.pr, list)
+}
+
+/** `extraSlotWaitMs`: time this observer itself spent refused by the gate before the data came. */
+function noteObservation(who: string, prNumber: number, o: PRRefreshOutcome, extraSlotWaitMs = 0): void {
   const running = isRunningOutcome(o)
-  if (!ev || running === null) return
+  if (running === null) return
+  const samples = rec.samples.get(prNumber) ?? []
+  let sample: { startAt: number; sampledAt: number; slotWaitMs: number } | undefined
+  for (let i = samples.length - 1; i >= 0; i--) {
+    if (samples[i].sampledAt <= o.fetchedAt) {
+      sample = samples[i]
+      break
+    }
+  }
+  if (!sample) return
+  const sampledAt = sample.sampledAt - rec.t0
+  const now = Date.now() - rec.t0
+  const slotWaitMs = Math.max(sample.slotWaitMs, extraSlotWaitMs)
+  for (const ev of eventsByPR.get(prNumber) ?? []) {
+    if (ev.at > sampledAt || ev.covers[who]) continue
+    ev.covers[who] = { atMs: now, latencyMs: now - ev.at, slotWaitMs, sawRunning: running }
+  }
+  const ev = openEvents.get(prNumber)
+  if (!ev || ev.at > sampledAt) return
   if ((ev.kind === 'start') !== running) return
-  const latency = Date.now() - rec.t0 - ev.at
+  const latency = now - ev.at
   if (who === 'host') ev.host ??= latency
   else ev.clients[who] ??= latency
 }
@@ -536,20 +649,32 @@ function scheduleEvents(candidates: GitHubPRRefreshCandidate[]): void {
   const targets = candidates.filter((c, i) => c.linkedPRNumber != null && [0, 1].includes(i % 5)).slice(0, cfg.eventTargets)
   for (const c of targets) {
     const number = c.linkedPRNumber!
+    const selected = c.isSelected === true
     const loop = (delayMin: number): void => {
       setTimeout(() => {
         const pr = rec.prs.get(number)!
         pr.checks = 'running'
-        const ev: Detection = { pr: number, kind: 'start', selected: c.isSelected === true, at: Date.now() - rec.t0, clients: {} }
-        detections.push(ev)
-        openEvents.set(number, ev)
+        const ev: Detection = { pr: number, kind: 'start', selected, at: Date.now() - rec.t0, nextDueInMs: nextDueIn(number, selected), clients: {}, covers: {}, startSeenBy: [] }
+        pushEvent(ev)
+        const runMs = Math.round((cfg.runMinMin + rng() * (cfg.runMaxMin - cfg.runMinMin)) * 60_000)
+        ev.runMs = runMs
         setTimeout(() => {
           pr.checks = 'done'
-          const fin: Detection = { pr: number, kind: 'finish', selected: c.isSelected === true, at: Date.now() - rec.t0, clients: {} }
-          detections.push(fin)
-          openEvents.set(number, fin)
-          loop(50 + rng() * 30)
-        }, (20 + rng() * 10) * 60_000)
+          const fin: Detection = {
+            pr: number,
+            kind: 'finish',
+            selected,
+            at: Date.now() - rec.t0,
+            nextDueInMs: nextDueIn(number, selected),
+            clients: {},
+            covers: {},
+            startSeenBy: [...(ev.host === undefined ? [] : ['host']), ...Object.keys(ev.clients)]
+          }
+          const firstSeen = Math.min(...(ev.host === undefined ? [] : [ev.host]), ...Object.values(ev.clients))
+          if (Number.isFinite(firstSeen)) fin.runSeenForMs = fin.at - (ev.at + firstSeen)
+          pushEvent(fin)
+          loop(cfg.gapMinMin + rng() * (cfg.gapMaxMin - cfg.gapMinMin))
+        }, runMs)
       }, delayMin * 60_000)
     }
     loop(40 + rng() * 30)
@@ -557,9 +682,10 @@ function scheduleEvents(candidates: GitHubPRRefreshCandidate[]): void {
 }
 
 // ---------- serve: host RPC ----------
-type Deferred = { kind: 'deferred'; nextRefreshAt: number }
+/** `slotRefused` is harness bookkeeping only (not a contract field): the gate refused this ask. */
+type Deferred = { kind: 'deferred'; nextRefreshAt: number; slotRefused?: boolean }
 // nextRefreshAt: number = earliest useful timed read; null = the host says "no timed read".
-type Reply = (PRRefreshOutcome & { nextRefreshAt?: number | null }) | Deferred
+type Reply = (PRRefreshOutcome & { nextRefreshAt?: number | null; slotRefused?: boolean }) | Deferred
 type RpcRequest = {
   c: GitHubPRRefreshCandidate
   clientId: number
@@ -653,8 +779,9 @@ function createHostAfter() {
     const selected = req.selected === true
     const entry = store.get(key)
     const timed = req.foreground !== true
-    const startRead = (): Promise<PRRefreshOutcome> => {
+    const startRead = (slotWaitMs = 0): Promise<PRRefreshOutcome> => {
       rpcStats.upstreamStarts.push(Date.now() - rec.t0)
+      if (c.linkedPRNumber != null && !req.checks) rec.gateWait.set(c.linkedPRNumber, slotWaitMs)
       const read = (req.checks ? upstreamChecksRead(c) : upstreamRead(c)).then((outcome) => {
         inFlight.delete(key)
         if (outcome.kind !== 'upstream-error') {
@@ -662,6 +789,7 @@ function createHostAfter() {
           if (!existing || existing.fetchedAt <= outcome.fetchedAt) {
             d2.note(key, outcome as never)
             store.set(key, { outcome, fetchedAt: outcome.fetchedAt })
+            if (c.linkedPRNumber != null && !req.checks) rec.hostEntry.set(c.linkedPRNumber, { key, fetchedAt: outcome.fetchedAt })
           }
           if (c.linkedPRNumber != null && !req.checks) noteObservation('host', c.linkedPRNumber, outcome)
         }
@@ -711,12 +839,12 @@ function createHostAfter() {
       if (!admission.admit) {
         if (entry) {
           rpcStats.staleServed += 1
-          return done({ ...entry.outcome, nextRefreshAt: admission.retryAt })
+          return done({ ...entry.outcome, nextRefreshAt: admission.retryAt, slotRefused: true })
         }
         rpcStats.deferredCold += 1
-        return done({ kind: 'deferred', nextRefreshAt: admission.retryAt })
+        return done({ kind: 'deferred', nextRefreshAt: admission.retryAt, slotRefused: true })
       }
-      read = startRead()
+      read = startRead(admission.waitedMs)
     }
     // Reply deadline: the initiator and every joiner wait at most 10 s. The read itself goes on
     // and is stored when it settles; the slot it used is not refunded.
@@ -758,14 +886,19 @@ function startClient(args: {
   const hints = createHintStore()
   let selectedOnly = false
   let stopped = false
+  // D3r: when this client was first refused a slot for a row, until newer data arrives.
+  const refusedSince = new Map<string, number>()
   const apply = (c: GitHubPRRefreshCandidate, reply: Reply, startedInEpoch: string): boolean => {
     if (reply.kind === 'upstream-error') return false
+    if (reply.slotRefused === true && !refusedSince.has(c.cacheKey)) refusedSince.set(c.cacheKey, Date.now())
     if (reply.kind !== 'deferred') {
       const before = cache.get(c.cacheKey)?.fetchedAt
       // Same rule as setGitHubPRResultCaches: an outcome that is not newer is a no-op.
       if (before === undefined || reply.fetchedAt > before) {
         cache.set(c.cacheKey, { fetchedAt: reply.fetchedAt, outcome: reply })
-        if (c.linkedPRNumber != null) noteObservation(`c${args.id}`, c.linkedPRNumber, reply)
+        const since = refusedSince.get(c.cacheKey)
+        refusedSince.delete(c.cacheKey)
+        if (c.linkedPRNumber != null) noteObservation(`c${args.id}`, c.linkedPRNumber, reply, since === undefined ? 0 : Date.now() - since)
       }
     }
     if (args.capable && reply.nextRefreshAt !== undefined) {
@@ -868,11 +1001,195 @@ function startClient(args: {
   }
 }
 
+// Real (unfaked) macrotask turn. `setImmediate` is not in the faked list.
+const realImmediate = setImmediate
+let settleTurns = 0
+function realIoPending(): boolean {
+  return process.getActiveResourcesInfo().some((r) => r.startsWith('FSReq') || r === 'GetAddrInfoReqWrap' || r === 'ProcessWrap')
+}
+/** Runs microtasks and real event-loop turns until no real I/O request is outstanding. */
+async function settle(): Promise<void> {
+  let quiet = 0
+  while (quiet < 2) {
+    await new Promise<void>((resolve) => realImmediate(resolve))
+    settleTurns += 1
+    quiet = realIoPending() ? 0 : quiet + 1
+  }
+}
+
 function pct(values: number[], p: number): number | null {
   if (values.length === 0) return null
   const sorted = [...values].sort((a, b) => a - b)
   return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))]
 }
+
+/** D3r. Contract numbers the detection report is judged against, seconds. */
+const BOUNDS = {
+  finishSelectedS: 70,
+  finishVisibleS: 130,
+  capSelectedS: cfg.capSelectedMin * 60 + 10,
+  capVisibleS: cfg.capVisibleMin * 60 + 10
+}
+
+/** Interval of the stuck-check ladder after a run has been seen running, unchanged, for `seenForMs`
+ *  (policy-d3.ts `stuck`), seconds; null while the row is still at its 120 s base. */
+function stuckIntervalS(seenForMs: number): number | null {
+  const P = d2.POLICY_D3
+  if (seenForMs < P.STUCK_AFTER_MS) return null
+  const steps = Math.floor((seenForMs - P.STUCK_AFTER_MS) / P.STUCK_STEP_MS) + 1
+  return Math.round(Math.max(P.VISIBLE_BASE_MS, Math.min(P.VISIBLE_CAP_MS, P.VISIBLE_BASE_MS * 2 ** Math.min(steps, 5))) / 1000)
+}
+
+function stats(values: number[]) {
+  return { samples: values.length, p50: pct(values, 50), p90: pct(values, 90), max: values.length ? Math.max(...values) : null }
+}
+
+/**
+ * D3r detection report. Every (event, observer) pair is put in exactly one class:
+ *   finish, run was seen running by this observer  -> bound 70 s selected / 130 s visible
+ *   finish, run never seen running by this observer -> bound cap + 10 s (the row was backed off)
+ *   start, seen running                              -> bound cap + 10 s
+ *   start, never seen running ("transient run")      -> bound cap + 10 s for the first read after it
+ * and is judged on `latency - slot wait`. A pair with no covering read is `uncovered` if the run
+ * went on for longer than cap + 10 s + 15 min after the event, otherwise `pendingAtEnd`.
+ */
+function detectionReport(desktop: boolean, seconds: number) {
+  const observers = desktop ? ['host'] : Array.from({ length: cfg.clients }, (_, k) => `c${k + 1}`)
+  const sec = (ms: number): number => Math.round(ms / 1000)
+  type Row = { cls: string; selected: boolean; latencyS: number; slotWaitS: number; netS: number; boundS: number; over: boolean; pr: number; atS: number; who: string }
+  const rows: Row[] = []
+  let uncovered = 0
+  let pendingAtEnd = 0
+  let transientRuns = 0
+  let d3Undetected = 0
+  for (const d of detections) {
+    const capS = d.selected ? BOUNDS.capSelectedS : BOUNDS.capVisibleS
+    for (const who of observers) {
+      const seen = who === 'host' ? d.host !== undefined : d.clients[who] !== undefined
+      const cover = d.covers[who]
+      if (!seen && d.at < seconds * 1000 - 20 * 60_000) d3Undetected += 1
+      if (!cover) {
+        if (d.at < seconds * 1000 - (capS + 15 * 60) * 1000) uncovered += 1
+        else pendingAtEnd += 1
+        continue
+      }
+      let cls: string
+      let boundS = capS
+      if (d.kind === 'finish') {
+        if (d.startSeenBy.includes(who)) {
+          // A non-selected row whose check picture has not moved for 30 min is on the stuck-check
+          // ladder (design 3.1): its finish bound is that ladder's interval, not 130 s.
+          const stuckS = d.selected ? null : stuckIntervalS(d.runSeenForMs ?? 0)
+          cls = stuckS === null ? 'finishSeenRunning' : 'finishSeenStuck'
+          boundS = stuckS === null ? (d.selected ? BOUNDS.finishSelectedS : BOUNDS.finishVisibleS) : stuckS + 10
+        } else {
+          cls = 'finishRunNeverSeen'
+        }
+      } else if (cover.sawRunning) {
+        cls = 'startSeen'
+      } else {
+        cls = 'startTransient'
+        transientRuns += 1
+      }
+      const latencyS = sec(cover.latencyMs)
+      const slotWaitS = sec(cover.slotWaitMs)
+      const netS = Math.max(0, latencyS - slotWaitS)
+      rows.push({ cls, selected: d.selected, latencyS, slotWaitS, netS, boundS, over: netS > boundS, pr: d.pr, atS: sec(d.at), who })
+    }
+  }
+  const classes: Record<string, unknown> = {}
+  for (const cls of ['finishSeenRunning', 'finishSeenStuck', 'finishRunNeverSeen', 'startSeen', 'startTransient']) {
+    for (const selected of [true, false]) {
+      const r = rows.filter((x) => x.cls === cls && x.selected === selected)
+      classes[`${cls}${selected ? 'Selected' : 'Visible'}`] = {
+        boundS: r.length ? Math.max(...r.map((x) => x.boundS)) : null,
+        latencyS: stats(r.map((x) => x.latencyS)),
+        slotWaitS: stats(r.map((x) => x.slotWaitS)),
+        latencyMinusSlotWaitS: stats(r.map((x) => x.netS)),
+        overBound: r.filter((x) => x.over).length
+      }
+    }
+  }
+  const legacy = (filter: (d: Detection) => boolean) =>
+    stats(
+      detections
+        .filter(filter)
+        .flatMap((d) => (desktop ? (d.host === undefined ? [] : [d.host]) : Object.values(d.clients)))
+        .map((ms) => Math.round(ms / 1000))
+    )
+  return {
+    events: detections.length,
+    observers: observers.length,
+    bounds: BOUNDS,
+    // D3 fields, same meaning (first time the observer saw the state the event produced).
+    startSelected: legacy((d) => d.kind === 'start' && d.selected),
+    startVisible: legacy((d) => d.kind === 'start' && !d.selected),
+    finishSelected: legacy((d) => d.kind === 'finish' && d.selected),
+    finishVisible: legacy((d) => d.kind === 'finish' && !d.selected),
+    undetected: detections.filter((d) => (desktop ? d.host === undefined : Object.keys(d.clients).length < cfg.clients) && d.at < seconds * 1000 - 20 * 60_000).length,
+    // D3r fields.
+    pairs: detections.length * observers.length,
+    d3UndetectedPairs: d3Undetected,
+    transientRunPairs: transientRuns,
+    uncovered,
+    pendingAtEnd,
+    overBound: rows.filter((x) => x.over).length,
+    worstSlotWaitS: rows.length ? Math.max(...rows.map((x) => x.slotWaitS)) : null,
+    classes,
+    overBoundRows: rows.filter((x) => x.over).slice(0, 50),
+    perEvent: detections.map((d) => ({
+      pr: d.pr,
+      kind: d.kind,
+      selected: d.selected,
+      atS: sec(d.at),
+      runS: d.runMs === undefined ? null : sec(d.runMs),
+      nextDueInS: d.nextDueInMs === null ? null : sec(d.nextDueInMs),
+      startSeenBy: d.kind === 'finish' ? d.startSeenBy : undefined,
+      seenS: desktop ? (d.host === undefined ? null : sec(d.host)) : Object.fromEntries(Object.entries(d.clients).map(([k, v]) => [k, sec(v)])),
+      covers: Object.fromEntries(Object.entries(d.covers).map(([k, v]) => [k, { latencyS: sec(v.latencyMs), slotWaitS: sec(v.slotWaitMs), sawRunning: v.sawRunning }]))
+    }))
+  }
+}
+
+/**
+ * D3r queue-age time series: per client and per 5-minute window, the gate starts that client
+ * caused and how long each had waited since its first refusal ("queue age"), plus the refusals
+ * it received. `open` is the host view at the end of the window: identities refused and not yet
+ * started whose claim is still live (retry time + 15 s grace not passed).
+ */
+function queueAgeSeries(events: Gate['events'], t0: number, seconds: number) {
+  const W = 5 * 60_000
+  const windows = Math.ceil((seconds * 1000) / W)
+  const clients = [...new Set(events.map((e) => e.client))].sort((a, b) => a - b)
+  const sec = (ms: number): number => Math.round(ms / 1000)
+  const byClient: Record<string, { starts: number[]; refusals: number[]; ageP50S: (number | null)[]; ageMaxS: (number | null)[]; overdueMaxS: (number | null)[] }> = {}
+  for (const c of clients) {
+    const mine = events.filter((e) => e.client === c && (e.kind === 'refuse' || e.lane !== 'interactive'))
+    const cell = (w: number, kind: 'start' | 'refuse') => mine.filter((e) => e.kind === kind && e.t - t0 >= w * W && e.t - t0 < (w + 1) * W)
+    const ages = (w: number): number[] => cell(w, 'start').map((e) => (e.kind === 'start' ? e.waitedMs : 0))
+    const overdue = (w: number): number[] => cell(w, 'start').map((e) => (e.kind === 'start' ? e.overdueMs : 0))
+    byClient[String(c)] = {
+      starts: Array.from({ length: windows }, (_, w) => cell(w, 'start').length),
+      refusals: Array.from({ length: windows }, (_, w) => cell(w, 'refuse').length),
+      ageP50S: Array.from({ length: windows }, (_, w) => (ages(w).length ? sec(pct(ages(w), 50) ?? 0) : null)),
+      ageMaxS: Array.from({ length: windows }, (_, w) => (ages(w).length ? sec(Math.max(...ages(w))) : null)),
+      overdueMaxS: Array.from({ length: windows }, (_, w) => (overdue(w).length ? sec(Math.max(...overdue(w))) : null))
+    }
+  }
+  const open = Array.from({ length: windows }, (_, w) => {
+    const end = t0 + (w + 1) * W
+    const first = new Map<string, { first: number; until: number }>()
+    for (const e of events) {
+      if (e.t >= end) break
+      if (e.kind === 'start') first.delete(e.key)
+      else first.set(e.key, { first: first.get(e.key)?.first ?? e.t, until: e.retryAt + 15_000 })
+    }
+    const live = [...first.values()].filter((v) => v.until >= end)
+    return { identities: live.length, oldestS: live.length ? sec(end - Math.min(...live.map((v) => v.first))) : 0 }
+  })
+  return { windowSeconds: W / 1000, windows, byClient, open }
+}
+
 
 it(
   `d3 ${cfg.scenario} gate=${cfg.gate} host=${cfg.host} N=${cfg.n} clients=${cfg.clients} ${cfg.workload} ${cfg.focus} ${cfg.hours}h`,
@@ -969,8 +1286,18 @@ it(
       }
     }
 
+    // Deterministic stepping (D3r). Production code on the read path does real fs I/O
+    // (local-git-config-signature.ts stats the worktree's git config through fs.promises). With
+    // advanceTimersByTimeAsync the continuation of such a call landed in whichever simulated
+    // second the wall clock allowed, so two runs of one spec line differed. Here one fake timer
+    // fires at a time and all real I/O it caused is drained before simulated time moves again.
     for (let s = 0; s < SECONDS; s++) {
-      await vi.advanceTimersByTimeAsync(1000)
+      const target = rec.t0 + (s + 1) * 1000
+      setTimeout(() => {}, target - Date.now()) // sentinel: the next timer is never past `target`
+      while (Date.now() < target) {
+        vi.advanceTimersToNextTimer()
+        await settle()
+      }
     }
     for (const stop of stops) stop()
 
@@ -995,16 +1322,6 @@ it(
       }
       return +worst.toFixed(2)
     })()
-    const lat = (filter: (d: Detection) => boolean, who: 'host' | 'client'): number[] =>
-      detections
-        .filter(filter)
-        .flatMap((d) => (who === 'host' ? (d.host === undefined ? [] : [d.host]) : Object.values(d.clients)))
-        .map((ms) => Math.round(ms / 1000))
-    const detectionSummary = (filter: (d: Detection) => boolean) => {
-      const who = desktop ? 'host' : 'client'
-      const values = lat(filter, who)
-      return { samples: values.length, p50: pct(values, 50), p90: pct(values, 90), max: values.length ? Math.max(...values) : null }
-    }
     const result = {
       config: cfg,
       simulatedSeconds: SECONDS,
@@ -1064,6 +1381,7 @@ it(
               legacy: { hits: rpcStats.legacyHits, upstreamReads: rpcStats.legacyReads },
               maxRpcSimulatedMs: rpcStats.maxRpcMs,
               rpcSimulatedMs: { p50: pct(rpcStats.rpcMs, 50), p99: pct(rpcStats.rpcMs, 99), over10s: rpcStats.rpcMs.filter((ms) => ms > REPLY_DEADLINE_MS + 50).length },
+              queueAgeSeries: host ? queueAgeSeries(events, rec.t0, SECONDS) : null,
               queueAgeSecondsByClient: Object.fromEntries(
                 Object.entries(waitedByClient).map(([k, v]) => [k, { admits: v.length, p50: pctS(v, 50), max: Math.round(Math.max(0, ...v) / 1000) }])
               ),
@@ -1075,16 +1393,7 @@ it(
               upstreamStartsAfterAllClientsGone: goneAt === null ? null : rpcStats.upstreamStarts.filter((t) => t >= goneAt).length
             }
           })(),
-      detection: cfg.events
-        ? {
-            events: detections.length,
-            startSelected: detectionSummary((d) => d.kind === 'start' && d.selected),
-            startVisible: detectionSummary((d) => d.kind === 'start' && !d.selected),
-            finishSelected: detectionSummary((d) => d.kind === 'finish' && d.selected),
-            finishVisible: detectionSummary((d) => d.kind === 'finish' && !d.selected),
-            undetected: detections.filter((d) => (desktop ? d.host === undefined : Object.keys(d.clients).length < cfg.clients) && d.at < SECONDS * 1000 - 20 * 60_000).length
-          }
-        : null,
+      detection: cfg.events ? detectionReport(desktop, SECONDS) : null,
       focusReturn:
         cfg.focus === 'return'
           ? (() => {
@@ -1102,11 +1411,20 @@ it(
               }
             })()
           : null,
+      // D3r: sha256 over every gh spawn (time and kind). Two runs of one spec line must agree.
+      determinism: {
+        spawnDigest: createHash('sha256').update(rec.gh.map((g) => `${g.t} ${g.kind}`).join('\n')).digest('hex'),
+        gateDigest: host ? createHash('sha256').update(host.gate.events.map((e) => `${e.t - rec.t0} ${e.kind} ${e.lane} ${e.client} ${e.key}`).join('\n')).digest('hex') : null,
+        realEventLoopTurns: settleTurns
+      },
       unknownGit: [...rec.unknownGit],
       unknownGh: [...rec.unknownGh]
     }
     mkdirSync(path.dirname(OUT), { recursive: true })
     writeFileSync(OUT, JSON.stringify(result, null, 2))
+    if (process.env.EXP_TRACE === '1') {
+      writeFileSync(OUT.replace(/\.json$/, '') + '.trace.txt', rec.gh.map((g) => `${g.t} ${g.kind}`).join('\n') + '\n')
+    }
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({ ...result, gh: { ...result.gh, timelinePerMinute: undefined } }))
     vi.useRealTimers()
