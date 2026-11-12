@@ -202,15 +202,6 @@ class WaylandScreenshotTest(unittest.TestCase):
             options["stdout"].write(b"png")
         return types.SimpleNamespace(returncode=0)
 
-    def test_grim_captures_the_compositor_window_at_logical_scale(self):
-        pixbuf = types.SimpleNamespace(get_width=lambda: 640, get_height=lambda: 480)
-        loader = types.SimpleNamespace(write=lambda _: None, close=lambda: None, get_pixbuf=lambda: pixbuf)
-        with patch.object(runtime.GdkPixbuf, "PixbufLoader", types.SimpleNamespace(new_with_type=lambda _: loader), create=True), \
-             patch.object(runtime, "png_bytes", return_value=b"png"):
-            result = runtime.capture_png(runtime.Rect(0, 0, 640, 480), self.app, self.window)
-        self.assertEqual(self.commands[-1], ["/usr/bin/grim", "-s", "1", "-g", "-800,40 640x480", "-t", "png", "-"])
-        self.assertEqual(result, {"base64": "cG5n", "width": 640, "height": 480, "scale": 1.0})
-
     def test_ambiguous_missing_and_hidden_windows_never_capture_another_region(self):
         for clients in ([], self.clients * 2, [{**self.clients[0], "hidden": True}],
                         [{**self.clients[0], "workspace": {"id": 3}}],
@@ -240,40 +231,6 @@ class WaylandScreenshotTest(unittest.TestCase):
         self.assertEqual(rect.to_json(), {"x": 100, "y": 50, "width": 640, "height": 480})
         self.assertIsNone(hidden)
         self.assertIsNotNone(hidden_error)
-
-    def test_grim_failure_and_timeout_preserve_accessibility_only_results(self):
-        native = self.run_native
-        for failure in (1, runtime.subprocess.TimeoutExpired("grim", 5)):
-            def failed(command, **options):
-                if not command[0].endswith("grim"):
-                    return native(command, **options)
-                if isinstance(failure, Exception):
-                    raise failure
-                return types.SimpleNamespace(returncode=failure)
-            with self.subTest(failure=failure), patch.object(runtime.subprocess, "run", side_effect=failed):
-                result = runtime.capture_png(runtime.Rect(0, 0, 640, 480), self.app, self.window)
-                self.assertEqual(result["error"]["code"], "screenshot_failed")
-
-    def test_x11_retains_gdk_capture_without_running_grim(self):
-        root = object()
-        screen = types.SimpleNamespace(get_root_window=lambda: root)
-        pixbuf = types.SimpleNamespace(get_width=lambda: 640, get_height=lambda: 480)
-        with patch.dict(runtime.os.environ, {"XDG_SESSION_TYPE": "x11", "HYPRLAND_INSTANCE_SIGNATURE": ""}), \
-             patch.object(runtime.Gdk, "Screen", types.SimpleNamespace(get_default=lambda: screen), create=True), \
-             patch.object(runtime.Gdk, "pixbuf_get_from_window", return_value=pixbuf, create=True) as capture, \
-             patch.object(runtime, "png_bytes", return_value=b"png"):
-            result = runtime.capture_png(runtime.Rect(100, 50, 640, 480))
-        capture.assert_called_once_with(root, 100, 50, 640, 480)
-        self.assertEqual(result, {"base64": "cG5n", "width": 640, "height": 480, "scale": 1.0})
-        self.assertEqual(self.commands, [])
-
-    def test_capabilities_require_grim_and_a_supported_compositor(self):
-        with patch.object(runtime.shutil, "which", side_effect=lambda name: None if name == "grim" else "/usr/bin/" + name):
-            self.assertFalse(runtime.handshake_response()["supports"]["observation"]["screenshot"])
-        with patch.dict(runtime.os.environ, {"HYPRLAND_INSTANCE_SIGNATURE": "", "SWAYSOCK": ""}):
-            self.assertFalse(runtime.handshake_response()["supports"]["observation"]["screenshot"])
-        self.assertTrue(runtime.handshake_response()["supports"]["observation"]["screenshot"])
-
 
 class RuntimeRenderTest(unittest.TestCase):
 

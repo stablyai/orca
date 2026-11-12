@@ -1675,7 +1675,6 @@
       "src/main/ghostty/theme-import.test.ts": 100,
       "src/main/git/refs/resolution/base-ref-search-selector.test.ts": 257,
       "src/main/git/worktrees/checkout/branch-rename.test.ts": 66,
-      "src/main/git/repositories/canonical-repo-key.test.ts": 221,
       "src/main/git/worktrees/checkout/checkout-branch-identity-real-git.test.ts": 378,
       "src/main/git/remotes/coalesced-probe.test.ts": 43,
       "src/main/git/command-runner/exec-file-capture-bytes.test.ts": 4698,
