@@ -20559,7 +20559,8 @@
         "compactAfterRetry": "Retry your earlier message, then run /compact.",
         "clearAfterSending": "Your earlier message is still being sent. Run /clear once it has gone.",
         "compactAfterSending": "Your earlier message is still being sent. Run /compact once it has gone.",
-        "pendingWork": "Wait for pending work and messages to finish before using this command."
+        "pendingWork": "Wait for pending work and messages to finish before using this command.",
+        "notDoneBackgroundTask": "Couldn't move the task to the background."
       },
       "taskList": {
         "title": "Tasks",
@@ -20920,7 +20921,9 @@
         "stateUnverifiableCount": "{{value0}} with status unavailable",
         "stateWaitingCount": "{{value0}} waiting",
         "stateWorkingCount": "{{value0}} working",
-        "showAgent": "Show {{value0}} in the conversation"
+        "showAgent": "Show {{value0}} in the conversation",
+        "background": "Background",
+        "backgrounding": "Backgrounding…"
       },
       "jumpToLatest": "Jump to latest",
       "newRowsAnnouncement": "New messages arrived while you were away",

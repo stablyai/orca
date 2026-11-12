@@ -131,6 +131,7 @@ function createClaudeAdapter(
     resolveClaudeInheritedEnv: context.environment.resolveBaseEnvironment,
     atRestCommandProbe: createClaudeCommandCatalogProbe(claudeListingDeps(context)),
     onLifecycleEvent: context.deliverLifecycle,
+    onForegroundTasksChanged: (sessionId) => host()?.publishForegroundTasks(sessionId),
     logger: deps.logger,
     onChildWorkEvidence: (sessionId, evidence, producer) =>
       host()?.publishChildWorkEvidence(sessionId, evidence, producer),

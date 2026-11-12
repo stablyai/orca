@@ -1,6 +1,7 @@
 // Background task wire rows and roster; keep task equality consistent across host publication and client reduction.
 
 import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
+import type { AgentSessionForegroundTask } from './agent-session-foreground-task'
 
 /** Optional state uses dashboard vocabulary; older hosts fall back to kind-derived defaults. */
 export type AgentSessionBackgroundTaskRunState =
@@ -29,6 +30,8 @@ export type AgentSessionBackgroundTask = {
 
 export type AgentSessionBackgroundTaskState = {
   state: 'monitoring'
+  /** Exact currently running calls the host can move into the background. */
+  foregroundTasks?: AgentSessionForegroundTask[]
   /** Optional so mixed-version clients can consume state-only hosts. */
   tasks?: AgentSessionBackgroundTask[]
   /** Keep settled rows separate so older clients still render only live tasks. */

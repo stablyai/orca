@@ -125,6 +125,11 @@ export class ClaudeChildWorkDecoder {
     return pending.map((edge) => edge(observedAt))
   }
 
+  taskForToolUse(toolUseId: string): { taskId: string; backgrounded: boolean } | undefined {
+    const match = [...this.live].find(([, task]) => task.toolUseId === toolUseId)
+    return match ? { taskId: match[0], backgrounded: match[1].backgrounded } : undefined
+  }
+
   private started(id: string, message: Record<string, unknown>, roster = false): void {
     const selection = this.taskInvocations.selection(message, id)
     if (!selection?.acceptsStart || selection.invocation.excluded) {
@@ -288,11 +293,7 @@ export class ClaudeChildWorkDecoder {
   private end(
     id: string,
     status: unknown,
-    reported: {
-      runId?: string
-      lastMessage?: string
-      totalTokens?: number
-    },
+    reported: Pick<ClaudeTaskFacts, 'lastMessage' | 'totalTokens'> & { runId?: string },
     ownerOf?: ClaudeToolOwner
   ): void {
     const task = this.live.get(id)

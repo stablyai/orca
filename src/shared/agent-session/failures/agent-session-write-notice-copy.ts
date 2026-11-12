@@ -24,6 +24,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   messageNotSaved: "Couldn't save your message.",
   notDoneStop: "The agent wasn't stopped.",
   notDoneStopTask: "The background task wasn't stopped.",
+  notDoneBackgroundTask: "Couldn't move the task to the background.",
   notDoneStopTasks: "The background tasks weren't stopped.",
   notDoneAnswer: 'Your answer was not sent.',
   notDoneOption: "The setting wasn't changed.",

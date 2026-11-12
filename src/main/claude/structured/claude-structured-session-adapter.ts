@@ -36,7 +36,7 @@ import {
   settleClaudeUnexpectedExit,
   type ClaudeExitLifecycle
 } from './claude-structured-session-exit-lifecycle'
-import { drainClaudeChildWork } from '../child-work/claude-child-work-evidence'
+import { claudeChildWorkPublisher } from '../child-work/claude-child-work-evidence'
 import {
   deliverClaudeConnectionEvent,
   emitClaudeStructuredSessionEvent
@@ -51,6 +51,7 @@ import { claudePromptCancelRoute } from './journal/claude-structured-prompt-repl
 import { claudeForkForRewind } from '../transcripts/claude-rewind-fork'
 import { copyClaudeConversation } from '../transcripts/claude-conversation-copy'
 import { ClaudeConversationNaming } from '../conversation-naming/claude-conversation-naming'
+import { claudeForegroundTasks, backgroundClaudeTask } from './claude-structured-background-task'
 import { captureClaudeConversationTitleOwner } from './claude-conversation-title-owner'
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
@@ -64,6 +65,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   private readonly naming: ClaudeConversationNaming | undefined
 
   constructor(private readonly deps: ClaudeStructuredSessionAdapterDeps) {
+    this.publishChildWork = claudeChildWorkPublisher(this.sessions, deps)
     const { namingInputs: snapshot, requestTimeoutMs: timeoutMs } = deps
     this.naming = snapshot && new ClaudeConversationNaming({ snapshot, timeoutMs })
     this.atRestCommands = deps.atRestCommands
@@ -138,17 +140,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })
   }
 
-  /** Publish child records after the frame's journal rows and parent record. */
-  private publishChildWork(
-    sessionId: string,
-    session: ClaudeSession | null | undefined = this.sessions.get(sessionId),
-    message: Record<string, unknown> | null = null
-  ): void {
-    const evidence = drainClaudeChildWork(session, message, this.deps.now?.() ?? Date.now())
-    if (evidence.length > 0) {
-      this.deps.onChildWorkEvidence?.(sessionId, evidence, session?.events)
-    }
-  }
+  private readonly publishChildWork: ReturnType<typeof claudeChildWorkPublisher>
 
   bindPromptItemId(sessionId: string, journalItemId: string, promptKey: string): void {
     this.sessions.get(sessionId)?.prompts.bindJournalItemId(journalItemId, promptKey)
@@ -160,6 +152,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   forkForRewind = claudeForkForRewind
+  foregroundTasks = (sessionId: string) => claudeForegroundTasks(this.sessions.get(sessionId))
+  backgroundTask: NonNullable<StructuredAgentSessionAdapter['backgroundTask']> = (input) =>
+    backgroundClaudeTask(this.sessions, input, this.deps.requestTimeoutMs)
   copyConversation = copyClaudeConversation
   stopProviderNaming = (): void => this.naming?.stop()
   nameProviderConversation: StructuredAgentSessionAdapter['nameProviderConversation'] = (input) =>

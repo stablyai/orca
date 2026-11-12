@@ -55,6 +55,7 @@ export type ClaudeJournalTranslator = {
   childTaskParent?: (taskId: string, run?: string) => string | undefined
   childToolOwner?: ClaudeChildToolQueries['childToolOwner']
   childActivity?: ClaudeChildToolQueries['childActivity']
+  foregroundToolIds?: ClaudeChildToolQueries['foregroundToolIds']
   retryPendingTaskRows?: () => StructuredAgentSessionSinkAdmission
   retryPendingCancellations?: () => StructuredAgentSessionSinkAdmission
   /** Streamed blocks awaiting final frames; settlement clears them. */

@@ -95,6 +95,7 @@ beforeEach(async () => {
       }
     },
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
+    onForegroundTasksChanged: (sessionId) => host.publishForegroundTasks(sessionId),
     onChildWorkEvidence: (sessionId, evidence) =>
       host.publishChildWorkEvidence(sessionId, evidence),
     openConnection: claude.openConnection,

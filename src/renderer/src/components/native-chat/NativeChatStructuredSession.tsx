@@ -5,13 +5,13 @@ import {
 } from '@/components/orchestration-crew/NativeChatCrewPanel'
 import { NativeChatUsageLimitActionsProvider } from '@/components/native-chat/usage/NativeChatUsageLimitActions'
 import { useNativeChatHandOff } from '@/components/native-chat/pane/actions/use-native-chat-hand-off'
+import { nativeChatForegroundTasks } from './NativeChatForegroundTaskAction'
 import { cn } from '@/lib/class-names'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from '@/components/native-chat/appearance/native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/appearance/use-native-chat-store-appearance-style'
 import { useRef, useState } from 'react'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useStructuredChatLiveSession } from '@/components/native-chat/session/structured/use-structured-chat-live-session'
-import { NativeChatStructuredPromptCard } from '@/components/native-chat/prompts/NativeChatStructuredPromptCard'
 import { NativeChatComposer } from '@/components/native-chat/composer/NativeChatComposer'
 import type { NativeChatComposerHandle } from '@/components/native-chat/composer/native-chat-composer-types'
 import type { NativeChatOptionPickerRequest } from '@/components/native-chat/session/options/controls/native-chat-option-picker-request'
@@ -23,7 +23,6 @@ import { NativeChatMessageList } from '@/components/native-chat/NativeChatMessag
 import { NativeChatContextClearFade } from '@/components/native-chat/conversation/projection/NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from '@/components/native-chat/pane/actions/use-structured-native-chat-submit-reveal'
 import { useStructuredPromptResponseHold } from '@/components/native-chat/prompts/use-structured-prompt-response-hold'
-import { nativeChatStructuredAsyncQuestion } from '@/components/native-chat/prompts/NativeChatStructuredAsyncQuestion'
 import {
   selectNativeChatViewState,
   structuredChatHistoryPhase
@@ -57,11 +56,9 @@ import { useNativeChatRewindHost } from '@/components/native-chat/messages/actio
 import { NativeChatRowActionsProvider } from '@/components/native-chat/messages/actions/NativeChatRowActionsProvider'
 import { useNativeChatPaneFork } from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import { NativeChatQueuedMessageList } from '@/components/native-chat/queue/NativeChatQueuedMessageList'
-import {
-  cancelStructuredPrompt,
-  nativeChatStructuredStopControls
-} from '@/components/native-chat/session/structured/writes/native-chat-structured-stop-controls'
+import { nativeChatStructuredStopControls } from '@/components/native-chat/session/structured/writes/native-chat-structured-stop-controls'
 import { useAppStore } from '@/store/index'
+import { NativeChatStructuredPrompts } from '@/components/native-chat/prompts/NativeChatStructuredAsyncQuestion'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useNativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/use-native-chat-structured-composer-transport'
 import { NativeChatStructuredComposerTabStrips } from '@/components/native-chat/pane/actions/NativeChatStructuredComposerTabStrips'
@@ -193,7 +190,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const installLayout = viewState.kind === 'empty' ? 'hero' : 'strip'
   const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
   const canMention = composerShown && install.unavailableHint === undefined
-  const cancelPrompt = () => cancelStructuredPrompt(controller, prompt)
   const rootInput = useNativeChatRootInputRouting({
     tabId: props.tabId,
     rootRef,
@@ -373,15 +369,16 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             />
           )}
           {composerShown ? null : <NativeChatPromptSlotNotices notices={notices} />}
-          <NativeChatStructuredPromptCard
-            key={prompt ? `${prompt.itemId}:${prompt.revision}` : undefined}
-            prompt={prompt}
-            promptResponse={promptResponse}
-            onCancel={cancelPrompt}
+          <NativeChatStructuredPrompts
+            pane={props}
+            controller={controller}
+            response={promptResponse}
+            session={session}
+            transport={transport}
+            submits={submits}
             shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
             answerInputRef={questionAnswerInputRef}
           />
-          {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (
             <NativeChatComposer
@@ -406,5 +403,9 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
     </div>
   )
-  return <NativeChatLinkClickContext value={onLinkClick}>{root}</NativeChatLinkClickContext>
+  return (
+    <NativeChatLinkClickContext value={onLinkClick}>
+      {nativeChatForegroundTasks(props.sessionId, controller, root)}
+    </NativeChatLinkClickContext>
+  )
 }

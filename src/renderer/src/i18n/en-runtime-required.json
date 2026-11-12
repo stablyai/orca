@@ -2049,6 +2049,7 @@
         "messagesUnsettled": "A message you sent earlier isn't confirmed yet.",
         "notAvailable": "This isn't available in this chat.",
         "notDoneAnswer": "Your answer was not sent.",
+        "notDoneBackgroundTask": "Couldn't move the task to the background.",
         "notDoneCommand": "The command didn't run.",
         "notDoneGoalChangeIncomplete": "Couldn't finish changing the goal. Check the chat.",
         "notDoneOption": "The setting wasn't changed.",

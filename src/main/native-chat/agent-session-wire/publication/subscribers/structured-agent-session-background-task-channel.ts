@@ -121,13 +121,15 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     const views = structuredRunningChildWork((session && this.readChildWork(sessionId)) ?? [])
     // Untracked work still needs a visible Stop.
     const incomplete = this.childWorkIncomplete(sessionId)
-    if (!session || (views.length === 0 && !incomplete)) {
+    const foregroundTasks = this.deps.adapter.foregroundTasks?.(sessionId)
+    if (!session || (views.length === 0 && !incomplete && !foregroundTasks?.length)) {
       return null
     }
     const stops = this.deps.adapter.backgroundTaskStops?.(sessionId)
     const { tasks, settledTasks } = structuredChildWorkLegacyTasks(views, session.params.provider)
     return {
       state: 'monitoring',
+      ...(foregroundTasks?.length ? { foregroundTasks } : {}),
       ...(tasks ? { tasks } : {}),
       ...(settledTasks ? { settledTasks } : {}),
       ...(stops?.supportsTaskStop ? { supportsTaskStop: true } : {}),

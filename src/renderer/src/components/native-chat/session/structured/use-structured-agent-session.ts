@@ -28,10 +28,7 @@ import {
 } from '../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { useStructuredAgentSessionMessages } from '../../conversation/projection/use-structured-agent-session-messages'
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
-import {
-  stopStructuredAgentSessionBackgroundTask,
-  useStructuredAgentSessionStop
-} from './writes/use-structured-agent-session-stop'
+import { useStructuredAgentSessionStop } from './writes/use-structured-agent-session-stop'
 import { useStructuredAgentSessionTransport } from './use-structured-agent-session-transport'
 import { useStructuredAgentSessionOptions } from '../options/structured/use-structured-agent-session-options'
 import { useStructuredAgentSessionThreadGoal } from '../goals/use-structured-agent-session-thread-goal'
@@ -44,6 +41,7 @@ import { hostStatesTurnScopes } from '../../../../../../shared/native-chat/trans
 import { withNativeChatCutTurnNotices } from '../../../../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from '../../conversation/projection/use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from '../../messages/actions/use-structured-agent-session-rewind'
+import { structuredAgentSessionTaskActions } from '../../structured-agent-session-task-actions'
 
 export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) {
   const {
@@ -86,6 +84,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   const commandPending = useRef(false)
   const legacyLaunchStop = useStructuredLegacyLaunchStop(sessionId)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
+  const taskActions = useMemo(() => structuredAgentSessionTaskActions(mutate), [mutate])
   const journalItems = transportState.journalItems
   const {
     conversationCommands,
@@ -307,8 +306,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     ),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
       cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
-    stopBackgroundTask: (taskId?: string) =>
-      stopStructuredAgentSessionBackgroundTask(mutate, taskId),
+    ...taskActions,
     respond: (item: StructuredPromptItem, response: AgentSessionPromptResponse) =>
       respondToStructuredAgentSessionPrompt({ item, response, action: admit() }),
     optionSnapshot,

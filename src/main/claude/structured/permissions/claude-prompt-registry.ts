@@ -111,6 +111,12 @@ export class ClaudePromptRegistry {
     return prompt !== undefined && !this.claims.has(prompt)
   }
 
+  awaitsTool(toolUseId: string): boolean {
+    return [...this.prompts.values()].some(
+      (prompt) => prompt.toolUseId === toolUseId && !this.claims.has(prompt)
+    )
+  }
+
   /** Prevent abort and answer from settling the same pending request twice. */
   forgetIfPending(prompt: ClaudePendingPrompt): boolean {
     if (!this.prompts.has(prompt.promptKey)) {

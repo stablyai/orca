@@ -206,7 +206,6 @@
 2 src/renderer/src/components/mobile/use-mobile-page-paired-devices.ts
 1 src/renderer/src/components/mobile/use-mobile-pairing-generation.ts
 1 src/renderer/src/components/native-chat-recovery/offers/native-chat-restart-runtimes.ts
-1 src/renderer/src/components/native-chat/NativeChatStructuredSession.tsx
 8 src/renderer/src/components/native-chat/attachments/chips/use-native-chat-composer-attachments.ts
 2 src/renderer/src/components/native-chat/attachments/intake/use-native-chat-resolved-path-attachments.ts
 2 src/renderer/src/components/native-chat/composer/controls/NativeChatComposerToolbar.tsx

@@ -6,8 +6,10 @@ import type {
   ClaudeSubagentLinkageSource
 } from './claude-subagent-linkage'
 import type { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
+import { claudeRecord } from '../structured/journal/claude-structured-item-translation'
 
 export type ClaudeChildToolQueries = {
+  foregroundToolIds: () => string[]
   /** Canonical journal owner; null for the session agent or unseen calls. */
   childToolOwner: (toolUseId: string) => string | null
   /** The child named by `parent_tool_use_id` and its newest unanswered call. */
@@ -30,6 +32,15 @@ export function claudeChildToolQueries(deps: {
       : (deps.linkage.settledLinkageFor(ownerRef).linkage.agentId ?? null)
   }
   return {
+    foregroundToolIds: () =>
+      [...deps.tools.values()]
+        .filter(
+          (tool) =>
+            (tool.name === 'Bash' || tool.name === 'Agent' || tool.name === 'Task') &&
+            deps.toolOrigins.childOwnerRef(tool.id) === null &&
+            claudeRecord(tool.input)?.run_in_background !== true
+        )
+        .map((tool) => tool.id),
     childToolOwner,
     childActivity: (parentToolUseId) => {
       let openTool: ClaudeToolUse | null = null

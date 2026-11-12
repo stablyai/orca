@@ -146,6 +146,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
   'src/main/ipc/runtime-environments/runtime-environment-preference.test.ts',
   'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
+  'src/main/claude/claude-background-task-control-contract.test.ts',
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.

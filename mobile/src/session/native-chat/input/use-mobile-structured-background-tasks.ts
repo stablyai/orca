@@ -1,3 +1,5 @@
+import { agentSessionWriteNoticeParts } from '../../../../../src/shared/agent-session/failures/agent-session-refusal-notice'
+import { mobileAgentSessionWriteNoticeText } from '../agent-session/agent-session-write-notice-copy'
 import { useCallback, useMemo } from 'react'
 import type { AgentChildRowContext } from '../../../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { AgentSessionCancelResult } from '../../../../../src/shared/agent-session/agent-session-wire'
@@ -11,6 +13,10 @@ import { structuredSessionForegroundCommands } from '../../../../../src/shared/s
 import type { StructuredAgentSessionMutationResult } from '../agent-session/mobile-structured-agent-session-rpc'
 import type { MobileStructuredAgentMutate } from '../agent-session/use-mobile-structured-agent-mutation'
 import { mobileStructuredHostClockOffsetMs } from '../agent-session/mobile-structured-host-clock-offset'
+import type {
+  AgentSessionForegroundTask,
+  AgentSessionBackgroundResult
+} from '../../../../../src/shared/agent-session/agent-session-foreground-task'
 
 export type MobileStructuredBackgroundTasks = {
   // Scope strip expansion and stopping state to the conversation.
@@ -19,6 +25,7 @@ export type MobileStructuredBackgroundTasks = {
   // Treat retained rows as unverifiable off-stream; convert host timestamps with this offset.
   rowContext: AgentChildRowContext
   stop: (taskId?: string) => Promise<StructuredAgentSessionMutationResult<AgentSessionCancelResult>>
+  background?: (task: AgentSessionForegroundTask) => Promise<boolean>
 }
 
 export function useMobileStructuredBackgroundTasks(args: {
@@ -28,8 +35,9 @@ export function useMobileStructuredBackgroundTasks(args: {
   // Retained roster does not prove current liveness.
   connected: boolean
   mutate: MobileStructuredAgentMutate
+  onSendError: (message: string) => void
 }): MobileStructuredBackgroundTasks {
-  const { connected, mutate, sessionKey, state, turnId } = args
+  const { connected, mutate, onSendError, sessionKey, state, turnId } = args
   const { backgroundTasks, items, latestTurn } = state
   const view = useMemo(
     () =>
@@ -56,8 +64,29 @@ export function useMobileStructuredBackgroundTasks(args: {
       }),
     [mutate]
   )
+  const background = useCallback(
+    async (target: AgentSessionForegroundTask) => {
+      if (!streamLive) {
+        return false
+      }
+      const result = await mutate<AgentSessionBackgroundResult>(
+        'agentSession.backgroundTask',
+        'agentSession.backgroundTask',
+        { target }
+      )
+      if (result.status === 'unknown') {
+        onSendError(
+          mobileAgentSessionWriteNoticeText(
+            agentSessionWriteNoticeParts({ kind: 'unconfirmed' }, 'background-task')
+          )
+        )
+      }
+      return result.status === 'accepted' && result.value.backgrounded && result.sameFence
+    },
+    [mutate, onSendError, streamLive]
+  )
   return useMemo(
-    () => ({ sessionKey, view, rowContext, stop }),
-    [sessionKey, view, rowContext, stop]
+    () => ({ sessionKey, view, rowContext, stop, background }),
+    [sessionKey, view, rowContext, stop, background]
   )
 }
