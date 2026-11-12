@@ -10,6 +10,7 @@ export const COMPUTER_ERROR_CODES = {
   permission_denied: 'permission_denied',
   element_not_found: 'element_not_found',
   element_not_clickable: 'element_not_clickable',
+  element_not_enabled: 'element_not_enabled',
   action_not_supported: 'action_not_supported',
   value_not_settable: 'value_not_settable',
   invalid_argument: 'invalid_argument',

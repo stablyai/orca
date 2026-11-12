@@ -813,6 +813,7 @@ final class Provider {
         }
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
+            try requireEnabled(record, snapshot: snapshot)
             if !foreground {
                 try requireBackgroundClickAllowed(backgroundClickHit(record.element, snapshot: snapshot))
             }
@@ -832,22 +833,20 @@ final class Provider {
                     actionName: actionName
                 )
             }
-            if let point = center(record.localFrame, in: snapshot.windowBounds) {
-                try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground, element: record.element)
-                guard unselectedRow else {
-                    return actionMetadata(
-                        path: "synthetic",
-                        fallbackReason: "actionUnsupported",
-                        verification: unverifiedAction(reason: "synthetic_input")
-                    )
-                }
-                return rowClickMetadata(
-                    try RowSelectionClick.confirm(record.element, ax: rowSelection),
+            let point = try pointerTarget(record, snapshot: snapshot)
+            try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground, element: record.element)
+            guard unselectedRow else {
+                return actionMetadata(
                     path: "synthetic",
-                    actionName: nil
+                    fallbackReason: "actionUnsupported",
+                    verification: unverifiedAction(reason: "synthetic_input")
                 )
             }
-            throw ProviderError.coded("element_not_clickable", "element \(record.index) has no clickable frame")
+            return rowClickMetadata(
+                try RowSelectionClick.confirm(record.element, ax: rowSelection),
+                path: "synthetic",
+                actionName: nil
+            )
         }
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
         try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground)
@@ -873,6 +872,38 @@ final class Provider {
         }
     }
 
+    private func requireEnabled(_ record: ElementRecord, snapshot: Snapshot) throws {
+        let ax = AccessibilityActionability(pid: snapshot.app.pid)
+        let enabled = ElementActionability.waitUntilEnabled(record.element, ax: ax)
+        if ax.unanswered { throw AccessibilityMessaging.appNotResponding(snapshot.app.name) }
+        guard enabled else { throw notEnabledError(record) }
+    }
+
+    /// The screen point a pointer click on the element should use, once it is enabled, in view and on top there.
+    private func pointerTarget(_ record: ElementRecord, snapshot: Snapshot) throws -> CGPoint {
+        // Why: its own wait budget, so time spent enabling or trying AXPress cannot cut short the settle after a scroll.
+        let ax = AccessibilityActionability(pid: snapshot.app.pid)
+        let target = try ElementActionability.pointerTarget(record.element, windowFrame: snapshot.windowBounds, ax: ax)
+        if ax.unanswered { throw AccessibilityMessaging.appNotResponding(snapshot.app.name) }
+        switch target {
+        case let .ready(point):
+            return point
+        case .notEnabled:
+            throw notEnabledError(record)
+        case .noFrame:
+            throw ProviderError.coded("element_not_clickable", "element \(record.index) has no clickable frame; no click was sent")
+        case let .outOfView(scrolled):
+            let reason = scrolled ? "is still out of view after scrolling it into view" : "is out of view and cannot be scrolled into view"
+            throw ProviderError.coded("element_not_clickable", "element \(record.index) \(reason), so no click was sent; scroll its container, run get-app-state again and retry")
+        case let .covered(by: cover):
+            throw ProviderError.coded("element_not_clickable", "element \(record.index) is covered by \(describeElement(cover)), so no click was sent; close or finish what covers it, run get-app-state again and retry")
+        }
+    }
+
+    private func notEnabledError(_ record: ElementRecord) -> ProviderError {
+        .coded("element_not_enabled", "element \(record.index) is disabled, so no input was sent; do what enables it first, then run get-app-state and retry once its line no longer lists disabled")
+    }
+
     private func performClickAction(record: ElementRecord, mouseButton: MouseButtonSelection) throws -> String? {
         if mouseButton == .right {
             return try performAction(record.element, "AXShowMenu") ? "AXShowMenu" : nil
@@ -893,6 +924,10 @@ final class Provider {
         guard let action else {
             throw ProviderError.coded("action_not_supported", "'\(requested)' is not a valid secondary action for element \(record.index)")
         }
+        // Why: scrolling a control into view does not operate it.
+        if action != "AXScrollToVisible" {
+            try requireEnabled(record, snapshot: snapshot)
+        }
         guard try performAction(record.element, action) else {
             throw ProviderError.coded("accessibility_error", "AXUIElementPerformAction(\(action)) failed")
         }
@@ -903,6 +938,7 @@ final class Provider {
         let snapshot = try currentSnapshot(params: params)
         let record = try element(snapshot, try requiredInteger(params, "elementIndex"))
         let expected = try requiredStringAllowingEmpty(params, "value")
+        try requireEnabled(record, snapshot: snapshot)
         guard isSettable(record.element, kAXValueAttribute as String) else {
             throw ProviderError.coded("value_not_settable", "element \(record.index) is not settable")
         }
@@ -1978,6 +2014,94 @@ private final class AccessibilityRowSelection: RowSelectionAccessibility {
         }
         return result == .success
     }
+}
+
+/// Once the app stops answering, later reads return nothing at once so a hung app costs one timeout, not dozens.
+private final class AccessibilityActionability: ElementActionabilityAccessibility {
+    private let appElement: AXUIElement
+    // Why: wall time, since one slow AX read can take the full 3 s messaging timeout.
+    private let deadline = CFAbsoluteTimeGetCurrent() + 0.5
+    private(set) var unanswered = false
+
+    init(pid: pid_t) {
+        appElement = AXUIElementCreateApplication(pid)
+    }
+
+    func isEnabled(_ element: AXUIElement) -> Bool? {
+        read(element, kAXEnabledAttribute as String) as? Bool
+    }
+
+    func frame(of element: AXUIElement) -> CGRect? {
+        var point = CGPoint.zero
+        var size = CGSize.zero
+        guard let position = read(element, kAXPositionAttribute as String),
+              let extent = read(element, kAXSizeAttribute as String),
+              CFGetTypeID(position) == AXValueGetTypeID(),
+              CFGetTypeID(extent) == AXValueGetTypeID(),
+              AXValueGetValue(position as! AXValue, .cgPoint, &point),
+              AXValueGetValue(extent as! AXValue, .cgSize, &size)
+        else {
+            return nil
+        }
+        return CGRect(origin: point, size: size)
+    }
+
+    func role(of element: AXUIElement) -> String? {
+        read(element, kAXRoleAttribute as String) as? String
+    }
+
+    func parent(of element: AXUIElement) -> AXUIElement? {
+        guard let value = read(element, kAXParentAttribute as String), CFGetTypeID(value) == AXUIElementGetTypeID() else {
+            return nil
+        }
+        return (value as! AXUIElement)
+    }
+
+    func isSame(_ lhs: AXUIElement, _ rhs: AXUIElement) -> Bool {
+        CFEqual(lhs, rhs)
+    }
+
+    func isModal(_ window: AXUIElement) -> Bool {
+        read(window, kAXModalAttribute as String) as? Bool == true
+    }
+
+    /// Asks the target app itself: background input reaches it whatever other apps' windows are on top.
+    func element(at point: CGPoint) -> AXUIElement? {
+        guard !unanswered, Float(point.x).isFinite, Float(point.y).isFinite else { return nil }
+        var found: AXUIElement?
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = AXUIElementCopyElementAtPosition(appElement, Float(point.x), Float(point.y), &found)
+        unanswered = AccessibilityMessaging.timedOut(result, since: start)
+        return result == .success ? found : nil
+    }
+
+    func scrollToVisible(_ element: AXUIElement) throws -> Bool {
+        try performAction(element, "AXScrollToVisible")
+    }
+
+    func waitBeforeRetry() -> Bool {
+        let interval = 0.05
+        guard !unanswered, CFAbsoluteTimeGetCurrent() + interval < deadline else { return false }
+        Thread.sleep(forTimeInterval: interval)
+        return true
+    }
+
+    private func read(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
+        guard !unanswered else { return nil }
+        var value: CFTypeRef?
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+        unanswered = AccessibilityMessaging.timedOut(result, since: start)
+        return result == .success ? value : nil
+    }
+}
+
+private func describeElement(_ element: AXUIElement) -> String {
+    let role = stringAttribute(element, kAXRoleAttribute as String) ?? "an element"
+    guard let label = stringAttribute(element, kAXTitleAttribute as String) ?? stringAttribute(element, kAXDescriptionAttribute as String) else {
+        return role
+    }
+    return "\(role) \"\(preview(label, maxLength: 60))\""
 }
 
 private func frame(_ element: AXUIElement, windowBounds: CGRect) -> CGRect? {
