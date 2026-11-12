@@ -24363,7 +24363,7 @@
     "prompt": {
       "title": "Move Orca to Applications?",
       "message": "Move Orca to your Applications folder?",
-      "detail": "Orca is running from outside Applications, such as a disk image or Downloads. From there it can’t install updates, and ejecting a disk image while Orca is open can crash it. Orca will move itself into Applications, then quit and reopen. Your settings and sessions are kept.",
+      "detail": "Orca is running from outside Applications, such as a disk image or Downloads. From there it may not be able to update, and ejecting a disk image while Orca is open can crash it. Orca will move itself into Applications, then quit and reopen. Your settings and sessions are kept.",
       "moveButton": "Move and Relaunch",
       "notNowButton": "Not Now",
       "neverButton": "Don’t Ask Again"
@@ -24384,6 +24384,11 @@
       "title": "Couldn’t Move Orca",
       "message": "Orca couldn’t be moved to Applications.",
       "detail": "Drag Orca into the Applications folder in Finder instead. This copy keeps running."
+    },
+    "cannotReplace": {
+      "title": "Can’t Replace Orca in Applications",
+      "message": "Another copy of Orca is already in Applications, and this account can’t replace it.",
+      "detail": "Remove or replace that copy in Finder, then reopen this one to move it. This copy keeps running."
     },
     "okButton": "OK"
   },

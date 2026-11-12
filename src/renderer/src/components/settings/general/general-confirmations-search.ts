@@ -1,6 +1,8 @@
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 export const getGeneralConfirmationSearchEntries = createLocalizedCatalog(() => ({
   pinned: {
@@ -114,6 +116,11 @@ export const getGeneralConfirmationSearchEntries = createLocalizedCatalog(() => 
     ]
   }
 }))
+
+/** The move offer belongs to the macOS desktop host, not to whichever browser is viewing it. */
+export function showsMacDesktopConfirmations(): boolean {
+  return getRendererAppPlatform() === 'darwin' && !isWebClientLocation()
+}
 
 export const getGeneralMacConfirmationSearchEntries = createLocalizedCatalog(() => ({
   applicationsFolder: {

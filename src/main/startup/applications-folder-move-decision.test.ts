@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  createApplicationsFolderMoveRequest,
   handleApplicationsFolderMoveOffer,
+  moveWouldDeleteExistingCopyUnasked,
   resolveApplicationsFolderMoveConflict,
   runApplicationsFolderMove,
   shouldOfferApplicationsFolderMove,
@@ -114,5 +116,54 @@ describe('resolveApplicationsFolderMoveConflict', () => {
     ).toBe(false)
     expect(explainRunningCopy).toHaveBeenCalledTimes(1)
     expect(confirmReplace).not.toHaveBeenCalled()
+  })
+
+  it('declines when a confirmation dialog throws, because Electron reads a throw as consent', () => {
+    expect(
+      resolveApplicationsFolderMoveConflict('exists', {
+        confirmReplace: () => {
+          throw new Error('dialog failed')
+        },
+        explainRunningCopy: () => {}
+      })
+    ).toBe(false)
+  })
+})
+
+describe('moveWouldDeleteExistingCopyUnasked', () => {
+  it('blocks replacing an existing copy that needs administrator rights', () => {
+    expect(
+      moveWouldDeleteExistingCopyUnasked({
+        exists: true,
+        writable: false,
+        applicationsFolderWritable: true
+      })
+    ).toBe(true)
+  })
+
+  it('allows an administrator-authorized install when nothing would be replaced', () => {
+    expect(
+      moveWouldDeleteExistingCopyUnasked({
+        exists: false,
+        writable: false,
+        applicationsFolderWritable: false
+      })
+    ).toBe(false)
+  })
+})
+
+describe('createApplicationsFolderMoveRequest', () => {
+  it('lets only the asked window holding the token trigger the move, and only once', () => {
+    const request = createApplicationsFolderMoveRequest(7, 'move-token')
+    expect(request.settle(8, 'move-token')).toBe(false)
+    expect(request.settle(7, 'other-token')).toBe(false)
+    expect(request.settle(7, 'move-token')).toBe(true)
+    expect(request.settle(7, 'move-token')).toBe(false)
+  })
+
+  it('ignores a late answer once the request has expired', () => {
+    const request = createApplicationsFolderMoveRequest(7, 'move-token')
+    expect(request.expire()).toBe(true)
+    expect(request.settle(7, 'move-token')).toBe(false)
   })
 })

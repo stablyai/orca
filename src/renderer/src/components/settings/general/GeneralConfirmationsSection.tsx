@@ -1,9 +1,9 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
 import {
   getGeneralConfirmationSearchEntries,
-  getGeneralMacConfirmationSearchEntries
+  getGeneralMacConfirmationSearchEntries,
+  showsMacDesktopConfirmations
 } from './general-confirmations-search'
-import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -56,7 +56,7 @@ export function GeneralConfirmationsSection({
       onChange: () =>
         updateSettings({ skipDeleteArtifactConfirm: !settings.skipDeleteArtifactConfirm })
     },
-    ...(isMacUserAgent()
+    ...(showsMacDesktopConfirmations()
       ? [
           {
             ...getGeneralMacConfirmationSearchEntries().applicationsFolder,

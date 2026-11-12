@@ -32,12 +32,55 @@ export function resolveApplicationsFolderMoveConflict(
   conflict: ApplicationsFolderMoveConflict,
   handlers: { confirmReplace: () => boolean; explainRunningCopy: () => void }
 ): boolean {
-  // Electron's default focuses the running copy and quits this one; refuse so neither session is dropped.
-  if (conflict === 'existsAndRunning') {
-    handlers.explainRunningCopy()
+  try {
+    // Electron's default focuses the running copy and quits this one; refuse so neither session is dropped.
+    if (conflict === 'existsAndRunning') {
+      handlers.explainRunningCopy()
+      return false
+    }
+    return handlers.confirmReplace()
+  } catch {
+    // Electron reads a throwing handler as consent and falls back to its destructive defaults.
     return false
   }
-  return handlers.confirmReplace()
+}
+
+export type ApplicationsFolderMoveDestination = {
+  exists: boolean
+  writable: boolean
+  applicationsFolderWritable: boolean
+}
+
+/** Electron's admin-authorized install never calls the conflict handler and rm -rf's the destination, so an existing copy must not be reached that way. */
+export function moveWouldDeleteExistingCopyUnasked(
+  destination: ApplicationsFolderMoveDestination
+): boolean {
+  return destination.exists && !(destination.writable && destination.applicationsFolderWritable)
+}
+
+/** One-shot gate for the renderer's answer: only the asked window holding the token settles it, and only before it expires. */
+export function createApplicationsFolderMoveRequest(
+  senderId: number,
+  token: string
+): {
+  settle: (answerSenderId: number, answerToken: unknown) => boolean
+  expire: () => boolean
+} {
+  let open = true
+  return {
+    settle: (answerSenderId, answerToken) => {
+      if (!open || answerSenderId !== senderId || answerToken !== token) {
+        return false
+      }
+      open = false
+      return true
+    },
+    expire: () => {
+      const wasOpen = open
+      open = false
+      return wasOpen
+    }
+  }
 }
 
 export type ApplicationsFolderMoveHandlers = {
@@ -79,7 +122,7 @@ export async function handleApplicationsFolderMoveOffer(
 // Electron throws this (rather than returning false) when the user cancels the admin prompt.
 const AUTHORIZATION_REJECTED_MESSAGE = 'User rejected the authorization request'
 
-/** Returns true only when Electron moved the bundle and started quitting to reopen it. */
+/** True means Electron reported success; callers rule out an already-installed bundle first, where it reports success without moving or quitting. */
 export function runApplicationsFolderMove(handlers: {
   move: () => boolean
   onMoveFailed: (error: unknown) => void

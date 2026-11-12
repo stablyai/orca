@@ -15,7 +15,7 @@ import {
 
 function restartIpc(eventTarget: EventTarget) {
   const ipcRenderer = Object.assign(new EventEmitter(), {
-    invoke: vi.fn(async () => {}),
+    invoke: vi.fn(async (): Promise<unknown> => undefined),
     postMessage: vi.fn(),
     send: vi.fn(),
     sendSync: vi.fn(),
@@ -163,10 +163,11 @@ describe('renderer restart wiring', () => {
   })
 })
 
-function moveRelayIpc(
+function moveRelay(
   eventTarget: EventTarget,
   options: { move?: () => unknown; checkpoint?: () => Promise<void> } = {}
 ) {
+  const { ipcRenderer } = restartIpc(eventTarget)
   let invoked = (): void => {}
   const invokedOnce = new Promise<void>((resolve) => {
     invoked = resolve
@@ -175,18 +176,13 @@ function moveRelayIpc(
   const sentOnce = new Promise<void>((resolve) => {
     sent = resolve
   })
-  const ipcRenderer = Object.assign(new EventEmitter(), {
-    invoke: vi.fn(async () => {
-      const moved = options.move ? options.move() : true
-      invoked()
-      return moved
-    }),
-    postMessage: vi.fn(),
-    send: vi.fn(() => {
-      sent()
-    }),
-    sendSync: vi.fn(),
-    sendToHost: vi.fn()
+  ipcRenderer.invoke.mockImplementation(async () => {
+    const moved = options.move ? options.move() : true
+    invoked()
+    return moved
+  })
+  ipcRenderer.send.mockImplementation(() => {
+    sent()
   })
   registerApplicationsFolderMoveRelay(
     ipcRenderer,
@@ -203,7 +199,7 @@ describe('applications folder move relay', () => {
     eventTarget.addEventListener(ORCA_APP_RESTART_STARTED_EVENT, () =>
       order.push('restart-started')
     )
-    const { ipcRenderer, invokedOnce } = moveRelayIpc(eventTarget, {
+    const { ipcRenderer, invokedOnce } = moveRelay(eventTarget, {
       move: () => {
         order.push('move')
         return true
@@ -217,17 +213,18 @@ describe('applications folder move relay', () => {
 
   it('re-arms quit guards when main declines to move', async () => {
     const eventTarget = new EventTarget()
-    const aborted = new Promise<void>((resolve) => {
-      eventTarget.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, () => resolve())
-    })
-    const { ipcRenderer } = moveRelayIpc(eventTarget, { move: () => false })
+    const aborted = vi.fn()
+    eventTarget.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, aborted)
+    const { ipcRenderer, invokedOnce } = moveRelay(eventTarget, { move: () => false })
     ipcRenderer.emit('applicationsFolderMove:begin', {}, 'move-token')
-    await aborted
+    await invokedOnce
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(aborted).toHaveBeenCalledTimes(1)
   })
 
   it('tells main when preparation fails instead of moving', async () => {
     const eventTarget = new EventTarget()
-    const { ipcRenderer, sentOnce } = moveRelayIpc(eventTarget, {
+    const { ipcRenderer, sentOnce } = moveRelay(eventTarget, {
       checkpoint: async () => {
         throw new Error('checkpoint failed')
       }
