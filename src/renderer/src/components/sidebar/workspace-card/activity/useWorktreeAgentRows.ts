@@ -13,7 +13,7 @@ export function useAgentPresentation<T>(
   active = true
 ): T {
   const store = useAppStateView()
-  const projection = store.getState().agentStatusByPaneKey.projection
+  const projection = store((state) => state.agentStatusByPaneKey.projection)
   const subscribe = useCallback(
     (listener: () => void) => projection.subscribe(channel, listener),
     [projection, channel]

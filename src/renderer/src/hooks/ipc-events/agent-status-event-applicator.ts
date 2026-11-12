@@ -1,4 +1,4 @@
-import type { AgentStatusEventApplicatorArgs } from './agent-status-bridge-types'
+import type * as AgentStatusBridge from './agent-status-bridge-types'
 import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import { AgentHookAttributionDiagnostics } from '../../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
 import { pickHostTurnEnd } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -26,7 +26,6 @@ import {
   resolvePaneKeyFromRoutingIndex,
   resolveWorktreeConnectionFromRoutingIndex
 } from './agent-status-pane-routing-index'
-import type { AgentStatusApplyOptions, AgentStatusApplyResult } from './agent-status-bridge-types'
 import {
   normalizeAgentStatusEvent,
   normalizeAgentStatusMetadata
@@ -38,8 +37,11 @@ import {
 } from './agent-status-partial-updates'
 
 export function createAgentStatusEventApplicator(
-  args: AgentStatusEventApplicatorArgs
-): (data: AgentStatusIpcPayload, options?: AgentStatusApplyOptions) => AgentStatusApplyResult {
+  args: AgentStatusBridge.AgentStatusEventApplicatorArgs
+): (
+  data: AgentStatusIpcPayload,
+  options?: AgentStatusBridge.AgentStatusApplyOptions
+) => AgentStatusBridge.AgentStatusApplyResult {
   const {
     pendingAgentStatusEvents,
     transientClearWatermarkByConnectionId,
@@ -48,8 +50,8 @@ export function createAgentStatusEventApplicator(
   const attributionDiagnostics = new AgentHookAttributionDiagnostics()
   const applyAgentStatus = (
     data: AgentStatusIpcPayload,
-    options?: AgentStatusApplyOptions
-  ): AgentStatusApplyResult => {
+    options?: AgentStatusBridge.AgentStatusApplyOptions
+  ): AgentStatusBridge.AgentStatusApplyResult => {
     const store = options?.batch?.transaction.getState() ?? useAppStore.getState()
     if (!store.workspaceSessionReady) {
       return 'dropped'

@@ -41,6 +41,15 @@ describe('renderer layout writes', () => {
     expect(countLayoutWrites(src, rendererRatchet, 'a.tsx')).toBe(5)
   })
 
+  it('distinguishes typed function registries from layout-value maps', () => {
+    const src = [
+      'const factories: { [K in Field]: (source: Rows<K>) => Draft<K> } = { tabsByWorktree: tabBucketDraft, terminalLayoutsByTabId: recordDraft }',
+      'const next: { [K in Field]: TerminalTab[] } = { tabsByWorktree: tabs }',
+      'set({ tabsByWorktree: next })'
+    ].join('\n')
+    expect(countLayoutWrites(src, rendererRatchet, 'a.ts')).toBe(2)
+  })
+
   it('skips content updates of existing editor and browser entries, not membership changes', () => {
     const src = [
       'set({ openFiles: s.openFiles.map((f) => (f.id === id ? { ...f, isDirty: true } : f)) })',

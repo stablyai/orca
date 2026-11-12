@@ -12,6 +12,7 @@ import {
 import { useAgentPresentation, useWorktreeAgentRow } from './useWorktreeAgentRows'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
 import { cn } from '@/lib/class-names'
+import { recomputeOn } from '@/lib/recompute-on'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
 import { CompactAgentExpansion, CompactAgentSummaryButton } from './worktree-card-compact-agents'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
@@ -58,32 +59,35 @@ function WorktreeCardAgentsBody({
   const send = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const control = useAppStore(useShallow((s) => selectSendTargetControlInputs(s, worktreeId)))
   const inputs = useAppStore(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
-  const targets = useMemo(() => {
-    void languageRevision
-    if (!control.targetMode) {
-      return null
-    }
-    return new Map(
-      deriveRunningAgentSendTargets(inputs, worktreeId).map((target) => [
-        target.paneKey,
-        control.targetMode?.status === 'sending' &&
-        control.targetMode.sendingPaneKey === target.paneKey
-          ? {
-              status: 'sending' as const,
-              disabledReason: t(
-                'auto.components.sidebar.WorktreeCardAgents.sendingTarget',
-                'Sending...'
-              )
-            }
-          : {
-              status: target.status,
-              ...(target.disabledReason
-                ? { disabledReason: agentSendDisabledReasonLabel(target.disabledReason) }
-                : {})
-            }
-      ])
-    )
-  }, [control, inputs, worktreeId, t, languageRevision])
+  const targets = useMemo(
+    () =>
+      recomputeOn([languageRevision], () => {
+        if (!control.targetMode) {
+          return null
+        }
+        return new Map(
+          deriveRunningAgentSendTargets(inputs, worktreeId).map((target) => [
+            target.paneKey,
+            control.targetMode?.status === 'sending' &&
+            control.targetMode.sendingPaneKey === target.paneKey
+              ? {
+                  status: 'sending' as const,
+                  disabledReason: t(
+                    'auto.components.sidebar.WorktreeCardAgents.sendingTarget',
+                    'Sending...'
+                  )
+                }
+              : {
+                  status: target.status,
+                  ...(target.disabledReason
+                    ? { disabledReason: agentSendDisabledReasonLabel(target.disabledReason) }
+                    : {})
+                }
+          ])
+        )
+      }),
+    [control, inputs, worktreeId, t, languageRevision]
+  )
   const onSend = useCallback(
     (key: string) => {
       void send(key)

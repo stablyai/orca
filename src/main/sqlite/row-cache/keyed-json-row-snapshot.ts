@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import SyncDatabase from '../sync-database'
 import { removeVersionedCacheDatabase } from '../versioned-cache-database'
 
@@ -67,10 +66,6 @@ export function readKeyedJsonRowsSnapshot(
 ):
   | { kind: 'rows'; rows: KeyedJsonRow[]; receipt: unknown }
   | { kind: 'unavailable'; error: unknown } {
-  // One-shot startup probe, so an unused store creates no file.
-  if (!existsSync(path)) {
-    return { kind: 'rows', rows: [], receipt: undefined }
-  }
   let db: SyncDatabase | null = null
   try {
     db = new SyncDatabase(path, { readonly: true, fileMustExist: true })

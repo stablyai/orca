@@ -320,6 +320,18 @@ function isSameNameCopy(property, name) {
   return ts.isPropertyAccessExpression(value) && value.name.text === name
 }
 
+/** A typed field-to-function registry describes operations rather than layout values. */
+function isTypedFunctionRegistry(objectLiteral) {
+  const declaration = objectLiteral.parent
+  return (
+    ts.isVariableDeclaration(declaration) &&
+    declaration.type &&
+    ts.isMappedTypeNode(declaration.type) &&
+    declaration.type.type &&
+    ts.isFunctionTypeNode(declaration.type.type)
+  )
+}
+
 // The transition seam names the fields it tracks in `const SEAM_*_FIELDS = [...] as const` lists; names, not writes.
 function isSeamFieldNameConstant(literal) {
   let list = literal.parent
@@ -387,6 +399,7 @@ export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
         name !== null &&
         ratchet.keyedFields.has(name) &&
         !isSameNameCopy(node, name) &&
+        !isTypedFunctionRegistry(node.parent) &&
         !(ratchet.entryContentFields.has(name) && keepsMembership(node.initializer))
       ) {
         count += 1

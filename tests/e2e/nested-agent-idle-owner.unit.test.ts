@@ -57,7 +57,7 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
         )
         const record = sleepingRecordFromEntry({
           state: store.getState(),
-          entry: store.getState().agentStatusByPaneKey.get(PANE),
+          entry: store.getState().agentStatusByPaneKey.get(PANE)!,
           worktreeId: 'wt-1',
           capturedAt: Date.now()
         })

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import {
   readRows,
   rollback,
@@ -206,6 +207,10 @@ export class KeyedJsonRowCache {
 
   /** One read-only snapshot: another connection's write lock cannot block it. */
   private readSnapshot(busyTimeoutMs: number) {
+    // One-shot startup probe, so an unused store creates no file.
+    if (!existsSync(this.path)) {
+      return { kind: 'rows' as const, rows: [], receipt: undefined }
+    }
     return readKeyedJsonRowsSnapshot(this.path, this.options.schemaVersion, busyTimeoutMs)
   }
 

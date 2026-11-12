@@ -136,6 +136,9 @@ export async function startSpinnerStatusTraffic(page: Page) {
     const timer = setInterval(() => {
       for (let index = 0; index < Math.min(8, keys.length); index++) {
         const entry = store.getState().agentStatusByPaneKey.get(keys[cursor++ % keys.length])
+        if (!entry) {
+          continue
+        }
         store.getState().setAgentStatus(
           entry.paneKey,
           {

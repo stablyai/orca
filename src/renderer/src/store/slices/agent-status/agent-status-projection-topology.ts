@@ -10,6 +10,12 @@ import { readRecordChanges, readTabMapChanges } from '../../keyed-record-change-
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../../shared/migration-unsupported-agent-entry'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
 
+const SEAM_AGENT_PRESENTATION_FIELDS = [
+  'runtimePaneTitlesByTabId',
+  'ptyIdsByTabId',
+  'terminalLayoutsByTabId'
+] as const
+
 export function stageProjectionTopology(
   data: AgentStatusProjectionState,
   state: AppState,
@@ -101,12 +107,7 @@ export function stageProjectionTopology(
       }
     }
   }
-  const presentationFields = [
-    'runtimePaneTitlesByTabId',
-    'ptyIdsByTabId',
-    'terminalLayoutsByTabId'
-  ] as const
-  for (const field of presentationFields) {
+  for (const field of SEAM_AGENT_PRESENTATION_FIELDS) {
     if (state[field] === previous?.[field]) {
       continue
     }

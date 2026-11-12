@@ -15,7 +15,10 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../runtime/orca-runtime-tests/orca-runtime-test-fixtures.spec'
-import { withBoundPane } from '../runtime/orca-runtime-tests/bind-first-pane.test-fixture'
+import {
+  bindPaneFirst,
+  withBoundPane
+} from '../runtime/orca-runtime-tests/bind-first-pane.test-fixture'
 import { bindTerminalPaneStatusLifecycle } from '../ipc/pty/pane/terminal-pane-status-lifecycle'
 import { rememberPaneKeyForPty, paneKeyPtyId, ptyPaneKey } from '../ipc/pty/pane/key-state'
 import { ptyIncarnationById, ptyOwnership } from '../ipc/pty/provider/ownership-state'
@@ -75,6 +78,25 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true })
 })
 
+function syncPaneGraph(
+  runtime: OrcaRuntimeService,
+  ptyId: string,
+  binding: { tabId: string; leafId: string; incarnationId: string }
+): void {
+  runtime.syncWindowGraph(1, {
+    tabs: [
+      {
+        ...binding,
+        worktreeId: TEST_WORKTREE_ID,
+        title: 'Agent',
+        activeLeafId: HEADLESS_LEAF_ID,
+        layout: null
+      }
+    ],
+    leaves: [{ ...binding, worktreeId: TEST_WORKTREE_ID, ptyId, paneRuntimeId: 1 }]
+  })
+}
+
 function setup(ptyId: string, connectionId: string | null) {
   const binding = { tabId: 'host-tab', leafId: HEADLESS_LEAF_ID, incarnationId: INCARNATION }
   const session = withBoundPane(makeWorkspaceSessionWithHeadlessTerminal(), {
@@ -94,18 +116,7 @@ function setup(ptyId: string, connectionId: string | null) {
   runtime.registerPty(ptyId, TEST_WORKTREE_ID, connectionId, binding)
   ownedPtys.add(ptyId)
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
-    tabs: [
-      {
-        ...binding,
-        worktreeId: TEST_WORKTREE_ID,
-        title: 'Agent',
-        activeLeafId: HEADLESS_LEAF_ID,
-        layout: null
-      }
-    ],
-    leaves: [{ ...binding, worktreeId: TEST_WORKTREE_ID, ptyId, paneRuntimeId: 1 }]
-  })
+  syncPaneGraph(runtime, ptyId, binding)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the placement adapter reads only the fixture's real getWorkspaceSession implementation.
   bindTerminalPaneStatusLifecycle(runtime, runtimeStore as unknown as Store)
   server.ingestTerminalStatus({
@@ -171,11 +182,23 @@ it.each([false, true])(
     expect(paneKeyPtyId.has(PANE)).toBe(false)
     if (successor) {
       const replacement = toAppSshPtyId('ssh-1', 'replacement')
-      h.runtime.registerPty(replacement, TEST_WORKTREE_ID, 'ssh-1', {
-        ...h.binding,
+      const replacementBinding = { ...h.binding, incarnationId: 'replacement-incarnation' }
+      bindPaneFirst(
+        h.runtime,
+        {
+          ...replacementBinding,
+          worktreeId: TEST_WORKTREE_ID,
+          ptyId: replacement
+        },
+        getConnectionExecutionHostId('ssh-1')
+      )
+      h.runtime.registerPty(replacement, TEST_WORKTREE_ID, 'ssh-1', replacementBinding)
+      syncPaneGraph(h.runtime, replacement, replacementBinding)
+      ownedPtys.add(replacement)
+      expect(h.runtime.resolveTerminalPane(PANE)).toMatchObject({
+        ptyId: replacement,
         incarnationId: 'replacement-incarnation'
       })
-      ownedPtys.add(replacement)
     }
     await h.runtime.onPtyExit(id, 0, INCARNATION, { hostExitConfirmed: true })
     const row = server.getStatusSnapshotForPane(PANE)[0]
