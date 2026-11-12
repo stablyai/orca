@@ -1,6 +1,7 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { AppearanceChatSection } from '../appearance/chat/AppearanceChatSection'
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
+import { ChatTransientErrorRecoverySetting } from './ChatTransientErrorRecoverySetting'
 import { ChatNamingSetting } from './ChatNamingSetting'
 import { NativeChatInlineVisualsSetting } from './NativeChatInlineVisualsSetting'
 import { SettingsSection } from '../section-layout/SettingsSection'
@@ -124,6 +125,13 @@ export function ChatSettingsSection({
             updateSettings={updateSettings}
             forceVisible={showAllBehavior}
           />
+          {showDesktopOnlySettings ? (
+            <ChatTransientErrorRecoverySetting
+              settings={settings}
+              updateSettings={updateSettings}
+              forceVisible={showAllBehavior}
+            />
+          ) : null}
           {showDesktopOnlySettings ? (
             <ChatNamingSetting
               key={chatPromptDiscardSignal}

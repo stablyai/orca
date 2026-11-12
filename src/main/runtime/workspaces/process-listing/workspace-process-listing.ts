@@ -23,7 +23,7 @@ import { attachRuntimeWorktreeAgentRowWaits } from './runtime-worktree-agent-row
 import { compareWorktreePs } from './runtime-worktree-status-projection'
 import type { Repo } from '../../../../shared/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../../workspaces/catalog/repo-git-remote-identity-enrichment'
-import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../../agent-session/structured-agent-session-runtime'
+import * as structuredSessions from '../../agent-session/structured-agent-session-runtime'
 import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels
@@ -259,7 +259,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       )
     )
     const { stateDirectory, ...catalogDeps } = this.structuredAgentCatalogDependencies()
-    await installStructuredAgentSessionHost({
+    await structuredSessions.ensureStructuredAgentSessionHost({
       stateDirectory,
       legacySessionTabIds: this.legacyStructuredSessionTabIds,
       hostId: LOCAL_EXECUTION_HOST_ID,
@@ -272,6 +272,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
       },
+      transientRecovery: structuredSessions.transientRecoveryPolicy(() => this.requireStore()),
       resolveAgentFullAccess: (agent) =>
         isTuiAgent(agent) &&
         preModeChatGetsFullAccess(agent, this.requireStore().getSettings(), process.platform),

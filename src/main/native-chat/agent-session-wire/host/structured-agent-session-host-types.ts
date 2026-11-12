@@ -58,6 +58,7 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import type { StructuredAgentSessionStartupLimits } from '../startup/structured-agent-session-startup-attempt-contract'
+import type { TransientRecoveryPolicy } from '../recovery/structured-agent-session-transient-recovery'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionSwitchResult } from '../../../../shared/agent-session/requests/agent-session-switch-execution'
 
@@ -205,6 +206,8 @@ export type StructuredAgentSessionHostDeps = {
   ) => boolean
   /** Explicit switch admission also includes direct chat assignments, even at rest. */
   hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
+  /** Host-local opt-in; absent never sends an automatic continuation. */
+  transientRecovery?: TransientRecoveryPolicy
   /** Whether an agent's queued message is still owed to this session at handover; absent: always. */
   queuedAgentMessageOwed?: (
     sessionId: string,

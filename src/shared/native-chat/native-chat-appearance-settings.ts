@@ -18,6 +18,8 @@ export type NativeChatAppearanceSettings = {
 export type AgentDefaultSurface = 'chat' | 'terminal'
 
 export type NativeChatGlobalSettings = {
+  /** Opt-in: continue supported chats after temporary provider failures, up to three times. */
+  nativeChatAutoContinueOnTransientError?: boolean
   /** Unlisted agents follow this default; absent means terminal. */
   agentDefaultSurface?: AgentDefaultSurface
   nativeChatAppearance?: NativeChatAppearanceSettings

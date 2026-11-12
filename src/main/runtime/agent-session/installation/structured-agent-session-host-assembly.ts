@@ -70,6 +70,7 @@ export async function installOnJournal(
   const nameProvider = (record: AgentSessionRecord): void => void providerNaming.push(record)
   host = new StructuredAgentSessionHost({
     store,
+    transientRecovery: deps.transientRecovery,
     adapter,
     nameProviderConversation: (record) => void providerNaming.push(record, true),
     agents,
