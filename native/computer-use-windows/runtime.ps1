@@ -1269,7 +1269,7 @@ function Test-OrcaRangeValueMatches([string]$Actual, [double]$Expected) {
     # Why: compare numerically so "50.0" matches a control that reads back 50; snapping controls still show a mismatch.
     $actualNumber = 0.0
     [double]::TryParse($Actual, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$actualNumber) -and
-        [Math]::Abs($actualNumber - $Expected) -le 1e-9 * [Math]::Max(1.0, [Math]::Abs($Expected))
+        [Math]::Abs($actualNumber - $Expected) -le 1e-12 * [Math]::Max(1.0, [Math]::Abs($Expected))
 }
 
 function Set-OrcaElementValue($Element, [string]$Value) {
@@ -1345,7 +1345,9 @@ function Invoke-OrcaScrollPattern($Element, $RootElement, [string]$Direction, [d
     if ($null -eq $pattern) { return $false }
     $amount = if ($Direction -in @("down", "right")) { [Windows.Automation.ScrollAmount]::LargeIncrement } else { [Windows.Automation.ScrollAmount]::LargeDecrement }
     $none = [Windows.Automation.ScrollAmount]::NoAmount
+    # Why: without a readable position the loop can't tell the end of the content, so the wheel handles it.
     $before = Get-OrcaScrollPercent $pattern $vertical
+    if ($null -eq $before) { return $false }
     for ($page = 0; $page -lt $Pages; $page++) {
         try {
             if ($vertical) { $pattern.Scroll($none, $amount) } else { $pattern.Scroll($amount, $none) }
@@ -1353,15 +1355,14 @@ function Invoke-OrcaScrollPattern($Element, $RootElement, [string]$Direction, [d
             # Why: a refusal before any page moved falls back to the wheel; after that it is the end of the content.
             return $page -gt 0
         }
-        if ($null -eq $before) { continue }
-        # Why: WPF and Chromium move the viewport after Scroll returns; an unmoved percent after the wait is the end.
+        # Why: WPF and Chromium move the viewport after Scroll returns; an unmoved or unreadable percent after the wait is the end.
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($true) {
             $after = Get-OrcaScrollPercent $pattern $vertical
             if ($after -ne $before -or $stopwatch.ElapsedMilliseconds -ge 500) { break }
             Start-Sleep -Milliseconds 25
         }
-        if ($after -eq $before) { break }
+        if ($null -eq $after -or $after -eq $before) { break }
         $before = $after
     }
     $true
