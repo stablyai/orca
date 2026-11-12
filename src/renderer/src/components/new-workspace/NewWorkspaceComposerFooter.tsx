@@ -36,11 +36,8 @@ export function NewWorkspaceComposerFooter({
 }: NewWorkspaceComposerFooterProps): React.JSX.Element {
   const t = useTranslate()
   // RR-c1: why Create waits (a folder project on Orca Cloud), on hover and for screen readers.
+  // RR-c1: set only after a Create stopped for it; the button stays enabled and points at the error.
   const needsRepo = Boolean(cloudStart?.needsGitHubRepo)
-  const needsRepoReason = t(
-    'components.newWorkspace.cloudOnly.needsRepository',
-    'Orca Cloud needs a GitHub repository.'
-  )
   return (
     <>
       {createError ? (
@@ -77,7 +74,7 @@ export function NewWorkspaceComposerFooter({
             </span>
           </button>
         ) : null}
-        <span className="ml-auto shrink-0" title={needsRepo ? needsRepoReason : undefined}>
+        <span className="ml-auto shrink-0">
           <Button
             onClick={() => void onCreate()}
             disabled={createDisabled}
