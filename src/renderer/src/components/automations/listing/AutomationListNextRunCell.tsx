@@ -1,14 +1,17 @@
 import React from 'react'
-import { TriangleAlert, X } from 'lucide-react'
+import { TriangleAlert } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 
-export function AutomationListStatusCell({
+/** Next run, or why there isn't one: paused, moved, needs migration, or setup awaiting review. */
+export function AutomationListNextRunCell({
   enabled,
+  nextRunLabel,
   movedToDistro = null,
   needsMigration = false,
   setupSkipped = false
 }: {
   enabled: boolean
+  nextRunLabel: string
   /** A moved project's local copy: the host runs it, never this computer. */
   movedToDistro?: string | null
   /** A copy its host's Orca server now serves: it runs only once migrated. */
@@ -27,18 +30,29 @@ export function AutomationListStatusCell({
       </span>
     )
   }
-  if (enabled && needsMigration) {
+  if (!enabled) {
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-muted-foreground">
+        <span
+          aria-hidden="true"
+          className="size-1.5 shrink-0 rounded-full border border-muted-foreground"
+        />
+        {t('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
+      </span>
+    )
+  }
+  if (needsMigration) {
     const label = t(
       'auto.components.automations.AutomationDetail.needsMigration',
       'Needs migration'
     )
     return (
-      <span className="min-w-0 line-clamp-2 leading-tight text-muted-foreground" title={label}>
+      <span className="min-w-0 truncate text-status-warning-text" title={label}>
         {label}
       </span>
     )
   }
-  if (enabled && setupSkipped) {
+  if (setupSkipped) {
     return (
       <span
         className="inline-flex min-w-0 items-center gap-1 truncate text-status-warning-text"
@@ -52,18 +66,9 @@ export function AutomationListStatusCell({
       </span>
     )
   }
-  if (enabled) {
-    return (
-      <span className="inline-flex min-w-0 items-center gap-1 truncate text-muted-foreground">
-        <span className="size-1.5 shrink-0 rounded-full bg-foreground" />
-        {t('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')}
-      </span>
-    )
-  }
   return (
-    <span className="inline-flex min-w-0 items-center gap-1 truncate text-muted-foreground">
-      <X className="size-3.5 shrink-0" />
-      {t('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
+    <span className="min-w-0 truncate tabular-nums text-muted-foreground" title={nextRunLabel}>
+      {nextRunLabel}
     </span>
   )
 }

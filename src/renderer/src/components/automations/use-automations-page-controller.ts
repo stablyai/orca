@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { createAutomationManagementActions } from './authoring/automation-management-actions'
 import { createAutomationRunActions } from './runs/automation-run-actions'
 import { createAutomationRunWorkspaceAction } from './runs/automation-run-workspace-action'
@@ -17,6 +18,7 @@ import { useAutomationsPageSetupState } from './authoring/use-automations-page-s
 import { useAutomationsPageStoreState } from './use-automations-page-store-state'
 import { useExternalAutomationActions } from './external/use-external-automation-actions'
 import { useAutomationRunsDashboard } from './runs/use-automation-runs-dashboard'
+import { createAutomationsPageNavigation } from './automations-page-navigation'
 
 export function useAutomationsPageController() {
   const store = useAutomationsPageStoreState()
@@ -87,7 +89,45 @@ export function useAutomationsPageController() {
   const runActions = createAutomationRunActions(actionContext)
   const externalActions = useExternalAutomationActions(actionContext)
   const openRunWorkspace = createAutomationRunWorkspaceAction(actionContext)
-  useAutomationsPageEscape({ store, local })
+  const { setPendingAutomationRunNavigation } = store
+  const {
+    setPageView,
+    setIsDetailOpen,
+    setActivePaneTab,
+    setSelectedAutomationRunPageId,
+    setRunPageOrigin,
+    setRunNotFound,
+    selectExternalKey
+  } = local
+  const { selectAutomationRow } = list
+  const navigation = useMemo(
+    () =>
+      createAutomationsPageNavigation({
+        store: { setPendingAutomationRunNavigation },
+        local: {
+          setPageView,
+          setIsDetailOpen,
+          setActivePaneTab,
+          setSelectedAutomationRunPageId,
+          setRunPageOrigin,
+          setRunNotFound,
+          selectExternalKey
+        },
+        selectAutomationRow
+      }),
+    [
+      selectAutomationRow,
+      selectExternalKey,
+      setActivePaneTab,
+      setIsDetailOpen,
+      setPageView,
+      setPendingAutomationRunNavigation,
+      setRunNotFound,
+      setRunPageOrigin,
+      setSelectedAutomationRunPageId
+    ]
+  )
+  useAutomationsPageEscape({ store, local, navigation })
 
   return {
     store,
@@ -107,7 +147,8 @@ export function useAutomationsPageController() {
     managementActions,
     runActions,
     externalActions,
-    openRunWorkspace
+    openRunWorkspace,
+    navigation
   }
 }
 

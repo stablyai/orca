@@ -31,13 +31,11 @@ export type ListPanelProps = {
   selectExternalKey: (entryKey: string | null) => void
   onOpenDetail: () => void
   onRefresh: () => void
-  onOpenRuns: () => void
   runNow: (row: AutomationListRow) => void
   openEditDialog: (row: AutomationListRow) => void
   toggleAutomation: (row: AutomationListRow) => void
   requestDeleteAutomation: (row: AutomationListRow) => void
   openCreateDialog: () => void
-  canCreateAutomation: boolean
 }
 
 export type EditorDialogProps = {

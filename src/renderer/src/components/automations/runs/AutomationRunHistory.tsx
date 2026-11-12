@@ -1,19 +1,17 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/class-names'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { Worktree } from '../../../../../shared/worktree/types'
+import { getAutomationUsageStatusLabel } from './automation-usage-model'
 import {
-  formatAutomationDateTime,
-  getAutomationRunStatusLabel,
-  getAutomationRunStatusVariant
-} from '../automation-page-parts'
-import {
-  formatAutomationCost,
-  formatAutomationTokens,
-  getAutomationUsageStatusLabel
-} from './automation-usage-model'
+  AUTOMATION_RUN_TABLE_GRID_CLASS,
+  AutomationRunIdentityCell,
+  AutomationRunResultCell,
+  AutomationRunSpendCell,
+  AutomationRunTableHeaderCells,
+  AutomationRunWorkspaceCell
+} from './AutomationRunTableCells'
 import { automationRunOccurrenceLabel, isAutomationRunFolded } from './automation-run-occurrences'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import { AutomationOwnerConflictNotice } from '../hosts/AutomationOwnerConflictNotice'
@@ -33,8 +31,7 @@ const RUN_ROW_OVERSCAN = 10
 // Seed viewport geometry because first paint and happy-dom report zero height, which would mount no rows.
 const RUNS_VIEWPORT_INITIAL_RECT = { width: 1024, height: 600 }
 
-const RUN_ROW_GRID_CLASS =
-  'grid w-full grid-cols-[minmax(9rem,1fr)_minmax(10rem,1.1fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_minmax(6rem,auto)] gap-3'
+const RUN_ROW_GRID_CLASS = AUTOMATION_RUN_TABLE_GRID_CLASS
 // Share scroller width with rows, including scrollbar gutter; opaque sticky headers hide scrolled content.
 const RUN_ROW_HEADER_SURFACE_CLASS =
   '[background:color-mix(in_srgb,var(--muted)_20%,var(--background))]'
@@ -236,13 +233,7 @@ export function AutomationRunHistory({
               'sticky top-0 z-10 border-b border-border/50 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground'
             )}
           >
-            <div>{t('auto.components.automations.AutomationRunHistory.8faaa00726', 'Run')}</div>
-            <div>
-              {t('auto.components.automations.AutomationRunHistory.149c0b49c7', 'Workspace')}
-            </div>
-            <div>{t('auto.components.automations.AutomationRunHistory.86a248187e', 'Spend')}</div>
-            <div>{t('auto.components.automations.AutomationRunHistory.13988187b3', 'Tokens')}</div>
-            <div>{t('auto.components.automations.AutomationRunHistory.9974a2b429', 'Status')}</div>
+            <AutomationRunTableHeaderCells />
           </div>
           <div
             ref={rowsRef}
@@ -287,58 +278,27 @@ export function AutomationRunHistory({
                       onOpenRun(run)
                     }}
                   >
-                    <div className="min-w-0">
-                      <div>{formatAutomationDateTime(run.scheduledFor, t, intlLocale)}</div>
-                      {/* The row's own date is the first occurrence; only this line says it recurred. */}
-                      {occurrenceLabel ? (
-                        <div
-                          data-testid="automation-run-occurrences"
-                          className="mt-1 truncate text-xs text-foreground"
-                        >
-                          {occurrenceLabel}
-                        </div>
-                      ) : null}
-                      <div className="mt-1 truncate text-xs text-muted-foreground">
-                        {workspaceLabel.detailLabel}
-                      </div>
-                    </div>
-                    <div
-                      className={
-                        workspaceLabel.muted
-                          ? 'min-w-0 truncate text-muted-foreground'
-                          : 'min-w-0 truncate text-foreground'
+                    <AutomationRunIdentityCell
+                      run={run}
+                      extra={
+                        // The row's own date is the first occurrence; only this line says it recurred.
+                        occurrenceLabel ? (
+                          <div
+                            data-testid="automation-run-occurrences"
+                            className="mt-1 truncate text-xs text-foreground"
+                          >
+                            {occurrenceLabel}
+                          </div>
+                        ) : null
                       }
-                      title={workspaceLabel.title}
-                    >
-                      {workspaceLabel.rowLabel}
-                    </div>
-                    <div
-                      className={
-                        run.usage?.status === 'known'
-                          ? 'text-sm tabular-nums'
-                          : 'text-sm text-muted-foreground'
-                      }
+                    />
+                    <AutomationRunResultCell status={run.status} />
+                    <AutomationRunWorkspaceCell display={workspaceLabel} />
+                    <AutomationRunSpendCell
+                      estimatedCostUsd={run.usage?.estimatedCostUsd}
+                      usageKnown={run.usage?.status === 'known'}
                       title={usageLabel}
-                    >
-                      {formatAutomationCost(run.usage?.estimatedCostUsd, t)}
-                    </div>
-                    <div
-                      className={
-                        run.usage?.status === 'known'
-                          ? 'text-sm tabular-nums'
-                          : 'text-sm text-muted-foreground'
-                      }
-                      title={usageLabel}
-                    >
-                      {run.usage?.status === 'known'
-                        ? formatAutomationTokens(run.usage.totalTokens, intlLocale)
-                        : t('auto.components.automations.AutomationRunHistory.a00e38d1a3', 'n/a')}
-                    </div>
-                    <div className="flex justify-start">
-                      <Badge variant={getAutomationRunStatusVariant(run.status)}>
-                        {getAutomationRunStatusLabel(run.status, t)}
-                      </Badge>
-                    </div>
+                    />
                   </button>
                 </div>
               )

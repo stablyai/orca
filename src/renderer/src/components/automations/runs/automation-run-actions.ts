@@ -28,7 +28,7 @@ export function createAutomationRunActions({
   >
   local: Pick<
     AutomationsPageActionContext['local'],
-    'rerunRunIdsInFlightRef' | 'setRerunRunIdsInFlight'
+    'rerunRunIdsInFlightRef' | 'setRerunRunIdsInFlight' | 'setRunNowPending'
   >
   destination: Pick<
     AutomationsPageActionContext['destination'],
@@ -50,7 +50,7 @@ export function createAutomationRunActions({
     repoForRow,
     worktreeForRow
   } = store
-  const { rerunRunIdsInFlightRef, setRerunRunIdsInFlight } = local
+  const { rerunRunIdsInFlightRef, setRerunRunIdsInFlight, setRunNowPending } = local
   const {
     automationHostTargetFor,
     automationDispatchContext,
@@ -79,15 +79,29 @@ export function createAutomationRunActions({
       toast.error(availability.message)
       return
     }
-    const result = await dispatchAutomationRunNow(
-      automationDispatchContext,
-      { rowKey: row.key, automationId: row.automation.id },
-      () => runAutomationNowForTarget(row.automation, rowHostTarget)
-    )
+    // Why: the detail's Run now stays busy until the run it started is listed, so a
+    // second click can't queue a duplicate; a scheduled run in progress never blocks it.
+    setRunNowPending({ rowKey: row.key, requestedAt: Date.now(), runId: null })
+    let result: Awaited<ReturnType<typeof dispatchAutomationRunNow>>
+    try {
+      result = await dispatchAutomationRunNow(
+        automationDispatchContext,
+        { rowKey: row.key, automationId: row.automation.id },
+        () => runAutomationNowForTarget(row.automation, rowHostTarget)
+      )
+    } catch (error) {
+      setRunNowPending(null)
+      throw error
+    }
     reportOwnerAction(row.key, result.ok ? null : result.notice)
     if (!result.ok) {
+      setRunNowPending(null)
       return
     }
+    const startedRunId = result.value?.id ?? null
+    setRunNowPending((current) =>
+      current?.rowKey === row.key ? { ...current, runId: startedRunId } : current
+    )
     useAppStore.getState().recordFeatureInteraction('automation-run')
     invalidateRowHost(row.key, 'run')
     await pageRefresh.hydratePersistedUIState()

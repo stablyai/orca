@@ -1,6 +1,4 @@
 import { useEffect } from 'react'
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getAutomationAuthorityTarget,
@@ -43,6 +41,7 @@ export function useAutomationRunPageState({
     | 'pageView'
     | 'setPageView'
     | 'setRunPageOrigin'
+    | 'setRunNotFound'
     | 'isDetailOpen'
     | 'setIsDetailOpen'
   >
@@ -72,6 +71,7 @@ export function useAutomationRunPageState({
     pageView,
     setPageView,
     setRunPageOrigin,
+    setRunNotFound,
     isDetailOpen,
     setIsDetailOpen
   } = local
@@ -125,7 +125,8 @@ export function useAutomationRunPageState({
     }
     const pending = pendingAutomationRunNavigation
     if (pending.runId && pageView !== 'run') {
-      setRunPageOrigin(pageView === 'automations' && isDetailOpen ? 'automation' : 'runs')
+      // Why: a deep link (workspace card, notification) undoes to its automation, not the Runs list.
+      setRunPageOrigin(pending.origin ?? 'automation')
       setPageView('run')
     }
     if (isLoading) {
@@ -147,15 +148,8 @@ export function useAutomationRunPageState({
       setSelectedId(pending.automationId)
       setSelectedAutomationRunPageId(null)
       setPendingAutomationRunNavigation(null)
-      if (pageView === 'run') {
-        setPageView('runs')
-      }
-      toast.message(
-        translate(
-          'auto.components.automations.AutomationsPage.pendingAutomationMissing',
-          'Automation no longer available.'
-        )
-      )
+      setRunNotFound({ kind: 'automation', automationId: pending.automationId })
+      setPageView('run')
       return
     }
     const pendingRow = visibleRows.find(
@@ -178,7 +172,7 @@ export function useAutomationRunPageState({
     }
     if (!pending.runId) {
       setIsDetailOpen(true)
-      setActivePaneTab('overview')
+      setActivePaneTab(pending.paneTab ?? 'overview')
       setSelectedAutomationRunPageId(null)
       setPendingAutomationRunNavigation(null)
       setPageView('automations')
@@ -188,17 +182,19 @@ export function useAutomationRunPageState({
       return
     }
     if (selectedRunsNotice) {
+      // The recent-runs rail shows why the history could not be read.
       setIsDetailOpen(true)
-      setActivePaneTab('runs')
+      setActivePaneTab('overview')
       setSelectedAutomationRunPageId(null)
       setPendingAutomationRunNavigation(null)
       setPageView('automations')
       return
     }
     setIsDetailOpen(true)
-    setActivePaneTab('runs')
+    setActivePaneTab(pending.origin === 'automationRuns' ? 'runs' : 'overview')
     const pendingRun = selectedRuns.find((run) => run.id === pending.runId)
     if (pendingRun) {
+      setRunPageOrigin(pending.origin ?? 'automation')
       setSelectedAutomationRunPageId(pending.runId)
       setPendingAutomationRunNavigation(null)
       setPageView('run')
@@ -206,20 +202,12 @@ export function useAutomationRunPageState({
     }
     setSelectedAutomationRunPageId(null)
     setPendingAutomationRunNavigation(null)
-    if (pageView === 'run') {
-      setPageView('runs')
-    }
-    toast.message(
-      translate(
-        'auto.components.automations.AutomationsPage.pendingAutomationRunMissing',
-        'Run history no longer available.'
-      )
-    )
+    setRunNotFound({ kind: 'run', automationId: pending.automationId })
+    setPageView('run')
   }, [
     automations,
     automationHostTargetKey,
     isLoading,
-    isDetailOpen,
     hostCatalog,
     selectAutomationRow,
     visibleRows,
@@ -238,6 +226,7 @@ export function useAutomationRunPageState({
     setPendingAutomationRunNavigation,
     setPageView,
     setRunPageOrigin,
+    setRunNotFound,
     setSelectedAutomationRunPageId,
     setSelectedId
   ])

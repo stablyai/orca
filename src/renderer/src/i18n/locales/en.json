@@ -18538,7 +18538,9 @@
           "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported",
           "createdBy": "Created by",
           "createdByPluginTitle": "Plugin {{plugin}}",
-          "createdByEnded": "Plugin removed or disabled; it must ask before changing this automation"
+          "createdByEnded": "Plugin removed or disabled; it must ask before changing this automation",
+          "active": "Active",
+          "runNowStarting": "Starting…"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -19024,7 +19026,9 @@
         },
         "runWorkspaceDisplay": {
           "notLaunched": "Not launched",
-          "namedWorkspaceGone": "{{name}} (no longer available)"
+          "namedWorkspaceGone": "{{name}} (no longer available)",
+          "removed": "Removed",
+          "namedRemoved": "{{name}} was removed"
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
@@ -19051,6 +19055,34 @@
         },
         "launchSettings": {
           "needsFreshSession": "Agent launch settings require a fresh session for every run."
+        },
+        "runNotFound": {
+          "crumbRun": "Run not found",
+          "crumbAutomation": "Automation not found",
+          "runTitle": "This run no longer exists",
+          "automationTitle": "This automation no longer exists",
+          "runDescription": "It was deleted or dropped from the retained run history.",
+          "automationDescription": "It was deleted, or its host no longer lists it.",
+          "openAutomation": "Open {{name}}",
+          "goToAutomations": "Go to Automations"
+        },
+        "recentRuns": {
+          "title": "Recent runs",
+          "allRuns": "All {{count}} runs"
+        },
+        "runIdentity": {
+          "triggerManual": "Run now",
+          "triggerScheduled": "Scheduled",
+          "newerRun": "Newer run",
+          "olderRun": "Older run",
+          "needsCredentials": "{{host}} needs credentials to reconnect, so this run did not start.",
+          "signIn": "Sign in to {{host}}",
+          "output": "Output",
+          "details": "Details",
+          "runNumber": "Run #{{number}}"
+        },
+        "runTable": {
+          "result": "Result"
         }
       },
       "agent": {

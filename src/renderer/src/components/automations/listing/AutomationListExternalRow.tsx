@@ -26,12 +26,12 @@ import type { ExternalAutomationListEntry } from '../external/external-automatio
 import type { ExternalAutomationScope } from '../external/external-automation-scope-client'
 import {
   formatExternalDate,
-  getExternalProviderLabel,
-  getExternalTargetKindLabel
+  getExternalProviderLabel
 } from '../external/external-automation-display'
 import { getExternalAutomationScheduleDisplay } from '../external/external-automation-schedule-display'
 import { getExternalAutomationActionDisabledMessage } from '../external/external-automation-source-availability'
-import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
+import { automationsTableGridClass } from './automations-table-layout'
+import { externalAutomationHostLabel } from './automation-list-host'
 import {
   LIST_TABLE_ROW_CLASS,
   LIST_TABLE_ROW_SELECTED_CLASS,
@@ -43,7 +43,7 @@ import {
 } from '@/lib/list-interaction/list-row-interaction'
 import { getExternalAutomationLastRunSnapshot } from './automation-list-last-run'
 import { AutomationListLastRunCell } from './AutomationListLastRunCell'
-import { AutomationListStatusCell } from './AutomationListStatusCell'
+import { AutomationListNextRunCell } from './AutomationListNextRunCell'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export type AutomationListExternalRowProps = {
@@ -52,6 +52,8 @@ export type AutomationListExternalRowProps = {
   relativeNow: number
   sshConnectionStates: ReadonlyMap<string, Pick<SshConnectionState, 'status'>>
   externalActionKey: string | null
+  /** The list spans more than one host. */
+  showHost?: boolean
   onSelect: (entryKey: string) => void
   onRequestAction: (
     manager: ExternalAutomationManager,
@@ -63,6 +65,7 @@ export type AutomationListExternalRowProps = {
 
 export function AutomationListExternalRow({
   entry,
+  showHost = false,
   selectedExternalKey,
   relativeNow,
   sshConnectionStates,
@@ -94,8 +97,7 @@ export function AutomationListExternalRow({
     t,
     intlLocale
   ).label
-  const hostLabel =
-    entry.manager.targetLabel || entry.manager.label || getExternalTargetKindLabel(entry.manager, t)
+  const hostLabel = externalAutomationHostLabel(entry, t)
   const projectLabel = entry.job.workdir ?? providerLabel
   const nextRunLabel = entry.job.enabled
     ? formatExternalDate(entry.job.nextRunAt, relativeNow, t, intlLocale)
@@ -108,7 +110,9 @@ export function AutomationListExternalRow({
         <div
           role="button"
           tabIndex={0}
+          data-automation-external-id={entry.key}
           data-current={isSelected ? 'true' : undefined}
+          aria-label={`${entry.job.name}, ${scheduleLabel}`}
           onClick={(event) => {
             // React bubbles portaled menu clicks through this row; ignore them to avoid opening detail.
             if (isPortaledRowMenuClick(event)) {
@@ -124,31 +128,39 @@ export function AutomationListExternalRow({
             onSelect(entry.key)
           }}
           className={cn(
-            AUTOMATIONS_TABLE_GRID_CLASS,
+            automationsTableGridClass(showHost),
             LIST_TABLE_ROW_CLASS,
             isSelected && LIST_TABLE_ROW_SELECTED_CLASS
           )}
         >
-          <span className={LIST_TABLE_STICKY_ROW_CELL_CLASS}>
-            <span className="min-w-0 truncate font-medium">{entry.job.name}</span>
-          </span>
-          <span className="min-w-0 truncate text-muted-foreground" title={scheduleLabel}>
-            {scheduleLabel}
+          <span className={cn(LIST_TABLE_STICKY_ROW_CELL_CLASS, 'gap-2.5')}>
+            <span
+              className="flex size-4 shrink-0 items-center justify-center rounded-sm bg-muted text-3xs font-semibold text-muted-foreground"
+              title={providerLabel}
+              aria-hidden="true"
+            >
+              {providerLabel.slice(0, 1)}
+            </span>
+            <span className="flex min-w-0 flex-col">
+              <span className="min-w-0 truncate font-medium">{entry.job.name}</span>
+              <span
+                className="min-w-0 truncate text-xs text-muted-foreground"
+                title={scheduleLabel}
+              >
+                {scheduleLabel}
+              </span>
+            </span>
           </span>
           <span className="min-w-0 truncate text-muted-foreground" title={projectLabel}>
             {projectLabel}
           </span>
-          <span className="min-w-0 truncate text-muted-foreground" title={hostLabel}>
-            {hostLabel}
-          </span>
-          <span className="min-w-0 truncate text-muted-foreground" title={nextRunLabel}>
-            {nextRunLabel}
-          </span>
+          {showHost ? (
+            <span className="min-w-0 truncate text-muted-foreground" title={hostLabel}>
+              {hostLabel}
+            </span>
+          ) : null}
+          <AutomationListNextRunCell enabled={entry.job.enabled} nextRunLabel={nextRunLabel} />
           <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
-          <AutomationListStatusCell enabled={entry.job.enabled} />
-          <span className="truncate text-center text-xs text-muted-foreground">
-            {providerLabel}
-          </span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

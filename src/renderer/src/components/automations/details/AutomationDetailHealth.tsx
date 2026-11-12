@@ -16,18 +16,20 @@ function HealthCell({
   value,
   detail,
   tone,
-  title
+  title,
+  onClick
 }: {
   label: string
   value: string
   detail?: string | null
   tone?: AutomationLastRunTone
   title?: string
+  onClick?: () => void
 }): React.JSX.Element {
   const failed = tone === 'failed'
   const showDot = tone !== undefined && tone !== 'never'
-  return (
-    <div className="min-w-0 bg-background px-4 py-3" title={title}>
+  const content = (
+    <>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div
         className={cn(
@@ -42,8 +44,10 @@ function HealthCell({
               failed
                 ? 'bg-destructive'
                 : tone === 'succeeded'
-                  ? 'bg-foreground'
-                  : 'bg-muted-foreground/70'
+                  ? 'bg-status-success'
+                  : tone === 'running'
+                    ? 'animate-pulse bg-foreground motion-reduce:animate-none'
+                    : 'bg-muted-foreground/70'
             )}
             aria-hidden="true"
           />
@@ -53,6 +57,20 @@ function HealthCell({
       {detail ? (
         <div className="mt-0.5 truncate text-xs text-muted-foreground tabular-nums">{detail}</div>
       ) : null}
+    </>
+  )
+  return onClick ? (
+    <button
+      type="button"
+      onClick={onClick}
+      className="min-w-0 bg-background px-4 py-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50"
+      title={title}
+    >
+      {content}
+    </button>
+  ) : (
+    <div className="min-w-0 bg-background px-4 py-3" title={title}>
+      {content}
     </div>
   )
 }
@@ -62,12 +80,14 @@ export function AutomationDetailHealth({
   automation,
   runs,
   latestRun,
-  now
+  now,
+  onOpenRun
 }: {
   automation: Automation
   runs: AutomationRun[]
   latestRun: AutomationRun | undefined
   now: number
+  onOpenRun?: (run: AutomationRun) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -124,6 +144,7 @@ export function AutomationDetailHealth({
           value={lastRunValue}
           detail={lastRunDetail}
           tone={lastRun.tone}
+          onClick={latestRun && onOpenRun ? () => onOpenRun(latestRun) : undefined}
         />
         <HealthCell
           label={t('auto.components.automations.AutomationDetail.578ff46987', 'Next run')}

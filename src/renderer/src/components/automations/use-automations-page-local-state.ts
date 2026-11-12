@@ -19,6 +19,8 @@ import {
 } from './listing/automation-list-view'
 import type {
   AutomationPaneTab,
+  AutomationRunNotFound,
+  AutomationRunNowPending,
   AutomationRunPageOrigin,
   AutomationsPageView
 } from './automation-page-state'
@@ -74,6 +76,8 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const [relativeNow, setRelativeNow] = useState(() => Date.now())
   const [pageView, setPageView] = useState<AutomationsPageView>('automations')
   const [runPageOrigin, setRunPageOrigin] = useState<AutomationRunPageOrigin>('runs')
+  const [runNotFound, setRunNotFound] = useState<AutomationRunNotFound | null>(null)
+  const [runNowPending, setRunNowPending] = useState<AutomationRunNowPending | null>(null)
   const [activePaneTab, setActivePaneTab] = useState<AutomationPaneTab>('overview')
   const [selectedAutomationRunPageId, setSelectedAutomationRunPageId] = useState<string | null>(
     null
@@ -202,6 +206,10 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     setPageView,
     runPageOrigin,
     setRunPageOrigin,
+    runNotFound,
+    setRunNotFound,
+    runNowPending,
+    setRunNowPending,
     activePaneTab,
     setActivePaneTab,
     selectedAutomationRunPageId,

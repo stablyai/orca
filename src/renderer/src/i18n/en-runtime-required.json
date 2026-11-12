@@ -147,16 +147,27 @@
       },
       "automations": {
         "AutomationDetail": {
+          "91a4155e95": "Pause automation",
+          "d79452fb30": "Resume automation",
           "graceHours_one": "{{count}} hour",
           "graceHours_other": "{{count}} hours",
           "graceMinutes_one": "{{count}} minute",
           "graceMinutes_other": "{{count}} minutes"
         },
+        "AutomationRunHistory": {
+          "9974a2b429": "Status"
+        },
+        "AutomationRunPageFrame": {
+          "33741dd973": "Back to runs",
+          "40a511bed4": "Run context"
+        },
         "AutomationRunsDashboard": {
           "historyUnavailable_one": "Run history is unavailable for {{count}} automation. Counts include available history only.",
           "historyUnavailable_other": "Run history is unavailable for {{count}} automations. Counts include available history only.",
           "local": "Local",
-          "remote": "Remote"
+          "remote": "Remote",
+          "runs": "Runs",
+          "triggered": "Triggered"
         },
         "AutomationSchedulePicker": {
           "55b2ef82a4": "Hourly",
@@ -166,13 +177,21 @@
           "f0202f3a89": "Daily"
         },
         "AutomationsPage": {
+          "backToList": "All automations",
+          "bb1b2cd31e": "Overview",
+          "c3a28c9793": "Select an automation to view runs.",
           "moveOriginalKept": "Created on {host}, but the original could not be deleted. Remove it on the old host.",
           "moveOriginalUnverified": "Created on {host}, but the original deletion could not be verified. Check the old host before retrying.",
+          "pendingAutomationMissing": "Automation no longer available.",
+          "pendingAutomationRunMissing": "Run history no longer available.",
           "runUsageSummaryTokens_one": "{{cost}} est. · {{tokens}} token",
           "runUsageSummaryTokens_other": "{{cost}} est. · {{tokens}} tokens",
           "tableLastRun": "Last run",
           "tableName": "Name",
           "tableProject": "Project"
+        },
+        "AutomationsPageBreadcrumb": {
+          "runDetails": "Run details"
         },
         "ExternalAutomationManagers": {
           "automationCount_one": "{{count}} automation",
@@ -199,6 +218,9 @@
           "occurrencesWithLatestCount_other": "{{count}} times, most recently {{date}}",
           "runCountSummary_one": "{{count}} run · {{completed}} completed",
           "runCountSummary_other": "{{count}} runs · {{completed}} completed"
+        },
+        "runWorkspaceDisplay": {
+          "namedWorkspaceGone": "{{name}} (no longer available)"
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",

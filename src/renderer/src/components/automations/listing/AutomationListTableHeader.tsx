@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
+import { automationsTableGridClass } from './automations-table-layout'
 import {
   LIST_TABLE_HEADER_CLASS,
   LIST_TABLE_STICKY_HEADER_CELL_CLASS
@@ -13,6 +13,7 @@ type HeaderColumn = {
   fallback: string
   /** Absent for columns the list cannot order by. */
   sortField?: AutomationListSortField
+  hostOnly?: boolean
 }
 
 const COLUMNS: readonly HeaderColumn[] = [
@@ -22,16 +23,13 @@ const COLUMNS: readonly HeaderColumn[] = [
     sortField: 'name'
   },
   {
-    key: 'auto.components.automations.AutomationDetail.18763ded26',
-    fallback: 'Schedule'
-  },
-  {
     key: 'auto.components.automations.AutomationsPage.tableProject',
     fallback: 'Project'
   },
   {
     key: 'auto.components.automations.AutomationsPage.tableHost',
-    fallback: 'Host'
+    fallback: 'Host',
+    hostOnly: true
   },
   {
     key: 'auto.components.automations.AutomationDetail.578ff46987',
@@ -41,37 +39,28 @@ const COLUMNS: readonly HeaderColumn[] = [
     key: 'auto.components.automations.AutomationsPage.tableLastRun',
     fallback: 'Last run',
     sortField: 'lastRun'
-  },
-  {
-    key: 'auto.components.automations.AutomationsPage.tableStatus',
-    fallback: 'Status'
-  },
-  {
-    key: 'auto.components.automations.AutomationDetail.2df8970cd5',
-    fallback: 'Agent'
   }
 ]
 
 export function AutomationListTableHeader({
   sort = null,
-  onSort
+  onSort,
+  showHost = false
 }: {
   sort?: AutomationListSort | null
   onSort?: (field: AutomationListSortField) => void
+  showHost?: boolean
 } = {}): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className={`${AUTOMATIONS_TABLE_GRID_CLASS} ${LIST_TABLE_HEADER_CLASS}`}>
-      {COLUMNS.map((column, index) => {
+    <div className={`${automationsTableGridClass(showHost)} ${LIST_TABLE_HEADER_CLASS}`}>
+      {COLUMNS.filter((column) => showHost || !column.hostOnly).map((column, index) => {
         const label = t(column.key, column.fallback)
-        const className =
-          index === 0
-            ? LIST_TABLE_STICKY_HEADER_CELL_CLASS
-            : index === COLUMNS.length - 1
-              ? 'text-center'
-              : undefined
         return (
-          <span key={column.key} className={className}>
+          <span
+            key={column.key}
+            className={index === 0 ? LIST_TABLE_STICKY_HEADER_CELL_CLASS : undefined}
+          >
             {column.sortField && onSort ? (
               <AutomationListSortHeader
                 field={column.sortField}
