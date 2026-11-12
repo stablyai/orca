@@ -342,8 +342,9 @@ export default function TabGroupPanel({
         </div>
       )}
 
-      {/* GIT-SETUP: under the tab row, above the panes; once per workspace (the focused split). */}
-      {!hasSplitGroups || isFocused ? <CloudGitSetupStrip worktreeId={worktreeId} /> : null}
+      {/* GIT-SETUP: under the tab row, above the panes; once per workspace, in the top-left group
+          whatever has focus, so it never moves between splits. */}
+      {reserveCollapsedSidebarHeaderSpace ? <CloudGitSetupStrip worktreeId={worktreeId} /> : null}
       <div
         ref={setBodyRef}
         data-tab-group-body-id={groupId}
