@@ -7,7 +7,8 @@ import {
   readWorkspaceReviewPR,
   type PRCacheView
 } from '../../../shared/sidebar-list/workspace-review-facts'
-import { isFullGitCommitOid } from '../../../shared/source-control/decisions/source-control-base-ref-resolution'
+import { isFullGitObjectId } from '../../git/refs/resolution/commit-object-ref'
+import { resolveWorktreeAddBaseRef, worktreeBaseRefFamily } from '../../../shared/worktree/base-ref'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorkspaceCleanupMergeEvidence } from '../../../shared/workspace-cleanup/workspace-cleanup'
 import {
@@ -61,10 +62,12 @@ async function readMergeEvidence(
     return undefined
   }
   const branchName = worktree.branch.replace(/^refs\/heads\//, '')
-  // The worktree's HEAD is the branch itself, so prove against the base alone, never the default target list.
+  // The proof reads the branch ref, so it only speaks for HEAD while HEAD is still that branch.
+  // Prove against the base alone: the default target list includes the worktree's HEAD, the branch itself.
   const headInDefaultBranch =
     aheadOfDefault === 0 ||
     (branchName.length > 0 &&
+      (await resolveCommitOid(git, `refs/heads/${branchName}`)) === headOid &&
       (await localBranchHasNoUnmergedChanges({
         cwd: worktree.path,
         branchName,
@@ -100,25 +103,32 @@ async function resolveWorkspaceCleanupBaseOid(
   const branchName = worktree.branch.replace(/^refs\/heads\//, '')
   for (const candidate of [worktree.baseRef, repo.worktreeBaseRef]) {
     const ref = candidate?.trim()
-    // A reused branch records itself (or its remote copy) as base, which would make every commit look landed.
-    if (!ref || isFullGitCommitOid(ref) || namesBranch(ref, branchName)) {
+    if (!ref || isFullGitObjectId(ref)) {
       continue
     }
-    const oid = await resolveCommitOid(git, ref)
+    const oid = await resolveBranchBaseOid(git, ref, branchName)
     if (oid) {
       return oid
     }
   }
   const defaultRef = await resolveDefaultBaseRefViaExec(git)
-  return defaultRef ? resolveCommitOid(git, defaultRef) : null
+  return defaultRef ? resolveBranchBaseOid(git, defaultRef, branchName) : null
 }
 
-function namesBranch(ref: string, branchName: string): boolean {
-  if (!branchName) {
-    return false
+/** Qualified so a tag cannot shadow the branch; a reused branch records itself (or its remote copy) as base, which would make every commit look landed. */
+async function resolveBranchBaseOid(
+  git: CleanupGit,
+  ref: string,
+  branchName: string
+): Promise<string | null> {
+  const qualified = await resolveWorktreeAddBaseRef(
+    ref,
+    async (candidate) => (await resolveCommitOid(git, candidate)) !== null
+  )
+  if (branchName && worktreeBaseRefFamily(qualified) === branchName) {
+    return null
   }
-  const shortRef = ref.replace(/^refs\/(heads|remotes)\//, '')
-  return shortRef === branchName || shortRef.endsWith(`/${branchName}`)
+  return resolveCommitOid(git, qualified)
 }
 
 async function resolveCommitOid(git: CleanupGit, ref: string): Promise<string | null> {

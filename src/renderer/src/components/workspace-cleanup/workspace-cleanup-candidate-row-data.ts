@@ -1,8 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type {
-  WorkspaceCleanupBlocker,
-  WorkspaceCleanupCandidate
+import {
+  isWorkspaceCleanupHeadLanded,
+  type WorkspaceCleanupBlocker,
+  type WorkspaceCleanupCandidate
 } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getWorkspaceCleanupGitState } from './workspace-cleanup-presentation'
 import {
@@ -135,7 +136,8 @@ export function formatBranchSafetyDetails(
   t?: Translate
 ): string[] {
   const details: string[] = []
-  if (candidate.git.upstreamAhead !== null) {
+  // Commits ahead of the upstream are not at risk once they landed in the base.
+  if (candidate.git.upstreamAhead !== null && !isWorkspaceCleanupHeadLanded(candidate.git.merge)) {
     details.push(
       candidate.git.upstreamAhead === 0
         ? getNoUnpushedCommitsLabel(t)
