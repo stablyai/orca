@@ -556,6 +556,7 @@
 :root {
   --notice-secondary-mix: 6%;
   --notice-muted-foreground: var(--muted-foreground);
+  --notice-secondary-edge: transparent;
   --notice-surface: var(--popover);
   --notice-border: color-mix(in srgb, var(--foreground) 14%, transparent);
   --notice-secondary: color-mix(
@@ -586,6 +587,16 @@
   --muted-foreground: var(--notice-muted-foreground);
   --secondary: var(--notice-secondary);
   --secondary-foreground: var(--popover-foreground);
+}
+
+/* Why inset outline: an edge for themes that leave secondary buttons unfilled, without moving layout. */
+:is([data-sonner-toaster], .notification-card-stack)
+  :is(
+    [data-slot='button'][data-variant='secondary'],
+    [data-sonner-toast] [data-button][data-cancel]
+  ) {
+  outline: 1px solid var(--notice-secondary-edge);
+  outline-offset: -1px;
 }
 
 [data-sonner-toaster] {
