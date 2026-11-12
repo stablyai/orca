@@ -88,9 +88,11 @@ export class MobileDictationAutoSend {
   register(scope: string, send: () => void): () => void {
     this.senders.set(scope, send)
     return () => {
-      if (this.senders.get(scope) === send) {
-        this.senders.delete(scope)
+      // A newer composer for this chat replaced this one, and the send is now its to make.
+      if (this.senders.get(scope) !== send) {
+        return
       }
+      this.senders.delete(scope)
       if (this.armed?.scope === scope || this.countdown?.scope === scope) {
         this.withdraw()
       }
