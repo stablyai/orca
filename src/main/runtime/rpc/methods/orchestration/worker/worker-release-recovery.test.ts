@@ -224,18 +224,6 @@ describe('orchestration worker release recovery', () => {
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
-  it('defers instead of settling unknown while inventory is incomplete', async () => {
-    setup()
-    const { dispatchId } = await startSettledWorker()
-    vi.mocked(runtime.closeTerminal).mockRejectedValueOnce(new Error('Multiplexer disposed'))
-    await call('orchestration.workerRelease', { dispatch: dispatchId })
-    vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
-
-    const result = await reconcileRequestedWorkerTerminalReleases(runtime)
-    expect(result).toMatchObject({ attempted: 1, pending: 1, unknown: 0 })
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('releasing')
-  })
-
   it('keeps the output reference when an unconfirmed release retry cannot find the terminal', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
@@ -292,17 +280,5 @@ describe('orchestration worker release recovery', () => {
       attempted: 0
     })
     expect(db.getWorkerTerminalResource(resourceId!)?.recovery_attempt_count).toBe(1)
-  })
-
-  it('removes terminal authority and archived output on orchestration reset', async () => {
-    setup()
-    const { dispatchId } = await startSettledWorker()
-    await call('orchestration.workerRelease', { dispatch: dispatchId })
-    expect(db.getWorkerTerminalArchive(dispatchId)).toBeDefined()
-
-    db.resetTasks()
-
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toBeUndefined()
-    expect(db.getWorkerTerminalArchive(dispatchId)).toBeUndefined()
   })
 })

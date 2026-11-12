@@ -2,10 +2,12 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { getWorktreeExecutionHostId } from '../../../shared/execution-host'
+import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
 import {
-  applyWorkspaceCleanupPolicy,
   createWorkspaceCleanupFingerprint,
   getWorkspaceCleanupInactivityReasons,
+  getWorkspaceCleanupMergeReasons,
   isWorkspaceOldForCleanup,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
@@ -23,11 +25,12 @@ export async function buildWorkspaceCleanupCandidate(args: {
   worktree: Worktree
   scannedAt: number
   route: WorkspaceCleanupGitRoute
+  prCache: PRCacheView<PRInfo>
   skipGit: boolean
   forceGitCheck: boolean
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupCandidate> {
-  const { repo, worktree, scannedAt, route, skipGit, forceGitCheck, signal } = args
+  const { repo, worktree, scannedAt, route, prCache, skipGit, forceGitCheck, signal } = args
   const blockers: WorkspaceCleanupBlocker[] = []
   const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt)
   const repoIsFolder = isFolderRepo(repo)
@@ -53,8 +56,9 @@ export async function buildWorkspaceCleanupCandidate(args: {
 
   const gitEvidence = !shouldReadGit
     ? createEmptyWorkspaceCleanupGitEvidence()
-    : await readWorkspaceCleanupGitEvidence(worktree, repo, route, signal)
+    : await readWorkspaceCleanupGitEvidence(worktree, repo, route, prCache, signal)
   appendWorkspaceCleanupItems(blockers, gitEvidence.blockers)
+  appendWorkspaceCleanupItems(reasons, getWorkspaceCleanupMergeReasons(gitEvidence.merge))
 
   const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {
     worktreeId: worktree.id,
@@ -65,8 +69,6 @@ export async function buildWorkspaceCleanupCandidate(args: {
     displayName: worktree.displayName,
     branch: shortWorkspaceCleanupBranchName(worktree.branch),
     path: worktree.path,
-    tier: 'review',
-    selectedByDefault: false,
     reasons,
     blockers: uniqueWorkspaceCleanupBlockers(blockers),
     lastActivityAt: worktree.lastActivityAt,
@@ -76,7 +78,8 @@ export async function buildWorkspaceCleanupCandidate(args: {
       clean: gitEvidence.clean,
       upstreamAhead: gitEvidence.upstreamAhead,
       upstreamBehind: gitEvidence.upstreamBehind,
-      checkedAt: gitEvidence.checkedAt
+      checkedAt: gitEvidence.checkedAt,
+      ...(gitEvidence.merge ? { merge: gitEvidence.merge } : {})
     },
     fingerprint: ''
   }
@@ -88,12 +91,12 @@ export async function buildWorkspaceCleanupCandidate(args: {
     lastActivityAt: worktree.lastActivityAt
   })
 
-  return applyWorkspaceCleanupPolicy({
+  return {
     ...candidateWithoutFingerprint,
     reasons: uniqueWorkspaceCleanupReasons(reasons),
     blockers: uniqueWorkspaceCleanupBlockers(blockers),
     fingerprint
-  })
+  }
 }
 
 export function buildWorkspaceCleanupCandidateFromError(
@@ -101,7 +104,7 @@ export function buildWorkspaceCleanupCandidateFromError(
   worktree: Worktree,
   scannedAt: number
 ): WorkspaceCleanupCandidate {
-  return applyWorkspaceCleanupPolicy({
+  return {
     worktreeId: worktree.id,
     repoId: repo.id,
     repoName: repo.displayName,
@@ -110,8 +113,6 @@ export function buildWorkspaceCleanupCandidateFromError(
     displayName: worktree.displayName,
     branch: shortWorkspaceCleanupBranchName(worktree.branch),
     path: worktree.path,
-    tier: 'protected',
-    selectedByDefault: false,
     reasons: getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt),
     blockers: ['git-status-error'],
     lastActivityAt: worktree.lastActivityAt,
@@ -129,7 +130,7 @@ export function buildWorkspaceCleanupCandidateFromError(
       gitClean: null,
       lastActivityAt: worktree.lastActivityAt
     })
-  })
+  }
 }
 
 export function buildWorkspaceCleanupLocalContext(

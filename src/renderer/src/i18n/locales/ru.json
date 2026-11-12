@@ -3954,7 +3954,6 @@
             "runningTerminalBlocker": "Работающий процесс терминала",
             "terminalLivenessUnknownBlocker": "Состояние работы терминала неизвестно",
             "dirtyEditorBufferBlocker": "Несохранённый буфер редактора",
-            "volatileLocalContextBlocker": "Несохранённый локальный контекст",
             "recentVisibleContextBlocker": "Недавно открытые вкладки",
             "liveAgentBlocker": "Работающий агент",
             "sshDisconnectedBlocker": "Удалённый компьютер недоступен",

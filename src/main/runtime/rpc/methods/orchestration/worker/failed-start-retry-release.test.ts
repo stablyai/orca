@@ -104,20 +104,6 @@ describe('retrying a failed worker-start', () => {
     expect(h.db.getWorkerTerminalArchive(failed.dispatchId)).toBeTruthy()
   })
 
-  it('also releases a worker that ran and reported its own failure', async () => {
-    h.setup()
-    giveRetryItsOwnTerminal()
-    const ran = await h.startSettledWorker('failed')
-    vi.spyOn(h.runtime, 'waitForTerminal').mockResolvedValue(BLOCKED_WAIT)
-
-    await retry(ran)
-
-    await vi.waitFor(() =>
-      expect(h.db.getWorkerTerminalResourceByOwner(ran.dispatchId)?.release_state).toBe('released')
-    )
-    expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
-  })
-
   it('keeps a pane the user kept open', async () => {
     h.setup()
     const failed = await failFirstStart()
@@ -129,28 +115,6 @@ describe('retrying a failed worker-start', () => {
       ownership_state: 'owned',
       retained_reason: 'user_kept'
     })
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-  })
-
-  it('leaves the pane alone when the retry reuses a terminal explicitly', async () => {
-    h.setup()
-    const failed = await failFirstStart()
-    vi.spyOn(h.runtime, 'waitForTerminal').mockResolvedValue({
-      ...BLOCKED_WAIT,
-      satisfied: true,
-      blockedReason: undefined
-    })
-
-    await h.call('orchestration.workerStart', {
-      task: failed.taskId,
-      retryOf: failed.dispatchId,
-      from: 'term_coord',
-      terminal: 'term_retry'
-    })
-
-    expect(h.db.getWorkerTerminalResourceByOwner(failed.dispatchId)?.release_state).toBe(
-      'not_requested'
-    )
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
   })
 

@@ -1532,6 +1532,20 @@ html.native-shell .app-layout {
   color: var(--accent-foreground);
 }
 
+/* Why: the split-pane landing card is a flat surface, so its highlight is a plain fill on
+   --popover with no ring; these out-rank the palette rules above in both themes. */
+.split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+  --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 12%, var(--popover));
+  background: var(--jump-palette-selection-surface);
+  box-shadow: none;
+}
+
+.dark .split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+  --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 8%, var(--popover));
+  background: var(--jump-palette-selection-surface);
+  box-shadow: none;
+}
+
 [data-file-explorer-row][data-selected='true'] {
   /* Why: flat bg-accent ≈ panel background in light mode, so selection mixes
      foreground into accent and adds an inset ring to stay legible in both themes. */
