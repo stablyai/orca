@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { gzipSync, gunzipSync } from 'node:zlib'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import * as durable from '../filesystem/durable-file-write'
 import { sealUsageCacheJson, verifyUsageCacheJson } from '../usage/cache/usage-cache-json-integrity'
 import { readClaudeUsageJson, writeClaudeUsageJson } from './source-cache-compression'
 
@@ -86,29 +87,40 @@ it.each([0, 129 * 1024 * 1024])('rejects out-of-range gzip footer %i', async (de
   await expect(readClaudeUsageJson(ref().path, domain)).rejects.toThrow()
 })
 
-it('streams bounded gzip inputs at N and 10N source histories', async () => {
-  const original = Readable.from
-  const receipts: { iterable: boolean; maximum: number; bytes: number; chunks: number }[] = []
-  const spy = vi.spyOn(Readable, 'from').mockImplementation((input, options) => {
+it('streams bounded gzip inputs and publication at N and 10N source histories', async () => {
+  type Receipt = { iterable: boolean; maximum: number; bytes: number; chunks: number }
+  const inputs: Receipt[] = []
+  const outputs: Receipt[] = []
+  async function* measure(payload: durable.DurableFilePayload, receipts: Receipt[]) {
     const receipt = {
-      iterable: typeof input !== 'string' && !(input instanceof Uint8Array),
+      iterable: typeof payload !== 'string' && !(payload instanceof Uint8Array),
       maximum: 0,
       bytes: 0,
       chunks: 0
     }
     receipts.push(receipt)
-    async function* chunks() {
-      const iterable = typeof input === 'string' || input instanceof Uint8Array ? [input] : input
-      for await (const chunk of iterable) {
-        const bytes = typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.byteLength
-        receipt.maximum = Math.max(receipt.maximum, bytes)
-        receipt.bytes += bytes
-        receipt.chunks++
-        yield chunk
-      }
+    const iterable =
+      typeof payload === 'string' || payload instanceof Uint8Array ? [payload] : payload
+    for await (const chunk of iterable) {
+      const bytes = typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.byteLength
+      receipt.maximum = Math.max(receipt.maximum, bytes)
+      receipt.bytes += bytes
+      receipt.chunks++
+      yield chunk
     }
-    return original.call(Readable, chunks(), options)
-  })
+  }
+  const originalFrom = Readable.from
+  const inputSpy = vi
+    .spyOn(Readable, 'from')
+    .mockImplementation((input, options) =>
+      originalFrom.call(Readable, measure(input, inputs), options)
+    )
+  const originalWrite = durable.writeTempFileDurable
+  const outputSpy = vi
+    .spyOn(durable, 'writeTempFileDurable')
+    .mockImplementation((path, payload, mode) =>
+      originalWrite(path, measure(payload, outputs), mode)
+    )
   try {
     for (const events of [10_000, 100_000]) {
       const value = {
@@ -122,13 +134,17 @@ it('streams bounded gzip inputs at N and 10N source histories', async () => {
       expect(loaded.verified).toBe(true)
       expect(loaded.parsed).toMatchObject(value)
     }
-    for (const receipt of receipts) {
+    for (const receipt of [...inputs, ...outputs]) {
       expect(receipt.iterable).toBe(true)
       expect(receipt.maximum).toBeLessThanOrEqual(256 * 1024)
+    }
+    for (const receipt of inputs) {
       expect(receipt.chunks).toBeLessThanOrEqual(Math.ceil(receipt.bytes / (32 * 1024)) + 1)
     }
-    expect(receipts).toHaveLength(2)
+    expect(inputs).toHaveLength(2)
+    expect(outputs).toHaveLength(2)
   } finally {
-    spy.mockRestore()
+    inputSpy.mockRestore()
+    outputSpy.mockRestore()
   }
 })
