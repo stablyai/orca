@@ -14,9 +14,11 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
-import { AI_VAULT_AGENT_SOURCES } from '../discovery/session-scanner-agent-sources'
+import {
+  AI_VAULT_AGENT_SOURCES,
+  sessionRowRootDirs
+} from '../discovery/session-scanner-agent-sources'
 import { isDiscoverableSessionFile } from '../discovery/session-file-discovery'
-import { sessionRowRootDirs } from '../discovery/session-scanner-agent-sources'
 import { subagentTranscriptsDirFor } from '../scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from '../session-scanner-types'
 

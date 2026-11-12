@@ -37,8 +37,7 @@ import {
   normalizeCodexUsage,
   subtractCodexUsage
 } from '../../parsing/session-scanner-token-values'
-import { asRecord } from '../../parsing/session-record-fields'
-import { extractGitBranch, extractModel } from '../../parsing/session-record-fields'
+import { asRecord, extractGitBranch, extractModel } from '../../parsing/session-record-fields'
 import { extractString } from '../../../../shared/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'

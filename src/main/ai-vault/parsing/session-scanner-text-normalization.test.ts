@@ -2,9 +2,12 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { extractFullFirstUserPromptText } from '../prompts/session-scanner-first-user-prompt'
-import { extractPreviewContentText } from './session-scanner-text-normalization'
+import {
+  extractPreviewContentText,
+  normalizePreviewText,
+  normalizeTitleText
+} from './session-scanner-text-normalization'
 import { primeAgentSessionsDirFromEnv } from '../discovery/agent-session-directories'
-import { normalizePreviewText, normalizeTitleText } from './session-scanner-text-normalization'
 
 describe('AI Vault session scanner text values', () => {
   it('normalizes compact title text without surfacing hidden context blocks', () => {

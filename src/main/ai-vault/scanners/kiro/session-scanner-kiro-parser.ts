@@ -15,10 +15,9 @@ import { consumeCompleteJsonlLines } from '../../parsing/session-scanner-jsonl-r
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
 import type { SkippedTranscriptRecord } from '../../transcripts/session-transcript-record-budget'
-import { arrayValue } from '../../parsing/session-record-fields'
+import { arrayValue, asRecord } from '../../parsing/session-record-fields'
 import { extractString } from '../../../../shared/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
-import { asRecord } from '../../parsing/session-record-fields'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
 type ParserSessionOptions = {

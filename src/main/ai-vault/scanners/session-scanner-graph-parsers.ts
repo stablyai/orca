@@ -32,12 +32,10 @@ import {
   updateTimeline
 } from '../parsing/session-scanner-accumulator'
 import { addSessionContent } from '../parsing/session-scanner-messages'
-import { arrayValue } from '../parsing/session-record-fields'
+import { arrayValue, firstString, asRecord } from '../parsing/session-record-fields'
 import { extractString } from '../../../shared/trimmed-string'
-import { firstString } from '../parsing/session-record-fields'
 import { parseJsonObject } from '../parsing/session-json-object'
 import { readJsonObjectIfExists } from '../discovery/session-json-file'
-import { asRecord } from '../parsing/session-record-fields'
 import {
   extractContentText,
   extractMessageText

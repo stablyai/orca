@@ -5,8 +5,10 @@ import { PrioritySemaphore } from '../../../shared/priority-semaphore'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { SessionNewestFiles } from './session-newest-files'
 import type { SessionSidecarObservation } from '../parse-cache/session-sidecar-stat'
-import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import type { AiVaultScanIssue } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import type {
+  AiVaultAgent,
+  AiVaultScanIssue
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { wslGatedReaddir, wslGatedStat } from '../../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../native-chat/wsl-transcript-fs-error'
 import { recordSessionScanIssue, scanIssueTextFromError } from '../parsing/session-scan-issues'
@@ -23,6 +25,7 @@ import {
   noteAiVaultScanWorkChanged,
   openAiVaultScanSource
 } from '../scan-lifecycle/ai-vault-scan-progress'
+import { isMissingTranscriptPathError } from './session-path-absence'
 
 const NATIVE_DISCOVERY_CONCURRENCY = 4
 const NATIVE_DISCOVERY_BATCH_SIZE = 16
@@ -249,18 +252,6 @@ async function observeSessionSidecar(
   } catch (error) {
     return isMissingTranscriptPathError(error) ? 'none' : 'unknown'
   }
-}
-
-/** A missing file or folder is absence, not a refusal; WSL gate errors are always refusals. */
-export function isMissingTranscriptPathError(error: unknown): boolean {
-  if (error instanceof WslTranscriptFsError) {
-    return false
-  }
-  const code =
-    error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
-      ? error.code
-      : null
-  return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
 /** Collecting form for callers that want every match; bounded scans stream. */

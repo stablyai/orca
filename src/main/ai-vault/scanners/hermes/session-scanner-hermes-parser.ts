@@ -11,9 +11,8 @@ import {
   updateTimeline
 } from '../../parsing/session-scanner-accumulator'
 import { addSessionContent } from '../../parsing/session-scanner-messages'
-import { arrayValue } from '../../parsing/session-record-fields'
+import { arrayValue, asRecord } from '../../parsing/session-record-fields'
 import { extractString } from '../../../../shared/trimmed-string'
-import { asRecord } from '../../parsing/session-record-fields'
 import { extractContentText } from '../../parsing/session-scanner-text-normalization'
 import { numberValue } from '../../parsing/session-scanner-token-values'
 

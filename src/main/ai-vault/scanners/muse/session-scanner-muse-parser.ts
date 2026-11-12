@@ -12,11 +12,10 @@ import {
 } from '../../parsing/session-scanner-accumulator'
 import { addSessionContent } from '../../parsing/session-scanner-messages'
 import { museSessionIdFromFilePath } from './session-scanner-muse-paths'
-import { arrayValue } from '../../parsing/session-record-fields'
+import { arrayValue, asRecord } from '../../parsing/session-record-fields'
 import { extractString } from '../../../../shared/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { timestampMs } from '../../parsing/session-record-time'
-import { asRecord } from '../../parsing/session-record-fields'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 import { numberValue } from '../../parsing/session-scanner-token-values'
 

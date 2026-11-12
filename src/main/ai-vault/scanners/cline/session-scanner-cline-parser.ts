@@ -14,9 +14,8 @@ import {
 import { addSessionContent } from '../../parsing/session-scanner-messages'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
-import { arrayValue } from '../../parsing/session-record-fields'
+import { arrayValue, asRecord } from '../../parsing/session-record-fields'
 import { extractString } from '../../../../shared/trimmed-string'
-import { asRecord } from '../../parsing/session-record-fields'
 import {
   extractContentText,
   normalizeTitleText

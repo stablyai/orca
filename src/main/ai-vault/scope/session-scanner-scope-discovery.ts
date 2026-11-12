@@ -18,7 +18,7 @@ import type { FileWithMtime } from '../session-scanner-types'
 import { extractString } from '../../../shared/trimmed-string'
 import { parseJsonObject } from '../parsing/session-json-object'
 import { scanIssueTextFromError } from '../parsing/session-scan-issues'
-import { isMissingTranscriptPathError } from '../discovery/session-scanner-discovery'
+import { isMissingTranscriptPathError } from '../discovery/session-path-absence'
 import { noteAiVaultScanFileFound } from '../scan-lifecycle/ai-vault-scan-progress'
 
 // Limit representative probing when a bucket contains transcripts without cwd records.
