@@ -6,6 +6,12 @@ import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
+import { readGrokAuthSession } from '../providers/grok/grok-auth'
+import {
+  bindGrokTokenRefreshSchedule,
+  clearGrokTokenRefreshSchedule,
+  noteGrokAuthForScheduledRefresh
+} from '../providers/grok/grok-token-refresh-schedule'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
 import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/antigravity-account-usage'
 import {
@@ -33,6 +39,14 @@ import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { NetworkProxySettings } from '../../../shared/network-proxy'
 
 export class RateLimitService extends RateLimitServiceAccountRefresh {
+  protected bindGrokAccessTokenRefresh(): void {
+    bindGrokTokenRefreshSchedule(() => {
+      void this.fetchGrokOnly({ force: true })
+    })
+    // Arm from the file even when the window is unfocused; the poll does not run then.
+    noteGrokAuthForScheduledRefresh(readGrokAuthSession(), false)
+  }
+
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {
     this.codexHomePathResolver = resolver
   }
@@ -157,6 +171,7 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
   }
 
   start(options: { fetchImmediately?: boolean } = {}): void {
+    this.bindGrokAccessTokenRefresh()
     if (options.fetchImmediately !== false) {
       this.clearDeferredStartupRefresh()
       void this.fetchAll()
@@ -167,6 +182,7 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
   }
 
   stop(): void {
+    clearGrokTokenRefreshSchedule()
     this.abortActiveFetchCycle()
     this.clearQueuedFetches()
     this.inactiveClaudeFetching.clear()

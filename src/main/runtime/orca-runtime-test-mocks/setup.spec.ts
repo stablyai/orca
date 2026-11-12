@@ -1,7 +1,7 @@
 export * from './github-hosted-review-test-harness'
 export * from './gitlab-test-harness'
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
-import { vi, type Mock } from 'vitest'
+import { vi, type Mock as TestMock } from 'vitest'
 
 import type * as GitUsernameModule from '../../git/repositories/git-username'
 import './repo-creation.spec'
@@ -13,8 +13,6 @@ export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
 import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
-
-type TestMock = Mock
 
 const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
 vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
