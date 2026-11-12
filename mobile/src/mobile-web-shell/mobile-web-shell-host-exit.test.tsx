@@ -58,7 +58,7 @@ const directSessionFromHomeState = {
   ]
 }
 
-async function notifySessionNavigate(href: string, replace: boolean): Promise<void> {
+async function notifySessionNavigate(href: string, replace?: boolean): Promise<void> {
   dependencies.pathname = SESSION_PATH
   dependencies.client = createFakeRpcClient()
   dependencies.state = harness.readyState('session-direct')
@@ -76,7 +76,14 @@ async function notifySessionNavigate(href: string, replace: boolean): Promise<vo
   await act(async () => {
     view?.props.onBridgeMessage({ nativeEvent: { json: clientFrame({ type: 'ready' }) } })
     view?.props.onBridgeMessage({
-      nativeEvent: { json: clientFrame({ type: 'notify', name: 'navigate', href, replace }) }
+      nativeEvent: {
+        json: clientFrame({
+          type: 'notify',
+          name: 'navigate',
+          href,
+          ...(replace === undefined ? {} : { replace })
+        })
+      }
     })
   })
   act(() => mounted.tree?.unmount())
@@ -92,15 +99,18 @@ afterEach(() => {
 })
 
 describe('leaving a session whose host list was skipped', () => {
-  it('pops back to the opener instead of opening the host workspace list', async () => {
-    dependencies.rootState = directSessionFromHomeState
-    dependencies.canGoBack = true
+  it.each([true, undefined])(
+    'pops back to the opener when replace is %s instead of opening the host workspace list',
+    async (replace) => {
+      dependencies.rootState = directSessionFromHomeState
+      dependencies.canGoBack = true
 
-    await notifySessionNavigate('/h/host-1', true)
+      await notifySessionNavigate('/h/host-1', replace)
 
-    expect(dependencies.back).toHaveBeenCalledTimes(1)
-    expect(dependencies.dismissTo).not.toHaveBeenCalled()
-  })
+      expect(dependencies.back).toHaveBeenCalledTimes(1)
+      expect(dependencies.dismissTo).not.toHaveBeenCalled()
+    }
+  )
 
   it('still dismisses to the host route when carrying a notice query', async () => {
     dependencies.rootState = directSessionFromHomeState

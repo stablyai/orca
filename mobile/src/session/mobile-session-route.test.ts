@@ -45,7 +45,7 @@ function mountedHostState(hostId: string): HostStackNavigationState {
 }
 
 describe('mobile session route', () => {
-  it('mounts the host, then opens the session over its list', () => {
+  it('mounts the host, then replaces its list with the session', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const push = vi.fn()
     const target = mobileSessionRouteTarget({
@@ -62,8 +62,9 @@ describe('mobile session route', () => {
     harness.setState(mountedHostState('host/one'))
 
     expect(harness.navigation.dispatch).toHaveBeenCalledWith({
-      type: 'PUSH',
+      type: 'REPLACE',
       target: '/h',
+      source: 'host-index',
       payload: target
     })
   })

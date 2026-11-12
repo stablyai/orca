@@ -123,10 +123,9 @@ export function routeViewOf(
     )
   // New pages keep ownership across rotation; legacy pages require the wide-only contract.
   const ownsHostArea = canOwnHostArea && pathname === root
-  // No pair for the host route in an owned detail session, so a hop there goes to the shell, which
-  // opens it owning the area rather than as a second host list in this pane.
+  // Omit the host route in detail sessions so exits reach the shell instead of mounting a host list in-pane.
   const paired =
-    canOwnHostArea && !ownsHostArea && root !== null
+    root !== null && pathname !== root
       ? entries.filter((route) => !matchesRoutePattern(root, route.pathname))
       : entries
   return {

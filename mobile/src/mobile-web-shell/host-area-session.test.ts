@@ -65,12 +65,22 @@ describe('the page declaring it can own the host area', () => {
         routes
       })
       expect(routeViewOf(parsed.routes, HOST_ROUTE, false).ownsHostArea).toBe(false)
+      expect(routeViewOf(parsed.routes, HOST_ROUTE, false).routeGrants).toEqual([
+        'navigate',
+        'storage',
+        'externalLink',
+        'haptics'
+      ])
       expect(routeViewOf(parsed.routes, HOST_ROUTE, true).ownsHostArea).toBe(true)
-      expect(
-        routeViewOf(parsed.routes, '/h/host-1/session/wt-1', false).pageRouteGrants.map(
-          (pair) => pair.pathname
-        )
-      ).toContain('/h/[hostId]')
     }
   )
+
+  it('hands host-route exits from legacy narrow detail sessions to the shell while keeping detail hops', () => {
+    const pairs = routeViewOf(desktopRoutes(true), '/h/host-1/session/wt-1', false).pageRouteGrants
+    expect(pairs.map((pair) => pair.pathname)).toEqual([
+      '/h/[hostId]/tasks',
+      '/h/[hostId]/files/[worktreeId]',
+      '/h/[hostId]/session/[worktreeId]'
+    ])
+  })
 })
