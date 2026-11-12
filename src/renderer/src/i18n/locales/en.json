@@ -29210,8 +29210,8 @@
     "billingBlock": {
       "plan": {
         "title": "Choose a plan",
-        "body": "Your team needs a plan to start cloud workspaces.",
-        "ask": "Ask an owner or admin to choose a plan."
+        "ask": "Ask an owner or admin to choose a plan.",
+        "body2": "Your team’s plan has ended."
       },
       "hours": {
         "title": "Out of sandbox hours",

@@ -31,8 +31,9 @@ function blockerCopy(
       return {
         title: t('worktreeCreation.billingBlock.plan.title', 'Choose a plan'),
         body: t(
-          'worktreeCreation.billingBlock.plan.body',
-          'Your team needs a plan to start cloud workspaces.'
+          // Only teams that had Orca Cloud reach the sheet; a never-planned team gets setup.
+          'worktreeCreation.billingBlock.plan.body2',
+          'Your team’s plan has ended.'
         ),
         ask: t('worktreeCreation.billingBlock.plan.ask', 'Ask an owner or admin to choose a plan.')
       }
