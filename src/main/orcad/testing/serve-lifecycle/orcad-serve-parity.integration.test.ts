@@ -93,6 +93,7 @@ function serveEnv(userData: string): NodeJS.ProcessEnv {
     ),
     ORCA_BACKGROUND_LAUNCH: '1',
     ORCA_DISABLE_MACOS_LOGIN_SHELL: '1',
+    ORCA_VERSION: '0.0.0-serve-parity-test',
     ORCA_USER_DATA: userData
   }
 }
@@ -169,6 +170,20 @@ describe.skipIf(skip)('orca serve on orcad', () => {
     try {
       await serveOnce(userData, ['--bind', '127.0.0.1', '--port', '0', '--json'], env)
       await cli(['repo', 'add', '--path', repo])
+      if (process.platform === 'win32') {
+        const catalog = await cli(['worktree', 'ps'])
+        reportServePhase(userData, 'registeredPaths', {
+          expectedWorktree: worktree,
+          gitWorktrees: await git(['worktree', 'list', '--porcelain']),
+          catalog: catalog.worktrees.map(
+            (row: { worktreeId: string; path: string; branch: string }) => ({
+              id: row.worktreeId,
+              path: row.path,
+              branch: row.branch
+            })
+          )
+        })
+      }
       await cli(['worktree', 'rm', '--worktree', `path:${worktree}`, '--force', '--delete-branch'])
       expect(existsSync(worktree)).toBe(false)
       expect(await git(['worktree', 'list', '--porcelain'])).not.toContain(
