@@ -93,6 +93,7 @@ function headerContext(): SectionHeaderRowContext {
         onHandlePointerDown: vi.fn()
       },
       repoDrag: { state: INITIAL_REPO_DRAG_STATE, onHandlePointerDown: vi.fn() },
+      repoMoveToTop: { isFirst: vi.fn(), move: vi.fn() },
       projectGroupDrag: { state: INITIAL_PROJECT_GROUP_DRAG_STATE, onHandlePointerDown: vi.fn() },
       sidebarRepoHeaderIdsByBucket: new Map(),
       sidebarProjectGroupHeaderIdsByBucket: new Map(),

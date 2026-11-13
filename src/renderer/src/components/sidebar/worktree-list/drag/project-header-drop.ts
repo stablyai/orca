@@ -27,16 +27,26 @@ export function getProjectHeaderDragBucketKey(
   return repo.projectGroupId ? `group:${repo.projectGroupId}` : 'ungrouped'
 }
 
+export function getProjectHeaderHostBucketKey(
+  hostId: string | undefined,
+  bucketKey: ProjectHeaderDragBucketKey
+): string {
+  return JSON.stringify([hostId ?? '', bucketKey])
+}
+
 export function getSidebarOrderedRepoHeaderIdsByBucket(
-  rows: readonly Row[]
+  rows: readonly Row[],
+  byHost = false
 ): Map<ProjectHeaderDragBucketKey, string[]> {
   const buckets = new Map<ProjectHeaderDragBucketKey, string[]>()
   for (const row of rows) {
     const repo = row.type === 'header' ? getHeaderDragRepo(row) : undefined
-    if (!repo) {
+    if (!repo || row.type !== 'header') {
       continue
     }
-    const bucketKey = getProjectHeaderDragBucketKey(repo)
+    const bucketKey = byHost
+      ? getProjectHeaderHostBucketKey(row.hostId, getProjectHeaderDragBucketKey(repo))
+      : getProjectHeaderDragBucketKey(repo)
     const list = buckets.get(bucketKey) ?? []
     list.push(repo.id)
     buckets.set(bucketKey, list)

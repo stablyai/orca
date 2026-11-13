@@ -19,6 +19,7 @@ export const INITIAL_REPO_DRAG_STATE: RepoDragState = {
 export type UseRepoHeaderDragArgs = RootProjectHeaderDrag & {
   orderedRepoIds: string[]
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
+  sidebarRepoHeaderIdsByHostBucket?: ReadonlyMap<string, readonly string[]>
   repoById: ReadonlyMap<string, Repo>
   getLiveRepos: () => readonly Repo[]
   usesProjectGroupOrdering: boolean

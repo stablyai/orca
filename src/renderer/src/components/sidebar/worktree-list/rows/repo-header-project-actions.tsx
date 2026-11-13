@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import React from 'react'
 import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
 import {
+  ArrowUpToLine,
   CircleX,
   Ellipsis,
   Eye,
@@ -30,6 +31,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
 import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
+import type { ProjectHeaderMoveToTop } from '../drag/project-header-move-to-top'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
@@ -87,7 +89,10 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
   hostRepos,
   label,
   projectGroups,
-  actions
+  actions,
+  moveToTopRepo,
+  moveToTopHostId,
+  moveToTop
 }: {
   repo: Repo
   /** A header spanning hosts: every copy it shows, which Hide hides together. */
@@ -95,6 +100,10 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
   label: string
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
+  // Why: the drag anchor may differ from `repo`; unset hides the item outside manual order.
+  moveToTopRepo?: Repo
+  moveToTopHostId?: string
+  moveToTop: ProjectHeaderMoveToTop
 }): React.JSX.Element {
   const t = useTranslate()
   // Memoized: subscribe so a language change still repaints its labels.
@@ -153,6 +162,15 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           <DropdownMenuItem onSelect={() => actions.onOpenWorktreeVisibility(repo)}>
             <Eye className="size-3.5" />
             {getWorktreeVisibilityMenuLabel(repo, actions.getWorktreeVisibilityDefaults(repo), t)}
+          </DropdownMenuItem>
+        ) : null}
+        {moveToTopRepo ? (
+          <DropdownMenuItem
+            disabled={moveToTop.isFirst(moveToTopRepo, moveToTopHostId)}
+            onSelect={() => moveToTop.move(moveToTopRepo, moveToTopHostId)}
+          >
+            <ArrowUpToLine className="size-3.5" />
+            {t('auto.components.sidebar.repoHeaderProjectActions.moveToTop', 'Move to top')}
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem onSelect={() => actions.onCreateGroupFromRepo(repo)}>
