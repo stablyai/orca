@@ -79,7 +79,7 @@ export function DictationController() {
   const { setupTarget, closeSetup, hasPendingStart, invalidatePendingStart, readyToRecord } =
     useDictationSpeechModelSetup(settings?.voice, isIdle, setPillAnchor)
   const queuedSend = useDictationQueuedSend(sessionRef, keptRef)
-  const { clear: clearQueuedSend, release: releaseQueuedSend } = queuedSend
+  const { follow: followQueuedSend, release: releaseQueuedSend, takeOverAutoSend } = queuedSend
   const cleanup = useDictationCleanup(keptRef)
   const { land: landCleanup, interrupt: interruptCleanup } = cleanup
 
@@ -100,16 +100,14 @@ export function DictationController() {
           setPillAnchor(null)
           keptRef.current = null
         }
-        if (next.phase === 'idle' || next.phase === 'error') {
-          clearQueuedSend()
-        }
+        followQueuedSend(next)
         if (next.phase !== 'error') {
           setFailure(null)
         }
       }
       return next
     },
-    [setDictationState, setLiveText, clearQueuedSend]
+    [setDictationState, setLiveText, followQueuedSend]
   )
 
   const finishDictationSession = useCallback(
@@ -203,6 +201,10 @@ export function DictationController() {
   }, [dispatch, finishCapture, finishDictationSession, invalidatePendingStart])
 
   const startDictation = useCallback(async () => {
+    // A new dictation during the countdown keeps the draft; that session has already finished.
+    if (takeOverAutoSend()) {
+      dispatch({ type: 'ended' })
+    }
     if (!canStartDictation(sessionRef.current.phase)) {
       return
     }
@@ -251,6 +253,14 @@ export function DictationController() {
     }
 
     let captureStarted = false
+    // Capture ended the recording before the user did; its words still land, but only as a draft.
+    const stopEarly = (markCutOff: () => void, showToast: () => void): void => {
+      markCutOff()
+      if (isCurrent()) {
+        showToast()
+        void stopDictation()
+      }
+    }
 
     try {
       // Capture and buffer before slow worker startup so speech during model load is retained.
@@ -261,19 +271,8 @@ export function DictationController() {
         microphoneDeviceId: preferredMicrophoneDeviceId,
         microphoneDeviceLabel: settings?.voice?.microphoneDeviceLabel ?? null,
         onFrame: kept.keep,
-        onCaptureLost: () => {
-          if (isCurrent()) {
-            showMicrophoneDisconnectedToast()
-            void stopDictation()
-          }
-        },
-        onAudioLimitReached: () => {
-          kept.reachedHostLimit()
-          if (isCurrent()) {
-            showCloudLimitToast()
-            void stopDictation()
-          }
-        }
+        onCaptureLost: () => stopEarly(kept.lostCapture, showMicrophoneDisconnectedToast),
+        onAudioLimitReached: () => stopEarly(kept.reachedHostLimit, showCloudLimitToast)
       })
       captureStarted = true
       if (captureResult?.fellBackToDefaultMicrophone) {
@@ -337,7 +336,8 @@ export function DictationController() {
     stoppedSessions,
     recordFeatureInteraction,
     showFailure,
-    readyToRecord
+    readyToRecord,
+    takeOverAutoSend
   ])
 
   const retryDictation = useDictationRetry({
@@ -375,7 +375,7 @@ export function DictationController() {
   })
 
   const { isHolding } = useHoldDictationGesture({
-    canStartDictation: () => canStartDictation(sessionRef.current.phase),
+    canStartDictation: () => queuedSend.canStart(sessionRef.current.phase),
     isDictationUnderway: () => isDictationUnderway(sessionRef.current.phase),
     keybindings,
     settings,
@@ -423,6 +423,7 @@ export function DictationController() {
       failure={failure}
       queued={queuedSend.queuedKind}
       cleanup={cleanup}
+      autoSend={queuedSend.autoSend}
       setup={setupTarget}
       onSetupClose={closeSetup}
     />

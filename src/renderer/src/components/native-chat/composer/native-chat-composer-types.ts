@@ -65,6 +65,8 @@ export type NativeChatComposerProps = {
   notices?: readonly NativeChatComposerNotice[]
   /** The conversation Up/Down recalls prompts from. */
   recallSource?: NativeChatRecallSource
+  /** The terminal agent's session; a new one in the same pane is a different conversation. */
+  conversationId?: string | null
 }
 
 export type NativeChatComposerHandle = {

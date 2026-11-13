@@ -21,6 +21,8 @@ export type DictationKeptRecording = {
   deliver: DictationTranscriptDelivery
   /** A retry spells with the dictionary of the place it started in. */
   context: DictationContext
+  /** Capture ended it before the user did (mic lost, cloud cap), so its words land only as a draft. */
+  cutOff: boolean
 }
 
 export function createDictationKeptRecording(
@@ -31,6 +33,7 @@ export function createDictationKeptRecording(
   keep: (samples: Float32Array) => void
   /** The host stopped accepting audio at its own cap, so the first ten minutes are all it would hear. */
   reachedHostLimit: () => void
+  lostCapture: () => void
 } {
   let samples = 0
   let hostLimited = false
@@ -41,6 +44,7 @@ export function createDictationKeptRecording(
     target,
     deliver,
     context,
+    cutOff: false,
     keep: (frame: Float32Array): void => {
       const room = MAX_KEPT_SAMPLES - samples
       if (room <= 0) {
@@ -57,6 +61,10 @@ export function createDictationKeptRecording(
     reachedHostLimit: (): void => {
       hostLimited = true
       recording.complete = true
+      recording.cutOff = true
+    },
+    lostCapture: (): void => {
+      recording.cutOff = true
     }
   }
   return recording

@@ -123,6 +123,9 @@ export type VoiceSettings = {
   /** Drops "um", "uh" and their equivalents in the dictation language before text is inserted. */
   removeFillerWords: boolean
   terminalConfirmBeforeInsert: boolean
+  /** Sends a message dictated into a chat composer once the words land, after autoSendDelayMs. */
+  autoSendAfterDictation: boolean
+  autoSendDelayMs: number
   openAiApiKeyConfigured: boolean
   /** null = system default input device */
   microphoneDeviceId: string | null

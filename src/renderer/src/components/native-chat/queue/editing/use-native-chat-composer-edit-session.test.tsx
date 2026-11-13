@@ -42,8 +42,8 @@ function Composer() {
       setNotice: () => {}
     },
     setNotice: () => {},
-    disabled: false,
-    sendHeld: false,
+    saveHeld: false,
+    autoSendTo: scope,
     sendMessage: () => {},
     completeItem: () => {}
   })

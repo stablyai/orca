@@ -12043,6 +12043,9 @@
               "silenceStopTitle": "Stop after silence",
               "silenceStopDescription": "Choose how long dictation keeps listening when you stop talking.",
               "silenceStopKeyword": "silence",
+              "autoSendDescription": "Send a dictated chat message after a short pause you can cancel.",
+              "autoSendKeyword": "auto send",
+              "handsFreeKeyword": "hands-free",
               "dictationTitle": "Dictation",
               "shortcutTitle": "Shortcut",
               "shortcutDescription": "The key that starts dictation.",
@@ -17966,7 +17969,8 @@
           "finish": "Finish",
           "oneMinuteLeft": "One minute left.",
           "sendsWhenLanded": "Sends when the text lands",
-          "entersWhenLanded": "Presses Enter when the text lands"
+          "entersWhenLanded": "Presses Enter when the text lands",
+          "sendingIn": "Sending in {{duration}}"
         },
         "DictationPillFailure": {
           "discard": "Discard recording",
@@ -22123,6 +22127,11 @@
           "off": "Off",
           "label": "Stop after silence",
           "short": "Ends dictation when you stop talking."
+        },
+        "autoSend": {
+          "label": "Send when dictation ends",
+          "description": "Sends what you dictate into a chat after a short pause. Type, click or press Esc to keep it as a draft.",
+          "delay": "Delay before sending"
         },
         "pageDescription": "Talk instead of typing in any pane.",
         "dictation": {
