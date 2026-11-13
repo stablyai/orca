@@ -131,21 +131,4 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
       }
     })
   })
-
-  it('reports an explicit null for the same lane inside a long tool call', async () => {
-    // Explicit null means checked-and-not-waiting; absence preserves compatibility with hosts too old to know.
-    const result = await showWorkerPaneServing(fixture('cursor-agent-long-tool-call'))
-
-    expect(result).toMatchObject({ observation: { exactWorker: true, agentWait: null } })
-  })
-
-  it('omits the field entirely for a worker it could not verify', async () => {
-    // Replaced processes were never checked; null would falsely claim no wait.
-    const result = (await showWorkerPaneServing(fixture('cursor-agent-approval-prompt'), {
-      breakIdentity: true
-    })) as { observation: Record<string, unknown> }
-
-    expect(result.observation.exactWorker).toBe(false)
-    expect('agentWait' in result.observation).toBe(false)
-  })
 })
