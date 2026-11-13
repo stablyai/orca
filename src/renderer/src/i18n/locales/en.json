@@ -1575,7 +1575,18 @@
           "routineRun": "Ran a routine",
           "routineRunStart": "A routine run started",
           "routineRunFinish": "A routine run finished",
-          "routineWebhook": "Replaced a routine’s webhook URL"
+          "routineWebhook": "Replaced a routine’s webhook URL",
+          "memberJoined": "Joined the team",
+          "teamDelete": "Deleted the team",
+          "planStarted": "Plan started",
+          "planChanged": "Plan changed",
+          "planCanceled": "Plan ended",
+          "cancelScheduled": "Plan set to end at the next renewal",
+          "cancelReverted": "Plan set to renew again",
+          "seatsChanged": "Seats changed",
+          "overageOn": "Turned on overage",
+          "overageOff": "Turned off overage",
+          "spendCapChanged": "Changed the overage spend cap"
         }
       },
       "sso": {

@@ -15,6 +15,7 @@ import {
 } from './store'
 import { entitlementsMode } from './entitlements-mode'
 import { loadCatalog } from './catalog'
+import { pushBillingAudit, subscriptionAuditEvents } from './audit-push'
 import { projectSubscription } from './grants'
 import { catalogIfApplied, isOveragePrice, recordSubscriptionPrices, seatPriceMatch, syncCatalogPrices, type PriceMatch } from './catalog-sync'
 import type { StripePrice } from './stripe'
@@ -160,6 +161,16 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
     seat_price_id: seatPrice?.id ?? null
   })
   await projectGrants(env, subscription.id, now)
+  // The team's audit log: plan started, changed or canceled, seats, a scheduled cancellation.
+  await pushBillingAudit(
+    env,
+    accountId,
+    subscriptionAuditEvents(
+      known,
+      { status: subscription.status, plan: match.plan, billing_interval: match.interval, seats, cancel_at_period_end: subscription.cancel_at_period_end ? 1 : 0 },
+      now
+    )
+  )
   if (overageItemId) {
     // An opted-out account's overage item goes once the period it was used in has been invoiced.
     const stored = await currentSubscription(db, accountId)
@@ -290,6 +301,7 @@ export async function endCustomerSubscriptions(env: Env, customerId: string, now
 async function markCanceled(env: Env, row: SubscriptionRow, now: number): Promise<void> {
   await upsertSubscription(env.BILLING_DB, { ...row, status: 'canceled', past_due_since: null, member_count: null, updated_at: now })
   await projectGrants(env, row.stripe_subscription_id, now)
+  await pushBillingAudit(env, row.account_id, subscriptionAuditEvents(row, { ...row, status: 'canceled' }, now))
 }
 
 /**

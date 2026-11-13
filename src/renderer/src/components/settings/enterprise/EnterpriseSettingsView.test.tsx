@@ -348,9 +348,55 @@ describe('copy', () => {
       'routine.run',
       'routine.run.start',
       'routine.run.finish',
-      'routine.rotate_webhook'
+      'routine.rotate_webhook',
+      // Sent by auth and billing (AUDIT-AUTH-EVENTS).
+      'member.invited',
+      'member.invite_revoked',
+      'member.joined',
+      'team.created',
+      'team.renamed',
+      'team.deleted',
+      'billing.plan_started',
+      'billing.plan_changed',
+      'billing.plan_canceled',
+      'billing.cancel_scheduled',
+      'billing.cancel_reverted',
+      'billing.seats_changed',
+      'billing.overage_enabled',
+      'billing.overage_disabled',
+      'billing.spend_cap_changed'
     ]
     expect(recorded.filter((action) => !isKnownAuditAction(action))).toEqual([])
+  })
+
+  it('words the events auth and billing send', () => {
+    const base: CloudAuditEvent = {
+      id: 'a',
+      at: FIXTURE_NOW,
+      category: 'members',
+      action: 'member.invited',
+      actor: { kind: 'person', userId: 'u_ada', name: 'Ada Lovelace', via: null },
+      target: { type: 'invite', id: null, label: 'new@acme.dev' },
+      detail: { role: 'member' }
+    }
+    const say = (action: string, target: CloudAuditEvent['target'] = null): string =>
+      auditEventSentence({ ...base, action, target })
+    expect(auditEventSentence(base)).toBe('Invited new@acme.dev')
+    expect(say('member.invite_revoked', base.target)).toBe('Canceled the invite for new@acme.dev')
+    expect(say('member.joined', { type: 'member', id: 'u_x', label: 'Bo' })).toBe('Joined the team')
+    expect(say('team.renamed', { type: 'team', id: null, label: 'Acme Labs' })).toBe(
+      'Renamed the team to “Acme Labs”'
+    )
+    expect(say('team.deleted', { type: 'team', id: null, label: 'Acme Labs' })).toBe(
+      'Deleted the team'
+    )
+    expect(say('billing.plan_started', { type: 'plan', id: null })).toBe('Plan started')
+    expect(say('billing.cancel_scheduled', { type: 'plan', id: null })).toBe(
+      'Plan set to end at the next renewal'
+    )
+    expect(say('billing.spend_cap_changed', { type: 'plan', id: null })).toBe(
+      'Changed the overage spend cap'
+    )
   })
 
   it('falls back to the plain sentence when the target has no name', () => {
