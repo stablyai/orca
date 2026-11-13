@@ -5,7 +5,9 @@ import {
 import type {
   AgentStatusPayload,
   AgentStatusRouting,
-  AgentStatusMetadata
+  AgentStatusMetadata,
+  AgentLaunchConfigRegistryEntry,
+  AgentLaunchConfigRegistrationMetadata
 } from './agent-status-contract'
 import type { AppState } from '../../types'
 import type {
@@ -17,10 +19,6 @@ import {
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type {
-  AgentLaunchConfigRegistryEntry,
-  AgentLaunchConfigRegistrationMetadata
-} from './agent-status-contract'
 import { getLeafIdFromPaneKey, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { launchConfigsEqual } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 
