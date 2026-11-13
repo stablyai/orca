@@ -66,18 +66,25 @@ export function completeReadKey(
   ])
 }
 
-export function cachedPRBranchOutcome(
+/** The owner and exact keys a read of this request would use now. */
+export function prBranchReadKeys(
   repoPath: string,
   branch: string,
   linkedPRNumber: number | null,
   connectionId: string | null,
   fallbackPRNumber: number | null,
   options: GitHubPRBranchLookupOptions
-): ReturnType<typeof readTimedPROutcome> {
+): [owner: string, exact: string] {
   const branchName = branch.replace(/^refs\/heads\//, '')
   const scope = prLookupScope(repoPath, connectionId, options)
-  return readTimedPROutcome(
+  return [
     lastOutcomeKey(repoPath, branchName, scope),
     completeReadKey(repoPath, branchName, linkedPRNumber, fallbackPRNumber, options, scope)
-  )
+  ]
+}
+
+export function cachedPRBranchOutcome(
+  ...request: Parameters<typeof prBranchReadKeys>
+): ReturnType<typeof readTimedPROutcome> {
+  return readTimedPROutcome(...prBranchReadKeys(...request))
 }

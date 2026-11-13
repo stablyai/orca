@@ -3,11 +3,19 @@ import type {
   GitHubPRRefreshCandidate,
   PRRefreshOutcome
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
+import type {
+  PRBranchReadProducer,
+  PRBranchReadRequest
+} from '../../client/lookup/pr-branch-read-resources'
+import { prBranchReadKeys } from '../../client/lookup/pr-read-identity'
 import {
   aliasFromCandidate,
   automaticDueAt,
+  candidateReadRequest,
   isBudgetedBackground,
   isMergeabilityPendingOutcome,
+  refreshKey,
   sameAliasRequestIdentity,
   visibleCandidateAfterOutcome,
   visibleFollowUpPriority
@@ -52,9 +60,6 @@ export class PRRefreshQueueScheduler {
     options?: { pendingMergeabilityDelayMs?: number; plannedRetryAt?: number }
   ): void {
     if (outcome.kind === 'upstream-error') {
-      if (this.retry.replacedFailure(outcome)) {
-        return
-      }
       const retryCandidate = this.visibility.candidate(key, candidate)
       const retryAt = Math.max(
         options?.plannedRetryAt ?? this.retry.nextVisibleErrorRetryAt(key, retryCandidate),
@@ -142,19 +147,62 @@ export class PRRefreshQueueScheduler {
     this.schedule(Math.max(0, dueAt - Date.now()))
   }
 
-  /** Whether an automatic attempt still in its own reason (a follow-up or a failure's retry, not a
-   *  return, an action or a forced reread) is no longer given by the current cadence; checked again
-   *  once it has waited for quota, before it may start. */
-  retired(entry: PRRefreshQueueEntry): boolean {
+  /** When an automatic attempt still in its own reason (a follow-up or a failure's retry, not a
+   *  return, an action or a forced reread) is due under the current cadence, from the failure that
+   *  still owns it or else its row's data; null once that no longer gives it. Checked again once it has
+   *  waited for quota, before it may start. Other work is due as queued (0). */
+  automaticPlan(entry: PRRefreshQueueEntry): number | null {
     if (entry.reason !== 'visible' || entry.hosted || entry.watch || entry.bypassBackgroundBudget) {
-      return false
+      return 0
     }
     const candidate = this.visibility.candidate(entry.key, entry.candidate)
     if (entry.errorRetry) {
       const retryAt = this.retry.retimedVisibleErrorRetryAt(entry.key, candidate)
-      return retryAt === null || !Number.isFinite(retryAt)
+      if (retryAt !== null) {
+        return Number.isFinite(retryAt) ? retryAt : null
+      }
+      // No failure owns it any more: it is the row's ordinary automatic work.
+      entry.errorRetry = false
+      entry.followUp = true
     }
-    return entry.followUp === true && automaticDueAt(candidate) === null
+    return entry.followUp ? automaticDueAt(candidate) : 0
+  }
+
+  /** A full provider read of a visible row's exact request that the row's own queue did not run
+   *  (another client's read, a host job, a provider lookup) plans the row's next automatic work as
+   *  the row's own read would: its failure's retry, or the interval after its data. Work an action
+   *  or a return queued keeps its own reason; a read a newer read already replaced plans nothing. */
+  reconcileCompletion(
+    outcome: PRRefreshOutcome,
+    prepared: PreparedPRBranchRead,
+    request: PRBranchReadRequest,
+    producer: PRBranchReadProducer
+  ): PRRefreshOutcome {
+    const key = refreshKey(request)
+    const shown = this.visibility.shown(key)
+    const pending = this.queue.get(key)
+    if (
+      !shown ||
+      !producer.current?.() ||
+      (pending && !pending.followUp && !pending.errorRetry) ||
+      prBranchReadKeys(...candidateReadRequest(shown, 'visible'))[1] !== prepared.key
+    ) {
+      return outcome
+    }
+    const candidate = this.visibility.candidate(key, shown)
+    const settled = this.retry.settleProducerError(
+      outcome,
+      key,
+      candidate,
+      prepared,
+      this.queue,
+      producer
+    )
+    const aliases = pending ? Array.from(pending.aliases.values()) : [aliasFromCandidate(shown)]
+    this.scheduleVisibleFollowUp(key, candidate, settled, 40, aliases, pending?.windowId, {
+      plannedRetryAt: this.retry.errorFollowUpAt(key, candidate, settled, true)
+    })
+    return settled
   }
 
   /** Queues the automatic retry a failure earned; it stays an error retry until it runs, is
@@ -185,6 +233,7 @@ export class PRRefreshQueueScheduler {
   }
 
   ordered(): PRRefreshQueueEntry[] {
+    this.visibility.prune()
     this.watchJobs.age(this.queue.values(), Date.now())
     return this.queue.ordered((a, b) => this.pacing.order(a, b))
   }

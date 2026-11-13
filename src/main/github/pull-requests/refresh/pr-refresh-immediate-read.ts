@@ -6,10 +6,10 @@ import type {
 import { preparePRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
 import {
   aliasFromCandidate,
+  candidateReadRequest,
   refreshKey,
   validateCandidate,
   isBackground,
-  hostedReviewOptionArgs,
   MANUAL_MERGEABILITY_PENDING_REFRESH_MS
 } from './pr-refresh-candidate-policy'
 import {
@@ -106,16 +106,12 @@ export async function runImmediatePRRefresh(
   const requestStartedAt = Date.now()
   queue.noteRequestStarted(key, requestSequence)
   events.broadcast({ aliases, reason, status: 'in-flight', requestStartedAt }, requestSequence)
-  const prepared = await preparePRBranchRead(
-    candidate.repoPath,
-    candidate.branch,
-    candidate.linkedPRNumber ?? null,
-    candidate.connectionId ?? null,
-    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
-    ...hostedReviewOptionArgs(candidate, reason, options)
-  )
+  const prepared = await preparePRBranchRead(...candidateReadRequest(candidate, reason, options))
+  // A read a newer read of its request replaced while it ran plans nothing for its row.
+  let replaced = false
   try {
     const outcome = await prepared.read((outcome, producer) => {
+      replaced = producer.current?.() === false
       if (!prepared.isCurrent()) {
         return outcome
       }
@@ -131,7 +127,7 @@ export async function runImmediatePRRefresh(
       events.observe(candidate, settled, aliases)
       return settled
     })
-    if (!queue.ownsRequest(key, requestSequence)) {
+    if (!queue.ownsRequest(key, requestSequence) || replaced) {
       events.broadcast({ aliases, reason, outcome, requestStartedAt }, requestSequence)
       return outcome
     }
@@ -145,7 +141,7 @@ export async function runImmediatePRRefresh(
       { aliases, reason, outcome: broadcastOutcome, requestStartedAt },
       requestSequence
     )
-    drainer.scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases, undefined, {
+    drainer.scheduler.scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases, undefined, {
       plannedRetryAt,
       ...(reason === 'manual'
         ? { pendingMergeabilityDelayMs: MANUAL_MERGEABILITY_PENDING_REFRESH_MS }

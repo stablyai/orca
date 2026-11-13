@@ -26,6 +26,9 @@ type ErrorBackoff = {
    *  that holds its key and whether a timed retry is planned; null once a newer read replaced it. */
   settled?: PRRefreshOutcome
   retime?: () => { gate: number; timed: boolean } | null
+  /** Whether the settled failure still owns its request: no newer provider read started, its scope
+   *  is unchanged and the exact cache still holds the error it scheduled. */
+  current?: () => boolean
   /** The failed provider read's claim, current until a newer read of its resource starts. */
   hold?: PRReadFailureHold
   /** A newer read or a scope change replaced this failure; it owes no automatic retry. */
@@ -33,9 +36,6 @@ type ErrorBackoff = {
   /** The row as it failed; a row now reported with another HEAD or links is another request. */
   candidate?: GitHubPRRefreshCandidate
 }
-
-// Failures a newer provider read of the same request had already replaced when they settled.
-const superseded = new WeakSet<PRRefreshOutcome>()
 
 export class PRRefreshRetryState {
   private readonly errorBackoff = new Map<string, ErrorBackoff>()
@@ -86,16 +86,24 @@ export class PRRefreshRetryState {
 
   /** The retry a failure already earned, planned again under the current cadence from the time
    *  the read failed: a retry queued before the cadence changed must not keep the old timing.
-   *  null when no failure is recorded for the key. */
+   *  null when no failure of this row's request still owns it; one that lost it is retired. */
   retimedVisibleErrorRetryAt(
     key: string,
     candidate: GitHubPRRefreshCandidate,
     cadence: PRAutoRefreshCadence = getPRAutoRefreshCadence()
   ): number | null {
     const state = this.errorBackoff.get(key)
-    return state && !state.revoked
-      ? planErrorRetry(candidate, state.failures, state.failedAt, cadence)
-      : null
+    if (!state || state.revoked) {
+      return null
+    }
+    if (
+      state.current?.() === false ||
+      (state.candidate && !sameRequest(state.candidate, candidate))
+    ) {
+      revoke(state)
+      return null
+    }
+    return planErrorRetry(candidate, state.failures, state.failedAt, cadence)
   }
 
   /** How long a failed key stays closed to background reads. Off plans no retry, yet holds the key
@@ -108,19 +116,11 @@ export class PRRefreshRetryState {
     return state ? planErrorRetry(candidate, state.failures, state.failedAt, 'default') : Date.now()
   }
 
-  /** A failure a newer read of the same request had already replaced when it settled. */
-  replacedFailure(outcome: PRRefreshOutcome): boolean {
-    return superseded.has(outcome)
-  }
-
   /** Whether the recorded failure belongs to the row as it is reported now (same HEAD and links);
    *  a failure of another request is released rather than restored for this one. */
   failureMatches(key: string, candidate: GitHubPRRefreshCandidate): boolean {
     const failed = this.errorBackoff.get(key)?.candidate
-    if (
-      failed &&
-      sameAliasRequestIdentity(aliasFromCandidate(failed), aliasFromCandidate(candidate))
-    ) {
+    if (failed && sameRequest(failed, candidate)) {
       return true
     }
     this.releaseFailure(key)
@@ -134,9 +134,7 @@ export class PRRefreshRetryState {
     for (const [key, state] of this.errorBackoff) {
       const plan = state.retime?.()
       if (plan === null) {
-        state.retime = undefined
-        state.revoked = true
-        state.hold?.release()
+        revoke(state)
       } else if (plan !== undefined) {
         const gate = Math.max(plan.gate, this.manualGateUntil(key))
         queue.protectBackgroundUntil(key, gate)
@@ -176,9 +174,6 @@ export class PRRefreshRetryState {
     if (this.errorBackoff.get(key)?.settled === outcome) {
       return outcome.nextAutoRetryAt ?? Number.POSITIVE_INFINITY
     }
-    if (superseded.has(outcome)) {
-      return undefined
-    }
     const scheduled = getPRAutoRefreshCadence() === 'off' ? undefined : outcome.nextAutoRetryAt
     return scheduled ?? (visible ? this.nextVisibleErrorRetryAt(key, candidate) : undefined)
   }
@@ -186,8 +181,9 @@ export class PRRefreshRetryState {
   /**
    * Settles the actual provider read's failure once, before its callers continue: plans the retry
    * it owes and keeps how to re-plan it. A read the exact cache kept also schedules the shared
-   * error there; a full read the cache refused still owes its retry through its own claim. Other
-   * outcomes, and reads with no demand, pass through.
+   * error there; a full read the cache refused still owes its retry through its own claim. A newer
+   * read of the request starting retires that retry and its claim, keeping the failure count and
+   * rate gate. Other outcomes, and reads with no demand, pass through.
    */
   settleProducerError(
     outcome: PRRefreshOutcome,
@@ -205,7 +201,6 @@ export class PRRefreshRetryState {
     if (hold && !hold.current()) {
       // A newer read already owns the request: this late failure owes it no retry.
       hold.release()
-      superseded.add(outcome)
       return outcome
     }
     const rateLimitedUntil = outcome.retryDisabledUntil ?? 0
@@ -219,9 +214,19 @@ export class PRRefreshRetryState {
     state.hold = hold
     state.candidate = candidate
     let scheduled = result
+    state.current = () =>
+      !(hold && !hold.current()) && !(producer.retained && !prepared.accepts(scheduled))
+    hold?.onSuperseded(() => {
+      if (this.errorBackoff.get(key) === state) {
+        revoke(state)
+        if (queue.get(key)?.errorRetry) {
+          queue.delete(key)
+        }
+      }
+    })
     // Replaces only the error this settlement scheduled; a newer read's result stays.
     state.retime = () => {
-      if ((hold && !hold.current()) || (producer.retained && !prepared.accepts(scheduled))) {
+      if (!state.current!()) {
         return null
       }
       const planned = planErrorRetry(
@@ -248,6 +253,16 @@ export class PRRefreshRetryState {
     )
     return result
   }
+}
+
+function revoke(state: ErrorBackoff): void {
+  state.retime = undefined
+  state.revoked = true
+  state.hold?.release()
+}
+
+function sameRequest(left: GitHubPRRefreshCandidate, right: GitHubPRRefreshCandidate): boolean {
+  return sameAliasRequestIdentity(aliasFromCandidate(left), aliasFromCandidate(right))
 }
 
 function planErrorRetry(

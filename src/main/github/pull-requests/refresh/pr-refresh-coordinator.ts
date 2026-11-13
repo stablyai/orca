@@ -8,8 +8,8 @@ import type {
 import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
 import {
   aliasFromCandidate,
+  isBudgetedBackground,
   refreshKey,
-  shouldBroadcastQueued,
   validateCandidate
 } from './pr-refresh-candidate-policy'
 import {
@@ -30,6 +30,7 @@ import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
 import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evidence'
 import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
+import { setPRBranchReadCompletion } from '../../client/lookup/pr-branch-read-resources'
 
 const retry = new PRRefreshRetryState()
 // Dropping an old gate index entry must not forget a visible row's current failure.
@@ -39,9 +40,26 @@ const queue = new PRRefreshQueue((key) => {
   }
 })
 const pacing = new PRRefreshPacing()
-const visibility = new PRRefreshVisibility()
+// A row no longer shown owes no retry for its failure (only its rate-limit gate stays), and its
+// queued visible read is dropped.
+const visibility = new PRRefreshVisibility((key) => {
+  retry.releaseFailure(key)
+  const entry = queue.get(key)
+  if (entry?.reason === 'visible') {
+    queue.delete(key)
+    events.broadcast({
+      aliases: Array.from(entry.aliases.values()),
+      reason: 'visible',
+      status: 'skipped',
+      skippedReason: 'fresh'
+    })
+  }
+})
 const events = new PRRefreshEventPublisher()
 const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, events)
+setPRBranchReadCompletion((outcome, producer, prepared, request) =>
+  drainer.scheduler.reconcileCompletion(outcome, prepared, request, producer)
+)
 
 export function addPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver): () => void {
   return events.addOutcomeObserver(observer)
@@ -109,38 +127,10 @@ export async function runHostedPRSnapshot(
   return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly)
 }
 
-function removeInvisibleVisibleRefreshes(): void {
-  const removed = queue.removeInvisibleVisibleEntries((key) => visibility.has(key))
-  for (const entry of removed) {
-    events.broadcast({
-      aliases: Array.from(entry.aliases.values()),
-      reason: 'visible',
-      status: 'skipped',
-      skippedReason: 'fresh'
-    })
-  }
-}
-
-// A row no longer shown owes no retry for its failure; only its rate-limit gate stays.
-function releaseHiddenFailures(shown: ReadonlySet<string>): void {
-  for (const key of shown) {
-    if (!visibility.has(key)) {
-      retry.releaseFailure(key)
-    }
-  }
-}
-
-function shownKeys(): Set<string> {
-  return new Set(Array.from(visibility.reported(), ([, candidate]) => refreshKey(candidate)))
-}
-
 export function clearVisiblePRRefreshWindow(windowId: number): void {
-  const shown = shownKeys()
   const hadVisibleRefreshes = visibility.clearWindow(windowId)
-  releaseHiddenFailures(shown)
   pacing.clearActiveBurstWindow(windowId)
   if (hadVisibleRefreshes) {
-    removeInvisibleVisibleRefreshes()
     queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
     drainer.schedule()
   }
@@ -172,9 +162,9 @@ export function retimePRRefreshesForCadence(): void {
     }
     const aliases = [aliasFromCandidate(candidate)]
     if (retryAt === undefined) {
-      drainer.restoreFollowUp(key, candidate, 40, aliases, windowId)
+      drainer.scheduler.restoreFollowUp(key, candidate, 40, aliases, windowId)
     } else {
-      drainer.scheduleErrorRetry(key, candidate, retryAt, 40, aliases, windowId)
+      drainer.scheduler.scheduleErrorRetry(key, candidate, retryAt, 40, aliases, windowId)
     }
   }
   drainer.schedule()
@@ -182,6 +172,7 @@ export function retimePRRefreshesForCadence(): void {
 
 export function pruneWorktreePRRefreshAliases(worktreeId: string): void {
   queue.pruneWorktreeAliases(worktreeId)
+  visibility.removeWorktree(worktreeId)
 }
 
 export function enqueuePRRefresh(
@@ -207,7 +198,8 @@ export function enqueuePRRefresh(
     pending.bypassBackgroundBudget = true
   }
   events.record(enqueued.coalesced ? 'coalesced' : 'enqueued', reason)
-  if (shouldBroadcastQueued(reason, enqueued.dueAt)) {
+  const delay = enqueued.dueAt - Date.now()
+  if (!isBudgetedBackground(reason) && delay > 0 && delay <= 5_000) {
     events.broadcast({ aliases: [enqueued.alias], reason, status: 'queued' })
   }
   drainer.schedule()
@@ -219,13 +211,10 @@ export function reportVisiblePRRefreshCandidates(
   windowId: number
 ): void {
   refreshPRPolicyContext()
-  const newlyExposed = new Set(candidates.map(refreshKey).filter((key) => !visibility.has(key)))
-  const shown = shownKeys()
-  if (!visibility.report(candidates, generation, windowId)) {
+  const reported = visibility.report(candidates, generation, windowId)
+  if (!reported) {
     return
   }
-  releaseHiddenFailures(shown)
-  removeInvisibleVisibleRefreshes()
   queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
   for (const candidate of candidates) {
     const key = refreshKey(candidate)
@@ -233,13 +222,12 @@ export function reportVisiblePRRefreshCandidates(
       enqueuePRRefresh(candidate, 'visible', 40, windowId)
       continue
     }
-    queue.enqueue(
-      visibility.candidate(key, candidate),
-      'visible',
-      40,
-      windowId,
-      newlyExposed.has(key)
-    )
+    // A row still shown as the same request keeps its automatic work; only a return, a new row or
+    // another request earns a read the cadence does not give.
+    const exposed = reported.exposed.has(key)
+    queue.enqueue(visibility.candidate(key, candidate), 'visible', 40, windowId, exposed, {
+      routine: !exposed && !reported.changed.has(key)
+    })
   }
   drainer.schedule()
 }

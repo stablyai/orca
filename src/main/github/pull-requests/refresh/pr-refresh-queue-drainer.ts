@@ -3,8 +3,9 @@ import {
   preparePRBranchRead,
   type PRReadSettlement
 } from '../../client/lookup/pr-for-branch-outcome'
+import { completePRBranchRead } from '../../client/lookup/pr-branch-read-resources'
 import {
-  hostedReviewOptionArgs,
+  candidateReadRequest,
   freshQueuedPROutcome,
   isBackground,
   isBudgetedBackground,
@@ -31,10 +32,7 @@ export class PRRefreshQueueDrainer {
   registrationCheck: PRRefreshRegistrationCheck | null = null
   readonly watchJobs: PRWatchJobRunner
   readonly hostedJobs: HostedPRReadJobs
-  private readonly scheduler: PRRefreshQueueScheduler
-  readonly scheduleVisibleFollowUp: PRRefreshQueueScheduler['scheduleVisibleFollowUp']
-  readonly scheduleErrorRetry: PRRefreshQueueScheduler['scheduleErrorRetry']
-  readonly restoreFollowUp: PRRefreshQueueScheduler['restoreFollowUp']
+  readonly scheduler: PRRefreshQueueScheduler
 
   constructor(
     private readonly queue: PRRefreshQueue,
@@ -53,9 +51,6 @@ export class PRRefreshQueueDrainer {
       this.watchJobs,
       () => this.drain()
     )
-    this.scheduleVisibleFollowUp = this.scheduler.scheduleVisibleFollowUp.bind(this.scheduler)
-    this.scheduleErrorRetry = this.scheduler.scheduleErrorRetry.bind(this.scheduler)
-    this.restoreFollowUp = this.scheduler.restoreFollowUp.bind(this.scheduler)
     this.hostedJobs = new HostedPRReadJobs(
       queue,
       pacing,
@@ -144,7 +139,7 @@ export class PRRefreshQueueDrainer {
           const fresh = freshQueuedPROutcome(candidate, next.reason, next.foreground)
           if (fresh) {
             this.events.broadcast({ aliases, reason: next.reason, outcome: fresh })
-            this.scheduleVisibleFollowUp(
+            this.scheduler.scheduleVisibleFollowUp(
               next.key,
               candidate,
               fresh,
@@ -176,19 +171,27 @@ export class PRRefreshQueueDrainer {
             continue
           }
           // A job retired or replaced, or automatic work the cadence no longer gives, while quota
-          // was checked never starts; the pause it learned still holds.
-          if (this.hostedJobs.completeFromCache(next) || this.scheduler.retired(next)) {
-            if (pausedUntil !== null) {
-              this.queue.protectBackgroundUntil(next.key, pausedUntil)
-            }
-            continue
-          }
+          // was checked never starts; automatic work the cadence now gives later waits for that
+          // plan and the pause it learned, without displacing work queued since.
+          const planned = this.hostedJobs.completeFromCache(next)
+            ? null
+            : this.scheduler.automaticPlan(next)
           if (pausedUntil !== null) {
             this.queue.protectBackgroundUntil(next.key, pausedUntil)
-            const dueAt = Math.min(pausedUntil, next.hosted?.expiresAt ?? Infinity)
+          }
+          if (planned === null) {
+            continue
+          }
+          const dueAt = Math.min(
+            Math.max(planned, pausedUntil ?? 0),
+            next.hosted?.expiresAt ?? Infinity
+          )
+          if (pausedUntil !== null || dueAt > Date.now()) {
             next.dueAt = dueAt
-            this.queue.set(next.key, next)
-            if (!next.hosted) {
+            if (next.hosted || !this.queue.get(next.key)) {
+              this.queue.set(next.key, next)
+            }
+            if (!next.hosted && pausedUntil !== null) {
               this.events.broadcast({
                 aliases,
                 reason: next.reason,
@@ -218,18 +221,12 @@ export class PRRefreshQueueDrainer {
         const prepared =
           next.hosted?.prepared ??
           (await preparePRBranchRead(
-            next.candidate.repoPath,
-            next.candidate.branch,
-            next.candidate.linkedPRNumber ?? null,
-            next.candidate.connectionId ?? null,
-            next.candidate.linkedPRNumber == null
-              ? (next.candidate.fallbackPRNumber ?? null)
-              : null,
-            ...hostedReviewOptionArgs(next.candidate, next.reason, {
-              watchPRKey: next.watch?.prKey
-            })
+            ...candidateReadRequest(next.candidate, next.reason, { watchPRKey: next.watch?.prKey })
           ))
+        // A read a newer read of its request replaced while it ran plans nothing for its row.
+        let replaced = false
         const settle: PRReadSettlement = (outcome, producer) => {
+          replaced = producer.current?.() === false
           if (!prepared.isCurrent()) {
             return outcome
           }
@@ -246,6 +243,11 @@ export class PRRefreshQueueDrainer {
             Boolean(next.hosted) || this.visibility.has(next.key)
           )
           this.events.observe(next.candidate, settled, aliases)
+          // A host job's read also plans the visible row of the same request, under its own claim.
+          const unretained = { ...producer, retained: false }
+          if (next.hosted) {
+            completePRBranchRead(settled, unretained, prepared, next.candidate)
+          }
           return settled
         }
         const outcome = await (joinedRead ??
@@ -261,7 +263,7 @@ export class PRRefreshQueueDrainer {
           next.hosted.finish(null)
           continue
         }
-        if (!this.queue.ownsRequest(next.key, requestSequence)) {
+        if (!this.queue.ownsRequest(next.key, requestSequence) || (!next.hosted && replaced)) {
           next.hosted?.finish(null)
           this.events.broadcast(
             { aliases, reason: next.reason, outcome, requestStartedAt },
@@ -295,7 +297,7 @@ export class PRRefreshQueueDrainer {
           this.watchJobs.afterOutcome(next, outcome)
           continue
         }
-        this.scheduleVisibleFollowUp(
+        this.scheduler.scheduleVisibleFollowUp(
           next.key,
           next.candidate,
           outcome,

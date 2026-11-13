@@ -1,30 +1,58 @@
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import { refreshKey } from './pr-refresh-candidate-policy'
+import {
+  aliasFromCandidate,
+  refreshKey,
+  sameAliasRequestIdentity
+} from './pr-refresh-candidate-policy'
 import { prRefreshRenderers } from './pr-refresh-renderer-port'
 
+/** Which rows windows show. A key's demand ends when the last window stops showing it, whether a
+ *  report drops it, the window clears or closes, or its workspace is removed; `demandEnded` hears
+ *  it then, before that evidence is gone. */
 export class PRRefreshVisibility {
   private readonly visibleByWindow = new Map<
     number,
     { generation: number; candidates: Map<string, GitHubPRRefreshCandidate> }
   >()
 
+  constructor(private readonly demandEnded: (key: string) => void = () => {}) {}
+
   get windowCount(): number {
     return this.visibleByWindow.size
   }
 
   clearWindow(windowId: number): boolean {
-    return this.visibleByWindow.delete(windowId)
+    const cleared = this.removeWindow(windowId)
+    this.prune()
+    return cleared
   }
 
-  report(candidates: GitHubPRRefreshCandidate[], generation: number, windowId: number): boolean {
-    this.pruneDestroyedWindows()
+  /** Replaces a window's rows unless the report is older than the last one accepted (null). Returns
+   *  the keys no window showed before (`exposed`) and those it shows as another request than
+   *  before (`changed`); work only the window's own old and new rows. */
+  report(
+    candidates: GitHubPRRefreshCandidate[],
+    generation: number,
+    windowId: number
+  ): { exposed: Set<string>; changed: Set<string> } | null {
+    this.prune()
     const existing = this.visibleByWindow.get(windowId)
     if (existing && generation < existing.generation) {
-      return false
+      return null
     }
+    const exposed = new Set<string>()
+    const changed = new Set<string>()
     const reported = new Map<string, GitHubPRRefreshCandidate>()
     for (const candidate of candidates) {
       const key = refreshKey(candidate)
+      const shown = existing?.candidates.get(key) ?? this.shown(key)
+      if (!shown) {
+        exposed.add(key)
+      } else if (
+        !sameAliasRequestIdentity(aliasFromCandidate(shown), aliasFromCandidate(candidate))
+      ) {
+        changed.add(key)
+      }
       const previous = this.candidate(key, candidate)
       reported.set(key, {
         ...previous,
@@ -37,12 +65,31 @@ export class PRRefreshVisibility {
       })
     }
     this.visibleByWindow.set(windowId, { generation, candidates: reported })
-    return true
+    for (const key of existing?.candidates.keys() ?? []) {
+      if (!reported.has(key)) {
+        this.endDemand(key)
+      }
+    }
+    return { exposed, changed }
+  }
+
+  /** A removed workspace's rows are no longer shown, whatever its windows reported last. */
+  removeWorktree(worktreeId: string): void {
+    const removed = new Set<string>()
+    for (const window of this.visibleByWindow.values()) {
+      for (const [key, candidate] of window.candidates) {
+        if (candidate.worktreeId === worktreeId) {
+          window.candidates.delete(key)
+          removed.add(key)
+        }
+      }
+    }
+    removed.forEach((key) => this.endDemand(key))
   }
 
   /** Every reported candidate, with the window that reported it. */
   *reported(): Generator<[number, GitHubPRRefreshCandidate]> {
-    this.pruneDestroyedWindows()
+    this.prune()
     for (const [windowId, window] of this.visibleByWindow) {
       for (const candidate of window.candidates.values()) {
         yield [windowId, candidate]
@@ -51,8 +98,18 @@ export class PRRefreshVisibility {
   }
 
   has(key: string): boolean {
-    this.pruneDestroyedWindows()
-    return Array.from(this.visibleByWindow.values()).some((window) => window.candidates.has(key))
+    return this.shown(key) !== undefined
+  }
+
+  /** The row a window reports for the key. */
+  shown(key: string): GitHubPRRefreshCandidate | undefined {
+    for (const window of this.visibleByWindow.values()) {
+      const candidate = window.candidates.get(key)
+      if (candidate) {
+        return candidate
+      }
+    }
+    return undefined
   }
 
   candidate(key: string, fallback: GitHubPRRefreshCandidate): GitHubPRRefreshCandidate {
@@ -93,11 +150,25 @@ export class PRRefreshVisibility {
     }
   }
 
-  private pruneDestroyedWindows(): void {
-    for (const windowId of this.visibleByWindow.keys()) {
+  /** Drops windows whose renderer is gone, ending their rows' demand. */
+  prune(): void {
+    for (const windowId of Array.from(this.visibleByWindow.keys())) {
       if (!prRefreshRenderers().isRendererOpen(windowId)) {
-        this.visibleByWindow.delete(windowId)
+        this.removeWindow(windowId)
       }
+    }
+  }
+
+  private removeWindow(windowId: number): boolean {
+    const window = this.visibleByWindow.get(windowId)
+    this.visibleByWindow.delete(windowId)
+    window?.candidates.forEach((_, key) => this.endDemand(key))
+    return window !== undefined
+  }
+
+  private endDemand(key: string): void {
+    if (!this.has(key)) {
+      this.demandEnded(key)
     }
   }
 }

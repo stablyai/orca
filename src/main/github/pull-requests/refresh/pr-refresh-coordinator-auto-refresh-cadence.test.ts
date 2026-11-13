@@ -154,6 +154,9 @@ describe('pr-refresh-coordinator auto-refresh cadence', () => {
     coordinator.reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
     await vi.advanceTimersByTimeAsync(0)
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    // A routine report (another workspace selected) still shows it as the same request.
+    await vi.advanceTimersByTimeAsync(4_000)
+    coordinator.reportVisiblePRRefreshCandidates([makeCandidate()], 2, 1)
 
     policy.setPRAutoRefreshCadence('off')
     coordinator.retimePRRefreshesForCadence()

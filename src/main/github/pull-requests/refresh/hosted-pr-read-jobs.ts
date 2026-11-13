@@ -6,6 +6,7 @@ import type {
 import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 import { freshTimedPROutcome } from './pr-refresh-candidate-policy'
 import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
+import { completePRBranchRead } from '../../client/lookup/pr-branch-read-resources'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
 import type { PRRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
@@ -116,23 +117,23 @@ export class HostedPRReadJobs {
   ): Promise<PRSnapshotReply> {
     try {
       const outcome = await (acceptRevalidationOnly
-        ? prepared.readRetained((outcome) => {
-            if (
-              outcome.kind !== 'upstream-error' ||
-              !prepared.isCurrent() ||
-              !prepared.accepts(outcome)
-            ) {
-              return outcome
-            }
-            const key = `hosted::${prepared.key}`
-            return this.retry.settleProducerError(
-              outcome,
-              key,
-              { ...candidate, isSelected: false },
+        ? // The job's failure keeps its own retry; the read also plans a visible row of its request.
+          prepared.readRetained((outcome, producer) =>
+            completePRBranchRead(
+              outcome.kind === 'upstream-error' && prepared.isCurrent() && prepared.accepts(outcome)
+                ? this.retry.settleProducerError(
+                    outcome,
+                    `hosted::${prepared.key}`,
+                    { ...candidate, isSelected: false },
+                    prepared,
+                    this.queue
+                  )
+                : outcome,
+              { ...producer, retained: false },
               prepared,
-              this.queue
+              candidate
             )
-          })
+          )
         : prepared.read())
       if (!outcome) {
         return await this.complete(prepared, candidate, null, acceptRevalidationOnly)
@@ -211,10 +212,7 @@ export class HostedPRReadJobs {
           if (this.jobs.get(key) === job) {
             this.jobs.delete(key)
           }
-          const listenersAtCompletion = Array.from(listeners)
-          for (const listener of listenersAtCompletion) {
-            listener(outcome)
-          }
+          Array.from(listeners).forEach((listener) => listener(outcome))
           listeners.clear()
         }
       }

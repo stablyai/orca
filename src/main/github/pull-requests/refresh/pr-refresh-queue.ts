@@ -143,7 +143,8 @@ export class PRRefreshQueue {
     reason: GitHubPRRefreshReason,
     priority: number,
     windowId?: number,
-    reexposed = false
+    reexposed = false,
+    { routine = false }: { routine?: boolean } = {}
   ): PRRefreshEnqueue {
     const alias = aliasFromCandidate(candidate)
     const key = refreshKey(candidate)
@@ -156,8 +157,14 @@ export class PRRefreshQueue {
       Date.now() - candidate.cachedFetchedAt >= exposureAgeMs
         ? Date.now()
         : null
+    // A routine report of a row still shown as the same request is due only when the cadence gives
+    // it a read, never as discovery.
+    const routineDueAt = routine ? (automaticDueAt(candidate) ?? Number.POSITIVE_INFINITY) : null
     const dueAt = Math.max(
-      exposureDueAt ?? freshDueAt ?? Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0),
+      routineDueAt ??
+        exposureDueAt ??
+        freshDueAt ??
+        Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0),
       bypassesFreshnessDelay(reason) ? 0 : (this.backgroundNotBefore.get(key)?.until ?? 0)
     )
     if (!Number.isFinite(dueAt) && !existing) {
@@ -172,7 +179,8 @@ export class PRRefreshQueue {
         priority,
         dueAt,
         queuedAt: this.nextOrder(),
-        followUp: reason === 'visible' && freshDueAt !== null && exposureDueAt === null,
+        followUp:
+          routine || (reason === 'visible' && freshDueAt !== null && exposureDueAt === null),
         foreground: exposureDueAt !== null,
         windowId
       })
@@ -181,6 +189,7 @@ export class PRRefreshQueue {
 
     setLiveAlias(existing.aliases, alias)
     if (
+      !routine &&
       reason === 'visible' &&
       (exposureDueAt !== null || !shouldSkipFresh(candidate, reason)) &&
       existing.reason === 'visible'
@@ -246,18 +255,6 @@ export class PRRefreshQueue {
         }
       }
     }
-  }
-
-  removeInvisibleVisibleEntries(isVisible: (key: string) => boolean): PRRefreshQueueEntry[] {
-    const removed: PRRefreshQueueEntry[] = []
-    for (const [key, entry] of this.entries) {
-      if (entry.reason !== 'visible' || isVisible(key)) {
-        continue
-      }
-      this.entries.delete(key)
-      removed.push(entry)
-    }
-    return removed
   }
 
   setVisibleFollowUp(entry: PRRefreshQueueEntry): void {

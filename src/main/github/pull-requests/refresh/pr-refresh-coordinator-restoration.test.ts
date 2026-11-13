@@ -44,30 +44,62 @@ function failed(): PRRefreshOutcome {
 const readsOf = (branch: string) =>
   provider.resolve.mock.calls.filter(([read]) => read.branchName === branch).length
 
+/** The title of the last outcome the renderer received for the branch. */
+const deliveredTo = (branch: string) =>
+  coordinatorMocks.sendToTrustedUIRendererMock.mock.calls
+    .map(([, event]) => event)
+    .findLast((event) => event.outcome && event.aliases.some((alias) => alias.branch === branch))
+    ?.outcome.pr?.title
+
 async function load() {
   const policy = await import('../../../../shared/review-refresh-policy')
   const coordinator = await import('./pr-refresh-coordinator')
   const lookup = await import('../../client/lookup/pr-for-branch-outcome')
   const resources = await import('../../client/lookup/pr-branch-read-resources')
-  const switchTo = async (cadence: 'default' | 'off', at: number) => {
+  const { hostedReviewOptionArgs } = await import('./pr-refresh-candidate-policy')
+  const switchTo = async (cadence: 'default' | 'reduced' | 'off', at: number) => {
     await vi.advanceTimersByTimeAsync(at - Date.now())
     policy.setPRAutoRefreshCadence(cadence)
     coordinator.retimePRRefreshesForCadence()
   }
-  return { coordinator, lookup, resources, switchTo }
+  // 256 other exact results, each held: the exact cache has no room for another.
+  const fillExactCache = async () => {
+    const holds: (() => void)[] = []
+    for (let other = 0; other < 256; other += 1) {
+      const prepared = await lookup.preparePRBranchRead(
+        '/repo',
+        `other-${other}`,
+        null,
+        null,
+        null,
+        {
+          currentHeadOid: 'head-sha'
+        }
+      )
+      await prepared.read()
+      holds.push(prepared.hold())
+    }
+    return holds
+  }
+  // A paired client's foreground read of the same request, through the runtime's direct path.
+  const directRead = async (candidate: ReturnType<typeof makeCandidate>) => {
+    const prepared = await lookup.preparePRBranchRead(
+      candidate.repoPath,
+      candidate.branch,
+      null,
+      null,
+      null,
+      hostedReviewOptionArgs(candidate, 'active')[0] ?? {}
+    )
+    return coordinator.runHostedPRRead(candidate, prepared.read, prepared.didRead, prepared.release)
+  }
+  const claims = () => resources._prBranchReadResourceCountForTests()
+  return { coordinator, lookup, switchTo, fillExactCache, directRead, claims }
 }
 
 it('restores a failure the full exact cache could not keep as its own retry, which Off retires again', async () => {
-  const { coordinator, lookup, resources, switchTo } = await load()
-  // 256 other exact results, each held: the exact cache has no room for another.
-  const holds: (() => void)[] = []
-  for (let other = 0; other < 256; other += 1) {
-    const prepared = await lookup.preparePRBranchRead('/repo', `other-${other}`, null, null, null, {
-      currentHeadOid: 'head-sha'
-    })
-    await prepared.read()
-    holds.push(prepared.hold())
-  }
+  const { coordinator, switchTo, fillExactCache, claims } = await load()
+  const holds = await fillExactCache()
   provider.resolve.mockImplementation(async () => failed())
   const target = makeCandidate({ branch: 'target', currentHeadOid: 'head-sha' })
   // Fails at 1 s with no exact entry; Default would retry it at 121 s.
@@ -92,37 +124,125 @@ it('restores a failure the full exact cache could not keep as its own retry, whi
     outcome: { pr: { title: 'recovered' } }
   })
   // Recovery released the failure's claim on its request.
-  expect(resources._prBranchReadResourceCountForTests()).toBe(0)
+  expect(claims()).toBe(0)
 })
 
-it('owes no retry for a failure a newer read of the same request had already replaced', async () => {
-  const { coordinator, lookup } = await load()
-  const { hostedReviewOptionArgs } = await import('./pr-refresh-candidate-policy')
-  // The exact cache is full, so neither read below keeps its outcome there.
-  for (let other = 0; other < 256; other += 1) {
-    const prepared = await lookup.preparePRBranchRead('/repo', `other-${other}`, null, null, null, {
-      currentHeadOid: 'head-sha'
-    })
-    await prepared.read()
-    prepared.hold()
-  }
-  const target = makeCandidate({ branch: 'target', currentHeadOid: 'head-sha' })
-  const late = Promise.withResolvers<PRRefreshOutcome>()
-  provider.resolve.mockImplementationOnce(() => late.promise)
-  coordinator.reportVisiblePRRefreshCandidates([target], 1, 1)
-  await vi.advanceTimersByTimeAsync(0)
-  // A fresh read of the same request through the direct caller path, as a paired client's
-  // foreground read does, starts after it and succeeds first.
-  const options = hostedReviewOptionArgs(target, 'active')[0] ?? {}
-  await coordinator.runHostedPRRead(target, () =>
-    lookup.getPRForBranchOutcome('/repo', 'target', null, null, null, options)
-  )
-  late.resolve(failed())
-  await vi.advanceTimersByTimeAsync(10 * 60_000)
+// Off holds no timer, so its row reads again only once Default returns.
+async function expectNextAutomaticRead(
+  cadence: 'default' | 'off',
+  dueAt: number,
+  switchTo: (cadence: 'default', at: number) => Promise<void>
+) {
+  provider.resolve.mockImplementation(async () => found('changed'))
+  const due = cadence === 'default' ? dueAt : 700_000
+  await vi.advanceTimersByTimeAsync(due - 1 - Date.now())
   expect(readsOf('target')).toBe(2)
-})
+  if (cadence === 'off') {
+    await switchTo('default', due)
+  }
+  await vi.advanceTimersByTimeAsync(due - Date.now())
+  expect(readsOf('target')).toBe(3)
+  expect(deliveredTo('target')).toBe('changed')
+}
 
-it.each(['automatic', 'shown again'] as const)(
+it.each(['default', 'off'] as const)(
+  'a failure a newer read replaced while it ran owes no retry; under %s the row follows that read',
+  async (cadence) => {
+    const { coordinator, switchTo, fillExactCache, directRead, claims } = await load()
+    // The exact cache is full, so neither read below keeps its outcome there.
+    await fillExactCache()
+    const target = makeCandidate({ branch: 'target', currentHeadOid: 'head-sha' })
+    const late = Promise.withResolvers<PRRefreshOutcome>()
+    provider.resolve.mockImplementationOnce(() => late.promise)
+    coordinator.reportVisiblePRRefreshCandidates([target], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    if (cadence === 'off') {
+      await switchTo('off', 1_500)
+    }
+    // The newer read starts at 5 s and succeeds first; then the old one fails.
+    await vi.advanceTimersByTimeAsync(5_000 - Date.now())
+    provider.resolve.mockImplementationOnce(async () => found('newer'))
+    expect(await directRead(target)).toMatchObject({ pr: { title: 'newer' } })
+    late.resolve(failed())
+    await vi.advanceTimersByTimeAsync(0)
+    expect(claims()).toBe(0)
+    // Default: the ordinary follow-up two minutes after the newer read, not the old error's retry.
+    await expectNextAutomaticRead(cadence, 125_000, switchTo)
+  }
+)
+
+it.each(['default', 'off'] as const)(
+  'a newer read starting retires a failure already settled, its retry and its claim (%s)',
+  async (cadence) => {
+    const { coordinator, lookup, switchTo, fillExactCache, directRead, claims } = await load()
+    const { hostedReviewOptionArgs } = await import('./pr-refresh-candidate-policy')
+    await fillExactCache()
+    const target = makeCandidate({ branch: 'target', currentHeadOid: 'head-sha' })
+    const running = Promise.withResolvers<PRRefreshOutcome>()
+    provider.resolve.mockImplementationOnce(() => running.promise)
+    coordinator.reportVisiblePRRefreshCandidates([target], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    // Another reader of the same request joins the running read: it starts nothing, so the failure
+    // stays that read's, with its retry at 121 s.
+    const joined = lookup.getPRForBranchOutcome(
+      '/repo',
+      'target',
+      null,
+      null,
+      null,
+      hostedReviewOptionArgs(target, 'visible')[0] ?? {}
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    running.resolve(failed())
+    expect(await joined).toMatchObject({ kind: 'upstream-error' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(readsOf('target')).toBe(1)
+    expect(claims()).toBe(1)
+    if (cadence === 'off') {
+      await switchTo('off', 2_000)
+      expect(claims()).toBe(1)
+    }
+    await vi.advanceTimersByTimeAsync(61_000 - Date.now())
+    provider.resolve.mockImplementationOnce(async () => found('newer'))
+    await directRead(target)
+    expect(claims()).toBe(0)
+    await expectNextAutomaticRead(cadence, 181_000, switchTo)
+  }
+)
+
+it.each(['HEAD', 'scope'] as const)(
+  'a parked failure is not restored once the row is another request (%s)',
+  async (change) => {
+    const { coordinator, switchTo, fillExactCache, claims } = await load()
+    const { bumpScopeGeneration, hostedReviewRepoScope } =
+      await import('../../../source-control/hosted-review-scope-generations')
+    await fillExactCache()
+    provider.resolve.mockImplementation(async () => failed())
+    const target = makeCandidate({ branch: 'target', currentHeadOid: 'head-sha' })
+    coordinator.reportVisiblePRRefreshCandidates([target], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    await switchTo('off', 2_000)
+    expect(claims()).toBe(1)
+    await vi.advanceTimersByTimeAsync(1_000)
+    if (change === 'HEAD') {
+      coordinator.reportVisiblePRRefreshCandidates([{ ...target, currentHeadOid: 'head-b' }], 2, 1)
+    } else {
+      bumpScopeGeneration(hostedReviewRepoScope('/repo', 'local'))
+    }
+    await switchTo('default', 4_000)
+    expect(claims()).toBe(0)
+
+    provider.resolve.mockImplementation(async () => found('changed'))
+    await vi.advanceTimersByTimeAsync(121_000 - Date.now())
+    expect(readsOf('target')).toBe(2)
+    expect(provider.resolve.mock.calls.at(-1)?.[0].options.currentHeadOid).toBe(
+      change === 'HEAD' ? 'head-b' : 'head-sha'
+    )
+    expect(deliveredTo('target')).toBe('changed')
+  }
+)
+
+it.each(['automatic', 'reported again', 'shown again'] as const)(
   'Off retires a restored follow-up waiting its turn, but not one a return upgraded (%s)',
   async (kind) => {
     const { coordinator, lookup, switchTo } = await load()
@@ -155,6 +275,9 @@ it.each(['automatic', 'shown again'] as const)(
     await switchTo('default', 200_000)
     if (kind === 'shown again') {
       coordinator.clearVisiblePRRefreshWindow(1)
+    }
+    if (kind !== 'automatic') {
+      // A routine report keeps the restored follow-up automatic; only a return earns a read.
       coordinator.reportVisiblePRRefreshCandidates([shownX, y], 3, 1)
     }
     await switchTo('off', 201_000)
@@ -166,23 +289,123 @@ it.each(['automatic', 'shown again'] as const)(
     await vi.advanceTimersByTimeAsync(15_000)
     // The automatic one is restored and reads now; the shown-again one already read under Off.
     expect(readsOf('x')).toBe(2)
+    expect(deliveredTo('x')).toBe(kind === 'shown again' ? 'first' : 'changed')
   }
 )
 
-it('a restored follow-up that waited for quota does not start once Off arrives', async () => {
-  const { coordinator, switchTo } = await load()
-  const x = makeCandidate({ branch: 'x', currentHeadOid: 'head-sha' })
-  coordinator.reportVisiblePRRefreshCandidates([x], 1, 1)
-  await vi.advanceTimersByTimeAsync(0)
-  await switchTo('off', 2_000)
-  await vi.advanceTimersByTimeAsync(200_000 - Date.now())
-  const quota = Promise.withResolvers<number | null>()
-  provider.gate.mockReturnValueOnce(quota.promise)
-  await switchTo('default', 200_000)
-  await vi.advanceTimersByTimeAsync(0)
-  expect(provider.gate).toHaveBeenCalled()
-  await switchTo('off', 201_000)
-  quota.resolve(null)
-  await vi.advanceTimersByTimeAsync(60 * 60_000)
-  expect(readsOf('x')).toBe(1)
+it.each(['off', 'reduced'] as const)(
+  'a restored follow-up that waited for quota starts only when %s still gives it',
+  async (cadence) => {
+    const { coordinator, lookup, switchTo } = await load()
+    const x = makeCandidate({ branch: 'x', currentHeadOid: 'head-sha' })
+    coordinator.reportVisiblePRRefreshCandidates([x], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    await switchTo('off', 2_000)
+    // Other reads push X's exact answer out of the bounded cache, so none can stand in for a start.
+    for (let other = 0; other < 256; other += 1) {
+      await lookup.getPRForBranchOutcome('/repo', `other-${other}`, null, null, null, {
+        currentHeadOid: 'head-sha'
+      })
+    }
+    await vi.advanceTimersByTimeAsync(200_000 - Date.now())
+    const quota = Promise.withResolvers<number | null>()
+    provider.gate.mockReturnValueOnce(quota.promise)
+    await switchTo('default', 200_000)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.gate).toHaveBeenCalled()
+    await switchTo(cadence, 201_000)
+    provider.resolve.mockImplementation(async () => found('changed'))
+    if (cadence === 'off') {
+      quota.resolve(null)
+      await vi.advanceTimersByTimeAsync(60 * 60_000)
+      expect(readsOf('x')).toBe(1)
+      return
+    }
+    // Reduced puts X's next read five intervals after its data (1 s + 600 s); a shorter learned
+    // pause does not bring it forward.
+    await vi.advanceTimersByTimeAsync(1_000)
+    quota.resolve(300_000)
+    await vi.advanceTimersByTimeAsync(600_999 - Date.now())
+    expect(readsOf('x')).toBe(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(readsOf('x')).toBe(2)
+    expect(deliveredTo('x')).toBe('changed')
+  }
+)
+
+/** Opens these renderer windows; a closed one reports destroyed before any cleanup for it runs. */
+function openWindows(...ids: number[]): (id: number) => void {
+  const closed = new Set<number>()
+  coordinatorMocks.getAllWebContentsMock.mockReturnValue(
+    ids.map((id) => ({ id, isDestroyed: () => closed.has(id) }))
+  )
+  return (id) => closed.add(id)
+}
+
+const row = (branch: string) =>
+  makeCandidate({ branch, worktreeId: `wt-${branch}`, cacheKey: `/repo::${branch}` })
+
+it('a parked failure releases its claim once no window shows its row, however that demand ends', async () => {
+  const { coordinator, switchTo, claims } = await load()
+  const close = openWindows(1, 2, 3)
+  provider.resolve.mockImplementation(async () => failed())
+  coordinator.reportVisiblePRRefreshCandidates([row('a'), row('shared'), row('removed')], 1, 1)
+  coordinator.reportVisiblePRRefreshCandidates([row('shared')], 1, 2)
+  await vi.advanceTimersByTimeAsync(30_000)
+  expect([readsOf('a'), readsOf('shared'), readsOf('removed')]).toEqual([1, 1, 1])
+  // Off leaves no queued work; each failure keeps its claim while its row is shown.
+  await switchTo('off', 31_000)
+  expect(coordinator._getPRRefreshQueueSizeForTests()).toBe(0)
+  expect(claims()).toBe(3)
+
+  // A removed workspace's row has no queued alias to prune, yet its demand ends.
+  coordinator.pruneWorktreePRRefreshAliases('wt-removed')
+  expect(claims()).toBe(2)
+  // Window 1 is already destroyed when its close cleanup runs; window 2 still shows the shared row.
+  close(1)
+  coordinator.clearVisiblePRRefreshWindow(1)
+  expect(claims()).toBe(1)
+  // Window 2 closes with no cleanup of its own; the next report, from window 3, prunes it.
+  close(2)
+  coordinator.reportVisiblePRRefreshCandidates([], 1, 3)
+  expect(claims()).toBe(0)
+  expect(coordinator._getPRRefreshErrorBackoffCountForTests()).toBe(0)
 })
+
+it.each([750, 7_500])(
+  'a report from another window does no bookkeeping over %i unchanged rows, and its dropped row releases',
+  async (count) => {
+    const { coordinator, claims } = await load()
+    const { PRRefreshVisibility } = await import('./pr-refresh-visibility')
+    const { PRRefreshRetryState } = await import('./pr-refresh-retry-state')
+    openWindows(1, 2)
+    provider.resolve.mockImplementation(async () => failed())
+    coordinator.reportVisiblePRRefreshCandidates([row('b')], 1, 2)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(claims()).toBe(1)
+    coordinator.reportVisiblePRRefreshCandidates(
+      Array.from({ length: count }, (_, index) => row(`a-${index}`)),
+      1,
+      1
+    )
+    const memberships = vi.spyOn(PRRefreshVisibility.prototype, 'has')
+    const releases = vi.spyOn(PRRefreshRetryState.prototype, 'releaseFailure')
+    const rendererChecks = coordinatorMocks.webContentsFromIdMock
+    const work = (report: () => void) => {
+      for (const counter of [memberships, releases, rendererChecks]) {
+        counter.mockClear()
+      }
+      report()
+      return [memberships, releases, rendererChecks].map((counter) => counter.mock.calls.length)
+    }
+    // Row membership checks, failure releases and renderer checks: one prune of the two windows per
+    // report, and only B's dropped row is checked and released.
+    expect(work(() => coordinator.reportVisiblePRRefreshCandidates([row('b')], 2, 2))).toEqual([
+      0, 0, 2
+    ])
+    expect(work(() => coordinator.reportVisiblePRRefreshCandidates([], 1, 2))).toEqual([0, 0, 2])
+    expect(work(() => coordinator.reportVisiblePRRefreshCandidates([], 3, 2))).toEqual([1, 1, 2])
+    expect(claims()).toBe(0)
+    expect(coordinator._getPRRefreshErrorBackoffCountForTests()).toBe(0)
+  }
+)
