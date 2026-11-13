@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
+import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { setCloudCardDetailsOpen } from './use-cloud-workspace-card-state'
 import { cloudCardSideOffset } from './CloudWorkspaceMark'
 
@@ -88,6 +89,19 @@ describe('calm cloud workspace card', () => {
     expect(container.querySelector('[data-cloud-card-wake-hint]')?.textContent).toBe(
       'Opens and wakes when you select it.'
     )
+  })
+
+  it('ARCHIVED-DEAD-ACTIONS: a paired card has no "On this computer" row; an owned one does', () => {
+    seedCloudWorkspaceSnapshot({ paired: { ws: 'env-paired' }, idsLoaded: true })
+    expect(
+      render(card('running')).container.querySelector('[data-cloud-card-on-computer]')
+    ).toBeNull()
+    cleanup()
+    seedCloudWorkspaceSnapshot({ ids: new Set(['ws']), idsLoaded: true })
+    expect(
+      render(card('running')).container.querySelector('[data-cloud-card-on-computer]')
+    ).not.toBeNull()
+    seedCloudWorkspaceSnapshot({})
   })
 
   it('an asleep owned row offers Wake, no hint', () => {

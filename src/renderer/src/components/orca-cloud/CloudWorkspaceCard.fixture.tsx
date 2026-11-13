@@ -125,6 +125,9 @@ function card({
   seedCloudSyncView(syncView(id, mirror, emptyContext))
   return defineFixture({
     width: 320,
+    // A paired card is registered as paired (PAIRED-STATUS), as the app does for its row.
+    setup: () =>
+      seedCloudWorkspaceSnapshot(paired ? { paired: { [id]: 'env-paired' }, idsLoaded: true } : {}),
     render: () => (
       <div className="w-72 rounded-md border border-border bg-floating-surface p-3">
         <CloudWorkspaceStatusPanel
@@ -196,7 +199,7 @@ export const menuOpen = defineFixture({
   }
 })
 
-/** PAIRED-CHROME: a paired row running: Sleep and ⋯ (Delete only). */
+/** A paired row running: no "On this computer" (sync is this desktop's own only), Sleep and ⋯. */
 export const pairedRunningCard = card({ id: 'card-paired-running', paired: true })
 /** PAIRED-CHROME: a paired row asleep: Wake, as on an owned row. */
 export const pairedAsleepCard = card({ id: 'card-paired-asleep', state: 'sleeping', paired: true })
