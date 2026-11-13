@@ -251,7 +251,9 @@ export function queueWorkspaceRestore<T>(
   hostId: string | undefined,
   run: () => Promise<T>
 ): Promise<T> {
-  const key = explicitKey(runtime.listRepos(), selector, hostId)
+  // Restore takes a bare worktree id too; key it the same way so it never skips the queue.
+  const worktreeId = getExplicitWorktreeIdSelector(selector) ?? selector
+  const key = explicitKey(runtime.listRepos(), `id:${worktreeId}`, hostId)
   return key
     ? runWorkspaceLifecycleCommand(runtime.workspaceLifecycle, key, { kind: 'wake', run })
     : run()
