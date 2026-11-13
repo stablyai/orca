@@ -76,6 +76,10 @@ export async function unarchivePairedOrNotCloud(
         await invalidate(environmentId).catch(() => undefined)
       }
     }
+    // ARCHIVE-MENU-DISABLED: the control plane answers once the VM is ready. Settle this wake now:
+    // the window's open then finds it running and starts no wake of its own, so nothing else would,
+    // leaving the row "waking" (Archive disabled) until the overlay called it stalled.
+    emit({ workspaceId, phase: 'ready', source: 'unarchive', startedAt })
     return { ok: true, value: null }
   } catch (error) {
     emit({

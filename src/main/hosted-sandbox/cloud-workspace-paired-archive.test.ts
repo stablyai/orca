@@ -100,7 +100,8 @@ describe('Unarchive for a paired cloud workspace (PAIRED-ARCHIVE)', () => {
     expect(unarchive).toHaveBeenCalledWith('sbx_gh')
     expect(invalidate).toHaveBeenCalledTimes(1)
     expect(invalidate).toHaveBeenCalledWith('env-gh')
-    expect(phases).toEqual(['waking'])
+    // Settled here: the window's open finds it running and starts no wake that would settle it.
+    expect(phases).toEqual(['waking', 'ready'])
   })
 
   it('a refused unarchive reports failed (the shared wake failure) and passes the error back', async () => {

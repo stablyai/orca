@@ -8,9 +8,33 @@ import {
   cloudWorkspaceApi,
   cloudWorkspaceTarget,
   dismissCloudOom,
+  getCloudWorkspaceSnapshot,
+  noteCloudWakeProgress,
   refreshCloudWorkspaceStatus,
   updateCloudWorkspaceSnapshot
 } from './orca-cloud-workspace-store'
+
+/**
+ * ARCHIVE-MENU-DISABLED: Unarchive's wake is settled by whoever wakes it next, but a workspace the
+ * control plane already brought up starts no wake on open. A fresh read that says running settles
+ * a still-pending unarchive wake, so the row is not left "waking" (Archive disabled, then stalled).
+ */
+async function settleUnarchiveWakeIfRunning(workspaceId: string): Promise<void> {
+  const wake = getCloudWorkspaceSnapshot().wake[workspaceId]
+  if (
+    !wake ||
+    wake.source !== 'unarchive' ||
+    (wake.phase !== 'waking' && wake.phase !== 'connecting')
+  ) {
+    return
+  }
+  await refreshCloudWorkspaceStatus(workspaceId)
+  const entry = getCloudWorkspaceSnapshot().status[workspaceId]
+  const still = getCloudWorkspaceSnapshot().wake[workspaceId]
+  if (still?.startedAt === wake.startedAt && !entry?.error && entry?.status?.state === 'ready') {
+    noteCloudWakeProgress({ ...still, phase: 'ready', at: Date.now() })
+  }
+}
 
 function withPending<T>(
   workspaceId: string,
@@ -120,6 +144,7 @@ export function unarchiveCloudWorkspace(
           : {}
       })
       await deps.wake(workspaceId)
+      await settleUnarchiveWakeIfRunning(workspaceId)
     }
     return result
   })
