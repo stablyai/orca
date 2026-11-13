@@ -37,7 +37,7 @@ type RestartSession = {
   launch: (options?: LaunchOptions) => Promise<LaunchedOrca>
   launchUntilExit: (executablePath: string) => Promise<ProcessResult>
   /** Gracefully close a launch, letting beforeunload flush session state. */
-  close: (app: ElectronApplication) => Promise<void>
+  close: (app: ElectronApplication, options?: { gracefulCloseTimeoutMs?: number }) => Promise<void>
   /** Close the final launch and remove the shared userDataDir after the test is done. */
   dispose: (app?: ElectronApplication) => Promise<void>
 }
@@ -177,8 +177,11 @@ export function createRestartSession(
     }
   }
 
-  const close = async (app: ElectronApplication): Promise<void> => {
-    await closeElectronAppForE2E(app)
+  const close = async (
+    app: ElectronApplication,
+    options?: { gracefulCloseTimeoutMs?: number }
+  ): Promise<void> => {
+    await closeElectronAppForE2E(app, options)
   }
 
   // Startup refusals exit before a renderer exists; capture their output from process creation.
