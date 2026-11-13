@@ -18,7 +18,7 @@ import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-
 import { createRichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
 
 vi.mock('../links/rich-markdown-editor-click-routing', () => ({
-  handleRichMarkdownEditorClick: vi.fn()
+  handleRichMarkdownEditorClick: vi.fn(() => false)
 }))
 
 function ref<T>(current: T): MutableRefObject<T> {
@@ -291,5 +291,18 @@ describe('rich Markdown slash commands in code', () => {
     expect(editor.state.doc.firstChild?.type.name).toBe('heading')
     expect(editor.state.doc.firstChild?.attrs.level).toBe(1)
     expect(editor.state.doc.firstChild?.textContent).toBe('')
+  })
+
+  it('does not open the link action bubble when moving selection onto a link', () => {
+    const setLinkBubble = vi.fn()
+    const { editor } = slashEditor('Visit [Orca](https://orca.dev) now')
+    editor.options.onSelectionUpdate = createRichMarkdownEditorConfig(
+      createConfigParams({ setLinkBubble })
+    ).onSelectionUpdate!
+
+    editor.commands.setTextSelection(8)
+
+    expect(editor.isActive('link')).toBe(true)
+    expect(setLinkBubble).not.toHaveBeenCalled()
   })
 })

@@ -2,92 +2,215 @@
 
 import { act, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { Editor } from '@tiptap/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
-import type { LinkBubbleState } from './RichMarkdownLinkBubble'
-import { createRichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
-
-const activateMarkdownLinkMock = vi.hoisted(() => vi.fn())
-
-vi.mock('@/store/index', () => ({
-  useAppStore: (
-    selector: (state: { activateMarkdownLink: typeof activateMarkdownLinkMock }) => unknown
-  ) => selector({ activateMarkdownLink: activateMarkdownLinkMock })
-}))
-
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
+import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-html'
+import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
+import { RichMarkdownLinkBubble, type LinkBubbleState } from './RichMarkdownLinkBubble'
 import { useLinkBubble } from './useLinkBubble'
 
-describe('useLinkBubble owner hydration', () => {
+vi.mock('@/i18n/use-translate', () => ({
+  useTranslate: () => (_key: string, fallback: string) => fallback
+}))
+
+describe('useLinkBubble hover and targetRange actions', () => {
   let container: HTMLDivElement
   let root: Root
+  let editor: Editor | null = null
 
   afterEach(() => {
-    act(() => root.unmount())
-    container.remove()
-    activateMarkdownLinkMock.mockReset()
+    vi.useRealTimers()
+    editor?.destroy()
+    editor = null
+    act(() => root?.unmount())
+    container?.remove()
+    document.body.replaceChildren()
   })
 
-  it.each<HttpLinkSourceOwner>([{ kind: 'local' }, { kind: 'ssh', connectionId: 'ssh-1' }])(
-    'refreshes an open Markdown bubble when ownership becomes $kind',
-    (sourceOwner) => {
-      const context = createRichMarkdownHtmlSuperscriptLinkContext({
-        sourceFilePath: '/repo/README.md',
-        worktreeId: 'worktree-1',
-        worktreeRoot: '/repo',
-        sourceOwner: { kind: 'unknown' }
-      })
+  function mountEditorWithBubble(markdown: string): {
+    editor: Editor
+    wrapper: HTMLDivElement
+  } {
+    const codec = createRichMarkdownEditorCodec()
+    const editorHost = document.createElement('div')
+    const activeEditor = new Editor({
+      element: editorHost,
+      extensions: createRichMarkdownExtensions({ codec }),
+      content: encodeRawMarkdownHtmlForRichEditor(markdown, codec),
+      contentType: 'markdown'
+    })
+    editor = activeEditor
 
-      function Harness(): React.JSX.Element {
-        const rootRef = useRef<HTMLElement>(null)
-        const [bubble, setBubble] = useState<LinkBubbleState | null>({
-          kind: 'markdown',
-          href: 'https://example.com',
-          openEnabled: false,
-          copyEnabled: true,
-          left: 0,
-          top: 0
-        })
-        const { handleLinkOpen } = useLinkBubble(null, rootRef, bubble, setBubble, () => {}, {
-          sourceFilePath: '/repo/README.md',
-          worktreeId: 'worktree-1',
-          worktreeRoot: '/repo',
-          htmlSuperscriptLinkContext: context
-        })
-        return (
-          <button data-enabled={String(bubble?.openEnabled)} onClick={handleLinkOpen}>
-            {bubble?.href}
-          </button>
-        )
-      }
+    function Harness(): React.JSX.Element {
+      const rootRef = useRef<HTMLDivElement | null>(null)
+      const [bubble, setBubble] = useState<LinkBubbleState | null>(null)
+      const [isEditing, setIsEditing] = useState(false)
+      const {
+        handleLinkSave,
+        handleLinkRemove,
+        handleLinkEditCancel,
+        handleLinkCopy,
+        cancelHoverBubble,
+        onBubblePointerEnter,
+        onBubblePointerLeave
+      } = useLinkBubble(activeEditor, rootRef, bubble, isEditing, setBubble, setIsEditing)
 
-      container = document.createElement('div')
-      document.body.appendChild(container)
-      root = createRoot(container)
-      act(() => root.render(<Harness />))
-      const button = container.querySelector('button')
-      if (!button) {
-        throw new Error('Expected link action')
-      }
-      expect(button.dataset.enabled).toBe('false')
-      act(() => button.click())
-      expect(activateMarkdownLinkMock).not.toHaveBeenCalled()
-
-      act(() => {
-        context.update({
-          sourceFilePath: '/repo/README.md',
-          worktreeId: 'worktree-1',
-          worktreeRoot: '/repo',
-          sourceOwner
-        })
-      })
-      expect(button.dataset.enabled).toBe('true')
-      expect(button.textContent).toBe('https://example.com')
-
-      act(() => button.click())
-      expect(activateMarkdownLinkMock).toHaveBeenCalledWith(
-        'https://example.com',
-        expect.objectContaining({ sourceOwner })
+      return (
+        <TooltipProvider>
+          <div
+            data-test-wrapper=""
+            ref={(node) => {
+              rootRef.current = node
+              if (node && !node.contains(editorHost)) {
+                node.appendChild(editorHost)
+              }
+            }}
+          >
+            {bubble ? (
+              <RichMarkdownLinkBubble
+                anchorElement={rootRef.current}
+                linkBubble={bubble}
+                isEditing={isEditing}
+                onDismiss={() => {
+                  cancelHoverBubble()
+                  setBubble(null)
+                  setIsEditing(false)
+                }}
+                onSave={handleLinkSave}
+                onRemove={handleLinkRemove}
+                onEditStart={() => {
+                  cancelHoverBubble()
+                  setIsEditing(true)
+                }}
+                onEditCancel={handleLinkEditCancel}
+                onCopy={handleLinkCopy}
+                onPointerEnter={onBubblePointerEnter}
+                onPointerLeave={onBubblePointerLeave}
+                portalToDocument
+              />
+            ) : null}
+          </div>
+        </TooltipProvider>
       )
     }
-  )
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() => root.render(<Harness />))
+    const wrapper = container.querySelector<HTMLDivElement>('[data-test-wrapper]')
+    if (!wrapper) {
+      throw new Error('Expected wrapper element')
+    }
+    const rect = new DOMRect(0, 0, 400, 200)
+    const rectList: DOMRectList = Object.assign([rect], {
+      item: (index: number) => (index === 0 ? rect : null)
+    })
+    vi.spyOn(wrapper, 'getClientRects').mockReturnValue(rectList)
+    return { editor: activeEditor, wrapper }
+  }
+
+  it('opens the link menu on hover without an open-link action and updates the hovered link when the caret is elsewhere', () => {
+    vi.useFakeTimers()
+    const { editor: activeEditor } = mountEditorWithBubble(
+      'Intro paragraph\n\nVisit [docs](https://example.com) today'
+    )
+    activeEditor.commands.setTextSelection(2)
+    const linkEl = activeEditor.view.dom.querySelector('a')
+    if (!linkEl) {
+      throw new Error('Expected rendered link')
+    }
+
+    act(() => {
+      linkEl.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, buttons: 0 }))
+    })
+    expect(document.querySelector('[data-rich-markdown-link-bubble]')).toBeNull()
+
+    act(() => {
+      vi.advanceTimersByTime(160)
+    })
+
+    const bubbleEl = document.querySelector<HTMLElement>('[data-rich-markdown-link-bubble]')
+    expect(bubbleEl).not.toBeNull()
+    const actionLabels = Array.from(bubbleEl!.querySelectorAll('button')).map((button) =>
+      button.getAttribute('aria-label')
+    )
+    expect(actionLabels).toEqual(['Copy link', 'Edit link', 'Remove link'])
+
+    const editButton = bubbleEl!.querySelector<HTMLButtonElement>('button[aria-label="Edit link"]')!
+    act(() => editButton.click())
+
+    const input = document.querySelector<HTMLInputElement>(
+      '[data-rich-markdown-link-bubble] input'
+    )!
+    expect(input.value).toBe('https://example.com')
+
+    act(() => {
+      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      valueSetter?.call(input, 'https://orca.dev/docs')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(activeEditor.getMarkdown()).toBe(
+      'Intro paragraph\n\nVisit [docs](https://orca.dev/docs) today'
+    )
+  })
+
+  it('removes the hovered link mark even when the caret is in another paragraph', () => {
+    vi.useFakeTimers()
+    const { editor: activeEditor } = mountEditorWithBubble(
+      'Intro paragraph\n\nVisit [docs](https://example.com) today'
+    )
+    activeEditor.commands.setTextSelection(2)
+    const linkEl = activeEditor.view.dom.querySelector('a')!
+
+    act(() => {
+      linkEl.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, buttons: 0 }))
+      vi.advanceTimersByTime(160)
+    })
+
+    const removeButton = document.querySelector<HTMLButtonElement>(
+      '[data-rich-markdown-link-bubble] button[aria-label="Remove link"]'
+    )!
+    act(() => removeButton.click())
+
+    expect(activeEditor.getMarkdown()).toBe('Intro paragraph\n\nVisit docs today')
+  })
+
+  it('selects the full URL text on double-click in the hover bubble and keeps it open while selected', () => {
+    vi.useFakeTimers()
+    const { editor: activeEditor } = mountEditorWithBubble(
+      'PR: [344](https://github.com/nwparker/orca-private/pull/344)'
+    )
+    const linkEl = activeEditor.view.dom.querySelector('a')!
+
+    act(() => {
+      linkEl.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, buttons: 0 }))
+      vi.advanceTimersByTime(160)
+    })
+
+    const urlSpan = document.querySelector<HTMLSpanElement>('[data-rich-markdown-link-url]')!
+    const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    act(() => {
+      urlSpan.dispatchEvent(mouseDown)
+      urlSpan.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    })
+
+    expect(mouseDown.defaultPrevented).toBe(false)
+    expect(window.getSelection()?.toString()).toBe(
+      'https://github.com/nwparker/orca-private/pull/344'
+    )
+
+    const bubbleEl = document.querySelector<HTMLElement>('[data-rich-markdown-link-bubble]')!
+    act(() => {
+      bubbleEl.dispatchEvent(new PointerEvent('pointerout', { bubbles: false }))
+      vi.advanceTimersByTime(200)
+    })
+    expect(document.querySelector('[data-rich-markdown-link-bubble]')).not.toBeNull()
+  })
 })
