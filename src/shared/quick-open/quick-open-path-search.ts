@@ -135,10 +135,16 @@ export class QuickOpenPathRanker {
 
 type QuickOpenQueryTerm = { text: string; withoutSeparators: string | undefined }
 
+const NON_ASCII = /[\u0080-\u{10ffff}]/u
+
+// Why: macOS often stores names decomposed (NFD) while keyboards type composed (NFC), so compare both composed.
+function composeQuickOpenText(text: string): string {
+  return NON_ASCII.test(text) ? text.normalize('NFC') : text
+}
+
 function normalizeQuickOpenQuery(query: string): readonly QuickOpenQueryTerm[] {
-  const terms = [...new Set(query.trim().replace(/\\/g, '/').toLowerCase().split(/\s+/))]
-    .filter(Boolean)
-    .sort()
+  const composed = composeQuickOpenText(query.trim().replace(/\\/g, '/'))
+  const terms = [...new Set(composed.toLowerCase().split(/\s+/))].filter(Boolean).sort()
   return terms.map((text) => ({
     text,
     withoutSeparators:
@@ -178,7 +184,7 @@ function scoreQuickOpenTerms(
 }
 
 function prepareQuickOpenFile(path: string, inputIndex: number): QuickOpenIndexedFile {
-  const searchPath = path.replace(/\\/g, '/')
+  const searchPath = composeQuickOpenText(path.replace(/\\/g, '/'))
   const lastSlash = searchPath.lastIndexOf('/')
   const file = {
     path,
