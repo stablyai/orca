@@ -19,7 +19,7 @@ import {
 const CURSOR = acpLaunchSpecFor('cursor')!
 afterEach(closeProviderTimelineRigs)
 
-// Recorded from cursor-agent 2026.11.11 over `cursor-agent acp`, which names no session on these.
+// Shaped as cursor-agent 2026.11.11's question handler sends them; these name no session.
 const QUESTION = {
   toolCallId: 'call-1\nfc_1',
   title: 'Preferences',
@@ -37,7 +37,12 @@ const QUESTION = {
 }
 const QUESTION_FALLBACK = {
   sessionId: PROVIDER_SESSION,
-  toolCall: { toolCallId: 'call-1\nfc_1_q0', title: 'Which color?', kind: 'other' },
+  toolCall: {
+    toolCallId: 'call-1\nfc_1_q0',
+    title: 'Preferences',
+    kind: 'other',
+    content: [{ type: 'content', content: { type: 'text', text: 'Which color?' } }]
+  },
   options: [
     { optionId: 'red', name: 'Red', kind: 'allow_once' },
     { optionId: 'blue', name: 'Blue', kind: 'allow_once' },
@@ -144,7 +149,9 @@ it("never picks the first answer of Cursor's fallback question in Full access", 
     agent.request(8, 'session/request_permission', QUESTION_FALLBACK)
   )
   await waitFor(async () =>
-    expect((await rig.rig.rows()).some((row) => row.body.kind === 'question')).toBe(true)
+    expect((await rig.rig.rows()).map((row) => row.body)).toContainEqual(
+      expect.objectContaining({ kind: 'question', question: 'Which color?' })
+    )
   )
   expect(replies).toEqual([])
 })
