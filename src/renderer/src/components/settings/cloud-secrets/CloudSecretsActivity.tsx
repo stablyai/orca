@@ -47,7 +47,9 @@ function ActivityRow({
       ? t('cloudSecrets.activity.byYou', 'You')
       : (people.nameFor(event.actor.userId) ??
         event.actor.name ??
-        t('cloudSecrets.activity.byTeammate', 'A teammate'))
+        (people.rosterLoaded && event.orgId
+          ? t('cloudSecrets.activity.byFormerTeammate', 'A former teammate')
+          : t('cloudSecrets.activity.bySomeone', 'Someone')))
   return (
     <li className="flex min-h-9 items-center gap-3 px-3 py-2 text-xs" data-secret-event={event.id}>
       <span className="w-16 shrink-0 text-muted-foreground">{actionLabel(event.action, t)}</span>
@@ -58,7 +60,7 @@ function ActivityRow({
           : cloudSecretScopeLabel(event.scope, t)}
       </Badge>
       <span
-        className="w-40 shrink-0 truncate text-muted-foreground"
+        className="w-48 shrink-0 truncate text-muted-foreground"
         title={new Date(event.at).toLocaleString()}
       >
         {t('cloudSecrets.activity.byWhen', '{{who}} · {{when}}', {

@@ -18,7 +18,7 @@ const REPOS: CloudSecretRepoChoice[] = [
   { key: 'github.com/acme/web', label: 'acme/web' },
   { key: 'github.com/acme/api', label: 'acme/api' }
 ]
-const people = { nameFor: (userId: string) => FIXTURE_NAMES[userId] ?? null }
+const people = { nameFor: (userId: string) => FIXTURE_NAMES[userId] ?? null, rosterLoaded: true }
 const noop = (): void => {}
 
 function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -340,7 +340,7 @@ export const activityAdmin = defineFixture({
     <Frame>
       <CloudSecretsPane
         api={fixtureCloudSecretsApi({
-          activity: { team: FIXTURE_TEAM_ACTIVITY, personal: FIXTURE_PERSONAL_ACTIVITY, pageSize: 5 }
+          activity: { team: FIXTURE_TEAM_ACTIVITY, personal: FIXTURE_PERSONAL_ACTIVITY, pageSize: 7 }
         })}
         repos={REPOS}
         people={people}

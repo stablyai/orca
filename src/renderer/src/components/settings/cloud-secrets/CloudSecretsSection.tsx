@@ -26,7 +26,7 @@ function TeamCloudSecretsPane({
     },
     [members]
   )
-  return <CloudSecretsPane {...props} people={{ nameFor }} />
+  return <CloudSecretsPane {...props} people={{ nameFor, rosterLoaded: members !== null }} />
 }
 
 /** Shown only where Orca Cloud is offered to this account. */

@@ -22,6 +22,8 @@ export type CloudSecretPeople = {
   viewerUserId: string | null
   /** Display name for a teammate, or null when the roster does not know them. */
   nameFor: (userId: string) => string | null
+  /** True once the team roster has loaded (so a user missing from it has left the team). */
+  rosterLoaded?: boolean
 }
 
 export type CloudSecretListMode =

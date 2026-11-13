@@ -143,7 +143,8 @@ export const FIXTURE_TEAM_ACTIVITY: CloudSecretEvent[] = [
   event(5, 'created', 'org', 'ANTHROPIC_MODEL', 30, 'u_dana'),
   event(6, 'created', 'org', 'AI_GATEWAY_API_KEY', 30, 'u_dana'),
   // A member who has since left the team: no roster name, so it reads "A teammate".
-  event(7, 'created', 'org', 'NPM_TOKEN', 170, 'u_gone')
+  event(7, 'created', 'org', 'NPM_TOKEN', 170, 'u_gone'),
+  event(8, 'created', 'org', 'SENTRY_DSN', 400, 'u_ravi')
 ]
 
 export const FIXTURE_PERSONAL_ACTIVITY: CloudSecretEvent[] = [
