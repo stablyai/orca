@@ -28,6 +28,13 @@ import {
   refreshCloudEnvironmentIds,
   useCloudEnvironmentIds
 } from '@/lib/cloud-remote-desktop/cloud-environment-ids'
+import { openCloudWorkspacePicker } from '@/components/cloud-workspaces/cloud-workspace-picker-store'
+import { useCloudWorkspacesPresent } from '@/components/cloud-workspaces/use-cloud-workspaces'
+
+function openCloudWorkspacePickerAction(): void {
+  // After the palette closes, so focus lands in the picker's search field.
+  queueMicrotask(() => openCloudWorkspacePicker())
+}
 
 function openCloudRemoteDesktopAction(worktreeId: string, environmentId: string): void {
   // Loaded on use: the desktop flow pulls in the cloud workspace store and toasts.
@@ -87,6 +94,8 @@ export function useWorktreeJumpPaletteQuickActions({
 }: WorktreeJumpPaletteQuickActionsInput) {
   // "Open remote desktop" shows only for Orca Cloud workspaces: read the list fresh on open.
   const cloudEnvironmentIds = useCloudEnvironmentIds()
+  // "Open cloud workspace…" shows only while signed in to Orca Cloud.
+  const cloudPresent = useCloudWorkspacesPresent()
   useEffect(() => {
     if (visible) {
       void refreshCloudEnvironmentIds()
@@ -173,9 +182,11 @@ export function useWorktreeJumpPaletteQuickActions({
         openCreateWorkspace: openCreateWorkspaceAction,
         deleteActiveWorkspace: deleteActiveWorkspaceAction,
         openAddQuickCommand: openAddQuickCommandAction,
-        openCloudRemoteDesktop: openCloudRemoteDesktopAction
+        openCloudRemoteDesktop: openCloudRemoteDesktopAction,
+        openCloudWorkspacePicker: cloudPresent ? openCloudWorkspacePickerAction : undefined
       }),
     [
+      cloudPresent,
       activeGroupSnapshotRef,
       deleteActiveWorkspaceAction,
       openAddQuickCommandAction,
@@ -202,7 +213,8 @@ export function useWorktreeJumpPaletteQuickActions({
           isLoading,
           settings?.activeRuntimeEnvironmentId,
           runtimeStatusByEnvironmentId,
-          cloudEnvironmentIds
+          cloudEnvironmentIds,
+          cloudPresent
         ],
         () => {
           const context = buildQuickActionContext()
@@ -247,7 +259,8 @@ export function useWorktreeJumpPaletteQuickActions({
       isLoading,
       settings?.activeRuntimeEnvironmentId,
       runtimeStatusByEnvironmentId,
-      cloudEnvironmentIds
+      cloudEnvironmentIds,
+      cloudPresent
     ]
   )
   const middleItems = useMemo<(SettingsPaletteItem | QuickActionPaletteItem)[]>(() => {

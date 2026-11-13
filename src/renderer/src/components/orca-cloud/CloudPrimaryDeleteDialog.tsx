@@ -1,7 +1,7 @@
 // CLOUD-PRIMARY-DELETE: Delete for a cloud row that IS the cloud workspace (the sandbox's own
 // checkout, shown as "primary"), including paired ones this desktop did not create. A local removal
 // cannot delete it (Git keeps a primary checkout; a paired sandbox isn't this desktop's to destroy),
-// so this is the cloud delete dialog from Home and the sidebar, acting through the control plane:
+// so this is the cloud delete dialog from the sidebar, acting through the control plane:
 // Delete destroys the sandbox, Archive instead archives it (with Undo).
 import React, { useRef, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
@@ -26,14 +26,15 @@ import {
   subscribeCloudPrimaryDelete,
   type CloudPrimaryDeleteTarget
 } from '@/lib/orca-cloud/cloud-primary-delete-request'
+import { openCloudWorkspacePicker } from '@/components/cloud-workspaces/cloud-workspace-picker-store'
 
 type Target = CloudPrimaryDeleteTarget
 const setRequested = requestCloudPrimaryDelete
 
 const NO_SANDBOX = (): string =>
   translate(
-    'orcaCloudWorkspace.primaryDelete.noSandbox',
-    "Orca couldn't find this workspace's sandbox. Delete it from Cloud workspaces."
+    'orcaCloudWorkspace.primaryDelete.noSandbox2',
+    "Orca couldn't find this workspace's sandbox. Find it in Open cloud workspace… to delete it."
   )
 
 async function withSandbox(target: Target, run: (sandboxId: string) => Promise<void>) {
@@ -43,7 +44,13 @@ async function withSandbox(target: Target, run: (sandboxId: string) => Promise<v
       translate('orcaCloudWorkspace.deleteFailedNamed', 'Couldn’t delete {{name}}', {
         name: target.displayName ?? ''
       }),
-      { description: NO_SANDBOX() }
+      {
+        description: NO_SANDBOX(),
+        action: {
+          label: translate('components.cloudWorkspaces.picker.menuItem', 'Open cloud workspace…'),
+          onClick: () => openCloudWorkspacePicker()
+        }
+      }
     )
     return
   }

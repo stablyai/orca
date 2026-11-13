@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { AlertTriangle, Cloud, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { CloudNotPairedCard } from './CloudNotPairedCard'
 import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
@@ -201,7 +202,9 @@ export function CloudWakingOverlay({
         }
         data-cloud-waking-anchor={passThrough ? 'terminal' : undefined}
       >
-        {failed ? (
+        {failed && wake.notPaired ? (
+          <CloudNotPairedCard name={name} autoFocus={autoFocus} onDismiss={onDismiss} />
+        ) : failed ? (
           <div
             role="alert"
             className="flex w-full max-w-sm flex-col gap-3 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-xs"

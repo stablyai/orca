@@ -23,6 +23,7 @@ export type CmdJUnavailableReason =
   | 'no-active-chat'
   | 'client-action-unsupported'
   | 'not-cloud-workspace'
+  | 'no-orca-cloud'
 
 export type CmdJQuickActionAvailability =
   | { available: true }
@@ -52,6 +53,8 @@ export type CmdJQuickActionContext = {
   /** The active workspace's Orca Cloud environment; null for every other workspace. */
   activeCloudEnvironmentId?: string | null
   openCloudRemoteDesktop?: (worktreeId: string, environmentId: string) => void
+  /** Set only while signed in to Orca Cloud: "Open cloud workspace…". */
+  openCloudWorkspacePicker?: () => void
   canSplitActiveChat?: boolean
   splitActiveChat?: (direction: NativeChatSplitDirection) => boolean
 }
@@ -167,6 +170,7 @@ export function buildCmdJQuickActionContext(args: {
   deleteActiveWorkspace: () => void
   openAddQuickCommand: () => void
   openCloudRemoteDesktop?: (worktreeId: string, environmentId: string) => void
+  openCloudWorkspacePicker?: () => void
 }): CmdJQuickActionContext {
   const activeWorktreeId = args.state.activeWorktreeId
   const activeWorktree = activeWorktreeId
@@ -214,6 +218,7 @@ export function buildCmdJQuickActionContext(args: {
         ? activeEnvironmentId
         : null,
     openCloudRemoteDesktop: args.openCloudRemoteDesktop,
+    openCloudWorkspacePicker: args.openCloudWorkspacePicker,
     canSplitActiveChat: canRunNativeChatSplitTarget(args.state, activeChatTarget),
     splitActiveChat: (direction) =>
       runActiveNativeChatSplit(activeWorktreeId, activeGroupId, direction)
@@ -261,6 +266,12 @@ export function getUnavailableQuickActionMessage(
       return translate(
         'auto.components.cmdJ.quickActionUnavailable.notCloudWorkspace',
         'Can’t run “{{action}}” — the active workspace isn’t a cloud workspace.',
+        options
+      )
+    case 'no-orca-cloud':
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.noOrcaCloud',
+        'Can’t run “{{action}}” — sign in to Orca Cloud first.',
         options
       )
     case 'client-action-unsupported':

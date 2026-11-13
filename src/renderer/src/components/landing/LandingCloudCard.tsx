@@ -33,7 +33,7 @@ export function LandingCloudCard({
   cloudWorkspacesPresent,
   accessOverride
 }: {
-  /** The account already has cloud workspaces listed below: the card has done its job. */
+  /** Signed in with Orca Cloud: the account can already open cloud workspaces, so no pitch. */
   cloudWorkspacesPresent: boolean
   /** Fixtures pin the account's access. */
   accessOverride?: OrcaCloudRunTargetAccess

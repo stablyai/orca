@@ -40,6 +40,8 @@ export type CloudWakeProgressEvent = {
   workspaceId: string
   phase: 'waking' | 'connecting' | 'ready' | 'failed'
   source: CloudWakeSource
+  /** Failed because this computer's pairing to it is gone: the card offers "Open cloud workspace…". */
+  notPaired?: true
   /** Epoch ms the wake began (the overlay's elapsed timer). */
   startedAt: number
   at: number

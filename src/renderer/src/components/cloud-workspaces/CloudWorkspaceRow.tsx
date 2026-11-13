@@ -1,5 +1,5 @@
 import { CloudStatusGlyph } from '@/components/orca-cloud/CloudStatusGlyph'
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useId, useState } from 'react'
 import { GitBranch, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -11,12 +11,7 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings/matching
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { MemberAvatar, PresenceStack } from './CloudMemberAvatars'
-import {
-  CloudWorkspaceRowMenu,
-  isReadableAsleep,
-  type RowActions,
-  type RowArrangement
-} from './CloudWorkspaceRowMenu'
+import { CloudWorkspaceRowMenu, isReadableAsleep, type RowActions } from './CloudWorkspaceRowMenu'
 import {
   formatSandboxHours,
   formatRelative,
@@ -72,7 +67,7 @@ export function statusLabel(w: CloudWorkspace, t: Translate): string {
       return t('auto.components.cloudWorkspaces.statusCouldntStart', "Couldn't start")
     case 'destroying':
     case 'destroyed':
-      // Home never lists these (see CloudWorkspacesHome); a stray one is not usable.
+      // The picker never lists these (useListedCloudWorkspaces); a stray one is not usable.
       return t('auto.components.cloudWorkspaces.statusNotResponding', 'Not responding')
   }
 }
@@ -82,31 +77,19 @@ export function CloudWorkspaceRow({
   directory,
   selfId,
   canAdmin,
-  sections,
   members,
   opening,
-  highlighted,
   now,
-  actions,
-  arrangement,
-  dragProps,
-  dragging = false
+  actions
 }: {
   workspace: CloudWorkspace
   directory: MemberDirectory
   selfId: string | null
   canAdmin: boolean
-  sections: string[]
   members: { userId: string; name: string }[]
   opening: boolean
-  highlighted: boolean
   now: number
   actions: RowActions
-  /** Pinned state and whether Move up / Move down apply (synced prefs). */
-  arrangement?: RowArrangement
-  /** Drag-to-reorder within its group (from CloudWorkspaceGroup's rowDragProps). */
-  dragProps?: React.LiHTMLAttributes<HTMLLIElement>
-  dragging?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -118,13 +101,6 @@ export function CloudWorkspaceRow({
   const canManage = w.access === 'owner' || canAdmin
   const title = cloudWorkspaceTitle(w, t)
   const ownerName = memberName(directory, w.ownerUserId, selfId, t)
-  const rowRef = useRef<HTMLLIElement>(null)
-  // A link brought this row up: make sure it is on screen (the tint fades on its own).
-  useEffect(() => {
-    if (highlighted) {
-      rowRef.current?.scrollIntoView({ block: 'nearest' })
-    }
-  }, [highlighted])
   const canOpen = w.access !== 'none'
   // Asleep: Enter / click reads the saved copy; waking is its own explicit action.
   const readable = isReadableAsleep(w)
@@ -167,9 +143,7 @@ export function CloudWorkspaceRow({
 
   return (
     <li
-      ref={rowRef}
       data-cloud-workspace-row=""
-      {...dragProps}
       onKeyDown={(event) => {
         // Menu items render in a portal but still bubble through React; only this row's own DOM counts.
         if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) {
@@ -189,18 +163,9 @@ export function CloudWorkspaceRow({
       }}
       className={cn(
         'group relative isolate flex items-center gap-3 rounded-lg pr-2 transition-colors hover:bg-accent',
-        menuOpen && 'bg-accent',
-        dragging && 'opacity-50'
+        menuOpen && 'bg-accent'
       )}
     >
-      {/* Opened from a link: an accent tint that fades out (instantly under reduced motion). */}
-      <span
-        aria-hidden
-        className={cn(
-          'pointer-events-none absolute inset-0 -z-10 rounded-lg bg-accent opacity-0 motion-safe:transition-opacity motion-safe:duration-[2s]',
-          highlighted && 'opacity-100'
-        )}
-      />
       <button
         type="button"
         disabled={!canOpen}
@@ -373,14 +338,12 @@ export function CloudWorkspaceRow({
         title={title}
         canOpen={canOpen}
         canManage={canManage}
-        sections={sections}
         members={members}
         directory={directory}
         selfId={selfId}
         open={menuOpen}
         onOpenChange={setMenuOpen}
         actions={actions}
-        arrangement={arrangement}
       />
       <span id={descriptionId} className="sr-only">
         {description}
