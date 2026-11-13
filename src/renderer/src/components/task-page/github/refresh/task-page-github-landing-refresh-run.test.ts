@@ -110,18 +110,13 @@ function landAfterFilterChange(cache: Record<string, GitHubWorkItem[] | null>) {
 }
 
 describe('runTaskPageGitHubLandingRefresh after a filter change', () => {
-  it('shows the cached rows and refetches them when every selected repo has the query cached', () => {
-    const { state, model, rows } = landAfterFilterChange({ a: [pr('a', 7)], b: [pr('b', 9)] })
+  it('clears the skeleton only when every selected repo has the query cached', () => {
+    const cached = landAfterFilterChange({ a: [pr('a', 7)], b: [pr('b', 9)] })
+    const partial = landAfterFilterChange({ a: [pr('a', 7)], b: null })
 
-    expect(state).toEqual({ filtering: false, loading: false, refreshing: true })
-    expect(rows()).toEqual([9, 7])
-    expect(model.fetchWorkItemsAcrossRepos).toHaveBeenCalledWith(
-      expect.anything(),
-      30,
-      30,
-      QUERY,
-      expect.objectContaining({ force: true, noCache: true })
-    )
+    expect(cached.state).toEqual({ filtering: false, loading: false, refreshing: true })
+    expect(cached.rows()).toEqual([9, 7])
+    expect(partial.state).toEqual({ filtering: true, loading: true, refreshing: true })
   })
 
   it('shows a cached empty answer as empty rather than the skeleton', () => {
@@ -131,15 +126,18 @@ describe('runTaskPageGitHubLandingRefresh after a filter change', () => {
     expect(rows()).toEqual([])
   })
 
-  it('keeps the skeleton while a selected repo has no cached rows, including after a failed fetch', () => {
-    // A failed fetch caches only its error, so getCachedWorkItems reads null for it.
-    const { state } = landAfterFilterChange({ a: [pr('a', 7)], b: null })
+  it('keeps cached rows on screen while the forced refetch runs, then replaces them in place', async () => {
+    const { state, model, rows, answer } = landAfterFilterChange({ a: [pr('a', 7), pr('a', 5)] })
 
-    expect(state).toEqual({ filtering: true, loading: true, refreshing: true })
-  })
-
-  it('replaces stale cached rows in place when the forced refetch lands', async () => {
-    const { state, rows, answer } = landAfterFilterChange({ a: [pr('a', 7), pr('a', 5)] })
+    expect(model.fetchWorkItemsAcrossRepos).toHaveBeenCalledWith(
+      expect.anything(),
+      30,
+      30,
+      QUERY,
+      expect.objectContaining({ force: true, noCache: true })
+    )
+    expect(rows()).toEqual([7, 5])
+    expect(state.filtering).toBe(false)
 
     await answer([pr('a', 8), pr('a', 7)])
 
@@ -147,12 +145,13 @@ describe('runTaskPageGitHubLandingRefresh after a filter change', () => {
     expect(state).toEqual({ filtering: false, loading: false, refreshing: false })
   })
 
-  it('leaves a newer filter alone when a superseded landing run settles', async () => {
+  it('does not let a superseded cached landing clear the next filter skeleton', async () => {
     const { state, rows, answer, cancel } = landAfterFilterChange({ a: [pr('a', 7)] })
+    expect(state.filtering).toBe(false)
+
     cancel?.()
     // The next filter click re-arms the skeleton before its own landing run.
     state.filtering = true
-
     await answer([pr('a', 8)])
 
     expect(state.filtering).toBe(true)

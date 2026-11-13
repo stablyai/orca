@@ -163,9 +163,9 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
   const landingNeedsNetwork = targetPage > 0 ? cachedTargetPage === null : anyUncached
   setTasksLoading(landingNeedsNetwork)
   if (!landingNeedsNetwork) {
-    // Why: the rows just painted were cached for this exact query, so the filter skeleton has done its job.
-    // They may be stale or partial (a repo whose last answer carried a source error); the forced refetch below
-    // still runs under the toolbar spinner and replaces them in place.
+    // Why: the rows just painted were cached for this exact query, so they cannot read as the old filter's result.
+    // They may be stale or partial (a repo whose last answer carried a source error); the landing fetch below
+    // still runs (forced after a click, a probe or cache read after typed search) and replaces them in place.
     setTasksFiltering(false)
   }
   model.setLandingRequestKey(taskPageGitHubLandingRequestKey(model))
