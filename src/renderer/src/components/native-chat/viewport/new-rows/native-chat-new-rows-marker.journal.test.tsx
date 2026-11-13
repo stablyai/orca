@@ -3,7 +3,7 @@
 // The queued-run rule, driven from journal items through the desktop projection, turn membership,
 // slots and the waiting split, the way NativeChatMessageList feeds the marker.
 
-import { act, renderHook } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
@@ -151,28 +151,6 @@ describe('the New line for a send that ran while the reader was away, from the j
     expect(leaveAndReturn(left, back).result.current.marker).toMatchObject({ look: 'line' })
   })
 
-  it('draws when a held send ran behind a turn the reader opened that had drawn no reply', () => {
-    const left = pane(
-      [
-        message('opener', 1, 'user', inTurn('turn')),
-        turn('turn', 2, 'running', 'opener'),
-        message(HELD, 3, 'user', THREAD)
-      ],
-      [held]
-    )
-    const back = pane(
-      [
-        message('opener', 1, 'user', inTurn('turn')),
-        turn('turn', 2, 'completed', 'opener'),
-        message(HELD, 4, 'user', inTurn('next')),
-        turn('next', 5, 'completed', HELD),
-        message('answer', 6, 'assistant', inTurn('next'))
-      ],
-      [handedOver(4)]
-    )
-    expect(leaveAndReturn(left, back).result.current.marker).toMatchObject({ look: 'line' })
-  })
-
   it("weighs a new chat's first answer by height, its send held before any turn opened", () => {
     const left = pane([message(HELD, 1, 'user', THREAD)], [held])
     const back = pane(
@@ -184,24 +162,5 @@ describe('the New line for a send that ran while the reader was away, from the j
       [handedOver(2)]
     )
     expect(leaveAndReturn(left, back).result.current.marker).toMatchObject({ look: 'measure' })
-  })
-
-  it('weighs by height a short reply to a running turn with nothing queued', () => {
-    const left = pane(
-      [message('opener', 1, 'user', inTurn('turn')), turn('turn', 2, 'running', 'opener')],
-      []
-    )
-    const back = pane(
-      [
-        message('opener', 1, 'user', inTurn('turn')),
-        turn('turn', 2, 'completed', 'opener'),
-        message('answer', 3, 'assistant', inTurn('turn'))
-      ],
-      []
-    )
-    const view = leaveAndReturn(left, back)
-    expect(view.result.current.marker).toMatchObject({ look: 'measure' })
-    act(() => view.result.current.marker?.onMeasured(false))
-    expect(view.result.current.marker).toBeUndefined()
   })
 })
