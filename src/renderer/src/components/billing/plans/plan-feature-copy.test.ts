@@ -35,6 +35,23 @@ describe('plan feature copy', () => {
     ).toBe('Sleeps after 15 minutes idle, so quiet time is free')
   })
 
+  it('never advertises egress controls, which no team can configure yet', () => {
+    const egress = { id: 'egress_controls', params: {}, text: 'Network egress controls' }
+    expect(planFeatureLine(egress, context, t, 'en-US')).toBeNull()
+    expect(
+      planFeatureLines(
+        [
+          { id: 'byoc', params: {}, text: 'x' },
+          egress,
+          { id: 'custom_limits', params: {}, text: 'x' }
+        ],
+        context,
+        t,
+        'en-US'
+      )
+    ).toEqual(['Run sandboxes in your own cloud account', 'Custom limits, invoicing and terms'])
+  })
+
   it("shows billing's text for ids it does not know, or a known id missing its numbers", () => {
     expect(
       planFeatureLine(

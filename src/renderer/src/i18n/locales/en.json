@@ -21548,7 +21548,6 @@
         "plans": {
           "entByoc": "Run sandboxes in your own cloud account",
           "entSso": "SSO, SCIM provisioning and audit logs",
-          "entNetwork": "Network policy and egress controls",
           "entTerms": "Custom limits, invoicing and terms",
           "contactSales": "Contact sales",
           "eyebrow": "Orca Cloud",

@@ -87,7 +87,9 @@ export function planFeatureLine(
     case 'sso_scim':
       return t('auto.components.billing.plans.entSso', 'SSO, SCIM provisioning and audit logs')
     case 'egress_controls':
-      return t('auto.components.billing.plans.entNetwork', 'Network policy and egress controls')
+      // Not offered yet: the sandbox egress policy is one operator-wide setting, open by default, and
+      // no team can choose its own. The catalog keeps the feature; the desktop doesn't advertise it.
+      return null
     case 'custom_limits':
       return t('auto.components.billing.plans.entTerms', 'Custom limits, invoicing and terms')
     default:
