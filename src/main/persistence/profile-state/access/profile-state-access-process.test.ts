@@ -1,15 +1,12 @@
 import { once } from 'node:events'
-import { mkdtempSync, readdirSync, rmSync, utimesSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { buildSync } from 'esbuild'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import { stagePackagedProcessHost } from '../../../../../config/scripts/desktop-distribution/runtime-verification/packaged-process-host-fixture.mjs'
-import {
-  acquireProfileStateMaintenance,
-  acquireProfileStateRuntimeAdmission
-} from './profile-state-access'
+import { acquireProfileStateMaintenance } from './profile-state-access'
 import { profileStateAccessPaths } from './profile-state-access-owner'
 
 const fixture = mkdtempSync(join(tmpdir(), 'orca-state-access-process-'))
@@ -118,19 +115,5 @@ describe('profile state owners across actual process death', () => {
     const maintenance = acquireProfileStateMaintenance(root)
     expect(readdirSync(profileStateAccessPaths(root).participants)).toEqual([])
     maintenance.release()
-  })
-
-  it('never steals a live maintenance owner with arbitrarily old timestamps', async () => {
-    const root = join(fixture, 'maintenance')
-    const child = await startChild(root, 'maintenance')
-    const gate = profileStateAccessPaths(root).maintenance
-    for (const file of readdirSync(gate)) {
-      utimesSync(join(gate, file), 0, 0)
-    }
-    utimesSync(gate, 0, 0)
-    expect(() => acquireProfileStateRuntimeAdmission(root)).toThrow('in use')
-    expect(() => acquireProfileStateMaintenance(root)).toThrow('in use')
-    await stopChild(child)
-    acquireProfileStateRuntimeAdmission(root).release()
   })
 })

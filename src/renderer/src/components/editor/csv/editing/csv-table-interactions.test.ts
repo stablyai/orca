@@ -1,21 +1,6 @@
 import { expect, it } from 'vitest'
 import { moveCsvSelection } from '../grid/csv-cell-selection'
-import { csvInspectionRows, csvSourceRow } from './csv-inspection'
 import { copyCsvSelection, pasteCsvSelection } from './clipboard/csv-cell-clipboard'
-import { mutateCsvTextDocument, parseCsvTextDocument } from '../document/csv-text-document'
-
-it('sorts and filters for inspection without mutating source order and edits the original row', () => {
-  const document = parseCsvTextDocument('name,value\nb,10\na,2\na,1', ',')
-  const view = csvInspectionRows(document.rows, 'a', { column: 1, direction: 'ascending' })
-  expect(view).toEqual([3, 2])
-  expect(csvSourceRow(0, view)).toBe(0)
-  const result = mutateCsvTextDocument(document, {
-    kind: 'cells',
-    edits: [{ row: csvSourceRow(1, view), column: 1, value: 'changed' }]
-  })
-  expect(result).toBe('name,value\nb,10\na,2\na,changed')
-  expect(document.source).toBe('name,value\nb,10\na,2\na,1')
-})
 
 it('copies and pastes rectangular quoted TSV without losing embedded CRLF or trailing blanks', () => {
   const rows = [

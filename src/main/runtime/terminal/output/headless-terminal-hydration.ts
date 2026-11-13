@@ -48,6 +48,16 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       )
   })
 
+  /** Claims a startup-dialog card choice while the screen still reads as that card; a moved highlight, a new dialog or an earlier claim on this screen fails. */
+  claimStartupDialogChoice(ptyId: string, prompt: string): boolean {
+    const received = this.getPtyOutputSequence(ptyId)
+    // A model behind received output could vouch for a screen Claude has already changed.
+    return (
+      this.headlessTerminals.get(ptyId)?.outputSequence === received &&
+      this.trustDialogStatus.claimChoice(ptyId, prompt, received)
+    )
+  }
+
   // Create emulator state synchronously and chain renderer hydration first so concurrent live bytes cannot be overwritten by a late seed (docs/mobile-prefer-renderer-scrollback.md).
   maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null {
     if (this.headlessHydrationState.has(ptyId)) {

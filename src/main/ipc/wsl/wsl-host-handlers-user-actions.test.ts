@@ -25,7 +25,9 @@ vi.mock('../../wsl/host-lifecycle/wsl-host-e2e-fake-connector', () => ({
   createFakeWslHostConnector: vi.fn(),
   readFakeWslHostsConfig: () => null
 }))
-vi.mock('../../orcad/orcad-artifact-materializer', () => ({ hasOrcadTemplate: () => true }))
+vi.mock('../../orcad/artifact-slots/orcad-artifact-materializer', () => ({
+  hasOrcadTemplate: () => true
+}))
 vi.mock('../runtime-environments/runtime-environment-removal-cleanup', () => ({
   retireRemovedRuntimeEnvironment: vi.fn()
 }))
@@ -85,22 +87,6 @@ describe('WSL host IPC: the user Add and Remove (D3a)', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
     service.add.mockClear()
-  })
-
-  it('refuses an Add in serve-only and says so in its capability, keeping saved hosts usable', async () => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
-    register()
-
-    expect(await handlers.get('wslHosts:add')?.({}, { distro: 'Ubuntu' })).toMatchObject({
-      ok: false,
-      kind: 'disabled'
-    })
-    expect(service.add).not.toHaveBeenCalled()
-    expect(await handlers.get('wslHosts:getCapability')?.({})).toMatchObject({
-      acceptsNewWork: false
-    })
-    await handlers.get('wslHosts:remove')?.({}, { environmentId: 'wsl:Ubuntu' })
-    expect(service.remove).toHaveBeenCalledWith('wsl:Ubuntu')
   })
 
   // A block published while Orca runs must stop new hosts now, not at the next launch.

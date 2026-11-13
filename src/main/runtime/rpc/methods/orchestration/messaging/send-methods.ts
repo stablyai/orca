@@ -17,12 +17,12 @@ import {
   type SendRecipientWarning
 } from './recipient-routing'
 import { replayAcceptedSend } from './send-replay'
-import { sendRemoteMessage } from '../../../../orchestration/legacy-remote/legacy-remote'
+import { sendRemoteMessage } from '../../../../orchestration/legacy-remote/send-remote'
 import { withPeerMailSend } from './peer-mail-send'
-import { mayNameSession } from './session-recipient'
+import { prepareSessionRecipient } from './session-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
-import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
+import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
@@ -161,16 +161,14 @@ export const ORCHESTRATION_SEND_METHODS = [
         const sendWarnings: SendRecipientWarning[] = []
         let messageRunId = routing.run?.id
         if (!isGroupAddress(to) && !to.startsWith('run:') && !to.startsWith('dispatch:')) {
-          if (mayNameSession(to)) {
-            // Recipient routing reads the session record store, which the host opens lazily.
-            await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-          }
+          const terminal = await prepareSessionRecipient(runtime, to, revalidateLegacyCoordinator)
           const recipient = resolveBareOrchestrationRecipient({
             runtime,
             db,
             handle: to,
             senderRunId: routing.run?.id,
-            explicitRunId: params.run
+            explicitRunId: params.run,
+            terminalRecipient: terminal
           })
           if (!recipient.ok) {
             throw new OrchestrationError(recipient.code, recipient.message)

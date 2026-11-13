@@ -2,7 +2,7 @@ import type {
   PRCheckAnnotation,
   PRCheckJob,
   PRCheckRunDetails
-} from '../../../../src/shared/github/check-types'
+} from '../../../../src/shared/github/checks/check-types'
 import {
   resolveStepOutcome,
   summarizeJobSteps

@@ -5,14 +5,14 @@ import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { withCodexTerminalServerIsolationEnv } from '../../../shared/codex-terminal-server-isolation'
-import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
+import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/status-hooks/legacy-shared-config-dir'
 import { prepareOpenCodePtyLaunch } from '../../opencode/opencode-pty-launch'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../pty/shell-startup/legacy-terminal-shim-dir'
 import { PI_PROCESS_OWNER_ENV_KEYS } from '../../pty/shell-startup/pi-process-owner-env'
 import { planCodexNoDaemonLaunch } from '../../pty/shell-startup/codex-no-daemon-launch-command'
 import { applyAgentWorkspaceTrustToSpawn } from '../../agent-launch/trust/agent-workspace-trust-spawn'
-import type { PtySpawnOptions } from '../../providers/pty-provider-contract'
-import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
+import type { PtySpawnOptions } from '../../providers/pty/provider-contract'
+import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
 import { getStartupTerminalIngressIntent } from '../terminal-startup-color-query-replies'
 import { CODEX_HOME_ENV_KEYS } from './host-env/codex-home'
 import {
@@ -25,9 +25,9 @@ import { promoteAgentTeamsShimPath, deleteRequestedEnvKeys } from './host-env/pa
 import { resolveConfiguredTerminalShellArgs } from './configured-terminal-shell-args'
 import { ptySizes } from './delivery/visibility-state'
 import {
-  canonicalClaudeSessionStampEnvKey,
-  stripInheritedClaudeSessionEnv
-} from '../../../shared/agent-launch/startup/claude-parent-session-env'
+  canonicalAgentSessionStampEnvKey,
+  stripInheritedAgentSessionEnv
+} from '../../../shared/agent-launch/startup/parent-agent-session-env'
 import { shouldSeedPreAttachPtySize } from './delivery/attached-pty-size'
 
 type TrustInput = Parameters<typeof applyAgentWorkspaceTrustToSpawn>[0]
@@ -49,12 +49,12 @@ export function assemblePtySpawnEnvDeletions(input: {
   const isolated = withCodexTerminalServerIsolationEnv(input.env, input.settings)
   const env = isolated ? { ...isolated } : undefined
   if (env) {
-    stripInheritedClaudeSessionEnv(env, { launchEnv: isolated })
+    stripInheritedAgentSessionEnv(env, { launchEnv: isolated })
   }
   let envToDelete =
     mergePtyEnvDeletions(
       input.callerEnvToDelete?.map((key) =>
-        canonicalClaudeSessionStampEnvKey(key, process.platform)
+        canonicalAgentSessionStampEnvKey(key, process.platform)
       ) ?? [],
       // Persistent daemons and older SSH hosts must not resurrect a parent Pi's ownership.
       PI_PROCESS_OWNER_ENV_KEYS,

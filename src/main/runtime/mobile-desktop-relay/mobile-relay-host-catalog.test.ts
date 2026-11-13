@@ -11,7 +11,7 @@ import type { SshConnectionState } from '../../../shared/ssh-types'
 
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from './mobile-relay-host-catalog'
-import { PairedServerRowsProducer } from '../sidebar-inputs/paired-server-rows-producer'
+import { PairedServerRowsProducer } from '../sidebar-inputs/workspace-rows/paired-server-rows-producer'
 
 function answer(capable: boolean): RuntimeStatus {
   return {

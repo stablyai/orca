@@ -3,7 +3,7 @@ import type { BranchNameWorkContext } from '../../shared/source-control/ai/namin
 import type { ConversationNameContext } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import type { CommitMessageDraftContext } from '../../shared/source-control/ai/generation/commit-message-generation'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/source-control/ai/generation/commit-message-host-key'
-import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
+
 import type {
   GeneratedPullRequestFields,
   PullRequestDraftContext
@@ -18,50 +18,32 @@ import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   discoverModelsLocal,
   type CommitMessageModelDiscoveryLocalOptions
-} from './commit-message-model-discovery'
-import { discoverModelsWithHostCache } from './model-discovery-host-cache'
-import { spawnSourceControlAgent } from './source-control-agent-launch'
-import { generateConversationName } from './conversation-name-generation-request'
-import { cancelLocalGeneration } from './source-control-generation-lanes'
+} from './models/commit-message-model-discovery'
+import { discoverModelsWithHostCache } from './models/model-discovery-host-cache'
+import { spawnSourceControlAgent } from './execution/source-control-agent-launch'
+import { generateConversationName } from './requests/conversation-name-generation-request'
+import { cancelLocalGeneration } from './execution/source-control-generation-lanes'
+import { commandBackslashMode } from './agent-generation-request'
 import {
-  commandBackslashMode as resolveCommandBackslashMode,
   generateBranchName,
   generateCommitMessage,
-  generatePullRequestFields,
-  trimGeneratedCommitMessage as trimCommitMessage
-} from './source-control-text-generation-requests'
+  generatePullRequestFields
+} from './requests/source-control-text-generation-requests'
 import type {
   CommitMessageGenerationTarget,
   DiscoverCommitMessageModelsResult,
   GenerateBranchNameResult,
   GenerateConversationNameResult,
   GenerateCommitMessageResult,
-  GeneratePullRequestFieldsResult as GenericGeneratePullRequestFieldsResult,
-  RemoteCommitMessageExecResult,
-  TextGenerationOperation
+  GeneratePullRequestFieldsResult as GenericGeneratePullRequestFieldsResult
 } from './source-control-text-generation-types'
 
-export type GenerateCommitMessageParams = ResolvedSourceControlAiGenerationParams
-export type {
-  CommitMessageGenerationTarget,
-  CommitMessageModelDiscoveryLocalOptions,
-  DiscoverCommitMessageModelsResult,
-  GenerateBranchNameResult,
-  GenerateConversationNameResult,
-  GenerateCommitMessageResult,
-  RemoteCommitMessageExecResult,
-  TextGenerationOperation
-}
 export type GeneratePullRequestFieldsResult =
   GenericGeneratePullRequestFieldsResult<GeneratedPullRequestFields>
 
 type ResolveCommitMessageSettingsResult =
-  | { ok: true; params: GenerateCommitMessageParams }
+  | { ok: true; params: ResolvedSourceControlAiGenerationParams }
   | ({ ok: false } & TextGenerationFailureFields)
-
-export function trimGeneratedCommitMessage(message: string): string {
-  return trimCommitMessage(message)
-}
 
 export function resolveCommitMessageSettings(
   settings: Parameters<typeof resolveSourceControlAiForOperation>[0]['settings'],
@@ -76,22 +58,6 @@ export function resolveCommitMessageSettings(
     discoveryHostKey
   })
   return resolved.ok ? { ok: true, params: resolved.value.params } : resolved
-}
-
-export function resolveTextGenerationParams(
-  settings: Parameters<typeof resolveSourceControlAiForOperation>[0]['settings'],
-  discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY,
-  operation: AiTextOperation = 'commitMessage',
-  repo?: Pick<Repo, 'sourceControlAi'> | null
-): ResolveCommitMessageSettingsResult {
-  return resolveCommitMessageSettings(settings, discoveryHostKey, operation, repo)
-}
-
-export function commandBackslashMode(
-  target: CommitMessageGenerationTarget,
-  platform: NodeJS.Platform = process.platform
-): CommandTemplateBackslash {
-  return resolveCommandBackslashMode(target, platform)
 }
 
 export function discoverCommitMessageModelsLocal(
@@ -126,7 +92,7 @@ export function cancelGeneratePullRequestFieldsLocal(cwd: string): void {
 
 export function generateCommitMessageFromContext(
   context: CommitMessageDraftContext,
-  params: GenerateCommitMessageParams,
+  params: ResolvedSourceControlAiGenerationParams,
   target: CommitMessageGenerationTarget
 ): Promise<GenerateCommitMessageResult> {
   return generateCommitMessage({ context, params, target, spawnAgent: spawnSourceControlAgent })
@@ -134,7 +100,7 @@ export function generateCommitMessageFromContext(
 
 export function generatePullRequestFieldsFromContext(
   context: PullRequestDraftContext,
-  params: GenerateCommitMessageParams,
+  params: ResolvedSourceControlAiGenerationParams,
   target: CommitMessageGenerationTarget
 ): Promise<GeneratePullRequestFieldsResult> {
   return generatePullRequestFields({ context, params, target, spawnAgent: spawnSourceControlAgent })
@@ -142,7 +108,7 @@ export function generatePullRequestFieldsFromContext(
 
 export function generateBranchNameFromContext(
   context: BranchNameWorkContext,
-  params: GenerateCommitMessageParams,
+  params: ResolvedSourceControlAiGenerationParams,
   target: CommitMessageGenerationTarget
 ): Promise<GenerateBranchNameResult> {
   return generateBranchName({ context, params, target, spawnAgent: spawnSourceControlAgent })
@@ -150,7 +116,7 @@ export function generateBranchNameFromContext(
 
 export function generateConversationNameFromContext(
   context: ConversationNameContext,
-  params: GenerateCommitMessageParams,
+  params: ResolvedSourceControlAiGenerationParams,
   target: CommitMessageGenerationTarget,
   shouldExecute?: () => boolean
 ): Promise<GenerateConversationNameResult> {

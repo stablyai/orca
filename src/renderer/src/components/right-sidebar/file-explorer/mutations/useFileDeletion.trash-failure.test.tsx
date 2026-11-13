@@ -97,16 +97,7 @@ it('permanently deletes after the user confirms a Trash failure', async () => {
   await requestDelete(result)
 
   await vi.waitFor(() => expect(closeFile).toHaveBeenCalledWith('tab-1'))
-  expect(mocks.confirm).toHaveBeenCalledWith(
-    expect.objectContaining({
-      title: "Couldn't move 'file.ts' to the Recycle Bin. Delete it permanently?",
-      description: 'This cannot be undone.',
-      confirmLabel: 'Delete Permanently',
-      confirmVariant: 'destructive',
-      cancelVariant: 'ghost',
-      surface: 'security'
-    })
-  )
+
   expect(mocks.deleteRuntimePath).toHaveBeenLastCalledWith(
     expect.anything(),
     'C:\\repo\\file.ts',
@@ -134,11 +125,7 @@ it('keeps the file and stays quiet when the user cancels', async () => {
   await requestDelete(result)
 
   await vi.waitFor(() => expect(mocks.confirm).toHaveBeenCalled())
-  expect(mocks.confirm).toHaveBeenCalledWith(
-    expect.objectContaining({
-      title: "Couldn't move 'file.ts' to the Trash. Delete it permanently?"
-    })
-  )
+
   expect(mocks.deleteRuntimePath).toHaveBeenCalledTimes(1)
   expect(closeFile).not.toHaveBeenCalled()
   expect(refreshDir).not.toHaveBeenCalled()

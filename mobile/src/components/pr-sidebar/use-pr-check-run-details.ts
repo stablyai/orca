@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
+import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
 import { fetchPRCheckDetails } from '../../source-control/review/github-pr-rpc'
 import '../../source-control/review/github-pr-repo-slug'
 import type { GitHubPrRepoSlug } from '../../source-control/review/github-pr-repo-slug'

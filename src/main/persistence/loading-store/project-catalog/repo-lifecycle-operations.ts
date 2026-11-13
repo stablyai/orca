@@ -3,7 +3,6 @@ import { REMOVE_PROJECT_DOMAINS, REPO_CATALOG_DOMAINS } from '../../profile-save
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../../shared/repo-host-identity'
-import type { GhAccountBinding } from '../../../../shared/github/account-binding'
 import {
   removeRepoFromHostWorkspaceSessions,
   removeRepoFromWorkspaceSession
@@ -13,7 +12,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { mergeProjectHostSetupCompatibilityState } from '../../tracking-repos/project-host-compatibility'
+import { applyProjectHostSetupCompatibilityState } from '../../tracking-repos/project-host-compatibility'
 import { RepoOrderPersistenceOperations } from '../../tracking-repos/repo-order-operations'
 import { pruneWorktreeStateForRepo as pruneWorktreeStateForRepoOperation } from '../../tracking-repos/repo-worktree-pruning'
 import { collectDeregisteredRepoIds } from '../../tracking-repos/deregistered-repo-residue'
@@ -31,8 +30,8 @@ import type { StoreRuntimeState } from '../store-runtime-state'
 
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
 import { pruneDeregisteredRepoUiResidue } from './repo-lifecycle-ui-residue'
-import { isWslMoveProjectSessionFrozen } from '../../moving-wsl-projects/wsl-move-scope-guard'
-import { dropOrcadTerminalRestoreHintsForWorktrees } from '../../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
+import { isWslMoveProjectSessionFrozen } from '../../moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { dropOrcadTerminalRestoreHintsForWorktrees } from '../../migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { applyNewWindowsDriveProjectDefault } from '../../../wsl/filesystem/wsl-drive-project-new-default'
 
@@ -171,43 +170,7 @@ export class RepoLifecycleOperations {
 
   updateRepo(
     target: RepoHostTarget,
-    updates: Partial<
-      Pick<
-        Repo,
-        | 'displayName'
-        | 'badgeColor'
-        | 'repoIcon'
-        | 'upstream'
-        | 'gitRemoteIdentity'
-        | 'defaultJiraProject'
-        | 'hookSettings'
-        | 'editorFormatter'
-        | 'worktreeBaseRef'
-        | 'worktreeBasePath'
-        | 'kind'
-        | 'folderUpgradeGitRootPath'
-        | 'executionHostId'
-        | 'symlinkPaths'
-        | 'dictationTerms'
-        | 'issueSourcePreference'
-        | 'forkSyncMode'
-        | 'agentWorkspaceTrust'
-        | 'externalWorktreeVisibilityPromptDismissedAt'
-        | 'externalWorktreeInboxBaselinePaths'
-        | 'importedExternalWorktreePaths'
-        | 'customWorktreeVisibilitySources'
-        | 'worktreeVisibilitySourcePreferences'
-        | 'projectGroupId'
-        | 'projectHostSetupMethod'
-      >
-    > & {
-      projectGroupOrder?: number | null
-      externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
-      agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
-      sourceControlAi?: Repo['sourceControlAi'] | null
-      externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
-      ghAccount?: GhAccountBinding | null
-    }
+    updates: Parameters<RepoUpdatePersistenceOperations['updateRepo']>[1]
   ): Repo | null {
     return getRepoUpdateOperations(this).updateRepo(target, updates)
   }
@@ -282,13 +245,8 @@ export function getRepoUpdateOperations(
 }
 
 export function syncProjectHostSetupCompatibilityState(owner: RepoLifecycleOperations): void {
-  const compatibilityState = mergeProjectHostSetupCompatibilityState(
-    owner[repoLifecycleOperationsContext].runtime.state,
-    owner[repoLifecycleOperationsContext].runtime.state.repos
-  )
-  owner[repoLifecycleOperationsContext].runtime.state.projects = compatibilityState.projects
-  owner[repoLifecycleOperationsContext].runtime.state.projectHostSetups =
-    compatibilityState.projectHostSetups
+  const state = owner[repoLifecycleOperationsContext].runtime.state
+  applyProjectHostSetupCompatibilityState(state, state.repos)
 }
 
 export function getProjectHostSetupOperations(

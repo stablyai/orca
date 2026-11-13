@@ -67,8 +67,8 @@ vi.mock('../monaco-view/diff-editor-word-wrap-options', () => ({
   buildDiffEditorWordWrapOptions: () => ({}),
   syncDiffEditorOriginalWordWrap: syncWordWrap
 }))
-vi.mock('../monaco-view/diff-editor-shift-wheel-scroll', () => ({
-  installDiffEditorShiftWheelScroll: () => cleanupShiftWheel
+vi.mock('../monaco-view/diff-editor-horizontal-wheel-scroll', () => ({
+  installDiffEditorHorizontalWheelScroll: () => cleanupShiftWheel
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 

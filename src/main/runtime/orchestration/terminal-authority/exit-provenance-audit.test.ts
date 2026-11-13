@@ -127,21 +127,31 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     })
   })
 
-  it('does not escalate a deliberate close, but still escalates a crash', () => {
-    const closedDb = createDb()
-    const closed = createRuntime(closedDb)
-    const closedCtx = dispatchOnHandle(closedDb, 'no escalation on close')
-    closed.markPtyStopRequested(PTY_ID)
-    closed.onPtyExit(PTY_ID, 0)
-    // Prove settlement before absence checks so an inert dispatch cannot pass.
-    expect(observe(closedDb, closedCtx.id).termination_reason).toBe('operator_close')
-    expect(escalations(closedDb, closedCtx.runId)).toHaveLength(0)
+  it('reports a person closing a running worker once as lost, with its last output', () => {
+    const db = createDb()
+    const runtime = createRuntime(db)
+    const ctx = dispatchOnHandle(db, 'closed by a person')
+    runtime.onPtyData(PTY_ID, 'Waiting for CI on the pull request\r\n', 1)
+    runtime.markPtyStopRequested(PTY_ID)
+    runtime.onPtyExit(PTY_ID, 0)
+    // A repeated exit report must not repeat the alert.
+    runtime.onPtyExit(PTY_ID, 0)
+    expect(observe(db, ctx.id).termination_reason).toBe('operator_close')
+    const mail = escalations(db, ctx.runId)
+    expect(mail.map((message) => message.subject)).toEqual(['Worker lost without reporting'])
+    expect(mail[0]?.body).toContain('is gone (it was closed in Orca)')
+    expect(mail[0]?.body).toContain('Waiting for CI on the pull request')
+    expect(mail[0]?.body).not.toContain('still open')
+  })
 
-    const crashDb = createDb()
-    const crashed = createRuntime(crashDb)
-    const crashCtx = dispatchOnHandle(crashDb, 'escalate on crash')
-    crashed.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
-    expect(escalations(crashDb, crashCtx.runId)).toHaveLength(1)
+  it('reports a crash once as an exit', () => {
+    const db = createDb()
+    const runtime = createRuntime(db)
+    const ctx = dispatchOnHandle(db, 'escalate on crash')
+    runtime.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
+    const mail = escalations(db, ctx.runId)
+    expect(mail.map((message) => message.subject)).toEqual(['Worker exited without reporting'])
+    expect(mail[0]?.body).toContain('exited (Agent process killed by signal 9)')
   })
 
   it('does not carry an unconsumed stop intent across a same-id respawn', () => {

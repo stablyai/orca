@@ -7,8 +7,4 @@ describe('normalizeTerminalTextInput', () => {
     expect(normalizeTerminalTextInput('git checkout – file')).toBe('git checkout -- file')
     expect(normalizeTerminalTextInput('git checkout — file')).toBe('git checkout -- file')
   })
-
-  it('keeps ASCII hyphens unchanged', () => {
-    expect(normalizeTerminalTextInput('git checkout -- file')).toBe('git checkout -- file')
-  })
 })

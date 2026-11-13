@@ -46,6 +46,8 @@ export type DragReorderListProps<ItemT> = {
   rowHeight?: number
   scopeKey?: string
   rowPresentation?: 'settings' | 'plain'
+  /** A long press anywhere on the row lifts it, not only on its grip. */
+  liftFromRow?: boolean
   renderRow: (item: ItemT, handle: ReactNode) => ReactNode
   /** Called with every item key in the new order after a drop changes it. */
   onReorder?: (orderedKeys: string[]) => void
@@ -66,6 +68,7 @@ export function DragReorderList<ItemT>({
   rowHeight,
   scopeKey = '',
   rowPresentation = 'settings',
+  liftFromRow = false,
   renderRow,
   onReorder,
   onMove,
@@ -349,6 +352,7 @@ export function DragReorderList<ItemT>({
           movable={!canMove || canMove(item)}
           disabled={isMoveDisabled?.(item) ?? false}
           presentation={rowPresentation}
+          liftFromRow={liftFromRow}
           onMeasure={onMeasure}
           shared={shared}
           scrollOffsetY={scrollOffsetY}

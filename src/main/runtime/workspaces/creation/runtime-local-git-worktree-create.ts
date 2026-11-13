@@ -1,4 +1,4 @@
-import type { LocalGitExecOptions } from '../../../git/repo-default-base-ref'
+import type { LocalGitExecOptions } from '../../../git/refs/resolution/repo-default-base-ref'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repo-types'

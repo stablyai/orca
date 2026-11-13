@@ -20,10 +20,10 @@ import type {
   PluginAutoUpdateEvent,
   PluginHostInstallResult,
   PluginHostInstallSource,
-  PluginHostListEntry,
-  PluginHostLogLine,
-  PreloadApi
-} from '../api-types'
+  PluginHostLogLine
+} from './plugin-host-api'
+import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
+import type { PreloadApi } from '../api-types'
 
 export const pluginsApi = {
   list: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:list'),

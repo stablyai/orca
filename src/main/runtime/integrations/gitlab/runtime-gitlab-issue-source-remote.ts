@@ -1,7 +1,7 @@
 import type { Repo } from '../../../../shared/repo-types'
-import { getDefaultRemote } from '../../../git/repo'
-import { getProjectRefForRemote } from '../../../gitlab/gitlab-project-ref-resolution'
-import { getGlabKnownHosts } from '../../../gitlab/gitlab-known-host-probe'
+import { getDefaultRemote } from '../../../git/remotes/repo-remote-queries'
+import { getProjectRefForRemote } from '../../../gitlab/projects/gitlab-project-ref-resolution'
+import { getGlabKnownHosts } from '../../../gitlab/projects/gitlab-known-host-probe'
 
 export async function resolveRuntimeGitLabIssueSourceRemote(
   repoPath: string,

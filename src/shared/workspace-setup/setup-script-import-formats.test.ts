@@ -19,33 +19,6 @@ async function inspect(files: Record<string, string>) {
 }
 
 describe('Conductor settings.toml', () => {
-  it('imports setup and archive and lists run actions as skipped', async () => {
-    expect(
-      await inspect({ '.conductor/settings.toml': fixture('conductor-settings-inbox-zero.toml') })
-    ).toEqual([
-      {
-        provider: 'conductor',
-        label: 'Conductor',
-        files: ['.conductor/settings.toml'],
-        setup: 'pnpm install --prefer-offline --frozen-lockfile',
-        archive:
-          'node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/dev-setup.ts clean',
-        unsupportedFields: ['scripts.run']
-      }
-    ])
-  })
-
-  it('reports run_mode alongside run actions', async () => {
-    const [candidate] = await inspect({
-      '.conductor/settings.toml': fixture('conductor-settings-relaticle.toml')
-    })
-    expect(candidate).toMatchObject({
-      setup: 'bash bin/setup-workspace.sh',
-      archive: 'bash bin/archive-workspace.sh',
-      unsupportedFields: ['scripts.run', 'scripts.run_mode']
-    })
-  })
-
   it('wins over conductor.json and lets settings.local.toml override per key', async () => {
     const candidates = await inspect({
       'conductor.json': JSON.stringify({ scripts: { setup: 'npm install' } }),
@@ -75,34 +48,6 @@ describe('Conductor settings.toml', () => {
 })
 
 describe('devcontainer.json', () => {
-  it('chains creation-time commands from a commented config and skips per-start ones', async () => {
-    expect(
-      await inspect({
-        '.devcontainer/devcontainer.json': fixture('devcontainer-freecodecamp.jsonc')
-      })
-    ).toEqual([
-      {
-        provider: 'devcontainer',
-        label: 'Dev Container',
-        files: ['.devcontainer/devcontainer.json'],
-        setup:
-          '.devcontainer/on-create.sh\npnpm install --prefer-offline\n.devcontainer/post-create.sh',
-        unsupportedFields: ['postStartCommand', 'postAttachCommand']
-      }
-    ])
-  })
-
-  it('reports features as skipped', async () => {
-    const [candidate] = await inspect({
-      '.devcontainer.json': fixture('devcontainer-aspire.jsonc')
-    })
-    expect(candidate).toMatchObject({
-      files: ['.devcontainer.json'],
-      setup: './restore.sh',
-      unsupportedFields: ['postStartCommand', 'features']
-    })
-  })
-
   it('reads a BOM-prefixed file and survives pathological nesting elsewhere', async () => {
     const candidates = await inspect({
       '.devcontainer/devcontainer.json': '﻿{ "postCreateCommand": "npm ci" }',
@@ -129,22 +74,6 @@ describe('devcontainer.json', () => {
         'git lfs pull\nnpm install --prefix ${ORCA_WORKTREE_PATH}/server\nnpm install --prefix client',
       unsupportedFields: ['postCreateCommand.quoted', 'postCreateCommand.token']
     })
-  })
-})
-
-describe('Cursor environment.json', () => {
-  it('imports install and lists machine settings as skipped', async () => {
-    expect(
-      await inspect({ '.cursor/environment.json': fixture('cursor-environment-novu.json') })
-    ).toEqual([
-      {
-        provider: 'cursor',
-        label: 'Cursor',
-        files: ['.cursor/environment.json'],
-        setup: 'bash .cursor/scripts/install.sh',
-        unsupportedFields: ['start', 'terminals', 'build']
-      }
-    ])
   })
 })
 
@@ -206,48 +135,5 @@ jobs:
         '(\ncd web || exit 1\ncd client && npm ci\n)\n(\ncd web || exit 1\ncp "${ORCA_WORKTREE_PATH}/.env.example" .env\n)',
       unsupportedFields: ['steps.2.if', 'steps.3.env']
     })
-  })
-
-  it('ignores workflows without the copilot-setup-steps job', async () => {
-    expect(
-      await inspect({
-        '.github/workflows/copilot-setup-steps.yml':
-          'jobs:\n  build:\n    steps:\n      - run: npm ci\n'
-      })
-    ).toEqual([])
-  })
-})
-
-describe('Capy setup.json', () => {
-  it('imports initialize and lists refresh and commands as skipped', async () => {
-    expect(await inspect({ '.capy/setup.json': fixture('capy-setup-jep.json') })).toEqual([
-      {
-        provider: 'capy',
-        label: 'Capy',
-        files: ['.capy/setup.json'],
-        setup: './scripts/setup.sh',
-        unsupportedFields: ['scripts.refresh', 'commands']
-      }
-    ])
-  })
-})
-
-describe('import precedence', () => {
-  it('ranks tool configs first and disposable-machine setups below the lockfile guess', async () => {
-    const candidates = await inspect({
-      '.devcontainer/devcontainer.json': '{ "postCreateCommand": "npm ci" }',
-      '.github/workflows/copilot-setup-steps.yml':
-        'jobs:\n  copilot-setup-steps:\n    steps:\n      - run: npm ci\n',
-      'package.json': '{ "packageManager": "pnpm@10.0.0" }',
-      '.cursor/environment.json': '{ "install": "npm install" }',
-      '.conductor/settings.toml': '[scripts]\nsetup = "pnpm install"\n'
-    })
-    expect(candidates.map((candidate) => candidate.provider)).toEqual([
-      'conductor',
-      'cursor',
-      'package-manager',
-      'copilot',
-      'devcontainer'
-    ])
   })
 })

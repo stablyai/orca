@@ -1,4 +1,4 @@
-import { classifyExactGitHubOperation } from '../../../src/shared/github/exact-work-item-operation'
+import { classifyExactGitHubOperation } from '../../../src/shared/github/work-items/exact-work-item-operation'
 import {
   captureGitHubInvocation,
   GITHUB_TARGET_CHECK_TIMED_OUT,

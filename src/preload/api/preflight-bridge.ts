@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
-import type { PreflightRuntimeContext, PreloadApi, RefreshAgentsResult } from '../api-types'
+import type { PreflightRuntimeContext, RefreshAgentsResult } from './preflight-api'
+import type { PreloadApi } from '../api-types'
 import type { ZCodeInteractiveCapability } from '../../shared/zcode-missing-tui'
 
 export const preflightApi = {

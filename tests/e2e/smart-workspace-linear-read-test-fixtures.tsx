@@ -12,9 +12,9 @@ import {
   referenceLinearIssue,
   referenceRepo
 } from '../../src/renderer/src/components/sidebar/workspace-card/review/workspace-reference-fixtures.test-support'
-import { SmartWorkspaceSourceResultList } from '../../src/renderer/src/components/new-workspace/SmartWorkspaceSourceResultList'
-import { useWorkItemSourceSearch } from '../../src/renderer/src/components/new-workspace/use-work-item-source-search'
-import type * as MainLinearClient from '../../src/main/linear/client'
+import { SmartWorkspaceSourceResultList } from '../../src/renderer/src/components/new-workspace/source-search/SmartWorkspaceSourceResultList'
+import { useWorkItemSourceSearch } from '../../src/renderer/src/components/new-workspace/source-search/use-work-item-source-search'
+import type * as MainLinearClient from '../../src/main/linear/accounts/linear-account-client'
 import type * as RuntimeLinearClient from '@/runtime/linear/runtime-linear-client'
 import type * as RuntimeLinearIssueMutations from '@/runtime/linear/runtime-linear-issue-client'
 import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
@@ -68,7 +68,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: (...args: unknown[]) => detailTransport.rpc(...args)
 }))
-vi.mock('../../src/main/linear/client', async (original) => {
+vi.mock('../../src/main/linear/accounts/linear-account-client', async (original) => {
   const actual = await original<typeof MainLinearClient>()
   return {
     ...actual,
@@ -88,7 +88,7 @@ vi.mock('../../src/main/linear/client', async (original) => {
           ]
   }
 })
-vi.mock('../../src/main/linear/linear-sdk', () => {
+vi.mock('../../src/main/linear/requests/linear-sdk', () => {
   class LinearClient {
     client: { rawRequest: (...args: unknown[]) => Promise<unknown> }
     apiKey: string
@@ -109,7 +109,7 @@ vi.mock('../../src/main/linear/linear-sdk', () => {
     createLinearClient: (options: { apiKey: string }) => new LinearClient(options)
   }
 })
-vi.mock('../../src/main/linear/linear-workspace-registry', () => ({
+vi.mock('../../src/main/linear/accounts/linear-workspace-registry', () => ({
   getWorkspaceState: () => ({
     workspaces: detailTransport.workspaces.map((id) => ({
       id,
@@ -122,7 +122,7 @@ vi.mock('../../src/main/linear/linear-workspace-registry', () => ({
   resolveWorkspaceId: (id?: string | null) => id ?? detailTransport.workspaces[0],
   getCredentialError: () => detailTransport.credential.message
 }))
-vi.mock('../../src/main/linear/linear-token-store', () => ({
+vi.mock('../../src/main/linear/accounts/linear-token-store', () => ({
   clearToken: (id: string) => {
     detailTransport.workspaces = detailTransport.workspaces.filter((workspace) => workspace !== id)
     detailTransport.clear(id)
@@ -216,12 +216,18 @@ vi.mock('@/runtime/hosts/preflight/local-preflight-context-key', () => ({
   localPreflightContextKey: () => 'test'
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('../../src/renderer/src/components/new-workspace/use-jira-source-connection', () => ({
-  useJiraSourceConnection: () => ({ status: null, loaded: false })
-}))
-vi.mock('../../src/renderer/src/components/new-workspace/use-jira-url-source', () => ({
-  useJiraUrlSource: () => ({ intent: false })
-}))
+vi.mock(
+  '../../src/renderer/src/components/new-workspace/source-search/use-jira-source-connection',
+  () => ({
+    useJiraSourceConnection: () => ({ status: null, loaded: false })
+  })
+)
+vi.mock(
+  '../../src/renderer/src/components/new-workspace/source-search/use-jira-url-source',
+  () => ({
+    useJiraUrlSource: () => ({ intent: false })
+  })
+)
 vi.mock('../../src/renderer/src/components/use-jira-project-inventory', () => ({
   useJiraProjectInventory: () => ({ projects: [], connected: true, error: null, loading: false })
 }))
