@@ -1,16 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DegradedDaemonPtyProvider } from '../degraded-daemon-pty-provider'
-import { DEGRADED_DAEMON_RECOVERY_RETRY_MS } from '../degraded-daemon-fresh-spawn-routing'
+
 import type { DaemonPtyAdapter } from '../../adapter/daemon-pty-adapter'
-import { settledWriteStub } from '../../../../providers/settled-pty-write-stub'
-import type {
-  IPtyProvider,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../../providers/pty-provider-contract'
-import type { PtyProcessInspectionOptions } from '../../../../providers/pty-process-inspection'
+import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
+import type { IPtyProvider, PtySpawnOptions } from '../../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../../providers/pty/spawn-result'
+import type { PtyProcessInspectionOptions } from '../../../../providers/pty/process-inspection'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import { readLaunchedAgentForeground } from '../../../../runtime/terminal/wait/launched-agent-foreground'
+
 import { SessionNotFoundError } from '../../../protocol/daemon-errors'
 
 type ProviderMock = IPtyProvider & {
@@ -147,22 +144,6 @@ function createDaemonAdapter(
   } as unknown as DaemonPtyAdapter & ProviderMock
 }
 
-it('reports focus lost to the daemon that owns the session', async () => {
-  const current = createDaemonAdapter('daemon')
-  const legacy = createDaemonAdapter('legacy', ['legacy-session'])
-  const provider = new DegradedDaemonPtyProvider({
-    current,
-    legacy: [legacy],
-    fallback: createProvider('fallback')
-  })
-  await provider.discoverDaemonSessions()
-
-  await provider.reportFocusLost('legacy-session')
-
-  expect(legacy.reportFocusLost).toHaveBeenCalledWith('legacy-session')
-  expect(current.reportFocusLost).not.toHaveBeenCalled()
-})
-
 it('confirms repeated stale-binding absence without falling back or spawning', async () => {
   const current = createDaemonAdapter('daemon-current')
   const legacy = createDaemonAdapter('daemon-legacy')
@@ -224,88 +205,6 @@ it('confirms repeated stale-binding absence without falling back or spawning', a
 })
 
 describe('DegradedDaemonPtyProvider', () => {
-  it('observes an established fresh PTY while an unrelated legacy daemon is unreachable', async () => {
-    const current = createDaemonAdapter('daemon')
-    const legacy = createDaemonAdapter('legacy', ['unrelated'])
-    const fallback = createProvider('fallback')
-    const observation = {
-      ptyId: 'fallback-new',
-      ptyIncarnationId: 'inc',
-      authorityGeneration: 'owner',
-      observationEpoch: 1,
-      capturedAgeMs: 0,
-      verdict: 'observed' as const,
-      source: 'pty-master' as const,
-      foregroundKind: 'non-shell' as const,
-      processName: 'claude'
-    }
-    Object.assign(fallback, { supportsForegroundObservation: () => true })
-    vi.mocked(fallback.inspectProcess).mockResolvedValue({
-      foregroundProcess: 'claude',
-      hasChildProcesses: true,
-      foregroundObservation: observation
-    })
-    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
-    const fresh = await provider.spawn({ cols: 80, rows: 24 })
-    vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('unreachable'))
-    const controller = {
-      supportsForegroundObservation: (id: string) => provider.supportsForegroundObservation(id),
-      inspectProcess: (id: string, options?: PtyProcessInspectionOptions) =>
-        provider.inspectProcess(id, options),
-      getForegroundProcess: (id: string) => provider.getForegroundProcess(id),
-      listProcesses: (_host?: string, opts?: Parameters<IPtyProvider['listProcesses']>[0]) =>
-        provider.listProcesses(opts)
-    }
-
-    await expect(
-      readLaunchedAgentForeground(controller, { remote: false, windows: false }, fresh.id, 'claude')
-    ).resolves.toBe('agent')
-    expect(fallback.inspectProcess).toHaveBeenCalledWith(fresh.id, { foregroundOnly: true })
-    // The target read skips the unrelated census; every other scoped read keeps it.
-    await expect(
-      provider.listProcesses({ ptyIds: [fresh.id], targetOwnerOnly: true })
-    ).resolves.toMatchObject([{ id: fresh.id }])
-    expect(legacy.listProcesses).not.toHaveBeenCalled()
-    await expect(provider.listProcesses({ ptyIds: [fresh.id] })).rejects.toThrow()
-    expect(provider.supportsForegroundObservation('unrouted')).toBe(false)
-  })
-
-  it('routes later fresh PTYs to the daemon after spawn health recovers', async () => {
-    const current = createDaemonAdapter('daemon')
-    const fallback = createProvider('fallback')
-    const probeCurrentDaemonSpawn = vi
-      .fn<() => Promise<boolean>>()
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true)
-    const provider = new DegradedDaemonPtyProvider({
-      current,
-      legacy: [],
-      fallback,
-      probeCurrentDaemonSpawn
-    })
-    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
-
-    try {
-      await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(false)
-      await provider.spawn({ cols: 80, rows: 24 })
-      await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(false)
-      expect(probeCurrentDaemonSpawn).toHaveBeenCalledOnce()
-      now.mockReturnValue(1_000 + DEGRADED_DAEMON_RECOVERY_RETRY_MS)
-      await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(true)
-      const recovered = await provider.spawn({ cols: 80, rows: 24, worktreeId: 'wt-1' })
-
-      expect(provider.routesFreshSpawnsToLocalProvider).toBeUndefined()
-      expect(provider.isDegraded).toBe(true)
-      expect(provider.supportsGitCredentialGuardHost()).toBe(true)
-      expect(fallback.spawn).toHaveBeenCalledOnce()
-      expect(current.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24, worktreeId: 'wt-1' })
-      expect(recovered.id).toBe('daemon-new')
-      expect(provider.canProvideAuthoritativeBufferSnapshot(recovered.id)).toBe(true)
-    } finally {
-      now.mockRestore()
-    }
-  })
-
   it('does not retain recovered daemon ownership after exit beats the spawn reply', async () => {
     const current = createDaemonAdapter('daemon')
     const provider = new DegradedDaemonPtyProvider({

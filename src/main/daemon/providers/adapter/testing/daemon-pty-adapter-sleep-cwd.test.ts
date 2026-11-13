@@ -9,7 +9,7 @@ import { getHistorySessionDirName } from '../../../history/storage/history-paths
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
 import type * as DaemonHealthModule from '../../../health/daemon-health'
 import type * as DaemonTccAttributionModule from '../../../permissions/daemon-tcc-attribution'
-import type * as ProcessCwdModule from '../../../../providers/process-cwd'
+import type * as ProcessCwdModule from '../../../../providers/working-directory/process-cwd'
 
 const {
   getMacDaemonSystemResolverHealthMock,
@@ -25,7 +25,7 @@ const {
   )
 }))
 
-vi.mock('../../../../providers/process-cwd', async (importOriginal) => {
+vi.mock('../../../../providers/working-directory/process-cwd', async (importOriginal) => {
   const actual = await importOriginal<typeof ProcessCwdModule>()
   resolveProcessCwdSpy.mockImplementation(actual.resolveProcessCwd)
   return { ...actual, resolveProcessCwd: resolveProcessCwdSpy }
