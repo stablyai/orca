@@ -1,31 +1,40 @@
-# Spec: Multi-Window & Tab Tear-Off
+# Spec: Multi-Window & Tab Tear-Off (Anchor-Satellite Model)
 
-## Requisitos Funcionais
+## Requisitos Funcionais & Critérios de Aceite
 
-### REQ-MW-01: Flag Experimental de Múltiplas Janelas
-* **Descrição:** A funcionalidade de múltiplas janelas DEVE vir protegida por uma configuração padrão desativada (`experimentalMultiWindow: false`), sem qualquer alteração de comportamento para os usuários padrão do Orca.
-* **Critério de Aceite:** Quando desativada, `File > New Window` não aparece no menu e qualquer tentativa de abrir nova janela é tratada pelo singleton lock existente.
+### REQ-MW-01: Flag Experimental de Segurança (`experimentalMultiWindow`)
+* **Descrição:** A funcionalidade DEVE vir desativada por padrão em `experimentalMultiWindow: false`.
+* **Critério de Aceite:** Quando desativada, a interface e os menus permanecem rigorosamente idênticos ao Orca estável. Nenhuma funcionalidade de multi-janela é disparada acidentalmente.
 
-### REQ-MW-02: Registro de Janelas Principais (`MainWindowRegistry`)
-* **Descrição:** O processo principal DEVE registrar todas as instâncias de `BrowserWindow` principais e broadcastar mudanças de UI (`ui:stateChanged`) para todas as janelas ativas.
-* **Critério de Aceite:** Abrir uma janela secundária e alterar configurações ou temas deve refletir instantaneamente em ambas as telas sem necessidade de recarregar.
+### REQ-MW-02: Modelo Anchor-Satellite no Registro de Janelas
+* **Descrição:** O `MainWindowRegistry` DEVE distinguir a Janela Âncora (`anchor`) de Janelas Satélites (`satellite`).
+* **Critério de Aceite:**
+  * Fechar uma janela satélite não fecha o aplicativo nem derruba os agentes que nela estavam.
+  * O app só encerra quando a última janela aberta for fechada pelo usuário.
 
-### REQ-MW-03: Comando `File > New Window`
-* **Descrição:** Quando `experimentalMultiWindow: true`, o menu nativo da aplicação DEVE disponibilizar `File > New Window` com o atalho `Mod+Shift+N` (Command+Shift+N no macOS / Ctrl+Shift+N no Windows/Linux).
-* **Critério de Aceite:** O comando cria uma janela independente no mesmo processo, com dimensões cascateadas, permitindo selecionar e navegar por qualquer worktree disponível.
+### REQ-MW-03: Consumer Handover de Terminal sem Interrupção de Agentes
+* **Descrição:** Mover uma aba com um agente em execução (Claude Code, Codex, Antigravity) de uma janela para outra DEVE transferir a visualização mantendo o PID do processo vivo.
+* **Critério de Aceite:**
+  * O processo do agente no sistema operacional não recebe `SIGTERM` nem reinicia.
+  * O histórico do terminal (scrollback) é reconstituído na nova tela sem perda de linhas.
 
-### REQ-MW-04: Roteamento de Posse de PTY (`pty-owner-routing`)
-* **Descrição:** O fluxo de entrada (`stdin`), saída (`stdout`) e redimensionamento (`pty:resize`) de cada terminal PTY DEVE ser roteado exclusivamente para a janela que hospeda a visualização do workspace correspondente.
-* **Critério de Aceite:** Terminais com colunas diferentes em monitores distintos não sofrem interferência mútua de quebra de linha ou concorrência de buffer.
+### REQ-MW-04: Exclusividade de Redimensionamento do PTY
+* **Descrição:** Apenas a janela onde o terminal está visível e focado pode emitir `pty:resize`.
+* **Critério de Aceite:** Janelas com larguras de tela diferentes não corrompem o wrapping de linhas do terminal xterm.
 
-### REQ-MW-05: Composite Graph no Runtime
-* **Descrição:** O `OrcaRuntimeService` DEVE aceitar sincronizações de grafo de múltiplas janelas, compondo um estado unificado exposto para a CLI e Mobile.
-* **Critério de Aceite:** Comandos CLI como `orca worktree ps` e conexões do Orca Mobile devem listar todos os terminais e agentes em execução, independentemente de estarem na janela 1 ou na janela 2.
+### REQ-MW-05: Grafo Composto e Visibilidade Universal (CLI & Mobile)
+* **Descrição:** O `OrcaRuntimeService` DEVE manter o registro de workspaces de todas as janelas ativas e expor a união completa.
+* **Critério de Aceite:**
+  * `orca worktree ps` lista os agentes em execução tanto na Janela 1 quanto na Janela 2.
+  * Conexões pareadas do Orca Mobile continuam recebendo status dos agentes da janela secundária.
+  * Skills carregam e interagem normalmente com os agentes em ambas as janelas.
 
-### REQ-MW-06: Ação de Menu de Contexto para Destaque de Abas
-* **Descrição:** Clicar com botão direito em uma aba de workspace/chat/terminal DEVE exibir a opção *"Mover para Nova Janela"*.
-* **Critério de Aceite:** Ao clicar na opção, a aba é desanexada da janela atual e abre em uma nova janela sem encerrar a sessão do agente nem perder o histórico do chat.
+### REQ-MW-06: Ações de Tear-Off e Dock-Back na Interface
+* **Descrição:** O usuário DEVE poder destacar abas e reacoplá-las de volta com 1 clique.
+* **Critério de Aceite:**
+  * Right-click na aba exibe a opção *"Mover para Nova Janela"*.
+  * Na janela satélite, um botão *"Reacoplar à Janela Principal"* devolve a aba à janela âncora e fecha o satélite suavemente.
 
-### REQ-MW-07: Proteção de Persistência de Sessão
-* **Descrição:** Janelas secundárias NÃO DEVEM sobrescrever o arquivo de sessão principal com listas vazias de abas ou workspaces.
-* **Critério de Aceite:** Fechar e reabrir o Orca preserva os workspaces da janela principal sem regressão.
+### REQ-MW-07: Proteção Antissobrescrita de Persistência no Disco
+* **Descrição:** Janelas satélites NÃO DEVEM sobrescrever o arquivo `session.json` com estados parciais ou vazios.
+* **Critério de Aceite:** Ao reiniciar o Orca, todos os workspaces abertos são preservados no disco sem regressão.

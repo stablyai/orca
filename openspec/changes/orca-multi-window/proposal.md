@@ -1,29 +1,48 @@
-# Proposal: Suporte Nativo a Múltiplas Janelas e Destaque de Abas (Multi-Window & Tab Tear-Off)
+# Proposal: Suporte Nativo a Múltiplas Janelas e Destaque de Abas (Anchor-Satellite Architecture)
 
 ## Contexto e Motivação
 
 O **Orca** ([stablyai/orca](https://github.com/stablyai/orca)) consolidou-se como o ADE (Agentic Development Environment) de referência para orquestração paralela de agentes de código (Claude Code, Codex, Antigravity) isolados por Git worktrees.
 
-No entanto, uma das limitações arquiteturais mais apontadas pela comunidade é a imposição de uma **janela desktop única** com `singleInstanceLock` rígido:
-* **Issue #6074** (*[Feature]: Multiple windows*): Aberta há 4 meses com dezenas de reações e comentários diários de desenvolvedores exigindo suporte a múltiplos monitores e múltiplos desktops (Spaces/Virtual Desktops no macOS/Linux/Windows).
-* **Issue #22167** (*Tear out floating workspaces into independent windows*): Necessidade de desanexar terminais e workspaces flutuantes para que prévias e diffs em tela cheia não ocultem o acompanhamento dos agentes.
-* **Issue #28955** (*Move a terminal tab to its own window*): Permitir right-click em uma aba de terminal/chat e destacá-la para outra tela.
-* **PR #5329** (*Add experimental multi-window support* por Brennan Benson): Tentativa oficial dos maintainers de viabilizar múltiplas janelas via flag experimental, mas que acabou estagnada com mais de 12.500 linhas de diff, conflitos massivos com a `main` e instabilidade sob carga de 25 PTYs concorrentes.
-* **Protótipo Comunitário de Robert Crivat** ([Robert-Crivat/orca](https://github.com/Robert-Crivat/orca)): Demonstrou que uma abordagem modular e cirúrgica (~359 linhas) com `MainWindowRegistry` e `pty-owner-routing` é viável, porém deixou lacunas críticas (o silenciamento do grafo na janela secundária deixa a CLI e o Orca Mobile cegos aos agentes secundários; ausência de persistência de sessão e ausência de destaque de abas).
+No entanto, o app impõe uma **única janela desktop no Electron** com `singleInstanceLock` rígido. Usuários que utilizam dois ou mais monitores ou múltiplos desktops virtuais (macOS Spaces / Windows Desktops) não conseguem separar abas de trabalho em telas distintas.
 
-## Problema
+Essa limitação é a mais solicitada e debatida pela comunidade:
+* **Issue #6074** (*[Feature]: Multiple windows*): Aberta há 4 meses com centenas de reações e solicitações diárias de suporte a múltiplos monitores.
+* **Issue #22167** (*Tear out floating workspaces into independent windows*): Demanda por destacar terminais flutuantes para que telas cheias de diff/browser não cubram os agentes.
+* **Issue #28955** (*Move a terminal tab to its own window*): Desejo de clicar em uma aba de chat/terminal e abri-la no monitor secundário.
+* **PR #5329** (*Add experimental multi-window support* por Brennan Benson): PR oficial dos mantenedores com mais de 12.500 linhas que tentou tornar todas as janelas "iguais" de uma só vez, gerando complexidade excessiva, timeouts em testes de escala PTY e estagnação há 5 meses (~6.000 commits defasado da `main`).
+* **Protótipo Comunitário de Robert Crivat** ([Robert-Crivat/orca](https://github.com/Robert-Crivat/orca)): Demonstrou viabilidade em ~359 linhas cirúrgicas, mas silenciou o grafo da janela 2 (`if (isSecondary) return`), deixando a CLI (`orca worktree ps`), o Orca Mobile e as Skills completamente cegos aos agentes secundários, além de não implementar o destaque/reacoplamento de abas.
 
-1. **Monitores Secundários Subutilizados:** Usuários com dois ou mais monitores precisam escolher entre alternar workspaces na mesma janela ou recorrer ao navegador via `orca pair` (web client), perdendo a ergonomia nativa do desktop.
-2. **Arquitetura Acoplada a uma Janela Única:**
-   - O processo principal mantém um único `trustedUIRendererWebContentsId` (`src/main/ipc/ui.ts`).
-   - O `OrcaRuntimeService` impõe uma única autoridade de grafo (`authoritativeWindowId`), rejeitando qualquer segunda janela com a exceção `Runtime graph publisher does not match the pending desktop promotion`.
-   - A camada de streaming de PTY (`src/main/ipc/pty/`) não possuía particionamento de redimensionamento (`pty:resize`) nem de fluxo (`stdin`/`stdout`) por janela visualizadora, causando concorrência destrutiva entre resoluções de tela diferentes.
-   - A persistência de sessão no frontend (`useAppSessionPersistence.ts`) grava de forma não escopada em `session.json`, fazendo com que uma janela secundária recém-aberta possa sobrescrever e apagar o layout da janela primária.
+---
 
-## Objetivos da Spec
+## O Problema Sob a Ótica Crítica ("Se fosse fácil, já teriam feito")
 
-1. **Permitir Múltiplas Janelas Nativas:** Suportar `File > New Window` (`Mod+Shift+N`) no macOS, Windows e Linux compartilhando o mesmo perfil de dados e runtime ativo sem corrupção de banco.
-2. **Permitir Destaque de Abas (Tab Tear-Off):** Adicionar no menu de contexto das abas de workspace/chat/terminal a opção *"Mover para Nova Janela"* / *"Destacar Aba"*, desacoplando a visualização sem derrubar o processo de agente nem o PTY subjacente.
-3. **Composite Window Graph no Runtime:** Substituir a autoridade de janela única no `OrcaRuntimeService` por um modelo de grafo composto (`Map<windowId, WindowGraph>`), garantindo que **a CLI do Orca, o Orca Mobile e as Skills continuem enxergando 100% dos agentes**, independentemente de em qual janela física eles estejam abertos.
-4. **Isolamento de PTY e Persistência Segura:** Garantir que redimensionamentos de tela (ex: laptop 80 colunas vs monitor 4K 160 colunas) sejam estritamente roteados pela janela dona, e que o arquivo de sessão guarde o estado particionado por janela.
-5. **Estratégia de PRs Upstream (Small PRs Series):** Em vez de submeter um PR monolítico de 12.000 linhas, estruturar a entrega em 3 waves modulares, default-off (`experimentalMultiWindow`), prontas para revisão e merge pelo time da Stably AI.
+A investigação minuciosa do código-fonte revelou por que o time da Stably AI travou nessa implementação:
+
+1. **Gargalo de Autoridade no Runtime:** O `src/main/ipc/ui.ts` e `OrcaRuntimeService` foram construídos sob a premissa de um único publicador de grafo (`trustedUIRendererWebContentsId`). Se duas janelas publicarem, ocorre colisão de autoridade.
+2. **Disputa de Resolução de Tela no PTY (xterm buffer wrap):** Se a Janela 1 estiver num monitor 4K (160 colunas) e a Janela 2 num laptop (80 colunas), disparar redimensionamentos concorrentes para o mesmo processo bash/zsh corrompe a formatação do terminal.
+3. **Risco de Morte do Processo do Agente:** Em implementações ingênuas, destacar uma aba destrói o componente React e recria o PTY, o que mataria o processo do Claude Code ou Codex no meio de uma compilação ou raciocínio.
+4. **Sobrescrita Destrutiva de Sessão no Disco:** O frontend React grava periodicamente em `userData/session.json`. Uma janela secundária recém-aberta (vazia) pode sobrescrever o arquivo e apagar do disco as abas da janela principal.
+
+---
+
+## A Solução Proposta: Modelo "Janela Âncora + Janelas Satélites"
+
+Em vez de criar um monólito de 12 mil linhas tentando fazer janelas perfeitamente simétricas com concorrência complexa, esta proposta adota a **Abordagem de Simplicidade Máxima com Segurança Total**:
+
+1. **Janela Âncora (Primary Window):**
+   * Mantém o ciclo de vida global do Electron, menus do sistema, diálogos de encerramento e consolidação da persistência de sessão.
+2. **Janelas Satélites (Secondary/Satellite Windows):**
+   * Janelas leves dedicadas a exibir worktrees/chats/terminais destacados.
+   * Não disputam autoridade global de encerramento do app.
+3. **Consumer Handover (Zero Interrupção de Agentes):**
+   * O processo PTY/Node do agente continua rodando no processo Main/Daemon ininterruptamente.
+   * Ao destacar a aba, a Janela 1 apenas cancela a subscrição de tela (`unsubscribe`); a Janela 2 monta o xterm, conecta no `ptyId` já ativo e recebe o replay do buffer.
+   * **O agente nunca percebe que mudou de tela. Zero perda de processo, zero perda de histórico.**
+4. **Exclusividade de Visualização do Terminal:**
+   * Um terminal ativo é exibido exclusivamente em uma janela por vez. Apenas a janela onde o terminal está visível tem o direito de enviar `pty:resize`, eliminando qualquer conflito de colunas.
+5. **Composite Window Graph:**
+   * O runtime no Main process mantém um mapa por workspace (`Map<windowId, WindowGraph>`) e expõe a **união consolidada** dos agentes para a CLI do Orca, o Orca Mobile e as Skills.
+6. **Mecânica de Tear-Off e Dock-Back:**
+   * Menu de contexto e ícone pop-out na aba: *"Mover para Nova Janela"*.
+   * Botão na janela secundária: *"Reacoplar à Janela Principal"*.

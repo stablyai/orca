@@ -1,145 +1,119 @@
-# Design Document: Arquitetura Multi-Window & Tab Tear-Off no Orca
+# Design Document: Arquitetura Anchor-Satellite & Consumer Handover
 
-## Visão Geral da Arquitetura
+## 1. Visão Geral da Arquitetura
 
-O Orca opera como uma aplicação Electron com arquitetura distribuída:
-1. **Processo Principal (Node.js/Electron Main):** Gerencia ciclo de vida, janelas nativas, IPC, SQLite (`state_5.sqlite`), processo PTY/orcad e orquestração de runtime.
-2. **Processos de Renderização (Electron Renderers):** Cada `BrowserWindow` executa uma instância isolada do frontend React/Zustand.
-3. **Runtime Service & Daemons:** Gerencia worktrees, catálogo de projetos, automações e comunicação com CLI/Mobile via WebSocket.
+O modelo **Anchor-Satellite** desacopla a visualização gráfica (Renderers) do ciclo de vida dos processos e agentes (Main/Daemon).
 
 ```mermaid
-flowchart TD
-    subgraph MainProcess ["Electron Main Process"]
-        Registry["MainWindowRegistry\n(Window 1 & Window 2)"]
-        UIBridge["sendToTrustedUIRenderer\n(Broadcast to all main windows)"]
-        PTYRouter["pty-owner-routing\n(Maps ptyId -> Window Owner)"]
-        Runtime["OrcaRuntimeService\n(Composite Graph: Map<WindowId, Graph>)"]
-        Disk["Session Persistence Engine\n(Partitioned session by windowId)"]
-    end
+sequenceDiagram
+    autonumber
+    actor User as Desenvolvedor
+    participant W1 as Janela Âncora (Monitor 1)
+    participant Main as Electron Main & PTY Daemon
+    participant W2 as Janela Satélite (Monitor 2)
+    participant Ext as Orca CLI / Mobile / Skills
 
-    subgraph Window1 ["Janela 1 (Monitor Principal)"]
-        R1["Renderer React/Zustand"]
-        W1["Worktree A (Agente 1)"]
-    end
-
-    subgraph Window2 ["Janela 2 (Segundo Monitor)"]
-        R2["Renderer React/Zustand"]
-        W2["Worktree B (Agente 2)"]
-    end
-
-    Registry --> Window1
-    Registry --> Window2
-    PTYRouter -->|pty:data / pty:resize| W1
-    PTYRouter -->|pty:data / pty:resize| W2
-    Window1 -->|syncWindowGraph(1)| Runtime
-    Window2 -->|syncWindowGraph(2)| Runtime
-    Runtime -->|Unified Graph| CLI["Orca CLI & Mobile"]
+    Note over Main: Agente rodando no PTY daemon (ptyId: 42)
+    User->>W1: Clica em "Mover para Nova Janela" na aba
+    W1->>Main: IPC window:detachWorkspace({ workspaceKey, ptyId: 42 })
+    W1->>W1: Unsubscribe da tela & minimiza aba local
+    Main->>W2: Cria BrowserWindow satélite com bounds cascateados
+    W2->>Main: Conecta ao ptyId: 42 (Consumer Handover)
+    Main->>W2: Envia replay do scrollback buffer (zero perda)
+    W2->>Main: pty:resize({ cols: 140, rows: 45 }) [Exclusividade]
+    Note over Main: PTY continua rodando ininterruptamente!
+    W2->>Main: syncWindowGraph(W2, { slice: [workspaceKey] })
+    Main->>Ext: Expõe Composite Graph (União W1 + W2)
 ```
 
 ---
 
-## Detalhamento dos 4 Pilares Arquiteturais
+## 2. Detalhamento dos Subsistemas
 
-### 1. MainWindowRegistry & Ciclo de Vida do Electron
-
-#### Problema Existente
-* `src/main/ipc/ui.ts` possui uma variável escalar `let trustedUIRendererWebContentsId: number | null = null`.
-* O `app.on('window-all-closed')` assume que qualquer fechamento de janela pode encerrar o aplicativo se não houver janelas secundárias formalmente registradas.
-
-#### Solução
-Criar `src/main/window/main-window-registry.ts`:
-* Armazena instâncias de janelas em `liveMainWindows(): BrowserWindow[]`.
-* Expõe helpers:
-  * `registerMainWindow(window: BrowserWindow)`
-  * `unregisterMainWindow(window: BrowserWindow)`
-  * `isMainWindowWebContents(contents: WebContents): boolean`
-  * `isSecondaryMainWindowWebContents(contents: WebContents): boolean`
-* Atualiza `sendToTrustedUIRenderer` em `src/main/ipc/ui.ts` para iterar e enviar atualizações do store a **todas as janelas vivas**, evitando telas congeladas.
-* O fechamento do app no macOS/Linux/Windows só ocorre quando `liveMainWindows().length === 0`.
-
----
-
-### 2. PTY Owner Routing & Prevenção de Conflitos de Redimensionamento
-
-#### Problema Existente
-* O PTY emite `pty:data` e escuta `pty:resize` sem discernir qual tela está exibindo o terminal.
-* Se duas telas com larguras diferentes (ex: 80 colunas vs 160 colunas) emitirem `pty:resize`, o buffer de texto do terminal xterm corrompe a formatação (wraps de linha erráticos e panes travados).
-
-#### Solução
-Criar `src/main/ipc/pty/delivery/pty-owner-routing.ts`:
-* **Canais de reivindicação (Claiming Channels):** `pty:spawn`, `pty:write`, `pty:writeAccepted`, `pty:resize`.
-* **Canais exclusivos do dono (Owner Only):** `pty:setActiveRendererPty`, `pty:setHiddenRendererPty`, `pty:terminalViewAttributes`.
-* Quando a Janela 2 foca ou instancia um terminal, ela executa `notePtyOwner(ptyId, senderContents)`.
-* O wrapper de IPC `withPtyOwnerTracking` filtra os eventos e entrega `pty:data` exclusivamente ao `webContents` registrado como proprietário daquele terminal.
-* **Resultado:** Redimensionamentos na Janela 1 nunca afetam os terminais da Janela 2, eliminando os gargalos de concorrência observados no PR #5329.
-
----
-
-### 3. Composite Window Graph no `OrcaRuntimeService`
-
-#### Problema Existente
-* O runtime trava com erro caso uma janela com ID diferente do `authoritativeWindowId` chame `syncWindowGraph()`.
-* O protótipo prévio silenciava a Janela 2 (`if (isSecondary) return runtime.getStatus()`), gerando o efeito colateral crítico de deixar a CLI e o Orca Mobile cegos para os agentes rodando na Janela 2.
-
-#### Solução
-No `OrcaRuntimeService` (`src/main/runtime/orca-runtime.ts`):
-* Mudar a autoridade escalar para um mapa de grafos:
+### 2.1. MainWindowRegistry & Modelo Anchor-Satellite
+* **Arquivo:** `src/main/window/main-window-registry.ts`
+* **Contrato:**
   ```typescript
-  private windowGraphs: Map<number, WindowGraph> = new Map();
+  export interface WindowDescriptor {
+    id: number;
+    browserWindow: BrowserWindow;
+    role: 'anchor' | 'satellite';
+    activeWorkspaces: Set<string>;
+  }
   ```
-* O método `syncWindowGraph(windowId: number, graph: WindowGraph)` armazena o slice reportado por cada janela.
-* O método `getStatus()` e os endpoints expostos para a CLI e Mobile passam a computar a **união consolidada**:
+* **Comportamento do Ciclo de Vida:**
+  * A primeira janela criada é registrada como `anchor`.
+  * Janelas subsequentes (`File > New Window` ou Tear-Off) são registradas como `satellite`.
+  * **Fechamento de Satélite:** O satélite avisa o Main (`window:satelliteClosed`). Seus workspaces voltam para a visualização da Janela Âncora ou ficam desacoplados. O app continua ativo.
+  * **Fechamento da Âncora:** Se a Âncora for fechada enquanto houver satélites abertos, o Main pode promover um satélite ativo para Âncora ou fechar de forma ordenada com confirmação do usuário.
+  * `app.on('window-all-closed')` só encerra o processo se `liveMainWindows().length === 0`.
+
+### 2.2. Consumer Handover no PTY (Zero Interrupção de Agentes)
+* **Arquivo:** `src/main/ipc/pty/delivery/pty-owner-routing.ts`
+* **Mecanismo:**
+  * O PTY roda desanexado do DOM do React, gerenciado pelo `node-pty` / `orcad` no Main process.
+  * O `pty-owner-routing` mantém um mapa:
+    ```typescript
+    const ptyOwnerByPtyId = new Map<string, number>(); // ptyId -> webContentsId
+    ```
+  * Quando a Janela 2 assume um terminal:
+    1. A Janela 1 emite `pty:unsubscribe`. O Main cessa o envio de `pty:data` para a Janela 1.
+    2. A Janela 2 emite `pty:subscribe` com o mesmo `ptyId`.
+    3. O Main registra `ptyOwnerByPtyId.set(ptyId, window2.webContents.id)`.
+    4. O Main despacha o histórico acumulado em memória (`replayBuffer`) para o xterm da Janela 2.
+    5. A Janela 2 emite `pty:resize` com as dimensões da nova tela.
+  * **Invariante:** O processo do agente (PID do sistema operacional) nunca recebe `SIGTERM` ou `SIGHUP`. Ele permanece vivo e operando.
+
+### 2.3. Exclusividade de Redimensionamento do Terminal
+* **Regra de Ouro:** Não existe múltiplos consumidores enviando `pty:resize` concorrentes para o mesmo terminal.
+* O canal `pty:resize` só é aceito se:
   ```typescript
-  export function mergeCompositeGraphs(graphs: Iterable<WindowGraph>): CompositeGraphSummary {
-    const allTabs = [];
-    const allLeaves = [];
-    for (const g of graphs) {
-      allTabs.push(...g.tabs);
-      allLeaves.push(...g.leaves);
+  if (effectivePtyOwnerId(ptyId) !== sender.id) {
+    return; // Rejeita silenciosamente se a janela não for a dona ativa
+  }
+  ```
+* Isso previne a corrupção de buffer xterm quando duas telas têm densidades de pixels ou resoluções diferentes.
+
+### 2.4. Composite Runtime Graph (Visibilidade Total para CLI, Mobile e Skills)
+* **Arquivo:** `src/main/runtime/orca-runtime.ts` e `session-window-graph.ts`
+* **Estrutura de Armazenamento:**
+  ```typescript
+  private windowGraphs = new Map<number, WindowGraph>();
+  ```
+* **Processamento de Sincronização:**
+  * Cada janela publica apenas o seu slice:
+    `syncWindowGraph(windowId, graphSlice)`
+  * A Janela 1 publica os workspaces que estão nela; a Janela 2 publica os que estão nela.
+* **Consulta Externa (`getStatus()` / WebSockets CLI e Mobile):**
+  * O runtime computa a união linear:
+    ```typescript
+    export function getCompositeGraph(windowGraphs: Map<number, WindowGraph>): WindowGraph {
+      const composite: WindowGraph = { tabs: [], leaves: [] };
+      for (const [_, graph] of windowGraphs) {
+        composite.tabs.push(...graph.tabs);
+        composite.leaves.push(...graph.leaves);
+      }
+      return composite;
     }
-    return { tabs: allTabs, leaves: allLeaves };
-  }
-  ```
-* Cada janela é dona apenas do seu slice de workspaces/tabs, mas o ecossistema externo enxerga a totalidade dos agentes em execução.
+    ```
+  * A CLI (`orca worktree ps`), o aplicativo móvel e as Skills enxergam a lista unificada de todos os agentes em execução.
+
+### 2.5. Persistência Segura de Sessão (`session.json`)
+* **Arquivo:** `src/renderer/src/app-shell/use-app-session-persistence.ts`
+* **Proteção de Escrita:**
+  * As Janelas Satélites carregam com a flag `?orcaWindowRole=satellite`.
+  * `isSecondaryWindow` desativa o autosave local na Janela Satélite.
+  * A persistência de sessão no disco é orquestrada centralizadamente pelo processo Main ao detectar mudanças estruturais ou no fechamento do aplicativo.
+  * O arquivo `session.json` preserva os workspaces da janela principal, garantindo integridade contra sobrescritas vazias.
 
 ---
 
-### 4. Persistência de Sessão Particionada (`session.json`)
+## 3. Experiência do Usuário (UI/UX)
 
-#### Problema Existente
-* `useAppSessionPersistence.ts` no renderer escuta as mutações do Zustand e persiste o estado diretamente no arquivo central `session.json`.
-* Ao abrir uma janela secundária vazia, ela faria o flush de uma lista de workspaces nula, apagando a sessão da janela principal.
-
-#### Solução
-* **Fase 1 (Proteção Imediata):** A Janela secundária recebe query param `?orcaWindowRole=secondary` e inicializa `isSecondaryWindow = true`. A persistência do arquivo central continua a cargo exclusivo da Janela Primária (`useAppSessionPersistence` retorna `noop` na janela secundária).
-* **Fase 2 (Persistência Completa de Multi-Janela):** O schema do `session.json` é evoluído com retrocompatibilidade:
-  ```json
-  {
-    "version": 2,
-    "primaryWindow": { "bounds": {...}, "workspaces": ["ws-1"] },
-    "secondaryWindows": [
-      { "id": "win-2", "bounds": {...}, "workspaces": ["ws-2"] }
-    ]
-  }
-  ```
-* Ao reiniciar o Orca com a flag experimental ativada, o app reabre automaticamente ambas as janelas exatamente nos monitores e com os workspaces onde estavam.
-
----
-
-### 5. Mecânica de "Tab Tear-Off" (Destaque de Aba)
-
-Diferente do Google Chrome, onde o Chromium reparenta widgets C++ entre janelas nativas, no Electron cada janela é um processo V8 e React tree independente.
-
-Para viabilizar o destaque de abas:
-1. No menu de contexto de qualquer aba de chat/workspace/terminal:
-   * Adiciona: **"Mover para Nova Janela"** (`contextMenu.ts`).
-2. O renderer dispara:
-   ```typescript
-   window.api.window.detachTab({ tabId, workspaceKey });
-   ```
-3. O processo Main:
-   * Cria a `BrowserWindow` secundária com coordenadas cascateadas no monitor adjacente.
-   * Inicializa o renderer passando o `workspaceKey` de destino.
-   * Invoca `notePtyOwner(terminalId, newWindow.webContents)`.
-4. A Janela 1 desmonta o componente da aba; a Janela 2 monta o componente e assume o streaming do PTY existente.
-5. **Resultado:** O agente continua rodando ininterruptamente, sem perda de histórico, sem reinicialização de processo.
+1. **Menu de Contexto na Aba de Workspace/Chat:**
+   * Botão direito na aba -> *"Mover para Nova Janela"*.
+   * Ícone discreto de pop-out (`↗`) ao passar o mouse na aba ativa.
+2. **Janela Satélite:**
+   * Abre no monitor secundário com bounds calculados para evitar sobreposição total.
+   * Barra de título com botão *"Reacoplar à Janela Principal"* (`↙`).
+   * Acesso rápido via atalho `Mod+Shift+N` ou `Mod+Alt+W`.
