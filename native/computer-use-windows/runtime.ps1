@@ -1501,9 +1501,13 @@ function Invoke-OrcaScrollPattern($Element, $RootElement, [string]$Direction, [d
             # Why: a refusal before any page moved means ScrollPattern can't do it; after that it is the end of the content.
             return $page -gt 0
         }
-        # Why: an unmoved or unreadable percent after the wait is the end of the content.
         $after = Wait-OrcaScrollPercentChange $pattern $vertical $before
-        if ($null -eq $after -or $after -eq $before) { break }
+        if ($null -eq $after -or $after -eq $before) {
+            # Why: a first page that doesn't move away from the end means the provider ignored it; later ones reached the end.
+            $atEnd = if ($forward) { $before -ge 99.99 } else { $before -le 0.01 }
+            if ($page -eq 0 -and -not $atEnd) { return $false }
+            break
+        }
         $before = $after
     }
     $true

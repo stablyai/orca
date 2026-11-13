@@ -106,7 +106,7 @@ $functions = @(
     "Assert-OrcaElementFound", "Get-OrcaPointerPoint", "Get-OrcaElementScreenPoint", "Get-OrcaModifierVirtualKey",
     "Get-OrcaClickModifierVirtualKeys", "Send-OrcaMouseClick", "Send-OrcaDrag", "Invoke-OrcaOperation",
     "Assert-OrcaInputAllowed", "Test-OrcaTargetTookForeground", "Invoke-OrcaPrimaryAction", "Get-OrcaScrollPattern",
-    "Get-OrcaScrollPercent", "Get-OrcaScrollViewSize", "Wait-OrcaScrollPercentChange", "Invoke-OrcaScrollPercent",
+    "Get-OrcaScrollPercent", "Get-OrcaScrollViewSize", "Get-OrcaRuntimeId", "Test-OrcaSameRuntimeId", "Wait-OrcaScrollPercentChange", "Invoke-OrcaScrollPercent",
     "Invoke-OrcaScrollPattern"
 )
 foreach ($definition in $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
@@ -146,6 +146,7 @@ function Get-TestPointerCalls {
 function Invoke-OrcaPrimaryActionStub($Element) { [bool]$Element.pattern }
 Set-Item -Path function:Invoke-OrcaPrimaryActionReal -Value (Get-Item function:Invoke-OrcaPrimaryAction).ScriptBlock
 Set-Item -Path function:Invoke-OrcaPrimaryAction -Value { param($Element, $Index) Invoke-OrcaPrimaryActionStub $Element }
+Set-Item -Path function:Invoke-OrcaScrollPatternReal -Value (Get-Item function:Invoke-OrcaScrollPattern).ScriptBlock
 function Invoke-OrcaScrollPattern($Element, $RootElement, $Direction, $Pages) { [bool]$Element.pattern }
 
 $pointerCases = @(
@@ -289,6 +290,20 @@ if ($uiaTypes) {
     Assert-TestEqual ($scroll.Calls -join " ") "-1,0" "fractional scroll clamped percent"
     $scroll | Add-Member -Force -MemberType ScriptMethod -Name SetScrollPercent -Value { param($horizontal, $vertical) }
     Assert-TestEqual (Invoke-OrcaScrollPercent $scroll $true $true 0.5 0.0) $false "fractional scroll the provider ignores"
+
+    # A page the provider ignores fails unless the view is already at that end.
+    function New-TestScrollElement([double]$Percent) {
+        $pattern = [pscustomobject]@{ Current = [pscustomobject]@{ VerticallyScrollable = $true; VerticalScrollPercent = $Percent } }
+        $pattern | Add-Member -MemberType ScriptMethod -Name Scroll -Value { param($horizontal, $vertical) }
+        $element = [pscustomobject]@{ pattern = $pattern }
+        $element | Add-Member -MemberType ScriptMethod -Name GetCurrentPattern -Value { param($id) $this.pattern }
+        $element | Add-Member -MemberType ScriptMethod -Name GetRuntimeId -Value { @(1) }
+        $element
+    }
+    $ignored = New-TestScrollElement 30.0
+    Assert-TestEqual (Invoke-OrcaScrollPatternReal $ignored $ignored "down" 1) $false "whole page the provider ignores"
+    $atEnd = New-TestScrollElement 100.0
+    Assert-TestEqual (Invoke-OrcaScrollPatternReal $atEnd $atEnd "down" 1) $true "whole page at the end of the content"
 } else {
     Write-Output "skipping UI Automation pattern checks: UIAutomationClient is unavailable"
 }
