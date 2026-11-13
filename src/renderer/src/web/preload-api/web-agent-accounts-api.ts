@@ -49,6 +49,13 @@ export function createZcodePlanCredentialsApi(): PreloadApi['zcodePlanCredential
   }
 }
 
+const hostOnlyCursorAccounts = (): Promise<never> =>
+  Promise.reject(
+    new Error(
+      'Cursor accounts can only be changed in the desktop app on the computer running Orca.'
+    )
+  )
+
 export function createCursorAccountsApi(): NonNullable<Partial<PreloadApi>['cursorAccounts']> {
   // Cursor auth is host-owned and unreadable here; claiming signed-out would contradict the host-provided usage meter.
   return {
@@ -64,7 +71,18 @@ export function createCursorAccountsApi(): NonNullable<Partial<PreloadApi>['curs
           'auto.components.web.preloadApi.cursorAccounts.hostOnly',
           'Cursor sign-in details are only readable on the computer running Orca.'
         )
-      })
+      }),
+    list: () =>
+      Promise.resolve({
+        supported: false,
+        accounts: [],
+        activeAccountId: null,
+        selectedAccountId: null,
+        currentUnsaved: false
+      }),
+    addCurrent: hostOnlyCursorAccounts,
+    select: hostOnlyCursorAccounts,
+    remove: hostOnlyCursorAccounts
   }
 }
 

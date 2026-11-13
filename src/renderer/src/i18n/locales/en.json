@@ -13289,7 +13289,15 @@
           "resets": "Resets {{when}}",
           "usageLabel": "Usage",
           "noAllowance": "Cursor reported no usage allowance for this account.",
-          "staleUsage": "Last known usage — the latest refresh failed: {{reason}}"
+          "staleUsage": "Last known usage — the latest refresh failed: {{reason}}",
+          "subtitleManaged": "Shows your Cursor plan usage and lets you switch between saved cursor-agent sign-ins on this computer.",
+          "savedTitle": "Saved accounts",
+          "savedDescription": "Switching changes the cursor-agent sign-in. Cursor sessions already running keep their account until you restart them. Cursor IDE is not affected.",
+          "unnamed": "Cursor account",
+          "active": "Active",
+          "switch": "Switch",
+          "remove": "Remove",
+          "saveCurrent": "Save current account"
         },
         "UnsealedCredentialNotice": {
           "body": "{{credential}} is stored unencrypted — this system has no OS keyring Orca can use. Anyone who can read your disk or a backup of it can read the credential. Install and unlock gnome-keyring or kwallet, then save it again to seal it."
