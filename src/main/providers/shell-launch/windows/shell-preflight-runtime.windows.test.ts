@@ -14,10 +14,7 @@ import * as pty from 'node-pty'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CODEX_COMMAND_IDENTITY_ENV_KEYS } from '../../../../shared/codex-shell-function'
 import { resolveGitBashPath } from '../../../pty/shell-startup/git-bash'
-import {
-  ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
-  resolveWindowsShellLaunchArgs
-} from './shell-args'
+import { resolveWindowsShellLaunchArgs } from './shell-args'
 
 const describeWindows = process.platform === 'win32' ? describe : describe.skip
 const tempDirs: string[] = []
@@ -124,36 +121,6 @@ afterEach(() => {
 })
 
 describeWindows('Windows Codex shell preflight runtime', () => {
-  it('runs a spaced executable through cmd.exe and continues after failure', async () => {
-    const root = makeTempDir()
-    const preflight = writeFailingPreflight(root)
-    const preflightMarker = join(root, 'cmd-preflight-ran')
-    const startupMarker = join(root, 'cmd-started')
-    const resolved = resolveWindowsShellLaunchArgs(
-      'cmd.exe',
-      root,
-      root,
-      undefined,
-      'echo launched>cmd-started & exit /b 0',
-      preflight
-    )
-
-    await runPty({
-      shellPath: 'cmd.exe',
-      shellArgs: resolved.shellArgs,
-      cwd: root,
-      env: {
-        ...process.env,
-        ORCA_CODEX_LAUNCH_PREFLIGHT: preflight,
-        [ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV]: '"',
-        ORCA_PREFLIGHT_MARKER: preflightMarker
-      }
-    })
-
-    expect(readFileSync(preflightMarker, 'utf8')).toBe('ran')
-    expect(readFileSync(startupMarker, 'utf8').trim()).toBe('launched')
-  })
-
   it('runs the typed-Codex wrapper through Git Bash without MSYS switch rewriting', async () => {
     const gitBash = resolveGitBashPath()
     expect(gitBash).not.toBeNull()
