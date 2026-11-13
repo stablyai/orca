@@ -116,6 +116,8 @@ export function cloudRenewInPlaceActions(args: {
     },
     submitCode: running ? flow.submitCode : args.surface.submitCode,
     submitSetupCode: flow.submitSetupCode,
+    // "Copy link" beside Open again: the renewal's sign-in page, as for "Set up once".
+    linkFor: running ? flow.linkFor : args.surface.linkFor,
     pasteCode: running ? flow.pasteCode : args.surface.pasteCode,
     openSettings: args.openSettings,
     cancel: () => (running ? stopOrcaCloudAgentSetups(args.agent) : args.surface.cancel())
