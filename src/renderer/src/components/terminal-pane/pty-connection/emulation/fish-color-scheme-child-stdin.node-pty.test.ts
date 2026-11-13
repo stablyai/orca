@@ -305,6 +305,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       recordTerminalInput: vi.fn(),
       setAgentStatus: vi.fn(),
       removeAgentStatus: vi.fn(),
+      retireAgentStatusProcess: vi.fn(),
       dropAgentStatus: vi.fn(),
       retireAgentPaneAuthority: vi.fn(),
       setPaneForegroundAgent: vi.fn(),

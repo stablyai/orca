@@ -97,6 +97,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
       }
     ),
     removeAgentStatus: vi.fn(),
+    retireAgentStatusProcess: vi.fn(),
     dropAgentStatus: vi.fn(),
     retireAgentPaneAuthority: vi.fn(),
     restoreAgentPaneAuthority: vi.fn(),

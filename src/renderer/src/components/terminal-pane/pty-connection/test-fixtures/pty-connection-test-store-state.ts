@@ -124,6 +124,7 @@ export type StoreState = {
   recordTerminalInput: ReturnType<typeof vi.fn>
   setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
+  retireAgentStatusProcess: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
   retireAgentPaneAuthority: ReturnType<typeof vi.fn>
   restoreAgentPaneAuthority: ReturnType<typeof vi.fn>

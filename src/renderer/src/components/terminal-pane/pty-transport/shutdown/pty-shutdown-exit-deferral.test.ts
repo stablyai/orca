@@ -81,7 +81,7 @@ async function placedExitSession() {
       paneTransportsRef: { current: new Map([[1, transport]]) }
     })
   )
-  // SAFETY: the exit installer uses the same partial session initialization as connectPanePty.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer uses connectPanePty's partial session initialization.
   const session = { pane, manager, deps } as ConnectPanePtySession
   Object.assign(session, {
     transport,
@@ -124,7 +124,11 @@ it('keeps providerless Done through the committed deferred process exit until ex
       activityClearedAtByPaneKey: { [PANE]: NOW - 50 },
       manuallyUnreadTurnsByPaneKey: { [PANE]: NOW - 75 },
       agentLaunchConfigByPaneKey: {
-        [PANE]: { launchConfig: { agentArgs: '', agentEnv: {} }, identity: { agentType: 'claude' } }
+        [PANE]: {
+          registeredAt: NOW,
+          launchConfig: { agentArgs: '', agentEnv: {} },
+          identity: { agentType: 'claude' }
+        }
       },
       cacheTimerByKey: { [PANE]: NOW }
     })
