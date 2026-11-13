@@ -43,6 +43,12 @@ describe('CLONE-ACCESS-ERROR card', () => {
     expect(actions[0]?.label).toBe('Copy request for an owner')
     actions[0]?.onClick()
     expect(access.copyRequest).toHaveBeenCalledOnce()
+    const copied = cloneAccessActions(
+      { phase: 'requested', giveAccess: vi.fn(), copyRequest: vi.fn(), copied: true },
+      { onRetry: vi.fn(), onChooseAnotherRepo: vi.fn() },
+      translate
+    )
+    expect(copied[0]?.label).toBe('Copied')
   })
 
   it('reachable now: a plain Try again', () => {

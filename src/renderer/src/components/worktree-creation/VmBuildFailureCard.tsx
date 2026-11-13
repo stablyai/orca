@@ -115,7 +115,14 @@ export function VmBuildFailureCard({
           {/* InlineError announces only the cause; the check rows and actions are read on demand.
               An account limit isn't a broken build, so it reads as a neutral notice. */}
           <InlineError
-            tone={isAccountGate(visible) ? 'neutral' : 'error'}
+            tone={
+              isAccountGate(visible)
+                ? 'neutral'
+                : // CLONE-ACCESS-ERROR: missing access is a precondition to fix, not a crash.
+                  accessFix && cloneAccess.phase !== 'reachable'
+                  ? 'warning'
+                  : 'error'
+            }
             className="break-words"
             title={
               <h3 ref={headingRef} tabIndex={-1} className="outline-none">

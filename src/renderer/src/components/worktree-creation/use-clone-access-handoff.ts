@@ -18,6 +18,8 @@ export type CloneAccessPhase = 'checking' | 'missing' | 'waiting' | 'requested' 
 
 /** Re-check delays while focused after Give Orca access (as REPO-ACCESS-REFRESH backs off). */
 export const CLONE_ACCESS_POLL_DELAYS_MS = [4_000, 4_000, 8_000, 15_000, 30_000] as const
+/** How long "Copied" stays on the request button. */
+export const COPIED_MS = 1_500
 /** Stop waiting after this long: the button comes back. */
 export const CLONE_ACCESS_WAIT_MS = 3 * 60_000
 
@@ -47,6 +49,8 @@ export function useCloneAccessHandoff({
   phase: CloneAccessPhase
   giveAccess: () => void
   copyRequest: () => void
+  /** The request was just copied: the button reads Copied for a moment (like the W-number chip). */
+  copied: boolean
 } {
   const repoUrl = githubRepoUrlFor(repoName)
   const [phase, setPhase] = useState<CloneAccessPhase>('checking')
@@ -147,15 +151,24 @@ export function useCloneAccessHandoff({
     })
   }, [repoUrl])
 
+  const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(copiedTimer.current), [])
   const copyRequest = useCallback(() => {
-    void copyOwnerRequest(repoName, repoUrl)
+    void copyOwnerRequest(repoName, repoUrl).then((ok) => {
+      if (ok) {
+        setCopied(true)
+        window.clearTimeout(copiedTimer.current)
+        copiedTimer.current = window.setTimeout(() => setCopied(false), COPIED_MS)
+      }
+    })
   }, [repoName, repoUrl])
 
-  return { phase, giveAccess, copyRequest }
+  return { phase, giveAccess, copyRequest, copied }
 }
 
 /** A message for an owner of the repository's org, with the install link that preselects it. */
-export async function copyOwnerRequest(repoName: string, repoUrl: string | null): Promise<void> {
+export async function copyOwnerRequest(repoName: string, repoUrl: string | null): Promise<boolean> {
   const link = repoUrl
     ? await cloudWorkspaceApi()
         ?.gitHubInstallLink({ repoUrl })
@@ -169,8 +182,9 @@ export async function copyOwnerRequest(repoName: string, repoUrl: string | null)
   )
   try {
     await window.api.ui.writeClipboardText(link ? `${message}\n${link}` : message)
-    toast.success(translate('worktreeCreation.cloneAccess.requestCopied', 'Request copied.'))
+    return true
   } catch {
     toast.error(translate('worktreeCreation.cloneAccess.requestCopyFailed', 'Couldn’t copy it.'))
+    return false
   }
 }

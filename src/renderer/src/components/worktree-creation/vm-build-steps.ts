@@ -43,6 +43,7 @@ type VmBuildEntry = Pick<
   | 'checkoutProgress'
   | 'worktreeId'
   | 'errorAt'
+  | 'errorCode'
   | 'provisioningLog'
   | 'provisioningLogStamps'
 >
@@ -129,7 +130,10 @@ export function deriveVmBuildSteps(
     (cloud ? orcaCloudPlannedRepoMode(entry.provisioningLog ?? '') : null) ??
     undefined
   const afterClone = clone?.endedAt ?? check?.startedAt ?? createAt
-  const provisionDone = Boolean(check) || workspacePhase || cloneAt !== undefined
+  // A clone that failed (CLONE-ACCESS-ERROR: GitHub refused it) means the sandbox started, even
+  // when no clone line made it into the log: the steps tell the same story as the card.
+  const cloneRefused = failed && cloud && entry.errorCode === 'cloudCloneFailed'
+  const provisionDone = Boolean(check) || workspacePhase || cloneAt !== undefined || cloneRefused
 
   const provision = provisionDone
     ? step(
@@ -148,7 +152,12 @@ export function deriveVmBuildSteps(
     ? null
     : cloneAt === undefined
       ? {
-          ...step('clone', provisionDone ? 'done' : 'pending', null, undefined),
+          ...step(
+            'clone',
+            cloneRefused ? 'failed' : provisionDone ? 'done' : 'pending',
+            null,
+            undefined
+          ),
           ...(cloneMode ? { cloneMode } : {})
         }
       : clone?.ended || check || workspacePhase

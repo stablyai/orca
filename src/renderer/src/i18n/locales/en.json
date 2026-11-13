@@ -29466,8 +29466,8 @@
       "waiting": "Waiting for GitHub…",
       "giveAccess": "Give Orca access",
       "requestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to start workspaces from this repository.",
-      "requestCopied": "Request copied.",
-      "requestCopyFailed": "Couldn’t copy it."
+      "requestCopyFailed": "Couldn’t copy it.",
+      "copied": "Copied"
     }
   },
   "renderer": {

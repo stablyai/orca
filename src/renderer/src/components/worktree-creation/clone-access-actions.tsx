@@ -1,6 +1,6 @@
 // CLONE-ACCESS-ERROR: the card's copy and actions for a clone GitHub refused, by what GitHub says
 // about Orca's access now (use-clone-access-handoff).
-import { Copy, FolderSearch, Github, Loader2 } from 'lucide-react'
+import { Check, Copy, FolderSearch, Github, Loader2 } from 'lucide-react'
 import type { Translate } from '@/i18n/use-translate'
 import type { CloneAccessPhase } from './use-clone-access-handoff'
 import { repoOwner } from './vm-build-clone-failure-copy'
@@ -9,6 +9,7 @@ export type CloneAccessHandlers = {
   phase: CloneAccessPhase
   giveAccess: () => void
   copyRequest: () => void
+  copied?: boolean
 }
 
 export type CloneAccessAction = {
@@ -83,8 +84,10 @@ export function cloneAccessActions(
       return [
         {
           key: 'copyRequest',
-          label: t('worktreeCreation.cloneAccess.copyRequest', 'Copy request for an owner'),
-          icon: <Copy />,
+          label: access.copied
+            ? t('worktreeCreation.cloneAccess.copied', 'Copied')
+            : t('worktreeCreation.cloneAccess.copyRequest', 'Copy request for an owner'),
+          icon: access.copied ? <Check /> : <Copy />,
           onClick: access.copyRequest
         },
         chooseAnother
