@@ -32,7 +32,7 @@ import { makeDetectedResult } from '@/store/slices/worktrees/listing/worktrees-d
 import * as discovery from '../native-chat/session/options/catalog/native-chat-session-option-discovery'
 import { createAntigravityTerminalModelDemand } from '../native-chat/session/options/terminal/antigravity-terminal-model-observation'
 import { useNativeChatSessionOptions } from '../native-chat/session/options/terminal/use-native-chat-session-options'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { useAgentPickerTerminalDiscoveryKey } from './agent-launch-picker-host-reads'
 import {

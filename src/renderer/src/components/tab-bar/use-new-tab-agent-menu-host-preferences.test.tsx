@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 import * as terminalDiscovery from '@/runtime/terminal/terminal-model-discovery-client'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
