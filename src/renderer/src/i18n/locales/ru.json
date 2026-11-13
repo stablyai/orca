@@ -449,7 +449,8 @@
       "open": "Открыть",
       "pin": "Закрепить на панели инструментов",
       "unpin": "Открепить от панели инструментов",
-      "visitWebStore": "Открыть Chrome Web Store"
+      "visitWebStore": "Открыть Chrome Web Store",
+      "openWebStoreFailed": "Не удалось открыть Chrome Web Store."
     },
     "history": {
       "clear": "Очистить историю браузера",
@@ -4115,6 +4116,8 @@
             "15dd899676": "Добавить в {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "Проблема с терминалом",
+            "errorTitle": "Ошибка терминала",
             "e4aa243f8c": "Перезапустить службу",
             "retry": "Повторить",
             "retrying": "Повторная попытка…",
@@ -17700,6 +17703,14 @@
                     "logins": {
                       "title": "Сохраните авторизацию на сайтах",
                       "body": "Перенесите существующие сессии входа в Orca, чтобы сразу пользоваться своими учётными записями."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Расширения Chrome",
+                        "body": "Установите расширения из Chrome Web Store и закрепите их рядом с адресной строкой.",
+                        "action": "Открыть Chrome Web Store",
+                        "secondaryAction": "Понятно"
+                      }
                     }
                   },
                   "tasks": {
@@ -18059,7 +18070,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Свернуть",
-          "showMore": "Показать ещё"
+          "showMore": "Показать ещё",
+          "copied": "Скопировано",
+          "copyFailed": "Не удалось скопировать",
+          "copyPrompt": "Копировать запрос"
         },
         "AutomationDetail": {
           "host": "Сервер",
@@ -18098,7 +18112,15 @@
           "precheckNone": "Нет",
           "migrate": "Перенести",
           "migrateNotice": "{{host}} обновлён до нового удалённого хоста. Перенесите эту автоматизацию, чтобы она продолжала работать.",
-          "needsMigration": "Требуется перенос"
+          "needsMigration": "Требуется перенос",
+          "repeats": "Повтор",
+          "missedRunGrace": "Допустимая задержка запуска",
+          "execution": "Выполнение",
+          "notRunYet": "Ещё не запускалась",
+          "usageDetail_one": "Токены: {{tokens}} · {{known}}/{{count}} запуск с данными",
+          "usageDetail_few": "Токены: {{tokens}} · {{known}}/{{count}} запуска с данными",
+          "usageDetail_many": "Токены: {{tokens}} · {{known}}/{{count}} запусков с данными",
+          "usageDetail_other": "Токены: {{tokens}} · {{known}}/{{count}} запуска с данными"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Отмена",
@@ -21421,6 +21443,7 @@
           "about": {
             "parakeetV3": "Быстрая. {{languages}} европейских языков.",
             "parakeetV2": "Быстрая. Только английский, и на нём самая точная.",
+            "parakeetUnifiedEn": "Только английский. Слова появляются по ходу речи.",
             "whisperTiny": "Самая маленькая. Чтобы попробовать диктовку.",
             "whisperTurbo": "Больше всего языков, около 100. Медленная без GPU.",
             "senseVoice": "Быстрая. Для китайского, японского и корейского.",
@@ -22555,7 +22578,6 @@
       "description": "Агенты там используют учётные записи Claude и Codex дистрибутива по умолчанию до обновления Orca в WSL."
     },
     "antigravity": {
-      "chatTitle": "Чаты Antigravity",
       "chatSignIn": "Войти",
       "chatChangeAccount": "Сменить учётную запись",
       "chatRetry": "Повторить вход",
@@ -22573,23 +22595,13 @@
       "chatFailed": "Не удалось войти. Повторите попытку.",
       "chatOtherClient": "В другом клиенте уже выполняется вход.",
       "chatReadFailed": "Не удалось проверить вход на {{host}}.",
-      "signIn": "Запустите agy на этом сервере и завершите вход через браузер, затем сохраните текущую учётную запись. Для добавления другой используйте /logout в agy и войдите снова.",
-      "docs": "Инструкция по входу",
       "retry": "Повторить",
-      "identityUnknown": "Данные вошедшего пользователя недоступны",
-      "signedOut": "Вход в agy не выполнен.",
       "changed": "Учётная запись agy изменилась. Снова выберите сохранённую учётную запись перед запуском agy.",
-      "save": "Сохранить текущую учётную запись",
       "refresh": "Обновить учётные записи",
       "usage": "Обновить расход",
-      "working": "Обновление учётной записи",
       "usageReading": "Сессия: {{session}} · За неделю: {{weekly}}",
       "saved": "Сохранённая учётная запись Google",
-      "nativeActive": "Учётная запись agy",
-      "selected": "Выбрана",
-      "select": "Выбрать",
       "remove": "Удалить",
-      "sessions": "Выбор применяется к новым сессиям agy на этом сервере. Существующие сессии могут сохранить прежнюю учётную запись.",
       "searchDescription": "Сохраняйте и выбирайте учётные записи Google для agy на сервере выполнения.",
       "title": "Antigravity",
       "keyword": {
@@ -22601,7 +22613,6 @@
       "authMethod": "Войти через",
       "personal": "Аккаунт Google",
       "gcpProject": "Проект Google Cloud",
-      "gcpLocation": "Регион Google Cloud",
       "settingsIncomplete": "Выберите тип аккаунта Antigravity и укажите проект и регион Google Cloud.",
       "settingsLoadFailed": "Orca не удалось загрузить настройки входа в Antigravity. Попробуйте ещё раз.",
       "settingsSaveFailed": "Orca не удалось сохранить настройки входа в Antigravity. Попробуйте ещё раз.",

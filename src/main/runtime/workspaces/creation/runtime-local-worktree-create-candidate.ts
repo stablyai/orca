@@ -39,7 +39,10 @@ import {
   resolveCreateBranchName
 } from './runtime-worktree-create-git'
 import { runtimePathExists } from '../catalog/runtime-worktree-filesystem'
-import { findPendingWorktreeRemovalConflict } from '../../../workspaces/removal/worktree-removal-table'
+import {
+  assertNoPendingWorktreeRemovalConflict,
+  findPendingWorktreeRemovalConflict
+} from '../../../workspaces/removal/worktree-removal-table'
 import type { WorktreeCreatePathClaim } from '../../../workspaces/creation/worktree-create-in-flight'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
@@ -80,7 +83,6 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   let branchName = ''
   let checkoutExistingBranch = false
   let selectedExistingLocalBranchName: string | null = null
-  let selectedReuseBranchName: string | null = null
   let branchConflictKind: 'local' | 'remote' | null = null
   let worktreePath = ''
   let worktreePathResolved = false
@@ -100,7 +102,28 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
         )
       : null
   const isRetiredName = retiredNameRegistry ? createRetiredNameLookup(retiredNameRegistry) : null
-  selectedReuseBranchName = await resolveLegacyRemoteBranch({ ...args, sanitizedName })
+  if (args.request.nameWasGenerated !== true || args.request.branchNameOverride) {
+    assertNoPendingWorktreeRemovalConflict(args.repo.path, {
+      worktreePath:
+        args.request.nameWasGenerated === true
+          ? undefined
+          : ensurePathWithinWorkspace(
+              computeWorktreePath(sanitizedName, args.repo.path, args.worktreePathSettings),
+              args.workspaceRoot
+            ),
+      branch:
+        args.request.branchNameOverride ||
+        (await resolveCreateBranchName(
+          args.repo.path,
+          undefined,
+          sanitizedName,
+          args.settings,
+          args.username,
+          args.localWorktreeGitOptions
+        ))
+    })
+  }
+  let selectedReuseBranchName = await resolveLegacyRemoteBranch({ ...args, sanitizedName })
   if (selectedReuseBranchName) {
     branchName = selectedReuseBranchName
   }

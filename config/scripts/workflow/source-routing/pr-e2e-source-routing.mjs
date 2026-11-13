@@ -132,7 +132,7 @@ export const PR_E2E_SOURCE_ROUTES = [
         file
       ) ||
       (isProductSource(file) &&
-        /^src\/(?:cli\/runtime\/(?:launch|serve-)|main\/orcad\/(?:main|orcad-entry|orcad-command-startup|orcad-instance-lock|orcad-command-arguments|orcad-lifecycle)\.ts$|main\/startup\/desktop-profile-instance-lock\.ts$|main\/daemon\/(?:[^/]+\/)*daemon-(?:spawner|endpoint-adoption|init)|main\/server\/serve-)/.test(
+        /^src\/(?:cli\/runtime\/(?:launch|serve-)|main\/orcad\/(?:main|orcad-entry|orcad-command-startup|orcad-instance-lock|orcad-command-arguments|orcad-lifecycle)\.ts$|main\/startup\/profile-startup\/desktop-profile-instance-lock\.ts$|main\/daemon\/(?:[^/]+\/)*daemon-(?:spawner|endpoint-adoption|init)|main\/server\/serve-)/.test(
           file
         ))
   },
@@ -142,14 +142,16 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       file === 'tests/e2e/helpers/orca-serve-cli-host.ts' ||
       (isProductSource(file) &&
-        /^src\/main\/startup\/(?:windows-app-data-path|main-process-preflight)\.ts$/.test(file))
+        /^src\/main\/startup\/(?:windows-startup\/windows-app-data-path|main-process-preflight)\.ts$/.test(
+          file
+        ))
   },
   {
     id: 'clipboard.windows-copy-file',
     specs: ['tests/e2e/file-explorer-copy-file-windows.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/window\/clipboard-(?:file-copy|ipc-handlers)|renderer\/src\/components\/right-sidebar\/file-explorer\/panel\/file-explorer-row-file-transfer)\.ts$/.test(
+      /^src\/(?:main\/window\/clipboard\/clipboard-(?:file-copy|ipc-handlers)|renderer\/src\/components\/right-sidebar\/file-explorer\/panel\/file-explorer-row-file-transfer)\.ts$/.test(
         file
       )
   },

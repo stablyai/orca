@@ -88,6 +88,27 @@ export const failed = defineFixture({
     })
 })
 
+export const foldedRun = defineFixture({
+  width: 1000,
+  render: () =>
+    renderDetail({
+      automation: { ...automation, lastRunAt: NOW - 6 * HOUR },
+      runs: [
+        makeRun({
+          id: 'run-4',
+          status: 'skipped_unavailable',
+          error: 'The execution host is offline.',
+          scheduledFor: NOW - 8 * 24 * HOUR - 6 * HOUR,
+          createdAt: NOW - 8 * 24 * HOUR - 6 * HOUR,
+          dispatchedAt: null,
+          startedAt: null,
+          occurrenceCount: 9,
+          lastOccurrenceAt: NOW - 6 * HOUR
+        })
+      ]
+    })
+})
+
 export const paused = defineFixture({
   width: 720,
   render: () =>

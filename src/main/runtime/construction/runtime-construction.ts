@@ -51,7 +51,7 @@ import { RuntimeSessionSearchSettingsController } from '../integrations/ai-vault
 import { RuntimeAutomationController } from '../integrations/automations/runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from '../orchestration/federation/runtime-orchestration-federation'
 import { configureAiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
-import { configureHostReadableTranscriptPathSources } from '../../native-chat/host-readable-transcript-path'
+import { configureHostReadableTranscriptPathSources } from '../../native-chat/transcript-discovery/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal/output/terminal-model-query-authority'
 import { registerTerminalViewAttributesApplier } from '../terminal/view/terminal-view-attribute-store'

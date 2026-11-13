@@ -1,5 +1,5 @@
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
-import { isConversationNameRequestSession } from './conversation-name-request-sessions'
+import { isTextTaskRequestSession } from './text-task-request-sessions'
 import { candidateFileTime } from '../scanners/antigravity/antigravity-transcript-candidates'
 import {
   aiVaultAgentLabel,
@@ -107,7 +107,7 @@ export async function parseSessionCandidates(args: {
       }
       if (
         result.session &&
-        !isConversationNameRequestSession(result.session) &&
+        !isTextTaskRequestSession(result.session) &&
         (!args.admitSession || args.admitSession(result.session))
       ) {
         if (args.listed === false) {

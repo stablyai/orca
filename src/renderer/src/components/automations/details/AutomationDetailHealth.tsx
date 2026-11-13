@@ -138,11 +138,12 @@ export function AutomationDetailHealth({
     hasUsage && !runsUnavailable
       ? t(
           'auto.components.automations.AutomationDetail.usageDetail',
-          '{{tokens}} tokens · {{known}}/{{total}} runs reported',
+          '{{tokens}} tokens · {{known}}/{{count}} runs reported',
           {
             tokens: formatAutomationTokens(usage.totalTokens, intlLocale),
             known: usage.knownRuns,
-            total: runs.length
+            count: runs.length,
+            defaultValue_one: '{{tokens}} tokens · {{known}}/{{count}} run reported'
           }
         )
       : null

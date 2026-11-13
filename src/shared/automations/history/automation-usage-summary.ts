@@ -1,4 +1,5 @@
 import {
+  getAutomationRunLastRunAt,
   getAutomationRunListedAt,
   type AutomationRun,
   type AutomationRunStatus
@@ -71,9 +72,7 @@ export function summarizeAutomationRunUsage(
     totalTokens,
     estimatedCostUsd: hasKnownCost ? estimatedCostUsd : null,
     lastRunStatus: latest?.status ?? null,
-    lastRunAt: latest
-      ? (latest.dispatchedAt ?? latest.startedAt ?? latest.createdAt ?? null)
-      : null,
+    lastRunAt: latest ? getAutomationRunLastRunAt(latest) : null,
     lastRunListedAt: latest ? getAutomationRunListedAt(latest) : null,
     ...(latest?.setupSkippedReason === 'setup-changed'
       ? {

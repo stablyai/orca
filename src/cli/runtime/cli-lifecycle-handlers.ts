@@ -98,7 +98,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       }
       // Why lazy: only this mode needs orcad's lock code, and every other command skips loading it.
       const { printOrcadStaleLockReclaimResult, reclaimStaleOrcadInstanceLock } =
-        await import('../../main/orcad/orcad-stale-lock-reclaim.js')
+        await import('../../main/orcad/instance-lock/orcad-stale-lock-reclaim.js')
       const result = await reclaimStaleOrcadInstanceLock(
         typeof dataRoot === 'string' ? resolve(dataRoot) : resolveLaunchUserDataPath(),
         // This CLI's own binary is no command to give a user; `orca serve` is.

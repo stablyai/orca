@@ -233,11 +233,32 @@ it('reads live worktree occupancy and discovers remotes despite 50 local matches
   })
   expect(transaction.code).toBe(0)
   const page = await searchRemoteRefPage(directory, 'topic', 50)
-  expect(page.refDetails).toEqual([{ refName: 'origin/topic', localBranchName: 'topic' }])
+  expect(page.refDetails).toEqual([
+    { refName: 'refs/remotes/origin/topic', localBranchName: 'topic' }
+  ])
   const occupied = join(directory, '.git', 'checkout-test')
   await git('worktree', 'add', '-q', occupied, 'topic-0')
   expect((await listLocalBranches(directory)).worktreePaths?.['topic-0']).toBe(occupied)
   await git('worktree', 'remove', occupied)
   expect((await listLocalBranches(directory)).worktreePaths?.['topic-0']).toBeUndefined()
+  await git('worktree', 'add', '-q', occupied, 'topic-1')
+  await rm(occupied, { recursive: true })
+  expect((await listLocalBranches(directory)).worktreePaths?.['topic-1']).toBe(occupied)
+  await git('checkout', '-qb', 'external-current')
+  const updated = await listLocalBranches(directory)
+  expect(updated.current).toBe('external-current')
+  expect(updated.branches[0]).toBe('external-current')
+  expect(updated.branches).toContain('topic-0')
+  expect(updated.branches).toContain('topic-9')
+})
+it('does not overlay an unborn local branch over a remote branch', async () => {
+  await git('update-ref', 'refs/remotes/origin/main', initialHead)
+  await git('update-ref', '-d', 'refs/heads/main')
+  const local = await listLocalBranches(directory)
+  expect(local.current).toBeNull()
+  expect(local.branches).toEqual([])
+  expect((await searchRemoteRefPage(directory, 'main', 30)).refDetails).toEqual([
+    { refName: 'refs/remotes/origin/main', localBranchName: 'main' }
+  ])
 })
 installRealWorkerThreadChildProcesses()

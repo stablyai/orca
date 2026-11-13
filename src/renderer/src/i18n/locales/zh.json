@@ -3652,6 +3652,8 @@
             "15dd899676": "添加到 {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "终端问题",
+            "errorTitle": "终端错误",
             "e4aa243f8c": "重新启动守护进程",
             "a7e2fd2699": "提交议题",
             "5c8ce20be6": "如果这种情况持续存在，请",
@@ -16792,6 +16794,14 @@
                     "logins": {
                       "title": "保持登录状态",
                       "body": "把现有登录信息导入 Orca，立即保持登录状态"
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 扩展程序",
+                        "body": "从 Chrome 应用商店安装扩展程序，并将其固定在地址栏旁。",
+                        "action": "打开应用商店",
+                        "secondaryAction": "知道了"
+                      }
                     }
                   },
                   "tasks": {
@@ -17178,7 +17188,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "收起",
-          "showMore": "显示更多"
+          "showMore": "显示更多",
+          "copied": "已复制",
+          "copyFailed": "复制失败",
+          "copyPrompt": "复制提示词"
         },
         "AutomationDetail": {
           "host": "主机",
@@ -17211,7 +17224,12 @@
           "precheckNone": "无",
           "migrate": "迁移",
           "migrateNotice": "{{host}} 已升级为新的远程主机。请迁移此自动化以继续运行。",
-          "needsMigration": "需要迁移"
+          "needsMigration": "需要迁移",
+          "repeats": "重复",
+          "missedRunGrace": "错过运行宽限期",
+          "execution": "执行",
+          "notRunYet": "尚未运行",
+          "usageDetail_other": "{{tokens}} Token · 已报告 {{known}}/{{count}} 次运行"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -20353,6 +20371,7 @@
           "about": {
             "parakeetV3": "速度快。支持 {{languages}} 种欧洲语言。",
             "parakeetV2": "速度快。仅支持英语，英语最准确。",
+            "parakeetUnifiedEn": "仅限英语。说话时即时显示文字。",
             "whisperTiny": "下载最小。适合试用听写。",
             "whisperTurbo": "语言最多，约 100 种。没有 GPU 时较慢。",
             "senseVoice": "速度快。适用于中文、日语和韩语。",
@@ -20881,7 +20900,8 @@
       "remove": "移除…",
       "empty": "此配置文件未启用任何扩展程序",
       "visitWebStore": "访问 Chrome 应用商店",
-      "manage": "管理扩展程序"
+      "manage": "管理扩展程序",
+      "openWebStoreFailed": "无法打开 Chrome 应用商店。"
     },
     "history": {
       "clear": "清除浏览记录",
@@ -21804,7 +21824,6 @@
       "cancel": "取消"
     },
     "antigravity": {
-      "chatTitle": "Antigravity 聊天",
       "chatSignIn": "登录",
       "chatChangeAccount": "更换帐户",
       "chatRetry": "重试登录",
@@ -21822,23 +21841,13 @@
       "chatFailed": "登录失败，请重试",
       "chatOtherClient": "另一个客户端正在登录",
       "chatReadFailed": "无法检查 {{host}} 上的登录",
-      "signIn": "在此主机上启动 agy 并完成其浏览器登录，然后保存当前帐户，要添加其他帐户，请在 agy 中使用 /logout 并再次登录",
-      "docs": "登录说明",
       "retry": "重试",
-      "identityUnknown": "登录身份不可用",
-      "signedOut": "没有登录本机 agy 帐户",
       "changed": "本机帐户已更改，在启动 agy 之前再次选择已保存的帐户",
-      "save": "保存当前帐户",
       "refresh": "刷新帐户",
       "usage": "刷新使用情况",
-      "working": "正在更新帐户",
       "usageReading": "会话：{{session}} · 每周：{{weekly}}",
       "saved": "已保存的 Google 帐户",
-      "nativeActive": "原生账户",
-      "selected": "已选择",
-      "select": "选择",
       "remove": "移除",
-      "sessions": "选择适用于该主机上的新 agy 会话，现有会话可能会保留其以前的帐户",
       "searchDescription": "在执行主机上保存并选择本机 agy Google 帐户",
       "title": "Antigravity",
       "keyword": {
@@ -21850,7 +21859,6 @@
       "authMethod": "登录方式",
       "personal": "Google 账户",
       "gcpProject": "Google Cloud 项目",
-      "gcpLocation": "Google Cloud 位置",
       "settingsIncomplete": "请选择 Antigravity 账户类型并输入其 Google Cloud 项目和位置。",
       "settingsLoadFailed": "Orca 无法加载 Antigravity 登录设置。请重试。",
       "settingsSaveFailed": "Orca 无法保存 Antigravity 登录设置。请重试。",

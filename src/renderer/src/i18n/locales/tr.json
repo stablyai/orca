@@ -401,7 +401,8 @@
       "remove": "Kaldır…",
       "empty": "Bu profilde etkin eklenti yok",
       "visitWebStore": "Chrome Web Store'u ziyaret et",
-      "manage": "Eklentileri yönet"
+      "manage": "Eklentileri yönet",
+      "openWebStoreFailed": "Chrome Web Store açılamadı."
     },
     "history": {
       "clear": "Tarama geçmişini temizle",
@@ -3993,6 +3994,8 @@
             "15dd899676": "{{value0}}'e Ekle…"
           },
           "TerminalErrorToast": {
+            "title": "Terminal sorunu",
+            "errorTitle": "Terminal hatası",
             "e4aa243f8c": "Arka plan sürecini yeniden başlat",
             "retry": "Yeniden dene",
             "retrying": "Yeniden deneniyor…",
@@ -17182,6 +17185,14 @@
                     "logins": {
                       "title": "Oturumunuz açık kalsın",
                       "body": "Mevcut oturumlarınızı Orca'ya aktararak oturum açmış halde hemen devam edin."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome eklentileri",
+                        "body": "Eklentileri Chrome Web Store’dan yükleyin ve adres çubuğunun yanına sabitleyin.",
+                        "action": "Chrome Web Store’u aç",
+                        "secondaryAction": "Anladım"
+                      }
                     }
                   },
                   "tasks": {
@@ -17541,7 +17552,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Daha az göster",
-          "showMore": "Daha fazla göster"
+          "showMore": "Daha fazla göster",
+          "copied": "Kopyalandı",
+          "copyFailed": "Kopyalanamadı",
+          "copyPrompt": "İstemi kopyala"
         },
         "AutomationDetail": {
           "host": "Sunucu",
@@ -17576,7 +17590,13 @@
           "precheckNone": "Yok",
           "migrate": "Taşı",
           "migrateNotice": "{{host}} yeni bir uzak ana bilgisayara yükseltildi. Çalışmaya devam etmesi için bu otomasyonu taşıyın.",
-          "needsMigration": "Taşınması gerekiyor"
+          "needsMigration": "Taşınması gerekiyor",
+          "repeats": "Tekrar",
+          "missedRunGrace": "Kaçırılan çalıştırma toleransı",
+          "execution": "Çalıştırma",
+          "notRunYet": "Henüz çalıştırılmadı",
+          "usageDetail_one": "{{tokens}} token · {{known}}/{{count}} çalıştırma raporlandı",
+          "usageDetail_other": "{{tokens}} token · {{known}}/{{count}} çalıştırma raporlandı"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "İptal",
@@ -20718,6 +20738,7 @@
           "about": {
             "parakeetV3": "Hızlı. {{languages}} Avrupa dili.",
             "parakeetV2": "Hızlı. Yalnızca İngilizce, bunda en doğrusu.",
+            "parakeetUnifiedEn": "Yalnızca İngilizce. Kelimeler siz konuşurken görünür.",
             "whisperTiny": "En küçük indirme. Dikteyi denemek için iyi.",
             "whisperTurbo": "En çok dil, yaklaşık 100. GPU olmadan yavaş.",
             "senseVoice": "Hızlı. Çince, Japonca ve Korece için.",
@@ -21826,7 +21847,6 @@
       "description": "WSL'deki Orca güncellenene kadar buradaki ajanlar dağıtımın varsayılan Claude ve Codex hesaplarını kullanır."
     },
     "antigravity": {
-      "chatTitle": "Antigravity sohbetleri",
       "chatSignIn": "Oturum aç",
       "chatChangeAccount": "Hesabı değiştir",
       "chatRetry": "Oturum açmayı yeniden dene",
@@ -21844,23 +21864,13 @@
       "chatFailed": "Oturum açılamadı. Yeniden deneyin.",
       "chatOtherClient": "Başka bir istemcide oturum açma işlemi devam ediyor.",
       "chatReadFailed": "{{host}} üzerindeki oturum durumu kontrol edilemedi.",
-      "signIn": "Bu ana makinede agy'yi başlatıp tarayıcıda oturum açma işlemini tamamlayın, ardından mevcut hesabı kaydedin. Farklı bir hesap eklemek için agy'de /logout kullanıp yeniden oturum açın.",
-      "docs": "Oturum açma talimatları",
       "retry": "Tekrar dene",
-      "identityUnknown": "Oturum açan kimlik bilgisi kullanılamıyor",
-      "signedOut": "agy'nin kendi hesabıyla oturum açılmamış.",
       "changed": "agy'nin kendi hesabı değişti. agy'yi başlatmadan önce kayıtlı bir hesabı yeniden seçin.",
-      "save": "Mevcut hesabı kaydet",
       "refresh": "Hesapları yenile",
       "usage": "Kullanımı yenile",
-      "working": "Hesap güncelleniyor",
       "usageReading": "Oturum: {{session}} · Haftalık: {{weekly}}",
       "saved": "Kaydedilmiş Google hesabı",
-      "nativeActive": "agy'nin kendi hesabı",
-      "selected": "Seçili",
-      "select": "Seç",
       "remove": "Kaldır",
-      "sessions": "Seçim, bu ana makinedeki yeni agy oturumları için geçerlidir. Mevcut oturumlar önceki hesaplarını kullanmaya devam edebilir.",
       "searchDescription": "Çalıştırma ana makinesinde agy'nin kullandığı Google hesaplarını kaydedin ve seçin.",
       "title": "Antigravity",
       "keyword": {
@@ -21872,7 +21882,6 @@
       "authMethod": "Şununla oturum aç",
       "personal": "Google hesabı",
       "gcpProject": "Google Cloud projesi",
-      "gcpLocation": "Google Cloud konumu",
       "settingsIncomplete": "Bir Antigravity hesap türü seçin ve Google Cloud projesini ve konumunu girin.",
       "settingsLoadFailed": "Orca Antigravity oturum açma ayarlarınızı yükleyemedi. Tekrar deneyin.",
       "settingsSaveFailed": "Orca Antigravity oturum açma ayarlarınızı kaydedemedi. Tekrar deneyin.",
