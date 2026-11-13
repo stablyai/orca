@@ -10,7 +10,10 @@ import type {
   ProfileStateDomainMutation,
   ProfileStateDomainTransaction
 } from './profile-state-domain-writes'
-import { prepareProfileStateDomainPatches } from './profile-state-domain-patches'
+import {
+  isProfileStateStringArray,
+  prepareProfileStateDomainPatches
+} from './profile-state-domain-patches'
 import type { ProfileStateExistingDocumentParts } from '../document-parts/profile-state-document-parts-storage'
 
 export type PreparedProfileStateMutation = ProfileStateDomainMutation & {
@@ -60,7 +63,7 @@ export function validateProfileStateDomainTransaction(transaction: ProfileStateD
   if (transaction.domainOrder !== undefined) {
     const present = new Set([...domains, ...patches.map(({ domain }) => domain)])
     if (
-      !Array.isArray(transaction.domainOrder) ||
+      !isProfileStateStringArray(transaction.domainOrder) ||
       transaction.domainOrder.length !== present.size ||
       !transaction.domainOrder.every(
         (domain: unknown) => typeof domain === 'string' && present.delete(domain)

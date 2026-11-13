@@ -31,6 +31,59 @@ beforeEach(() => {
 afterEach(() => setSecretStore(previousSecretStore))
 
 describe('protected-secret async write retention', () => {
+  it('keeps a repeated complete flush fenced without publishing fresh ciphertext', async () => {
+    let nonce = 0
+    setSecretStore({
+      isEncryptionAvailable: () => encryptionAvailable,
+      encryptString: (plaintext) => Buffer.from(JSON.stringify([++nonce, plaintext])),
+      decryptString: (ciphertext) => JSON.parse(ciphertext.toString())[1],
+      describeProtectionGap: () => null
+    })
+    const { store, peer, readState } = await createWorkerMaintenanceFixture()
+    store.updateSettings({ opencodeSessionCookie: 'synthetic-cookie' })
+    await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+    const saved = readState().settings.opencodeSessionCookie
+    const revision = () => {
+      const reader = peer()
+      try {
+        reader.readSerializedState()
+        return reader.revision
+      } finally {
+        reader.close()
+      }
+    }
+    const before = revision()
+    await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+    expect(revision()).toBe(before)
+    expect(readState().settings.opencodeSessionCookie).toBe(saved)
+
+    // The skipped capture's ciphertext must not become the degraded-retention value.
+    encryptionAvailable = false
+    await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+    expect(readState().settings.opencodeSessionCookie).toBe(saved)
+    encryptionAvailable = true
+    store.updateSettings({ opencodeSessionCookie: 'changed-cookie' })
+    store.getWorkspaceSession().activeTabId = 'getter-change'
+    await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+    const changed = readState()
+    expect(
+      JSON.parse(Buffer.from(changed.settings.opencodeSessionCookie, 'base64').toString())[1]
+    ).toBe('changed-cookie')
+    expect(changed.workspaceSession.activeTabId).toBe('getter-change')
+
+    await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+    const competitor = peer()
+    try {
+      competitor.readSerializedState()
+      competitor.writeSerializedDomains([{ domain: 'peer', payload: '1' }])
+    } finally {
+      competitor.close()
+    }
+    await expect(store.flushPendingOrThrowAsync({ fullCheckpoint: true })).rejects.toMatchObject({
+      code: 'profile-state-revision-conflict'
+    })
+  })
+
   it('does not retain ciphertext from a rejected worker write after a newer secret arrives', async () => {
     const { store, authority, peer, dataFile, readState } = await createWorkerMaintenanceFixture()
     store.updateSettings({ opencodeSessionCookie: 'durable-cookie' })

@@ -2,6 +2,7 @@ import { types } from 'node:util'
 import { PROFILE_STATE_SPLIT_DOMAIN_DEPTHS } from '../../profile-state/document-parts/profile-state-document-parts'
 import {
   defineProfileStateOwnValue,
+  appendProfileStateOwnValue,
   type ProfileStateDomainPatch,
   type ProfileStateDomainPatchOperation
 } from '../../profile-state/documents/profile-state-domain-patches'
@@ -32,7 +33,10 @@ function admitObject(value: unknown): asserts value is Record<string, unknown> |
 
 function admitToJson(value: unknown): void {
   const descriptor = Object.getOwnPropertyDescriptor(value, 'toJSON')
-  if (descriptor && (!('value' in descriptor) || typeof descriptor.value === 'function')) {
+  if (
+    descriptor &&
+    (!Object.hasOwn(descriptor, 'value') || typeof descriptor.value === 'function')
+  ) {
     throw unsupported
   }
 }
@@ -50,7 +54,7 @@ function admitPrototypes(): void {
 
 function readDataProperty(value: unknown, key: string): unknown {
   const descriptor = Object.getOwnPropertyDescriptor(value, key)
-  if (!descriptor || !('value' in descriptor)) {
+  if (!descriptor || !Object.hasOwn(descriptor, 'value')) {
     throw unsupported
   }
   return descriptor.value
@@ -118,7 +122,7 @@ function equalJson(value: unknown, previous: unknown, ancestors: Set<object>): b
         old && Object.hasOwn(old, key) ? old[key] : undefined,
         ancestors
       )
-      equal &&= key === oldKeys[index] && childEqual
+      equal &&= index < oldKeys.length && key === oldKeys[index] && childEqual
       index++
     }
     return equal && index === oldKeys.length
@@ -135,22 +139,40 @@ export type CapturedProfileStateSplitDomain = {
 /** Only admitted storage or a successful commit may replace these independent JSON trees. */
 export class ProfileStateSplitSnapshots {
   private readonly acknowledged = new Map<string, unknown>()
+  private completeFingerprint: string | undefined
 
   seed(state: Record<string, unknown> | undefined): void {
-    this.acknowledged.clear()
+    this.clear()
     for (const domain of PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.keys()) {
-      this.acknowledged.set(domain, structuredClone(state?.[domain]))
+      this.acknowledged.set(
+        domain,
+        structuredClone(state && Object.hasOwn(state, domain) ? state[domain] : undefined)
+      )
     }
   }
 
   clear(): void {
     this.acknowledged.clear()
+    this.invalidateCompleteWrite()
   }
 
-  acknowledge(candidates: ReadonlyMap<string, unknown>): void {
+  invalidateCompleteWrite(): void {
+    this.completeFingerprint = undefined
+  }
+
+  isAbsent(domain: string): boolean {
+    return this.acknowledged.has(domain) && this.acknowledged.get(domain) === undefined
+  }
+
+  matchesCompleteWrite(fingerprint: string): boolean {
+    return fingerprint === this.completeFingerprint
+  }
+
+  acknowledge(candidates: ReadonlyMap<string, unknown>, completeFingerprint?: string): void {
     for (const [domain, value] of candidates) {
       this.acknowledged.set(domain, value)
     }
+    this.completeFingerprint = completeFingerprint
   }
 
   capture(domain: string, value: unknown): CapturedProfileStateSplitDomain | undefined {
@@ -166,7 +188,7 @@ export class ProfileStateSplitSnapshots {
       if (payload === undefined) {
         throw unsupported
       }
-      operations.push({ kind: 'set', path: [...path], payload })
+      appendProfileStateOwnValue(operations, { kind: 'set', path: [...path], payload })
       return JSON.parse(payload)
     }
     const visit = (current: unknown, previous: unknown, remaining: number): unknown => {
@@ -189,8 +211,8 @@ export class ProfileStateSplitSnapshots {
           if (child === undefined) {
             continue
           }
-          keys.push(key)
-          path.push(key)
+          appendProfileStateOwnValue(keys, key)
+          appendProfileStateOwnValue(path, key)
           const captured = visit(
             child,
             Object.hasOwn(previous, key) ? previous[key] : undefined,
@@ -204,17 +226,23 @@ export class ProfileStateSplitSnapshots {
         const present = new Set(keys)
         for (const key of oldKeys) {
           if (!present.has(key)) {
-            operations.push({ kind: 'remove', path: [...path, key] })
+            appendProfileStateOwnValue(operations, { kind: 'remove', path: [...path, key] })
             delete change()[key]
           }
         }
         const naturalKeys = next === previous ? oldKeys : Object.keys(next)
-        if (naturalKeys.some((key, index) => key !== keys[index])) {
+        if (
+          naturalKeys.length !== keys.length ||
+          naturalKeys.some((key, index) => key !== keys[index])
+        ) {
           const ordered: Record<string, unknown> = {}
           for (const key of keys) {
+            if (!Object.hasOwn(next, key)) {
+              throw unsupported
+            }
             defineProfileStateOwnValue(ordered, key, next[key])
           }
-          operations.push({ kind: 'order', path: [...path], keys })
+          appendProfileStateOwnValue(operations, { kind: 'order', path: [...path], keys })
           next = ordered
         }
         return next

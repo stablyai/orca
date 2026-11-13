@@ -12,7 +12,10 @@ export function registerProfileStateWorkerCoordinationTests(): void {
         session.activeTabId = 'C'
         store.setWorkspaceSession(session)
         const gate = authority.pause()
-        const first = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+        const first = store.flushPendingOrThrowAsync({
+          drainToStableGeneration: false,
+          fullCheckpoint: true
+        })
         const settled = fail ? expect(first).rejects.toThrow('disk refused') : first
         await gate.started.promise
         session.activeTabId = 'D'
@@ -26,7 +29,7 @@ export function registerProfileStateWorkerCoordinationTests(): void {
         if (!fail) {
           expect(readState().workspaceSession.activeTabId).toBe('C')
         }
-        await store.flushPendingOrThrowAsync()
+        await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
         expect(readState().workspaceSession.activeTabId).toBe('D')
       }
     )

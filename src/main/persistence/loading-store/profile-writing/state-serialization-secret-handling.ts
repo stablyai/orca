@@ -78,10 +78,8 @@ export class StateSerializationSecretHandlingOperations {
     dirtyDomains: ReadonlySet<string> | null,
     automationRuns?: readonly AutomationRun[]
   ): CapturedProfileStateWrite {
-    const complete =
-      dirtyDomains === null ||
-      dirtyDomains.size === 0 ||
-      this.runtime.protectedSecrets.hasPendingEncryption()
+    const pendingEncryption = this.runtime.protectedSecrets.hasPendingEncryption()
+    const complete = dirtyDomains === null || dirtyDomains.size === 0 || pendingEncryption
     let stateToSave: Record<string, unknown>
     let secretSubs: SecretSentinelSubstitution[] = []
     let protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
@@ -109,6 +107,8 @@ export class StateSerializationSecretHandlingOperations {
       complete,
       secretSubs,
       protectedSecretUpdates,
+      protectedStorageDegraded: projection?.protectedStorageDegraded,
+      pendingEncryption: pendingEncryption || this.runtime.protectedSecrets.hasPendingEncryption(),
       automationRuns,
       serializeRoot: projection
         ? () => this.serializeCompleteProjection(projection, false)

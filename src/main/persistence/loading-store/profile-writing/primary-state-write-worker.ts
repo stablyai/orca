@@ -71,7 +71,9 @@ function beginWrite(
     if (!isCurrent()) {
       return undefined
     }
-    const unchanged = captured.stateHash !== null && captured.stateHash === lastWrittenStateHash
+    const unchanged =
+      captured.unchanged ||
+      (captured.stateHash !== null && captured.stateHash === lastWrittenStateHash)
     const completion = unchanged
       ? authority.assertCurrentRevision()
       : captured.write

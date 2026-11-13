@@ -22,10 +22,27 @@ export type PreparedProfileStateDomainPatch = {
 
 type PathNode = { mutation?: boolean; order?: boolean; children: Map<string, PathNode> }
 
+function isDenseArray(value: unknown): value is unknown[] {
+  if (!Array.isArray(value)) {
+    return false
+  }
+  for (let index = 0; index < value.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index)
+    if (!descriptor || !Object.hasOwn(descriptor, 'value')) {
+      return false
+    }
+  }
+  return true
+}
+
+export function isProfileStateStringArray(value: unknown): value is string[] {
+  return isDenseArray(value) && value.every((entry) => typeof entry === 'string')
+}
+
 export function prepareProfileStateDomainPatches(
   patches: readonly ProfileStateDomainPatch[]
 ): PreparedProfileStateDomainPatch[] {
-  if (!Array.isArray(patches)) {
+  if (!isDenseArray(patches)) {
     throw new Error('Profile state patches must be an array')
   }
   const domains = new Set<string>()
@@ -34,7 +51,7 @@ export function prepareProfileStateDomainPatches(
       isRecord(patch) && typeof patch.domain === 'string'
         ? PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.get(patch.domain)
         : undefined
-    if (depth === undefined || domains.has(patch.domain) || !Array.isArray(patch.operations)) {
+    if (depth === undefined || domains.has(patch.domain) || !isDenseArray(patch.operations)) {
       throw new Error('Profile state patch domain is invalid or repeated')
     }
     domains.add(patch.domain)
@@ -42,9 +59,8 @@ export function prepareProfileStateDomainPatches(
     const operations = patch.operations.map((operation): PreparedOperation => {
       if (
         !isRecord(operation) ||
-        !Array.isArray(operation.path) ||
+        !isProfileStateStringArray(operation.path) ||
         operation.path.length > depth ||
-        !operation.path.every((key: unknown) => typeof key === 'string') ||
         (operation.kind !== 'set' && operation.kind !== 'remove' && operation.kind !== 'order')
       ) {
         throw new Error('Profile state patch operation is invalid')
@@ -67,8 +83,7 @@ export function prepareProfileStateDomainPatches(
       if (operation.kind === 'order') {
         if (
           operation.path.length >= depth ||
-          !Array.isArray(operation.keys) ||
-          !operation.keys.every((key: unknown) => typeof key === 'string') ||
+          !isProfileStateStringArray(operation.keys) ||
           new Set(operation.keys).size !== operation.keys.length
         ) {
           throw new Error('Profile state patch order is invalid')
@@ -98,17 +113,18 @@ export function prepareProfileStateDomainPatches(
   })
 }
 
-export function defineProfileStateOwnValue(
-  object: Record<string, unknown>,
-  key: string,
-  value: unknown
-): void {
+export function defineProfileStateOwnValue(object: object, key: string, value: unknown): void {
   Object.defineProperty(object, key, {
     value,
     enumerable: true,
     configurable: true,
     writable: true
   })
+}
+
+export function appendProfileStateOwnValue<T>(array: T[], value: T): void {
+  // Array.push can invoke a prototype setter at the new index.
+  defineProfileStateOwnValue(array, String(array.length), value)
 }
 
 /** The worker owns this parsed base; no live Store references reach it. */
@@ -145,7 +161,12 @@ export function applyProfileStateDomainPatch(
       }
       delete parent[key]
     } else {
-      const current = key === undefined ? value : isRecord(parent) ? parent[key] : undefined
+      const current =
+        key === undefined
+          ? value
+          : isRecord(parent) && Object.hasOwn(parent, key)
+            ? parent[key]
+            : undefined
       if (
         !isRecord(current) ||
         Object.keys(current).length !== operation.keys.length ||

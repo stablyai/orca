@@ -40,7 +40,14 @@ export function writeToDiskSync(
         intent.restoreIntent()
         return false
       }
-      if (captured.stateHash !== null && canReuseDurableProfileState(runtime, captured.stateHash)) {
+      const unchanged = captured.unchanged && authority.assertCurrentRevision !== undefined
+      if (unchanged) {
+        authority.assertCurrentRevision?.()
+      }
+      if (
+        unchanged ||
+        (captured.stateHash !== null && canReuseDurableProfileState(runtime, captured.stateHash))
+      ) {
         captured.acknowledge()
       } else {
         if (captured.write) {

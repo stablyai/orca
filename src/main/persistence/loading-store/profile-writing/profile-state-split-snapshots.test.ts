@@ -78,6 +78,122 @@ describe('profile state split capture', () => {
     }
   })
 
+  it.each([
+    ['worktreeMeta', '{"w":{"x":1}}', '{"w":{"x":1,"y":2}}'],
+    ['workspaceSession', '{"tabsByWorktree":{"w":[1]}}', '{"tabsByWorktree":{"w":[1,2]}}'],
+    [
+      'workspaceSessionsByHostId',
+      '{"host":{"tabsByWorktree":{"w":[1]}}}',
+      '{"host":{"tabsByWorktree":{"w":[1,2]}}}'
+    ]
+  ])(
+    'captures %s growth without observing numeric prototype accessors',
+    (domain, before, after) => {
+      const snapshots = new ProfileStateSplitSnapshots()
+      snapshots.seed({ [domain]: JSON.parse(before) })
+      const current = JSON.parse(after)
+      let observations = 0
+      let captured: ReturnType<ProfileStateSplitSnapshots['capture']>
+      Object.defineProperty(Array.prototype, '1', {
+        configurable: true,
+        get() {
+          observations++
+          throw new Error('unexpected inherited index read')
+        },
+        set() {
+          observations++
+          throw new Error('unexpected inherited index write')
+        }
+      })
+      try {
+        captured = snapshots.capture(domain, current)
+      } finally {
+        Reflect.deleteProperty(Array.prototype, '1')
+      }
+      expect(observations).toBe(0)
+      expect(captured).toBeDefined()
+      const [patch] = prepareProfileStateDomainPatches([captured!.patch])
+      expect(JSON.stringify(applyProfileStateDomainPatch(JSON.parse(before), patch))).toBe(after)
+    }
+  )
+
+  it('rejects accessors without reading inherited descriptor values, including toJSON', () => {
+    const snapshots = new ProfileStateSplitSnapshots()
+    snapshots.seed({ workspaceSession: {} })
+    const accessor = {
+      get probe() {
+        throw new Error('native only')
+      }
+    }
+    const toJSON = {
+      get toJSON() {
+        throw new Error('native only')
+      }
+    }
+    let observations = 0
+    let first: ReturnType<ProfileStateSplitSnapshots['capture']>
+    let second: ReturnType<ProfileStateSplitSnapshots['capture']>
+    Object.defineProperty(Object.prototype, 'value', {
+      configurable: true,
+      get() {
+        observations++
+        throw new Error('unexpected inherited descriptor read')
+      }
+    })
+    try {
+      first = snapshots.capture('workspaceSession', { a: { b: accessor } })
+      second = snapshots.capture('workspaceSession', { a: { b: toJSON } })
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'value')
+    }
+    expect(first).toBeUndefined()
+    expect(second).toBeUndefined()
+    expect(observations).toBe(0)
+  })
+
+  it('seeds an absent root and rejects missing order targets without inherited reads', () => {
+    const snapshots = new ProfileStateSplitSnapshots()
+    const [patch] = prepareProfileStateDomainPatches([
+      { domain: 'workspaceSession', operations: [{ kind: 'order', path: ['missing'], keys: [] }] }
+    ])
+    let observations = 0
+    let captured: ReturnType<ProfileStateSplitSnapshots['capture']>
+    let rejected: unknown
+    const getter = {
+      configurable: true,
+      get() {
+        observations++
+        throw new Error('inherited read')
+      }
+    }
+    Object.defineProperty(Object.prototype, 'workspaceSession', getter)
+    Object.defineProperty(Object.prototype, 'missing', getter)
+    try {
+      snapshots.seed({})
+      captured = snapshots.capture('workspaceSession', {})
+      try {
+        applyProfileStateDomainPatch({}, patch)
+      } catch (error) {
+        rejected = error
+      }
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'workspaceSession')
+      Reflect.deleteProperty(Object.prototype, 'missing')
+    }
+    expect(observations).toBe(0)
+    expect(captured?.patch.operations).toEqual([{ kind: 'set', path: [], payload: '{}' }])
+    expect(rejected).toEqual(new Error('Profile state patch order does not cover its object'))
+    expect(() =>
+      prepareProfileStateDomainPatches([
+        { domain: 'workspaceSession', operations: [{ kind: 'set', path: Array(1), payload: '1' }] }
+      ])
+    ).toThrow('operation is invalid')
+    expect(() => prepareProfileStateDomainPatches(Array(1))).toThrow('must be an array')
+    expect(() =>
+      prepareProfileStateDomainPatches([{ domain: 'workspaceSession', operations: Array(1) }])
+    ).toThrow('domain is invalid')
+  })
+
   it('normalizes array undefined and nonfinite numbers without changing JSON values', () => {
     const snapshots = new ProfileStateSplitSnapshots()
     snapshots.seed({ workspaceSession: { a: { b: [null, null, 0] } } })

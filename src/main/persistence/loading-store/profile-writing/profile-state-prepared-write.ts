@@ -1,7 +1,11 @@
+import { createHash } from 'node:crypto'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { ProtectedSecretRetentionUpdate } from '../../../credentials/protected-secret-persistence'
 import { PROFILE_STATE_SPLIT_DOMAIN_DEPTHS } from '../../profile-state/document-parts/profile-state-document-parts'
-import type { ProfileStateDomainPatch } from '../../profile-state/documents/profile-state-domain-patches'
+import {
+  appendProfileStateOwnValue,
+  type ProfileStateDomainPatch
+} from '../../profile-state/documents/profile-state-domain-patches'
 import type { ProfileStateSplitSnapshots } from './profile-state-split-snapshots'
 import type {
   ProfileStateDomainReplacement,
@@ -20,6 +24,7 @@ import {
 export type CapturedProfileStateWrite = {
   protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
   acknowledge: () => void
+  unchanged?: boolean
 } & (
   | { write: PreparedProfileStateWrite; stateHash: null; payload?: never }
   | { write?: never; stateHash: string; payload: Buffer }
@@ -31,6 +36,8 @@ type PreparedWriteProjection = {
   complete: boolean
   secretSubs: readonly SecretSentinelSubstitution[]
   protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
+  protectedStorageDegraded?: boolean
+  pendingEncryption?: boolean
   automationRuns?: readonly AutomationRun[]
   serializeRoot?: () => {
     payload: Buffer
@@ -45,12 +52,20 @@ export function capturePreparedProfileStateWrite({
   complete,
   secretSubs,
   protectedSecretUpdates,
+  protectedStorageDegraded = false,
+  pendingEncryption = false,
   automationRuns,
   serializeRoot
 }: PreparedWriteProjection): CapturedProfileStateWrite {
   const candidates = new Map<string, unknown>()
-  const acknowledge = snapshots.acknowledge.bind(snapshots, candidates)
+  let completeFingerprint: string | undefined
+  const acknowledge = () => snapshots.acknowledge(candidates, completeFingerprint)
+  if (!complete) {
+    // A selective dispatch breaks the previous complete-save proof, even if it later fails.
+    snapshots.invalidateCompleteWrite()
+  }
   if (complete && 'toJSON' in stateToSave && typeof stateToSave.toJSON === 'function') {
+    snapshots.invalidateCompleteWrite()
     const built = serializeRoot!()
     const state: unknown = JSON.parse(built.payload.toString('utf8'))
     for (const domain of PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.keys()) {
@@ -66,6 +81,11 @@ export function capturePreparedProfileStateWrite({
   const domainOrder: string[] = []
   const replacements: ProfileStateDomainReplacement[] = []
   const patches: ProfileStateDomainPatch[] = []
+  const fingerprint = complete
+    ? createHash('sha1').update(protectedStorageDegraded ? 'safeStorage-degraded\0' : '')
+    : undefined
+  let eligibleComplete = complete && !pendingEncryption
+  let splitEqual = true
   // Complete serialization captures entries before any hook; selective reads each key in turn.
   function* selectiveEntries(): Generator<[string, unknown]> {
     for (const domain of Object.keys(stateToSave)) {
@@ -76,23 +96,36 @@ export function capturePreparedProfileStateWrite({
     const split = PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.has(domain)
     const captured = split ? snapshots.capture(domain, value) : undefined
     if (captured) {
-      domainOrder.push(domain)
-      patches.push(captured.patch)
+      appendProfileStateOwnValue(domainOrder, domain)
+      appendProfileStateOwnValue(patches, captured.patch)
       candidates.set(domain, captured.value)
+      splitEqual &&= captured.patch.operations.length === 0
+      fingerprint?.update(JSON.stringify([domain, 'split']))
       continue
+    }
+    if (split) {
+      if (value === undefined && snapshots.isAbsent(domain)) {
+        candidates.set(domain, undefined)
+      } else {
+        eligibleComplete = false
+        snapshots.invalidateCompleteWrite()
+      }
     }
     const fragment = complete
       ? serializeProfileStateDomainFragment(domain, value)
       : serializeSelectiveProfileStateDomainFragment(domain, value)
-    const serialized =
-      complete && fragment !== '{}'
-        ? applySecretSentinelSubstitutions(fragment, secretSubs, '', 'text').payload
-        : fragment
+    const substituted = complete
+      ? applySecretSentinelSubstitutions(fragment, secretSubs, '', 'text')
+      : undefined
+    const serialized = substituted?.payload ?? fragment
     const payload =
       serialized === '{}' ? null : extractProfileStateDomainPayload(domain, serialized)
     if (!complete || split || payload !== null) {
-      domainOrder.push(domain)
-      replacements.push({ domain, payload })
+      appendProfileStateOwnValue(domainOrder, domain)
+      appendProfileStateOwnValue(replacements, { domain, payload })
+    }
+    if (complete && !split && payload !== null) {
+      fingerprint?.update(JSON.stringify([domain, 'value', substituted!.stateHash]))
     }
     if (split) {
       candidates.set(domain, payload === null ? undefined : JSON.parse(payload))
@@ -101,10 +134,18 @@ export function capturePreparedProfileStateWrite({
   if (complete) {
     for (const domain of PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.keys()) {
       if (!candidates.has(domain)) {
+        splitEqual &&= snapshots.isAbsent(domain)
         candidates.set(domain, undefined)
       }
     }
   }
+  if (eligibleComplete) {
+    completeFingerprint = fingerprint!.digest('hex')
+  }
+  const unchanged =
+    completeFingerprint !== undefined &&
+    splitEqual &&
+    snapshots.matchesCompleteWrite(completeFingerprint)
   const runPayloads =
     !complete && automationRuns !== undefined
       ? automationRuns.map((run) => {
@@ -118,6 +159,7 @@ export function capturePreparedProfileStateWrite({
   return {
     write: { domainOrder, replacements, patches, complete, runPayloads },
     stateHash: null,
+    unchanged,
     protectedSecretUpdates,
     acknowledge
   }
