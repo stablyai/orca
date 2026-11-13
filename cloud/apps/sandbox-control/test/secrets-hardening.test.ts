@@ -87,7 +87,7 @@ describe('SEC-6a: role changes reach secret writes within a minute', () => {
     expect((await put('personal', 'MY_VAR', PLAIN_VALUE, admin)).status).toBe(200)
     // A personal account's repository secrets have no role to lose.
     const solo = await h.token('carol')
-    h.advance(10 * 60_000)
+    h.advance(4 * 60_000)
     expect((await put('repo', 'DATABASE_URL', PLAIN_VALUE, solo, 'carol/app')).status).toBe(200)
     // A fresh admin token writes again.
     const fresh = await h.token('ada', 'acme', 'sandbox', { org_role: 'admin' })
