@@ -89,7 +89,7 @@ describe('a replayed folder launch', () => {
   })
 
   it('does not duplicate a terminal when the requested startup fails', async () => {
-    const runtime = folderRuntime()
+    const runtime = folderRuntime({ settings: {} })
     const original = runtime.createFolderWorkspace.getMockImplementation()!
     runtime.createFolderWorkspace.mockImplementationOnce(async (input) => ({
       ...(await original(input)),

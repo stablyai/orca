@@ -316,13 +316,10 @@ it.each([
       onOpenChange: vi.fn()
     })
     if (delivery === 'draft') {
-      expect(pasteDraft).not.toHaveBeenCalled()
-      expect(createTerminal.mock.calls[0]).toEqual([
-        'id:folder:folder-workspace-1',
-        expect.objectContaining({
-          command: expect.stringContaining('https://linear.app/team/issue/STA-1')
-        })
-      ])
+      expect(pasteDraft).toHaveBeenCalledExactlyOnceWith('agent', {
+        agent: 'codex',
+        content: 'Linked Linear issue\nhttps://linear.app/team/issue/STA-1'
+      })
       expect(sendFollowup).not.toHaveBeenCalled()
     } else if (delivery === 'auto-submit') {
       expect(pasteDraft).not.toHaveBeenCalled()
