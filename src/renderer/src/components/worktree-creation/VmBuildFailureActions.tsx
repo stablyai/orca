@@ -6,6 +6,7 @@ import {
   Github,
   Loader2,
   LifeBuoy,
+  Link2,
   LogIn,
   Monitor,
   PanelLeft,
@@ -22,7 +23,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { Translate } from '@/i18n/use-translate'
 import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
-import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
+import {
+  copyExternalLink,
+  type ExternalLinkSource
+} from '@/components/open-external/copy-external-link'
+import { ORCA_SUPPORT_URL, PUSH_TO_GITHUB_URL } from './vm-build-repo-actions'
 import { gitHubInstallLinkSource } from '@/lib/orca-cloud/github-link-sources'
 import type { VmBuildFailure } from './vm-build-failure'
 
@@ -231,6 +236,17 @@ function failureActions(
             ),
             icon: <LifeBuoy />,
             onClick: actions.onContactSupport
+          },
+          // A menu row can't carry the split's chevron: the same page, copied for another browser
+          // (COPY-LINK-RULE, as "Copy GitHub link" under "Add a GitHub repository…").
+          {
+            key: 'copySupportLink',
+            label: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.copySupportLink',
+              'Copy support link'
+            ),
+            icon: <Link2 />,
+            onClick: () => void copyExternalLink(ORCA_SUPPORT_URL)
           }
         ]
       }
@@ -268,7 +284,8 @@ function failureActions(
               'How to push to GitHub'
             ),
             icon: <SquareArrowOutUpRight />,
-            onClick: actions.onPushToGitHub
+            onClick: actions.onPushToGitHub,
+            link: PUSH_TO_GITHUB_URL
           },
           // After pushing, the same create works without leaving the sheet.
           tryAgain
