@@ -21,7 +21,7 @@ export function CodexRestartBanner(): React.JSX.Element | null {
   return (
     // Why: -mx cancels the menu surface's 6px plus the panel's 8px padding to reach both edges.
     <div
-      role="alert"
+      role="status"
       className="-mx-[14px] border-y border-[color-mix(in_srgb,var(--status-warning)_30%,transparent)] bg-[color-mix(in_srgb,var(--status-warning)_14%,var(--popover))] px-3.5 py-2.5"
     >
       <div className="flex items-start gap-2">
