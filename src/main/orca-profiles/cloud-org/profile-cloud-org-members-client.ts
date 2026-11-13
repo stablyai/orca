@@ -54,7 +54,7 @@ function optionalPictureUrl(value: unknown): string | undefined {
   }
 }
 
-const MEMBER_MFA: readonly OrcaOrgMemberMfa[] = ['on', 'off', 'pending']
+const MEMBER_MFA: readonly OrcaOrgMemberMfa[] = ['on', 'off', 'pending', 'sso']
 
 // Absent for plain members (the server leaves it out); an unknown value is dropped, never guessed.
 function normalizeMemberMfa(

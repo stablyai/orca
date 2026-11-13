@@ -1,3 +1,4 @@
+import { UbuntuSetupNote } from '@/components/sidebar/UbuntuSetupNote'
 import { useState } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
@@ -173,6 +174,9 @@ function ImportReviewContent({
                   </div>
                 ))}
               </pre>
+              {review.imports.ubuntuNote ? (
+                <UbuntuSetupNote note={review.imports.ubuntuNote} />
+              ) : null}
             </div>
           ) : null}
         </div>

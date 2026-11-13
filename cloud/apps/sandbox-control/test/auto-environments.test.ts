@@ -35,16 +35,16 @@ async function setup() {
       last_used_at: number | null
     }[]
   /** Lets the auto build's VM command succeed and finalizes it. */
-  async function finishBuild(as = 'alice') {
+  async function finishBuild(as = 'alice', output = '::orca-step:: clone\n') {
     const env = environments().find((row) => row.deleted_at === null && !row.active_build_id)!
     const build = h.raw.prepare('SELECT id FROM environment_builds WHERE environment_id = ? ORDER BY number DESC').get(env.id) as { id: string }
     const command = [...h.vercel.buildCommands.values()].at(-1)!
-    command.logs = `${JSON.stringify({ data: '::orca-step:: clone\n', stream: 'stdout' })}\n`
+    command.logs = `${JSON.stringify({ data: output, stream: 'stdout' })}\n`
     command.exitCode = 0
     h.advance(1000)
     const done = await h.call('GET', `/v1/environments/${env.id}/builds/${build.id}`, { as })
     expect(done.body.build.status).toBe('succeeded')
-    return { env, buildId: build.id }
+    return { env, buildId: build.id, build: done.body.build }
   }
   return { h, settle, environments, finishBuild }
 }
@@ -105,6 +105,17 @@ describe('automatic environments', () => {
     await h.call('POST', '/v1/sandboxes', { bearer: admin, body: { workspaceId: 'c1', machineSize: 'standard', repo: { url: REPO } } })
     await settle()
     expect(environments().filter((row) => row.kind === 'auto')).toHaveLength(2)
+  })
+
+  it('the build says what its lockfile install did (AUTO-ENV-DEPS-LABEL)', async () => {
+    const { h, settle, finishBuild } = await setup()
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w1', machineSize: 'standard', repo: { url: REPO } }, headers: FEATURES })
+    await settle()
+    const { build } = await finishBuild(
+      'alice',
+      '::orca-step:: install\nInstalling dependencies automatically: corepack pnpm install --frozen-lockfile\nInstalled dependencies in 42s.\n'
+    )
+    expect(build.autoInstall).toEqual({ manager: 'pnpm', outcome: 'installed' })
   })
 
   it("an admin's environment never installs automatically, with or without its own script", async () => {

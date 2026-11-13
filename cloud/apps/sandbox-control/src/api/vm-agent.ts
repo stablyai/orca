@@ -23,7 +23,7 @@ if [ ! -x "$O" ]; then echo '{"ok":false,"error":{"code":"orca_cli_missing"}}'; 
 cd "$P" 2>/dev/null || cd "$HOME"
 if [ "$1" = "--prepare" ]; then
   shift
-  [ -d "$P/.git" ] || { git -C "$P" init -q && git -C "$P" -c user.name=Orca -c user.email=cloud@onorca.dev commit -q --allow-empty -m init; } >/dev/null 2>&1 || true
+  [ -d "$P/.git" ] || { git -C "$P" init -q && git -C "$P" -c user.name=Orca -c user.email=noreply@orca.dev commit -q --allow-empty -m init; } >/dev/null 2>&1 || true
   "$O" repo add --path "$P" --json >/dev/null 2>&1 || true
   C="$HOME/.claude.json"
   if command -v jq >/dev/null 2>&1; then

@@ -97,10 +97,22 @@ export function accountIdFor(claims: { sub: string; org?: string }): string {
   return claims.org ? `org:${claims.org}` : `user:${claims.sub}`
 }
 
+/**
+ * A comma-separated issuer var as jwtVerify's `issuer` option: the token's `iss` must equal one entry.
+ * Unset or empty: no issuer check (as before lists). Blank entries are ignored; a value with no
+ * entries left accepts no issuer.
+ */
+export function issuerList(value: string | undefined): string[] | undefined {
+  if (!value) {
+    return undefined
+  }
+  return value.split(',').map((issuer) => issuer.trim()).filter(Boolean)
+}
+
 let stagingKeys: { source: string; keys: JWTVerifyGetKey } | null = null
 
 /** Staging auth's keys and issuer; never honored in prod. Same accounts as billing dev (it trusts staging too). */
-function stagingKeysFor(env: Env): { keys: JWTVerifyGetKey; issuer: string } | null {
+function stagingKeysFor(env: Env): { keys: JWTVerifyGetKey; issuer: string[] | undefined } | null {
   const source = env.SANDBOX_STAGING_JWKS_URL ?? (env.SANDBOX_STAGING_JWKS ? `inline:${env.SANDBOX_STAGING_JWKS}` : null)
   if (env.SANDBOX_ENV === 'prod' || !source || !env.SANDBOX_STAGING_AUTH_ISSUER) {
     return null
@@ -113,7 +125,7 @@ function stagingKeysFor(env: Env): { keys: JWTVerifyGetKey; issuer: string } | n
         : createLocalJWKSet(JSON.parse(env.SANDBOX_STAGING_JWKS ?? '{"keys":[]}') as JSONWebKeySet)
     }
   }
-  return { keys: stagingKeys.keys, issuer: env.SANDBOX_STAGING_AUTH_ISSUER }
+  return { keys: stagingKeys.keys, issuer: issuerList(env.SANDBOX_STAGING_AUTH_ISSUER) }
 }
 
 /** Dev-only operator keys (issuer DEV_TEST_ISSUER) so live tests run before Orca auth mints sandbox tokens. */
@@ -124,7 +136,7 @@ async function verify(
   token: string,
   keys: JWTVerifyGetKey,
   env: Env,
-  issuer: string | undefined,
+  issuer: string | string[] | undefined,
   now: number
 ): Promise<SandboxCaller | null> {
   try {
@@ -163,7 +175,7 @@ export async function authenticateDesktop(
   }
   const staging = stagingKeysFor(env)
   const caller =
-    (await verify(token, keysFor(env), env, env.SANDBOX_AUTH_ISSUER, now)) ??
+    (await verify(token, keysFor(env), env, issuerList(env.SANDBOX_AUTH_ISSUER), now)) ??
     (staging ? await verify(token, staging.keys, env, staging.issuer, now) : null)
   if (caller || !env.SANDBOX_DEV_JWKS || env.SANDBOX_ENV === 'prod') {
     if (!caller || (await tokenPredatesRemoval(env.SANDBOX_DB, caller))) {

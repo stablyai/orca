@@ -46,6 +46,7 @@ export type Env = {
   // SANDBOX_JWKS (inline set) is for local dev and tests only.
   SANDBOX_JWKS_URL?: string
   SANDBOX_JWKS?: string
+  /** Accepted `iss` values, comma-separated (a single issuer is a one-item list). */
   SANDBOX_AUTH_ISSUER?: string
   SANDBOX_JWT_AUDIENCE: string
   /** Dev-only operator key set (issuer `orca-sandbox-dev-test`); ignored when SANDBOX_ENV=prod. */
@@ -196,6 +197,8 @@ export type Env = {
   EGRESS_EXTRA_HOSTS?: string
   /** PARITY-DOCKER: 'off' turns Docker off in every workspace (the `docker` shim refuses). Default on. */
   SANDBOX_DOCKER?: string
+  /** Comma list of Orca platform egress hosts every VM may reach (default `*.onorca.dev`). */
+  ORCA_PLATFORM_HOST_SUFFIXES?: string
   /** GitHub App webhook secret (secret): verifies X-Hub-Signature-256 on /v1/github/webhook. */
   GITHUB_WEBHOOK_SECRET?: string
   /**

@@ -60,9 +60,10 @@ function fixture(
   })
 }
 
+// RS-5: a Claude credential is always labelled "Claude subscription" (the approved account can't be known).
 const CLAUDE_ACTIVE: OrcaCloudAccountRow = {
   kind: 'active',
-  label: 'a@acme.dev',
+  label: 'Claude subscription',
   expiresAt: NOW + YEAR,
   expiring: false,
   source: 'sign-in',

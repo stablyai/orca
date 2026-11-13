@@ -17,7 +17,8 @@ export type OrcaAccountMfaResult =
  * for a member the provider said nothing about. 'pending': a team policy requires it by the
  * member's `mfaDeadline` and they have not set it up.
  */
-export type OrcaOrgMemberMfa = 'on' | 'off' | 'pending'
+// 'sso': the team's single sign-on is live and the member signs in through it.
+export type OrcaOrgMemberMfa = 'on' | 'off' | 'pending' | 'sso'
 
 /** The two-factor fields of a team member (OrcaOrgMember in orca-profiles.ts). */
 export type OrcaOrgMemberMfaFields = {

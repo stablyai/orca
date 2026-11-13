@@ -39,7 +39,7 @@ export type RequireMfaRowProps = {
 }
 
 /**
- * "Require MFA" in Settings, Enterprise, Multi-factor authentication. Rendered only for a team
+ * "Require two-factor" in Settings, Enterprise, Multi-factor authentication. Rendered only for a team
  * whose plan includes it; the pane shows its shared upsell otherwise.
  */
 export function RequireMfaRow({
@@ -59,7 +59,7 @@ export function RequireMfaRow({
   const active = policy.policy
   const pendingCount = policy.manage?.pendingMembers ?? 0
   // The server refuses a change from someone without MFA; say so before they try.
-  const needsOwnMfa = policy.self !== 'on'
+  const needsOwnMfa = policy.self !== 'on' && policy.self !== 'delegated'
   const enforced = active !== null && active.enforceAt <= now
 
   return (
@@ -128,7 +128,7 @@ export function RequireMfaRow({
               }}
             >
               {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-              {t('auto.components.teamMfa.require', 'Require MFA')}
+              {t('auto.components.teamMfa.require', 'Require two-factor')}
             </Button>
           </div>
         ) : (
@@ -167,7 +167,7 @@ export function RequireMfaRow({
               link={policy.setupUrl}
               onClick={onSetUpOwn}
             >
-              {t('auto.components.teamMfa.setUp', 'Set up MFA')}
+              {t('auto.components.teamMfa.setUp', 'Set up two-factor')}
             </OpenExternalSplitButton>
           }
         />
@@ -217,7 +217,10 @@ export function RequireMfaRow({
           {pending && pending.length > 0 ? (
             <ul
               className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border"
-              aria-label={t('auto.components.teamMfa.pendingList', 'Members without MFA')}
+              aria-label={t(
+                'auto.components.teamMfa.pendingList',
+                'Members without two-factor authentication'
+              )}
             >
               {pending.map((member) => (
                 <li
@@ -231,9 +234,12 @@ export function RequireMfaRow({
                     ) : null}
                   </div>
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {member.mfa === 'blocked'
-                      ? t('auto.components.teamMfa.memberBlocked', 'No access')
-                      : t('auto.components.teamMfa.memberPending', 'Pending')}
+                    {member.userId === null
+                      ? // No account to remind yet, which is why this row has no Remind button.
+                        t('auto.components.teamMfa.memberNotSignedIn', 'Hasn’t signed in yet')
+                      : member.mfa === 'blocked'
+                        ? t('auto.components.teamMfa.memberBlocked', 'No access')
+                        : t('auto.components.teamMfa.memberPending', 'Pending')}
                   </span>
                   {member.userId ? (
                     <Button

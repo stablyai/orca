@@ -55,6 +55,7 @@ import { entitlementsView, offersFor, plansView } from './plans-api'
 import { reconcile } from './reconcile'
 import type { Env } from './env'
 import { MACHINE_SIZES, PlanConfigError, planCatalog, publicOffers } from './plans'
+import { SetupPagesConfigError } from './cloud-setup-urls'
 import { OverageRequestSchema, updateOverage } from './overage'
 import { LiveModeRefusedError, StripeError, createStripeClient, type StripeClient } from './stripe'
 import { UsageReportSchema, flushMeterReports, recordUsage, validateSegment } from './usage'
@@ -566,7 +567,12 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
     if (error instanceof SyntaxError) {
       return json({ error: 'invalid_json' }, 400)
     }
-    if (error instanceof LiveModeRefusedError || error instanceof PlanConfigError || error instanceof CatalogUnavailableError) {
+    if (
+      error instanceof LiveModeRefusedError ||
+      error instanceof PlanConfigError ||
+      error instanceof CatalogUnavailableError ||
+      error instanceof SetupPagesConfigError
+    ) {
       return json({ error: 'billing_misconfigured' }, 503)
     }
     if (error instanceof MembershipUnavailableError) {

@@ -63,10 +63,22 @@ function devKeysFor(env: Env): JWTVerifyGetKey | null {
   return devKeys.keys
 }
 
+/**
+ * A comma-separated issuer var as jwtVerify's `issuer` option: the token's `iss` must equal one entry.
+ * Unset or empty: no issuer check (as before lists). Blank entries are ignored; a value with no
+ * entries left accepts no issuer.
+ */
+export function issuerList(value: string | undefined): string[] | undefined {
+  if (!value) {
+    return undefined
+  }
+  return value.split(',').map((issuer) => issuer.trim()).filter(Boolean)
+}
+
 let stagingKeys: { source: string; keys: JWTVerifyGetKey } | null = null
 
 /** Staging auth's keys and issuer; never honored when BILLING_ENV is 'prod'. */
-function stagingKeysFor(env: Env): { keys: JWTVerifyGetKey; issuer: string } | null {
+function stagingKeysFor(env: Env): { keys: JWTVerifyGetKey; issuer: string[] | undefined } | null {
   if (env.BILLING_ENV === 'prod' || !env.BILLING_STAGING_JWKS_URL || !env.BILLING_STAGING_AUTH_ISSUER) {
     return null
   }
@@ -76,7 +88,7 @@ function stagingKeysFor(env: Env): { keys: JWTVerifyGetKey; issuer: string } | n
       keys: createRemoteJWKSet(new URL(env.BILLING_STAGING_JWKS_URL))
     }
   }
-  return { keys: stagingKeys.keys, issuer: env.BILLING_STAGING_AUTH_ISSUER }
+  return { keys: stagingKeys.keys, issuer: issuerList(env.BILLING_STAGING_AUTH_ISSUER) }
 }
 
 export function readBearer(value: string | null): string | null {
@@ -102,7 +114,7 @@ export async function authenticateDesktop(
   if (!token) {
     return null
   }
-  const verify = (keys: JWTVerifyGetKey, issuer: string | undefined) =>
+  const verify = (keys: JWTVerifyGetKey, issuer: string | string[] | undefined) =>
     jwtVerify(token, keys, {
       audience: env.BILLING_JWT_AUDIENCE,
       algorithms: ['ES256'],
@@ -114,7 +126,7 @@ export async function authenticateDesktop(
   try {
     // Production auth first; in dev only, then staging auth, then the operator key set.
     const attempts: Array<() => ReturnType<typeof verify>> = [
-      () => verify(keysFor(env), env.BILLING_AUTH_ISSUER)
+      () => verify(keysFor(env), issuerList(env.BILLING_AUTH_ISSUER))
     ]
     const staging = stagingKeysFor(env)
     if (staging) {

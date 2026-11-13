@@ -1,5 +1,6 @@
 // `window.api.orcaCloudEnvironments`: org environments (shared install script + snapshot builds) in
 // Orca Cloud. Main holds the token and talks to the control plane; the renderer sees only views.
+import type { UbuntuNote } from '../workspace-setup/setup-script-imports'
 import type {
   HostedEnvironmentBuildView,
   HostedEnvironmentCreateInput,
@@ -70,6 +71,8 @@ export type OrcaCloudRepoSetupImports = {
   installScript?: string
   /** Human labels of where the suggestions came from, e.g. "Conductor (.conductor/settings.toml)". */
   sources: string[]
+  /** PARITY-DNF: the install script came from Amazon Linux (dnf); what was translated and what to check. */
+  ubuntuNote?: UbuntuNote
 }
 
 export type OrcaCloudEnvironmentsApi = {

@@ -51,6 +51,7 @@ export type Env = {
   // BILLING_JWKS (inline set) is for local dev and tests only.
   BILLING_JWKS_URL?: string
   BILLING_JWKS?: string
+  // Accepted `iss` values, comma-separated (a single issuer is a one-item list); so is the staging one.
   BILLING_AUTH_ISSUER?: string
   BILLING_JWT_AUDIENCE: string
   // 'dev' | 'prod'. Dev may also accept BILLING_DEV_JWKS (issuer 'orca-billing-dev-test', a secret

@@ -1371,8 +1371,8 @@
         "pendingCount_other": "{{count}} members still need it",
         "reminded_one": "Reminder sent to {{count}} member.",
         "reminded_other": "Reminder sent to {{count}} members.",
-        "soonTitle_one": "{{value0}} requires MFA in {{count}} day",
-        "soonTitle_other": "{{value0}} requires MFA in {{count}} days"
+        "soonTitle_one": "{{value0}} requires two-factor authentication in {{count}} day",
+        "soonTitle_other": "{{value0}} requires two-factor authentication in {{count}} days"
       },
       "teammates": {
         "daySandboxHours_one": "{{hours}} sandbox hour",
