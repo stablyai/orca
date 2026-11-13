@@ -270,6 +270,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   showPinnedWorktreesInGroups?: boolean
   /** How Ctrl+Tab picks the next visible tab; optional (older profiles), readers default to MRU. */
   ctrlTabOrderMode?: CtrlTabOrderMode
+  /** Promote tabs on user input or keyboard switching; absent keeps manual ordering. */
+  tabBarOrderMode?: 'manual' | 'mru'
   /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */

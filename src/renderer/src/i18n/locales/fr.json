@@ -291,6 +291,14 @@
     "refreshingDetails": "Actualisation des détails de la vérification…"
   },
   "settings": {
+    "general": {
+      "tabBarOrder": {
+        "title": "Ordre de la barre d’onglets",
+        "description": "Place les onglets non épinglés en tête lors de la saisie ou du changement au clavier. Les clics ne modifient pas l’ordre. L’ordre défini par glissement reste jusqu’à la prochaine interaction.",
+        "manual": "Manuel",
+        "mru": "Utilisés le plus récemment"
+      }
+    },
     "chat": {
       "permissionsAgentsLink": "Paramètres → Agents",
       "permissionsTitle": "Autorisations pour les nouveaux chats",

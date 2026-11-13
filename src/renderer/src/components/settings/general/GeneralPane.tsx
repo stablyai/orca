@@ -16,6 +16,7 @@ import {
 import { getGeneralEditorSearchDescriptors } from '../editor/general-editor-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
+import { TabBarOrderControl } from '../appearance/TabBarOrderControl'
 import { RecentTabOrderControl } from '../appearance/RecentTabOrderControl'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -49,9 +50,10 @@ export function shouldShowProjectRuntimeSection(
 }
 
 export function getTabOrderControlSearchKeywords(
-  entries = getGeneralNavigationSearchEntries()
+  entries = getGeneralNavigationSearchEntries(),
+  index = 0
 ): string[] {
-  const entry = entries[0]
+  const entry = entries[index]
   return entry ? [entry.title, entry.description ?? '', ...(entry.keywords ?? [])] : []
 }
 
@@ -169,6 +171,11 @@ function GeneralRootSettings({
     <>
       {matchesSettingsSearch(query, tabsEntries) ? (
         <SettingsGroup title={t('settings.general.tabs.title', 'Tabs')}>
+          <TabBarOrderControl
+            value={settings.tabBarOrderMode ?? 'manual'}
+            keywords={getTabOrderControlSearchKeywords(tabsEntries, 1)}
+            updateSettings={updateSettings}
+          />
           <RecentTabOrderControl
             ctrlTabOrderMode={settings.ctrlTabOrderMode ?? 'mru'}
             keywords={getTabOrderControlSearchKeywords(tabsEntries)}

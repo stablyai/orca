@@ -116,6 +116,22 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('settings.general.tabBarOrder.title', 'Tab bar order'),
+    description: translate(
+      'settings.general.tabBarOrder.description',
+      'Move unpinned tabs to the front when typing or switching with the keyboard. Clicking keeps tabs in place. Dragged tabs stay until the next interaction.'
+    ),
+    keywords: searchKeywords([
+      {
+        key: 'settings.general.tabBarOrder.title',
+        fallback: 'Tab bar order',
+        aliases: ['tabs', 'tab bar', 'manual', 'recent', 'mru', 'order', 'sort', 'drag', 'pinned']
+      },
+      { key: 'settings.general.tabBarOrder.manual', fallback: 'Manual' },
+      { key: 'settings.general.tabBarOrder.mru', fallback: 'Most recently used' }
+    ])
+  },
+  {
     title: translate('settings.general.previewTabs.title', 'Preview tabs'),
     description: translate(
       'settings.general.previewTabs.description',
