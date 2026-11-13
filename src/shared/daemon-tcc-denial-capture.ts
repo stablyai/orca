@@ -1,6 +1,6 @@
 // Enum vocabulary for macOS's own verdict at a confirmed terminal-host folder denial; no paths, pids or log text.
 
-export const TCC_LOG_ACCESS_VALUES = ['ok', 'denied', 'timeout', 'error'] as const
+export const TCC_LOG_ACCESS_VALUES = ['ok', 'denied', 'timeout', 'truncated', 'error'] as const
 export type TccLogAccess = (typeof TCC_LOG_ACCESS_VALUES)[number]
 
 export const YES_NO_VALUES = ['yes', 'no'] as const

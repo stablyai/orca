@@ -4,18 +4,20 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { getLogsDirectory } from '../../observability/logs-directory'
 
-export const TCC_DENIAL_DIAGNOSTICS_MAX_CAPTURES = 10
-export const TCC_DENIAL_DIAGNOSTICS_MAX_BYTES = 256 * 1024
+const TCC_DENIAL_DIAGNOSTICS_MAX_CAPTURES = 10
+const TCC_DENIAL_DIAGNOSTICS_MAX_BYTES = 256 * 1024
 
 export function tccDenialDiagnosticsPath(): string {
   return join(getLogsDirectory(), 'terminal-folder-denials.ndjson')
 }
 
 /** Newest captures win; each entry is one NDJSON line, and an oversized newest entry is dropped. */
-export function appendCapture(existing: string, entry: string): string {
-  const lines = [...existing.split('\n').filter((line) => line.length > 0), entry].slice(
-    -TCC_DENIAL_DIAGNOSTICS_MAX_CAPTURES
-  )
+function appendCapture(existing: string, entry: string): string {
+  const earlier = existing.split('\n').filter((line) => line.length > 0)
+  if (Buffer.byteLength(entry) + 1 > TCC_DENIAL_DIAGNOSTICS_MAX_BYTES) {
+    return earlier.map((line) => `${line}\n`).join('')
+  }
+  const lines = [...earlier, entry].slice(-TCC_DENIAL_DIAGNOSTICS_MAX_CAPTURES)
   let bytes = lines.reduce((total, line) => total + Buffer.byteLength(line) + 1, 0)
   while (lines.length > 0 && bytes > TCC_DENIAL_DIAGNOSTICS_MAX_BYTES) {
     bytes -= Buffer.byteLength(lines.shift() ?? '') + 1

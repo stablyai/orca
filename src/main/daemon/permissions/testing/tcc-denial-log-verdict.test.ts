@@ -170,8 +170,34 @@ describe('parseTccLogVerdict', () => {
     expect(parseTccLogVerdict(ndjson([failed]), SUBJECT, 'ok').requirementFailure).toBe('yes')
   })
 
-  it('leaves tccd_asked unknown when the log could not be read', () => {
+  it('ignores requirement failures for other apps', () => {
+    const other = line(
+      '20:06:46.000000',
+      TCCD,
+      157,
+      'Failed to match existing code requirement for subject org.example.other and service kTCCServiceSystemPolicyDownloadsFolder'
+    )
+    expect(parseTccLogVerdict(ndjson([other]), SUBJECT, 'ok')).toMatchObject({
+      requirementFailure: 'no',
+      lines: []
+    })
+  })
+
+  it('does not credit an earlier helper on the same copy path to this one', () => {
+    const earlierHelper = HELPER_DOWNLOADS_REFUSED.map((entry) =>
+      entry.replace('pid=1206', 'pid=1100')
+    )
+    expect(parseTccLogVerdict(ndjson(earlierHelper), SUBJECT, 'ok')).toMatchObject({
+      tccdAsked: 'no',
+      authValue: 'none'
+    })
+  })
+
+  it('leaves tccd_asked unknown when the log was unreadable or cut short', () => {
     expect(parseTccLogVerdict('', SUBJECT, 'denied').tccdAsked).toBe('unknown')
+    expect(parseTccLogVerdict(ndjson(APP_DOCUMENTS_REFUSED), SUBJECT, 'truncated').tccdAsked).toBe(
+      'unknown'
+    )
   })
 })
 

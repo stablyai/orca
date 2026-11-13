@@ -56,6 +56,7 @@ const LOG_ENTRY_SCHEMA = z.object({
   timestamp: z.string().optional()
 })
 const MSG_ID_PATTERN = /\bmsgID=(\d+\.\d+)/
+const ANY_PID_PATTERN = /\bpid=\d+/
 const SERVICE_PATTERN = /\bservice=kTCCService(\w+)/
 const RESULT_PATTERN = /AUTHREQ_RESULT: .*\bauthValue=(\d+), authReason=(\d+)/
 const REQUIREMENT_FAILURE_PATTERN = /failed to match existing code requirement/i
@@ -99,7 +100,10 @@ function toRecord(rawLine: string): LogRecord | null {
 
 function isRequirementFailure(message: string, subject: TccLogSubject): boolean {
   if (REQUIREMENT_FAILURE_PATTERN.test(message)) {
-    return true
+    return (
+      new RegExp(`\\bsubject ${subject.appId.replace(/\./g, '\\.')}\\b`).test(message) ||
+      (!!subject.helperPath && message.includes(subject.helperPath))
+    )
   }
   // tccd also checks "anchor apple" on every client; only a failed stored requirement counts.
   const check = STATIC_REQUIREMENT_CHECK_PATTERN.exec(message)
@@ -126,8 +130,10 @@ export function parseTccLogVerdict(
 ): TccLogVerdict {
   const pidPattern = new RegExp(`\\bpid=${subject.helperPid}\\b`)
   const pathNeedles = subject.helperPath ? [subject.helperPath, encodeURI(subject.helperPath)] : []
+  // An earlier incarnation of the same copy shares the path, so an explicit pid outranks it.
   const namesHelper = (message: string): boolean =>
-    pidPattern.test(message) || pathNeedles.some((needle) => message.includes(needle))
+    pidPattern.test(message) ||
+    (!ANY_PID_PATTERN.test(message) && pathNeedles.some((needle) => message.includes(needle)))
   // Sandbox coalesces repeats as "N duplicate reports for Sandbox: …"; folder denies add "System Policy:".
   const sandboxDeny = new RegExp(
     `Sandbox: [^\\n]*?\\(${subject.helperPid}\\) (?:System Policy: )?deny\\(`
@@ -181,6 +187,7 @@ export function parseTccLogVerdict(
 
   return {
     logAccess,
+    // Only a complete read can show that tccd was never asked.
     tccdAsked: relevantGroups.length > 0 ? 'yes' : logAccess === 'ok' ? 'no' : 'unknown',
     authValue: chosen?.result ? (AUTH_VALUE_BY_NUMBER[chosen.result.authValue] ?? 'other') : 'none',
     authReason: authReasonOf(chosen?.result?.authReason),
@@ -229,9 +236,11 @@ export async function readTccLogVerdict(
     stdout = result.stdout
     logAccess = result.timedOut
       ? 'timeout'
-      : result.code === 0 || result.outputTruncated
-        ? 'ok'
-        : classifyLogFailure(`${result.stderr}\n${result.stdout}`)
+      : result.outputTruncated
+        ? 'truncated'
+        : result.code === 0
+          ? 'ok'
+          : classifyLogFailure(`${result.stderr}\n${result.stdout}`)
   } catch {
     logAccess = 'error'
   }

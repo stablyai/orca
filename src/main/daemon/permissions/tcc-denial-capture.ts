@@ -41,6 +41,15 @@ export type TccDenialCaptureStart = {
   cwdClass: MacTccFolderClass
   denialAtMs: number
   folderState: TccFolderState
+  /** Taken at the denial, before any await, so later reads and wakes cannot leak in. */
+  context: Pick<
+    EventProps<'daemon_pty_cwd_denial_capture'>,
+    | 'good_reads_bucket'
+    | 'since_good_read_bucket'
+    | 'since_resume_bucket'
+    | 'since_unlock_bucket'
+    | 'since_user_active_bucket'
+  >
 }
 
 type GoodReads = { count: number; lastAtMs: number }
@@ -91,11 +100,19 @@ export async function prepareTccDenialCapture(
   if (capturedKeys.has(key)) {
     return null
   }
+  const reads = goodReads.get(key)
+  const context: TccDenialCaptureStart['context'] = {
+    good_reads_bucket: bucketGoodReadCount(reads?.count ?? 0),
+    since_good_read_bucket: bucketElapsed(reads ? denialAtMs - reads.lastAtMs : null),
+    since_resume_bucket: bucketElapsed(msSinceWakeSignal('resume', denialAtMs)),
+    since_unlock_bucket: bucketElapsed(msSinceWakeSignal('unlock-screen', denialAtMs)),
+    since_user_active_bucket: bucketElapsed(msSinceWakeSignal('user-did-become-active', denialAtMs))
+  }
   const folderState = await readFolderState(
     join(homedir(), CLASS_ROOT_NAME[cwdClass]),
     cwdClass
   ).catch(() => UNKNOWN_FOLDER_STATE)
-  return { key, identity, cwdClass, denialAtMs, folderState }
+  return { key, identity, cwdClass, denialAtMs, folderState, context }
 }
 
 async function readFullDiskAccess(): Promise<FullDiskAccessValue> {
@@ -142,7 +159,6 @@ export async function runTccDenialCapture(start: TccDenialCaptureStart): Promise
       readFullDiskAccess()
     ])
     const origin = helperOriginOf(identity)
-    const reads = goodReads.get(start.key)
     const props: EventProps<'daemon_pty_cwd_denial_capture'> = {
       cwd_class: cwdClass,
       log_access: log.logAccess,
@@ -158,13 +174,7 @@ export async function runTccDenialCapture(start: TccDenialCaptureStart): Promise
         identity.startedAtMs > 0 ? denialAtMs - identity.startedAtMs : null
       ),
       helper_origin: origin,
-      good_reads_bucket: bucketGoodReadCount(reads?.count ?? 0),
-      since_good_read_bucket: bucketElapsed(reads ? denialAtMs - reads.lastAtMs : null),
-      since_resume_bucket: bucketElapsed(msSinceWakeSignal('resume', denialAtMs)),
-      since_unlock_bucket: bucketElapsed(msSinceWakeSignal('unlock-screen', denialAtMs)),
-      since_user_active_bucket: bucketElapsed(
-        msSinceWakeSignal('user-did-become-active', denialAtMs)
-      ),
+      ...start.context,
       full_disk_access: fullDiskAccess,
       // An adopted helper was launched by an earlier app process whose reason is gone.
       fork_fallback: origin === 'spawned' ? (getLastMacDaemonForkReason() ?? 'none') : 'unknown',

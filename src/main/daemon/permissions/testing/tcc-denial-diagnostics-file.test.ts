@@ -42,4 +42,12 @@ describe('writeTccDenialDiagnostics', () => {
         .map((line) => JSON.parse(line).index)
     ).toEqual([2, 3])
   })
+
+  it('keeps earlier captures when one new capture alone is over the cap', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'tcc-denial-diag-'))
+    const file = join(dir, 'terminal-folder-denials.ndjson')
+    await writeTccDenialDiagnostics({ index: 0 }, file)
+    await writeTccDenialDiagnostics({ index: 1, lines: 'x'.repeat(300_000) }, file)
+    expect(JSON.parse((await readFile(file, 'utf8')).trim()).index).toBe(0)
+  })
 })

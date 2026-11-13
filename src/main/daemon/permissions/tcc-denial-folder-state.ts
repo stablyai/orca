@@ -101,6 +101,20 @@ async function probe(
   }
 }
 
+/** A root relocated to a hung volume must not hold the denial notice behind it. */
+async function resolveWithin(path: string, timeoutMs: number): Promise<string> {
+  let timer: NodeJS.Timeout | undefined
+  const deadline = new Promise<string>((resolve) => {
+    timer = setTimeout(() => resolve(path), timeoutMs)
+    timer.unref?.()
+  })
+  try {
+    return await Promise.race([realpath(path).catch(() => path), deadline])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** Metadata of the class root only: none of these read the protected folder's contents. */
 export async function readTccFolderState(
   classRoot: string,
@@ -108,7 +122,7 @@ export async function readTccFolderState(
   run: typeof runProcess = runProcess
 ): Promise<TccFolderState> {
   // A relocated class root (symlink to another volume) is what decides the volume.
-  const resolved = await realpath(classRoot).catch(() => classRoot)
+  const resolved = await resolveWithin(classRoot, PROBE_TIMEOUT_MS)
   const icloudKey = ICLOUD_FINDER_KEY[cwdClass]
   const [flags, icloud, mounts] = await Promise.all([
     probe('/usr/bin/stat', ['-f', '%Xf', resolved], run),
