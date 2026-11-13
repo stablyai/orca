@@ -2,6 +2,7 @@ import { access, realpath, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { basename, delimiter, isAbsolute, resolve } from 'node:path'
 import { getExecutableNames } from '../../../shared/node-cli-command-resolution'
+import { agentModelCatalogScriptEntry } from './agent-model-catalog-script-entry'
 
 async function fileStamp(path: string): Promise<unknown> {
   try {
@@ -35,17 +36,11 @@ export async function agentModelCatalogInputStamp(input: {
       }
     }
   }
-  const interpreter = basename(input.command).replace(/\.exe$/i, '')
-  const args = input.prefixArgs ?? []
-  const operand = /^(bun|deno)$/i.test(interpreter) && args[0] === 'run' ? args[1] : args[0]
-  const script =
-    /^(node|nodejs|bun|deno|python\d*(?:\.\d+)?|ruby|sh|bash|zsh)(?:\.exe)?$/i.test(
-      basename(input.command)
-    ) &&
-    operand &&
-    !operand.startsWith('-')
-      ? resolve(input.cwd, operand)
-      : undefined
+  const interpreter = basename(input.command)
+    .replace(/\.exe$/i, '')
+    .toLowerCase()
+  const operand = agentModelCatalogScriptEntry(interpreter, input.prefixArgs ?? [])
+  const script = operand ? resolve(input.cwd, operand) : undefined
   return JSON.stringify([
     await fileStamp(executable),
     script ? await fileStamp(script) : null,
