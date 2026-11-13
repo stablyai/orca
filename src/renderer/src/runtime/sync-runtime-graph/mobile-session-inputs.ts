@@ -20,7 +20,6 @@ import {
   graphState
 } from './graph-state'
 import type {
-  MobileSessionAgentStatusByWorktree,
   MobileSessionPublicationInputs,
   MobileSessionWorktreeInputs,
   OpenFileIndexes
@@ -112,13 +111,6 @@ export function excludeCrossPlacedEditorFiles(
   return result
 }
 
-export function buildMobileSessionAgentStatusByWorktree(
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
-  _tabsByWorktree: AppState['tabsByWorktree']
-): MobileSessionAgentStatusByWorktree {
-  return agentStatusByPaneKey.projection.mobileSnapshots(agentStatusByPaneKey)
-}
-
 // Bare IDs collide across hosts (STA-4343); ambiguous ownership omits identity so main uses generation fences rather than blanks mobile.
 function resolveWorktreeInstanceId(state: AppState, worktreeId: string): string | undefined {
   const rows = getIndexedWorktreesById(selectWorktreesByRepo(state) ?? {}, worktreeId)
@@ -188,8 +180,6 @@ export function buildMobileSessionWorktreeInputs(
       mountedSurfaceCaptureByTabId,
       launchDraftByTabId: narrowRecordByKeys(state.nativeChatLaunchDraftByTabId, terminalTabIds)
     }),
-    agentStatusByPaneKey:
-      publication.agentStatusByWorktreeId.get(worktreeId) ?? EMPTY_NARROWED_BY_KEY,
     editorDraftVersionByFileId: narrowMapByKeys(
       publication.editorDraftVersionByFileId,
       openFileIds

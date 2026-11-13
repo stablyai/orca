@@ -24,6 +24,7 @@
     "../src/cli/runtime/runtime-pid-liveness.ts",
     "../src/renderer/src/store/slices/worktrees/create/worktree-create-payload.ts",
     "../src/renderer/src/runtime/repo-hooks/orca-hook-trust.ts",
+    "../src/renderer/src/runtime/agent-status/renderer-status-sender.ts",
     "../src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts",
     "../src/renderer/src/components/native-chat/structured-agent-question-projection.ts",
     "../src/renderer/src/components/native-chat/subagents/native-chat-subagent-delegation.ts",

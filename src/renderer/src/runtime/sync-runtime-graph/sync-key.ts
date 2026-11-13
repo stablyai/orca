@@ -1,12 +1,10 @@
 import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import {
   EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE,
-  EMPTY_AGENT_STATUS_BY_PANE_KEY,
   EMPTY_BROWSER_PAGES_BY_WORKSPACE,
   EMPTY_BROWSER_TABS_BY_WORKTREE,
   EMPTY_LAYOUT_BY_WORKTREE
 } from './graph-state'
-import { buildRuntimeMobileAgentStatusProjection } from './agent-status-projection'
 import {
   buildRuntimeMobileBrowserProjection,
   buildRuntimeMobileEditorDraftsProjection,
@@ -61,9 +59,7 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
     state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
     state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId &&
     state.nativeChatLaunchDraftByTabId === previousState.nativeChatLaunchDraftByTabId &&
-    selectFolderWorkspaces(state) === selectFolderWorkspaces(previousState) &&
-    state.agentStatusEpoch === previousState.agentStatusEpoch &&
-    state.agentStatusByPaneKey === previousState.agentStatusByPaneKey
+    selectFolderWorkspaces(state) === selectFolderWorkspaces(previousState)
   )
 }
 
@@ -77,16 +73,12 @@ export function getRuntimeMobileSessionSyncKey(
   const themeSystemPrefersDark = getTerminalThemeSystemPrefersDark(state, systemPrefersDark)
   const browserTabsByWorktree = getBrowserTabsByWorktree(state)
   const browserPagesByWorkspace = getBrowserPagesByWorkspace(state)
-  const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY
   const previousBrowserTabsByWorktree = previousState
     ? getBrowserTabsByWorktree(previousState)
     : EMPTY_BROWSER_TABS_BY_WORKTREE
   const previousBrowserPagesByWorkspace = previousState
     ? getBrowserPagesByWorkspace(previousState)
     : EMPTY_BROWSER_PAGES_BY_WORKSPACE
-  const previousAgentStatusByPaneKey = previousState
-    ? (previousState.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY)
-    : EMPTY_AGENT_STATUS_BY_PANE_KEY
   return {
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
@@ -104,11 +96,6 @@ export function getRuntimeMobileSessionSyncKey(
     activeTabId: state.activeTabId,
     activeBrowserTabIdByWorktree:
       state.activeBrowserTabIdByWorktree ?? EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE,
-    agentStatusEpoch: state.agentStatusEpoch ?? 0,
-    agentStatusProjection:
-      canReusePrevious && agentStatusByPaneKey === previousAgentStatusByPaneKey
-        ? previousKey.agentStatusProjection
-        : buildRuntimeMobileAgentStatusProjection(agentStatusByPaneKey),
     generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     systemPrefersDark: themeSystemPrefersDark,
     terminalThemeProjection:
@@ -178,8 +165,6 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.activeTabTypeByWorktree === b.activeTabTypeByWorktree &&
     a.activeTabId === b.activeTabId &&
     a.activeBrowserTabIdByWorktree === b.activeBrowserTabIdByWorktree &&
-    a.agentStatusEpoch === b.agentStatusEpoch &&
-    a.agentStatusProjection === b.agentStatusProjection &&
     a.generatedTabTitlesEnabled === b.generatedTabTitlesEnabled &&
     a.systemPrefersDark === b.systemPrefersDark &&
     a.terminalThemeProjection === b.terminalThemeProjection &&

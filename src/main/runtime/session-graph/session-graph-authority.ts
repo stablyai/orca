@@ -74,6 +74,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.clearPtyIncarnationHandles()
     this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
+    this.releaseUnseededPhoneFrames()
   }
 
   protected shouldRestoreHeadlessGraph(windowId: number): boolean {
@@ -95,6 +96,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
     this.markSessionTabsInventoryPublished()
+    this.releaseUnseededPhoneFrames()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       this.headlessGraphFallbackAvailable = true
       startedMainTerminalSurfaces(this)?.republish({ force: true })

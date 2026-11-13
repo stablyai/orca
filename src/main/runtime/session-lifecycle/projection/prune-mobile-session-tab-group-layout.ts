@@ -1,3 +1,4 @@
+import { rendererStatusReplica } from '../../session-graph/renderer-status-replica'
 import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithSavedConversationTitlePublication } from '../../session-tabs/saved-conversation-title-publication'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
@@ -114,6 +115,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
 
   protected getMobileSessionProjectionHost(): RuntimeMobileSessionProjectionHost {
     return {
+      getRendererStatus: (paneKey) =>
+        this.authoritativeWindowId !== 0 ? rendererStatusReplica(this).get(paneKey) : undefined,
       tabs: this.tabs,
       leaves: this.leaves,
       ptysById: this.ptysById,

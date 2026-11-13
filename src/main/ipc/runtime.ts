@@ -1,3 +1,4 @@
+import type { RendererStatusPublication } from '../../shared/agent-status/renderer-status-publication'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
@@ -76,6 +77,15 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       return result
     }
   )
+
+  ipcMain.removeHandler('runtime:syncAgentStatus')
+  ipcMain.handle('runtime:syncAgentStatus', (event, batch: RendererStatusPublication) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || event.senderFrame !== event.sender.mainFrame) {
+      return { accepted: false, reason: 'superseded' }
+    }
+    return runtime.syncRendererAgentStatus(window.id, batch)
+  })
 
   ipcMain.handle('runtime:getStatus', async (): Promise<RuntimeStatus> => {
     // Match status.get's capped name wait; later reads pick up a lookup that is still running.

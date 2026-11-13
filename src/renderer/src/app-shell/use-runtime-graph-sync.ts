@@ -1,3 +1,4 @@
+import { startRendererStatusPublication } from '../runtime/agent-status/renderer-status-publication'
 import { useEffect } from 'react'
 import { getSystemPrefersDarkSnapshot } from '../hooks/theme/use-system-prefers-dark'
 import {
@@ -70,8 +71,12 @@ export function useRuntimeGraphSync(): void {
   )
 
   useEffect(() => {
+    const stopStatusPublication = workspaceSessionReady
+      ? startRendererStatusPublication(useAppStore)
+      : undefined
     setRuntimeGraphSyncEnabled(workspaceSessionReady)
     return () => {
+      stopStatusPublication?.()
       setRuntimeGraphSyncEnabled(false)
     }
   }, [workspaceSessionReady])
