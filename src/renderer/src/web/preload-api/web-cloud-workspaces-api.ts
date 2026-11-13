@@ -35,6 +35,9 @@ export function createWebCloudWorkspacesApi(): PreloadApi['cloudWorkspaces'] {
     pokeInbox: () => Promise.resolve(NOT_CONFIGURED),
     setPokesEnabled: () => Promise.resolve(NOT_CONFIGURED),
     markPokesSeen: () => Promise.resolve(NOT_CONFIGURED),
+    changeOwner: () => Promise.resolve(NOT_CONFIGURED),
+    ownerNotices: () => Promise.resolve(NOT_CONFIGURED),
+    dismissOwnerNotice: () => Promise.resolve(NOT_CONFIGURED),
     onOpenLink: () => () => {},
     onAccessLost: () => () => {},
     consumePendingLink: () => Promise.resolve(null)

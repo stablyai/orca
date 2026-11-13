@@ -200,3 +200,53 @@ describe('the new owner of a workspace', () => {
     ).toBe('Made Bo the owner of workspace “endpass-own”')
   })
 })
+
+describe('telling the previous owner (OWNER-TRANSFER)', () => {
+  const told = (detail: Record<string, unknown>): CloudAuditEvent => ({
+    ...ownerChange(detail, 'told_1'),
+    action: 'workspace.owner_notified',
+    actor: { kind: 'system', userId: null, name: null, via: null }
+  })
+
+  it('says Notified only when something reached them', () => {
+    expect(
+      auditEventSentence(told({ toUserId: 'u_member', toUserName: 'Grace Hopper', reached: true }))
+    ).toBe('Notified Grace Hopper about the owner change for workspace “endpass-own”')
+    expect(
+      auditEventSentence(
+        told({ toUserId: 'u_member', toUserName: 'Grace Hopper', reached: false, emailed: false })
+      )
+    ).toBe('Couldn’t notify Grace Hopper about the owner change for workspace “endpass-own”')
+    // No `reached` at all is not a yes.
+    expect(auditEventSentence(told({ toUserId: 'u_member', toUserName: 'Grace Hopper' }))).toMatch(
+      /^Couldn’t notify/
+    )
+  })
+
+  it('names them from the roster, or says who they were, and never shows an id', () => {
+    const bare = told({ toUserId: 'u_member', reached: true })
+    expect(unnamedPersonIn(bare)).toBe('u_member')
+    expect(auditEventSentence(bare, undefined, undefined, () => 'Orca Staging Member')).toBe(
+      'Notified Orca Staging Member about the owner change for workspace “endpass-own”'
+    )
+    expect(auditEventSentence(bare)).toBe(
+      'Notified the previous owner about the owner change for workspace “endpass-own”'
+    )
+    expect(
+      auditEventSentence(told({ toUserId: 'u_left', toUserFormer: true, reached: false }))
+    ).toBe('Couldn’t notify a former member about the owner change for workspace “endpass-own”')
+  })
+
+  it('AUDIT-TRUNC-HOVER: a row cut short shows its whole sentence on hover, not the action key', () => {
+    const { container } = render(
+      <EnterpriseAuditLog
+        {...listed([told({ toUserId: 'u_member', toUserName: 'Grace Hopper', reached: true })])}
+      />
+    )
+    const cell = container.querySelector('ul[aria-label="Audit log"] > li')?.children[0]
+    expect(cell?.getAttribute('title')).toBe(
+      'Notified Grace Hopper about the owner change for workspace “endpass-own”'
+    )
+    expect(container.innerHTML).not.toContain('workspace.owner_notified')
+  })
+})

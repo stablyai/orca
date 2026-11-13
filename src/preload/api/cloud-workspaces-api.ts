@@ -12,6 +12,10 @@ import type {
   OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
 import type { PokeInbox, TeammateProfile } from '../../shared/cloud-workspaces/team-presence-wire'
+import type {
+  OwnerChange,
+  OwnerChangeNotice
+} from '../../shared/cloud-workspaces/owner-change-wire'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 
 export type CloudWorkspacesResult<T> =
@@ -98,6 +102,11 @@ export type CloudWorkspacesApi = {
   pokeInbox: () => Promise<CloudWorkspacesResult<PokeInbox>>
   setPokesEnabled: (enabled: boolean) => Promise<CloudWorkspacesResult<boolean>>
   markPokesSeen: (ids: string[]) => Promise<CloudWorkspacesResult<void>>
+  /** OWNER-TRANSFER: the workspace goes to sleep first, so this can take a while. */
+  changeOwner: (id: string, ownerUserId: string) => Promise<CloudWorkspacesResult<OwnerChange>>
+  /** Notices for you as a previous owner, in the team you are signed in to. */
+  ownerNotices: () => Promise<CloudWorkspacesResult<OwnerChangeNotice[]>>
+  dismissOwnerNotice: (id: string) => Promise<CloudWorkspacesResult<void>>
   onOpenLink: (callback: (link: string) => void) => () => void
   /**
    * EP-8: a cloud workspace's server refused this computer and Orca Cloud won't grant it again (the

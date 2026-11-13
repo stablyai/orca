@@ -124,6 +124,60 @@ export const FIXTURE_EVENTS: CloudAuditEvent[] = [
 
 const noop = (): void => {}
 
+/** OWNER-TRANSFER: an owner change, and Orca's own row about telling the previous owner. */
+export const OWNER_CHANGE_EVENTS: CloudAuditEvent[] = [
+  {
+    id: 'aud_own_4',
+    at: FIXTURE_NOW - 2 * MIN + 1,
+    category: 'workspaces',
+    action: 'workspace.owner_notified',
+    actor: SYSTEM,
+    target: { type: 'workspace', id: 'sbx_7Hq2', label: 'checkout-redesign' },
+    detail: { toUserId: 'u_grace', toUserName: 'Grace Hopper', reached: true, inApp: true }
+  },
+  {
+    id: 'aud_own_3',
+    at: FIXTURE_NOW - 2 * MIN,
+    category: 'workspaces',
+    action: 'workspace.owner_changed',
+    actor: ADA,
+    target: { type: 'workspace', id: 'sbx_7Hq2', label: 'checkout-redesign' },
+    detail: { fromUserId: 'u_grace', toUserId: 'u_ada' }
+  },
+  {
+    id: 'aud_own_2',
+    at: FIXTURE_NOW - 3 * HOUR + 1,
+    category: 'workspaces',
+    action: 'workspace.owner_notified',
+    actor: SYSTEM,
+    target: {
+      type: 'workspace',
+      id: 'sbx_9Kd1',
+      label: 'payments-refund-webhooks-retry-queue-investigation'
+    },
+    detail: {
+      toUserId: 'u_linus',
+      toUserName: 'Linus Park',
+      toUserFormer: true,
+      reached: false,
+      inApp: false
+    }
+  },
+  {
+    id: 'aud_own_1',
+    at: FIXTURE_NOW - 3 * HOUR,
+    category: 'workspaces',
+    action: 'workspace.owner_changed',
+    actor: ADA,
+    target: {
+      type: 'workspace',
+      id: 'sbx_9Kd1',
+      label: 'payments-refund-webhooks-retry-queue-investigation'
+    },
+    detail: { fromUserId: 'u_linus', toUserId: 'u_grace', toUserName: 'Grace Hopper' }
+  }
+]
+
 export function fixtureAuditProps(
   patch: Partial<EnterpriseAuditLogProps> = {}
 ): EnterpriseAuditLogProps {

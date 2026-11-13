@@ -39,6 +39,10 @@ export const cloudWorkspacesApi = {
   pokeInbox: () => ipcRenderer.invoke('cloudWorkspaces:pokeInbox'),
   setPokesEnabled: (enabled) => ipcRenderer.invoke('cloudWorkspaces:setPokesEnabled', { enabled }),
   markPokesSeen: (ids) => ipcRenderer.invoke('cloudWorkspaces:markPokesSeen', { ids }),
+  changeOwner: (id, ownerUserId) =>
+    ipcRenderer.invoke('cloudWorkspaces:changeOwner', { id, ownerUserId }),
+  ownerNotices: () => ipcRenderer.invoke('cloudWorkspaces:ownerNotices'),
+  dismissOwnerNotice: (id) => ipcRenderer.invoke('cloudWorkspaces:dismissOwnerNotice', { id }),
   onOpenLink: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, link: string): void => callback(link)
     ipcRenderer.on('ui:openCloudWorkspaceLink', listener)

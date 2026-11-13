@@ -234,6 +234,10 @@ export function createCloudWorkspacesService(deps: {
     pokeInbox: () => wrap(() => client.pokeInbox()),
     setPokesEnabled: (enabled: boolean) => wrap(() => client.setPokesEnabled(enabled)),
     markPokesSeen: (ids: string[]) => wrap(() => client.markPokesSeen(ids)),
+    changeOwner: (id: string, ownerUserId: string) =>
+      wrap(() => client.changeOwner(id, ownerUserId)),
+    ownerNotices: () => wrap(() => client.ownerNotices()),
+    dismissOwnerNotice: (id: string) => wrap(() => client.dismissOwnerNotice(id)),
     localWorkspaces: () => localWorkspaces(),
     noteSent: (id: string) => wrap(() => client.noteSent(id)),
     sleep: (id: string) => wrap(() => client.sleep(id)),

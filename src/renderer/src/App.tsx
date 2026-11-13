@@ -17,6 +17,7 @@ import { TeamDialogHost } from './components/billing/team/TeamDialogHost'
 import { TeammateProfileDialog } from './components/teammates/TeammateProfileDialog'
 import { CloudWorkspacePickerDialog } from './components/cloud-workspaces/CloudWorkspacePicker'
 import { PokesNotifier } from './components/teammates/PokesNotifier'
+import { OwnerChangeNotices } from './components/cloud-workspaces/OwnerChangeNotices'
 import { BrowserPagePrompts } from './components/browser-pane/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import { SkillFreshnessNudge } from './components/skills/freshness/SkillFreshnessNudge'
@@ -140,6 +141,7 @@ function App(): React.JSX.Element {
             <TeammateProfileDialog />
             <CloudWorkspacePickerDialog />
             <PokesNotifier />
+            <OwnerChangeNotices />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
         {createPortal(

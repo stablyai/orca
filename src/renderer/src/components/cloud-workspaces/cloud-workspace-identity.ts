@@ -12,6 +12,13 @@ export type CloudWorkspaceIdentity = {
   title: string | null
   /** What this account may do with it (PAIRED-ARCHIVE: only its creator archives a sandbox). */
   access?: CloudWorkspace['access']
+  /**
+   * OWNER-TRANSFER: who owns it, and when its owner was first changed (null: never). A workspace
+   * made from one inherits the time, so one made later was never handed over itself.
+   */
+  ownerUserId?: string
+  createdAt?: number
+  ownershipTransferredAt?: number | null
 }
 
 type State = {
@@ -34,7 +41,10 @@ function sameIdentity(a: CloudWorkspaceIdentity | undefined, b: CloudWorkspaceId
     a.number === b.number &&
     a.link === b.link &&
     a.title === b.title &&
-    a.access === b.access
+    a.access === b.access &&
+    a.ownerUserId === b.ownerUserId &&
+    a.createdAt === b.createdAt &&
+    a.ownershipTransferredAt === b.ownershipTransferredAt
   )
 }
 
@@ -47,7 +57,10 @@ export function rememberCloudWorkspaces(workspaces: readonly CloudWorkspace[]): 
       number: w.number ?? null,
       link: w.link ?? null,
       title: w.title,
-      access: w.access
+      access: w.access,
+      ownerUserId: w.ownerUserId,
+      createdAt: w.createdAt,
+      ownershipTransferredAt: w.ownershipTransferredAt ?? null
     }
     if (!sameIdentity(next.get(w.id), identity)) {
       next.set(w.id, identity)
@@ -133,6 +146,16 @@ export function useCloudWorktreeNumber(
   worktree: { id: string; hostId?: string | null } | null | undefined
 ): number | null {
   return useSyncExternalStore(subscribe, () => (worktree ? cloudNumberForWorktree(worktree) : null))
+}
+
+/** OWNER-TRANSFER: the cloud workspace behind a worktree has had more than one owner. */
+export function useCloudWorktreeOwnerChanged(
+  worktree: { id: string; hostId?: string | null } | null | undefined
+): boolean {
+  return useSyncExternalStore(subscribe, () => {
+    const sandboxId = worktree ? sandboxIdForWorktree(worktree) : null
+    return sandboxId ? state.bySandbox.get(sandboxId)?.ownershipTransferredAt != null : false
+  })
 }
 
 /** Test-only. */

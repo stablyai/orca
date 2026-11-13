@@ -233,6 +233,15 @@ function useRosterNames(events: readonly CloudAuditEvent[]): (userId: string) =>
 
 const NO_EVENTS: readonly CloudAuditEvent[] = []
 
+/** AUDIT-TRUNC-HOVER: a sentence cut short by the column shows in full on hover. */
+function AuditSentence({ sentence }: { sentence: string }): React.JSX.Element {
+  return (
+    <span className="min-w-0 flex-1 truncate text-foreground" title={sentence}>
+      {sentence}
+    </span>
+  )
+}
+
 export function EnterpriseAuditLog(props: EnterpriseAuditLogProps): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
@@ -366,9 +375,7 @@ export function EnterpriseAuditLog(props: EnterpriseAuditLogProps): React.JSX.El
                   data-settings-row=""
                   className="flex items-center gap-3 py-2 text-xs"
                 >
-                  <span className="min-w-0 flex-1 truncate text-foreground" title={event.action}>
-                    {auditEventSentence(event, t, locale, nameOf)}
-                  </span>
+                  <AuditSentence sentence={auditEventSentence(event, t, locale, nameOf)} />
                   <span className="w-28 shrink-0 truncate text-muted-foreground">
                     {auditCategoryLabel(event.category, t)}
                   </span>
