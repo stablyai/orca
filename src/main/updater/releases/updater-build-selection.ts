@@ -15,6 +15,7 @@ import { ReleaseBuildListCache, type ReleaseBuildListOptions } from './updater-r
 import { UpdaterMenuChecks } from '../lifecycle/updater-menu-checks'
 import { updaterCodedMessage } from '../../../shared/updater-failure-copy'
 import { updaterErrorMessage } from '../lifecycle/updater-coded-error'
+import { getGenericUpdateFeedOptions } from '../updater-generic-feed-options'
 
 export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
   private readonly releaseBuildCache = new ReleaseBuildListCache((channel) =>
@@ -68,7 +69,7 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
       const updater = this.getAutoUpdater()
       updater.allowDowngrade = true
       updater.disableDifferentialDownload = true
-      updater.setFeedURL({ provider: 'generic', url: feed.url })
+      updater.setFeedURL(getGenericUpdateFeedOptions(feed.url))
       const attemptId = this.beginUpdateCheckAttempt()
       this.markUpdateCheckLaunched(attemptId)
       await updater.checkForUpdates()
@@ -95,7 +96,7 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
       return
     }
     // Enforce platform artifact availability in main; renderer-disabled options do not protect IPC.
-    if (!isChannelSupportedOnPlatform(channel, process.platform)) {
+    if (!isChannelSupportedOnPlatform(channel, process.platform, process.arch)) {
       this.sendStatus({
         state: 'error',
         ...updaterCodedMessage('channelUnsupportedPlatform', {
@@ -157,7 +158,7 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
       updater.disableDifferentialDownload = true
       updater.allowPrerelease = true
       console.info(`[updater] pinned to ${channel} build ${target.tag} → ${target.feedUrl}`)
-      updater.setFeedURL({ provider: 'generic', url: target.feedUrl })
+      updater.setFeedURL(getGenericUpdateFeedOptions(target.feedUrl))
       this.availableReleaseUrl = target.feedUrl
       const attemptId = this.beginUpdateCheckAttempt()
       this.markUpdateCheckLaunched(attemptId)

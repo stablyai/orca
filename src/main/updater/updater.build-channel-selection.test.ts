@@ -1,5 +1,5 @@
 import type { getReleaseDownloadUrl } from './releases/updater-release-readiness'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './testing/updater-test-module-loader'
 import { updaterMainWindow } from './testing/updater-test-main-window'
 
@@ -44,11 +44,14 @@ warmUpdaterModule()
 describe('updater', () => {
   beforeEach(() => {
     resetUpdaterMocks()
+    vi.spyOn(process, 'arch', 'get').mockReturnValue('x64')
   })
+  afterEach(() => vi.restoreAllMocks())
 
   // Signed Windows builds verify publisherName; refuse unsigned dev jumps before downloading.
   it('refuses to pin a Windows dev build from a signed build, and says what to do', async () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const archSpy = vi.spyOn(process, 'arch', 'get').mockReturnValue('x64')
     try {
       appMock.getVersion.mockReturnValue('1.4.160')
       const send = vi.fn()
@@ -69,6 +72,44 @@ describe('updater', () => {
       expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
     } finally {
       platformSpy.mockRestore()
+      archSpy.mockRestore()
+    }
+  })
+
+  // Dev workflows build Windows x64 only; native ARM64 pins stay on its own manifest.
+  it('pins Windows ARM64 to its own update channel and refuses dev builds', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const archSpy = vi.spyOn(process, 'arch', 'get').mockReturnValue('arm64')
+    try {
+      appMock.getVersion.mockReturnValue('1.4.159')
+      const send = vi.fn()
+      const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
+      setupAutoUpdater(updaterMainWindow(send), {
+        getLastUpdateCheckAt: () => Date.now()
+      })
+
+      checkForUpdatesFromMenu({ channel: 'hourly', targetTag: 'v1.4.160-hourly.202607281400' })
+      expect(send).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: expect.any(String),
+        messageCode: 'channelUnsupportedPlatform',
+        messageParams: { channel: 'Hourly' },
+        userInitiated: true
+      })
+      expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+
+      checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.4.160' })
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.4.160',
+        channel: 'latest-arm64'
+      })
+    } finally {
+      platformSpy.mockRestore()
+      archSpy.mockRestore()
     }
   })
 
