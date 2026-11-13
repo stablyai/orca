@@ -4,6 +4,7 @@ import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
+import { TabColorDot } from '@/components/tab-bar/TabColorDot'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { cn } from '@/lib/class-names'
 import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-agent-row-view'
@@ -240,6 +241,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
               <AgentTypeIcon agentType={agent.agentType} size={13} />
             </span>
           )}
+          {agent.rowSource !== 'subagent' && <TabColorDot color={agent.tab.color} />}
           <span
             className="min-w-0 flex-1 truncate"
             title={sendTargetDisabledReason ? undefined : rowTitle}

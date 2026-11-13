@@ -19,7 +19,7 @@ export function tabFromWorktreeAttributedStatusEntry(
     worktreeId: entry.worktreeId,
     title: entry.terminalTitle ?? 'Agent',
     customTitle: null,
-    color: null,
+    color: representedTab?.color ?? null,
     sortOrder: Number.MAX_SAFE_INTEGER,
     // Missing-tab rows retain their original ordering clock; stateStartedAt changes with status.
     createdAt: effectiveStartedAt

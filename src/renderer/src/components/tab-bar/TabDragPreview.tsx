@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { Globe, Terminal as TerminalIcon } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { TabColorDot } from './TabColorDot'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 
 // Match the resting tab’s agent identity in the drag overlay.
@@ -29,9 +30,7 @@ export default function TabDragPreview({ drag }: { drag: TabDragItemData }): Rea
         <LeadingIcon drag={drag} />
       </span>
       <span className="truncate">{drag.label}</span>
-      {drag.color ? (
-        <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: drag.color }} />
-      ) : null}
+      <TabColorDot color={drag.color} />
     </div>
   )
 }

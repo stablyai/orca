@@ -12,6 +12,7 @@ import {
   type AgentDotState
 } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
+import { TabColorDot } from '@/components/tab-bar/TabColorDot'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
@@ -326,6 +327,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             <AgentTypeIcon agentType={agent.agentType} size={14} />
           </span>
         )}
+        {agent.rowSource !== 'subagent' && <TabColorDot color={agent.tab.color} />}
         {/* Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported. */}
         <span
           className={cn(

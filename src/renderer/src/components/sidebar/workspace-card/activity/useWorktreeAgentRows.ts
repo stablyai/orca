@@ -5,6 +5,7 @@ import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../../../shared/migration-unsupported-agent-entry'
 import type { AppState } from '@/store/types'
+import type { Tab } from '../../../../../../shared/tab-types'
 import {
   EMPTY_LIVE_PTY_IDS,
   EMPTY_PANE_FOREGROUND_AGENTS,
@@ -37,6 +38,7 @@ import {
 
 // Why frozen: shared by every inactive card, and callers only read these rows.
 const EMPTY_AGENT_ROWS = Object.freeze([]) as unknown as DashboardAgentRow[]
+const EMPTY_REPRESENTED_TABS: ReadonlyMap<string, Tab> = new Map()
 const subscribeToNothing = (): (() => void) => () => {}
 
 /** Share indexed worktree inputs across cards; derive live/retained row freshness from the available evidence. */
@@ -61,7 +63,11 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
         active
           ? selectPaneForegroundAgentsForWorktree(state, worktreeId)
           : EMPTY_PANE_FOREGROUND_AGENTS,
-        active ? selectAgentFreshness(state) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
+        active ? selectAgentFreshness(state) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE,
+        // Subscribed so a chat tab's color or attribution change reaches its row immediately.
+        active
+          ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree)
+          : EMPTY_REPRESENTED_TABS
       ] as const
     let previous: ReturnType<typeof readInputs> | undefined
     return (state: AppState) => {
@@ -88,7 +94,8 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     terminalLayoutsByTabId,
     runtimeAgentOrchestrationByPaneKey,
     paneForegroundAgentByPaneKey,
-    agentFreshnessSignature
+    agentFreshnessSignature,
+    representedTabs
   ] = useSyncExternalStore(active ? store.subscribe : subscribeToNothing, getInputs, getInputs)
 
   return useMemo<DashboardAgentRow[]>(() => {
@@ -110,9 +117,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     return applyAgentRowLineage(
       buildWorktreeAgentRows({
         tabs: tabs ?? EMPTY_TABS,
-        representedTabs: getStructuredAgentSessionTabsByPaneKey(
-          store.getState().unifiedTabsByWorktree
-        ),
+        representedTabs,
         entries,
         retained,
         runtimePaneTitlesByTabId,
@@ -126,7 +131,6 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     active,
-    store,
     tabs,
     liveEntries,
     migrationUnsupported,
@@ -136,6 +140,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     terminalLayoutsByTabId,
     runtimeAgentOrchestrationByPaneKey,
     paneForegroundAgentByPaneKey,
-    agentFreshnessSignature
+    agentFreshnessSignature,
+    representedTabs
   ])
 }
