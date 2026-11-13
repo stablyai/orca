@@ -36,7 +36,7 @@ export function canPaneOfferAgentId(
   if (state.paneForegroundAgentByPaneKey[paneKey]?.shellForeground === true) {
     return false
   }
-  const live = state.agentStatusByPaneKey[paneKey]
+  const live = state.agentStatusByPaneKey.get(paneKey)
   if (live && live.restoredUnconfirmed !== true) {
     // Null: the host can name it but its first link failed; the click retries there.
     return live.orcaSessionId !== undefined

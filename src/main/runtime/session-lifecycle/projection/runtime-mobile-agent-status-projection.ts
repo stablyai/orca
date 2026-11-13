@@ -1,3 +1,4 @@
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   workingHookOwnsIdleTitleInterval,
   codexHookReportsRunningTurn,

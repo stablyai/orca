@@ -160,7 +160,7 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
       // Resume seeds, exited agents and unconfirmed restored rows prove no running agent.
       if (
         row &&
-        !row.paneSleep &&
+        !('paneSleep' in row && row.paneSleep) &&
         row.providerSessionOnly !== true &&
         row.restoredUnconfirmed !== true &&
         !('agentPresence' in row && row.agentPresence?.ended === true)

@@ -116,9 +116,9 @@ it('drops a host-assigned agent id when a failed commit leaves a new Pi transcri
       }
     )
   report(1_000, '/a.jsonl', 'pi_identity_one')
-  expect(store.getState().agentStatusByPaneKey[paneKey]?.orcaSessionId).toBe('pi_identity_one')
+  expect(store.getState().agentStatusByPaneKey.get(paneKey)?.orcaSessionId).toBe('pi_identity_one')
   report(2_000, '/b.jsonl')
-  expect(store.getState().agentStatusByPaneKey[paneKey]?.orcaSessionId).toBeUndefined()
+  expect(store.getState().agentStatusByPaneKey.get(paneKey)?.orcaSessionId).toBeUndefined()
 })
 
 it('offers Copy Agent ID wherever the host stamped the field, even before it named the agent', () => {

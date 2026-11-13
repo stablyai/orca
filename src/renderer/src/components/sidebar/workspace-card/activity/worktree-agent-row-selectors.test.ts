@@ -108,11 +108,11 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
   })
   it('reads a new live agent after the last row was removed without an intervening read', () => {
     const store = createTestStore()
-    const first = makeEntry(PANE_KEY_1, Date.now(), { state: 'working', worktreeId: 'wt-1' })
+    const first = makeEntry(PANE_KEY_1, 1000, { state: 'working', worktreeId: 'wt-1' })
     store.setState({ agentStatusByPaneKey: acceptedAgentStatuses([[PANE_KEY_1, first]]) })
     expect(selectLiveAgentStatusEntriesForWorktree(store.getState(), 'wt-1')).toEqual([first])
     store.getState().removeAgentStatus(PANE_KEY_1)
-    const second = makeEntry('tab-2:33333333-3333-4333-8333-333333333333', Date.now(), {
+    const second = makeEntry('tab-2:33333333-3333-4333-8333-333333333333', 1001, {
       state: 'working',
       worktreeId: 'wt-1',
       prompt: 'new task'

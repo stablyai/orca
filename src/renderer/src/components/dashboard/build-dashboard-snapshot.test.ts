@@ -244,9 +244,9 @@ describe('buildDashboardSnapshot', () => {
     })
     const snapshot = buildDashboardSnapshot(
       baseState({
-        agentStatusByPaneKey: {
-          [PANE_KEY]: entry({ state: 'waiting', toolName: 'AskUserQuestion', interactivePrompt })
-        }
+        agentStatusByPaneKey: acceptedAgentStatuses([
+          [PANE_KEY, entry({ state: 'waiting', toolName: 'AskUserQuestion', interactivePrompt })]
+        ])
       }),
       NOW
     )

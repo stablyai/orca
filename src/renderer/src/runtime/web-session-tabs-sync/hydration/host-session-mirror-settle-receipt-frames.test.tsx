@@ -88,7 +88,7 @@ describe('a global singular frame whose patch never lands', () => {
       const snapshot = makeHostSnapshot(WT, OTHER_HOST_SURFACE_ID, OTHER_HOST_PARENT_TAB_ID)
       const prepare = vi.spyOn(AgentStatusProjection.prototype, 'prepare')
       if (failure === 'patch') {
-        const malformed = snapshot as never as { tabs: Record<string, unknown>[] }
+        const malformed: { tabs: { id: string; terminal?: unknown }[] } = snapshot
         malformed.tabs[0]!.terminal = undefined
       } else {
         prepare.mockImplementationOnce(() => {
