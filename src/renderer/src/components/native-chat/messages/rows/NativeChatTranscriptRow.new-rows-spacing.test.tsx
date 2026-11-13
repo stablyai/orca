@@ -27,7 +27,6 @@ const context: NativeChatTranscriptRowContext = {
   taskListPredecessors: new Map(),
   expandedTurnIds: new Set(),
   onToggleExpandedTurn: vi.fn(),
-  subagentDisclosure: { setSectionOpen: vi.fn(), setRosterOpen: vi.fn() },
   onScrollMessageToTop: vi.fn(),
   onRevealDiff: vi.fn()
 }
@@ -51,8 +50,6 @@ function slot(overrides: Partial<NativeChatMessageSlot> = {}): NativeChatMessage
     drawsMessage: true,
     turnFolds: false,
     turnDiff: undefined,
-    subagentRoster: undefined,
-    depth: 0,
     estimatedHeight: 40,
     ...overrides
   }
@@ -127,7 +124,17 @@ describe('NativeChatTranscriptRow New line spacing', () => {
       ['-mb-3'],
       ['-mt-6']
     ],
-    ['above-turn-bar', user(), { text: 'Not sent' }, ['-mb-3'], ['-mt-6']]
+    ['above-turn-bar', user(), { text: 'Not sent' }, ['-mb-3'], ['-mt-6']],
+    ['above-turn-bar', user(), { sending: true }, ['-mb-3'], ['-mt-6']],
+    ['above-turn-bar', user({ timestamp: null }), undefined, ['-mb-3'], ['-mt-6']],
+    ['above-turn-bar', { ...user(), drawsMessage: false }, undefined, ['-mb-3'], ['-mt-6']],
+    [
+      'above-row',
+      slot({ statusAbove: true, status: { startedAt: 1, thinking: false, workedSeconds: null } }),
+      undefined,
+      ['-mb-3'],
+      ['-mt-6', '-mb-1.5']
+    ]
   ] as const)('spaces the line %s, case %#', (place, row, notice, has, lacks) => {
     const view = render(
       <NativeChatTranscriptRow
