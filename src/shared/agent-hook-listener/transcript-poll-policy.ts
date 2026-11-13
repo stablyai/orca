@@ -1,8 +1,8 @@
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
-import { hasCodexTranscriptSubagents } from './providers/codex-state'
-import { hasMuseSessionLog } from './providers/muse-events'
+import { hasCodexTranscriptSubagents } from './providers/codex/codex-state'
+import { hasMuseSessionLog } from './providers/muse/muse-events'
 import { hasPendingCodexSubagentIdentity } from '../codex-subagent-roster'
 import { parseHookEnvelope } from './hook-envelope'
 

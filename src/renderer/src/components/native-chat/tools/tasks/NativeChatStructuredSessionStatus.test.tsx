@@ -8,12 +8,26 @@ import type { AgentSessionCancelResult } from '../../../../../../shared/agent-se
 import type { AgentChildWorkView } from '../../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { structuredSessionBackgroundTasksView } from '../../../../../../shared/structured-session-background-tasks-view'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
+import { useStructuredSessionTaskStop } from './use-structured-session-task-stop'
 
 vi.mock('./use-structured-session-child-row-context', () => ({
   useStructuredSessionChildRowContext: () => undefined
 }))
 
 afterEach(cleanup)
+
+function Strip(props: { tasks: Parameters<typeof useStructuredSessionTaskStop>[1] }) {
+  const stop = useStructuredSessionTaskStop('session-1', props.tasks)
+  return (
+    <NativeChatStructuredSessionStatus
+      sessionId="session-1"
+      paneKey="pane-1"
+      isVisible
+      backgroundTasks={props.tasks.backgroundTasks}
+      stop={stop}
+    />
+  )
+}
 
 function helper(invocation: AgentChildWorkView['invocation']): AgentChildWorkView {
   return {
@@ -37,10 +51,7 @@ describe('NativeChatStructuredSessionStatus', () => {
       () => new Promise<AgentSessionCancelResult>((resolve) => (finish = resolve))
     )
     const strip = (children: AgentChildWorkView[]) => (
-      <NativeChatStructuredSessionStatus
-        sessionId="session-1"
-        paneKey="pane-1"
-        isVisible
+      <Strip
         tasks={{
           backgroundTasks: structuredSessionBackgroundTasksView(
             { state: 'monitoring', supportsTaskStop: true, children },

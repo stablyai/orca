@@ -77,7 +77,13 @@ function needsGitEvidence(
   if (summary.isMainWorktree || summary.isPinned) {
     return false
   }
-  if (rules.merged.enabled || rules.unchanged.enabled) {
+  // These reasons come only from the scan's Git and run/worker evidence.
+  if (
+    rules.merged.enabled ||
+    rules.unchanged.enabled ||
+    rules.automationRuns.enabled ||
+    rules.orchestrationWorkers.enabled
+  ) {
     return true
   }
   // Filesystem activity can only make a workspace newer, so the persisted stamp bounds the inactive rule.
@@ -116,6 +122,7 @@ function dirtyEditorWorktreeIds(store: RuntimeStore, runtime: OrcaRuntimeService
 
 async function scanTargets(
   store: RuntimeStore,
+  runtime: OrcaRuntimeService,
   worktreeIds: string[],
   signal: AbortSignal | undefined
 ): Promise<Map<string, WorkspaceCleanupCandidate>> {
@@ -126,7 +133,8 @@ async function scanTargets(
     const result = await scanWorkspaceCleanup(
       store,
       { worktreeIds: batch, refreshActivity: true },
-      { signal }
+      // Without the orchestration store the scan can't prove a worker was released.
+      { signal, getOrchestrationDb: () => runtime.getExistingOrchestrationDb() }
     )
     for (const candidate of result.candidates) {
       // A same-id repo row on another host scans too; only this host's checkout is evidence here.
@@ -195,7 +203,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
       return needsGitEvidence(summary, rules, now)
     })
     .map((summary) => summary.worktreeId)
-  const candidates = await scanTargets(store, gitTargets, signal)
+  const candidates = await scanTargets(store, runtime, gitTargets, signal)
   const dirtyEditors = dirtyEditorWorktreeIds(store, runtime)
   const scanned = new Set(gitTargets)
   return summaries.map((summary) => {

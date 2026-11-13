@@ -40,7 +40,7 @@ export function parseComputerTreeText(treeText: string): ComputerTreeText {
 /** Rewrites the index of an element line; other lines pass through. */
 export function renumberComputerTreeLine(
   line: string,
-  indexes: ReadonlyMap<number, number>
+  indexes: Pick<ReadonlyMap<number, number>, 'get'>
 ): string {
   const match = ELEMENT_LINE.exec(line)
   const index = match ? indexes.get(Number(match[2])) : undefined

@@ -27,25 +27,25 @@ export const PAGE_GRANT_CALL_SITES = [
   callRow(
     ['externalLink'],
     'openExternalLink',
-    'src/platform/external-link.web.ts',
+    'src/platform/external-links/external-link.web.ts',
     'the shell is the only thing on the page that can open a URL outside the app'
   ),
   callRow(
     ['native.clipboard.write'],
     'useClipboardWriter',
-    'src/platform/clipboard.web.ts',
+    'src/platform/clipboard/clipboard.web.ts',
     "the browser's own clipboard write is refused without a user gesture the page cannot prove"
   ),
   callRow(
     ['native.clipboard.read'],
     'useClipboardReader',
-    'src/platform/clipboard.web.ts',
+    'src/platform/clipboard/clipboard.web.ts',
     'a paste needs the device pasteboard, which the WebView does not hand the page'
   ),
   callRow(
     ['native.media.pick', 'native.media.read', 'native.media.release'],
     'useMediaPicker',
-    'src/platform/media-picker.web.ts',
+    'src/platform/media-picking/media-picker.web.ts',
     'the picker runs the OS permission prompt inside the shell and hands back a handle'
   )
 ]

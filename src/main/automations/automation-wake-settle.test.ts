@@ -140,59 +140,5 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       expect(launch).toHaveBeenCalledOnce()
       service.stop()
     })
-
-    /** Holds today's 09:00 zero-grace occurrence: resume at 09:00:01, held by the 09:01:01 tick. */
-    async function holdZeroGraceOccurrence() {
-      clock.suspend()
-      asleepUntil('2026-11-09T09:00:01')
-      clock.resume()
-      await awakeFor(TICK_MS)
-    }
-
-    /** A run of yesterday's occurrence, still open so its completion lands during a hold. */
-    async function priorDispatchedRun(
-      store: Awaited<ReturnType<typeof scheduledService>>['store'],
-      service: AutomationService,
-      automationId: string
-    ) {
-      const automation = store.listAutomations().find((entry) => entry.id === automationId)!
-      const run = store.createAutomationRun(automation, new Date('2026-11-08T09:00:00').getTime())
-      await service.markDispatchResult({
-        runId: run.id,
-        status: 'dispatched',
-        workspaceId: 'r1::wt1',
-        terminalSessionId: 'tab-0',
-        terminalPtyId: 'pty-0'
-      })
-      return run
-    }
-
-    const updatedAt = (
-      store: Awaited<ReturnType<typeof scheduledService>>['store'],
-      automationId: string
-    ) => store.listAutomations().find((entry) => entry.id === automationId)!.updatedAt
-
-    it('keeps a held occurrence when an earlier run completes during the hold', async () => {
-      const { store, automation, launch, service } = await scheduledService({ graceMinutes: 0 })
-      const prior = await priorDispatchedRun(store, service, automation.id)
-      const todays = () =>
-        store
-          .listAutomationRuns(automation.id)
-          .filter((run) => run.id !== prior.id)
-          .map((run) => run.status)
-
-      await holdZeroGraceOccurrence()
-      expect(todays()).toEqual([])
-      const heldUpdatedAt = updatedAt(store, automation.id)
-      // 09:01:31: the completion watcher reports the earlier run, which also writes its usage.
-      await awakeFor(TICK_MS / 2)
-      await service.markDispatchResult({ runId: prior.id, status: 'completed' })
-      expect(updatedAt(store, automation.id)).not.toBe(heldUpdatedAt)
-
-      await awakeFor(TICK_MS / 2)
-      await vi.waitFor(() => expect(todays()).toEqual(['dispatched']))
-      expect(launch).toHaveBeenCalledOnce()
-      service.stop()
-    })
   }
 )

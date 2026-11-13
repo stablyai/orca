@@ -266,6 +266,8 @@ export class CodexChildWorkEvidence {
       residency: 'background',
       state: facts.waiting ? 'waiting' : 'working',
       ...(child.label ? { description: child.label } : {}),
+      ...(child.model ? { model: child.model } : {}),
+      ...(child.effort ? { effort: child.effort } : {}),
       ...(facts.totalTokens !== undefined ? { totalTokens: facts.totalTokens } : {}),
       ...(lastMessage ? { lastMessage } : {}),
       ...(spawner && spawner !== this.primaryThreadId ? { ownerId: spawner } : {}),

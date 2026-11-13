@@ -41,9 +41,8 @@ export async function getIssueGitHubApiRepository(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubApiRepository | null> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
-    const originPromise = getGitHubApiRepositoryForRemote(
+    const originPromise = getOriginGitHubApiRepository(
       repoPath,
-      'origin',
       connectionId,
       localGitOptions
     ).then(
@@ -81,15 +80,9 @@ export async function resolveGitHubApiRepositoryCandidates(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubApiRepositoryCandidates> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
-    const originPromise = getGitHubApiRepositoryForRemote(
-      repoPath,
-      'origin',
-      connectionId,
-      localGitOptions,
-      {
-        requireVerifiedSshProbe: true
-      }
-    ).then(
+    const originPromise = getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions, {
+      requireVerifiedSshProbe: true
+    }).then(
       (value) => ({ status: 'fulfilled' as const, value }),
       (reason: unknown) => ({ status: 'rejected' as const, reason })
     )
@@ -151,22 +144,12 @@ export async function resolveIssueGitHubApiRepositorySource(
       if (upstream) {
         return { source: upstream, fellBack: false }
       }
-      const origin = await getGitHubApiRepositoryForRemote(
-        repoPath,
-        'origin',
-        connectionId,
-        localGitOptions
-      )
+      const origin = await getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions)
       return { source: origin, fellBack: origin !== null }
     }
     if (preference === 'origin') {
       return {
-        source: await getGitHubApiRepositoryForRemote(
-          repoPath,
-          'origin',
-          connectionId,
-          localGitOptions
-        ),
+        source: await getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions),
         fellBack: false
       }
     }

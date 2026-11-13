@@ -14,7 +14,7 @@ import {
 import { splitGitRemoteKey } from '../../shared/git/remotes/git-remote-identity'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { isFolderRepo } from '../../shared/repo-kind'
-import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
