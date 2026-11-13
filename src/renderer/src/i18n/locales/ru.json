@@ -19573,7 +19573,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Открыть с помощью (если фокус не находится в редактируемом поле)"
+            "openWith": "Открыть с помощью (кроме ввода в текстовом поле Orca)"
           }
         },
         "pluginInstallCount": {

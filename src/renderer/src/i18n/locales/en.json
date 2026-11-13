@@ -19998,7 +19998,7 @@
         },
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Open with (when focus is not in an editable field)"
+            "openWith": "Open with (except while typing in an Orca text field)"
           }
         },
         "pluginInstallCount": {

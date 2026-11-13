@@ -18800,7 +18800,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Abrir con (cuando el foco no está en un campo editable)"
+            "openWith": "Abrir con (excepto al escribir en un campo de texto de Orca)"
           }
         },
         "pluginInstallCount": {

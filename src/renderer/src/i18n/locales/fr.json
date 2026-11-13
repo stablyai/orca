@@ -19067,7 +19067,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Ouvrir avec (lorsqu’aucun champ modifiable n’a le focus)"
+            "openWith": "Ouvrir avec (sauf pendant la saisie dans un champ de texte d’Orca)"
           }
         },
         "pluginInstallCount": {
