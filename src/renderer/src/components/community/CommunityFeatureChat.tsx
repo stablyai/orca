@@ -1,3 +1,4 @@
+import { communityRequestResult } from './community-request-result'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { CommunityFeatureRequests } from './CommunityFeatureRequests'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -40,7 +41,7 @@ export function CommunityFeatureChat({
     }
     setBusy(true)
     setError(null)
-    try {
+    const result = await communityRequestResult(async () => {
       const launch = startStructuredAgentLaunch(activeWorktreeId, agent, {
         requestId: createBrowserUuid(),
         activate: false,
@@ -62,11 +63,11 @@ export function CommunityFeatureChat({
       }
       setChat(reference)
       await onLink(reference)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setBusy(false)
+    })
+    if (!result.ok) {
+      setError(result.message)
     }
+    setBusy(false)
   }
   const target: RuntimeClientTarget = chat?.environmentId
     ? { kind: 'environment', environmentId: chat.environmentId }

@@ -1,3 +1,4 @@
+import { communityRequestResult } from './community-request-result'
 import { useState } from 'react'
 import { Camera, FileCheck, RefreshCw, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -56,7 +57,7 @@ export function CommunityFeatureRequests({
     }
     setBusy(true)
     setNotice(null)
-    try {
+    const result = await communityRequestResult(async () => {
       const send = sendStructuredAgentSessionMessage({
         sessionId: chat.sessionId,
         target,
@@ -77,11 +78,11 @@ export function CommunityFeatureRequests({
               'Delivery was not confirmed. Check the conversation before sending again.'
             )
       )
-    } catch (cause) {
-      setNotice(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setBusy(false)
+    })
+    if (!result.ok) {
+      setNotice(result.message)
     }
+    setBusy(false)
   }
   return (
     <div className="space-y-3">

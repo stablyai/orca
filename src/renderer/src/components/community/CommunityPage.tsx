@@ -1,3 +1,4 @@
+import { communityRequestResult } from './community-request-result'
 import { useMemo, useRef, useState } from 'react'
 import { FlaskConical, RefreshCw, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -47,25 +48,23 @@ export default function CommunityPage(): React.JSX.Element {
     const request = ++accountRequest.current
     setAccountBusy(true)
     setAccountError(null)
-    try {
+    const result = await communityRequestResult(async () => {
       const client = communityClient(target)
       if (user !== undefined) {
         await client.account(user)
       }
-      const result = await client.accounts()
-      if (request === accountRequest.current) {
-        setAccounts(result)
-        catalog.retry()
-      }
-    } catch (cause) {
-      if (request === accountRequest.current) {
-        setAccountError(cause instanceof Error ? cause.message : String(cause))
-      }
-    } finally {
-      if (request === accountRequest.current) {
-        setAccountBusy(false)
-      }
+      return client.accounts()
+    })
+    if (request !== accountRequest.current) {
+      return
     }
+    if (result.ok) {
+      setAccounts(result.value)
+      catalog.retry()
+    } else {
+      setAccountError(result.message)
+    }
+    setAccountBusy(false)
   }
   return (
     <main

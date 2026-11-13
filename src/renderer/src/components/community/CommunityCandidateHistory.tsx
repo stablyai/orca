@@ -1,3 +1,4 @@
+import { communityRequestResult } from './community-request-result'
 import { useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,13 +31,13 @@ export function CommunityCandidateHistory({
     }
     setBusy(true)
     setError(null)
-    try {
+    const result = await communityRequestResult(async () => {
       await action()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setBusy(false)
+    })
+    if (!result.ok) {
+      setError(result.message)
     }
+    setBusy(false)
   }
   const offset = next === undefined ? resource.value?.nextOffset : next
   return (

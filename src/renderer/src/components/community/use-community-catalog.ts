@@ -1,3 +1,4 @@
+import { communityRequestResult } from './community-request-result'
 import type { CommunitySyncStatus } from '../../../../shared/community-catalog'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -21,7 +22,7 @@ export function useCommunityCatalog(target: RuntimeClientTarget, query: Communit
       const id = ++request.current
       setLoading(true)
       setError(null)
-      try {
+      const result = await communityRequestResult(async () => {
         const value = await client.list({ ...query, offset })
         if (id !== request.current) {
           return
@@ -38,14 +39,12 @@ export function useCommunityCatalog(target: RuntimeClientTarget, query: Communit
                 ]
               : value.rows
         }))
-      } catch (cause) {
-        if (id === request.current) {
-          setError(cause instanceof Error ? cause.message : String(cause))
+      })
+      if (id === request.current) {
+        if (!result.ok) {
+          setError(result.message)
         }
-      } finally {
-        if (id === request.current) {
-          setLoading(false)
-        }
+        setLoading(false)
       }
     },
     [client, query]
@@ -97,40 +96,36 @@ export function useCommunityCatalog(target: RuntimeClientTarget, query: Communit
     const id = generation.current
     setRefreshing(true)
     setError(null)
-    try {
+    const result = await communityRequestResult(async () => {
       await client.refresh()
       if (id === generation.current) {
         await load()
       }
-    } catch (cause) {
-      if (id === generation.current) {
-        setError(cause instanceof Error ? cause.message : String(cause))
+    })
+    if (id === generation.current) {
+      if (!result.ok) {
+        setError(result.message)
       }
-    } finally {
-      if (id === generation.current) {
-        setRefreshing(false)
-      }
+      setRefreshing(false)
     }
   }
   const mutate = useCallback(
     async (action: CommunityFeatureAction): Promise<CommunityFeaturesSnapshot> => {
       const id = generation.current
-      try {
-        const personal = await client.mutate(action)
-        if (id !== generation.current) {
-          return personal
+      const result = await communityRequestResult(() => client.mutate(action))
+      if (!result.ok) {
+        if (id === generation.current) {
+          setError(result.message)
         }
-        setPage((previous) => (previous ? { ...previous, personal } : previous))
+        throw result.error
+      }
+      if (id === generation.current) {
+        setPage((previous) => (previous ? { ...previous, personal: result.value } : previous))
         if (query.view && query.view !== 'explore') {
           await load()
         }
-        return personal
-      } catch (cause) {
-        if (id === generation.current) {
-          setError(cause instanceof Error ? cause.message : String(cause))
-        }
-        throw cause
       }
+      return result.value
     },
     [client, load, query.view]
   )

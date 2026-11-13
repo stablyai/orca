@@ -1,3 +1,4 @@
+import { communityRequestResult } from './community-request-result'
 import { useState } from 'react'
 import { ExternalLink, GitBranch, Play, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -32,13 +33,13 @@ export function CommunityCandidate({ target }: { target: RuntimeClientTarget }):
     }
     setBusy(true)
     setError(null)
-    try {
+    const result = await communityRequestResult(async () => {
       await operation()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setBusy(false)
+    })
+    if (!result.ok) {
+      setError(result.message)
     }
+    setBusy(false)
   }
   return (
     <section className="space-y-4 rounded-xl border border-border p-6">

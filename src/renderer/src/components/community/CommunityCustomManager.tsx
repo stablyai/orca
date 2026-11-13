@@ -1,3 +1,4 @@
+import { communityRequestResult } from './community-request-result'
 import { CommunityCustomProgress } from './CommunityCustomProgress'
 import { CommunityCandidateHistory } from './CommunityCandidateHistory'
 import { communityClient } from './community-client'
@@ -43,14 +44,14 @@ export function CommunityCustomManager({
   const verify = async (number: number): Promise<void> => {
     setProofBusy(number)
     setError(null)
-    try {
+    const result = await communityRequestResult(async () => {
       const proof = await communityClient(target).verifyRelease(number)
       setProofs((previous) => ({ ...previous, [number]: proof.tag }))
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setProofBusy(null)
+    })
+    if (!result.ok) {
+      setError(result.message)
     }
+    setProofBusy(null)
   }
   return (
     <div className="space-y-6">

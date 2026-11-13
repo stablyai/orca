@@ -1,3 +1,4 @@
+import { communityRequestResult } from './community-request-result'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -40,13 +41,13 @@ export function CommunityFeatureHistory({
   const perform = async (operation: () => Promise<void>): Promise<void> => {
     setBusy(true)
     setError(null)
-    try {
+    const result = await communityRequestResult(async () => {
       await operation()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setBusy(false)
+    })
+    if (!result.ok) {
+      setError(result.message)
     }
+    setBusy(false)
   }
   return (
     <section className="space-y-5">

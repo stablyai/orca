@@ -1,3 +1,4 @@
+import { communityRequestResult } from './community-request-result'
 import { CommunitySourceDiff } from './CommunitySourceDiff'
 import { getCustomBuildInfo } from '../../../../shared/custom-build'
 import { CommunityFeatureHistory } from './CommunityFeatureHistory'
@@ -69,16 +70,15 @@ export function CommunityProposalDetail({
       return false
     }
     setBusy(true)
-    try {
+    const result = await communityRequestResult(async () => {
       const personal = await mutate(action)
       setDetail((old) => (old ? { ...old, feature: personal.features[number] ?? null } : old))
-      return true
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-      return false
-    } finally {
-      setBusy(false)
+    })
+    setBusy(false)
+    if (!result.ok) {
+      setError(result.message)
     }
+    return result.ok
   }
   return (
     <div className="space-y-6">
