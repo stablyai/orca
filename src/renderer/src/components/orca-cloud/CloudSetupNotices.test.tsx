@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { stack } = vi.hoisted(() => ({ stack: { show: vi.fn(), hide: vi.fn() } }))
 vi.mock('./cloud-toast-stack', () => ({ showCloudToast: stack.show, hideCloudToast: stack.hide }))
+const { recheck } = vi.hoisted(() => ({ recheck: vi.fn(async () => 'unreachable' as const) }))
+vi.mock('@/lib/orca-cloud/cloud-fetch-notice', () => ({ recheckCloudFetch: recheck }))
 vi.mock('@/store', () => ({
   useAppStore: (select: (state: unknown) => unknown) =>
     select({ ephemeralVmRuntimesByWorkspaceId: { w1: { runtimeEnvironmentId: 'env-1' } } })
@@ -58,5 +60,36 @@ describe('CloudSetupNoticesDock (DS-o, DS-q)', () => {
     vi.runAllTimers()
     expect(stack.hide).toHaveBeenCalledWith(cloudSetupToastId('env-1'))
     vi.useRealTimers()
+  })
+
+  it("can't reach GitHub: says which repository and offers Check again, never a bare line (ENV-ORIGIN-TOAST)", () => {
+    setCloudSetupNotices({
+      environmentId: 'env-1',
+      path: '/w',
+      repoId: 'r',
+      hostId: null,
+      repoUrl: 'https://github.com/stablyai/orca',
+      notices: [
+        {
+          id: 'git.fetch',
+          kind: 'fetch',
+          check: {
+            id: 'git.fetch',
+            category: 'git',
+            status: 'fail',
+            message: 'Cannot reach remote "origin".'
+          }
+        }
+      ]
+    })
+    render(<CloudSetupNoticesDock workspaceId="w1" />)
+    const [, shown] = stack.show.mock.calls.at(-1) ?? []
+    expect(shown.lines[0].text).toBe(
+      'This workspace can’t reach stablyai/orca on GitHub right now.'
+    )
+    expect(shown.lines[0].description).toBe('Pulls and pushes won’t work until it can.')
+    expect(shown.lines[0].action).toMatchObject({ label: 'Check again' })
+    shown.lines[0].action.onClick()
+    expect(recheck).toHaveBeenCalledWith('env-1', expect.any(Function))
   })
 })
