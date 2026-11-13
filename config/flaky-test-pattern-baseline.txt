@@ -526,7 +526,7 @@
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/snapshots/remote-snapshot-alt-screen-host-chain.test.ts
 1 test-no-wall-clock:src/renderer/src/components/terminal/initial-terminal-structured-launch.test.tsx
-2 test-no-wall-clock:src/renderer/src/components/workspace-cleanup/use-workspace-cleanup-removal.agent-stop.test.tsx
+2 test-no-wall-clock:src/renderer/src/components/workspace-cleanup/removal/use-workspace-cleanup-removal.agent-stop.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.behavior.test.tsx
 2 test-no-wall-clock:src/renderer/src/hooks/ipc-events/agent-status-terminal-title-tab-write.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/workspace/activation/worktree-activation-emptied-workspace-reseed.test.ts
