@@ -5,6 +5,7 @@
 #   ORCAD_BUNDLE_URL ORCAD_BUNDLE_SHA256 [GH_VERSION GH_SHA256] [CHROME_VERSION CHROME_SHA256]
 #   AGENT_NPM_PACKAGES (space-separated
 #   name@version), [CURSOR_AGENT_VERSION CURSOR_AGENT_SHA256], [NOVNC_VERSION NOVNC_SHA256 WEBSOCKIFY_VERSION WEBSOCKIFY_SHA256] and ORCA_VM_SCRIPT_<name> (base64) for each /opt/orca/bin entry point.
+#   [ORCA_VM_SCRIPTS_STAMP] (VM_SCRIPTS_STAMP of those scripts; written to /opt/orca/bin/.scripts-stamp).
 set -euo pipefail
 ORCA_HOME=/opt/orca
 log() { printf '[golden] %s\n' "$*" >&2; }
@@ -214,6 +215,12 @@ for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-
   printf '%s' "${!var}" | base64 -d >"$ORCA_HOME/bin/$name"
   chmod 0755 "$ORCA_HOME/bin/$name"
 done
+# Which entry points this image carries (VM_SCRIPTS_STAMP): a Worker with older scripts never
+# reinstalls over them. Absent (old callers) reads as 0, so any Worker may still update the image.
+rm -f "$ORCA_HOME/bin/.scripts-stamp" "$ORCA_HOME"/bin/.entry-points-*
+if [[ "${ORCA_VM_SCRIPTS_STAMP:-}" =~ ^[0-9]+$ ]]; then
+  printf '%s\n' "$ORCA_VM_SCRIPTS_STAMP" >"$ORCA_HOME/bin/.scripts-stamp"
+fi
 # The orca CLI (agents drive worktrees, terminals and the browser through it) talks to this VM's orcad.
 cli="$(find "$ORCA_HOME/runtime" -name orca-cli.cjs -type f | head -n 1)"
 if [ -n "$cli" ]; then
