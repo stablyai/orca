@@ -129,7 +129,7 @@ type AccountState = {
 
 export { entitlementsMode, type EntitlementsMode } from './entitlements-mode'
 
-const LIVE_STATUSES = new Set(['active', 'trialing'])
+export const LIVE_STATUSES = new Set(['active', 'trialing'])
 
 export function subscriptionWindow(subscription: SubscriptionRow, at: number): { start: number; end: number } {
   return allowanceWindow({ start: subscription.current_period_start, end: subscription.current_period_end }, at)
