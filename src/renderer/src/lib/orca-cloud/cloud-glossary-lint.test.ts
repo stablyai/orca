@@ -7,6 +7,12 @@ import ts from 'typescript-api'
 import { globSync } from 'glob'
 import { describe, expect, it } from 'vitest'
 import allowlist from './cloud-glossary-allowlist.json'
+import {
+  isAllowed,
+  staleAllowEntries,
+  type AllowEntry,
+  type GlossaryHit
+} from './cloud-glossary-allowlist-match'
 
 const ROOT = path.resolve(__dirname, '../../../../..')
 
@@ -88,8 +94,7 @@ const TEXT_ATTRIBUTES = new Set([
 ])
 const TRANSLATE_CALLEES = new Set(['t', 'translate'])
 
-type Hit = { file: string; line: number; term: string; text: string; rule: Rule }
-type AllowEntry = { path: string; line: number; term: string; reason: string }
+type Hit = GlossaryHit & { rule: Rule }
 
 function stringValue(node: ts.Node): string | null {
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
@@ -240,8 +245,6 @@ function findHits(): Hit[] {
 }
 
 const ALLOW: AllowEntry[] = allowlist
-const allowKey = (e: { path: string; line: number; term: string }): string =>
-  `${e.path}:${e.line}:${e.term}`
 
 describe('cloud glossary lint', () => {
   const hits = findHits()
@@ -251,22 +254,61 @@ describe('cloud glossary lint', () => {
   })
 
   it('every allowlist entry has a reason and still matches a string', () => {
-    const live = new Set(hits.map((h) => allowKey({ path: h.file, line: h.line, term: h.term })))
-    const problems = ALLOW.filter((e) => !e.reason?.trim() || !live.has(allowKey(e))).map(
-      (e) => `stale or unexplained allowlist entry: ${allowKey(e)}`
+    const problems = staleAllowEntries(hits, ALLOW).map(
+      (e) =>
+        `stale or unexplained allowlist entry: ${e.path} "${e.term}" match ${JSON.stringify(e.match)}`
     )
     expect(problems).toEqual([])
   })
 
   it('cloud strings use glossary words', () => {
-    const allowed = new Set(ALLOW.map(allowKey))
     const failures = hits
-      .filter((h) => !allowed.has(allowKey({ path: h.file, line: h.line, term: h.term })))
+      .filter((h) => !ALLOW.some((e) => isAllowed(h, e)))
       .map(
         (h) =>
           `cloud glossary: "${h.term}" at ${h.file}:${h.line}; use "${h.rule.use}" (glossary row: ${h.rule.row}). ` +
           `Allowlist with a reason only if this string is not shown in Orca Cloud. Text: ${JSON.stringify(h.text.slice(0, 120))}`
       )
     expect(failures).toEqual([])
+  })
+})
+
+describe('allowlist matching', () => {
+  const file = 'src/renderer/src/components/worktree-creation/vm-build-sheet-copy.ts'
+  const entry: AllowEntry = {
+    path: file,
+    term: 'VM',
+    match: 'Your VM workspace is ready',
+    reason: 'recipe-VM branch'
+  }
+  const hit = (over: Partial<GlossaryHit> = {}): GlossaryHit => ({
+    file,
+    line: 74,
+    term: 'VM',
+    text: 'Your VM workspace is ready',
+    ...over
+  })
+
+  it('still allows the same string after it moves to another line', () => {
+    expect(isAllowed(hit({ line: 74 }), entry)).toBe(true)
+    expect(isAllowed(hit({ line: 112 }), entry)).toBe(true)
+  })
+
+  it('does not allow a different string with the same term in the same file', () => {
+    expect(isAllowed(hit({ text: 'Delete this VM?' }), entry)).toBe(false)
+  })
+
+  it('does not allow the same snippet in a different file', () => {
+    expect(isAllowed(hit({ file: 'src/renderer/src/lib/other-cloud.ts' }), entry)).toBe(false)
+  })
+
+  it('reports an entry with no matching hit as stale', () => {
+    expect(staleAllowEntries([hit({ text: 'Delete this VM?' })], [entry])).toEqual([entry])
+    expect(staleAllowEntries([hit()], [entry])).toEqual([])
+  })
+
+  it('reports an entry with an empty reason', () => {
+    const unexplained = { ...entry, reason: '  ' }
+    expect(staleAllowEntries([hit()], [unexplained])).toEqual([unexplained])
   })
 })
