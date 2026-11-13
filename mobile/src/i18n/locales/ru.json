@@ -1715,6 +1715,7 @@
       "githubIssues": "Задачи GitHub",
       "githubTicket": "Задача GitHub",
       "host": "Сервер",
+      "projectName": "Название проекта",
       "hover": "При наведении",
       "jiraIssue": "Задача Jira",
       "jiraIssues": "Задачи Jira",

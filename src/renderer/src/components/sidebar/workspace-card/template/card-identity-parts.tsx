@@ -91,8 +91,8 @@ function sidebarLabel(text: string, tooltip: unknown): React.ReactNode {
 
 export const CARD_IDENTITY_PARTS = {
   Title: part(['dimWhenRead', 'tooltip'], (props, _children, card) => title(props, card)),
-  RepoChip: part([], (_props, _children, { repo }) =>
-    repo ? <WorktreeCardRepoChip repo={repo} /> : null
+  RepoChip: part([], (_props, _children, { repo, cardDetails }) =>
+    repo ? <WorktreeCardRepoChip repo={repo} showName={cardDetails.projectName} /> : null
   ),
   SshControl: part(['iconOnly'], (props, _children, card) => sshControl(props, card)),
   RuntimeHostMark: part([], (_props, _children, card) => (
@@ -124,8 +124,8 @@ export const CARD_IDENTITY_PARTS = {
       onClick={card.handleWorkspaceQuickAction}
     />
   )),
-  MetaRepoBadge: part([], (_props, _children, { repo }) =>
-    repo ? <WorktreeCardMetaRepoBadge repo={repo} /> : null
+  MetaRepoBadge: part([], (_props, _children, { repo, cardDetails }) =>
+    repo ? <WorktreeCardMetaRepoBadge repo={repo} showName={cardDetails.projectName} /> : null
   ),
   HostBadge: part(['label'], (props, _children, card) => (
     <CardHostBadge card={card} label={typeof props.label === 'string' ? props.label : ''} />

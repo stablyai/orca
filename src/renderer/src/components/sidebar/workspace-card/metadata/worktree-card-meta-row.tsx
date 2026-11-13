@@ -24,6 +24,7 @@ export function WorktreeCardMetaRow({
   const {
     worktree,
     repo,
+    cardDetails,
     identityDisplay,
     isFolder,
     newCardStyle,
@@ -52,7 +53,9 @@ export function WorktreeCardMetaRow({
   return (
     <div className="flex items-center gap-1.5 min-w-0" data-worktree-card-meta-row="">
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-        {showRepoBadgeInMetaRow && repo && <WorktreeCardMetaRepoBadge repo={repo} />}
+        {showRepoBadgeInMetaRow && repo && (
+          <WorktreeCardMetaRepoBadge repo={repo} showName={cardDetails.projectName} />
+        )}
 
         {showHostContextBadge &&
           (wslDistro ? (

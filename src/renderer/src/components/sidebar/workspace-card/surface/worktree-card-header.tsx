@@ -25,6 +25,7 @@ export function WorktreeCardHeader({
   const {
     worktree,
     repo,
+    cardDetails,
     affiliateListMode,
     renameRowKey,
     compactCards,
@@ -64,7 +65,9 @@ export function WorktreeCardHeader({
   return (
     <div className="flex min-w-0 items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        {showPinnedRepoIcon && <WorktreeCardRepoChip repo={repo!} />}
+        {showPinnedRepoIcon && (
+          <WorktreeCardRepoChip repo={repo!} showName={cardDetails.projectName} />
+        )}
 
         {repo?.connectionId && (
           <WorktreeCardSshHostControl
@@ -85,7 +88,9 @@ export function WorktreeCardHeader({
           />
         )}
 
-        {showInlineRepoBadge && <WorktreeCardRepoChip repo={repo!} />}
+        {showInlineRepoBadge && (
+          <WorktreeCardRepoChip repo={repo!} showName={cardDetails.projectName} />
+        )}
 
         <WorktreeTitleInlineRename
           displayName={visibleCardTitle}

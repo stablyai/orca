@@ -1633,6 +1633,7 @@
       "githubIssues": "GitHub-Issues",
       "githubTicket": "GitHub-Ticket",
       "host": "Host",
+      "projectName": "Projektname",
       "hover": "Bei Mauszeigerkontakt",
       "jiraIssue": "Jira-Issue",
       "jiraIssues": "Jira-Issues",

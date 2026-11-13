@@ -89,7 +89,8 @@ export const cardPropertyChoices = (t: Translate) =>
       comment: t('hostScreen.workspaceOptionControls.notes', 'Notes'),
       ports: t('hostScreen.workspaceOptionControls.ports', 'Ports'),
       'inline-agents': t('hostScreen.workspaceOptionControls.agentActivity', 'Agent activity'),
-      host: t('hostScreen.workspaceOptionControls.host', 'Host')
+      host: t('hostScreen.workspaceOptionControls.host', 'Host'),
+      'hide-project-name': t('hostScreen.workspaceOptionControls.projectName', 'Project name')
     })
   )
 
@@ -112,6 +113,7 @@ export function cardDisplayChoices(
       ports: t('hostScreen.workspaceOptionControls.ports', 'Ports'),
       'inline-agents': t('hostScreen.workspaceOptionControls.agentStatuses', 'Agent statuses'),
       host: t('hostScreen.workspaceOptionControls.host', 'Host'),
+      'hide-project-name': t('hostScreen.workspaceOptionControls.projectName', 'Project name'),
       branch: hasProjectGroups
         ? t('hostScreen.workspaceOptionControls.branchFolderPath', 'Branch / folder path')
         : t('hostScreen.workspaceOptionControls.branchName', 'Branch name')

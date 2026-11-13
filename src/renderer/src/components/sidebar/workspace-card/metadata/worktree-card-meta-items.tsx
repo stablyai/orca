@@ -5,20 +5,46 @@ import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import type { Repo } from '../../../../../../shared/repo-types'
 import '../activity/worktree-card-empty-inputs'
 import { conflictOperationLabel } from './worktree-conflict-label'
 import { getDirectoryName } from '../controller/worktree-card-model'
 
-export function WorktreeCardMetaRepoBadge({ repo }: { repo: Repo }): React.JSX.Element {
+export function WorktreeCardMetaRepoBadge({
+  repo,
+  showName
+}: {
+  repo: Repo
+  showName: boolean
+}): React.JSX.Element {
   return (
-    // Why: keep a 6rem name floor (+1.625rem chrome) so the branch shrinks first; grow only into width the branch leaves free.
-    <div className="flex min-w-0 max-w-max shrink-0 grow basis-[7.625rem] items-center gap-1.5 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
-      <RepoBadgeMark color={repo.badgeColor} />
-      <span className="min-w-0 truncate text-[10px] font-semibold text-foreground leading-none lowercase">
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          aria-label={repo.displayName}
+          className={cn(
+            'flex items-center gap-1.5 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60',
+            // Why: keep a 6rem name floor (+1.625rem chrome) so the branch shrinks first; grow only into width the branch leaves free.
+            showName
+              ? 'min-w-0 max-w-max shrink-0 grow basis-[7.625rem]'
+              : 'shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          )}
+          // Why: without the name, the tooltip is the only way to read it, so keyboard users must reach it.
+          {...(showName ? {} : { role: 'img', tabIndex: 0 })}
+        >
+          <RepoBadgeMark color={repo.badgeColor} />
+          {showName && (
+            <span className="min-w-0 truncate text-[10px] font-semibold text-foreground leading-none lowercase">
+              {repo.displayName}
+            </span>
+          )}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8}>
         {repo.displayName}
-      </span>
-    </div>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

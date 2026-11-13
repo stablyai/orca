@@ -1674,6 +1674,7 @@
       "githubIssues": "Issues GitHub",
       "githubTicket": "Ticket GitHub",
       "host": "Hôte",
+      "projectName": "Nom du projet",
       "hover": "Survol",
       "jiraIssue": "Ticket Jira",
       "jiraIssues": "Tickets Jira",

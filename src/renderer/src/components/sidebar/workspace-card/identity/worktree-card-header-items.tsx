@@ -13,13 +13,24 @@ import { resolveRepoHeaderColor } from '../../worktree-list/rows/project-header-
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { formatSparseDirectoryPreview } from '../controller/worktree-card-model'
 
-export function WorktreeCardRepoChip({ repo }: { repo: Repo }): React.JSX.Element {
+export function WorktreeCardRepoChip({
+  repo,
+  showName
+}: {
+  repo: Repo
+  showName: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex h-4 max-w-24 shrink-0 items-center justify-center gap-0.5 rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55 px-0.5"
+          className={cn(
+            'inline-flex h-4 max-w-24 shrink-0 items-center justify-center gap-0.5 rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55 px-0.5',
+            !showName && 'outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          )}
+          // Why: without the name, the tooltip is the only way to read it, so keyboard users must reach it.
+          {...(showName ? {} : { role: 'img', tabIndex: 0 })}
           aria-label={t('auto.components.sidebar.WorktreeCard.35ccfe2475', 'Project {{value0}}', {
             value0: repo.displayName
           })}
@@ -33,10 +44,11 @@ export function WorktreeCardRepoChip({ repo }: { repo: Repo }): React.JSX.Elemen
               iconClassName="size-3"
             />
           </span>
-          {/* Why: the default folder icon is the same for every project, so the name tells them apart. */}
-          <span className="min-w-0 truncate text-3xs leading-none text-muted-foreground lowercase">
-            {repo.displayName}
-          </span>
+          {showName && (
+            <span className="min-w-0 truncate text-3xs leading-none text-muted-foreground lowercase">
+              {repo.displayName}
+            </span>
+          )}
         </span>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>

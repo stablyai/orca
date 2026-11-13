@@ -1820,6 +1820,7 @@
       "githubIssues": "Issues do GitHub",
       "githubTicket": "Ticket do GitHub",
       "host": "Host",
+      "projectName": "Nome do projeto",
       "hover": "Passar o mouse",
       "jiraIssue": "Issue do Jira",
       "jiraIssues": "Issues do Jira",

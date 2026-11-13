@@ -762,6 +762,7 @@
       "ports": "Ports",
       "agentActivity": "Agent activity",
       "host": "Host",
+      "projectName": "Project name",
       "githubIssues": "GitHub issues",
       "linearIssues": "Linear issues",
       "jiraIssues": "Jira issues",
