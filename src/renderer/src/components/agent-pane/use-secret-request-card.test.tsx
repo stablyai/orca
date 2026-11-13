@@ -22,6 +22,7 @@ const NOW = 1_700_000_000_000
 const put = vi.fn()
 const refreshEnv = vi.fn()
 const effective = vi.fn()
+const workspaceSharing = vi.fn()
 
 function event(patch: Partial<SecretRequestedEvent> = {}): SecretRequestedEvent {
   return {
@@ -68,12 +69,18 @@ describe('S4-b secret request card', () => {
     put.mockResolvedValue({ ok: true, value: {} })
     refreshEnv.mockResolvedValue({ ok: true, value: true })
     effective.mockResolvedValue({ ok: false, error: 'unavailable' })
+    workspaceSharing.mockResolvedValue({
+      ok: true,
+      value: { shared: false, ownerName: null, isOwner: true }
+    })
     rpc.mockImplementation(async (_target, method: string) =>
       method === 'secrets.touchRequest'
         ? { expiresAt: Date.now() + 15 * 60_000 }
         : { outcome: 'provided' }
     )
-    Object.assign(window, { api: { cloudSecrets: { put, refreshEnv, effective } } })
+    Object.assign(window, {
+      api: { cloudSecrets: { put, refreshEnv, effective, workspaceSharing } }
+    })
     applySecretRequested('env-1', event())
   })
   afterEach(() => {
@@ -91,6 +98,31 @@ describe('S4-b secret request card', () => {
     // Repository isn't writable here, so only the Personal chip shows.
     expect(screen.queryByRole('combobox')).toBeNull()
     expect(screen.getByText(/Commands in this workspace can read it as \$NPM_TOKEN/)).toBeTruthy()
+  })
+
+  it('in a shared workspace never offers Personal (SEC-5): says who can add it instead', async () => {
+    workspaceSharing.mockResolvedValue({
+      ok: true,
+      value: { shared: true, ownerName: 'Ada', isOwner: false }
+    })
+    render(<Harness />)
+    await act(async () => {})
+    expect(workspaceSharing).toHaveBeenCalledWith({ runtimeEnvironmentId: 'env-1' })
+    expect(
+      screen.getByText('This workspace is shared, so it doesn’t get personal secrets.')
+    ).toBeTruthy()
+    expect(screen.queryByLabelText('Value for NPM_TOKEN')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Add secret' }).getAttribute('aria-disabled')).toBe(
+      'true'
+    )
+    expect(put).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when the workspace sharing can’t be read', async () => {
+    workspaceSharing.mockRejectedValue(new Error('down'))
+    render(<Harness />)
+    await act(async () => {})
+    expect(screen.queryByLabelText('Value for NPM_TOKEN')).toBeNull()
   })
 
   it('saves through Cloud secrets, then tells orcad the outcome without the value', async () => {

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { createGitHubAppMinter } from '../src/github-app'
 import { installUrl, isInstallationBound } from '../src/github-connect'
 import type { SetupNotice } from '../src/github-repo-access'
+import { storeUserToken } from '../src/github-user-tokens'
+import { keyringFor } from '../src/secrets'
 import { createHarness } from './harness'
 import {
   HostedGithubRepoAccessResponseSchema,
@@ -27,8 +29,12 @@ function fakeGitHub() {
   const requests: { account: { login: string }; requester: { id: number } }[] = []
   const users: Record<string, { id: number; login: string; memberships: Record<string, unknown> }> = {
     code_admin: { id: 3, login: 'admin-gh', memberships: { acme: { state: 'active', role: 'admin' } } },
-    code_sam: { id: 2, login: 'sam-gh', memberships: { acme: { state: 'active', role: 'member' } } }
+    code_sam: { id: 2, login: 'sam-gh', memberships: { acme: { state: 'active', role: 'member' } } },
+    code_alice: { id: 7, login: 'Alice-GH', memberships: {} }
   }
+  // Fault injection for GET /user/memberships/orgs/*.
+  const faults: { membership?: 'error' | 'hang' | 'forbidden'; users?: 'error' | 'hang' } = {}
+  const orgs: Record<string, number> = { acme: 50, 'other-org': 51 }
   const tokens = new Map<string, string>()
   const calls: string[] = []
   const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -36,6 +42,11 @@ function fakeGitHub() {
     const auth = new Headers(init?.headers).get('authorization') ?? ''
     const body = init?.body ? JSON.parse(String(init.body)) : undefined
     calls.push(`${init?.method ?? 'GET'} ${url.pathname}${url.search}`)
+    if (url.hostname === 'github.com' && url.pathname === '/login/oauth/access_token' && body.grant_type === 'refresh_token') {
+      const code = String(body.refresh_token).replace(/^ghr_/, '')
+      tokens.set(`gho_fresh_${code}`, code)
+      return Response.json({ access_token: `gho_fresh_${code}`, refresh_token: `ghr_${code}`, expires_in: 28_800 })
+    }
     if (url.hostname === 'github.com' && url.pathname === '/login/oauth/access_token') {
       const user = users[body.code]
       if (!user) {
@@ -45,6 +56,18 @@ function fakeGitHub() {
       return Response.json({ access_token: `gho_${body.code}` })
     }
     const user = auth.startsWith('Bearer gho_') ? users[tokens.get(auth.slice(7)) ?? ''] : undefined
+    if (url.pathname.startsWith('/user/memberships/orgs/') && faults.membership === 'error') {
+      return new Response(null, { status: 500 })
+    }
+    if (url.pathname.startsWith('/user/memberships/orgs/') && faults.membership === 'forbidden') {
+      return new Response(null, { status: 403 })
+    }
+    if (url.pathname.startsWith('/users/') && faults.users === 'error') {
+      return new Response(null, { status: 502 })
+    }
+    if ((url.pathname.startsWith('/user/memberships/orgs/') && faults.membership === 'hang') || (url.pathname.startsWith('/users/') && faults.users === 'hang')) {
+      return new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal!.reason)))
+    }
     if (url.pathname === '/user') {
       return user ? Response.json({ id: user.id, login: user.login }) : new Response(null, { status: 401 })
     }
@@ -66,8 +89,16 @@ function fakeGitHub() {
       const membership = member?.memberships[orgMembership[1]!]
       return membership ? Response.json({ ...membership, user: { id: member!.id, login: member!.login } }) : new Response(null, { status: 404 })
     }
-    if (url.pathname === '/users/acme') {
-      return Response.json({ id: 50, login: 'acme' })
+    const publicUser = /^\/users\/([^/]+)$/.exec(url.pathname)
+    if (publicUser) {
+      const login = decodeURIComponent(publicUser[1]!).toLowerCase()
+      const org = orgs[login]
+      const person = Object.values(users).find((u) => u.login.toLowerCase() === login)
+      return org
+        ? Response.json({ id: org, login, type: 'Organization' })
+        : person
+          ? Response.json({ id: person.id, login: person.login, type: 'User' })
+          : new Response(null, { status: 404 })
     }
     const repoInstall = /^\/repos\/([^/]+)\/([^/]+)\/installation$/.exec(url.pathname)
     if (repoInstall) {
@@ -99,7 +130,7 @@ function fakeGitHub() {
     }
     return new Response(null, { status: 404 })
   }) as typeof globalThis.fetch
-  return { installations, requests, calls, fetch }
+  return { installations, requests, calls, faults, tokens, fetch }
 }
 
 async function setup(options: { publicRepos?: string[] } = {}) {
@@ -175,7 +206,9 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
     expect((await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent('https://github.com/acme/site')}`)).body).toEqual({
       access: 'public',
       owner: 'acme',
-      repo: 'https://github.com/acme/site'
+      repo: 'https://github.com/acme/site',
+      // The App isn't on acme yet and alice hasn't connected GitHub: unknown.
+      canInstall: null
     })
     const missing = await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(`${REPO}.git`)}&session=${SESSION}`)
     expect(missing.body).toMatchObject({ access: 'missing', owner: 'acme', repo: REPO })
@@ -399,5 +432,153 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
     ])
     const asU1 = await h.call('GET', '/v1/github/user', { bearer: await h.token('u1', 'acme-team') })
     expect(asU1.body).toEqual({ connected: true, login: 'admin-gh', githubUserId: 3 })
+  })
+})
+
+describe('repo-access canInstall (REPO-CAN-INSTALL)', () => {
+  type Ctx = Awaited<ReturnType<typeof setup>>
+  const access = (h: Ctx['h'], repo = REPO, as?: string) => h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(repo)}`, as ? { as } : {})
+  const membershipCalls = (ctx: Ctx) => ctx.github.calls.filter((c) => c.startsWith('GET /user/memberships/orgs/'))
+  /** canInstall's reads: owner type and membership. */
+  const github = (ctx: Ctx) => ctx.github.calls.filter((c) => c.startsWith('GET /user/memberships/orgs/') || c.startsWith('GET /users/'))
+
+  /** Connects alice (account user:alice, user alice) as the fake GitHub user behind `code`. */
+  async function connect(ctx: Ctx, code: string, user: { id: number; login: string }, tokens: { accessExpiresAt?: number | null; refresh?: string | null } = {}) {
+    ctx.github.tokens.set(`gho_${code}`, code)
+    await storeUserToken(
+      ctx.h.env.SANDBOX_DB,
+      await keyringFor(ctx.h.env)!,
+      { account_id: 'user:alice', user_id: 'alice' },
+      user,
+      { access: `gho_${code}`, refresh: tokens.refresh ?? null, accessExpiresAt: tokens.accessExpiresAt ?? null, refreshExpiresAt: null },
+      ctx.h.now()
+    )
+  }
+
+  it('missing without a connected GitHub user: null, and GitHub is not asked', async () => {
+    const ctx = await setup()
+    const missing = await access(ctx.h)
+    expect(missing.body).toMatchObject({ access: 'missing', canInstall: null })
+    expect(missing.body.installUrl).toBeDefined()
+    expect(HostedGithubRepoAccessResponseSchema.parse(missing.body)).toEqual(missing.body)
+    expect(membershipCalls(ctx)).toEqual([])
+  })
+
+  it('missing on the person’s own GitHub account (login matched case-insensitively): true', async () => {
+    const ctx = await setup()
+    await connect(ctx, 'code_alice', { id: 7, login: 'Alice-GH' })
+    expect((await access(ctx.h, 'https://github.com/alice-gh/dotfiles')).body).toMatchObject({ access: 'missing', owner: 'alice-gh', canInstall: true })
+    expect(membershipCalls(ctx)).toEqual([])
+  })
+
+  it('missing on an org: admin true, member false', async () => {
+    const ctx = await setup()
+    await connect(ctx, 'code_admin', { id: 3, login: 'admin-gh' })
+    expect((await access(ctx.h)).body).toMatchObject({ access: 'missing', canInstall: true })
+    expect(github(ctx)).toEqual(['GET /users/acme', 'GET /user/memberships/orgs/acme'])
+
+    await connect(ctx, 'code_sam', { id: 2, login: 'sam-gh' })
+    expect((await access(ctx.h)).body).toMatchObject({ access: 'missing', canInstall: false })
+  })
+
+  it('org membership unreadable (404 or 403: the App isn’t installed there): null, never false', async () => {
+    const ctx = await setup()
+    await connect(ctx, 'code_sam', { id: 2, login: 'sam-gh' })
+    // sam isn't in other-org: GitHub answers 404, which a user token for an uninstalled App also gets.
+    expect((await access(ctx.h, 'https://github.com/other-org/app')).body).toMatchObject({ access: 'missing', canInstall: null })
+    await connect(ctx, 'code_admin', { id: 3, login: 'admin-gh' })
+    ctx.github.faults.membership = 'forbidden'
+    expect((await access(ctx.h)).body).toMatchObject({ access: 'missing', canInstall: null })
+  })
+
+  it('someone else’s personal account: false, without reading memberships', async () => {
+    const ctx = await setup()
+    await connect(ctx, 'code_sam', { id: 2, login: 'sam-gh' })
+    expect((await access(ctx.h, 'https://github.com/admin-gh/notes')).body).toMatchObject({ access: 'missing', owner: 'admin-gh', canInstall: false })
+    expect(github(ctx)).toEqual(['GET /users/admin-gh'])
+  })
+
+  it('owner-type lookup failing or timing out: null', async () => {
+    const ctx = await setup()
+    await connect(ctx, 'code_admin', { id: 3, login: 'admin-gh' })
+    ctx.github.faults.users = 'error'
+    expect((await access(ctx.h)).body).toMatchObject({ access: 'missing', canInstall: null })
+    expect(membershipCalls(ctx)).toEqual([])
+    // Unknown owner (404 from /users): null too.
+    ctx.github.faults.users = undefined
+    expect((await access(ctx.h, 'https://github.com/nobody-here/x')).body).toMatchObject({ access: 'missing', canInstall: null })
+    ctx.github.faults.users = 'hang'
+    const started = Date.now()
+    const timedOut = await access(ctx.h)
+    expect(timedOut.status).toBe(200)
+    expect(timedOut.body).toMatchObject({ access: 'missing', canInstall: null })
+    expect(timedOut.body.installUrl).toBeDefined()
+    expect(Date.now() - started).toBeLessThan(6_000)
+  }, 10_000)
+
+  it('membership read erroring or timing out: null, and the rest of the answer is unchanged', async () => {
+    const ctx = await setup()
+    await connect(ctx, 'code_admin', { id: 3, login: 'admin-gh' })
+    ctx.github.faults.membership = 'error'
+    const errored = await access(ctx.h)
+    expect(errored.status).toBe(200)
+    expect(errored.body).toMatchObject({ access: 'missing', owner: 'acme', repo: REPO, canInstall: null })
+    expect(errored.body.installUrl).toBeDefined()
+
+    ctx.github.faults.membership = 'hang'
+    const started = Date.now()
+    const timedOut = await access(ctx.h)
+    expect(timedOut.status).toBe(200)
+    expect(timedOut.body).toMatchObject({ access: 'missing', canInstall: null })
+    expect(timedOut.body.installUrl).toBeDefined()
+    expect(Date.now() - started).toBeLessThan(6_000)
+  }, 10_000)
+
+  it('public: present while the App isn’t on the owner, absent once an installation exists', async () => {
+    const ctx = await setup({ publicRepos: ['https://github.com/acme/site'] })
+    await connect(ctx, 'code_sam', { id: 2, login: 'sam-gh' })
+    expect((await access(ctx.h, 'https://github.com/acme/site')).body).toEqual({
+      access: 'public',
+      owner: 'acme',
+      repo: 'https://github.com/acme/site',
+      canInstall: false
+    })
+    await connect(ctx, 'code_admin', { id: 3, login: 'admin-gh' })
+    expect((await access(ctx.h, 'https://github.com/acme/site')).body).toMatchObject({ access: 'public', canInstall: true })
+    // Installed on acme (bound to some other Orca account): the App is there, so no canInstall.
+    ctx.github.installations.push({ id: 900, account: ACME, repos: ['acme/site'] })
+    expect((await access(ctx.h, 'https://github.com/acme/site')).body).toEqual({ access: 'public', owner: 'acme', repo: 'https://github.com/acme/site' })
+  })
+
+  it('granted and requested: absent', async () => {
+    const ctx = await setup()
+    const missing = await access(ctx.h)
+    ctx.github.installations.push({ id: 900, account: ACME, repos: ['acme/web'] })
+    const setupPage = await ctx.browser(`https://sandbox.test/v1/github/setup?installation_id=900&setup_action=install&state=${encodeURIComponent(stateOf(missing.body.installUrl))}`)
+    await ctx.browser(`https://sandbox.test/v1/github/callback?code=code_admin&state=${encodeURIComponent(stateOf(setupPage.location!))}`)
+    expect((await access(ctx.h)).body).toEqual({ access: 'granted', owner: 'acme', repo: REPO })
+
+    // Sam (a member, connected by the request's OAuth round trip) asks an owner: requested.
+    const other = await setup()
+    const samMissing = await access(other.h, REPO, 'sam')
+    const page = await other.browser(`https://sandbox.test/v1/github/setup?setup_action=request&state=${encodeURIComponent(stateOf(samMissing.body.installUrl))}`)
+    other.github.requests.push({ account: { login: 'acme' }, requester: { id: 2 } })
+    await other.browser(`https://sandbox.test/v1/github/callback?code=code_sam&state=${encodeURIComponent(stateOf(page.location!))}`)
+    expect((await access(other.h, REPO, 'sam')).body).toEqual({ access: 'requested', owner: 'acme', repo: REPO })
+  })
+
+  it('a token near expiry is refreshed through the member-git helper before the membership read', async () => {
+    const ctx = await setup()
+    await connect(ctx, 'code_admin', { id: 3, login: 'admin-gh' }, { accessExpiresAt: ctx.h.now() + 60_000, refresh: 'ghr_code_admin' })
+    expect((await access(ctx.h)).body).toMatchObject({ access: 'missing', canInstall: true })
+    expect(ctx.github.calls).toContain('POST /login/oauth/access_token')
+    expect(ctx.h.raw.prepare('SELECT access_expires_at AS e FROM github_user_tokens').get()).toEqual({ e: ctx.h.now() + 28_800_000 })
+  })
+
+  it('an expired token that can’t be refreshed: null', async () => {
+    const ctx = await setup()
+    await connect(ctx, 'code_admin', { id: 3, login: 'admin-gh' }, { accessExpiresAt: ctx.h.now() - 1, refresh: null })
+    expect((await access(ctx.h)).body).toMatchObject({ access: 'missing', canInstall: null })
+    expect(membershipCalls(ctx)).toEqual([])
   })
 })

@@ -2,13 +2,10 @@
 // the Orca GitHub App's access (repo-access) and what the person's own gh login says about installing
 // it. Install only shows where installing can work; a request already sent offers a copy for an owner;
 // a public repository someone else owns (octocat/Hello-World) gets a request to copy, no Install.
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
 import type { HostedGithubRepoAccessResponse } from '../../../../shared/hosted-sandbox/hosted-github-wire'
 import type { GitHubInstallRights } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { cloudWorkspaceApi } from './orca-cloud-workspace-store'
 import { fetchOrcaCloudRepoAccess } from './use-orca-cloud-repo-access'
-import { repoSlug } from './cloud-setup-notice-actions'
 
 /**
  * `install`: Install on {owner}. `requested`: an owner was asked; copy a request for them.
@@ -63,22 +60,4 @@ export async function fetchCloudPushAccess(
     .then((result) => (result.ok ? result.value : null))
     .catch(() => null)
   return cloudPushAccess(access, rights ?? null)
-}
-
-/** A message for an owner of the repository's org, with the install page that preselects it. */
-export async function copyOwnerPushRequest(repoUrl: string): Promise<boolean> {
-  // The install page the control plane minted for this repository (preselects it), if any.
-  const link = (await fetchOrcaCloudRepoAccess(repoUrl).catch(() => null))?.installUrl ?? null
-  const message = translate(
-    'orcaCloud.setupNotices.pushRequestMessage',
-    'Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to push from workspaces on this repository.',
-    { repo: repoSlug(repoUrl) }
-  )
-  try {
-    await window.api.ui.writeClipboardText(link ? `${message}\n${link}` : message)
-    return true
-  } catch {
-    toast.error(translate('orcaCloud.setupNotices.pushRequestCopyFailed', 'Couldn’t copy it.'))
-    return false
-  }
 }

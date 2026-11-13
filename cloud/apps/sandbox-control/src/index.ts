@@ -1939,7 +1939,14 @@ function repoAccessDeps(env: Env, deps: Deps): RepoAccessDeps {
     connect: githubConnect(env, deps),
     publicRepoCheck: deps.publicRepoCheck ?? ((repoUrl) => githubRepoIsPublic(repoUrl)),
     fetch: deps.githubFetch ?? fetch,
-    now: (deps.now ?? Date.now)()
+    now: (deps.now ?? Date.now)(),
+    githubUser: async (caller) => {
+      const keyring = keyringFor(env)
+      const identity = keyring
+        ? await memberGitIdentity(env.SANDBOX_DB, await keyring, githubConnect(env, deps), caller.accountId, caller.userId, (deps.now ?? Date.now)())
+        : null
+      return identity ? { login: identity.login, token: identity.token } : null
+    }
   }
 }
 

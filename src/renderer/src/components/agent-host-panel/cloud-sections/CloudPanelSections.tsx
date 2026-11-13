@@ -21,11 +21,7 @@ import {
   type CloudKeyRow,
   type ShadowedKey
 } from './cloud-panel-sections-model'
-import {
-  isGuestInSharedWorkspace,
-  type CloudPanelAddSecret,
-  type CloudPanelSectionsLoad
-} from './use-cloud-panel-sections'
+import type { CloudPanelAddSecret, CloudPanelSectionsLoad } from './use-cloud-panel-sections'
 
 const OWNER_LABEL: Record<Exclude<CloudKeyOwner, 'gateway' | 'aws' | 'other'>, string> = {
   claude: 'Claude',
@@ -253,19 +249,11 @@ export function CloudEnvironmentPanelSection({
       number={number}
       title={t('agentHostPanel.section.env', 'Environment')}
       help={
-        data && isGuestInSharedWorkspace(data)
-          ? `${t('agentHostPanel.help.cloudEnv', 'From Cloud secrets: Repository, then Personal, then Shared.')} ${
-              data.sharing?.ownerName
-                ? t(
-                    'agentHostPanel.env.guestOwner',
-                    'In a shared workspace, Personal values come from its owner, {{owner}}, not from you.',
-                    { owner: data.sharing.ownerName }
-                  )
-                : t(
-                    'agentHostPanel.env.guest',
-                    'In a shared workspace, Personal values come from its owner, not from you.'
-                  )
-            }`
+        data?.withoutPersonal
+          ? t(
+              'agentHostPanel.help.cloudEnvShared',
+              'From Cloud secrets: Repository, then Shared. Shared workspaces don’t get personal values, including the owner’s.'
+            )
           : t(
               'agentHostPanel.help.cloudEnv',
               'From Cloud secrets: Repository, then Personal, then Shared.'

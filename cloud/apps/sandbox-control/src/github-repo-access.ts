@@ -1,7 +1,11 @@
 // Can Orca Cloud clone this repository for this account, and if not, what fixes it? Checked when
 // Orca Cloud is picked (cloud-start onboarding D1/D2), never after a build fails.
 //   GET /v1/github/repo-access?repo=<https github url>[&session=cs_…][&repoId=&ownerId=]
-//        -> {access:'public'|'granted'|'missing'|'requested', owner, installUrl?}
+//        -> {access:'public'|'granted'|'missing'|'requested', owner, installUrl?, canInstall?}
+//      canInstall (only when the App isn't installed for the owner: 'missing', or 'public' with no
+//      installation): true = the caller can install it on the owner (it is their own GitHub account, or
+//      they are an active admin of the owner org); false = another user's account, or a non-admin org
+//      membership; null = unknown (no connected GitHub user token, membership unreadable, GitHub down).
 //   GET /v1/github/repositories[?cursor=]  -> {repositories, nextCursor}   (start from GitHub, D4/N12)
 //   GET /v1/internal/github/install-url?accountId&userId&repo&session  (billing's setup chain,
 //        Bearer CONTROL_PLANE_TOKEN) -> {access, url}
@@ -31,9 +35,11 @@ export type RepoAccessDeps = {
   github: GitHubAppMinter | undefined
   connect: GitHubConnectConfig | null
   publicRepoCheck: (repoUrl: string) => Promise<boolean>
-  /** Anonymous api.github.com reads (owner/repo ids for the install URL). */
+  /** Anonymous api.github.com reads (owner/repo ids for the install URL) and the caller's own membership read. */
   fetch: typeof fetch
   now: number
+  /** The caller's connected GitHub user (live token, refreshed when near expiry); null when not connected or unusable. */
+  githubUser?: (caller: { accountId: string; userId: string }) => Promise<{ login: string; token: string } | null>
 }
 
 /** https://github.com/<owner>/<repo>: the one form repo URLs take on this wire and toward billing. */
@@ -146,16 +152,80 @@ export async function repoAccessView(
   }
   const result = await repoAccess(deps, caller.accountId, repo)
   const body: Record<string, unknown> = { access: result.access, owner: parsed.owner, repo: canonicalRepoUrl(parsed) }
-  if (result.access === 'missing' && deps.connect) {
-    body.installUrl = (
-      await repoInstallUrl(deps, caller, repo, {
-        setupSessionId: url.searchParams.get('session') ?? undefined,
-        repoId: positiveInt(url.searchParams.get('repoId')),
-        ownerId: positiveInt(url.searchParams.get('ownerId'))
-      })
-    ).url
+  // Only while the App isn't installed for this owner: that is when the desktop picks "Install" vs "ask an owner".
+  const askCanInstall = result.access === 'missing' || (result.access === 'public' && result.installationId === null)
+  const [install, canInstall] = await Promise.all([
+    result.access === 'missing' && deps.connect
+      ? repoInstallUrl(deps, caller, repo, {
+          setupSessionId: url.searchParams.get('session') ?? undefined,
+          repoId: positiveInt(url.searchParams.get('repoId')),
+          ownerId: positiveInt(url.searchParams.get('ownerId'))
+        })
+      : null,
+    askCanInstall ? canInstallOn(deps, caller, parsed.owner) : undefined
+  ])
+  if (install) {
+    body.installUrl = install.url
+  }
+  if (canInstall !== undefined) {
+    body.canInstall = canInstall
   }
   return { status: 200, body }
+}
+
+const CAN_INSTALL_TIMEOUT_MS = 3_000
+
+/**
+ * Can the caller install the App on `owner`? Their own GitHub account (case-insensitive login match),
+ * or an org where their membership is active + admin. Another user's account, or an org membership
+ * that isn't active admin, is false (a repo admin who isn't an org owner only gets a request on
+ * GitHub). Never throws: anything unknown (incl. a 403/404 membership read) is null.
+ */
+export async function canInstallOn(
+  deps: Pick<RepoAccessDeps, 'fetch' | 'githubUser'>,
+  caller: { accountId: string; userId: string },
+  owner: string
+): Promise<boolean | null> {
+  try {
+    const user = deps.githubUser ? await deps.githubUser(caller) : null
+    if (!user) {
+      return null
+    }
+    if (user.login.toLowerCase() === owner.toLowerCase()) {
+      return true
+    }
+    const headers = { accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'user-agent': 'orca-sandbox-control' }
+    // Owner type, anonymously: someone else's personal account is a definite false.
+    const ownerResponse = await deps.fetch(`https://api.github.com/users/${encodeURIComponent(owner)}`, {
+      headers,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CAN_INSTALL_TIMEOUT_MS)
+    })
+    const ownerBody = ownerResponse.ok ? ((await ownerResponse.json().catch(() => null)) as { type?: unknown } | null) : null
+    if (ownerBody?.type === 'User') {
+      return false
+    }
+    if (ownerBody?.type !== 'Organization') {
+      return null
+    }
+    // A GitHub App user token often can't read orgs the App isn't installed on (exactly when this
+    // field is asked), so 403/404 here means "can't tell", not "not an admin".
+    const response = await deps.fetch(`https://api.github.com/user/memberships/orgs/${encodeURIComponent(owner)}`, {
+      headers: { ...headers, authorization: `Bearer ${user.token}` },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CAN_INSTALL_TIMEOUT_MS)
+    })
+    if (!response.ok) {
+      return null
+    }
+    const membership = (await response.json().catch(() => null)) as { state?: unknown; role?: unknown } | null
+    if (typeof membership?.state !== 'string' || typeof membership.role !== 'string') {
+      return null
+    }
+    return membership.state === 'active' && membership.role === 'admin'
+  } catch {
+    return null
+  }
 }
 
 function positiveInt(value: string | null): number | undefined {

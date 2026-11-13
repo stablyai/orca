@@ -1607,7 +1607,69 @@
         "upsellTitle": "Single sign-on is part of {{plan}}",
         "upsellBody": "Sign in with your identity provider over SAML, and add or remove teammates with SCIM.",
         "managedTitle": "Single sign-on is set up with us",
-        "managedBody": "To set up or change single sign-on, contact us."
+        "managedBody": "To set up or change single sign-on, contact us.",
+        "domains": {
+          "invalid": "Enter a domain like example.com.",
+          "public": "That domain belongs to an email provider. Use a domain your company owns.",
+          "tooMany": "A team can have up to 10 domains.",
+          "notFound": "That domain is no longer on the list.",
+          "taken": "Another team has already verified that domain. Contact us if it should be yours.",
+          "recordNotFound": "We couldn’t find the record yet. DNS changes can take a few minutes; try again shortly.",
+          "dnsUnavailable": "We couldn’t look up the record. Try again in a moment.",
+          "copy": "Copy {{label}}",
+          "verified": "Verified",
+          "pending": "Not verified",
+          "recordMissing": "Record missing",
+          "check": "Check record",
+          "remove": "Remove",
+          "pendingBody": "Add this TXT record at your DNS provider to show the domain is yours.",
+          "recordMissingBody": "The TXT record is gone. Sign-in still works; add the record back to keep the domain verified.",
+          "recordName": "Name",
+          "recordValue": "Value",
+          "title": "Email domains",
+          "body": "People who sign in with SSO using an email at one of these domains are sent to your identity provider.",
+          "none": "No domains yet.",
+          "inputLabel": "Domain to add",
+          "add": "Add domain",
+          "placeholder": "example.com"
+        },
+        "status": {
+          "on": "On",
+          "onWith": "Your team signs in with {{idp}}.",
+          "onBody": "Your team signs in with your identity provider.",
+          "testing": "Testing",
+          "testingBody": "Your connection is set up but not live. Finish testing it on the setup page to turn it on.",
+          "offBody": "Connect your identity provider over SAML or OIDC so your team signs in with it."
+        },
+        "title": "Single sign-on",
+        "connection": "Identity provider",
+        "manage": "Manage",
+        "setUp": "Set up SSO",
+        "linkWarning": "The setup link works without signing in and expires in 1 hour. Only share it with the person who manages your identity provider.",
+        "ownersOnly": "Only a team owner can change single sign-on.",
+        "lapsed": "Single sign-on stays on, but your plan no longer includes changing it. Contact us to make changes.",
+        "require": "Require SSO",
+        "requiredBody": "Every member signs in with SSO. Other sign-in methods are turned off for your team.",
+        "requiredOwnersBody": "Members sign in with SSO. Owners can still sign in another way until one owner has signed in with SSO.",
+        "requireOffBody": "Once SSO is on, every member must sign in with it. This can’t be turned off separately.",
+        "requiredValue": "Required",
+        "notRequiredValue": "Not yet",
+        "lapsedTitle": "Need to change single sign-on?",
+        "lapsedBody": "Talk to us about your plan.",
+        "loading": "Loading single sign-on",
+        "loadFailed": "Couldn’t load single sign-on",
+        "retry": "Try again",
+        "upsellBodySso": "Sign in with your identity provider over SAML or OIDC, and require it for everyone on your team.",
+        "error": {
+          "signIn": "Sign in to Orca again to see this.",
+          "forbidden": "Only a team owner or admin can see this.",
+          "rateLimited": "Too many requests. Try again shortly.",
+          "unsupported": "Single sign-on settings aren’t available here yet.",
+          "unavailable": "Couldn’t reach Orca Cloud. Check your connection and try again.",
+          "recentSignIn": "For your team’s safety, sign out and sign in to Orca again, then open the setup page within 10 minutes.",
+          "notEntitled": "Your team’s plan doesn’t include changing single sign-on."
+        },
+        "sessionsEndOn": "Sign-ins made before SSO was turned on end on {{date}} at {{time}}. Members then sign in again with SSO."
       },
       "title": "Enterprise",
       "searchDescription": "Single sign-on and directory sync, and the audit log of changes across your team.",
@@ -1620,7 +1682,31 @@
       "description": "Single sign-on, sign-in policies and the audit log for your team.",
       "bannerTitle": "Single sign-on and the audit log are part of {{plan}}",
       "bannerBody": "Talk to us about moving your team to {{plan}}.",
-      "contactUs": "Contact us"
+      "contactUs": "Contact us",
+      "scim": {
+        "status": {
+          "active": "Active",
+          "activeBody": "Your identity provider adds, updates and removes teammates.",
+          "waiting": "Waiting for first sync",
+          "waitingBody": "Directory sync is on. Nothing has arrived from your identity provider yet.",
+          "notEnabled": "Not turned on",
+          "notEnabledBody": "Ask us to turn directory sync on for your team. Then connect your identity provider here.",
+          "needsSso": "Needs SSO",
+          "needsSsoBody": "Turn on single sign-on first. Directory sync uses the same identity provider."
+        },
+        "change": {
+          "added": "A teammate was added",
+          "removed": "A teammate was removed",
+          "role": "A role changed",
+          "group": "A group changed"
+        },
+        "title": "Directory sync",
+        "connection": "SCIM provisioning",
+        "open": "Open directory sync setup",
+        "keyNote": "The setup page shows the SCIM address and key to enter in your identity provider. Orca never shows or stores the key.",
+        "lastChange": "Last change received",
+        "lastChangeSummary": "{{what}} · {{when}}"
+      }
     }
   },
   "menu": {
@@ -1993,7 +2079,9 @@
             "7d4bc516ee": "Failed to switch profile",
             "f518e89aa5": "Project already exists in that profile",
             "f03ae7f27b": "Failed to transfer project",
-            "signInDidNotFinish": "Sign-in didn’t finish. Try again."
+            "signInDidNotFinish": "Sign-in didn’t finish. Try again.",
+            "ssoRequired": "Your team requires single sign-on",
+            "ssoRequiredBody": "Sign in again and choose Sign in with SSO."
           }
         },
         "runtime": {
@@ -28206,7 +28294,12 @@
       "value": "Value",
       "shadowed": "Overrides",
       "overrides": "Overrides {{scopes}}",
-      "description": "What a new cloud workspace gets, and which scope each value comes from."
+      "description": "What a new cloud workspace gets, and which scope each value comes from.",
+      "workspaceLabel": "Workspace",
+      "workspacePrivate": "Not shared",
+      "workspaceShared": "Shared with your team",
+      "sharedNote": "Workspaces shared with your team don’t get personal secrets, so only shared and repository values are listed.",
+      "privateNote": "Personal values apply only to workspaces you haven’t shared. Once you share one, it gets only shared and repository values."
     },
     "repo": {
       "label": "Repository",
@@ -28526,16 +28619,19 @@
       "diskVeryLowMeaning": "Installs and builds may fail. Delete caches or build output you don’t need.",
       "diskLowMeaning": "Large dependency installs may run out of space.",
       "pushRequested": "Orca Cloud can read {{repo}} but can’t push yet. An owner of {{owner}} has been asked to approve the Orca GitHub App.",
-      "copied": "Copied",
-      "copyRequest": "Copy request for an owner",
       "pushCantInstall": "Orca Cloud can read {{repo}} but can’t push to it.",
       "pushCantInstallMeaning": "Pushing needs the Orca GitHub App on {{owner}}. Ask an owner of {{owner}} to install it.",
-      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet.",
-      "pushRequestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to push from workspaces on this repository.",
-      "pushRequestCopyFailed": "Couldn’t copy it."
+      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet."
     },
     "toast": {
       "dismiss": "Dismiss"
+    },
+    "ownerRequest": {
+      "messagePush": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to push from workspaces on this repository.",
+      "messageStart": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to start workspaces from this repository.",
+      "copyFailed": "Couldn’t copy it.",
+      "copied": "Copied",
+      "copy": "Copy request for an owner"
     }
   },
   "runActions": {
@@ -28592,14 +28688,11 @@
       "add": "Add",
       "addMine": "Add mine",
       "missing": "Missing",
-      "askOwner": "Ask {{owner}}, an owner or an admin to add it.",
       "valueLabel": "Value for {{name}}",
       "valuePlaceholder": "Value",
       "memberHelp": "Saved to your personal Cloud secrets, so only your workspaces get it.",
       "cancel": "Cancel",
       "save": "Save",
-      "guestOwner": "In a shared workspace, Personal values come from its owner, {{owner}}, not from you.",
-      "guest": "In a shared workspace, Personal values come from its owner, not from you.",
       "empty": "No variables from Cloud secrets yet.",
       "overrides": "overrides {{scopes}}"
     },
@@ -28642,7 +28735,8 @@
       "agentsWsl": "Sign-ins inside the distro. Windows sign-ins don’t carry over.",
       "envWsl": "Agents get the distro’s own environment. Orca doesn’t add variables in WSL.",
       "envPaired": "Agents on {{host}} use its own environment. Orca doesn’t add variables on paired hosts.",
-      "agentsCloud": "Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same."
+      "agentsCloud": "Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same.",
+      "cloudEnvShared": "From Cloud secrets: Repository, then Shared. Shared workspaces don’t get personal values, including the owner’s."
     },
     "retry": "Try again",
     "asleepFooter": "Changes reach the sandbox when it wakes.",
@@ -28788,7 +28882,8 @@
     "loading": "Loading secrets…",
     "nothingMissing": "Nothing is missing.",
     "dialogTitle": "Add missing secrets",
-    "dialogDetail": "Values go to your Cloud secrets. New terminals and agents in this workspace get them within a few seconds."
+    "dialogDetail": "Values go to your Cloud secrets. New terminals and agents in this workspace get them within a few seconds.",
+    "sharedMemberFooter": "This workspace is shared, so it doesn’t get personal secrets. Ask an owner or admin to add the missing values to this repository or the team."
   },
   "cloudAgents": {
     "source": {
@@ -28834,7 +28929,10 @@
     "unseenIn": "In {{workspace}}. The request waits up to 15 minutes.",
     "unseen": "Open that workspace to answer. The request waits up to 15 minutes.",
     "openWorkspace": "Open",
-    "helpBeforeSave": "Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}."
+    "helpBeforeSave": "Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}.",
+    "sharedNoScope": "This workspace is shared, so it doesn’t get personal secrets.",
+    "sharedAskAdmin": "Ask an owner or admin to add {{name}} to this repository’s secrets.",
+    "sharedRepoOnly": "This workspace is shared, so it only gets repository and shared values."
   },
   "agentApiKeys": {
     "cloud": {
@@ -29132,7 +29230,6 @@
     "failed": "{{agent}} couldn’t finish signing in",
     "queuedPrefix": "Queued:",
     "pasteInstead": "Paste a code instead",
-    "cancelSignIn": "Cancel sign-in",
     "copyAndOpen": "Copy code and open",
     "cancelledToast": "The agent didn’t start. The shell is still open.",
     "runningExpiredDetail": "Renew to keep working. Your conversation is kept.",
@@ -29536,6 +29633,16 @@
       "raiseCapAndContinue": "Raise spend cap and continue",
       "backToDraft": "Back to draft",
       "saveFailed": "Couldn’t save that. Try again, or change it in Plan & billing."
+    },
+    "cloneAccess": {
+      "reachableTitle": "Couldn’t clone {{repo}}",
+      "reachableBody": "GitHub refused the clone, but Orca can reach this repository now. Try again. The sandbox was deleted.",
+      "title": "Orca can’t access {{repo}}",
+      "askOwnerBody": "Ask an owner of {{owner}} to give Orca access. Orca tries again once they do. The sandbox was deleted.",
+      "body": "The Orca GitHub App on {{owner}} doesn’t include this repository. Give Orca access, and Orca tries again. The sandbox was deleted.",
+      "chooseAnother": "Choose another repository",
+      "waiting": "Waiting for GitHub…",
+      "giveAccess": "Give Orca access"
     }
   },
   "renderer": {

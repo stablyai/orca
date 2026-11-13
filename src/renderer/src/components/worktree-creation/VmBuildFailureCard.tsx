@@ -10,6 +10,8 @@ import { FailureActionRow, type VmBuildFailureActions } from './VmBuildFailureAc
 import { CheckRow } from './VmBuildCheckRow'
 import { VmBuildErrorDetails } from './VmBuildErrorDetails'
 import { BlockedSandboxHoursNote } from './BlockedSandboxHoursNote'
+import { cloneAccessCopy } from './clone-access-actions'
+import { githubRepoUrlFor, useCloneAccessHandoff } from './use-clone-access-handoff'
 
 export type { VmBuildFailureActions }
 
@@ -57,19 +59,33 @@ export function VmBuildFailureCard({
     setShown(failure)
   }
   const visible = failure ?? shown
-  const copy = visible
-    ? vmBuildFailureCopy(
-        visible,
-        {
-          cloud,
-          canManageBilling,
-          repoName,
-          sandboxLimit: sandboxLimitFromBilling(getLastBillingStatus()),
-          sandboxKept: vmKept
-        },
-        t
-      )
-    : null
+  // CLONE-ACCESS-ERROR: GitHub refused the clone; name the cause and offer to fix access.
+  const accessFix =
+    cloud &&
+    visible?.kind === 'cloneFailed' &&
+    visible.reason === 'repo_unreachable' &&
+    Boolean(actions.onChooseAnotherRepo) &&
+    githubRepoUrlFor(repoName) !== null
+  const cloneAccess = useCloneAccessHandoff({
+    repoName,
+    enabled: accessFix && failure !== null,
+    onRetry: actions.onRetry
+  })
+  const copy = accessFix
+    ? cloneAccessCopy(cloneAccess.phase, repoName, t)
+    : visible
+      ? vmBuildFailureCopy(
+          visible,
+          {
+            cloud,
+            canManageBilling,
+            repoName,
+            sandboxLimit: sandboxLimitFromBilling(getLastBillingStatus()),
+            sandboxKept: vmKept
+          },
+          t
+        )
+      : null
   const headingRef = React.useRef<HTMLHeadingElement>(null)
   const cardRef = React.useRef<HTMLDivElement>(null)
   // Move focus to the card when it opens, so keyboard and screen-reader users land on the way forward.
@@ -99,7 +115,14 @@ export function VmBuildFailureCard({
           {/* InlineError announces only the cause; the check rows and actions are read on demand.
               An account limit isn't a broken build, so it reads as a neutral notice. */}
           <InlineError
-            tone={isAccountGate(visible) ? 'neutral' : 'error'}
+            tone={
+              isAccountGate(visible)
+                ? 'neutral'
+                : // CLONE-ACCESS-ERROR: missing access is a precondition to fix, not a crash.
+                  accessFix && cloneAccess.phase !== 'reachable'
+                  ? 'warning'
+                  : 'error'
+            }
             className="break-words"
             title={
               <h3 ref={headingRef} tabIndex={-1} className="outline-none">
@@ -125,7 +148,7 @@ export function VmBuildFailureCard({
               canManageBilling={canManageBilling}
               signingIn={signingIn}
               connectingGitHub={connectingGitHub}
-              actions={actions}
+              actions={accessFix ? { ...actions, cloneAccess } : actions}
               t={t}
             />
             {visible.kind === 'checks' ? (

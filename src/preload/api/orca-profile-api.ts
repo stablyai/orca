@@ -21,6 +21,13 @@ import type {
   OrcaProfileOrgDeleteResult
 } from '../../shared/orca-org-delete'
 import type {
+  OrcaProfileOrgEnterpriseArgs,
+  OrcaProfileOrgEnterpriseDomainArgs,
+  OrcaProfileOrgEnterpriseResult,
+  OrcaProfileOrgSsoDomainResult,
+  OrcaProfileOrgSsoSetupLinkResult
+} from '../../shared/orca-org-enterprise'
+import type {
   OrcaProfileOrgCreateArgs,
   OrcaProfileOrgCreateResult,
   OrcaProfileOrgLeaveArgs
@@ -126,6 +133,21 @@ export type OrcaProfileApi = {
   orgDeleteCheck: (args: OrcaProfileOrgDeleteCheckArgs) => Promise<OrcaProfileOrgDeleteCheckResult>
   /** Deletes the team for everyone; `confirmName` is the name exactly as typed. */
   orgDelete: (args: OrcaProfileOrgDeleteArgs) => Promise<OrcaProfileOrgDeleteResult>
+  /** Settings › Enterprise for the team: single sign-on and directory sync, as auth reports them. */
+  orgEnterprise: (args: OrcaProfileOrgEnterpriseArgs) => Promise<OrcaProfileOrgEnterpriseResult>
+  /** A fresh single sign-on setup link (owners, just after signing in). Never stored. */
+  orgSsoSetupLink: (args: OrcaProfileOrgEnterpriseArgs) => Promise<OrcaProfileOrgSsoSetupLinkResult>
+  /** Starts verifying an email domain: answers the DNS record to publish. */
+  orgSsoDomainAdd: (
+    args: OrcaProfileOrgEnterpriseDomainArgs
+  ) => Promise<OrcaProfileOrgSsoDomainResult>
+  /** Checks the domain's DNS record. */
+  orgSsoDomainVerify: (
+    args: OrcaProfileOrgEnterpriseDomainArgs
+  ) => Promise<OrcaProfileOrgSsoDomainResult>
+  orgSsoDomainRemove: (
+    args: OrcaProfileOrgEnterpriseDomainArgs
+  ) => Promise<OrcaProfileOrgSsoDomainResult>
   /** Fires when the browser comes back from Stripe Checkout or the Portal (orca:// link). */
   onBillingReturn: (callback: (event: OrcaBillingReturn) => void) => () => void
   /** Main asks for a billing re-read (cloud workspace created/woken, or the usage poll). */

@@ -1,6 +1,7 @@
 import { isValidOrgName, ORCA_ORG_NAME_MAX_LENGTH } from '../../../shared/orca-org-management'
 import type { OrcaProfileOrgCreateResult } from '../../../shared/orca-org-management'
 import { ipcMain } from 'electron'
+import { registerOrcaProfileOrgEnterpriseHandlers } from './orca-profile-org-enterprise-handlers'
 import type {
   OrcaOrgRole,
   OrcaProfileOrgInviteRevokeArgs,
@@ -125,6 +126,9 @@ function orgDeleteConfirmNameFromUnknown(value: unknown): string {
 }
 
 export function registerOrcaProfileOrgMemberHandlers(): void {
+  // Settings › Enterprise (single sign-on, directory sync) for the same team.
+  registerOrcaProfileOrgEnterpriseHandlers()
+
   ipcMain.handle(
     'orcaProfiles:orgDeleteCheck',
     async (_event, rawArgs: unknown): Promise<OrcaProfileOrgDeleteCheckResult> =>

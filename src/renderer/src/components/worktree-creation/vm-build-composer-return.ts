@@ -15,7 +15,7 @@ export function typedComposerPrompt(entry: ReturnSource): string {
  */
 export function composerDataFromRefusedCreate(
   entry: ReturnSource,
-  { local }: { local: boolean }
+  { local, pickRepo = false }: { local: boolean; pickRepo?: boolean }
 ): ComposerModalData {
   const { request } = entry
   const recipe = request.ephemeralVmRecipe
@@ -29,7 +29,10 @@ export function composerDataFromRefusedCreate(
         ? {}
         : {
             initialEphemeralVmRecipeId: recipe?.recipeId,
-            initialCloudGitHubRepo: github.fullName
+            // "Choose another repository": the picker opens instead of the refused one coming back.
+            ...(pickRepo
+              ? { openCloudRepoPicker: true }
+              : { initialCloudGitHubRepo: github.fullName })
           }),
       prefilledName: entry.heldChatMessage ?? github.prompt,
       recovery: { note: '', agent: request.agent },
@@ -39,6 +42,7 @@ export function composerDataFromRefusedCreate(
   return {
     initialRepoId: recipe?.sourceRepoId ?? request.repoId,
     ...(!local && recipe ? { initialEphemeralVmRecipeId: recipe.recipeId } : {}),
+    ...(pickRepo ? { openCloudRepoPicker: true } : {}),
     // A generated name is regenerated; only a name the user typed comes back.
     ...(request.displayNameKind === 'user' && request.displayName
       ? { prefilledName: request.displayName }

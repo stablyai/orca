@@ -27,6 +27,7 @@ import {
   type SecretsResolveRequestResult,
   type SecretsTouchRequestResult
 } from '../../../../shared/secret-request-contract'
+import { cloudWorkspaceSecretsMode } from '@/lib/orca-cloud/cloud-workspace-secrets-mode'
 import type { CloudSecretsErrorCode } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
 import type {
   SecretRequestCardActions,
@@ -121,6 +122,9 @@ export function useSecretRequestCard(args: {
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [focused, setFocused] = useState(false)
   const [repoWritable, setRepoWritable] = useState(false)
+  // SEC-5: a shared workspace gets no Personal secrets, so a Personal save would never reach it.
+  // Unknown until read: Personal stays offered meanwhile, as before this check existed.
+  const [sharedWorkspace, setSharedWorkspace] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const repoKey = useWorkspaceRepoKey(event.worktreeId ?? worktreeId)
   const openPanel = useAgentHostPanelOpener()
@@ -139,6 +143,18 @@ export function useSecretRequestCard(args: {
       cancelled = true
     }
   }, [repoKey])
+
+  useEffect(() => {
+    let cancelled = false
+    void cloudWorkspaceSecretsMode(environmentId).then((mode) => {
+      if (!cancelled) {
+        setSharedWorkspace(mode === 'shared')
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [environmentId])
 
   // The card's own clock: an open request past its expiry shows as expired and drops what was typed.
   useEffect(() => {
@@ -196,12 +212,21 @@ export function useSecretRequestCard(args: {
     }
   }, [holding, environmentId, requestId])
 
-  const scopes: SecretRequestScope[] = repoKey && repoWritable ? ['personal', 'repo'] : ['personal']
-  const effectiveScope: SecretRequestScope = scopes.includes(scope) ? scope : 'personal'
+  const repoScope = repoKey !== null && repoWritable
+  const scopes: SecretRequestScope[] = sharedWorkspace
+    ? repoScope
+      ? ['repo']
+      : []
+    : repoScope
+      ? ['personal', 'repo']
+      : ['personal']
+  const effectiveScope: SecretRequestScope = scopes.includes(scope)
+    ? scope
+    : (scopes[0] ?? 'personal')
 
   const add = useCallback(async () => {
     const api = window.api.cloudSecrets
-    if (!value || local !== null) {
+    if (!value || local !== null || scopes.length === 0) {
       return
     }
     setFailed(false)
@@ -236,7 +261,17 @@ export function useSecretRequestCard(args: {
       requestId,
       outcome === 'provided' ? 'saved' : 'savedAfterExpiry'
     )
-  }, [value, local, environmentId, requestId, effectiveScope, repoKey, event.name, t])
+  }, [
+    value,
+    local,
+    scopes.length,
+    environmentId,
+    requestId,
+    effectiveScope,
+    repoKey,
+    event.name,
+    t
+  ])
 
   const phase: SecretRequestCardPhase =
     local === 'saving'
@@ -258,6 +293,7 @@ export function useSecretRequestCard(args: {
       suggestedRepo: event.scope === 'repo',
       scopes,
       scope: effectiveScope,
+      sharedWorkspace,
       // An expired request shows no field, and what was typed doesn't come back.
       value: local === 'expired' ? '' : value,
       phase,

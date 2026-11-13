@@ -41,6 +41,7 @@ export function useCloudStartComposer({
   setRecipeId,
   repoId,
   initialGitHubRepo = null,
+  openRepoPicker = false,
   prompt,
   agent,
   initialTargetFixed,
@@ -58,6 +59,8 @@ export function useCloudStartComposer({
   repoId: string
   /** A GitHub-only repository to start with picked (`owner/repo`). */
   initialGitHubRepo?: string | null
+  /** Open the Project picker once, after the dialog opens ("Choose another repository"). */
+  openRepoPicker?: boolean
   prompt: string
   agent: string | null
   /** The composer was opened on an explicit target (Landing card, a recovery). */
@@ -204,6 +207,8 @@ export function useCloudStartComposer({
     // PC-5: no "Using sandbox hours" toast on start; hours live in billing (Neil: noise).
   }, [cloudSelected, profileId, repoId])
 
+  // A signal above 0 when the dialog mounts opens the picker once (useOpenOnSignal).
+  const openRepoPickerSignal = openRepoPicker ? 1 : 0
   const view = useMemo<CloudStartView | null>(
     () =>
       segment === 'hidden'
@@ -212,6 +217,7 @@ export function useCloudStartComposer({
             onSelectOrcaCloud,
             onUserPick: markTouched,
             cloudOnly,
+            openRepoPickerSignal,
             folderProject: cloudOnly.folderProject,
             needsGitHubRepo: orcaCloudNeedsGitHubRepo({
               cloudSelected,
@@ -221,7 +227,15 @@ export function useCloudStartComposer({
               githubProjectCount
             })
           },
-    [cloudOnly, cloudSelected, githubProjectCount, markTouched, onSelectOrcaCloud, segment]
+    [
+      cloudOnly,
+      cloudSelected,
+      githubProjectCount,
+      markTouched,
+      onSelectOrcaCloud,
+      openRepoPickerSignal,
+      segment
+    ]
   )
   if (!view || !cloudSelected) {
     return { view, onPrimary: null, recordCreated }

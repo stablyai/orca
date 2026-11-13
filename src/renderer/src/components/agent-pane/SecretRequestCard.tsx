@@ -34,8 +34,13 @@ export type SecretRequestCardModel = {
   reason: string | null
   /** The agent suggested Repository. A hint only: it never preselects (D2). */
   suggestedRepo: boolean
-  /** Personal always; Repository only when the person can write it. Never Shared (D6). */
+  /**
+   * Personal, plus Repository when the person can write it. Never Shared (D6). In a shared workspace
+   * Personal is left out (SEC-5), so this can be empty: then the card says who can add it instead.
+   */
   scopes: readonly SecretRequestScope[]
+  /** The workspace is shared with teammates, so it gets no Personal secrets (SEC-5). */
+  sharedWorkspace: boolean
   scope: SecretRequestScope
   value: string
   phase: SecretRequestCardPhase
@@ -91,7 +96,7 @@ export function SecretRequestCard({
   const agentName = model.agent ?? t('secretRequest.anAgent', 'an agent')
   const done = model.phase === 'saved' || model.phase === 'savedAfterExpiry'
   const saving = model.phase === 'saving'
-  const canSave = model.value.length > 0 && !saving
+  const canSave = model.value.length > 0 && !saving && model.scopes.length > 0
   const ownRef = React.useRef<HTMLDivElement>(null)
   const focusedWithin = React.useRef(false)
 
@@ -230,58 +235,80 @@ export function SecretRequestCard({
             />
           ) : (
             <>
-              <div data-secret-request-field="" className="flex flex-col gap-1.5">
-                <Label htmlFor={`${id}-value`} className="sr-only">
-                  {t('secretRequest.valueLabel', 'Value for {{name}}', { name: model.name })}
-                </Label>
-                <div className="flex items-start gap-2">
-                  <div
-                    className="min-w-0 flex-1"
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && canSave) {
-                        event.preventDefault()
-                        actions.onAdd()
-                      }
-                    }}
-                  >
-                    <SecretValueInput
-                      id={`${id}-value`}
-                      value={model.value}
-                      onChange={actions.onValueChange}
-                      placeholder={t('secretRequest.valuePlaceholder', 'Value')}
-                      invalid={model.fieldError !== null}
-                      disabled={saving}
-                      describedBy={model.fieldError ? `${errorId} ${helpId}` : helpId}
-                    />
-                  </div>
-                  <SecretRequestScopeControl
-                    name={model.name}
-                    scopes={model.scopes}
-                    scope={model.scope}
-                    disabled={saving}
-                    onChange={actions.onScopeChange}
-                  />
-                </div>
-                {model.fieldError ? (
-                  <p id={errorId} role="alert" className="text-xs text-destructive">
-                    {model.fieldError}
-                  </p>
-                ) : null}
-                <p id={helpId} className="text-xs leading-5 text-muted-foreground">
-                  {t(
-                    'secretRequest.helpBeforeSave',
-                    'Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}.',
+              {model.scopes.length === 0 ? (
+                <InlineError
+                  tone="neutral"
+                  title={t(
+                    'secretRequest.sharedNoScope',
+                    'This workspace is shared, so it doesn’t get personal secrets.'
+                  )}
+                  detail={t(
+                    'secretRequest.sharedAskAdmin',
+                    'Ask an owner or admin to add {{name}} to this repository’s secrets.',
                     { name: model.name }
                   )}
-                </p>
-                {model.suggestedRepo && model.scopes.includes('repo') ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t('secretRequest.repoHint', '{{agent}} suggested Repository', {
-                      agent: agentName
-                    })}
+                  density="compact"
+                />
+              ) : (
+                <div data-secret-request-field="" className="flex flex-col gap-1.5">
+                  <Label htmlFor={`${id}-value`} className="sr-only">
+                    {t('secretRequest.valueLabel', 'Value for {{name}}', { name: model.name })}
+                  </Label>
+                  <div className="flex items-start gap-2">
+                    <div
+                      className="min-w-0 flex-1"
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && canSave) {
+                          event.preventDefault()
+                          actions.onAdd()
+                        }
+                      }}
+                    >
+                      <SecretValueInput
+                        id={`${id}-value`}
+                        value={model.value}
+                        onChange={actions.onValueChange}
+                        placeholder={t('secretRequest.valuePlaceholder', 'Value')}
+                        invalid={model.fieldError !== null}
+                        disabled={saving}
+                        describedBy={model.fieldError ? `${errorId} ${helpId}` : helpId}
+                      />
+                    </div>
+                    <SecretRequestScopeControl
+                      name={model.name}
+                      scopes={model.scopes}
+                      scope={model.scope}
+                      disabled={saving}
+                      onChange={actions.onScopeChange}
+                    />
+                  </div>
+                  {model.fieldError ? (
+                    <p id={errorId} role="alert" className="text-xs text-destructive">
+                      {model.fieldError}
+                    </p>
+                  ) : null}
+                  <p id={helpId} className="text-xs leading-5 text-muted-foreground">
+                    {t(
+                      'secretRequest.helpBeforeSave',
+                      'Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}.',
+                      { name: model.name }
+                    )}
+                    {model.sharedWorkspace
+                      ? ` ${t(
+                          'secretRequest.sharedRepoOnly',
+                          'This workspace is shared, so it only gets repository and shared values.'
+                        )}`
+                      : null}
                   </p>
-                ) : null}
-              </div>
+                  {model.suggestedRepo && model.scopes.includes('repo') ? (
+                    <p className="text-xs text-muted-foreground">
+                      {t('secretRequest.repoHint', '{{agent}} suggested Repository', {
+                        agent: agentName
+                      })}
+                    </p>
+                  ) : null}
+                </div>
+              )}
               {model.phase === 'failed' ? (
                 <InlineError
                   title={t('secretRequest.unreachable', 'Couldn’t reach Orca Cloud.')}

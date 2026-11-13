@@ -17,6 +17,8 @@ export type CloudStartView = {
    * Project on each); absent until the first.
    */
   needsGitHubRepo?: { hasRepos: boolean; attempt?: number } | null
+  /** Bumped to open the Project picker at its GitHub repositories (CLONE-ACCESS-ERROR's Choose another). */
+  openRepoPickerSignal?: number
 }
 
 /**

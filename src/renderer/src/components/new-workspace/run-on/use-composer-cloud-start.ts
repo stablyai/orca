@@ -60,6 +60,7 @@ export function useComposerCloudStart({
     setRecipeId: cardProps.onEphemeralVmRecipeChange,
     repoId: cardProps.repoId,
     initialGitHubRepo: modalData.initialCloudGitHubRepo ?? null,
+    openRepoPicker: modalData.openCloudRepoPicker === true,
     prompt: cardProps.name,
     agent: quickAgent,
     initialTargetFixed: Boolean(

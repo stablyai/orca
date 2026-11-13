@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { isSignInNoticeVisible } from '@/lib/orca-cloud/sign-in-notice-visibility'
+import { ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR } from '../../../../../shared/orca-org-enterprise'
 import type {
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileResult,
@@ -119,6 +120,25 @@ export const createOrcaProfilesAuthActions: StateCreator<
               'auto.store.slices.orca.profiles.signInDidNotFinish',
               'Sign-in didn’t finish. Try again.'
             )
+          )
+        } else if (
+          result.status === 'failed' &&
+          !alreadyConnected &&
+          result.auth.state !== 'connected' &&
+          result.error === ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR
+        ) {
+          // Not a failure to report as one: say what to do.
+          toast.error(
+            translate(
+              'auto.store.slices.orca.profiles.ssoRequired',
+              'Your team requires single sign-on'
+            ),
+            {
+              description: translate(
+                'auto.store.slices.orca.profiles.ssoRequiredBody',
+                'Sign in again and choose Sign in with SSO.'
+              )
+            }
           )
         } else if (
           result.status === 'failed' &&

@@ -12,6 +12,8 @@ import { EnterpriseMfaPolicy } from '../../team-mfa/EnterpriseMfaPolicy'
 import { EnterpriseSettingsView } from './EnterpriseSettingsView'
 import { ENTERPRISE_CONTACT_URL, type EnterpriseContact } from './EnterpriseUpsell'
 import { useEnterpriseAuditLog } from './use-enterprise-audit-log'
+import { EnterpriseSsoView } from './sso/EnterpriseSsoView'
+import { useEnterpriseSso } from './sso/use-enterprise-sso'
 
 /** Billing's own name and contact page for Enterprise; the fixed page until billing has answered. */
 function useEnterpriseContact(): EnterpriseContact {
@@ -40,21 +42,49 @@ function EnterpriseSettingsPaneBody(): React.JSX.Element | null {
   const contact = useEnterpriseContact()
   const orgId = authStatus?.cloud?.activeOrgId ?? null
   const audit = useEnterpriseAuditLog(availability?.status === 'ready' && admin)
+  const sso = useEnterpriseSso(
+    authStatus?.cloud?.activeOrgId ?? null,
+    availability?.status === 'ready' && admin
+  )
   if (availability?.status !== 'ready' || !admin) {
     return null
   }
+  // Auth says whether the single sign-on block is locked (the plan lacks it and the team has no
+  // connection). Unknown while it loads or fails.
+  const ssoLocked =
+    sso.state.status === 'ok'
+      ? !sso.state.enterprise.sso.entitled &&
+        (sso.state.enterprise.sso.status === 'off' || sso.state.enterprise.sso.status === 'allowed')
+      : null
+  const openUrl = (url: string): void => void window.api.shell.openUrl(url)
   return (
     <EnterpriseSettingsView
-      // Enterprise's features come together in one plan version, so the audit log's answer says
-      // which side of the plan the team is on. Unknown while it loads or fails: the block waits.
-      ssoIncluded={audit.log.status === 'ok' ? true : audit.log.status === 'upsell' ? false : null}
+      ssoIncluded={ssoLocked === null ? null : !ssoLocked}
+      singleSignOn={
+        <EnterpriseSsoView
+          state={sso.state}
+          contact={contact}
+          now={sso.now}
+          underBanner={ssoLocked === true && audit.log.status === 'upsell'}
+          setupNotice={sso.setupNotice}
+          setupLink={sso.mintSetupLink}
+          onOpenSetup={sso.openSetup}
+          onOpenUrl={openUrl}
+          onContactSales={openUrl}
+          onRetry={sso.retry}
+          domains={{
+            busy: sso.domainBusy,
+            notice: sso.domainNotice,
+            onAdd: sso.addDomain,
+            onVerify: sso.verifyDomain,
+            onRemove: sso.removeDomain,
+            onCopy: (text) => void window.api.ui.writeClipboardText(text)
+          }}
+        />
+      }
       policies={
         orgId ? (
-          <EnterpriseMfaPolicy
-            orgId={orgId}
-            contact={contact}
-            onContactSales={(url) => void window.api.shell.openUrl(url)}
-          />
+          <EnterpriseMfaPolicy orgId={orgId} contact={contact} onContactSales={openUrl} />
         ) : undefined
       }
       audit={{

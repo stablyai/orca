@@ -13,6 +13,7 @@ import {
   type CloudSecretsErrorCode,
   type CloudSecretTarget,
   type CloudSecretView,
+  type CloudSecretWorkspaceMode,
   type CloudSecretsEffective,
   type CloudWorkspaceSharing
 } from '../../shared/cloud-secrets/cloud-secrets-wire'
@@ -30,7 +31,11 @@ export type CloudSecretsClient = {
     target: CloudSecretTarget,
     change: { set?: Record<string, string>; delete?: string[] }
   ): Promise<CloudSecretBatchResult>
-  effective(repo?: string, signal?: AbortSignal): Promise<CloudSecretsEffective>
+  effective(
+    repo?: string,
+    signal?: AbortSignal,
+    workspace?: CloudSecretWorkspaceMode
+  ): Promise<CloudSecretsEffective>
   refreshEnv(sandboxId: string): Promise<boolean>
   /** Who owns a sandbox and whether teammates share it (GET /v1/agent-sources?workspaceId=). */
   workspaceSharing(sandboxId: string): Promise<CloudWorkspaceSharing>
@@ -85,11 +90,20 @@ export function createCloudSecretsClient(
         body: change,
         kind: 'control'
       }),
-    effective: (repo, signal) =>
-      call('GET', withRepo('v1/secrets/effective', repo), CloudSecretsEffectiveResponseSchema, {
-        kind: 'control',
-        signal
-      }),
+    effective: (repo, signal, workspace) =>
+      call(
+        'GET',
+        `v1/secrets/effective${
+          repo || workspace === 'shared'
+            ? `?${new URLSearchParams({
+                ...(repo ? { repo } : {}),
+                ...(workspace === 'shared' ? { workspace } : {})
+              })}`
+            : ''
+        }`,
+        CloudSecretsEffectiveResponseSchema,
+        { kind: 'control', signal }
+      ),
     refreshEnv: async (sandboxId) =>
       (
         await call(

@@ -240,6 +240,7 @@ export function NewWorkspaceComposerProjectSection({
                 !projectError && needsRepo ? ORCA_CLOUD_NEEDS_REPO_ID : projectDescriptionId
               }
               focusSignal={needsRepo?.attempt ?? 0}
+              openSignal={cloudStart?.openRepoPickerSignal ?? 0}
             />
             {projectError ? (
               <p id={projectDescriptionId} className="text-[11px] text-destructive">

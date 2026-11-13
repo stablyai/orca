@@ -7,6 +7,7 @@ import {
   ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS,
   ORCA_CLOUD_CALLBACK_SUCCESS_PAGE
 } from './profile-cloud-callback-page'
+import { ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR } from '../../../shared/orca-org-enterprise'
 
 export type OrcaCloudAuthorizationCode = {
   code: string
@@ -145,15 +146,26 @@ export function beginOrcaCloudPkceFlow(
           return
         }
         if (url.searchParams.has('error')) {
-          const cancelled = url.searchParams.get('error') === 'access_denied'
+          const reason = url.searchParams.get('error')
+          const cancelled = reason === 'access_denied'
+          // The team requires single sign-on and this sign-in came another way.
+          const ssoRequired = reason === 'sso_required'
           response.writeHead(400)
           response.end(
             cancelled
               ? 'Orca sign-in was cancelled.'
-              : 'Orca sign-in failed. Return to Orca and try again.'
+              : ssoRequired
+                ? 'Your team requires single sign-on. Return to Orca, sign in again and choose Sign in with SSO.'
+                : 'Orca sign-in failed. Return to Orca and try again.'
           )
           rejectFlow(
-            new Error(cancelled ? 'orca_cloud_auth_denied' : 'orca_cloud_auth_callback_failed')
+            new Error(
+              cancelled
+                ? 'orca_cloud_auth_denied'
+                : ssoRequired
+                  ? ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR
+                  : 'orca_cloud_auth_callback_failed'
+            )
           )
           return
         }

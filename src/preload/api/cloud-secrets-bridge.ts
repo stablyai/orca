@@ -3,6 +3,7 @@ import type {
   CloudSecretBatchResult,
   CloudSecretTarget,
   CloudSecretView,
+  CloudSecretWorkspaceMode,
   CloudSecretsEffective,
   CloudSecretsResult,
   CloudSecretsStatus,
@@ -27,7 +28,11 @@ export type CloudSecretsApi = {
     set?: Record<string, string>
     delete?: string[]
   }) => Promise<CloudSecretsResult<CloudSecretBatchResult>>
-  effective: (request: { repo?: string }) => Promise<CloudSecretsResult<CloudSecretsEffective>>
+  /** `workspace: 'shared'`: what a workspace shared with the team gets (no personal secrets). */
+  effective: (request: {
+    repo?: string
+    workspace?: CloudSecretWorkspaceMode
+  }) => Promise<CloudSecretsResult<CloudSecretsEffective>>
   /** Best-effort nudge so a running workspace picks up new values now; the server also does it on write. */
   refreshEnv: (request: { runtimeEnvironmentId: string }) => Promise<CloudSecretsResult<boolean>>
   /** Who owns an Orca Cloud workspace and whether teammates share it (control plane only). */
