@@ -6,7 +6,7 @@ export type SleepingMailUiApi = {
     callback: (worktreeIds: string[], settledMailWakeIds?: string[]) => void
   ) => () => void
   replySleepingAgentWake: (reply: { requestId: string; woke: boolean }) => void
-  notifySleepingMailAvailability: (paneKey: string) => void
+  notifySleepingMailAvailability: (paneKey?: string) => void
   onResumeSleepingAgents: (callback: (data: SleepingAgentWakeRequest) => void) => () => void
 }
 

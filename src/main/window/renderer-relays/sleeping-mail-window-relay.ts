@@ -28,7 +28,7 @@ export function registerSleepingMailAvailability(
       if (
         event.sender === window.webContents &&
         event.senderFrame === window.webContents.mainFrame &&
-        typeof paneKey === 'string'
+        (paneKey === undefined || typeof paneKey === 'string')
       ) {
         runtime.retrySleptMailboxWakes(paneKey)
       }
