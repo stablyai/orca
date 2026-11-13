@@ -1,6 +1,6 @@
 import type * as React from 'react'
 import type * as AppStoreModule from '@/store'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectPanePty } from '../connect-pane-pty'
 import type { CodexAccountRestart } from '@/store/terminals/terminal-contracts'
 import { codexAccountRestartToken } from '@/store/terminals/codex-account-restart-continuation'
@@ -44,6 +44,7 @@ const {
 }))
 
 let mockStoreState: StoreState
+let restartStore: typeof AppStoreModule.useAppStore
 let storeSubscribers: ((state: StoreState) => void)[] = []
 let callbacks: MultiplexSubscriptionCallbacks = null
 let disposeTransports: (() => void)[] = []
@@ -191,7 +192,7 @@ async function completeAttach(): Promise<void> {
 }
 
 async function connectAccountRestart() {
-  const { useAppStore } = await vi.importActual<typeof AppStoreModule>('@/store/index')
+  const useAppStore = restartStore
   const initial = useAppStore.getInitialState()
   const request: CodexAccountRestart = {
     agent: 'codex',
@@ -256,6 +257,13 @@ async function connectAccountRestart() {
 }
 
 describe('a brand-new remote pane through connectPanePty', () => {
+  beforeAll(async () => {
+    mockStoreState = createInitialStoreState(() => mockStoreState)
+    await installTerminalTestGlobals()
+    restartStore = (await vi.importActual<typeof AppStoreModule>('@/store/index')).useAppStore
+    await restoreTerminalTestGlobals()
+  })
+
   beforeEach(async () => {
     resetRemoteRuntimeTransport()
     storeSubscribers = []
