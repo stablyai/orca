@@ -3,6 +3,10 @@ import type { HttpLinkBrowserRequestFields } from './http-link-browser-placement
 import { showOpenInGroupRefusedToast } from '@/components/terminal-pane/links/files/terminal-file-open-in-group-toast'
 import { beginLinkOpenRequest } from '../../link-open-request'
 import { translate } from '@/i18n/i18n'
+import {
+  isGitHubPullRequestUrl,
+  openGitHubPullRequestUrlInOrca
+} from './http-link-open-pull-request-in-orca'
 import type { Translate } from '@/i18n/use-translate'
 import {
   openHttpLink,
@@ -56,6 +60,7 @@ export type HttpLinkActionDestinations = {
 
 export type HttpLinkAction = {
   external?: boolean
+  icon?: 'pull-request'
   label: string
   run: () => void | Promise<void>
 }
@@ -121,7 +126,7 @@ export function buildHttpLinkActions(
       : t('auto.components.terminal.pane.TerminalLinkActionPopover.openLink', 'Open link'),
     run: () => open(primaryDestination)
   }
-  const secondaryActions =
+  const openInNewTabActions: HttpLinkAction[] =
     source &&
     (destinations?.primary === 'orca' || destinations?.alternate === 'orca') &&
     canHttpLinkOpenInSourceGroup(
@@ -139,7 +144,23 @@ export function buildHttpLinkActions(
             run: source.openInSourceGroup
           }
         ]
-      : undefined
+      : []
+  const pullRequestUrl = source?.url
+  const openPullRequestActions: HttpLinkAction[] =
+    pullRequestUrl && isGitHubPullRequestUrl(pullRequestUrl)
+      ? [
+          {
+            icon: 'pull-request',
+            label: t(
+              'auto.lib.browser.navigation.httpLinkDestinations.openPullRequestInOrca',
+              'Open in Orca'
+            ),
+            run: () => openGitHubPullRequestUrlInOrca(pullRequestUrl)
+          }
+        ]
+      : []
+  const allSecondaryActions = [...openInNewTabActions, ...openPullRequestActions]
+  const secondaryActions = allSecondaryActions.length > 0 ? allSecondaryActions : undefined
   const alternateDestination = destinations?.alternate
   if (!alternateDestination) {
     return { primary, ...(secondaryActions ? { secondaryActions } : {}) }

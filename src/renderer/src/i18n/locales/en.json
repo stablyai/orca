@@ -1992,6 +1992,15 @@
               "googleCookiesSkippedRemoteWorkspace": "Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile, then sign into Google."
             }
           }
+        },
+        "navigation": {
+          "httpLinkDestinations": {
+            "openPullRequestInOrca": "Open in Orca"
+          },
+          "httpLinkOpenPullRequestInOrca": {
+            "noProject": "No project in Orca matches this pull request.",
+            "loadFailed": "Unable to load this pull request."
+          }
         }
       },
       "pluginCommandKeybindings": {
