@@ -171,6 +171,7 @@ export class RemoteRuntimeSharedControlConnection {
       sharedControlState.rejectSharedControlReadyWaiters(this.readyWaiters, refusal)
       return
     }
+    this.reconnect.resumeParked()
     this.reconnect.clear()
     const socketGeneration = this.socketGeneration.begin()
     const opened = openSharedControlSocket(this.connection, {
