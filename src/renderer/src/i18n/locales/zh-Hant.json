@@ -20362,6 +20362,8 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "將後續訊息加入佇列",
+        "enterToSendTitle": "按 Enter 傳送訊息",
+        "enterToSendCopy": "關閉後，Enter 換行，{{shortcut}} 傳送訊息。Shift+Enter 一律換行。",
         "scrollToLatestOnSendTitle": "傳送時捲動到最新訊息",
         "scrollToLatestOnSendCopy": "向上捲動時傳送訊息會跳到最新訊息並跟隨回覆。關閉後會保留目前位置。",
         "scrollToLatestOnSendSearchPosition": "位置",
@@ -20371,7 +20373,7 @@
         "inlineVisualsTitle": "內嵌視覺化",
         "inlineVisualsCopy": "允許代理程式在其回覆中顯示圖表、示意圖和原型圖。適用於新啟動的聊天。",
         "inlineVisualsToggleLabel": "切換內嵌視覺化",
-        "followUpBehaviorCopy": "代理程式執行時傳送的訊息會以卡片形式等待至回合結束，而不會進入目前的回合。Cmd/Ctrl+Enter 可針對單則訊息反轉此行為；輸入框為空時，會將第一張等待中的卡片引入目前回合。含圖片的訊息也會以卡片形式等待。",
+        "followUpBehaviorCopy": "代理程式執行時傳送的訊息會以卡片形式等待至回合結束，而不會進入目前的回合。當 Enter 用於傳送訊息時，Cmd/Ctrl+Enter 可針對單則訊息反轉此行為；輸入框為空時，會將第一張等待中的卡片引入目前回合。含圖片的訊息也會以卡片形式等待。",
         "behaviorTitle": "行為",
         "resumeSearchUpdate": "更新",
         "resumeSearchRelaunch": "重新啟動",

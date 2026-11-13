@@ -20654,6 +20654,8 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Takip mesajlarını sıraya al",
+        "enterToSendTitle": "Enter ile mesaj gönder",
+        "enterToSendCopy": "Kapalıyken Enter yeni satır ekler ve {{shortcut}} gönderir. Shift+Enter her zaman yeni satır ekler.",
         "scrollToLatestOnSendTitle": "Gönderirken en son mesaja kaydır",
         "scrollToLatestOnSendCopy": "Yukarı kaydırılmışken göndermek en son mesaja atlar ve yanıtı takip eder. Konumunuzu korumak için kapatın.",
         "scrollToLatestOnSendSearchPosition": "konum",
@@ -20663,7 +20665,7 @@
         "inlineVisualsTitle": "Yanıtlarda görseller",
         "inlineVisualsCopy": "Ajanın yanıtlarında grafikler, diyagramlar ve taslaklar göstermesine izin verin. Yeni başlatılan sohbetlere uygulanır.",
         "inlineVisualsToggleLabel": "Yanıtlardaki görselleri aç/kapat",
-        "followUpBehaviorCopy": "Ajan çalışırken gönderilen mesajlar, çalışan tura girmek yerine tur bitene kadar kart olarak bekler. Cmd/Ctrl+Enter tek bir mesaj için bunun tersini yapar; hiçbir şey yazılmadığında ise bekleyen ilk kartı çalışan tura yönlendirir. Görsel içeren mesajlar da kart olarak bekler.",
+        "followUpBehaviorCopy": "Ajan çalışırken gönderilen mesajlar, çalışan tura girmek yerine tur bitene kadar kart olarak bekler. Enter mesaj gönderdiğinde, Cmd/Ctrl+Enter tek bir mesaj için bunun tersini yapar; hiçbir şey yazılmadığında ise bekleyen ilk kartı çalışan tura yönlendirir. Görsel içeren mesajlar da kart olarak bekler.",
         "behaviorTitle": "Davranış",
         "resumeSearchUpdate": "güncelle",
         "resumeSearchRelaunch": "yeniden başlat",

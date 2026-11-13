@@ -20282,10 +20282,12 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "将后续消息加入队列",
+        "enterToSendTitle": "按 Enter 发送消息",
+        "enterToSendCopy": "关闭后，Enter 换行，{{shortcut}} 发送消息。Shift+Enter 始终换行。",
         "scrollToLatestOnSendTitle": "发送时滚动到最新消息",
         "scrollToLatestOnSendCopy": "向上滚动时发送消息会跳到最新消息并跟随回复。关闭后将保持当前位置。",
         "scrollToLatestOnSendSearchPosition": "位置",
-        "followUpBehaviorCopy": "智能体工作时发送的消息会作为卡片等待，直到本轮结束，而不是进入当前轮次。Cmd/Ctrl+Enter 对单条消息执行相反操作；输入框为空时，该快捷键会将第一张等待中的卡片引入当前轮次。带图片的消息也会作为卡片等待。",
+        "followUpBehaviorCopy": "智能体工作时发送的消息会作为卡片等待，直到本轮结束，而不是进入当前轮次。当 Enter 用于发送消息时，Cmd/Ctrl+Enter 对单条消息执行相反操作；输入框为空时，该快捷键会将第一张等待中的卡片引入当前轮次。带图片的消息也会作为卡片等待。",
         "inlineVisualsTitle": "内嵌可视化",
         "inlineVisualsCopy": "允许代理在回复中展示图表、示意图和原型图，适用于新开始的聊天",
         "inlineVisualsToggleLabel": "切换内嵌可视化",

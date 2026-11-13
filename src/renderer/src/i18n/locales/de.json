@@ -20679,6 +20679,8 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Folgenachrichten einreihen",
+        "enterToSendTitle": "Nachrichten mit Enter senden",
+        "enterToSendCopy": "Wenn deaktiviert, fügt Enter einen Zeilenumbruch ein und {{shortcut}} sendet. Shift+Enter fügt immer einen Zeilenumbruch ein.",
         "scrollToLatestOnSendTitle": "Beim Senden zur neuesten Nachricht scrollen",
         "scrollToLatestOnSendCopy": "Senden im hochgescrollten Zustand springt zur neuesten Nachricht und folgt der Antwort. Deaktiviere dies, um deine Position zu behalten.",
         "scrollToLatestOnSendSearchPosition": "Position",
@@ -20688,7 +20690,7 @@
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
-        "followUpBehaviorCopy": "Nachrichten, die während der Arbeit des Agenten gesendet werden, warten als Karten bis zum Ende des Durchgangs, statt in den laufenden Durchgang zu gehen. Cmd/Strg+Enter bewirkt für eine Nachricht das Gegenteil; ohne Eingabe wird die erste wartende Karte in den laufenden Durchgang gelenkt. Nachrichten mit Bildern warten ebenfalls als Karten.",
+        "followUpBehaviorCopy": "Nachrichten, die während der Arbeit des Agenten gesendet werden, warten als Karten bis zum Ende des Durchgangs, statt in den laufenden Durchgang zu gehen. Wenn Enter Nachrichten sendet, bewirkt Cmd/Strg+Enter für eine Nachricht das Gegenteil; ohne Eingabe wird die erste wartende Karte in den laufenden Durchgang gelenkt. Nachrichten mit Bildern warten ebenfalls als Karten.",
         "behaviorTitle": "Verhalten",
         "resumeSearchUpdate": "Aktualisieren",
         "resumeSearchRelaunch": "Neu starten",

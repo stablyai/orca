@@ -4,6 +4,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from './native-chat-resume-setting-target'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID } from './native-chat-usage-limit-continue-setting-target'
+import { getScreenSubmitShortcutLabel } from '@/lib/keyboard/screen-submit-shortcut'
 
 export const getChatBehaviorTitle = (t: Translate = translate): string =>
   t('components.settings.nativeChat.behaviorTitle', 'Behavior')
@@ -57,12 +58,21 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
     title: translate('components.settings.nativeChat.followUpBehaviorTitle', 'Queue follow-ups'),
     description: translate(
       'components.settings.nativeChat.followUpBehaviorCopy',
-      'Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message, and with nothing typed steers the first waiting card into the running turn. Messages with images wait as cards too.'
+      'Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. When Enter sends messages, Cmd/Ctrl+Enter does the opposite for one message, and with nothing typed steers the first waiting card into the running turn. Messages with images wait as cards too.'
     ),
     keywords: [
       translate('components.settings.nativeChat.queueSearchQueue', 'queue'),
       translate('components.settings.nativeChat.queueSearchSteer', 'steer')
     ]
+  },
+  enterToSend: {
+    targetSectionId: 'chat-enter-to-send',
+    title: translate('components.settings.nativeChat.enterToSendTitle', 'Send messages with Enter'),
+    description: translate(
+      'components.settings.nativeChat.enterToSendCopy',
+      'When off, Enter inserts a newline and {{shortcut}} sends. Shift+Enter always inserts a newline.',
+      { shortcut: getScreenSubmitShortcutLabel() }
+    )
   },
   scrollToLatestOnSend: {
     targetSectionId: 'chat-scroll-to-latest-on-send',

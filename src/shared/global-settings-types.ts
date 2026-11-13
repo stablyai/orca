@@ -214,6 +214,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatResumeWorkOnRestart?: boolean
   /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean
+  /** Off makes Enter insert a newline and Cmd/Ctrl+Enter send; absent means on. */
+  nativeChatEnterToSend?: boolean
   /** Opt-in: when a chat stops on a usage limit with a known reset time, send it "Continue where
    *  you left off." once the limit resets, unless that chat was told not to. */
   nativeChatAutoContinueAfterUsageLimit?: boolean
