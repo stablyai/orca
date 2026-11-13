@@ -179,68 +179,6 @@ export type PreloadApi = {
   speech: SpeechApi
 }
 
-export type {
-  ClaudeUsageApi,
-  CodexUsageApi,
-  MuseUsageApi,
-  OpenCodeUsageApi
-} from './api/agent-usage-api'
-export type { AiVaultApi } from './api/ai-vault-api'
-export type { AutomationsApi, ExternalAutomationManagerResult } from './api/automation-api'
-export type { AppApi } from './api/app-api'
-export type {
-  BrowserApi,
-  DetectedBrowserInfo,
-  DetectedBrowserProfileInfo
-} from './api/browser/browser-api'
-export type { EmulatorApi } from './api/emulator-api'
-export type { ExportApi } from './api/filesystem-api'
-export type {
-  NativeChatApi,
-  NativeChatAppendedMessages,
-  NativeChatAppendedPayload,
-  NativeChatReadSessionResult,
-  NativeChatSubscribeArgs,
-  NativeChatSubscriptionFrame
-} from './api/native-chat-api'
-export type {
-  PluginAutoUpdateEvent,
-  PluginHostCustomEditor,
-  PluginHostNewFile,
-  PluginHostInstallResult,
-  PluginHostInstallSource,
-  PluginHostListEntry,
-  PluginHostLogLine,
-  PluginHostPanel,
-  PluginHostStatus,
-  PluginMarketplaceHostInstallPreview,
-  PluginMarketplaceHostListing,
-  PluginMarketplaceHostSourceState
-} from './api/plugin-host-api'
-export type {
-  PreflightApi,
-  PreflightRuntimeContext,
-  PreflightStatus,
-  RefreshAgentsResult
-} from './api/preflight-api'
-export type {
-  PtyManagementApi,
-  PtyManagementDaemonCwdClass,
-  PtyManagementFolderAccessMismatch,
-  PtyManagementMacTccAttributionHealth,
-  PtyManagementSession,
-  PtyManagementSeveredDaemon,
-  PtyManagementSeveredDaemonRestartResult
-} from './api/pty-management-api'
-
-export type {
-  DiagnosticsBundlePayload,
-  DiagnosticsStatusPayload,
-  DiagnosticsUploadPayload,
-  MemoryApi,
-  StatsApi
-} from './api/telemetry-api'
-
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {

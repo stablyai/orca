@@ -1,5 +1,5 @@
 import { translate } from '../i18n/mobile-i18n'
-import { triggerError } from '../platform/haptics'
+import { triggerError } from '../platform/haptics/haptics'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type {

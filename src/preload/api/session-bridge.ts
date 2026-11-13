@@ -8,8 +8,5 @@ export const sessionApi = {
   patch: (args, hostId) => ipcRenderer.invoke('session:patch', args, hostId),
   closeTerminalSurface: (args) => ipcRenderer.invoke('session:close-terminal-surface', args),
   flush: () => ipcRenderer.invoke('session:flush'),
-  readTerminalScrollback: (args) =>
-    ipcRenderer.sendSync('session:read-terminal-scrollback-sync', args),
-  hasTerminalScrollback: (args) =>
-    ipcRenderer.sendSync('session:has-terminal-scrollback-sync', args)
+  readTerminalScrollback: (args) => ipcRenderer.invoke('session:read-terminal-scrollback', args)
 } satisfies PreloadApi['session']

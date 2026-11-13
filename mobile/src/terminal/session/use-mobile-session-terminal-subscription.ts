@@ -11,7 +11,7 @@ import {
   runTerminalViewportFitPass
 } from './mobile-terminal-viewport-resubscribe'
 import { updateTerminalCwdFromStreamEvent } from './terminal-stream-cwd'
-import { createTerminalOutputAck, writeTerminalStreamOutput } from '../terminal-output-ack'
+import * as terminalOutput from '../output-flow/terminal-output-ack'
 import { acceptTerminalLayoutSeq, terminalDisplayModeAdopter } from './terminal-stream-layout'
 import { createTerminalStreamResumeCursor } from './terminal-stream-resume'
 import type { MobileSessionTerminalSubscriptionFoundationModel } from './use-mobile-session-terminal-subscription-foundation'
@@ -128,7 +128,7 @@ export function useMobileSessionTerminalSubscription(
       })
 
       // Lease-only streams carry no output, so only a rendered terminal asks for credit.
-      const outputAck = createTerminalOutputAck({
+      const outputAck = terminalOutput.createTerminalOutputAck({
         client,
         capabilities: nativeChatTerminalStream.mobileNativeChatTerminalCapabilities(covered),
         terminal: covered ? undefined : getTerminalRef(handle),
@@ -250,7 +250,7 @@ export function useMobileSessionTerminalSubscription(
           } else if (data.type === 'data') {
             updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
             resume.output(data, getTerminalRef(handle) !== undefined)
-            writeTerminalStreamOutput({
+            terminalOutput.writeTerminalStreamOutput({
               handle,
               chunk: data.chunk as string,
               terminal: getTerminalRef(handle),

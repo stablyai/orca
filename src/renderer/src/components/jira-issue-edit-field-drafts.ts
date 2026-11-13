@@ -11,7 +11,7 @@ import {
   findJiraCreateAllowedValue,
   getJiraCreateAllowedValueLabel,
   getJiraCreateOptionPayload
-} from './task-page/jira/task-page-jira-create-fields'
+} from './task-page/jira/creation/task-page-jira-create-fields'
 
 export function getJiraEditFieldEditor(field: JiraEditField): JiraEditFieldEditor {
   return field.writable ? getJiraEditFieldSchemaEditor(field) : 'readonly'

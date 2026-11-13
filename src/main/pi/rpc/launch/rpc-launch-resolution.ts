@@ -16,7 +16,7 @@ import {
   type AgentCliVersionCheck,
   type AgentCliVersionReader
 } from '../../../agent-launch/preflight/agent-cli-version-probe'
-import { AgentCliInstallationError } from '../../../native-chat/agent-cli-installation-error'
+import { AgentCliInstallationError } from '../../../native-chat/agent-launch/agent-cli-installation-error'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   assertStructuredAgentResolutionCurrent,
@@ -24,10 +24,10 @@ import {
   resolveStructuredAgentCommand,
   type StructuredAgentCommand,
   type StructuredAgentCommandSettings
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import { isWindowsProcessStartTimeAvailable } from '../../../windows/windows-process-table'
-import { sessionIdFromFileName } from '../../../ai-vault/session-scanner-accumulator'
+import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import {
   PI_RPC_SESSION_ENV_TO_DELETE,
   withoutPiCallerEnv,

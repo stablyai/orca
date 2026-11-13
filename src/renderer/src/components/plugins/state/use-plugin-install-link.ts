@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
+import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugin-host-api'
 import { isSameGitRepository } from '../../../../../shared/plugins/catalog/plugin-marketplace'
 import type { PluginInstallLinkCatalog } from '../../../../../shared/plugins/catalog/plugin-install-link'
 import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'

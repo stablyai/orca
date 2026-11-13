@@ -5,7 +5,7 @@ import {
   releaseAutomationWorkspaceProvenanceRequest,
   resolveAutomationWorkspaceProvenance,
   resolveClientAutomationWorkspaceProvenance
-} from '../../../../automations/workspace-provenance'
+} from '../../../../automations/ownership/workspace-provenance'
 import { getLocalWorktreeCatalogVersion } from '../../../../workspaces/catalog/local-worktree-scan-generation'
 import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runtime-worktree-selection'
 import { splitWorktreeId } from '../../../../../shared/worktree/id'
@@ -15,7 +15,7 @@ import { defineMethod } from '../../core'
 import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
 import { resolvePairedCallerHostId } from '../pairing/paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
-import { resolveRpcWorkspaceCreatorProvenance } from '../../workspace-creator-context'
+import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
 import {
   WorktreeCreate,
   WorktreePrefetchCreateBase
@@ -35,7 +35,7 @@ import {
 } from '../../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
-import { waitsForWorktreeRemoval } from '../../worktree-removal-marker-projection'
+import { waitsForWorktreeRemoval } from '../../workspace-client-views/worktree-removal-marker-projection'
 import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 import { WORKSPACE_CLEANUP_SCAN_METHOD } from './workspace-cleanup-scan-method'

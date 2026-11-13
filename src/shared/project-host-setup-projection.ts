@@ -4,7 +4,10 @@ import {
   normalizeProjectRow
 } from './project-catalog-row-normalization'
 import { normalizeGitHubRemoteHost } from './git/remotes/git-remote-host-alias'
-import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-identity-key'
+import {
+  githubRepoIdentityKey,
+  isDefaultGitHubHost
+} from './github/repositories/repository-identity-key'
 import type { Project, ProjectHostSetup, ProjectProviderIdentity } from './project-types'
 import type { Repo } from './repo-types'
 

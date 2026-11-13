@@ -930,7 +930,7 @@
       "id": "settings-repo-metadata-fulfilled",
       "operation": "settings.repo-metadata",
       "family": "settings.repo-metadata",
-      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "sites": ["mobile/src/host-screen/catalog/use-host-repo-metadata.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -1023,7 +1023,7 @@
       "id": "settings-repo-metadata-icons",
       "operation": "settings.repo-metadata",
       "family": "settings.repo-metadata",
-      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "sites": ["mobile/src/host-screen/catalog/use-host-repo-metadata.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -1134,7 +1134,7 @@
       "id": "settings-repo-metadata-refused",
       "operation": "settings.repo-metadata",
       "family": "settings.repo-metadata",
-      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "sites": ["mobile/src/host-screen/catalog/use-host-repo-metadata.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -1222,7 +1222,7 @@
       "id": "settings-repo-metadata-transport-error",
       "operation": "settings.repo-metadata",
       "family": "settings.repo-metadata",
-      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "sites": ["mobile/src/host-screen/catalog/use-host-repo-metadata.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -2101,7 +2101,7 @@
       "id": "settings-repo-cache-expiry",
       "operation": "settings.repo-metadata",
       "family": "settings.repo-metadata",
-      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "sites": ["mobile/src/host-screen/catalog/use-host-repo-metadata.ts"],
       "schedules": ["follow-up-cache-observation", "timer-expiry"],
       "steps": [
         {
@@ -2424,7 +2424,7 @@
       "id": "settings-repo-metadata-single-host",
       "operation": "settings.repo-metadata",
       "family": "settings.repo-metadata",
-      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "sites": ["mobile/src/host-screen/catalog/use-host-repo-metadata.ts"],
       "schedules": ["single-ssh-host"],
       "steps": [
         {
@@ -2855,7 +2855,7 @@
       "id": "settings-repo-metadata-refuse-after-data",
       "operation": "settings.repo-metadata",
       "family": "settings.repo-metadata",
-      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "sites": ["mobile/src/host-screen/catalog/use-host-repo-metadata.ts"],
       "schedules": ["success-then-refused"],
       "steps": [
         {
@@ -6809,7 +6809,7 @@
       "id": "files-ownership-ssh",
       "operation": "files.mutation-ownership",
       "family": "files.mutation-ownership",
-      "sites": ["mobile/src/files/mobile-file-mutation-ownership.ts"],
+      "sites": ["mobile/src/files/mutation-ownership/mobile-file-mutation-ownership.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6872,7 +6872,7 @@
       "id": "files-ownership-local",
       "operation": "files.mutation-ownership",
       "family": "files.mutation-ownership",
-      "sites": ["mobile/src/files/mobile-file-mutation-ownership.ts"],
+      "sites": ["mobile/src/files/mutation-ownership/mobile-file-mutation-ownership.ts"],
       "schedules": [],
       "steps": [
         {
@@ -6915,8 +6915,8 @@
       "operation": "files.preview-load",
       "family": "files.preview-load",
       "sites": [
-        "mobile/src/files/mobile-file-preview-request.ts",
-        "mobile/src/files/mobile-terminal-artifact-grant-refresh.ts"
+        "mobile/src/files/preview/mobile-file-preview-request.ts",
+        "mobile/src/files/terminal-artifacts/mobile-terminal-artifact-grant-refresh.ts"
       ],
       "schedules": [],
       "steps": [
@@ -6989,8 +6989,8 @@
       "operation": "files.preview-load",
       "family": "files.preview-load",
       "sites": [
-        "mobile/src/files/mobile-file-preview-request.ts",
-        "mobile/src/files/mobile-terminal-artifact-grant-refresh.ts"
+        "mobile/src/files/preview/mobile-file-preview-request.ts",
+        "mobile/src/files/terminal-artifacts/mobile-terminal-artifact-grant-refresh.ts"
       ],
       "schedules": [],
       "steps": [
@@ -7023,7 +7023,7 @@
       "id": "files-preview-worktree",
       "operation": "files.preview-load",
       "family": "files.preview-load",
-      "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
+      "sites": ["mobile/src/files/preview/mobile-file-preview-request.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7054,7 +7054,7 @@
       "id": "files-preview-worktree-image",
       "operation": "files.preview-load",
       "family": "files.preview-load",
-      "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
+      "sites": ["mobile/src/files/preview/mobile-file-preview-request.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7089,7 +7089,7 @@
       "id": "files-preview-artifact-image",
       "operation": "files.preview-load",
       "family": "files.preview-load",
-      "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
+      "sites": ["mobile/src/files/preview/mobile-file-preview-request.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7126,8 +7126,8 @@
       "operation": "files.preview-save",
       "family": "files.preview-save",
       "sites": [
-        "mobile/src/files/mobile-file-preview-request.ts",
-        "mobile/src/files/mobile-terminal-artifact-grant-refresh.ts"
+        "mobile/src/files/preview/mobile-file-preview-request.ts",
+        "mobile/src/files/terminal-artifacts/mobile-terminal-artifact-grant-refresh.ts"
       ],
       "schedules": [],
       "steps": [
@@ -7179,8 +7179,8 @@
       "operation": "files.preview-save",
       "family": "files.preview-save",
       "sites": [
-        "mobile/src/files/mobile-file-preview-request.ts",
-        "mobile/src/files/mobile-terminal-artifact-grant-refresh.ts"
+        "mobile/src/files/preview/mobile-file-preview-request.ts",
+        "mobile/src/files/terminal-artifacts/mobile-terminal-artifact-grant-refresh.ts"
       ],
       "schedules": [],
       "steps": [
@@ -7212,7 +7212,7 @@
       "id": "files-tab-doc-shapes",
       "operation": "files.tab-doc",
       "family": "files.tab-doc",
-      "sites": ["mobile/src/files/mobile-file-tab-doc.ts"],
+      "sites": ["mobile/src/files/session-documents/mobile-file-tab-doc.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7416,7 +7416,7 @@
       "id": "host-view-settings-sync",
       "operation": "host.view-settings",
       "family": "host.view-settings",
-      "sites": ["mobile/src/host-screen/use-host-view-settings.ts"],
+      "sites": ["mobile/src/host-screen/view-settings/use-host-view-settings.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7640,7 +7640,7 @@
       "id": "host-worktree-actions-pin-open-delete",
       "operation": "host.worktree-actions",
       "family": "host.worktree-actions",
-      "sites": ["mobile/src/host-screen/use-host-worktree-actions.ts"],
+      "sites": ["mobile/src/host-screen/workspace-actions/use-host-worktree-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7731,7 +7731,7 @@
       "id": "host-worktree-delete-refused",
       "operation": "host.worktree-actions",
       "family": "host.worktree-actions",
-      "sites": ["mobile/src/host-screen/use-host-worktree-actions.ts"],
+      "sites": ["mobile/src/host-screen/workspace-actions/use-host-worktree-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -7786,7 +7786,7 @@
       "id": "host-worktree-delete-archive-hook-failed",
       "operation": "host.worktree-actions",
       "family": "host.worktree-actions",
-      "sites": ["mobile/src/host-screen/use-host-worktree-actions.ts"],
+      "sites": ["mobile/src/host-screen/workspace-actions/use-host-worktree-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16381,7 +16381,7 @@
       "id": "terminal-query-reply-accepted",
       "operation": "terminal.query-reply",
       "family": "terminal.query-reply",
-      "sites": ["mobile/src/terminal/mobile-terminal-query-reply.ts"],
+      "sites": ["mobile/src/terminal/host-operations/mobile-terminal-query-reply.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16418,7 +16418,7 @@
       "id": "terminal-query-reply-unsubscribed",
       "operation": "terminal.query-reply",
       "family": "terminal.query-reply",
-      "sites": ["mobile/src/terminal/mobile-terminal-query-reply.ts"],
+      "sites": ["mobile/src/terminal/host-operations/mobile-terminal-query-reply.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16437,7 +16437,7 @@
       "id": "terminal-raw-input-reported",
       "operation": "terminal.accessory-raw-send",
       "family": "terminal.raw-input",
-      "sites": ["mobile/src/terminal/terminal-live-accessory-raw-send.ts"],
+      "sites": ["mobile/src/terminal/live-input/terminal-live-accessory-raw-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16473,7 +16473,7 @@
       "id": "terminal-raw-input-refused",
       "operation": "terminal.accessory-raw-send",
       "family": "terminal.raw-input",
-      "sites": ["mobile/src/terminal/terminal-live-accessory-raw-send.ts"],
+      "sites": ["mobile/src/terminal/live-input/terminal-live-accessory-raw-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16509,7 +16509,7 @@
       "id": "terminal-viewport-refit-applied",
       "operation": "terminal.viewport-refit",
       "family": "terminal.viewport-refit",
-      "sites": ["mobile/src/terminal/terminal-viewport-refit.ts"],
+      "sites": ["mobile/src/terminal/viewport/terminal-viewport-refit.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16553,7 +16553,7 @@
       "id": "terminal-viewport-refit-legacy-desktop",
       "operation": "terminal.viewport-refit",
       "family": "terminal.viewport-refit",
-      "sites": ["mobile/src/terminal/terminal-viewport-refit.ts"],
+      "sites": ["mobile/src/terminal/viewport/terminal-viewport-refit.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20218,7 +20218,7 @@
       "id": "files-explorer-legacy-fallback",
       "operation": "files.explorer-screen",
       "family": "files.explorer-screen",
-      "sites": ["mobile/src/files/MobileFileExplorerPanel.tsx"],
+      "sites": ["mobile/src/files/explorer/MobileFileExplorerPanel.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -20277,7 +20277,7 @@
       "id": "files-explorer-readdir",
       "operation": "files.explorer-screen",
       "family": "files.explorer-screen",
-      "sites": ["mobile/src/files/MobileFileExplorerPanel.tsx"],
+      "sites": ["mobile/src/files/explorer/MobileFileExplorerPanel.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -23762,7 +23762,7 @@
       "id": "files-preview-worktree-text-read",
       "operation": "files.preview-load",
       "family": "files.preview-worktree-text",
-      "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
+      "sites": ["mobile/src/files/preview/mobile-file-preview-request.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23793,7 +23793,7 @@
       "id": "files-preview-worktree-image-read",
       "operation": "files.preview-load",
       "family": "files.preview-worktree-image",
-      "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
+      "sites": ["mobile/src/files/preview/mobile-file-preview-request.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23828,7 +23828,7 @@
       "id": "files-preview-artifact-image-read",
       "operation": "files.preview-load",
       "family": "files.preview-artifact-image",
-      "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
+      "sites": ["mobile/src/files/preview/mobile-file-preview-request.ts"],
       "schedules": [],
       "steps": [
         {

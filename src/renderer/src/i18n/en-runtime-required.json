@@ -150,7 +150,9 @@
           "graceHours_one": "{{count}} hour",
           "graceHours_other": "{{count}} hours",
           "graceMinutes_one": "{{count}} minute",
-          "graceMinutes_other": "{{count}} minutes"
+          "graceMinutes_other": "{{count}} minutes",
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} run reported",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} runs reported"
         },
         "AutomationRunsDashboard": {
           "historyUnavailable_one": "Run history is unavailable for {{count}} automation. Counts include available history only.",
@@ -427,6 +429,8 @@
             "discardFailedSampleMore_other": "{{paths}}, +{{count}} more",
             "discardFailed_one": "Failed to discard {{count}} file",
             "discardFailed_other": "Failed to discard {{count}} files",
+            "mergedReviewUncommitted_one": "{{review}} is merged, but this workspace has {{count}} uncommitted change that is not in it.",
+            "mergedReviewUncommitted_other": "{{review}} is merged, but this workspace has {{count}} uncommitted changes that are not in it.",
             "noteCount_one": "{{count}} note",
             "noteCount_other": "{{count}} notes"
           },
@@ -921,11 +925,6 @@
           "hiddenWorktreesNoun_other": "hidden worktrees",
           "reviewHiddenWorktrees_one": "Review {{count}} hidden worktree in {{scope}}",
           "reviewHiddenWorktrees_other": "Review {{count}} hidden worktrees in {{scope}}"
-        },
-        "PreservedBranchBatchReviewDialog": {
-          "a0f9863597": "Force Delete {{count}} Branches",
-          "a0f9863597_one": "Force Delete {{count}} Branch",
-          "a0f9863597_other": "Force Delete {{count}} Branches"
         },
         "ProjectGroupDeleteDialog": {
           "moreProjects_one": "+{{count}} more",
@@ -2139,8 +2138,6 @@
           "workspaceCount_other": "{{count}} workspaces"
         },
         "confirm": {
-          "deleteTitle_one": "Delete {{count}} workspace?",
-          "deleteTitle_other": "Delete {{count}} workspaces?",
           "deletingTitle_one": "Deleting {{count}} workspace",
           "deletingTitle_other": "Deleting {{count}} workspaces"
         },
@@ -2577,8 +2574,6 @@
     "discard": {
       "deleteUntrackedFilesDescription_one": "This will permanently delete {{count}} untracked file. This cannot be undone.",
       "deleteUntrackedFilesDescription_other": "This will permanently delete these {{count}} untracked files. This cannot be undone.",
-      "deleteUntrackedTitle_one": "Delete {{count}} untracked file?",
-      "deleteUntrackedTitle_other": "Delete {{count}} untracked files?",
       "unstagedFilesIncludingUntrackedDescription_one": "This will revert unstaged changes and permanently delete any untracked files among {{count}} file. This cannot be undone.",
       "unstagedFilesIncludingUntrackedDescription_other": "This will revert unstaged changes and permanently delete any untracked files among these {{count}} files. This cannot be undone."
     },

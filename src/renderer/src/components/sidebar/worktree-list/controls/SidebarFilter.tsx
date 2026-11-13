@@ -35,6 +35,7 @@ import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-
 import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { withoutHiddenRepos } from '../../../../../../shared/hidden-projects'
 
 type SidebarFilterProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -71,7 +72,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
   )
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
-  const repos = useAppStore((s) => s.repos)
+  const allRepos = useAppStore((s) => s.repos)
+  const repos = useMemo(() => withoutHiddenRepos(allRepos), [allRepos])
   const addRepo = useAppStore((s) => s.addRepo)
 
   const [open, setOpen] = useState(false)

@@ -67,4 +67,35 @@ describe('mobile session route', () => {
       payload: target
     })
   })
+
+  it('mounts the host, then puts a standalone session in place of its list', () => {
+    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+    const target = mobileSessionRouteTarget({
+      hostId: 'host/one',
+      worktreeId: 'repo::/tmp/wt',
+      standalone: true
+    })
+
+    navigateToHostStackRoute(
+      harness.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host/one',
+      target
+    )
+    harness.setState(mountedHostState('host/one'))
+
+    expect(harness.navigation.dispatch.mock.calls).toEqual([
+      [
+        {
+          type: 'REPLACE',
+          target: '/h',
+          source: 'host-index',
+          payload: {
+            name: '[hostId]/session/[worktreeId]',
+            params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt', standalone: '1' }
+          }
+        }
+      ]
+    ])
+  })
 })

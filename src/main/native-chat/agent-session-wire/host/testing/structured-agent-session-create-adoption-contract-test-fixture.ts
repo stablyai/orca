@@ -2,7 +2,8 @@ import { writeFile } from 'node:fs/promises'
 vi.mock(
   '../../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
   async (original) => {
-    const query = await import('../../../transcript-opencode-sqlite-query')
+    const query =
+      await import('../../../transcript-history/opencode/transcript-opencode-sqlite-query')
     return {
       ...(await original<object>()),
       readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,

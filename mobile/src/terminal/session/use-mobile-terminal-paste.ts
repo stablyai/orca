@@ -5,17 +5,16 @@ import {
 } from '../../../../src/shared/terminal/input/terminal-bracketed-paste-text'
 import { useCallback, type RefObject } from 'react'
 import { translate } from '../../i18n/mobile-i18n'
-import { terminalInputSend } from '../mobile-terminal-operations'
-import { useClipboardReader } from '../../platform/clipboard'
-import type { TerminalModes } from '../terminal-webview-contract'
+import { terminalInputSend } from '../host-operations/mobile-terminal-operations'
+import { useClipboardReader } from '../../platform/clipboard/clipboard'
+import type { TerminalModes } from '../webview/terminal-webview-contract'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import {
   buildMobileTerminalImagePastePayload,
-  prepareMobileClipboardImageBase64,
   saveMobileClipboardImageAsTempFile
 } from '../../files/attachments/mobile-clipboard-image'
-import { resizeMobileClipboardImage } from '../../files/attachments/mobile-clipboard-image-resize'
+import { fitMobileAgentImageBase64 } from '../../files/attachments/mobile-agent-image-fit'
 
 // Match xterm's paste(): newlines become CR, and DECSET 2004 frames the text with ESC made inert.
 function buildMobileTerminalClipboardTextPayload(
@@ -99,7 +98,7 @@ export function useMobileTerminalPaste({
           return
         }
         const connectionId = await getActiveWorktreeConnectionId()
-        const base64 = await prepareMobileClipboardImageBase64(image, resizeMobileClipboardImage)
+        const base64 = await fitMobileAgentImageBase64(image.data)
         const imagePath = await saveMobileClipboardImageAsTempFile(client, base64, {
           connectionId
         })

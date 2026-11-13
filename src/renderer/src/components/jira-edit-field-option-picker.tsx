@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/class-names'
 import type { JiraEditField } from '../../../shared/jira/jira-types'
-import { getJiraCreateAllowedValueLabel } from './task-page/jira/task-page-jira-create-fields'
+import { getJiraCreateAllowedValueLabel } from './task-page/jira/creation/task-page-jira-create-fields'
 import { getJiraEditOptionKey } from './jira-issue-edit-field-drafts'
 
 /**

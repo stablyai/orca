@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import { admitCloseActiveTabPayload } from '../close-active-tab-payload-admission'
+import { admitCloseActiveTabPayload } from '../renderer/window-commands/close-active-tab-payload-admission'
 import type { CloseActiveTabPayload } from '../api/ui-command-event-api'
 import type {
   BrowserHistoryNavigateCommand,
@@ -11,7 +11,7 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../shared/worktree/launch-types'
-import { browserFindSubscriptions } from '../preload-runtime-support'
+import { browserFindSubscriptions } from '../renderer/renderer-runtime'
 import type { PreloadApi } from '../api-types'
 
 export const uiTabAndBrowserCommandsApi = {

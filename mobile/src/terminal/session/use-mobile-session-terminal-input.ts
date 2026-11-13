@@ -1,9 +1,12 @@
 import { useCallback } from 'react'
 import { translate } from '../../i18n/mobile-i18n'
-import { terminalBufferClear } from '../mobile-terminal-operations'
-import { sendMobileTerminalQueryReply } from '../mobile-terminal-query-reply'
-import { buildTerminalSendParams, TERMINAL_INPUT_SEND_OPTIONS } from '../terminal-send-request'
-import { countTerminalGestureInputSequences } from '../terminal-gesture-input'
+import { terminalBufferClear } from '../host-operations/mobile-terminal-operations'
+import { sendMobileTerminalQueryReply } from '../host-operations/mobile-terminal-query-reply'
+import {
+  buildTerminalSendParams,
+  TERMINAL_INPUT_SEND_OPTIONS
+} from '../input-delivery/terminal-send-request'
+import { countTerminalGestureInputSequences } from '../pointer-input/terminal-gesture-input'
 import {
   isGestureMouseTrackingMode,
   TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
@@ -12,7 +15,7 @@ import {
   TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
 } from './terminal-gesture-input-policy'
 import type { Terminal, TerminalGestureInputQueue } from './mobile-terminal-model'
-import type { TerminalPointerInput } from '../terminal-webview-contract'
+import type { TerminalPointerInput } from '../webview/terminal-webview-contract'
 import type { MobileSessionFileActionsModel } from '../../files/session-documents/use-mobile-session-file-actions'
 
 export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsModel) {

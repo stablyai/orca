@@ -6,7 +6,7 @@ import {
   generateJiraIssueSummaryRequest,
   cancelJiraIssueSummaryRequest,
   type JiraIssueSummaryGenerationHost
-} from '../../../text-generation/jira-issue-summary-requests'
+} from '../../../text-generation/requests/jira-issue-summary-requests'
 import type {
   JiraConnectArgs,
   JiraCreateIssueArgs,

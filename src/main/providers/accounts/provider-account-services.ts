@@ -69,6 +69,18 @@ export function createProviderAccountServices(
   )
   store.onSettingsChanged((updates, settings) => {
     void agentView.reconcile(settings)
+    if (updates.claudeOAuthUsageEnabled === false) {
+      rateLimits.discardClaudeOAuthUsage()
+    } else if (updates.claudeOAuthUsageEnabled === true) {
+      void rateLimits
+        .refreshClaudeForTarget(rateLimits.getState().claudeTarget)
+        .catch((error: unknown) => {
+          console.warn(
+            '[rate-limits] Failed to refresh Claude usage after enabling polling:',
+            error
+          )
+        })
+    }
     // Auto runtime selection remains live as provider settings change.
     void syncAccountRuntimeTargets(updates, settings).catch((error) =>
       console.warn('[rate-limits] Failed to apply account runtime target:', error)
@@ -137,6 +149,7 @@ export function createProviderAccountServices(
     apiKey: readZcodePlanApiKey() ?? ''
   }))
   rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)
+  rateLimits.setClaudeOAuthUsageEnabledResolver(() => store.getSettings().claudeOAuthUsageEnabled)
   // Reuse the meter switch so hidden Antigravity usage does not spawn agy.
   rateLimits.setAntigravityUsageEnabledResolver(() =>
     store.getUI().statusBarItems.includes('antigravity')

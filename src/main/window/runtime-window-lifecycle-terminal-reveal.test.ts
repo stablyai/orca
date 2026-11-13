@@ -11,7 +11,9 @@ vi.mock('electron', () => ({ ipcMain }))
 vi.mock('../ipc/worktrees/listing/worktree-change-invalidators', () => ({
   runWorktreeChangeInvalidators: vi.fn()
 }))
-vi.mock('./renderer-document-navigation', () => ({ registerRendererDocumentNavigation: vi.fn() }))
+vi.mock('./security/renderer-document-navigation', () => ({
+  registerRendererDocumentNavigation: vi.fn()
+}))
 
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
 
@@ -39,6 +41,7 @@ function attachWindow(id: number): {
   }
   const runtime = {
     attachWindow: vi.fn(),
+    onClientEvent: vi.fn(() => () => {}),
     markGraphReloadFailed: vi.fn(),
     setNotifier: (next: RuntimeNotifier | null) => {
       attached.notifier = next
