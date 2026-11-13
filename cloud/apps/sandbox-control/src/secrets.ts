@@ -9,9 +9,12 @@
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import type { Env } from './env'
-import { createKeyring, type Keyring, type SecretBinding } from './secrets-crypto'
+import { createKeyring, type Keyring, type SealFormat, type SecretBinding } from './secrets-crypto'
+import { createKekUnwrapper, SecretsKmsError } from './secrets-kms'
+import { AUTH_IAT_BACKDATE_MS } from './member-changes'
 import { BASE_URL_NAMES, baseUrlHost } from './provider-env'
 import type { SandboxRow } from './store'
+import { secretLog } from './secret-log'
 import {
   activityAccounts,
   activityLimit,
@@ -132,8 +135,28 @@ export function checkValue(name: string, value: string): void {
   }
 }
 
+/**
+ * SEC-6b: the last 4 characters of values of 16+ characters, stored in plaintext beside the ciphertext.
+ * Kept deliberately: owners and admins use it to tell which key is saved (as GitHub, Stripe and AWS
+ * consoles do), it reveals at most 4 characters of a value with at least 12 more, and it is useless for
+ * calling a provider. Shorter values get no hint. Only people who can write a scope see its hints: team
+ * members get `hint: null` for Shared and team Repository secrets (`hintVisible`). Encrypting it under
+ * the row's DEK would add nothing against someone holding the DB and the KEK, who can open the value.
+ */
 function hintFor(value: string): string | null {
   return value.length >= 16 ? value.slice(-4) : null
+}
+
+/** Whether `caller` may see last-4 hints in `scope`: the same people who may write it. */
+export function hintVisible(caller: SandboxCaller, scope: SecretScope): boolean {
+  switch (scope) {
+    case 'personal':
+      return true
+    case 'org':
+      return isOrgAdmin(caller)
+    case 'repo':
+      return !caller.orgId || isOrgAdmin(caller)
+  }
 }
 
 const REPO_PART = /^[A-Za-z0-9_.-]{1,100}$/
@@ -368,13 +391,13 @@ export async function resolveSandboxSecrets(
     } catch {
       skipped++
       // Name and scope only: never the value or ciphertext.
-      console.log(JSON.stringify({ event: 'secret_unreadable', sandboxId: row.id, scope: record.scope, name: record.name }))
+      secretLog('secret_unreadable', { sandboxId: row.id, scope: record.scope, name: record.name })
       continue
     }
     bytes += record.name.length + value.length
     if (bytes > MAX_INJECTED_BYTES) {
       skipped++
-      console.log(JSON.stringify({ event: 'secret_injection_capped', sandboxId: row.id, name: record.name }))
+      secretLog('secret_injection_capped', { sandboxId: row.id, name: record.name }, [value])
       continue
     }
     env[record.name] = value
@@ -424,35 +447,110 @@ export async function effectiveSecrets(db: D1Database, caller: SandboxCaller, re
       const kind = kindOf(name)
       const rank = RANK[kind]
       const [winner, ...rest] = records.sort((a, b) => rank[b.scope] - rank[a.scope])
+      const hint = (record: SecretRecord) => (hintVisible(caller, record.scope) ? record.hint : null)
       return {
         name,
         kind,
         scope: winner!.scope,
-        hint: winner!.hint,
+        hint: hint(winner!),
         updatedAt: winner!.updated_at,
-        shadowed: rest.map((record) => ({ scope: record.scope, hint: record.hint }))
+        shadowed: rest.map((record) => ({ scope: record.scope, hint: hint(record) }))
       }
     })
 }
 
-let cachedKeyring: { source: string; keyring: Promise<Keyring> } | null = null
+let cachedKeyring: { source: string; keyring: Promise<Keyring>; failedAt?: number } | null = null
+/** How long a failed KMS unwrap is remembered, so an outage is not one KMS round trip per request. */
+export const KMS_RETRY_AFTER_MS = 10_000
 
-/** The Worker's keyring, or null when SECRETS_KEK is not configured. */
-export function keyringFor(env: Env): Promise<Keyring> | null {
+function parseKeyMap(json: string | undefined): Record<string, string> {
+  return json ? (JSON.parse(json) as Record<string, string>) : {}
+}
+
+/**
+ * SECRETS_KEK_SOURCE=kms: every KEK comes out of Cloud KMS (src/secrets-kms.ts), once per isolate.
+ * SECRETS_KEK is never read on this path, so a KMS failure cannot fall back to a plaintext key.
+ */
+function kmsKeyring(env: Env, sealFormat: SealFormat, fetcher: typeof fetch | undefined): Promise<Keyring> {
+  const activeId = env.SECRETS_KEK_ID ?? 'k1'
+  const source = `kms\n${activeId}\n${env.SECRETS_KMS_KEY ?? ''}\n${env.SECRETS_KEK_WRAPPED ?? ''}\n${env.SECRETS_KEK_RETIRED_WRAPPED ?? ''}\n${sealFormat}`
+  const cached = cachedKeyring
+  if (cached?.source === source && (cached.failedAt === undefined || Date.now() - cached.failedAt < KMS_RETRY_AFTER_MS)) {
+    return cached.keyring
+  }
+  const load = async (): Promise<Keyring> => {
+    if (!env.SECRETS_KMS_KEY || !env.SECRETS_KMS_SERVICE_ACCOUNT || !env.SECRETS_KEK_WRAPPED) {
+      throw new SecretsKmsError('config')
+    }
+    let retiredWrapped: Record<string, string>
+    try {
+      retiredWrapped = parseKeyMap(env.SECRETS_KEK_RETIRED_WRAPPED)
+    } catch {
+      throw new SecretsKmsError('config')
+    }
+    const unwrap = createKekUnwrapper({ keyName: env.SECRETS_KMS_KEY, serviceAccountJson: env.SECRETS_KMS_SERVICE_ACCOUNT, fetch: fetcher })
+    const active = await unwrap(env.SECRETS_KEK_WRAPPED, activeId)
+    const retired: Record<string, string> = {}
+    for (const [id, wrapped] of Object.entries(retiredWrapped)) {
+      if (typeof wrapped !== 'string') {
+        throw new SecretsKmsError('config')
+      }
+      retired[id] = await unwrap(wrapped, id)
+    }
+    try {
+      return await createKeyring({ id: activeId, key: active }, retired, { sealFormat })
+    } catch {
+      // KMS returned something that is not a 32-byte key, or an id is malformed.
+      throw new SecretsKmsError('invalid')
+    }
+  }
+  const entry: NonNullable<typeof cachedKeyring> = { source, keyring: load() }
+  entry.keyring.catch((error: unknown) => {
+    entry.failedAt = Date.now()
+    const kms = error instanceof SecretsKmsError ? error : null
+    // Reason and HTTP status only: never a response body, a token or a key.
+    secretLog('secrets_kms_unavailable', { reason: kms?.reason ?? 'error', ...(kms?.status ? { status: kms.status } : {}) })
+  })
+  cachedKeyring = entry
+  return entry.keyring
+}
+
+/**
+ * The Worker's keyring, or null when the secret store is not configured. With SECRETS_KEK_SOURCE=kms
+ * the promise rejects with SecretsKmsError while KMS cannot hand over the keys.
+ */
+export function keyringFor(env: Env, fetcher?: typeof fetch): Promise<Keyring> | null {
+  // Anything but the exact opt-in stays v1, the format every deployed version reads.
+  const sealFormat = env.SECRETS_SEAL_FORMAT === 'v2' ? 'v2' : 'v1'
+  if (env.SECRETS_KEK_SOURCE === 'kms') {
+    return kmsKeyring(env, sealFormat, fetcher)
+  }
   if (!env.SECRETS_KEK) {
     return null
   }
-  // Anything but the exact opt-in stays v1, the format every deployed version reads.
-  const sealFormat = env.SECRETS_SEAL_FORMAT === 'v2' ? 'v2' : 'v1'
   const source = `${env.SECRETS_KEK_ID ?? 'k1'}\n${env.SECRETS_KEK}\n${env.SECRETS_KEK_RETIRED ?? ''}\n${sealFormat}`
   if (cachedKeyring?.source !== source) {
-    const retired = env.SECRETS_KEK_RETIRED ? (JSON.parse(env.SECRETS_KEK_RETIRED) as Record<string, string>) : {}
     cachedKeyring = {
       source,
-      keyring: createKeyring({ id: env.SECRETS_KEK_ID ?? 'k1', key: env.SECRETS_KEK }, retired, { sealFormat })
+      keyring: createKeyring({ id: env.SECRETS_KEK_ID ?? 'k1', key: env.SECRETS_KEK }, parseKeyMap(env.SECRETS_KEK_RETIRED), { sealFormat })
     }
   }
   return cachedKeyring.keyring
+}
+
+/**
+ * SEC-6a: admin-only writes (Shared, and a team's Repository secrets) need a token minted within the
+ * last minute. Auth's role-changed push already makes older tokens stale at once (index.ts,
+ * tokenMintedBeforeMemberChange); this bounds a demoted admin to under a minute even if that push is
+ * late or lost. The desktop re-mints and retries once on `stale_token` (hosted-sandbox-request.ts).
+ */
+export const ADMIN_WRITE_TOKEN_MAX_AGE_MS = 60_000
+
+function tooOldForAdminWrite(caller: SandboxCaller, scope: SecretScope, now: number): boolean {
+  if (scope === 'personal' || !caller.orgId || !isOrgAdmin(caller) || caller.tokenIssuedAt === undefined) {
+    return false
+  }
+  return now - (caller.tokenIssuedAt + AUTH_IAT_BACKDATE_MS) > ADMIN_WRITE_TOKEN_MAX_AGE_MS
 }
 
 const ScopeSchema = z.enum(['org', 'personal', 'repo'])
@@ -481,6 +579,8 @@ export async function handleSecretsRoute(
   onChange: (change: SecretChange) => void = () => {}
 ): Promise<Response> {
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
+  // Same shape as index.ts ORG-TOKEN-STALE, so the desktop re-mints and retries once.
+  const staleToken = () => json({ error: 'unauthorized', reason: 'stale_token' }, 401)
   const repoQuery = url.searchParams.get('repo')
   if (url.pathname === '/v1/secrets/effective') {
     if (request.method !== 'GET') {
@@ -527,6 +627,9 @@ export async function handleSecretsRoute(
     if (!scope.success || request.method !== 'POST') {
       return json({ error: 'not_found' }, 404)
     }
+    if (tooOldForAdminWrite(caller, scope.data, now)) {
+      return staleToken()
+    }
     const owner = ownerFor(caller, scope.data, repoQuery, true)
     const body = BatchSchema.safeParse(await readJson(request))
     if (!body.success) {
@@ -559,7 +662,7 @@ export async function handleSecretsRoute(
       })
     }
     // Names only.
-    console.log(JSON.stringify({ event: 'secrets_batch', scope: scope.data, written: written.map((s) => s.name), deleted, failed: errors.length, by: caller.userId }))
+    secretLog('secrets_batch', { scope: scope.data, written: written.map((s) => s.name), deleted, failed: errors.length, by: caller.userId }, Object.values(body.data.set ?? {}))
     if (written.length > 0 || deleted.length > 0) {
       onChange({ scope: scope.data, ownerId: owner })
     }
@@ -580,11 +683,15 @@ export async function handleSecretsRoute(
       return json({ error: 'invalid_request', reason: 'invalid_scope' }, 400)
     }
     const owner = ownerFor(caller, scope.data, repoParam, false)
-    return json({ secrets: await listSecrets(db, scope.data, owner) })
+    const secrets = await listSecrets(db, scope.data, owner)
+    return json({ secrets: hintVisible(caller, scope.data) ? secrets : secrets.map((secret) => ({ ...secret, hint: null })) })
   }
   const scope = ScopeSchema.safeParse(scopeSegment)
   if (!scope.success || !name) {
     return json({ error: 'not_found' }, 404)
+  }
+  if ((request.method === 'PUT' || request.method === 'DELETE') && tooOldForAdminWrite(caller, scope.data, now)) {
+    return staleToken()
   }
   if (request.method === 'PUT') {
     const owner = ownerFor(caller, scope.data, repoParam, true)
@@ -593,7 +700,7 @@ export async function handleSecretsRoute(
       return json({ error: 'invalid_request' }, 400)
     }
     const secret = await putSecret(db, keyring, { scope: scope.data, ownerId: owner, name, value: body.data.value, updatedBy: caller.userId }, now, actor)
-    console.log(JSON.stringify({ event: 'secret_written', scope: scope.data, name, by: caller.userId }))
+    secretLog('secret_written', { scope: scope.data, name, by: caller.userId }, [body.data.value])
     onChange({ scope: scope.data, ownerId: owner })
     return json({ secret })
   }
@@ -603,7 +710,7 @@ export async function handleSecretsRoute(
     if (!(await deleteSecret(db, scope.data, owner, name, actor, now))) {
       return json({ error: 'not_found' }, 404)
     }
-    console.log(JSON.stringify({ event: 'secret_deleted', scope: scope.data, name, by: caller.userId }))
+    secretLog('secret_deleted', { scope: scope.data, name, by: caller.userId })
     onChange({ scope: scope.data, ownerId: owner })
     return json({ deleted: true })
   }
