@@ -28,14 +28,16 @@ function resetLine(
 ): string | null {
   const resets = entitlement.usageWindow ? date(entitlement.usageWindow.end) : null
   const ends = entitlement.period ? date(entitlement.period.end) : null
-  if (ends && entitlement.cancelAtPeriodEnd) {
+  if (entitlement.cancelAtPeriodEnd && (entitlement.cancelAt ?? ends)) {
+    // A portal cancel names its own end date (cancel_at); otherwise the plan ends with the period.
+    const endsOn = entitlement.cancelAt ? date(entitlement.cancelAt) : ends!
     return resets
       ? t('auto.components.billing.resetsEnds', 'Hours reset {{value0}} · Plan ends {{value1}}', {
           value0: resets,
-          value1: ends
+          value1: endsOn
         })
       : t('auto.components.billing.endsOn', 'Plan ends {{value0}}', {
-          value0: ends
+          value0: endsOn
         })
   }
   if (resets && ends) {

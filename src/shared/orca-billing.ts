@@ -123,6 +123,8 @@ export type OrcaBillingEntitlement = {
   /** Monthly window the hours count against (a slice of the year on annual plans). */
   usageWindow: { start: number; end: number } | null
   cancelAtPeriodEnd: boolean
+  /** When a cancelling plan ends: Stripe's cancel_at (a portal cancel), else null (use period.end). */
+  cancelAt?: number | null
   /**
    * The trial while it is the team's plan (status 'trial'); null otherwise. During a trial,
    * includedSeconds/usedSeconds/remainingIncludedSeconds mirror it and concurrency is 1.

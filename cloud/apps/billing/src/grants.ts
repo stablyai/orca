@@ -133,7 +133,7 @@ export function subscriptionProjection(catalog: Catalog, subscription: Subscript
     // stable across syncs (the first value seen), so a renewal doesn't rewrite every grant.
     startsAt: Math.min(subscription.current_period_start, existing[0]?.starts_at ?? subscription.updated_at),
     // Cancel at period end: access lasts until the period ends, then Stripe deletes it.
-    endsAt: subscription.cancel_at_period_end === 1 ? subscription.current_period_end : null
+    endsAt: subscription.cancel_at_period_end === 1 ? (subscription.cancel_at ?? subscription.current_period_end) : null
   }
 }
 
