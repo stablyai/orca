@@ -27,6 +27,7 @@ import {
 import { message } from './journal-sql-message.test-fixture'
 import { journalDatabasePath } from './database/journal-host-database'
 import { JournalSqlBatch } from './journal-sql-batch'
+import { acquireJournalLegacyFileLock } from './journal-legacy-file-lock'
 import { JournalLegacyRetirement } from './journal-legacy-retirement'
 import {
   advanceLegacyRetirementClock,
@@ -123,7 +124,10 @@ async function profile(seed?: (db: Database.Database) => void) {
     }
   }
   const errors: unknown[] = []
-  const lock = async () => ({ held: () => true, close: async () => {} })
+  const lock =
+    process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST === '1'
+      ? acquireJournalLegacyFileLock
+      : async () => ({ held: () => true, close: async () => {} })
   const retirement = new JournalLegacyRetirement(
     root,
     writer,

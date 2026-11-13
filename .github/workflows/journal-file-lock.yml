@@ -25,6 +25,7 @@ jobs:
           native-runtime: node
           node-version: '24'
       - run: node config/scripts/native-build/build-journal-file-lock.mjs
-      - run: node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/native-chat/agent-session-journal/journal-legacy-file-lock.test.ts
+      - run: node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/native-chat/agent-session-journal/journal-legacy-file-lock.test.ts src/main/native-chat/agent-session-journal/journal-legacy-retirement.test.ts
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_JOURNAL_NATIVE_LOCK_TEST: '1'
