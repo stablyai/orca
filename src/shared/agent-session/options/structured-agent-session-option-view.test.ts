@@ -4,6 +4,7 @@ import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
+import { CURSOR_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-gemini-cursor'
 
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
@@ -475,4 +476,27 @@ describe('Pi supported selection apart from saved intent', () => {
     })
     expect(effort(unknown)).toMatchObject({ settable: false, kind: { currentValue: 'off' } })
   })
+})
+
+it('shows no effort on a listed Cursor model that has none', () => {
+  const state = applyStructuredAgentSessionOptions(
+    createStructuredAgentSessionOptionState('cursor', CURSOR_SESSION_OPTION_CATALOG),
+    CURSOR_SESSION_OPTION_CATALOG,
+    {
+      models: [
+        {
+          id: 'composer-2.5',
+          label: 'Composer 2.5',
+          isDefault: false,
+          efforts: [],
+          declaredDefaultEffort: null
+        }
+      ],
+      listedModelIds: ['composer-2.5'],
+      current: { model: 'composer-2.5', effort: 'medium' }
+    }
+  )
+  expect(
+    structuredAgentSessionShownSnapshot(state).find((entry) => entry.id === 'effort')
+  ).toBeUndefined()
 })

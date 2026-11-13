@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
+import { cursorModelsFromAvailableList } from '../../cursor/cursor-acp-model-catalog'
 import { closeProviderTimelineRigs } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
@@ -92,17 +93,64 @@ it('sets Cursor effort and fast as their own options, and lists base models befo
   expect(CURSOR.dialect.clientCapabilities).toEqual({
     _meta: { parameterizedModelPicker: true }
   })
-  expect(CURSOR.modelDiscovery).toMatchObject({ kind: 'command', args: ['models'] })
-  if (CURSOR.modelDiscovery.kind !== 'command') {
-    return
-  }
+  expect(CURSOR.modelDiscovery.kind).toBe('initialize')
   expect(
-    CURSOR.modelDiscovery.parse(
-      'auto - Auto (default)\ngrok-4.7-medium - Grok 4.7 Medium\ngrok-4.7-high-fast - Grok 4.7 High Fast\n'
-    )
+    cursorModelsFromAvailableList({
+      models: [
+        { value: 'default', name: 'Auto', configOptions: [] },
+        {
+          value: 'composer-2.5',
+          name: 'Composer 2.5',
+          configOptions: [
+            {
+              id: 'fast',
+              category: 'model_config',
+              options: [
+                { value: 'false', name: 'Off' },
+                { value: 'true', name: 'Fast' }
+              ]
+            }
+          ]
+        },
+        {
+          value: 'grok-4.7',
+          name: 'Grok 4.7',
+          configOptions: [
+            {
+              id: 'reasoning_effort',
+              name: 'Effort',
+              category: 'thought_level',
+              currentValue: 'medium',
+              options: [
+                { value: 'low', name: 'Low' },
+                { value: 'medium', name: 'Medium' },
+                { value: 'high', name: 'High' }
+              ]
+            }
+          ]
+        }
+      ]
+    })
   ).toEqual([
-    { id: 'default', label: 'Auto', isDefault: true, efforts: [] },
-    { id: 'grok-4.7', label: 'Grok 4.7', isDefault: false, efforts: [] }
+    { id: 'default', label: 'Auto', isDefault: false, efforts: [], declaredDefaultEffort: null },
+    {
+      id: 'composer-2.5',
+      label: 'Composer 2.5',
+      isDefault: false,
+      efforts: [],
+      declaredDefaultEffort: null,
+      supportsFastMode: true
+    },
+    {
+      id: 'grok-4.7',
+      label: 'Grok 4.7',
+      isDefault: false,
+      efforts: [
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' }
+      ]
+    }
   ])
 })
 
