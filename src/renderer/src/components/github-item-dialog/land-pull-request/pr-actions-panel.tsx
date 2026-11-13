@@ -22,7 +22,7 @@ import {
   getPullRequestMergeMethodLabel,
   getPullRequestStateConfirmationTitle
 } from '@/components/github/pull-request-confirmation-copy'
-import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/task-page-github-dialog-state-authority'
+import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/mutations/task-page-github-dialog-state-authority'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { runPullRequestStateUpdate } from '@/components/github/github-work-item-edit-mutations'

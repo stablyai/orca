@@ -5,7 +5,7 @@ import {
   registerLinearIssueConsumer
 } from '@/store/slices/linear/linear-issue-write-publication'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
-import type { TaskPageGitHubIssueDraftModel } from './github/use-task-page-github-issue-draft'
+import type { TaskPageGitHubIssueDraftModel } from './github/issue-creation/use-task-page-github-issue-draft'
 import { useState, useMemo, useCallback, useLayoutEffect, useRef } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
