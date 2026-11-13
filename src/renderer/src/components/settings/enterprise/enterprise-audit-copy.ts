@@ -225,7 +225,7 @@ export function isKnownAuditAction(action: string): boolean {
  * people who have used Orca Cloud in this team), so the roster is read only when a row needs it.
  */
 export function unnamedPersonIn(event: CloudAuditEvent): string | null {
-  if (event.action !== 'workspace.owner_changed') {
+  if (event.action !== 'workspace.owner_changed' && event.action !== 'workspace.owner_notified') {
     // A role change or removal whose member the control plane could not name.
     return unnamedMemberTarget(event)
   }

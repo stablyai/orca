@@ -134,6 +134,53 @@ export const WORKSPACE_AUDIT_ACTIONS: Record<string, ActionCopy> = {
           )
     }
   },
+  // Orca's own row after an owner change: whether anything reached the previous owner (a notice
+  // waiting for them in Orca, or a delivered email), not whether they have read it.
+  'workspace.owner_notified': {
+    plain: (t) =>
+      t(
+        'settings.enterprise.audit.action.wsOwnerNotified',
+        'Told the previous owner about an owner change'
+      ),
+    detailed: (t, detail, _locale, { name, nameOf }) => {
+      const previous = typeof detail.toUserId === 'string' ? detail.toUserId : null
+      const person =
+        (
+          (typeof detail.toUserName === 'string' ? detail.toUserName : '') ||
+          (previous && detail.toUserFormer !== true ? nameOf(previous) : null) ||
+          ''
+        )
+          .trim()
+          .slice(0, 80) ||
+        (detail.toUserFormer === true
+          ? t('settings.enterprise.audit.action.wsOwnerNotifiedFormer', 'a former member')
+          : t('settings.enterprise.audit.action.wsOwnerNotifiedPrevious', 'the previous owner'))
+      if (detail.reached === true) {
+        return name
+          ? t(
+              'settings.enterprise.audit.action.wsOwnerNotifiedNamed',
+              'Notified {{person}} about the owner change for workspace “{{name}}”',
+              { person, name }
+            )
+          : t(
+              'settings.enterprise.audit.action.wsOwnerNotifiedPlain',
+              'Notified {{person}} about the owner change for a workspace',
+              { person }
+            )
+      }
+      return name
+        ? t(
+            'settings.enterprise.audit.action.wsOwnerNotNotifiedNamed',
+            'Couldn’t notify {{person}} about the owner change for workspace “{{name}}”',
+            { person, name }
+          )
+        : t(
+            'settings.enterprise.audit.action.wsOwnerNotNotifiedPlain',
+            'Couldn’t notify {{person}} about the owner change for a workspace',
+            { person }
+          )
+    }
+  },
   'workspace.share_create': {
     plain: (t) =>
       t('settings.enterprise.audit.action.wsShare', 'Shared a link to a workspace port'),

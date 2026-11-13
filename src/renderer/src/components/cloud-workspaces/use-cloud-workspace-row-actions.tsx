@@ -23,6 +23,7 @@ import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspa
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
 import { useCloudReadPanel } from './use-cloud-read-panel'
 import { toastSharedWithTeam } from './shared-with-team-toast'
+import { useCloudWorkspaceOwnerChange } from './use-cloud-workspace-owner-change'
 
 /** Names for every member id the rows show, and whether you are a team owner or admin. */
 export function useMemberDirectory(
@@ -78,6 +79,7 @@ export function useCloudWorkspaceRowActions({
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
   const { readingId, readingRef, setReadingId, readWake, setReadWake } = useCloudReadPanel()
+  const ownerChange = useCloudWorkspaceOwnerChange({ directory, selfId, replace, refresh })
   // EP-6-FLAKE: the row's spinner shows this open; the open's toast waits while the picker is up and
   // shows at once if it closes mid-open.
   useEffect(() => (openingId ? showCloudWorkspaceOpenInPicker(openingId) : undefined), [openingId])
@@ -120,7 +122,9 @@ export function useCloudWorkspaceRowActions({
         setConfirm({ kind: 'private', workspace: w })
         return
       }
-      if (!confirmed && change.ownerUserId) {
+      if (change.ownerUserId) {
+        // OWNER-TRANSFER: always asked first, and made from the confirmation (it stays open
+        // while the workspace goes to sleep, and shows a refusal in place).
         setConfirm({ kind: 'owner', workspace: w, ownerUserId: change.ownerUserId })
         return
       }
@@ -143,8 +147,6 @@ export function useCloudWorkspaceRowActions({
             'Now private. Teammates’ devices were disconnected.'
           )
         )
-      } else if (change.ownerUserId) {
-        toast.success(t('auto.components.cloudWorkspaces.ownerChanged', 'Owner changed'))
       }
       refresh()
     },
@@ -188,19 +190,26 @@ export function useCloudWorkspaceRowActions({
           directory={directory}
           selfId={selfId}
           canAdmin={canAdmin}
-          onCancel={() => setConfirm(null)}
+          busy={ownerChange.state.busy}
+          error={ownerChange.state.error}
+          onCancel={() => {
+            ownerChange.reset()
+            setConfirm(null)
+          }}
           onConfirm={() => {
             if (confirm.kind === 'archive' || confirm.kind === 'delete') {
               setConfirm(null)
               archive.runConfirmed(confirm, t, refresh)
               return
             }
-            const change: CloudWorkspacePatch =
-              confirm.kind === 'private'
-                ? { visibility: 'private' }
-                : { ownerUserId: confirm.ownerUserId }
+            if (confirm.kind === 'owner') {
+              void ownerChange
+                .run(confirm.workspace, confirm.ownerUserId)
+                .then((changed) => changed && setConfirm(null))
+              return
+            }
             setConfirm(null)
-            void patch(confirm.workspace, change, true)
+            void patch(confirm.workspace, { visibility: 'private' }, true)
           }}
         />
       )}

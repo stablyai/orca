@@ -27,6 +27,7 @@ import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { EditorRevealFlash } from './EditorRevealFlash'
 import { SplitPaneLanding } from './SplitPaneLanding'
 import { CloudWorkspaceNumberChip } from '../cloud-workspaces/CloudWorkspaceNumberChip'
+import { CloudWorkspaceOwnerChangedChip } from '../cloud-workspaces/CloudWorkspaceOwnerChangedChip'
 import { CloudWorkspacePeople } from '../cloud-workspaces/CloudWorkspacePeople'
 import { CloudGitSetupStrip } from '../orca-cloud/CloudGitSetupStrip'
 import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
@@ -318,6 +319,7 @@ export default function TabGroupPanel({
               {!hasSplitGroups || isFocused ? (
                 <>
                   <CloudWorkspacePeople worktreeId={worktreeId} />
+                  <CloudWorkspaceOwnerChangedChip worktreeId={worktreeId} />
                   <CloudWorkspaceNumberChip worktreeId={worktreeId} />
                 </>
               ) : null}

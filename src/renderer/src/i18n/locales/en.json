@@ -1630,7 +1630,14 @@
           "wsOwnerFormerNamed": "Made a former member the owner of workspace “{{name}}”",
           "wsOwnerFormer": "Made a former member the owner of a workspace",
           "wsOwnerMadeNamed": "Made {{person}} the owner of workspace “{{name}}”",
-          "wsOwnerMade": "Made {{person}} the owner of a workspace"
+          "wsOwnerMade": "Made {{person}} the owner of a workspace",
+          "wsOwnerNotified": "Told the previous owner about an owner change",
+          "wsOwnerNotifiedFormer": "a former member",
+          "wsOwnerNotifiedPrevious": "the previous owner",
+          "wsOwnerNotifiedNamed": "Notified {{person}} about the owner change for workspace “{{name}}”",
+          "wsOwnerNotifiedPlain": "Notified {{person}} about the owner change for a workspace",
+          "wsOwnerNotNotifiedNamed": "Couldn’t notify {{person}} about the owner change for workspace “{{name}}”",
+          "wsOwnerNotNotifiedPlain": "Couldn’t notify {{person}} about the owner change for a workspace"
         },
         "interval": {
           "month": "monthly",
@@ -21875,7 +21882,39 @@
         "errorTrialSandboxLimit_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
         "errorTeamSandboxLimitNoSeat_one": "Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
         "errorTeamSandboxLimitNoSeat_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
-        "sharedPersonalSecretsNote": "Your personal cloud secrets aren’t used in shared workspaces. Shared and repository secrets still are."
+        "sharedPersonalSecretsNote": "Your personal cloud secrets aren’t used in shared workspaces. Shared and repository secrets still are.",
+        "ownerChange": {
+          "changing": "Changing owner…",
+          "aWorkspace": "a workspace",
+          "chip": "Owner changed",
+          "explanation": "This workspace has had more than one owner. Files left by earlier owners may run when it’s used, so no one’s personal secrets or sign-ins are used here.",
+          "sleeps": "It goes to sleep now, and its share links stop working.",
+          "disk": "Everything on its disk goes with it, including files and any sign-ins saved inside it.",
+          "sharedForGoodOther": "From now on it runs like a shared workspace, even if it goes back to {{owner}}. No one’s personal secrets or sign-ins are used in it.",
+          "sharedForGood": "From now on it runs like a shared workspace, even if it comes back to you. No one’s personal secrets or sign-ins are used in it.",
+          "secretsOnDiskOther": "Personal secrets {{owner}} used in it may still be on its disk.",
+          "secretsOnDisk": "Personal secrets you used in it may still be on its disk.",
+          "notAMember": "{{name}} isn’t a member of this team.",
+          "membershipUnavailable": "Couldn’t confirm that {{name}} is a member of this team. Try again in a minute.",
+          "slow": "This is taking longer than expected. Check who owns the workspace before you try again.",
+          "stopFailed": "Couldn’t put this workspace to sleep, so the owner didn’t change. Try again.",
+          "notStopped": "Someone opened this workspace during the change, so the owner didn’t change. It may be asleep now. Try again.",
+          "busy": "This workspace is starting or going to sleep. Try again once it’s done.",
+          "toastTold": "{{name}} will see a notice in Orca. If they used personal secrets in this workspace, they should rotate them.",
+          "toastToldUnnamed": "The previous owner will see a notice in Orca. If they used personal secrets in this workspace, they should rotate them.",
+          "toastLeft": "{{name}} has left the team, so Orca can’t tell them. If they used personal secrets in this workspace, ask them to rotate them.",
+          "toastLeftUnnamed": "A former member owned this workspace, so Orca can’t tell them. If they used personal secrets in this workspace, ask them to rotate them.",
+          "aTeammate": "A teammate",
+          "aTeammateInline": "a teammate",
+          "noticeYouMade": "You made {{newOwner}} the owner of {{workspace}}.",
+          "noticeTook": "{{actor}} took ownership of {{workspace}}.",
+          "noticeMade": "{{actor}} made {{newOwner}} the owner of {{workspace}}.",
+          "noticeRotate": "Personal secrets you used in it may still be on its disk, so consider rotating them.",
+          "openSecrets": "Open Cloud secrets",
+          "newOwnerTitle": "You’re now the owner of {{workspace}}",
+          "newOwnerBody": "It runs like a shared workspace, so your personal secrets and sign-ins aren’t used here. To use them, create a new workspace.",
+          "newWorkspace": "New workspace"
+        }
       },
       "orcaCloud": {
         "QueuedPrompt": {

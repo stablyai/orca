@@ -3,7 +3,9 @@
 // a teammate's running workspace (their agents stop).
 import { useArchiveSnapshotDefinition } from '@/components/orca-cloud/ArchiveSnapshotTooltip'
 import React, { useEffect, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import {
   Dialog,
   DialogContent,
@@ -16,6 +18,7 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { formatNameList, memberName, type MemberDirectory } from './cloud-workspace-format'
 import { cloudWorkspaceTitle } from './open-cloud-workspace'
+import { ownerChangeConsequences } from './owner-change-copy'
 
 export type PendingConfirm =
   | { kind: 'private'; workspace: CloudWorkspace }
@@ -88,6 +91,8 @@ export function CloudWorkspaceConfirmDialog({
   directory,
   selfId,
   canAdmin,
+  busy = false,
+  error = null,
   onCancel,
   onConfirm
 }: {
@@ -96,6 +101,10 @@ export function CloudWorkspaceConfirmDialog({
   selfId: string | null
   /** Team owner or admin: still manages every workspace after giving one away. */
   canAdmin: boolean
+  /** OWNER-TRANSFER: the change is being made (the workspace goes to sleep first, so it takes a while). */
+  busy?: boolean
+  /** Why the last try changed nothing, shown in place so the person can try again. */
+  error?: string | null
   onCancel: () => void
   onConfirm: () => void
 }): React.JSX.Element {
@@ -123,7 +132,7 @@ export function CloudWorkspaceConfirmDialog({
   // Destructive for someone else (their agents stop, or you lose access): focus starts on Cancel.
   const focusCancel = losesManagement || pending.kind === 'archive' || pending.kind === 'delete'
   return (
-    <Dialog open onOpenChange={(next) => !next && onCancel()}>
+    <Dialog open onOpenChange={(next) => !next && !busy && onCancel()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -147,6 +156,15 @@ export function CloudWorkspaceConfirmDialog({
             </DialogDescription>
           ) : (
             <DialogDescription>
+              {/* OWNER-TRANSFER: what the change does, before who manages it afterwards. */}
+              {ownerChangeConsequences(
+                w.ownerUserId === selfId ? null : memberName(directory, w.ownerUserId, selfId, t),
+                t
+              ).map((line) => (
+                <span key={line} className="mb-1.5 block">
+                  {line}
+                </span>
+              ))}
               {losesManagement
                 ? t(
                     'auto.components.cloudWorkspaces.reassignLosesManagement',
@@ -159,24 +177,36 @@ export function CloudWorkspaceConfirmDialog({
             </DialogDescription>
           )}
         </DialogHeader>
+        {error ? <InlineError title={error} density="compact" /> : null}
         <DialogFooter>
           {/* Giving away your own access starts on Cancel, so Enter cannot do it by accident. */}
-          <Button type="button" variant="ghost" onClick={onCancel} autoFocus={focusCancel}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onCancel}
+            autoFocus={focusCancel}
+            disabled={busy}
+          >
             {t('auto.components.cloudWorkspaces.cancel', 'Cancel')}
           </Button>
           <Button
             type="button"
             variant={pending.kind === 'delete' ? 'destructive' : 'default'}
-            onClick={onConfirm}
+            onClick={busy ? undefined : onConfirm}
             autoFocus={!focusCancel}
+            aria-disabled={busy || undefined}
+            aria-busy={busy || undefined}
           >
+            {busy ? <Loader2 className="animate-spin" aria-hidden /> : null}
             {pending.kind === 'private'
               ? t('auto.components.cloudWorkspaces.makePrivate', 'Make private')
               : pending.kind === 'delete'
                 ? t('auto.components.sidebar.DeleteCloudWorkspace.delete', 'Delete workspace')
                 : pending.kind === 'archive'
                   ? t('auto.components.cloudWorkspaces.archive', 'Archive')
-                  : t('auto.components.cloudWorkspaces.makeOwner', 'Make owner')}
+                  : busy
+                    ? t('auto.components.cloudWorkspaces.ownerChange.changing', 'Changing owner…')
+                    : t('auto.components.cloudWorkspaces.makeOwner', 'Make owner')}
           </Button>
         </DialogFooter>
       </DialogContent>

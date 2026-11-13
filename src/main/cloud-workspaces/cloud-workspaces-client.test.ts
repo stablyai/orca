@@ -187,3 +187,85 @@ describe('cloud workspaces client: routine runs on Home', () => {
     expect(CloudWorkspaceSchema.parse(older).fromRoutine).toBeUndefined()
   })
 })
+
+describe('cloud workspaces client: owner change (OWNER-TRANSFER)', () => {
+  const row = {
+    id: SBX,
+    workspaceId: 'ws_1',
+    status: 'suspended',
+    machineSize: 'standard',
+    region: 'iad',
+    createdAt: 1,
+    title: 'Checkout retries',
+    repo: null,
+    visibility: 'private',
+    section: null,
+    archivedAt: null,
+    createdBy: 'user_grace',
+    ownerUserId: 'user_linus',
+    lastActivityAt: 2,
+    lastActivityBy: null,
+    cost: {
+      computeMs: 0,
+      rateUsdMicrosPerHour: 0,
+      computeUsdMicros: 0,
+      tokenUsdMicros: null,
+      totalUsdMicros: 0
+    },
+    access: 'none',
+    presence: [],
+    ownershipTransferredAt: 5
+  }
+
+  it('PATCHes the new owner and keeps the transferred mark and who was told', async () => {
+    const previousOwner = { userId: 'user_grace', notified: true, inApp: true, emailed: false }
+    const { client, fetch } = clientAnswering(200, { workspace: row, previousOwner })
+    const answer = await client.changeOwner(SBX, 'user_linus')
+    expect(answer.workspace.ownershipTransferredAt).toBe(5)
+    expect(answer.previousOwner).toEqual(previousOwner)
+    const [url, init] = fetch.mock.calls[0]!
+    expect(String(url)).toBe(`https://cp.example.test/v1/team/workspaces/${SBX}`)
+    expect(init?.method).toBe('PATCH')
+    expect(init?.body).toBe(JSON.stringify({ ownerUserId: 'user_linus' }))
+  })
+
+  it('an older control plane that says nothing about the previous owner is not an error', async () => {
+    const { client } = clientAnswering(200, { workspace: row })
+    expect((await client.changeOwner(SBX, 'user_linus')).previousOwner).toBeNull()
+  })
+
+  it('passes a refusal through with its reason', async () => {
+    const { client } = clientAnswering(409, { error: 'conflict', reason: 'stop_failed' })
+    await expect(client.changeOwner(SBX, 'user_linus')).rejects.toMatchObject({
+      status: 409,
+      code: 'conflict',
+      reason: 'stop_failed'
+    })
+  })
+
+  it('reads the previous owner’s notices, skipping kinds it does not know', async () => {
+    const notice = {
+      id: 'otn_0123456789abcdef01234567',
+      kind: 'workspace_owner_changed',
+      workspace: { id: SBX, name: 'Checkout retries', number: 12 },
+      actor: { userId: 'user_ada', name: 'Ada Lovelace' },
+      newOwner: { userId: 'user_linus', name: null },
+      at: 9
+    }
+    const { client, fetch } = clientAnswering(200, {
+      notices: [notice, { id: 'x_1', kind: 'something_newer' }]
+    })
+    expect(await client.ownerNotices()).toEqual([notice])
+    expect(String(fetch.mock.calls[0]![0])).toBe('https://cp.example.test/v1/team/notices')
+  })
+
+  it('dismisses a notice by id', async () => {
+    const { client, fetch } = clientAnswering(200, { dismissed: true })
+    await client.dismissOwnerNotice('otn_0123456789abcdef01234567')
+    const [url, init] = fetch.mock.calls[0]!
+    expect(String(url)).toBe(
+      'https://cp.example.test/v1/team/notices/otn_0123456789abcdef01234567/dismiss'
+    )
+    expect(init?.method).toBe('POST')
+  })
+})

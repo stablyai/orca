@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { errorMessage } from '../../shared/error-message'
 import { cloudWorkspacePrefsMethods } from './cloud-workspaces-prefs-client'
+import { cloudWorkspaceOwnerChangeMethods } from './cloud-workspaces-owner-change-client'
 import { HOSTED_SANDBOX_STATUSES } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { SealedReadSnapshot } from '../../shared/cloud-workspaces/read-snapshot'
 import {
@@ -138,6 +139,7 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
 
   return {
     ...cloudWorkspacePrefsMethods(call),
+    ...cloudWorkspaceOwnerChangeMethods(call),
     async list(query: CloudWorkspaceListQuery = {}) {
       const params = new URLSearchParams()
       for (const [key, value] of Object.entries(query)) {

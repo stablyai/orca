@@ -1,7 +1,7 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { EnterpriseSettingsView } from './EnterpriseSettingsView'
-import { fixtureAuditProps } from './enterprise-audit.fixtures'
+import { OWNER_CHANGE_EVENTS, fixtureAuditProps } from './enterprise-audit.fixtures'
 import type { EnterpriseAuditLogProps } from './EnterpriseAuditLog'
 
 const BARE_BODY = 'rounded-none border-0 bg-transparent p-0 shadow-none'
@@ -125,5 +125,27 @@ export const upsellAuditOnly = defineFixture({
   width: 860,
   render: () => (
     <Page audit={fixtureAuditProps({ log: { status: 'upsell' }, actors: [] })} ssoIncluded />
+  )
+})
+
+/**
+ * OWNER-TRANSFER: an owner change is followed by Orca's row saying whether the previous owner was
+ * told. The long workspace name is cut short; hovering the sentence shows all of it.
+ */
+export const ownerChangeRows = defineFixture({
+  width: 860,
+  render: () => (
+    <Page
+      audit={fixtureAuditProps({
+        log: {
+          status: 'ok',
+          events: OWNER_CHANGE_EVENTS,
+          hasMore: false,
+          loadingMore: false,
+          moreError: null,
+          refreshing: false
+        }
+      })}
+    />
   )
 })
