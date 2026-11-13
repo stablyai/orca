@@ -135,7 +135,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     }
     // Before any await: this Sleep ends only the binding it began with, never one installed while
     // it waited, and the observation records every same-ID spawn, exit or reconnect meanwhile.
-    const observation = this.ptyInventory.begin()
+    const observation = this.ptyInventory.begin(id)
     const captured = this.hostHistory.enabled ? this.hostHistory.get(id) : undefined
     const shutdown = Promise.resolve().then(async () => {
       try {

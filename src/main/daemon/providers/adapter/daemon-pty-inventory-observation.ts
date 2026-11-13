@@ -1,4 +1,6 @@
 export type InventoryRequest = {
+  /** Set for a single-ID observation: it records only this ID's evidence and never commits. */
+  scope?: string
   sequence: number
   transportEpoch: number
   owners: Map<string, string | undefined>
@@ -12,6 +14,7 @@ export class DaemonPtyInventoryObservation {
   private committedSequence = 0
   private transportEpoch = 0
   private pending = new Set<InventoryRequest>()
+  private scoped = new Map<string, Set<InventoryRequest>>()
 
   constructor(
     private readonly activeIds: Set<string>,
@@ -28,15 +31,25 @@ export class DaemonPtyInventoryObservation {
       : (this.sessions?.get(id) ?? this.incarnations.get(id))
   }
 
-  begin(): InventoryRequest {
+  begin(scope?: string): InventoryRequest {
     const request: InventoryRequest = {
+      scope,
       sequence: ++this.sequence,
       transportEpoch: this.transportEpoch,
-      owners: new Map([...this.activeIds].map((id) => [id, this.incarnations.get(id)])),
+      owners:
+        scope === undefined
+          ? new Map([...this.activeIds].map((id) => [id, this.incarnations.get(id)]))
+          : new Map(),
       replacements: new Map(),
       retirements: new Map()
     }
-    this.pending.add(request)
+    if (scope === undefined) {
+      this.pending.add(request)
+    } else {
+      const bucket = this.scoped.get(scope) ?? new Set()
+      bucket.add(request)
+      this.scoped.set(scope, bucket)
+    }
     return request
   }
 
@@ -47,6 +60,7 @@ export class DaemonPtyInventoryObservation {
   stillApplies(request: InventoryRequest, id: string, incarnation: string | undefined): boolean {
     const retired = request.retirements.get(id)
     return (
+      (request.scope === undefined || request.scope === id) &&
       request.transportEpoch === this.transportEpoch &&
       !request.replacements.has(id) &&
       !(retired && (retired.has(undefined) || retired.has(incarnation)))
@@ -54,7 +68,19 @@ export class DaemonPtyInventoryObservation {
   }
 
   end(request: InventoryRequest): void {
-    this.pending.delete(request)
+    if (request.scope === undefined) {
+      this.pending.delete(request)
+      return
+    }
+    const bucket = this.scoped.get(request.scope)
+    bucket?.delete(request)
+    if (bucket?.size === 0) {
+      this.scoped.delete(request.scope)
+    }
+  }
+
+  private observers(id: string): InventoryRequest[] {
+    return [...this.pending, ...(this.scoped.get(id) ?? [])]
   }
 
   reset(): void {
@@ -64,7 +90,7 @@ export class DaemonPtyInventoryObservation {
 
   spawned(id: string, incarnation: string | undefined): void {
     this.sessions?.delete(id)
-    for (const request of this.pending) {
+    for (const request of this.observers(id)) {
       request.replacements.set(id, incarnation)
     }
   }
@@ -78,7 +104,7 @@ export class DaemonPtyInventoryObservation {
     if (incarnation === undefined || listed === undefined || listed === incarnation) {
       this.sessions?.delete(id)
     }
-    for (const request of this.pending) {
+    for (const request of this.observers(id)) {
       const retired = request.retirements.get(id) ?? new Set()
       retired.add(incarnation)
       request.retirements.set(id, retired)
@@ -91,6 +117,7 @@ export class DaemonPtyInventoryObservation {
 
   commit(request: InventoryRequest, alive: ReadonlyMap<string, string | undefined>): void {
     if (
+      request.scope !== undefined ||
       request.transportEpoch !== this.transportEpoch ||
       request.sequence <= this.committedSequence
     ) {
