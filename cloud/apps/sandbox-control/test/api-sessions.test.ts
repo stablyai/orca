@@ -214,7 +214,7 @@ describe('public API: attachments', () => {
       const header = Buffer.from(tar.subarray(block * 512, block * 512 + 512))
       const stored = parseInt(field(block, 148, 8), 8)
       header.fill(0x20, 148, 156)
-      expect(header.reduce((sum, b) => sum + b, 0)).toBe(stored)
+      expect(header.reduce((sum: number, b: number) => sum + b, 0)).toBe(stored)
     }
     expect(tar.subarray(3 * 512, 3 * 512 + 5).toString()).toBe('hello')
     await expect(tarGzipFile({ dirs: [], path: '../x', bytes, mtime: 0 })).rejects.toThrow('tar_bad_path')

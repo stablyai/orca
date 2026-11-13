@@ -189,7 +189,7 @@ describe('Worker-embedded image scripts', () => {
 
   it('installs every VM script and makes zsh read the session env hook once', () => {
     const provision = readFileSync(fileURLToPath(new URL('./provision-golden.sh', import.meta.url).href), 'utf8')
-    const loop = provision.match(/^for name in (.+); do$/m)?.[1].split(' ') ?? []
+    const loop = provision.match(/^for name in (.+); do$/m)?.[1]?.split(' ') ?? []
     expect(new Set(loop)).toEqual(new Set(VM_SCRIPTS))
     expect(provision).toContain(
       "grep -q zz-orca-session-env /etc/zsh/zshenv ||\n    echo '[ -r /etc/profile.d/zz-orca-session-env.sh ] && . /etc/profile.d/zz-orca-session-env.sh' | sudo tee -a /etc/zsh/zshenv"

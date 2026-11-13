@@ -307,7 +307,7 @@ export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url:
 
 /** sandbox id -> its routine's name, for routine runs being listed. */
 async function routineNamesFor(db: D1Database, accountId: string, rows: readonly SandboxRow[]): Promise<Map<string, string>> {
-  const refs = [...new Set(rows.flatMap((row) => ((row as { origin_ref?: string | null }).origin_ref ? [(row as { origin_ref: string }).origin_ref] : [])))]
+  const refs = [...new Set(rows.flatMap((row) => (row.origin_ref ? [row.origin_ref] : [])))]
   if (refs.length === 0) {
     return new Map()
   }
@@ -318,7 +318,7 @@ async function routineNamesFor(db: D1Database, accountId: string, rows: readonly
   const byRoutine = new Map(results.map((r) => [r.id, r.name]))
   const out = new Map<string, string>()
   for (const row of rows) {
-    const name = byRoutine.get((row as { origin_ref?: string | null }).origin_ref ?? '')
+    const name = byRoutine.get(row.origin_ref ?? '')
     if (name) {
       out.set(row.id, name)
     }
@@ -438,8 +438,8 @@ export async function patchWorkspace(
   }
   const ownerChanged = transferring
   const wentPrivate = row.visibility === 'team' && next.visibility === 'private'
-  const archived = patch.archived === true && row.archived_at === null
-  return { row: next, revoke: ownerChanged ? 'all_but_new_owner' : wentPrivate || archived ? 'non_owner' : 'none' }
+  // Archiving goes through the lifecycle (archive_via_lifecycle above); the team route revokes on archive itself.
+  return { row: next, revoke: ownerChanged ? 'all_but_new_owner' : wentPrivate ? 'non_owner' : 'none' }
 }
 
 export const PresenceSchema = z

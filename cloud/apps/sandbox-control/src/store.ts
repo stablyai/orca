@@ -16,6 +16,8 @@ export type SandboxStatus =
 
 export type SandboxRow = {
   id: string
+  /** What made a machine-made workspace (a routine run: its routine's id); null for desktop creates. */
+  origin_ref?: string | null
   account_id: string
   user_id: string
   workspace_id: string
