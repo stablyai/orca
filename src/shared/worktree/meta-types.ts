@@ -19,6 +19,8 @@ import type { ExternalConversationLink } from '../external-conversation-link'
 export type ArchivedCheckout = {
   branch: string
   archivedAt: number
+  /** isArchived before the archive, so a refused archive puts it back. */
+  wasArchived?: boolean
 }
 
 export type WorktreeMeta = {

@@ -4,10 +4,8 @@ import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import { splitWorktreeId, worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
-import {
-  hostWorktreeTarget,
-  readWorktreeMetaForHost
-} from '../../../persistence/host-qualified-worktree-meta'
+import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { resolveWorktreeRemovalRoute } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import { resolveWorktreeRemovalRepoOwner } from '../../../workspaces/removal/worktree-removal-repo-owner'
@@ -82,10 +80,15 @@ export abstract class RuntimeWorkspaceArchive extends RuntimeNestedWorktreeRemov
         await unmarkArchiveIfCheckoutRemains(store, target, hostId)
         throw error
       }
+      const archived = readWorktreeMetaForHost(store, target.id, hostId)?.archivedCheckout
+      if (!archived) {
+        // A plain delete that started first took the workspace; nothing was kept.
+        throw new Error('This workspace was deleted instead of archived.')
+      }
       return {
         worktreeId: target.id,
         path: target.path,
-        branch: readWorktreeMetaForHost(store, target.id, hostId)?.archivedCheckout?.branch ?? '',
+        branch: archived.branch,
         ...(warning ? { warning } : {})
       }
     })

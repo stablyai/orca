@@ -105,9 +105,11 @@ export function listDisconnectedSshWorktrees(
   const expectedHostId = getRepoExecutionHostId(repo)
   const repoOwners = store.getRepos().filter((candidate) => candidate.id === repo.id)
   for (const candidate of metaIndex.get(repo.id) ?? []) {
+    // An archived row has no checkout to show while its host is unreachable.
     if (
       (candidate.meta.hostId && candidate.meta.hostId !== expectedHostId) ||
-      (!candidate.meta.hostId && repoOwners.length > 1)
+      (!candidate.meta.hostId && repoOwners.length > 1) ||
+      candidate.meta.archivedCheckout
     ) {
       continue
     }

@@ -41,6 +41,7 @@ import {
   isWslMoveSourceHost
 } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
+import { archiveMarkStep } from '../archive/workspace-archive-checkout'
 
 export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorkspaceMetadata {
   abstract removeWorktreeMetadataAndHistory(
@@ -265,7 +266,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
             this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
               allowUnverifiedStop: allowUnverifiedPtyStop
             }),
-          beforeCheckoutDelete: options.archive?.markArchived,
+          beforeCheckoutDelete: archiveMarkStep(options, store, removalTarget.id, removalHostId!),
           closeWatchers: (path) => this.closeFileWatchersForRemoval(path),
           preserveBranchHead: (result, fallbackHead) =>
             this.preservedBranchCleanup.preserveHead(result, fallbackHead),

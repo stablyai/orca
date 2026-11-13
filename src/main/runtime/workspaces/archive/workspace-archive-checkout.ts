@@ -8,19 +8,24 @@ import { addWorktree } from '../../../git/worktrees/creation/worktree-add'
 import { addSparseWorktree } from '../../../git/worktrees/creation/worktree-sparse-add'
 import { localBranchExists } from '../../../git/worktrees/removal/worktree-removal'
 import { pruneGitWorktrees } from '../../../git/worktrees/removal/worktree-prune-guard'
-import { normalizeLocalBranchRef } from '../../../git/worktrees/worktree-operation-options'
-import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
 import {
-  hostWorktreeTarget,
-  readWorktreeMetaForHost
-} from '../../../persistence/host-qualified-worktree-meta'
+  gitExecOptions,
+  normalizeLocalBranchRef
+} from '../../../git/worktrees/worktree-operation-options'
+import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
+import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
+import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { resolveWorktreeRemovalRepoOwner } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import { resolveWorktreeRemovalRoute } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import { findPendingWorktreeRemovalConflict } from '../../../workspaces/removal/worktree-removal-table'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { runtimePathExists } from '../catalog/runtime-worktree-filesystem'
-import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
+import type {
+  RemoveManagedWorktreeOptions,
+  RuntimeWorktreeRemovalTarget
+} from '../catalog/runtime-worktree-selection'
 import { materializeWorktreeContentPaths } from '../creation/runtime-local-worktree-materialization'
 
 /** Archive only a live, linked Git checkout on a branch; anything else has nothing to restore. */
@@ -62,13 +67,33 @@ export async function markWorktreeCheckoutArchived(
   if (!branch) {
     throw new Error('Only a workspace on a branch can be archived.')
   }
+  const wasArchived = readWorktreeMetaForHost(store, worktreeId, hostId)?.isArchived === true
   store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId }), {
     isArchived: true,
-    archivedCheckout: { branch, archivedAt: Date.now() }
+    archivedCheckout: { branch, archivedAt: Date.now(), ...(wasArchived ? { wasArchived } : {}) }
   })
   await (store.flushPendingOrThrowAsync
     ? store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
     : store.flushOrThrow?.())
+}
+
+/** Archive marks the row before Git deletes; a plain delete drops a leftover mark so its row is purged. */
+export function archiveMarkStep(
+  options: Pick<RemoveManagedWorktreeOptions, 'archive'>,
+  store: RuntimeStore,
+  worktreeId: string,
+  hostId: ExecutionHostId
+): (worktree: GitWorktreeInfo) => Promise<void> {
+  return (
+    options.archive?.markArchived ??
+    (async () => {
+      if (readWorktreeMetaForHost(store, worktreeId, hostId)?.archivedCheckout) {
+        store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId }), {
+          archivedCheckout: undefined
+        })
+      }
+    })
+  )
 }
 
 // A refusal or failure while Git still lists the checkout leaves an ordinary, visible workspace.
@@ -78,10 +103,8 @@ export async function unmarkArchiveIfCheckoutRemains(
   hostId: ExecutionHostId
 ): Promise<void> {
   const owner = resolveWorktreeRemovalRepoOwner(store, target.repoId, hostId)
-  if (
-    owner.kind !== 'resolved' ||
-    !readWorktreeMetaForHost(store, target.id, hostId)?.archivedCheckout
-  ) {
+  const mark = readWorktreeMetaForHost(store, target.id, hostId)?.archivedCheckout
+  if (owner.kind !== 'resolved' || !mark) {
     return
   }
   const registered = await listWorktreesStrict(
@@ -90,7 +113,7 @@ export async function unmarkArchiveIfCheckoutRemains(
   ).catch(() => null)
   if (registered?.some((worktree) => areWorktreePathsEqual(worktree.path, target.path))) {
     store.setWorktreeMeta(hostWorktreeTarget({ id: target.id, hostId }), {
-      isArchived: false,
+      isArchived: mark.wasArchived === true,
       archivedCheckout: undefined
     })
   }
@@ -116,6 +139,16 @@ export async function recreateArchivedCheckout(
   if (atPath) {
     if (normalizeLocalBranchRef(atPath.branch) !== branch) {
       throw new Error(`Another checkout is already at ${path}.`)
+    }
+    // Archive only took clean checkouts; anything else is a restore cut short before Git checked out.
+    const { stdout } = await gitExecFileAsync(
+      ['status', '--porcelain'],
+      gitExecOptions(path, gitOptions)
+    )
+    if (stdout.trim()) {
+      throw new Error(
+        `The checkout at ${path} is incomplete or changed. Move it away and restore again.`
+      )
     }
     return materializeWorktreeContentPaths(repo, path, gitOptions, untimed)
   }
