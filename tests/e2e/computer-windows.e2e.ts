@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 import type {
   ComputerActionResult,
@@ -26,9 +27,25 @@ import {
 const isWindows = process.platform === 'win32'
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', () => {
+  let notepadPath = ''
+
+  async function saveNotepad() {
+    await runOrcaCli([
+      'computer',
+      'hotkey',
+      '--app',
+      getNotepadAppSelector(),
+      '--key',
+      'CmdOrCtrl+S',
+      '--restore-window',
+      '--no-screenshot',
+      '--json'
+    ])
+  }
+
   beforeAll(async () => {
     await ensureOrcaRuntimeLaunched()
-    await ensureNotepadLaunched()
+    notepadPath = await ensureNotepadLaunched()
   })
 
   afterAll(async () => {
@@ -65,23 +82,19 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
     ])
 
     const marker = `orca-windows-replaced-café Ω 漢字 ${Date.now()}`
-    const second = parseJsonOutput<{ result: ComputerActionResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'paste-text',
-          '--app',
-          app,
-          '--text',
-          marker,
-          '--restore-window',
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(second.result.snapshot.treeText).toContain(marker)
-    expect(second.result.snapshot.treeText).not.toContain(first)
+    await runOrcaCli([
+      'computer',
+      'paste-text',
+      '--app',
+      app,
+      '--text',
+      marker,
+      '--restore-window',
+      '--no-screenshot',
+      '--json'
+    ])
+    await saveNotepad()
+    await expect.poll(() => readFile(notepadPath, 'utf8')).toBe(marker)
   })
 
   test('click and type-text send synthetic input to the document', async () => {
@@ -122,7 +135,8 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
       ).stdout
     )
     expect(typed.result.action?.path).toBe('synthetic')
-    expect(typed.result.snapshot.treeText).toContain(marker.trim())
+    await saveNotepad()
+    await expect.poll(() => readFile(notepadPath, 'utf8')).toContain(marker.trim())
   })
 
   test('a covered window screenshot shows the window, not what covers it', async () => {
