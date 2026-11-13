@@ -1,12 +1,17 @@
 // Account-level Orca Cloud calls for the window: product config (measured timings), GitHub connect,
 // repository access (cloud-start N2) and the repositories the account's GitHub installations reach.
-import { randomBytes } from 'node:crypto'
 import { ipcMain, shell } from 'electron'
 import { ORCA_CLOUD_WORKSPACE_CHANNELS as CH } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedSandboxConfigResponse } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { failure } from './hosted-workspace-runtime'
 import { githubRepoSlug, lookupGitHubRepoIds, type GitHubRepoIds } from './github-repo-ids'
+import {
+  CLOUD_CREATE_IDEMPOTENCY_KEY,
+  CLOUD_CREATE_PROVISION_ID,
+  createCloudWorkspaceFromGitHub
+} from './cloud-create-from-github'
+import { activeProvisionControllers } from '../ipc/provision-controllers'
 import {
   HOSTED_GITHUB_USER_CHANNELS,
   registerHostedGitHubUserHandlers
@@ -48,6 +53,9 @@ export function registerHostedAccountHandlers(
     | 'githubRepoAccess'
     | 'githubRepositories'
     | 'create'
+    | 'bootPlan'
+    | 'cloneStatus'
+    | 'destroy'
     | 'githubUser'
     | 'connectGitHubUser'
     | 'disconnectGitHubUser'
@@ -140,30 +148,50 @@ export function registerHostedAccountHandlers(
   })
 
   // D4: a repository the account's GitHub installations reach, with no clone here. The sandbox
-  // clones it; nothing touches this computer's disk. The id reads like the phone's: <repo>-<hex>.
-  ipcMain.handle(
-    CH.createFromGitHub,
-    async (_event, args?: { repoUrl?: unknown; title?: unknown }) => {
-      const slug = typeof args?.repoUrl === 'string' ? githubRepoSlug(args.repoUrl) : null
-      if (!slug) {
-        return { ok: false, code: 'failed', message: 'Not a GitHub repository.' }
-      }
-      const name = (slug.split('/').pop() ?? 'workspace')
-        .replace(/[^A-Za-z0-9_.-]/g, '-')
-        .slice(0, 48)
-      // The name typed in the composer, as the owned create sends it; else lists show the repo name.
-      const title = typeof args?.title === 'string' ? args.title.trim().slice(0, 120) : ''
-      try {
-        const ready = await client.create({
-          workspaceId: `${name}-${randomBytes(4).toString('hex')}`,
-          machineSize: 'standard',
-          repo: { url: `https://github.com/${slug}.git` },
-          ...(title ? { title } : {})
-        })
-        return { ok: true, value: { sandboxId: ready.sandbox.id } }
-      } catch (error) {
-        return failure(error)
+  // clones it; nothing touches this computer's disk. With a provision id the window shows the build
+  // sheet: progress streams on the build log channel and Cancel aborts it (GH-CREATE-SHEET).
+  ipcMain.handle(CH.createFromGitHub, async (event, args?: CreateFromGitHubArgs) => {
+    const slug = typeof args?.repoUrl === 'string' ? githubRepoSlug(args.repoUrl) : null
+    if (!slug) {
+      return { ok: false, code: 'failed', message: 'Not a GitHub repository.' }
+    }
+    // The name typed in the composer, as the owned create sends it; else lists show the repo name.
+    const title = typeof args?.title === 'string' ? args.title.trim().slice(0, 120) : ''
+    const provisionId = matching(args?.provisionId, CLOUD_CREATE_PROVISION_ID)
+    const idempotencyKey = matching(args?.idempotencyKey, CLOUD_CREATE_IDEMPOTENCY_KEY)
+    const controller = provisionId ? new AbortController() : null
+    if (provisionId && controller) {
+      activeProvisionControllers.set(provisionId, controller)
+    }
+    try {
+      return await createCloudWorkspaceFromGitHub(
+        client,
+        { slug, title, provisionId, idempotencyKey },
+        {
+          ...(controller ? { signal: controller.signal } : {}),
+          onLog: (chunk) => {
+            if (provisionId && !event.sender.isDestroyed()) {
+              event.sender.send('ephemeralVm:provisionEvent', {
+                provisionId,
+                stream: 'stderr',
+                chunk
+              })
+            }
+          }
+        }
+      )
+    } finally {
+      if (provisionId && activeProvisionControllers.get(provisionId) === controller) {
+        activeProvisionControllers.delete(provisionId)
       }
     }
-  )
+  })
+}
+
+type CreateFromGitHubArgs =
+  | { repoUrl?: unknown; title?: unknown; provisionId?: unknown; idempotencyKey?: unknown }
+  | undefined
+
+function matching(value: unknown, pattern: RegExp): string | null {
+  return typeof value === 'string' && pattern.test(value) ? value : null
 }

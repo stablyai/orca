@@ -50,6 +50,9 @@ fi
 # caller passed is only a fallback for commits from before commit-provision-env.mjs existed.
 image_dir="$src/cloud/apps/sandbox-control/image"
 if [ -f "$image_dir/commit-provision-env.mjs" ]; then
+  # The stamp must describe this commit's scripts, never the Worker's: a commit from before stamps
+  # leaves it unset (the image then reads as stamp 0).
+  unset ORCA_VM_SCRIPTS_STAMP
   node "$image_dir/commit-provision-env.mjs" "$image_dir" >/tmp/commit-provision.env
   # shellcheck disable=SC1091
   . /tmp/commit-provision.env

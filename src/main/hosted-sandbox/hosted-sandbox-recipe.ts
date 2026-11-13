@@ -15,6 +15,7 @@ import { isEnvironmentProviderError } from '../environment-providers/environment
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import {
   isHostedEntitlementDenied,
+  wakeBillingDenial,
   type HostedEnvironmentProviderDriver,
   type HostedEnvironmentReady
 } from './hosted-environment-provider'
@@ -85,7 +86,8 @@ function ok(stdout: string): RecipeStepProviderResult {
   return { stdout, stderr: '', exitCode: 0, signal: null }
 }
 
-function failed(error: unknown): RecipeStepProviderResult {
+/** A control-plane failure as the build sheet reads it: a reason line and a failure code. */
+export function hostedCreateFailure(error: unknown): RecipeStepProviderResult {
   const base = { stdout: '', exitCode: 1, signal: null }
   if (
     isHostedEntitlementDenied(error) &&
@@ -142,6 +144,15 @@ function failed(error: unknown): RecipeStepProviderResult {
   return { ...base, stderr: `${error instanceof Error ? error.message : String(error)}\n` }
 }
 
+type HostedProgress = { phase: string; percent?: number; message?: string }
+
+/** `clone-progress <percent> <stage>` lines drive the sheet's clone step; the plain log hides them. */
+export function hostedProgressLine({ phase, percent, message }: HostedProgress): string {
+  return (phase === 'cloning' || phase === 'updating') && percent !== undefined
+    ? `[orca-cloud] clone-progress ${percent} ${message === 'checkout' ? 'checkout' : 'download'}\n`
+    : `[orca-cloud] ${phase}\n`
+}
+
 export function createHostedSandboxStepProvider(
   driver: HostedEnvironmentProviderDriver,
   hooks: {
@@ -153,27 +164,14 @@ export function createHostedSandboxStepProvider(
       phase: 'waking' | 'connecting' | 'ready' | 'failed'
       startedAt: number
       message?: string
+      billingDenial?: { reason: string | null }
     }) => void
   } = {}
 ): RecipeStepProvider {
   return async ({ mode, repoPath, context, stdin, signal, onStderr }) => {
     const ctx = {
       signal,
-      // `clone-progress <percent> <stage>` lines drive the sheet's clone step; the plain log hides them.
-      onProgress: ({
-        phase,
-        percent,
-        message
-      }: {
-        phase: string
-        percent?: number
-        message?: string
-      }) =>
-        onStderr?.(
-          (phase === 'cloning' || phase === 'updating') && percent !== undefined
-            ? `[orca-cloud] clone-progress ${percent} ${message === 'checkout' ? 'checkout' : 'download'}\n`
-            : `[orca-cloud] ${phase}\n`
-        )
+      onProgress: (progress: HostedProgress) => onStderr?.(hostedProgressLine(progress))
     }
     try {
       if (mode === 'create') {
@@ -220,7 +218,8 @@ export function createHostedSandboxStepProvider(
               workspaceId,
               phase: 'failed',
               startedAt,
-              message: error instanceof Error ? error.message : String(error)
+              message: error instanceof Error ? error.message : String(error),
+              ...wakeBillingDenial(error)
             })
           }
           throw error
@@ -230,7 +229,7 @@ export function createHostedSandboxStepProvider(
       hooks.onStopped?.(handle.environmentId)
       return ok('')
     } catch (error) {
-      const result = failed(error)
+      const result = hostedCreateFailure(error)
       // Only streamed stderr reaches the build log, so the control plane's reason must be streamed too.
       if (result.stderr) {
         onStderr?.(result.stderr)

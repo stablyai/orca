@@ -27,6 +27,8 @@ const actions = {
   onMoveToComputer: noop,
   onDelete: noop
 }
+// PAIRED-CHROME: what a paired row (created on another desktop) can do today.
+const pairedActions = { onSleep: noop, onDelete: noop }
 
 const running: HostedWorkspaceStatus = {
   state: 'ready',
@@ -100,7 +102,8 @@ function card({
   emptyContext = false,
   attention = null,
   layer = 'main',
-  details = false
+  details = false,
+  paired = false
 }: {
   id: string
   state?: CloudDotState
@@ -109,6 +112,7 @@ function card({
   attention?: CloudCardAttention | null
   layer?: CloudCardLayer
   details?: boolean
+  paired?: boolean
 }) {
   // Seeded once, outside render: the card reads it through the same store as the live app.
   seedCloudSyncView(syncView(id, mirror, emptyContext))
@@ -122,7 +126,7 @@ function card({
           state={state}
           entry={entry(state === 'sleeping' ? asleep : state === 'archived' ? archived : running)}
           pending={undefined}
-          actions={actions}
+          actions={paired ? pairedActions : actions}
           attention={attention}
           asOf={AS_OF}
           initialLayer={layer}
@@ -171,6 +175,36 @@ export const menuOpen = defineFixture({
         entry={entry(running)}
         pending={undefined}
         actions={actions}
+        attention={null}
+        asOf={AS_OF}
+        detailsOpen={false}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    frame
+      .querySelector<HTMLButtonElement>('[data-cloud-card-more]')
+      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+})
+
+/** PAIRED-CHROME: a paired row running: Sleep and ⋯ (Delete only). */
+export const pairedRunningCard = card({ id: 'card-paired-running', paired: true })
+/** PAIRED-CHROME: a paired row asleep: no Wake button (opening the row wakes it). */
+export const pairedAsleepCard = card({ id: 'card-paired-asleep', state: 'sleeping', paired: true })
+/** PAIRED-CHROME: the ⋯ menu on a paired row: Details and Delete, no Restart, Move or Archive. */
+export const pairedMenuOpen = defineFixture({
+  width: 320,
+  render: () => (
+    <div className="w-72 rounded-md border border-border bg-floating-surface p-3">
+      <CloudWorkspaceStatusPanel
+        workspaceId="card-paired-menu"
+        name="fix-login-redirect"
+        state="running"
+        entry={entry(running)}
+        pending={undefined}
+        actions={pairedActions}
         attention={null}
         asOf={AS_OF}
         detailsOpen={false}

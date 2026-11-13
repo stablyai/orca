@@ -23,12 +23,23 @@ const SETUP: CloudSetupNotice = {
   }
 }
 
-function notices(list: readonly CloudSetupNotice[], installing = false) {
+const FETCH: CloudSetupNotice = {
+  id: 'git.fetch',
+  kind: 'fetch',
+  check: {
+    id: 'git.fetch',
+    category: 'git',
+    status: 'fail',
+    message: 'Cannot reach remote "origin".'
+  }
+}
+
+function notices(list: readonly CloudSetupNotice[], installing = false, checkingFetch = false) {
   return cloudSetupNoticesView(
     { repoUrl: 'https://github.com/stablyai/orca', environmentId: 'env' },
     list,
     translate,
-    { installing, install: noop, runSetup: noop, dismiss: noop }
+    { installing, install: noop, runSetup: noop, dismiss: noop, recheckFetch: noop, checkingFetch }
   )
 }
 
@@ -63,3 +74,6 @@ export const pushWaitingForGitHub = cards([notices([PUSH], true)])
 export const setupOnly = cards([notices([SETUP])])
 /** One family (DS-q): the action-required prompt and the warning, same chrome. */
 export const agentAndPush = cards([AGENT, notices([PUSH, SETUP])])
+/** ENV-ORIGIN-TOAST: origin still unreachable after two confirming checks; Check again re-runs it. */
+export const fetchFailed = cards([notices([FETCH])])
+export const fetchChecking = cards([notices([FETCH], false, true)])

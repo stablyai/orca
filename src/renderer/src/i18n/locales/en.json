@@ -23919,7 +23919,6 @@
         "addRepository": "Add a GitHub repository",
         "moreAccess": "Give Orca Cloud access to more repositories…",
         "startFailed": "Couldn’t start the cloud workspace. Nothing was created, and you weren’t charged.",
-        "starting": "Starting {{repo}} in Orca Cloud…",
         "openLater": "Your cloud workspace started, but this computer couldn’t open it yet. Open it from Cloud workspaces.",
         "showMore": "Show more repositories…",
         "folderDetail": "Orca Cloud starts from a GitHub repository. This project is a folder on this computer.",
@@ -23930,7 +23929,10 @@
         "privateLabel": "Private",
         "menuGroup": "Orca Cloud",
         "addRepositoryMenu": "Add a GitHub repository…",
-        "copyAddRepositoryLink": "Copy GitHub link"
+        "copyAddRepositoryLink": "Copy GitHub link",
+        "waitingForGitHubAccess": "Waiting for GitHub access…",
+        "noNewRepositoryYet": "No new repository yet.",
+        "checkAgain": "Check again"
       },
       "agentLabel": "Agent"
     },
@@ -27700,7 +27702,8 @@
       "pendingKeys_one": "{{count}} key waiting · it goes to the terminal when it’s up",
       "pendingKeys_other": "{{count}} keys waiting · they go to the terminal when it’s up",
       "clearPendingKeys": "Discard waiting keys",
-      "unarchivingNow": "Unarchiving…"
+      "unarchivingNow": "Unarchiving…",
+      "billingPayment": "Your team’s last payment failed."
     },
     "announce": {
       "restarting": "Restarting {{name}}.",
@@ -27760,7 +27763,6 @@
     "ago": "{{ago}} ago",
     "wake": "Wake",
     "error": {
-      "seePlans": "See plans",
       "unavailable": "Orca Cloud isn’t reachable right now. Try again in a moment.",
       "generic": "Something went wrong. Try again."
     },
@@ -27867,7 +27869,8 @@
     },
     "primaryDelete": {
       "noSandbox": "Orca couldn't find this workspace's sandbox. Delete it from Cloud workspaces."
-    }
+    },
+    "opensAndWakes": "Opens and wakes when you select it."
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -28296,7 +28299,12 @@
       "label": "Workspace setup",
       "installFailed": "Couldn’t open GitHub. Check your connection and try again.",
       "pushReady": "Orca Cloud can push to {{repo}} now.",
-      "setupMissing": "Couldn’t read the setup script from orca.yaml in this workspace."
+      "setupMissing": "Couldn’t read the setup script from orca.yaml in this workspace.",
+      "fetchFailed": "This workspace can’t reach {{repo}} on GitHub right now.",
+      "fetchFailedNoRepo": "This workspace can’t reach its Git remote right now.",
+      "checking": "Checking…",
+      "checkAgain": "Check again",
+      "fetchFailedMeaning": "Pulls and pushes won’t work until it can."
     },
     "toast": {
       "dismiss": "Dismiss"

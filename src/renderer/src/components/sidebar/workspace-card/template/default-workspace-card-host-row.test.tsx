@@ -11,7 +11,11 @@ const probe = compileCardTemplate(
     defs: undefined,
     root: {
       el: 'Probe',
-      props: { host: '=vars.hostLabel', identity: '=vars.identityInMeta', branch: '=vars.branch' }
+      props: {
+        host: '=vars.hostLabel',
+        identity: '=vars.identityInMeta',
+        branch: '=vars.branch'
+      }
     }
   },
   {
@@ -22,7 +26,9 @@ const probe = compileCardTemplate(
   }
 )
 
-function facts(host: { kind: string; contextLabel: string | null }, title: string, style = 'new') {
+type Host = { kind: string; contextLabel: string | null; cloud?: boolean; stateWord?: boolean }
+
+function facts(host: Host, title: string, style = 'new') {
   return {
     ws: {
       id: 'w',
@@ -38,7 +44,7 @@ function facts(host: { kind: string; contextLabel: string | null }, title: strin
       comment: ''
     },
     repo: { id: 'r', name: 'Hello-World', ssh: false },
-    host: { ...host, runtimeDisconnected: false },
+    host: { cloud: false, stateWord: false, ...host, runtimeDisconnected: false },
     git: { conflictOperation: null, remoteBranchConflict: null, cacheTimerActive: false },
     review: null,
     links: { count: 0, issue: false, linearIssue: false, jiraIssue: false },
@@ -100,5 +106,41 @@ describe('default workspace card host row (JA-13)', () => {
       read(facts({ kind: 'runtime', contextLabel: 'Orca Cloud' }, title, 'classic'))
     expect(classic('ja-hello')).toMatch(/\|false<\/i>$/)
     expect(classic('Fix login')).toMatch(/\|true<\/i>$/)
+  })
+})
+
+// Line 2's presence, read through the same compiled vars.
+const line2Probe = compileCardTemplate(
+  {
+    ...DEFAULT_WORKSPACE_CARD_TEMPLATE,
+    defs: undefined,
+    root: { el: 'Line2', props: { line2: '=vars.hasMetaRow' } }
+  },
+  {
+    ...CARD_PRIMITIVES,
+    Line2: cardElement<null>(['line2'], (props) => <b>{String(props.line2)}</b>)
+  }
+)
+const line2 = (f: ReturnType<typeof facts>): string =>
+  renderToStaticMarkup(<>{line2Probe.render(f, null).content}</>)
+
+describe('CLOUD-ROW-DUP-TAG: no host pill on an Orca Cloud row', () => {
+  const cloud = { kind: 'runtime', contextLabel: 'Orca Cloud', cloud: true }
+
+  it('an owned or paired cloud row has no host pill; its cloud mark names the host', () => {
+    expect(read(facts(cloud, 'codex sandbox2'))).toMatch(/^<i>null\|/)
+  })
+
+  it('SSH and other remote hosts keep theirs', () => {
+    expect(read(facts({ kind: 'ssh', contextLabel: 'devbox' }, 'x'))).toContain('devbox|')
+    expect(read(facts({ kind: 'runtime', contextLabel: 'build-server' }, 'x'))).toContain(
+      'build-server|'
+    )
+  })
+
+  it('line 2 keeps the branch, and stays for a state word with nothing else on it', () => {
+    expect(read(facts(cloud, 'codex sandbox2'))).toContain('|true|')
+    expect(line2(facts(cloud, 'ja-hello'))).toBe('<b>false</b>')
+    expect(line2(facts({ ...cloud, stateWord: true }, 'ja-hello'))).toBe('<b>true</b>')
   })
 })

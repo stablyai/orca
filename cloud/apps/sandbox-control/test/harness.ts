@@ -1,4 +1,5 @@
 import { SignJWT, exportJWK, generateKeyPair } from 'jose'
+import { AUTH_IAT_BACKDATE_MS } from '../src/member-changes'
 import type { EntitlementClient, StartDecision, UsageAnswer, UsageSegment } from '../src/entitlements'
 import type { Env } from '../src/env'
 import { handleRequest, type Deps } from '../src/index'
@@ -58,13 +59,15 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
   const deps: Deps = { provider: vercel, entitlements, now: clock, publicRepoCheck: async () => true, ...extraDeps }
 
   async function token(sub: string, org?: string, purpose = 'sandbox', extra: Record<string, string> = {}) {
-    const iat = Math.floor(now / 1000)
+    // Like Orca auth (service-tokens.ts): iat backdated 30 s for clock skew, exp 5 min from minting.
+    const minted = Math.floor(now / 1000)
+    const iat = minted - AUTH_IAT_BACKDATE_MS / 1000
     return new SignJWT({ sub, ...(org ? { org } : {}), purpose, ...extra })
       .setProtectedHeader({ alg: 'ES256', kid: 'k1' })
       .setIssuer('https://login.onorca.dev')
       .setAudience('orca-sandbox')
       .setIssuedAt(iat)
-      .setExpirationTime(iat + 300)
+      .setExpirationTime(minted + 300)
       .sign(privateKey)
   }
 

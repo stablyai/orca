@@ -64,7 +64,7 @@ export function getCloudSetupNoticesRecord(
   return snapshot.records[environmentId]
 }
 
-/** Visible notices first by importance: push access, then setup, then the rest. */
+/** Visible notices first by importance: push access, reaching GitHub, setup, then the rest. */
 export function visibleCloudSetupNotices(
   state: Snapshot,
   environmentId: string | undefined
@@ -73,7 +73,7 @@ export function visibleCloudSetupNotices(
   if (!record) {
     return []
   }
-  const order = { push: 0, setup: 1, check: 2 } as const
+  const order = { push: 0, fetch: 1, setup: 2, check: 3 } as const
   return record.notices
     .filter((notice) => !state.dismissed.has(dismissalKey(record.environmentId, notice.id)))
     .slice()

@@ -7,6 +7,7 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createVercelSandboxApi } from '../src/vercel-sandbox-api'
+import { VM_SCRIPTS_STAMP } from './vm-scripts.generated'
 import {
   ManifestSchema,
   VM_SCRIPTS,
@@ -28,6 +29,7 @@ function loadInputs(): BuildInputs {
     manifest,
     provisionScript: readFileSync(here('./provision-golden.sh'), 'utf8'),
     vmScripts,
+    vmScriptsStamp: VM_SCRIPTS_STAMP,
     buildId: randomBytes(4).toString('hex')
   }
 }

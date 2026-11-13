@@ -49,7 +49,11 @@ export function VmBuildSecretsRow({
 }): React.JSX.Element | null {
   const cloud = isOrcaCloudBuild(entry)
   const sourceRepoId = entry.request.ephemeralVmRecipe?.sourceRepoId
+  const githubName = entry.request.githubSource?.fullName
   const repoKey = useAppStore((state) => {
+    if (githubName) {
+      return `github.com/${githubName.toLowerCase()}`
+    }
     const repo = state.repos.find((candidate) => candidate.id === sourceRepoId)
     return repo ? cloudSecretRepoKey(repo) : null
   })

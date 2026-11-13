@@ -60,4 +60,16 @@ describe('triageCloudEnvironmentChecks', () => {
     )
     expect(notices).toEqual([])
   })
+
+  it('a failed reach of origin is its own notice, never a bare check line (ENV-ORIGIN-TOAST)', () => {
+    const { fatal, notices } = triageCloudEnvironmentChecks(
+      [c('git.fetch', 'fail', 'git'), c('disk.free', 'warn', 'disk')],
+      { setupRunsOnCreate: true }
+    )
+    expect(fatal).toEqual([])
+    expect(notices.map((notice) => [notice.id, notice.kind])).toEqual([
+      ['git.fetch', 'fetch'],
+      ['disk.free', 'check']
+    ])
+  })
 })

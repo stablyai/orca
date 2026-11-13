@@ -7,6 +7,8 @@ import { formatElapsedTime } from './worktree-creation-clock'
 import type { VmBuildStepTimings } from './vm-build-timing'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
+import { recordBillingStatus } from '../billing/billing-summary-store'
+import { sampleTeam } from '../billing/plan-billing-fixtures'
 
 export const LOG_LINES = [
   'Creating sandbox from snapshot snap_7f2c…',
@@ -115,3 +117,24 @@ export const CLOUD_FAILED_LOG = [
   'Orca Cloud refused the request (provider_unavailable).'
 ].join('\n')
 export const FAILED_LOG = `${LOG}\nError: snapshot snap_7f2c not found`
+
+/** Billing as the sheet reads it: an owner or a member of a team with overage on at a $25 cap. */
+export function stubBillingRole(
+  canManageBilling: boolean,
+  plan: Record<string, unknown> = {}
+): void {
+  // A team with overage on at a $25 cap (so the spend-cap blocker suggests $50); no plan numbers
+  // unless the fixture gives them (ENTITLEMENTS-C).
+  const entitlement = {
+    ...sampleTeam,
+    canManageBilling,
+    offers: null,
+    overage: { ...sampleTeam.overage, optedIn: true, spendCapCents: 2500 },
+    ...plan
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture plans override only entitlement fields the sheet reads.
+  const result = { status: 'ok', entitlement } as never
+  window.api.orcaProfiles.billingStatus = () => Promise.resolve(result)
+  // The caps come from the last billing read the app made.
+  recordBillingStatus(result)
+}

@@ -23,6 +23,7 @@ import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environmen
 import { autoResumeAgentsAfterRollover, listRestartOfferIds } from './hosted-agent-auto-resume'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { toReady } from './hosted-sandbox-driver'
+import { wakeBillingDenial } from './hosted-environment-provider'
 import { noteWakeTimeline } from './cloud-wake-timeline'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
 import { getCloudSyncService } from '../cloud-sync/cloud-sync-ipc'
@@ -255,7 +256,8 @@ export function installHostedWorkspaceService(deps: {
         phase: 'failed',
         source: 'restart',
         startedAt,
-        message: error instanceof Error ? error.message : String(error)
+        message: error instanceof Error ? error.message : String(error),
+        ...wakeBillingDenial(error)
       })
       deps.syncSessions()
       return failure(error)
@@ -313,7 +315,8 @@ export function installHostedWorkspaceService(deps: {
         phase: 'failed',
         source: 'unarchive',
         startedAt,
-        message: error instanceof Error ? error.message : String(error)
+        message: error instanceof Error ? error.message : String(error),
+        ...wakeBillingDenial(error)
       })
       return failure(error)
     }

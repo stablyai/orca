@@ -35,6 +35,12 @@ export function commitProvisionEnv(imageDir) {
   for (const name of readdirSync(vmDir).sort()) {
     env[`ORCA_VM_SCRIPT_${name.replaceAll(/[-.]/g, '_')}`] = readFileSync(join(vmDir, name)).toString('base64')
   }
+  // This commit's VM_SCRIPTS_STAMP (generate-vm-scripts.ts keeps it in step with image/vm).
+  const generated = readFileSync(join(imageDir, 'vm-scripts.generated.ts'), 'utf8')
+  const stamp = /^export const VM_SCRIPTS_STAMP: number = (\d+)$/m.exec(generated)?.[1]
+  if (stamp) {
+    env.ORCA_VM_SCRIPTS_STAMP = stamp
+  }
   return env
 }
 

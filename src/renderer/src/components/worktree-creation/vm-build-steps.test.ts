@@ -410,3 +410,28 @@ describe('Orca Cloud clone step', () => {
     expect(humanizeOrcaCloudLogLine('[orca-cloud] clone-progress 40 download', t)).toBeNull()
   })
 })
+
+describe('GitHub-only Orca Cloud create (GH-CREATE-SHEET)', () => {
+  it('has no environment checks step: start, clone, then open', () => {
+    const log = '[orca-cloud] provisioning\n[orca-cloud] cloning\n[orca-cloud] connecting'
+    const steps = deriveVmBuildSteps(
+      {
+        ...base,
+        phase: 'creating',
+        phaseLog: [
+          { phase: 'provisioning-vm', at: 1000 },
+          { phase: 'creating', at: 6000 }
+        ],
+        provisioningLog: log,
+        provisioningLogStamps: [1000, 3000, 5000]
+      },
+      7000,
+      { cloud: true, checks: false }
+    )
+    expect(steps.map((step) => [step.id, step.state])).toEqual([
+      ['provision', 'done'],
+      ['clone', 'done'],
+      ['create', 'running']
+    ])
+  })
+})

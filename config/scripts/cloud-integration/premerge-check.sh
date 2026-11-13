@@ -9,6 +9,10 @@
 # Prints "premerge OK" only when everything passes. Nothing here reads /tmp state. On macOS (no flock) wrap heavy runs
 # as /tmp/vdrv/heavy.sh 'config/scripts/cloud-integration/premerge-check.sh'.
 set -euo pipefail
+# macOS: /tmp and /var are symlinks into /private. Tests that build expected paths from os.tmpdir() then compare them with a
+# realpath'd value (packaged-cli-assets' macOS launcher argv, #574) fail only because of that. Resolve TMPDIR once so the gate's
+# environment matches what child processes see.
+TMPDIR=$(cd "${TMPDIR:-/tmp}" && pwd -P); export TMPDIR
 base=private/cloud/integration
 if [[ -z "${PREMERGE_IN_WORKTREE:-}" ]]; then
   branch=$(git rev-parse --abbrev-ref HEAD)
@@ -139,7 +143,21 @@ else
     node config/scripts/workspace-package-build/build-workspace-packages.mjs >/dev/null
     node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node >/dev/null
     # run-vitest.mjs applies the repo's test env policy (e.g. ORCA_BACKGROUND_LAUNCH=1); bare vitest gives false failures.
-    node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts "${tests[@]}"
+    # Batches of PREMERGE_TEST_BATCH (default 150) files: a PR touching widely imported modules (#574) selected so many
+    # tests that spawning vitest failed with E2BIG. Every batch must pass (set -e); same files, same gate.
+    batch=${PREMERGE_TEST_BATCH:-150}
+    for ((i = 0; i < ${#tests[@]}; i += batch)); do
+      chunk=("${tests[@]:i:batch}")
+      echo "premerge: vitest batch $((i / batch + 1)) of $(((${#tests[@]} + batch - 1) / batch)) (${#chunk[@]} file(s))"
+      # A batch that fails in parallel is re-run ONCE with a single worker (#574: Electron extension-worker tests failed
+      # only under 150-file parallel load and pass alone). It passes only if the serial run is fully clean; a second
+      # failure fails the gate as before. Logged, so the record shows the retry.
+      if ! node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts "${chunk[@]}"; then
+        echo "premerge: batch $((i / batch + 1)) failed in parallel; re-running it once with --maxWorkers=1"
+        node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts --maxWorkers=1 "${chunk[@]}"
+        echo "premerge: batch $((i / batch + 1)) failed in parallel, passed serially"
+      fi
+    done
   fi
 fi
 for app in $(git diff --name-only "$base"...HEAD -- cloud/apps | cut -d/ -f1-3 | sort -u); do

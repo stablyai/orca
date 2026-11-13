@@ -9,8 +9,7 @@ import {
   getCloudWorkspaceSnapshot,
   isCloudWorkspaceArchived,
   noteCloudWakeProgress,
-  refreshCloudWorkspaceStatus,
-  refreshCloudWorkspaceStatusIfStale
+  refreshCloudWorkspaceStatus
 } from './orca-cloud-workspace-store'
 
 function notPairedMessage(): string {
@@ -18,6 +17,15 @@ function notPairedMessage(): string {
     'auto.lib.orcaCloud.pairedWake.notPaired',
     'This workspace is no longer linked to this computer. Open it again from Cloud workspaces on Home.'
   )
+}
+
+// Paired rows this desktop put to sleep (their status read may not have caught up yet).
+const sleptHere = new Set<string>()
+
+/** Paired Sleep succeeded here: its status is re-read now, and an open wakes it even before that. */
+export function notePairedCloudSlept(workspaceId: string): void {
+  sleptHere.add(workspaceId)
+  void refreshCloudWorkspaceStatus(workspaceId)
 }
 
 export type PairedWakeResult = { ok: true } | { ok: false; message: string; reason?: string }
@@ -48,7 +56,10 @@ export async function wakePairedCloudWorkspace(
   }
   const startedAt = Date.now()
   const source = options.source ?? 'open'
-  const report = (phase: 'waking' | 'ready' | 'failed', message?: string): void => {
+  const report = (
+    phase: 'waking' | 'ready' | 'failed',
+    failure?: { message: string; reason?: string }
+  ): void => {
     if (!options.quiet) {
       noteCloudWakeProgress({
         workspaceId,
@@ -56,7 +67,11 @@ export async function wakePairedCloudWorkspace(
         source,
         startedAt,
         at: Date.now(),
-        ...(message ? { message } : {})
+        ...(failure ? { message: failure.message } : {}),
+        // The plan refused it: the card says why (and offers plans), never the raw code.
+        ...(failure?.message === 'entitlement_denied'
+          ? { billingDenial: { reason: failure.reason ?? null } }
+          : {})
       })
     }
   }
@@ -67,9 +82,10 @@ export async function wakePairedCloudWorkspace(
     reason: undefined
   }))
   if (result.ok) {
+    sleptHere.delete(workspaceId)
     report('ready')
   } else {
-    report('failed', result.error)
+    report('failed', { message: result.error, ...(result.reason ? { reason: result.reason } : {}) })
   }
   await refreshCloudWorkspaceStatus(workspaceId)
   return result.ok
@@ -84,9 +100,14 @@ export async function wakePairedCloudWorkspace(
 export async function wakePairedCloudWorkspaceIfAsleep(
   workspaceId: string
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
-  await refreshCloudWorkspaceStatusIfStale(workspaceId, 30_000)
-  const state = getCloudWorkspaceSnapshot().status[workspaceId]?.status?.state
-  if (state !== 'sleeping' || isCloudWorkspaceArchived(workspaceId)) {
+  // Always a fresh read: a cached "ready" from before its Sleep (up to a poll old) made the first
+  // open after Sleep skip the wake and sit in the dropped-connection retry (n38 GATE).
+  await refreshCloudWorkspaceStatus(workspaceId)
+  const entry = getCloudWorkspaceSnapshot().status[workspaceId]
+  const state = entry?.error ? null : entry?.status?.state
+  // Slept from here and the read failed: it is asleep as far as anyone knows, so wake it.
+  const asleep = state === 'sleeping' || (state == null && sleptHere.has(workspaceId))
+  if (!asleep || isCloudWorkspaceArchived(workspaceId)) {
     return { ok: true }
   }
   const result = await wakePairedCloudWorkspace(workspaceId, { source: 'open' })

@@ -8,6 +8,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { wakeElapsedSeconds } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { TERMINAL_CONTENT_INSET_PX, useTerminalContentInset } from './use-terminal-content-inset'
+import { useBillingSummary } from '@/components/billing/billing-summary-store'
+import { cloudWakeBillingCopy } from './cloud-wake-billing'
+import { CloudWakeBillingFixButton } from './CloudWakeBillingFixButton'
 import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
 /** After this long the pill says it's slower than usual; after STUCK_S it offers recovery inline. */
@@ -101,6 +104,10 @@ export function CloudWakingOverlay({
   const t = useTranslate()
   const failed = wake.phase === 'failed'
   const unknownServer = failed && isUnknownServerWakeFailure(wake.message)
+  const { canManageBilling } = useBillingSummary()
+  // The plan refused it: say why, offer the fix to someone who can make it, no Restart (it fails too).
+  const billing = cloudWakeBillingCopy(wake, canManageBilling, t)
+  const billingFix = billing?.fix ?? null
   const now = useNow(1_000, !failed && !leaving)
   const seconds = wakeElapsedSeconds(wake.startedAt, Math.max(now, wake.at))
   const slow = !failed && seconds >= WAKE_SLOW_S
@@ -215,7 +222,9 @@ export function CloudWakingOverlay({
                           name
                         })}
                 </div>
-                {wake.message && !unknownServer ? (
+                {billing ? (
+                  <p className="break-words text-xs text-foreground">{billing.body}</p>
+                ) : wake.message && !unknownServer ? (
                   <p className="break-words text-xs text-foreground">{wake.message}</p>
                 ) : null}
                 <p className="text-xs text-muted-foreground">
@@ -238,14 +247,20 @@ export function CloudWakingOverlay({
               </Button>
             </div>
             <div className="flex justify-end gap-2">
-              {terminalStalled ? null : (
+              {terminalStalled || billing ? null : (
                 <Button size="sm" variant="ghost" onClick={onRestart}>
                   {t('orcaCloudWorkspace.restartSandbox', 'Restart sandbox')}
                 </Button>
               )}
-              <Button ref={retryRef} size="sm" onClick={onRetry}>
+              <Button
+                ref={retryRef}
+                size="sm"
+                variant={billingFix ? 'ghost' : 'default'}
+                onClick={onRetry}
+              >
                 {t('orcaCloudWorkspace.overlay.tryAgain', 'Try again')}
               </Button>
+              {billingFix ? <CloudWakeBillingFixButton fix={billingFix} onRetry={onRetry} /> : null}
             </div>
           </div>
         ) : (

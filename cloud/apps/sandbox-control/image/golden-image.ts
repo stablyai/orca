@@ -106,7 +106,20 @@ export type BuildInputs = {
   manifest: GoldenImageManifest
   provisionScript: string
   vmScripts: Record<(typeof VM_SCRIPTS)[number], string>
+  /** VM_SCRIPTS_STAMP of these scripts; provisioning records it in /opt/orca/bin/.scripts-stamp. */
+  vmScriptsStamp: number
   buildId: string
+}
+
+/** Stable fingerprint of a set of VM entry points (FNV-1a over names and bytes). */
+export function vmScriptsHash(vmScripts: BuildInputs['vmScripts']): string {
+  let hash = 0x811c9dc5
+  for (const name of VM_SCRIPTS) {
+    for (const char of `${name}\u0000${vmScripts[name]}\u0000`) {
+      hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193) >>> 0
+    }
+  }
+  return hash.toString(16).padStart(8, '0')
 }
 
 const BUILD_TIMEOUT_MS = 40 * 60_000
@@ -140,6 +153,7 @@ export function provisionEnv(inputs: BuildInputs): Record<string, string> {
   for (const name of VM_SCRIPTS) {
     env[`ORCA_VM_SCRIPT_${name.replaceAll(/[-.]/g, '_')}`] = utf8Base64(inputs.vmScripts[name])
   }
+  env.ORCA_VM_SCRIPTS_STAMP = String(inputs.vmScriptsStamp)
   return env
 }
 

@@ -20,6 +20,8 @@ import {
   selectRuntimeAwareSshTargetRemoved
 } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { EMPTY_WORKSPACE_PORTS, type WorktreeCardProps } from './worktree-card-model'
+import { useIsCloudHostRow } from '@/lib/orca-cloud/cloud-host-rows'
+import { useHostStateWord } from '../host/WorktreeCardHostMark'
 import { getDeleteStateForWorktreeHost } from '../../workspace-actions/deletion/worktree-delete-state-host-match'
 
 export function useWorktreeCardFoundation({
@@ -211,6 +213,10 @@ export function useWorktreeCardFoundation({
     : null
   // Missing runtime probe data means unknown, not disconnected.
   const isRuntimeDisconnected = useRuntimeHostDisconnected(runtimeOwnerEnvironmentId || null)
+  // CLOUD-ROW-DUP-TAG: an Orca Cloud row (owned or paired) shows its cloud mark, not a host pill too.
+  const isCloudHostRow = useIsCloudHostRow(worktree)
+  // Line 2 stays for a state word ("Asleep ·") now that a cloud row has no host pill to hold it.
+  const hasHostStateWord = useHostStateWord(worktree.id) !== null
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.
@@ -255,6 +261,8 @@ export function useWorktreeCardFoundation({
     parsedRepoHost,
     runtimeHostLabel,
     isRuntimeDisconnected,
+    isCloudHostRow,
+    hasHostStateWord,
     titleRenaming,
     setTitleRenaming,
     showRenameErrorDialog,
