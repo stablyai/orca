@@ -12,6 +12,8 @@ import type { Translate } from '../../../../i18n/use-translate'
 export type NativeChatComposerSendState = {
   /** Why Send is disabled, when the user can do something about it. */
   sendBlockedReason: string | null
+  /** A host hold's placeholder for the empty field (typing stays open). */
+  heldHint?: string
   /** Nothing may be sent yet: an upload, a paste being saved, or the host holds it. */
   sendHeld: boolean
   /** The draft holds text or images: while the agent works, Send takes Stop's place. */
@@ -35,7 +37,12 @@ export function nativeChatComposerSendState(
     structuredTransport:
       | Pick<
           NativeChatStructuredComposerTransport,
-          'sendOut' | 'sendBlockedReason' | 'threadGoal' | 'sendFollowUp' | 'optionSnapshot'
+          | 'sendOut'
+          | 'sendBlockedReason'
+          | 'heldHint'
+          | 'threadGoal'
+          | 'sendFollowUp'
+          | 'optionSnapshot'
         >
       | undefined
     editSession: { canSave: boolean } | undefined
@@ -90,6 +97,7 @@ export function nativeChatComposerSendState(
       imageBlock.reason ??
       (hostHold && !runsWhileHostHolds ? transport?.sendBlockedReason : null) ??
       null,
+    ...(transport?.heldHint ? { heldHint: transport.heldHint } : {}),
     sendHeld,
     hasDraft,
     sendButtonDisabled,
