@@ -30,6 +30,14 @@ export type BrowserHostCommandResultParams = Omit<
   result: BrowserClientHostCommandResult
 }
 
+export type BrowserHostCommandResultChunkParams = Omit<
+  BrowserClientHostCommandEvent,
+  'type' | 'command'
+> & {
+  offset: number
+  contentBase64: string
+}
+
 export type BrowserHostCommandRecord = {
   event: BrowserClientHostCommandEvent
   resultAdmission: BrowserHostCommandResultAdmission
@@ -163,7 +171,7 @@ export function sameBrowserHostCommandResult(
 
 export function assertBrowserHostCommandResultAuthority(
   authority: BrowserClientHostLeaseAuthority,
-  params: BrowserHostCommandResultParams
+  params: Omit<BrowserHostCommandResultParams, 'result'>
 ): void {
   if (
     params.pageCommandProtocolVersion !== authority.pageCommandProtocolVersion ||

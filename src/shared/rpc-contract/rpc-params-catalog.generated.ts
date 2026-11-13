@@ -16,6 +16,7 @@ import {
 } from '../browser/client-hosting/browser-client-file-channel-protocol'
 import {
   BrowserClientHostAttachParams,
+  BrowserClientHostCommandResultChunkParams,
   BrowserClientHostCommandResultParams,
   BrowserNetworkTunnelAttachParams
 } from '../browser/client-hosting/browser-client-host-protocol'
@@ -926,6 +927,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.click': Element,
   'browser.clientHost.attach': BrowserClientHostAttachParams,
   'browser.clientHost.commandResult': BrowserClientHostCommandResultParams,
+  'browser.clientHost.commandResultChunk': BrowserClientHostCommandResultChunkParams,
   'browser.clientHost.fileChannel.abort': BrowserClientFileChannelAbortParams,
   'browser.clientHost.fileChannel.read': BrowserClientFileChannelReadParams,
   'browser.clientHost.fileChannel.write': BrowserClientFileChannelWriteParams,
