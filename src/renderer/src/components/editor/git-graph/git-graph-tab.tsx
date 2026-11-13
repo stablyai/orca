@@ -6,7 +6,7 @@ import {
 } from './git-graph-commit-action-controls'
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
-import { RefreshCw } from 'lucide-react'
+import { FileDiff, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -269,6 +269,16 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                   item={selected}
                   controller={controller.actions}
                   support={commitActionSupport}
+                  leading={
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={() => void actions.openHistoryCommitDiff(selected)}
+                    >
+                      <FileDiff className="size-3.5" />
+                      {t('gitGraph.openDiff', 'Open diff')}
+                    </Button>
+                  }
                 />
               }
               actions={actions}

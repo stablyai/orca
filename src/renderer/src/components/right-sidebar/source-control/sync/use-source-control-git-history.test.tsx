@@ -23,9 +23,10 @@ import {
 } from '../panel/source-control-hook-test-harness'
 import type { GitHistoryResult } from '../../../../../../shared/git/history/git-history-types'
 
-function historyResult(subject: string): GitHistoryResult {
+function historyResult(subject: string, headOid?: string): GitHistoryResult {
   return {
     items: [{ id: subject, parentIds: [], subject, message: subject }],
+    ...(headOid ? { currentRef: { id: 'refs/heads/main', name: 'main', revision: headOid } } : {}),
     hasIncomingChanges: false,
     hasOutgoingChanges: false,
     hasMore: false,
@@ -48,9 +49,12 @@ function Probe(props: {
   worktreePath?: string
   branchName?: string
   compareBaseRef?: string | null
+  compareBaseOid?: string | null
   isFolder?: boolean
   isBranchVisible?: boolean
-  isGitHistoryExpanded?: boolean
+  headOid?: string | null
+  headUnknown?: boolean
+  isGitHistoryNeeded?: boolean
   isGitHistoryVisible?: boolean
   worktreeMap?: ReadonlyMap<string, unknown>
 }): null {
@@ -60,9 +64,11 @@ function Probe(props: {
     worktreePath: props.worktreePath ?? '/a',
     branchName: props.branchName ?? 'main',
     compareBaseRef: props.compareBaseRef === undefined ? 'origin/main' : props.compareBaseRef,
+    compareBaseOid: props.compareBaseOid ?? null,
+    headOid: props.headUnknown ? undefined : (props.headOid ?? null),
     isFolder: props.isFolder ?? false,
     isBranchVisible: props.isBranchVisible ?? true,
-    isGitHistoryExpanded: props.isGitHistoryExpanded ?? true,
+    isGitHistoryNeeded: props.isGitHistoryNeeded ?? true,
     isGitHistoryVisible: props.isGitHistoryVisible ?? true,
     worktreeMap: props.worktreeMap ?? ALL_WORKTREES
   })
@@ -77,7 +83,9 @@ beforeEach(() => {
   mocks.getRuntimeGitHistory.mockResolvedValue(historyResult('default'))
 })
 
-afterEach(() => {
+afterEach(async () => {
+  // History is a session cache; an empty worktree map prunes it between tests.
+  await mount({ worktreeId: null, worktreeMap: new Map() })
   unmountProbes()
   vi.clearAllMocks()
   latest = null
@@ -189,5 +197,99 @@ describe('useSourceControlGitHistory stale completion', () => {
       root.render(<Probe worktreeId="A" worktreePath="/a" worktreeMap={ALL_WORKTREES} />)
     })
     expect(latest?.gitHistoryState).toEqual({ status: 'idle' })
+  })
+})
+
+function branchPage(subject: string, headOid: string, baseOid: string): GitHistoryResult {
+  return {
+    ...historyResult(subject, headOid),
+    branch: {
+      baseRef: { id: 'refs/remotes/origin/main', name: 'origin/main', revision: baseOid },
+      ahead: 1,
+      behind: 0,
+      unpushed: 1
+    }
+  }
+}
+
+describe('useSourceControlGitHistory session page', () => {
+  it('shows the last page at once on remount while it refreshes', async () => {
+    mocks.getRuntimeGitHistory.mockResolvedValueOnce(historyResult('first', 'h1'))
+    await mount({ headOid: 'h1' })
+    await flush()
+    unmountProbes()
+
+    mocks.getRuntimeGitHistory.mockReturnValueOnce(deferred<GitHistoryResult>().promise)
+    await mount({ headOid: 'h1' })
+    await flush()
+    expect(latest?.gitHistoryState).toEqual({
+      status: 'refreshing',
+      result: historyResult('first', 'h1')
+    })
+  })
+
+  it('shows a resolved no-base page, and loading only while HEAD is unknown', async () => {
+    mocks.getRuntimeGitHistory.mockResolvedValue(historyResult('recent', 'h1'))
+    const root = await mount({ headOid: 'h1', compareBaseRef: null })
+    await flush()
+    expect(latest?.gitHistoryState).toEqual({
+      status: 'ready',
+      result: historyResult('recent', 'h1')
+    })
+
+    await act(async () => {
+      root.render(<Probe headUnknown compareBaseRef={null} />)
+    })
+    expect(latest?.gitHistoryState).toEqual({ status: 'loading' })
+  })
+
+  it('never shows a page for another HEAD, base OID or host', async () => {
+    mocks.getRuntimeGitHistory.mockResolvedValueOnce(branchPage('first', 'h1', 'b1'))
+    const root = await mount({ headOid: 'h1', compareBaseOid: 'b1' })
+    await flush()
+    expect(latest?.gitHistoryState.result).toEqual(branchPage('first', 'h1', 'b1'))
+
+    mocks.getRuntimeGitHistory.mockReturnValue(deferred<GitHistoryResult>().promise)
+    await act(async () => {
+      root.render(<Probe headOid="h2" compareBaseOid="b1" />)
+    })
+    expect(latest?.gitHistoryState).toEqual({ status: 'loading' })
+
+    // Same base name and HEAD, but the base moved (fetch): the range changed.
+    await act(async () => {
+      root.render(<Probe headOid="h1" compareBaseOid="b2" />)
+    })
+    expect(latest?.gitHistoryState).toEqual({ status: 'loading' })
+
+    await act(async () => {
+      root.render(
+        <Probe
+          headOid="h1"
+          compareBaseOid="b1"
+          activeRepoTarget={{ kind: 'environment', environmentId: 'other-host' }}
+        />
+      )
+    })
+    expect(latest?.gitHistoryState).toEqual({ status: 'loading' })
+  })
+
+  it('keeps the newer page when an unmounted instance completes late', async () => {
+    const older = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory.mockReturnValueOnce(older.promise)
+    await mount({ headOid: 'h1' })
+    unmountProbes()
+
+    mocks.getRuntimeGitHistory.mockResolvedValueOnce(historyResult('newer', 'h1'))
+    await mount({ headOid: 'h1' })
+    await flush()
+    await act(async () => {
+      older.resolve(historyResult('older', 'h1'))
+    })
+    await flush()
+
+    expect(latest?.gitHistoryState).toEqual({
+      status: 'ready',
+      result: historyResult('newer', 'h1')
+    })
   })
 })

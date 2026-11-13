@@ -13599,13 +13599,6 @@
             "c76693e456": "Die Dateien für diesen Arbeitsbereich konnten nicht geladen werden:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Noch keine Commits",
-            "d0fb0f4bf2": "Commits aktualisieren",
-            "9f7535d22b": "Referenzen sind Branch- oder Tag-Namen, die genau auf diesen Commit verweisen. Sie erscheinen nur dort, wo Git eine benannte Referenz für den Commit hat.",
-            "9289ba0cb9": "Was sind Referenzen?",
-            "d836037d02": "Commits",
-            "8232c8b2f2": "Commit {{value0}} öffnen: {{value1}}",
-            "e5e81e59a6": "Größe des Commit-Bereichs ändern",
             "6d1e0a7c3b": "Commit-Dateien konnten nicht geladen werden"
           },
           "HostedReviewActions": {
@@ -14825,12 +14818,7 @@
             "f8a2c4d1e0": "Suchmodus des Datei-Explorers"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "Keine Dateiänderungen in diesem Commit",
-            "c3d4e5f6a7": "Alle Änderungen gemeinsam öffnen"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "Dateien in Commit {{value0}} anzeigen: {{value1}}",
-            "4a8d9e0c1f": "Dateien in Commit {{value0}} ausblenden: {{value1}}"
+            "b2c3d4e5f6": "Keine Dateiänderungen in diesem Commit"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Commit im Browser öffnen",

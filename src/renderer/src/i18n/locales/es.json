@@ -13220,13 +13220,6 @@
             "c76693e456": "No se pudieron cargar archivos para este espacio de trabajo:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Aún no hay commits",
-            "d0fb0f4bf2": "Actualizar commits",
-            "9f7535d22b": "Las refs son nombres de ramas o tags que apuntan a ese commit exacto. Solo aparecen cuando Git tiene una ref con nombre para el commit.",
-            "9289ba0cb9": "¿Qué son las refs?",
-            "d836037d02": "Commits",
-            "8232c8b2f2": "Abrir commit {{value0}}: {{value1}}",
-            "e5e81e59a6": "Cambiar tamaño del panel de commits",
             "6d1e0a7c3b": "No se pudieron cargar los archivos del commit"
           },
           "HostedReviewActions": {
@@ -14484,12 +14477,7 @@
             "f8a2c4d1e0": "Modo de búsqueda del explorador"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "No hay cambios de archivos en este commit",
-            "c3d4e5f6a7": "Abrir todos los cambios juntos"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "Mostrar archivos del commit {{value0}}: {{value1}}",
-            "4a8d9e0c1f": "Ocultar archivos del commit {{value0}}: {{value1}}"
+            "b2c3d4e5f6": "No hay cambios de archivos en este commit"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Abrir commit en el navegador",
