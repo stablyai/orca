@@ -53,6 +53,33 @@ const unknownChat = (
   models: [{ id: 'openai/gpt-6', label: 'GPT-6', isDefault: false, efforts, effortsKnown: false }]
 })
 
+it('keeps discovered fast support when a newer chat has not seen that model', () => {
+  const discovered: AgentModelCatalogListing = {
+    models: [
+      {
+        id: 'grok-4.7',
+        label: 'Grok 4.7',
+        isDefault: false,
+        efforts: [],
+        supportsFastMode: true
+      }
+    ],
+    origin: 'probe',
+    at: 1,
+    fastModeSupport: { supported: true }
+  }
+  const live: AgentModelCatalogListing = {
+    models: [
+      { id: 'grok-4.7', label: 'Grok 4.7', isDefault: false, efforts: [], effortsKnown: false }
+    ],
+    origin: 'live-session',
+    at: 2
+  }
+  const entry = agentModelCatalogEntry('cursor', 'fp', discovered, live, null)
+  expect(entry?.models[0]?.supportsFastMode).toBe(true)
+  expect(entry?.fastModeSupport).toEqual({ supported: true })
+})
+
 describe('a model whose newer chat listing does not know its efforts', () => {
   it('takes the menu the older listing supplies', () => {
     const merged = model(listing('probe', 1, menu('off', 'high')), unknownChat(2))

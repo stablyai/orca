@@ -478,6 +478,41 @@ describe('Pi supported selection apart from saved intent', () => {
   })
 })
 
+it('shows Cursor fast mode only on a model that supports it', () => {
+  const efforts = levels('low', 'medium', 'high')
+  const state = applyStructuredAgentSessionOptions(
+    createStructuredAgentSessionOptionState('cursor', CURSOR_SESSION_OPTION_CATALOG),
+    CURSOR_SESSION_OPTION_CATALOG,
+    {
+      models: [
+        {
+          id: 'default',
+          label: 'Auto',
+          isDefault: false,
+          efforts: [],
+          declaredDefaultEffort: null
+        },
+        {
+          id: 'grok-4.7',
+          label: 'Grok 4.7',
+          isDefault: false,
+          efforts,
+          supportsFastMode: true
+        }
+      ],
+      fastModeSupport: { supported: true },
+      listedModelIds: ['default', 'grok-4.7'],
+      current: { model: 'default' }
+    }
+  )
+  const fast = (current: StructuredAgentSessionOptionState) =>
+    structuredAgentSessionShownSnapshot(current).find((entry) => entry.id === 'fastMode')
+  expect(fast(state)).toBeUndefined()
+  expect(fast(commitStructuredAgentSessionOption(state, 'model', 'grok-4.7'))).toMatchObject({
+    kind: { type: 'boolean' }
+  })
+})
+
 it('shows no effort on a listed Cursor model that has none', () => {
   const state = applyStructuredAgentSessionOptions(
     createStructuredAgentSessionOptionState('cursor', CURSOR_SESSION_OPTION_CATALOG),
