@@ -1,7 +1,7 @@
 import type { PRRefreshOutcome } from './pull-request-refresh-types'
 
 /** Advertised only by hosts whose start/wait/commit/cancel run the queued recovery ticket. */
-export const GITHUB_PR_DETAIL_RECOVERY_RUNTIME_CAPABILITY = 'github.pr-detail-recovery.v1' as const
+export const GITHUB_PR_DETAIL_RECOVERY_RUNTIME_CAPABILITY = 'github.pr-detail-recovery.v2' as const
 
 export const PR_DETAIL_RECOVERY_WAIT_MAX_MS = 20_000
 export const PR_DETAIL_RECOVERY_PREPARE_TTL_MS = 20_000

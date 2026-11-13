@@ -1,3 +1,4 @@
+import { capturePRDetailRecoveryAuthority } from './pr-detail-recovery-authority'
 import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import {
   GITHUB_PR_DETAIL_RECOVERY_RUNTIME_CAPABILITY,
@@ -12,6 +13,8 @@ import { runtimeEnvironmentCapabilityProof } from '../../../runtime/rpc/compatib
 /** One host's ticket operations; native IPC and runtime RPC reach the same coordinator contract. */
 export type PRDetailRecoveryTransport = {
   sourceEpoch: string
+  signal?: AbortSignal
+  dispose?: () => void
   start: (args: PRDetailRecoveryStartArgs) => Promise<PRDetailRecoverySnapshot>
   wait: (ticketId: string, afterRevision: number) => Promise<PRDetailRecoverySnapshot | null>
   commit: (args: PRDetailRecoveryCommitArgs) => Promise<PRDetailRecoverySnapshot | null>
@@ -54,14 +57,18 @@ export async function resolvePRDetailRecoveryTransport(
   if (!proof?.supported) {
     return null
   }
+  const authority = capturePRDetailRecoveryAuthority(environmentId, proof)
   const target = { kind: 'environment' as const, environmentId }
   const options = {
+    signal: authority.signal,
     expectedEnvironmentRuntimeId: proof.runtimeId,
     ...(proof.pairingRevision !== undefined
       ? { expectedEnvironmentPairingRevision: proof.pairingRevision }
       : {})
   }
   return {
+    signal: authority.signal,
+    dispose: authority.dispose,
     sourceEpoch: `runtime:${environmentId}:${proof.runtimeId}:${proof.pairingRevision ?? ''}`,
     start: (args) =>
       callRuntimeRpc(target, 'github.prDetailRecovery.start', args, {

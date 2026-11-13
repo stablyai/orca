@@ -1,4 +1,5 @@
 // Per-device revocable tokens isolate compromises; persist with hardened metadata-style permissions.
+import type { AuthorizationIncarnation } from '../../../../../shared/authorization-incarnation'
 import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
 import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
@@ -28,8 +29,6 @@ import {
 } from './pairing-offer-expiry'
 import {
   mobilePairingConnectionModeOf,
-  findPrincipalDevice,
-  findTokenDevice,
   type AuthenticatedPrincipalBinding,
   lookupDeviceKeyRow,
   type DeviceEntry,
@@ -143,7 +142,7 @@ export class DeviceRegistry extends DeviceRegistrySightings {
   }
 
   getDevice(deviceId: string): DeviceEntry | null {
-    return this.devices.find((d) => d.deviceId === deviceId) ?? null
+    return this.authorityIndex.row(deviceId)
   }
 
   /** The offer re-advertisement under `offerTtlMs` would reuse. */
@@ -199,7 +198,8 @@ export class DeviceRegistry extends DeviceRegistrySightings {
 
   validateToken(token: string): DeviceEntry | null {
     this.adoptExternalEdits()
-    const device = findTokenDevice(this.devices, token, this.seenDeviceIds)
+    this.authorityIndex.expire(this.devices)
+    const device = this.authorityIndex.token(token)
     return device && isExchangeSignIn(device, token) ? this.retirePairingToken(device) : device
   }
 
@@ -288,8 +288,18 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     return plan.removed
   }
 
-  resolveAuthenticatedPrincipal(principal: AuthenticatedPrincipalBinding): DeviceEntry | null {
-    this.adoptExternalEdits()
-    return findPrincipalDevice(this.devices, principal)
+  resolveAuthenticatedPrincipal(
+    principal: AuthenticatedPrincipalBinding,
+    authority?: AuthorizationIncarnation
+  ): DeviceEntry | null {
+    if (authority) {
+      return authority.signal.aborted ? null : this.authorityIndex.principal(principal)
+    }
+    this.refreshAuthority()
+    return this.authorityIndex.principal(principal)
+  }
+
+  captureAuthority(principal: AuthenticatedPrincipalBinding, deviceToken = principal.deviceToken) {
+    return this.authorityIndex.capture({ ...principal, deviceToken })
   }
 }

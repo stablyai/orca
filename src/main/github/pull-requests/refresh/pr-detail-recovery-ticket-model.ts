@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { AuthorizationIncarnation } from '../../../../shared/authorization-incarnation'
 import {
   PR_DETAIL_RECOVERY_WAIT_MAX_MS,
   type PRDetailRecoveryIdentity,
@@ -20,7 +21,7 @@ export type PRDetailRecoveryCaller = {
   callerKey: string
   windowId?: number
   pacingScope?: string
-  isCredentialCurrent?: () => boolean
+  authority?: AuthorizationIncarnation
 }
 
 export type PRDetailRecoveryTicket = {

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import {
   prDetailRecoveryContextKey,
   prDetailRecoverySelectionRevision,

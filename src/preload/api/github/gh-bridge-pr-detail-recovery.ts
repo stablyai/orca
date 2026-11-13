@@ -4,7 +4,7 @@ import type {
   PRDetailRecoveryCommitArgs,
   PRDetailRecoveryStartArgs,
   PRDetailRecoveryWaitArgs
-} from '../../shared/github/pull-requests/refresh/pr-detail-recovery-contract'
+} from '../../../shared/github/pull-requests/refresh/pr-detail-recovery-contract'
 
 export const ghPRDetailRecoveryApi = {
   startPRDetailRecovery: (args: PRDetailRecoveryStartArgs) =>

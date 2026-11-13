@@ -103,6 +103,11 @@ export async function runPRDetailRecoveryEntry(
     return
   }
   const until = await gateUntil(deps, ticket)
+  // No await may separate this authority check from provider admission.
+  if (ticket.caller.authority?.signal.aborted) {
+    deps.tickets.cancelCaller(ticket.caller.callerKey)
+    return
+  }
   if (ticket.terminal || deps.queue.get(entry.key) !== entry) {
     return
   }

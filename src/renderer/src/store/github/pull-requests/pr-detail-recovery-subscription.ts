@@ -12,7 +12,10 @@ import type {
   PRDetailRecoveryOwner,
   PRDetailRecoveryStatus
 } from './pr-detail-recovery-context'
-import type { PRDetailRecoveryGrant } from './pr-detail-recovery-publication'
+import {
+  releasePRDetailRecoveryGrant,
+  type PRDetailRecoveryGrant
+} from './pr-detail-recovery-publication'
 import type { PRDetailRecoveryTransport } from './pr-detail-recovery-transport'
 
 /** One panel context's automatic recovery: at most one is current per store. */
@@ -190,5 +193,15 @@ export function newPRDetailRecoverySubscription(
     releaseIntentPin: () => {},
     admitted: false,
     yieldToNewerIntent
+  }
+}
+
+export function detachPRDetailRecoverySubscription(sub: PRDetailRecoverySubscription): void {
+  sub.cancelled = true
+  sub.transport?.dispose?.()
+  sub.releaseIntentPin()
+  releasePRDetailRecoveryGrant(sub.owner, sub.grant)
+  if (sub.transport && sub.ticketId) {
+    void sub.transport.cancel(sub.ticketId).catch(() => {})
   }
 }

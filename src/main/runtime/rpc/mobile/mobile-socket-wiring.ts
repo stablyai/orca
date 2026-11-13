@@ -1,13 +1,15 @@
+import { PairedSocketAuthorities } from './paired-socket-authorities'
 import type { RuntimeClientCapabilities } from '../callers/runtime-client-capabilities'
 import { randomBytes } from 'node:crypto'
 import type { WebSocket } from 'ws'
-import type { DeviceEntry } from '../server/pairing/device-entry'
 import type { DeviceRegistry } from '../server/pairing/device-registry'
 import { EPHEMERAL_DEVICE_SWEEP_INTERVAL_MS } from '../server/pairing/ephemeral-device-rows'
-import { devicePrincipalOf } from '../server/pairing/device-principal'
 import type { E2EEKeypair } from '../server/pairing/e2ee-keypair'
 import { E2EEChannel } from './e2ee/e2ee-channel'
-import type { E2EEAuthenticatedDevice } from '../server/mobile-e2ee-authenticated-device'
+import {
+  toAuthenticatedDevice,
+  type E2EEAuthenticatedDevice
+} from '../server/mobile-e2ee-authenticated-device'
 import { createMobileE2EEOutboundMemoryBudget } from './e2ee/mobile-e2ee-outbound-memory-budget'
 import type { RuntimeCapability } from '../../../../shared/protocol-version'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
@@ -67,13 +69,6 @@ type MobileSocketWiringOptions = {
   onUnpairedDeviceAuthFailure?: (metadata: MobileSocketTransportMetadata) => void
 }
 
-function toAuthenticatedDevice(device: DeviceEntry): E2EEAuthenticatedDevice {
-  return {
-    ...devicePrincipalOf(device),
-    ...(device.token !== undefined ? { deviceToken: device.token } : {})
-  }
-}
-
 export class MobileSocketWiring {
   private readonly deviceRegistry: DeviceRegistry
   private readonly e2eeKeypair: E2EEKeypair
@@ -83,6 +78,7 @@ export class MobileSocketWiring {
   private readonly onReady: MobileSocketWiringOptions['onReady']
   private readonly onUnpairedDeviceAuthFailure: MobileSocketWiringOptions['onUnpairedDeviceAuthFailure']
   private readonly ephemeralSweep: ReturnType<typeof setInterval>
+  private readonly authorities: PairedSocketAuthorities
   private readonly channels = new Map<WebSocket, E2EEChannel>()
   private readonly connectionIds = new Map<WebSocket, string>()
   private readonly authenticatedSockets = new Map<WebSocket, AuthenticatedMobileSocket>()
@@ -97,6 +93,7 @@ export class MobileSocketWiring {
     this.onClose = options.onClose
     this.onReady = options.onReady
     this.onUnpairedDeviceAuthFailure = options.onUnpairedDeviceAuthFailure
+    this.authorities = new PairedSocketAuthorities(this.deviceRegistry)
     this.ephemeralSweep = setInterval(
       () => this.sweepIdleEphemeralDevices(Date.now()),
       EPHEMERAL_DEVICE_SWEEP_INTERVAL_MS
@@ -107,6 +104,7 @@ export class MobileSocketWiring {
 
   dispose(): void {
     clearInterval(this.ephemeralSweep)
+    this.authorities.dispose()
   }
 
   /** Removes idle session-only browser rows and cuts any socket still bound to them. */
@@ -179,7 +177,11 @@ export class MobileSocketWiring {
     metadata: MobileSocketTransportMetadata
   ): void {
     const socket = this.authenticatedSockets.get(ws)
-    if (socket && !this.deviceRegistry.resolveAuthenticatedPrincipal(socket.device)) {
+    if (
+      socket &&
+      (socket.device.authority?.signal.aborted ||
+        !this.deviceRegistry.resolveAuthenticatedPrincipal(socket.device, socket.device.authority))
+    ) {
       ws.close(4001, 'Unauthorized')
       this.handleClose(ws)
       return
@@ -242,8 +244,6 @@ export class MobileSocketWiring {
             },
             transport: metadata
           }
-          this.authenticatedSockets.set(ws, socket)
-          transport.setClientId(ws, device.deviceId)
           // Do not delay e2ee_authenticated for the secure-file rewrite.
           this.deviceRegistry.updateLastSeenDeferred(
             device.deviceId,
@@ -253,6 +253,23 @@ export class MobileSocketWiring {
           if (device.deviceToken === undefined) {
             this.deviceRegistry.retireForkedTicket(device.deviceId)
           }
+          const authority = this.deviceRegistry.captureAuthority(device)
+          if (!authority) {
+            ws.close(4001, 'Unauthorized')
+            this.handleClose(ws)
+            return
+          }
+          device.authority = authority
+          this.authenticatedSockets.set(ws, socket)
+          if (
+            !this.authorities.bind(ws, authority, () => {
+              ws.close(4001, 'Unauthorized')
+              this.handleClose(ws)
+            })
+          ) {
+            return
+          }
+          transport.setClientId(ws, device.deviceId)
           this.onReady?.(socket)
         },
         onError: (code, reason) => {
@@ -290,6 +307,7 @@ export class MobileSocketWiring {
   private handleClose(ws: WebSocket): void {
     const socket = this.authenticatedSockets.get(ws) ?? null
     this.authenticatedSockets.delete(ws)
+    this.authorities.unbind(ws)
     this.channels.get(ws)?.destroy()
     this.channels.delete(ws)
     this.connectionIds.delete(ws)
@@ -298,8 +316,9 @@ export class MobileSocketWiring {
       Array.from(this.authenticatedSockets.values()).some(
         (candidate) => candidate.device.deviceId === socket.device.deviceId
       )
-    // Session-only idle time starts at disconnect, not connection.
-    if (socket && !hasOtherConnections && socket.device.deviceToken === undefined) {
+    // Revocation must not rebuild authority again for each closed socket.
+    const revoked = socket?.device.authority?.signal.aborted
+    if (socket && !revoked && !hasOtherConnections && socket.device.deviceToken === undefined) {
       this.deviceRegistry.updateLastSeenDeferred(socket.device.deviceId)
     }
     this.onClose(socket, hasOtherConnections)

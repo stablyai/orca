@@ -104,6 +104,14 @@ export function startPRDetailRecovery(
   return tickets.start(caller, args, resolved)
 }
 
+export function resolvePRDetailRecovery(
+  caller: PRDetailRecoveryCaller,
+  args: PRDetailRecoveryStartArgs,
+  resolve: () => Promise<GitHubPRRefreshCandidate | PRDetailRecoveryNotAdmittedReason>
+): Promise<PRDetailRecoverySnapshot> {
+  return tickets.startResolving(caller, args, resolve)
+}
+
 export function waitPRDetailRecovery(
   callerKey: string,
   ticketId: string,

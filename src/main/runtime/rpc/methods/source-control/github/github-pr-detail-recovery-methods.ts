@@ -8,7 +8,7 @@ import {
 import {
   cancelPRDetailRecovery,
   commitPRDetailRecovery,
-  startPRDetailRecovery,
+  resolvePRDetailRecovery,
   waitPRDetailRecovery
 } from '../../../../../github/pull-requests/refresh/pr-detail-recovery-coordinator'
 
@@ -18,7 +18,7 @@ function callerKey(context: RpcContext): string {
   if (!client) {
     throw new Error('caller_unidentified')
   }
-  const revision = context.authenticatedCredential?.revision
+  const revision = context.authenticatedCredential?.id
   return `rpc:${client}${revision === undefined ? '' : `:credential:${revision}`}`
 }
 
@@ -29,15 +29,14 @@ export const GITHUB_PR_DETAIL_RECOVERY_METHODS = [
     params: PRDetailRecoveryStart,
     handler: async (params, context) => {
       const key = callerKey(context)
-      const resolved = await context.runtime.resolvePRDetailRecoveryCandidate(params)
-      return startPRDetailRecovery(
+      return resolvePRDetailRecovery(
         {
           callerKey: key,
-          pacingScope: key,
-          isCredentialCurrent: context.authenticatedCredential?.isCurrent
+          pacingScope: `rpc:${context.clientId ?? context.connectionId}`,
+          authority: context.authenticatedCredential
         },
         params,
-        resolved
+        () => context.runtime.resolvePRDetailRecoveryCandidate(params)
       )
     }
   }),

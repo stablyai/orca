@@ -1,3 +1,4 @@
+import { onPRDetailRecoveryAuthorityLost } from './pr-detail-recovery-authority'
 import type { StateCreator } from 'zustand'
 import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import type { AppState } from '../../types'
@@ -26,6 +27,7 @@ import {
 import { resolvePRDetailRecoveryTransport } from './pr-detail-recovery-transport'
 import {
   awaitWithBudget,
+  detachPRDetailRecoverySubscription as detach,
   newPRDetailRecoverySubscription,
   recoveryRuntimeTarget,
   retainedEpochs,
@@ -53,7 +55,7 @@ export type PRDetailRecoverySlice = {
   ) => void
 }
 
-// Generation-ordered so the host can retire this renderer's scope once newer instances replace it.
+// Random renderer scope plus counter identifies retries within the retained ticket window.
 const EPOCH_SCOPE = `g${Date.now()}.${createNonSecureContextUuid()}`
 let epochCounter = 0
 let panelVisible = false
@@ -83,13 +85,17 @@ export const createPRDetailRecoveryActions = (
   }
 
   const live = (sub: Subscription): boolean =>
-    current === sub && !sub.cancelled && prDetailRecoveryContextLive(get(), sub.context, sub.owner)
+    current === sub &&
+    !sub.cancelled &&
+    !sub.transport?.signal?.aborted &&
+    prDetailRecoveryContextLive(get(), sub.context, sub.owner)
 
   const show = (sub: Subscription, status: PRDetailRecoveryStatus, terminal = false): void => {
     if (current !== sub) {
       return
     }
     if (terminal) {
+      sub.transport?.dispose?.()
       sub.releaseIntentPin()
       record(sub.contextKey, status, 1)
       return
@@ -101,15 +107,6 @@ export const createPRDetailRecoveryActions = (
         terminalCount: s.prDetailRecovery?.terminalCount ?? 0
       }
     }))
-  }
-
-  const detach = (sub: Subscription): void => {
-    sub.cancelled = true
-    sub.releaseIntentPin()
-    releasePRDetailRecoveryGrant(sub.owner, sub.grant)
-    if (sub.transport && sub.ticketId) {
-      void sub.transport.cancel(sub.ticketId).catch(() => {})
-    }
   }
 
   const prepare = async (sub: Subscription, snapshot: PRDetailRecoverySnapshot): Promise<void> => {
@@ -206,6 +203,14 @@ export const createPRDetailRecoveryActions = (
     }
     if (!sub.transport) {
       show(sub, { kind: 'unsupported' }, true)
+      return
+    }
+    if (
+      onPRDetailRecoveryAuthorityLost(sub.transport, () => {
+        detach(sub)
+        show(sub, { kind: 'closed' }, true)
+      })
+    ) {
       return
     }
     const inflight = inflightPRRequests.get(sub.owner.cacheKey)
