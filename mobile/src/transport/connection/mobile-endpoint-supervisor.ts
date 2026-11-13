@@ -9,6 +9,7 @@ import {
   createRelayRecoveryLog,
   type RelayRecoveryLog
 } from '../../diagnostics/connection/mobile-relay-recovery-log'
+import { createRelayDeferralLog } from '../../diagnostics/connection/mobile-relay-deferral-log'
 import {
   mobileRelayCredentialNeedsRotation,
   rotateMobileRelayCredential
@@ -41,6 +42,8 @@ export class MobileEndpointSupervisor {
   private readonly relayReconnect: RelayReconnectController
   private readonly leaseRotation: RelayLeaseRotationTimer
   private readonly logRelay: RelayRecoveryLog
+  // Lazy: logRelay is assigned in the constructor.
+  private readonly logDeferral = createRelayDeferralLog((m, d) => this.logRelay(m, d))
   private readonly directProbe: DirectReturnProbe
   private readonly directGrace: MobileRelayDirectGraceTimer
   private readonly backgroundGrace: MobileRelayBackgroundGrace
@@ -223,12 +226,13 @@ export class MobileEndpointSupervisor {
       return
     }
     // Share cooldown across overlapping resume, revival and lease failures to prevent reconnect churn.
-    if (this.relayReconnect.shouldDefer()) {
+    const deferral = this.relayReconnect.deferral()
+    if (deferral) {
       if (ownsRecovery) {
         // Without a dial, no session was disproven; keep intent queued for forced recovery after cooldown.
         this.pendingReplace = true
       }
-      this.logRelay('recovery deferred by cooldown or gate')
+      this.logDeferral(deferral)
       return
     }
     this.operationInFlight = true

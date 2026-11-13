@@ -1,6 +1,8 @@
 import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
 import { MobileE2EEAuthenticationError } from '../encryption/mobile-e2ee-v2-physical-channel'
 import { ReplacementAuthenticationTimeoutError } from './replacement-session-authentication'
+import { isHostAttachTimeout } from './relay-recovery-failure-count'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 
 type RelayDialResult = { ok: true } | { ok: false; error: Error }
@@ -12,9 +14,34 @@ export class RelayDialAbortedError extends Error {
   }
 }
 
+// An edge that still claims a desktop which moved answers 4404 until its fence lands, so the cell
+// alone never reveals the move. Resolve on the second consecutive 4404 (attach timeouts excluded:
+// the desktop was seated there), then count afresh so resolves stay at most every other dial.
+export class RelayHostOfflineStreak {
+  private streak = 0
+
+  shouldResolve(result: RelayDialResult): boolean {
+    if (!result.ok && result.error instanceof RelayDialAbortedError) {
+      return false
+    }
+    const hostOffline =
+      !result.ok &&
+      result.error instanceof RelayOuterError &&
+      result.error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE &&
+      !isHostAttachTimeout(result.error)
+    this.streak = hostOffline ? this.streak + 1 : 0
+    if (this.streak < 2) {
+      return false
+    }
+    this.streak = 0
+    return true
+  }
+}
+
 // After a director-class failure, resolve/persist the assignment and retry this credential once.
 export async function dialRelayThroughDirectorFallback(args: {
   resumeToken: string
+  hostOfflineStreak?: RelayHostOfflineStreak
   relay: () => MobileRelayEndpoint
   dial: () => Promise<RelayDialResult>
   resolveRelay: (input: {
@@ -25,10 +52,11 @@ export async function dialRelayThroughDirectorFallback(args: {
 }): Promise<RelayDialResult> {
   const first = await args.dial()
   const relay = args.relay()
+  const persistentHostOffline = args.hostOfflineStreak?.shouldResolve(first) ?? false
   if (
     first.ok ||
     first.error instanceof RelayDialAbortedError ||
-    !isDirectorResolutionFailure(first.error)
+    !(persistentHostOffline || isDirectorResolutionFailure(first.error))
   ) {
     return first
   }

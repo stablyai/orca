@@ -33,6 +33,7 @@ export class RelayReconnectController {
   private activeRelayConnectedAt: number | null = null
   private nextAttemptAt = 0
   private timer: ReturnType<typeof setTimeout> | null = null
+  private timerDueAt = 0
   private activeSession: RetainableRelaySession | null = null
   private recoveryGate: RecoveryGate | null = null
   private gateReprobePending = false
@@ -177,7 +178,7 @@ export class RelayReconnectController {
       return
     }
     if (this.recoveryGate) {
-      // Mint a gated tick’s pass token or shouldDefer would double the intended cadence.
+      // Mint a gated tick’s pass token or deferral() would double the intended cadence.
       this.holdGate(true)
       return
     }
@@ -212,21 +213,23 @@ export class RelayReconnectController {
     return failure ?? null
   }
 
-  shouldDefer(): boolean {
+  // Null lets recovery dial now; otherwise the pending timer retries at remainingMs (diagnostics).
+  deferral(): { reason: RecoveryGate | 'cooldown'; remainingMs: number } | null {
     if (this.recoveryGate) {
       if (this.gateReprobePending) {
         // Why: the slow reprobe tick gets exactly one attempt through the gate.
         this.gateReprobePending = false
-        return false
+        return null
       }
       this.scheduleGateReprobe()
-      return true
+      const remainingMs = Math.max(0, this.timerDueAt - this.dependencies.now())
+      return { reason: this.recoveryGate, remainingMs }
     }
     if (this.dependencies.now() < this.nextAttemptAt) {
       this.scheduleRetry()
-      return true
+      return { reason: 'cooldown', remainingMs: this.nextAttemptAt - this.dependencies.now() }
     }
-    return false
+    return null
   }
 
   registerFailure(error: Error | null, scheduleRetry = true): void {
@@ -311,6 +314,7 @@ export class RelayReconnectController {
       return
     }
     const delay = delayMs ?? Math.max(0, this.nextAttemptAt - this.dependencies.now())
+    this.timerDueAt = this.dependencies.now() + delay
     this.timer = this.dependencies.setTimer(() => {
       this.timer = null
       this.onRetry()
@@ -325,6 +329,7 @@ export class RelayReconnectController {
     if (this.timer) {
       return
     }
+    this.timerDueAt = this.dependencies.now() + delay
     this.timer = this.dependencies.setTimer(() => {
       this.timer = null
       // Advance cadence once per fired tick, not on repeated arm attempts.

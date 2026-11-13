@@ -2,8 +2,10 @@ import type { MobileEndpointSupervisorDependencies } from '../connection/mobile-
 import {
   dialRelayThroughDirectorFallback,
   RelayDialAbortedError,
+  RelayHostOfflineStreak,
   toError
 } from './mobile-relay-director-fallback'
+import { RelayResolveTimeoutBudget } from './mobile-relay-resume-director'
 import { encodeBase64Url } from '../encryption/mobile-session-id-encoding'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
 import { relayFailureAllowsGraceRetry } from './relay-credential-eligibility'
@@ -22,6 +24,8 @@ function directWon(logical: StableLogicalRpcClient): boolean {
 // Own candidate relays through cell resolution, logical migration and best-effort resume bookkeeping.
 export class MobileRelaySessionEstablisher {
   private relay: MobileRelayEndpoint
+  private readonly hostOfflineStreak = new RelayHostOfflineStreak()
+  private readonly resolveTimeout = new RelayResolveTimeoutBudget()
 
   constructor(
     private readonly args: {
@@ -88,11 +92,29 @@ export class MobileRelaySessionEstablisher {
   dial(credential: { token: string; version: number }): Promise<EstablishResult> {
     return dialRelayThroughDirectorFallback({
       resumeToken: credential.token,
+      hostOfflineStreak: this.hostOfflineStreak,
       relay: () => this.relay,
       dial: () => this.establish(credential),
-      resolveRelay: this.args.resolveRelay,
+      resolveRelay: (input) => this.resolveRelay(input),
       persistResolvedRelay: (resolved) => this.adoptRelay(resolved)
     })
+  }
+
+  private async resolveRelay(input: {
+    relay: MobileRelayEndpoint
+    resumeToken: string
+  }): Promise<MobileRelayEndpoint> {
+    try {
+      const resolved = await this.args.resolveRelay({
+        ...input,
+        timeoutMs: this.resolveTimeout.timeoutMs
+      })
+      this.resolveTimeout.succeeded()
+      return resolved
+    } catch (error) {
+      this.resolveTimeout.failed(error)
+      throw error
+    }
   }
 
   private async establish(credential: {
