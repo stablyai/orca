@@ -13,6 +13,7 @@ import type { ApprovedSetupHashes } from '../../../../../../shared/worktree/crea
 import { approvedOrcaHookContentHashes } from '../../../../../../shared/orca-hook-trust-entries'
 import { ensureHooksApproved } from '../../../../runtime/repo-hooks/ensure-hooks-confirmed'
 import { settleComposerSubmit } from '../composer-submit-cancellation'
+import type { SetupHooksCreateSource } from '../../../../../../shared/worktree/setup-hooks-create-source'
 
 export async function confirmWorkspaceSetupDecision<T extends SetupDecision | undefined>(
   stateOrGetter: AppState | (() => AppState),
@@ -20,7 +21,8 @@ export async function confirmWorkspaceSetupDecision<T extends SetupDecision | un
   decision: T,
   ownerHostId: ExecutionHostId | undefined,
   isCancelled: () => boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  createSource?: SetupHooksCreateSource
 ): Promise<
   | ({ setupDecision: T | 'skip' | 'run'; trustDecision: 'run' | 'skip' } & ApprovedSetupHashes)
   | 'cancelled'
@@ -33,7 +35,8 @@ export async function confirmWorkspaceSetupDecision<T extends SetupDecision | un
       ownerHostId,
       undefined,
       isCancelled,
-      signal
+      signal,
+      createSource
     ),
     isCancelled
   )

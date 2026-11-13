@@ -1,6 +1,7 @@
 export const HANG_WATCHDOG_HEARTBEAT_INTERVAL_MS = 2_000
 export const HANG_WATCHDOG_TIMEOUT_MS = 45_000
 export const HANG_WATCHDOG_CHECK_INTERVAL_MS = 5_000
+import type { NativeHangProcessMetadata } from './native-hang-report'
 
 export type HangWatchdogWorkerData = {
   parentPid: number
@@ -8,12 +9,15 @@ export type HangWatchdogWorkerData = {
   timeoutMs: number
   checkIntervalMs: number
   tracePath?: string
+  artifactDirectory?: string
+  processMetadata?: NativeHangProcessMetadata
 }
 
 export type MainToHangWatchdogWorkerMessage =
   | { type: 'heartbeat' }
   | { type: 'shutdown' }
   | { type: 'capture-drain-ack'; token: string }
+  | { type: 'menu-bar-setting'; enabled: boolean }
   | { type: 'power-event'; event: HangPowerReceipt['event']; observedAt: number }
 import type { HangPowerReceipt } from './hang-observations'
 

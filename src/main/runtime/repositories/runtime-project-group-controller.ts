@@ -71,7 +71,8 @@ export class RuntimeProjectGroupController {
       throw new Error('folder_workspace_project_group_not_found')
     }
     const checked = await new RuntimeRepositoryHooksCommands({
-      resolveRepo: async () => owner
+      resolveRepo: async () => owner,
+      readCreateSourceHooks: async () => undefined
     }).checkRepoHooks(groupId, options)
     return {
       ...checked,
