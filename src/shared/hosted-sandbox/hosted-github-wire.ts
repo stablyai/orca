@@ -12,8 +12,9 @@ export const HostedGithubRepoAccessResponseSchema = z.object({
   repo: z.string().url(),
   installUrl: z.string().url().optional(),
   // Present only while the App isn't installed for the owner ('missing', or 'public' with no
-  // installation). true: the caller can install it on the owner; false: they'd ask an owner;
-  // null: unknown (no connected GitHub user, or GitHub didn't answer).
+  // installation). true: the caller can install it on the owner (their own account, or org admin);
+  // false: another user's account, or a non-admin org member; null: unknown (no connected GitHub
+  // user, membership unreadable, or GitHub didn't answer).
   canInstall: z.boolean().nullable().optional()
 })
 export type HostedGithubRepoAccessResponse = z.infer<typeof HostedGithubRepoAccessResponseSchema>
