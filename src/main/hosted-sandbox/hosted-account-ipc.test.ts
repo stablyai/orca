@@ -44,7 +44,8 @@ const githubUser = {
     throw new Error('not_found')
   },
   cloneStatus: async () => ({ state: 'done' as const }),
-  destroy: async (id: string) => ({ id, status: 'destroyed' as const })
+  destroy: async (id: string) => ({ id, status: 'destroyed' as const }),
+  list: async () => []
 }
 const unusedCreate = async (): Promise<never> => {
   throw new Error('not called')

@@ -1817,7 +1817,12 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       // with the sandbox the first one made, for 24 h, instead of starting another (PC-8).
       let timings: Ready['timings']
       try {
-        const response = await withIdempotency(
+        // EP-5: a create outlives its request (ctx.waitUntil), like a wake. A desktop that cancels mid-create
+        // disconnects; the create still finishes (or fails and frees its VM) and stores its answer, so the
+        // cancel's replay gets the sandbox to delete instead of 409 `idempotency_in_progress` for minutes.
+        const response = await outlivingRequest(
+          life,
+          withIdempotency(
           life.db,
           { accountId: caller.accountId, scope: `sandbox.create:${caller.userId}`, key: readIdempotencyKey(request), body: raw, now: life.now() },
           async () => {
@@ -1833,6 +1838,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
             timings = ready.timings
             return { status: 200, body: readyView(ready.row, ready.connection, ready.cloning, features.includes('repo-update')) }
           }
+          )
         )
         const timing = Object.entries(timings ?? {})
           .map(([phase, ms]) => `${phase};dur=${ms}`)

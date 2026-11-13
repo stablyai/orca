@@ -15,7 +15,8 @@ import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-co
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { appendProvisioningLog } from '@/lib/workspace/creation/pending-creation-provisioning-log'
-import { trackOrcaCloudCreateStep } from '@/lib/orca-cloud-cancel-cleanup'
+import { setOrcaCloudCancelRetry, trackOrcaCloudCreateStep } from '@/lib/orca-cloud-cancel-cleanup'
+import { CANCEL_CLEANUP_UNCONFIRMED } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { launchFirstCloudAgent } from './github-cloud-first-agent'
 import {
   forgetGitHubCreateKey,
@@ -158,8 +159,15 @@ async function startSandbox(creationId: string): Promise<string | null> {
         provisionId: creationId,
         idempotencyKey: githubCreateIdempotencyKey(creationId)
       })
-      .catch(() => null)
+      .catch(() => null),
+    // EP-5: a cancel whose sandbox the control plane didn't confirm deleted is not "Sandbox deleted".
+    (result) => result?.ok !== false || result.reason !== CANCEL_CLEANUP_UNCONFIRMED
   ).finally(() => unsubscribe?.())
+  if (created && !created.ok && created.reason === CANCEL_CLEANUP_UNCONFIRMED) {
+    setOrcaCloudCancelRetry(creationId, () =>
+      window.api.orcaCloudWorkspace.retryCancelledCreate({ provisionId: creationId })
+    )
+  }
   noteGitHubCreateOutcome(
     creationId,
     !created ||
@@ -244,9 +252,16 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
 async function discardSandbox(creationId: string, sandboxId: string): Promise<void> {
   startedSandboxes.delete(creationId)
   forgetGitHubCreateKey(creationId)
-  const result = await window.api.cloudWorkspaces.destroy(sandboxId).catch(() => null)
-  if (!result?.ok) {
+  const destroy = (): Promise<boolean> =>
+    window.api.cloudWorkspaces
+      .destroy(sandboxId)
+      .then((result) => result.ok)
+      .catch(() => false)
+  // EP-5: the cancel's toast waits for this delete and says "deleted" only if it went through.
+  const ok = await trackOrcaCloudCreateStep(creationId, destroy(), (deleted) => deleted)
+  if (!ok) {
     console.warn('[orca-cloud] cancelled GitHub create: could not delete sandbox', sandboxId)
+    setOrcaCloudCancelRetry(creationId, destroy)
   }
   void refreshCloudWorktreeBindings().catch(() => undefined)
 }

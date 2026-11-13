@@ -28,6 +28,7 @@ export const orcaCloudWorkspaceApi = {
   gitHubInstallRights: (args) => ipcRenderer.invoke(CH.gitHubInstallRights, args),
   listGitHubRepositories: (args) => ipcRenderer.invoke(CH.listGitHubRepositories, args),
   createFromGitHub: (args) => ipcRenderer.invoke(CH.createFromGitHub, args),
+  retryCancelledCreate: (args) => ipcRenderer.invoke(CH.retryCancelledCreate, args),
   onWakeProgress: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, event: CloudWakeProgressEvent): void =>
       callback(event)

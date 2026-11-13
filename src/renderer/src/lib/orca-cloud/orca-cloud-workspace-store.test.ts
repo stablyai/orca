@@ -50,6 +50,7 @@ function stubApi(overrides: Partial<OrcaCloudWorkspaceApi> = {}): OrcaCloudWorks
     ),
     listGitHubRepositories: vi.fn(async () => ok({ repositories: [], nextCursor: null })),
     createFromGitHub: vi.fn(async () => ok({ sandboxId: 'sbx' })),
+    retryCancelledCreate: vi.fn(async () => true),
     onWakeProgress: vi.fn(() => () => {}),
     onOom: vi.fn(() => () => {}),
     ...overrides
