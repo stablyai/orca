@@ -73,6 +73,13 @@ describe('editor runtime file watch recovery', () => {
     await settle()
     expect(stopOld).toHaveBeenCalledOnce()
     expect(stopFresh).not.toHaveBeenCalled()
+    // An accepted subscription is not an installed host watcher; resyncing earlier loses writes in between.
+    expect(onPayload).not.toHaveBeenCalled()
+    const freshReady: unknown = runtime.subscribe.mock.calls[1]?.[3]
+    if (typeof freshReady !== 'function') {
+      throw new Error('fresh stream registered no ready callback')
+    }
+    freshReady()
     expect(onPayload).toHaveBeenCalledOnce()
     expect(onPayload).toHaveBeenCalledWith({
       worktreePath: '/repo',
