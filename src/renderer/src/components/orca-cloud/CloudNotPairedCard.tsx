@@ -11,7 +11,8 @@ export function CloudNotPairedCard({
   autoFocus = true,
   onDismiss
 }: {
-  name: string
+  /** Null: the unnamed sentence, never "This workspace" spliced into the named one. */
+  name: string | null
   autoFocus?: boolean
   onDismiss: () => void
 }): React.JSX.Element {
@@ -26,9 +27,14 @@ export function CloudNotPairedCard({
         <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-warning" aria-hidden="true" />
         <div className="min-w-0 flex-1 space-y-1">
           <div className="text-sm font-medium">
-            {t('orcaCloudWorkspace.notPaired.title', '{{name}} isn’t linked to this computer', {
-              name
-            })}
+            {name
+              ? t('orcaCloudWorkspace.notPaired.title', '{{name}} isn’t linked to this computer', {
+                  name
+                })
+              : t(
+                  'orcaCloudWorkspace.notPaired.titleUnnamed',
+                  'This workspace isn’t linked to this computer'
+                )}
           </div>
           <p className="break-words text-xs text-foreground">
             {t(

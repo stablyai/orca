@@ -203,7 +203,7 @@ export function CloudWakingOverlay({
         data-cloud-waking-anchor={passThrough ? 'terminal' : undefined}
       >
         {failed && wake.notPaired ? (
-          <CloudNotPairedCard name={name} autoFocus={autoFocus} onDismiss={onDismiss} />
+          <CloudNotPairedCard name={workspaceName} autoFocus={autoFocus} onDismiss={onDismiss} />
         ) : failed ? (
           <div
             role="alert"

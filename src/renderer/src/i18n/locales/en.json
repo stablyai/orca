@@ -27870,7 +27870,8 @@
     "cloudWorkspaceTitle": "Cloud workspace",
     "notPaired": {
       "title": "{{name}} isn’t linked to this computer",
-      "body": "Open it again to link it. Your files and chats are saved."
+      "body": "Open it again to link it. Your files and chats are saved.",
+      "titleUnnamed": "This workspace isn’t linked to this computer"
     }
   },
   "cloudAgentSetup": {
