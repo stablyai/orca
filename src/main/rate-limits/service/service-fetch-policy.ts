@@ -15,10 +15,24 @@ import {
   isStaleClaudeUsageWindow,
   mapClaudeUsageWindow
 } from '../providers/claude/claude-usage-window'
+import { claudeOAuthUsageDisabledResult } from '../providers/claude/claude-usage-result'
 import { readUserClaudeConfigDir } from '../../claude-accounts/profiles/claude-profile-paths'
 import { getClaudeProfileRouter } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
+  protected isClaudeOAuthUsageEnabled(): boolean {
+    return this.claudeOAuthUsageEnabledResolver?.() ?? true
+  }
+
+  protected claudeUsageFetchSignal(signal: AbortSignal): AbortSignal {
+    return AbortSignal.any([signal, this.claudeUsageAbortController.signal])
+  }
+
+  protected claudeUsageWithoutOAuth(): ProviderRateLimits {
+    const live = this.liveClaudeUsage ? withoutResetWindows(this.liveClaudeUsage, Date.now()) : null
+    return live?.session || live?.weekly ? live : claudeOAuthUsageDisabledResult()
+  }
+
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
     return {
       provider: 'minimax',
@@ -42,6 +56,12 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       status: 'error',
       usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
     }
+  }
+
+  protected claudeStateAtCycleStart(limits: ProviderRateLimits | null): ProviderRateLimits {
+    return this.isClaudeOAuthUsageEnabled()
+      ? this.withFetchingStatus(limits, 'claude')
+      : this.claudeUsageWithoutOAuth()
   }
 
   // Retry-After remains binding even when live posts restore ok display; early polls waste budget and prolong 429s.
@@ -70,6 +90,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     fresh: ProviderRateLimits,
     previous: ProviderRateLimits | null
   ): ProviderRateLimits {
+    if (!this.isClaudeOAuthUsageEnabled()) {
+      return this.claudeUsageWithoutOAuth()
+    }
     this.lastClaudeCheckCompletedAt = fresh.updatedAt
     // Failed OAuth must preserve newer live display while forwarding Retry-After to the poll gate.
     const current = this.state.claude
@@ -94,15 +117,23 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     ) {
       return
     }
-    this.lastClaudeAuthSnapshot = {
+    const snapshot = {
       // System Default uses the user config folder without injecting a managed one.
       configDir: normalizeClaudeConfigDir(
         authPreparation?.envPatch.CLAUDE_CONFIG_DIR ??
           getClaudeProfileRouter()?.userConfigDir() ??
           readUserClaudeConfigDir(process.env)
       ),
+      home: authPreparation?.configDir,
       provenance: authPreparation?.provenance ?? 'system'
     }
+    if (
+      snapshot.configDir !== this.lastClaudeAuthSnapshot?.configDir ||
+      snapshot.provenance !== this.lastClaudeAuthSnapshot?.provenance
+    ) {
+      this.liveClaudeUsage = null
+    }
+    this.lastClaudeAuthSnapshot = snapshot
   }
 
   ingestLiveClaudeRateLimits(event: ClaudeStatusLineRateLimits): void {
@@ -155,6 +186,26 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     ) {
       return
     }
+    const priorLive = this.liveClaudeUsage ? withoutResetWindows(this.liveClaudeUsage, now) : null
+    this.liveClaudeUsage = {
+      provider: 'claude',
+      session: freshSession ?? priorLive?.session ?? null,
+      weekly: freshWeekly ?? priorLive?.weekly ?? null,
+      updatedAt: now,
+      error: null,
+      status: 'ok',
+      usageMetadata: {
+        source: 'live-session',
+        lastSuccessfulSource: 'live-session',
+        authProvenance: snapshot.provenance
+      }
+    }
+    this.rememberUsageReadingAccount(
+      'claude',
+      this.claudeFetchTarget,
+      snapshot.home,
+      snapshot.provenance
+    )
     if (
       previous?.status === 'ok' &&
       previous.usageMetadata?.source === 'live-session' &&
