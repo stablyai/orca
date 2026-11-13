@@ -1165,9 +1165,11 @@ final class Provider {
         let snapshot = try currentSnapshot(params: params)
         let start: CGPoint
         let end: CGPoint
+        var fromRecord: ElementRecord?
         if let fromIndex = try optionalInteger(params, "fromElementIndex"),
            let toIndex = try optionalInteger(params, "toElementIndex") {
             let from = try element(snapshot, fromIndex)
+            fromRecord = from
             let to = try element(snapshot, toIndex)
             guard let fromPoint = center(from.localFrame, in: snapshot.windowBounds),
                   let toPoint = center(to.localFrame, in: snapshot.windowBounds)
@@ -1184,6 +1186,9 @@ final class Provider {
             try requireTargetWindowFocused(snapshot, restoreWindowRequested: true)
             try Input.drag(from: start, to: end, targetWindow: snapshot)
         } else {
+            // Why: the mouse-down opens a popup or menu button's menu over the user before the drag moves.
+            let startElement = try fromRecord?.element ?? backgroundPointerTarget(at: start, snapshot: snapshot)
+            try requireNoForegroundEffect(ForegroundEffect.ofPress(BackgroundInputTransport.pressTarget(startElement)))
             try withTransportErrors {
                 try BackgroundInputTransport.drag(backgroundTarget(snapshot), from: start, to: end)
             }
@@ -1634,7 +1639,7 @@ private func withTransportErrors<T>(_ body: () throws -> T) throws -> T {
         case .eventCreationFailed:
             throw ProviderError.coded("accessibility_error", "failed to create input event")
         case .targetWindowNotKey:
-            throw ProviderError.coded("background_unavailable", "the user is working in another window of this app, and input to this window would move their typing here, so nothing was sent; use an element action (click --element-index, set-value) or wait until the user leaves the app. Ask the user before retrying with --restore-window.")
+            throw ProviderError.coded("background_unavailable", "this app is in front and the target window is not its key window, so input to it would move the user's typing there; nothing was sent; use an element action (click --element-index, set-value) or wait until the user leaves the app. Ask the user before retrying with --restore-window.")
         case let .focusRecordFailed(status):
             throw ProviderError.coded("window_not_focused", "background key-window focus record failed (status \(status)); input may already have been delivered, so inspect current state before retrying")
         }
@@ -1654,24 +1659,12 @@ private func clickPointer(
         try Input.click(at: point, button: button, count: count, modifiers: modifiers, targetWindow: snapshot)
         return
     }
-    let hitElement: AXUIElement
-    if let element {
-        hitElement = element
-    } else {
-        var found: AXUIElement?
-        guard Float(point.x).isFinite, Float(point.y).isFinite,
-              AXUIElementCopyElementAtPosition(AXUIElementCreateApplication(snapshot.app.pid), Float(point.x), Float(point.y), &found) == .success,
-              let found
-        else {
-            throw ProviderError.coded("background_unavailable", "cannot identify the background click target; run get-app-state again or retry with --restore-window")
-        }
-        hitElement = found
-    }
+    let hitElement = try element ?? backgroundPointerTarget(at: point, snapshot: snapshot)
+    let hit = try backgroundClickHit(hitElement, snapshot: snapshot)
     // Why: an element click already checked its target before trying AXPress.
     if element == nil {
         try requireNoForegroundEffect(clickEffect(button: button, modifiers: modifiers, on: hitElement))
     }
-    let hit = try backgroundClickHit(hitElement, snapshot: snapshot)
     try withTransportErrors {
         try BackgroundInputTransport.click(
             backgroundTarget(snapshot),
@@ -1682,6 +1675,17 @@ private func clickPointer(
             hit: hit
         )
     }
+}
+
+private func backgroundPointerTarget(at point: CGPoint, snapshot: Snapshot) throws -> AXUIElement {
+    var found: AXUIElement?
+    guard Float(point.x).isFinite, Float(point.y).isFinite,
+          AXUIElementCopyElementAtPosition(AXUIElementCreateApplication(snapshot.app.pid), Float(point.x), Float(point.y), &found) == .success,
+          let found
+    else {
+        throw ProviderError.coded("background_unavailable", "cannot identify the background click target; run get-app-state again or retry with --restore-window")
+    }
+    return found
 }
 
 private func backgroundClickHit(_ element: AXUIElement, snapshot: Snapshot) throws -> BackgroundInputTransport.PointerHit {

@@ -152,13 +152,15 @@ public enum BackgroundInputTransport {
             // Why: a hung app answers each read only after the messaging timeout; the action that follows reports it.
             guard AXUIElementCopyAttributeValue(node, kAXRoleAttribute as CFString, &roleValue) != .cannotComplete else { break }
             let role = roleValue as? String
+            // Why: only a button's labels and a combobox's page matter, so other presses cost one read per node.
             chain.append(ForegroundEffect.Node(
                 role: role,
-                labels: [stringAttribute(node, kAXTitleAttribute as String), stringAttribute(node, kAXDescriptionAttribute as String)],
-                // Why: only a combobox needs the walk up to its page, so other presses cost no extra reads.
+                labels: role == kAXButtonRole as String
+                    ? [stringAttribute(node, kAXTitleAttribute as String), stringAttribute(node, kAXDescriptionAttribute as String)]
+                    : [],
                 inWebContent: role == kAXComboBoxRole as String && isInWebArea(node)
             ))
-            current = parent(of: node)
+            current = chain.count < 2 ? parent(of: node) : nil
         }
         return chain
     }
