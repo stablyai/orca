@@ -101,8 +101,13 @@ async function* listCodexSessionFilesIncrementally(
         }
       }
     } catch (error) {
-      await onDirectoryError?.(currentDirectory, error)
-      console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
+      if (onDirectoryError) {
+        // The handler owns directory failures: backfill and resume scans treat an absent
+        // scan root as empty instead of warning once per missing date on every startup.
+        await onDirectoryError(currentDirectory, error)
+      } else {
+        console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
+      }
     }
   }
 }
