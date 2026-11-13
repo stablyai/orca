@@ -54,14 +54,11 @@ import type {
   StatusFreshnessListener,
   StatusRowMutationListener
 } from './server-types'
-import { ProducerProgressStore } from './producer-progress'
 import { RevisionedMap } from './revisioned-map'
 import { forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
 import type { LastStatusStore } from './last-status-store'
 
 export abstract class AgentHookServerState {
-  readonly producerProgress = new ProducerProgressStore()
-
   protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {
     return canAdmitLegacyAgentStatusEntry(
       this.state,
@@ -133,8 +130,12 @@ export abstract class AgentHookServerState {
   protected endpointFileWritten = false
   protected state: HookListenerState = createHookListenerState({
     nextListingOrder: this.nextStatusListingOrder,
-    isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey)
+    isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey),
+    ...this.legacyRowHooks
   })
+  protected get legacyRowHooks(): Parameters<typeof createHookListenerState>[0] {
+    return {}
+  }
   protected onTransportInterference: ((report: HookTransportInterferenceReport) => void) | null =
     null
   protected transportInterference = createHookTransportInterferenceTracker(

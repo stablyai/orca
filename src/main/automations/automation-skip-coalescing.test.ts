@@ -13,8 +13,8 @@ import {
   testState,
   writePersistedStateJson
 } from '../persistence/persistence-test-harness'
-import { startedAutomationService, tickAt } from './automation-service-tick.test-fixture'
-import { runNowSettled } from './automation-run-now-settled.test-fixture'
+import { startedAutomationService, tickAt } from './testing/automation-service-tick.test-fixture'
+import { runNowSettled } from './testing/automation-run-now-settled.test-fixture'
 
 vi.mock('electron', () => ({
   app: {

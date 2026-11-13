@@ -100,7 +100,8 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   return (
     <div
       style={style}
-      className="relative flex min-h-0 flex-1 flex-col"
+      // Clip without scrolling: a squeezed toolbar must neither cover the divider nor slide when a hidden control takes focus.
+      className="relative flex min-h-0 flex-1 flex-col overflow-clip"
       data-browser-overlay-tab-id={browserTab.id}
       onPointerDown={handleFocus}
       onFocusCapture={handleFocus}

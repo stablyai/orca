@@ -7709,8 +7709,6 @@
             "df205a675e": "Stärke der Farbtönung",
             "ba1d9a0607": "Farbtönung der Seitenleiste"
           },
-          "interfaceDefaultFont": "Standardschriftart",
-          "terminalDefaultFont": "Standardschriftart",
           "interfaceTitle": "Oberfläche",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Seitenleiste, Statusleiste und Datei-Explorer",
@@ -8630,16 +8628,12 @@
           "5426ecbdcb": "Lokale Skripte werden nicht ausgeführt",
           "95a0411b3e": "Vorlage",
           "175daba180": "Beispiel",
-          "b20c5df6ca": "Eine Datei `orca.yaml` hinzufügen, um gemeinsame Standardwerte für Einrichtung, Archivierung oder Issue-Automatisierung in diesem Repository zu aktivieren. Beispielvorlage:",
-          "56f9a4a1d0": "`orca.yaml` wird verwendet",
           "623e0c9f31": "`orca.yaml` konnte nicht geparst werden",
-          "5a67e4793d": "Keine `orca.yaml` erkannt",
           "07ba35bc68": "Die Einrückung unter `scripts:` prüfen. Hook-Schlüssel sollten mit zwei Leerzeichen und Befehlszeilen mit vier Leerzeichen eingerückt sein.",
           "787ca433ef": "Nur die unterstützten Schlüssel definieren: `scripts`, `setup`, `archive` und `issueCommand`.",
           "ecc73d9125": "Die Datei mit der funktionierenden Vorlage unten vergleichen und bei Bedarf deren Struktur übernehmen.",
           "0cc712b823": "Die zentrale Konfigurationsdatei ist im Repository-Stammverzeichnis vorhanden, aber Orca konnte die unterstützten Hook-Definitionen noch nicht parsen.",
           "aba825233f": "Die Datei enthält Konfigurationsschlüssel, die diese Version von Orca nicht erkennt. Möglicherweise muss Orca aktualisiert oder die Datei auf Tippfehler geprüft werden.",
-          "ca424ff135": "Gemeinsame Standardwerte für Hooks und Issue-Automatisierung sind im Repository definiert und für alle verfügbar, die es verwenden.",
           "8bfe65fc60": "Lokale Befehle verwenden",
           "8d6c56bff8": "Beide ausführen",
           "0fa21e19ec": "Name des Arbeitsbereichs, in der Regel vom Branch-Namen abgeleitet.",
@@ -17575,7 +17569,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Weniger anzeigen",
-          "showMore": "Mehr anzeigen"
+          "showMore": "Mehr anzeigen",
+          "copied": "Kopiert",
+          "copyFailed": "Kopieren fehlgeschlagen",
+          "copyPrompt": "Prompt kopieren"
         },
         "AutomationDetail": {
           "host": "Host",
@@ -17612,7 +17609,13 @@
           "precheckNone": "Keine",
           "migrate": "Migrieren",
           "migrateNotice": "{{host}} wurde auf einen neuen Remote-Host umgestellt. Migriere diese Automatisierung, damit sie weiterläuft.",
-          "needsMigration": "Migration erforderlich"
+          "needsMigration": "Migration erforderlich",
+          "repeats": "Wiederholung",
+          "missedRunGrace": "Nachholfrist",
+          "execution": "Ausführung",
+          "notRunYet": "Noch nicht ausgeführt",
+          "usageDetail_one": "{{tokens}} Token · {{known}}/{{count}} Ausführung gemeldet",
+          "usageDetail_other": "{{tokens}} Token · {{known}}/{{count}} Ausführungen gemeldet"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Abbrechen",
@@ -20770,6 +20773,7 @@
           "about": {
             "parakeetV3": "Schnell. {{languages}} europäische Sprachen.",
             "parakeetV2": "Schnell. Nur Englisch, darin am genauesten.",
+            "parakeetUnifiedEn": "Nur Englisch. Wörter erscheinen, während du sprichst.",
             "whisperTiny": "Kleinster Download. Gut zum Ausprobieren.",
             "whisperTurbo": "Die meisten Sprachen, rund 100. Langsam ohne GPU.",
             "senseVoice": "Schnell. Für Chinesisch, Japanisch und Koreanisch.",

@@ -1,4 +1,4 @@
-import type { AgentStatusStoreView } from '../../../sidebar-inputs/workspace-activity-facts-producer'
+import type { AgentStatusStoreView } from '../../../sidebar-inputs/workspace-facts/workspace-activity-facts-producer'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime-terminal-state-records'
 import { getRuntimeDesktopSurface } from '../../../construction/runtime-desktop-surface'

@@ -61,9 +61,9 @@ import {
 } from '@/components/agent/launch-settings/AgentChatChoiceControls'
 import {
   chatProviderAgents,
+  managedRuntimeChatAgents,
   useHostStructuredAgentsVersion
 } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
-import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -124,12 +124,8 @@ export function AgentLaunchSettingsCatalog({
   const chatAgents = local
     ? recomputeOn([hostAgentsVersion], () => chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined))
     : []
-  const managedChatAgents = new Set(
-    recomputeOn([hostAgentsVersion], () =>
-      readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, undefined)
-    )
-      ?.filter((row) => row.managedRuntime)
-      .map((row) => row.agent)
+  const managedChatAgents = recomputeOn([hostAgentsVersion], () =>
+    managedRuntimeChatAgents(LOCAL_EXECUTION_HOST_ID, undefined)
   )
   // Agents whose chat program is here without their CLI, like a downloaded chat runtime, are installed for chat.
   const chatOnlyKey = useAppStateValue((state) => {

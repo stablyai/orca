@@ -7,7 +7,7 @@ src/cli/runtime/launch.ts
 src/main/agent-hooks/installation/locking/managed-hook-owner-identity.ts
 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
 src/main/window/desktop-integration/app-icon.ts
-src/main/automations/precheck-runner.ts
+src/main/automations/dispatch/precheck-runner.ts
 src/main/browser/agent-browser/helper-process/agent-browser-bridge-execution.ts
 src/main/browser/agent-browser/helper-process/agent-browser-bridge-raw-process.ts
 src/main/browser/network/egress/browser-route-egress-electron-launch.ts

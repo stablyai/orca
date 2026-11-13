@@ -1171,6 +1171,7 @@ function Get-OrcaHandshake {
             actions = [pscustomobject]@{
                 click = $true
                 typeText = $true
+                typeTextElement = $false
                 pressKey = $true
                 hotkey = $true
                 pasteText = $true

@@ -9,6 +9,8 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerListeners } from './server-listeners'
+import { ProducerProgressStore } from './producer-progress'
+import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 
 function toMutationIdentity(
   row: EnrichedAgentHookEventPayload | null | undefined
@@ -50,6 +52,13 @@ function semanticRowsEqual(
 }
 
 export abstract class AgentHookServerRowOwnership extends AgentHookServerListeners {
+  readonly producerProgress = new ProducerProgressStore()
+
+  protected clearAllStatusCaches(): void {
+    this.producerProgress.clear()
+    clearAllListenerCaches(this.state)
+  }
+
   /** Set only for the direct applyNormalizedStatus call of applyRestatedStatus. */
   protected restatingStatus = false
 
@@ -136,6 +145,24 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
       return
     }
     this.onAgentStatus?.({ ...this.programStatusFacets.stitch(row), programStatusOnly: true })
+    const identity = toMutationIdentity(row)
+    this.notifyStatusRowMutationListeners({ before: identity, after: identity })
+  }
+
+  protected publishAgentIdentityProjection(row: EnrichedAgentHookEventPayload): void {
+    // An id is no provider event: drop the row's last hook signals so no reader re-acts on them.
+    const {
+      hookEventName: _hookEventName,
+      hasExplicitPrompt: _hasExplicitPrompt,
+      promptInteractionKey: _promptInteractionKey,
+      authorityRestartId: _authorityRestartId,
+      ...projection
+    } = row
+    this.onAgentStatus?.({
+      ...this.programStatusFacets.stitch(projection),
+      isReplay: true,
+      identityOnly: true
+    })
     const identity = toMutationIdentity(row)
     this.notifyStatusRowMutationListeners({ before: identity, after: identity })
   }
