@@ -1,5 +1,5 @@
 import type { TerminalViewportRefitOptions } from './terminal-viewport-refit-options'
-import { terminalPaneViewport } from '../session/mobile-terminal-pane-layout'
+import { terminalPaneViewport } from '../session/pane-layout/mobile-terminal-pane-layout'
 import { useCallback, useEffect, useRef } from 'react'
 import { AppState, Platform, useWindowDimensions, type AppStateStatus } from 'react-native'
 import { shouldRecoverTerminalOnAppStateChange } from '../webview/terminal-foreground-recovery'

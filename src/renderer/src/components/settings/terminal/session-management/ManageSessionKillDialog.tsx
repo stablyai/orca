@@ -1,5 +1,5 @@
 import { LoaderCircle } from 'lucide-react'
-import type { PtyManagementSession } from '../../../../../../preload/api/pty-management-api'
+import type { PtyManagementSession } from '../../../../../../preload/api/terminal/pty-management-api'
 import { Button } from '../../../ui/button'
 import {
   Dialog,
