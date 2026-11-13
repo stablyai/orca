@@ -193,10 +193,8 @@ other catalogs may lag and fall back to English. `pnpm verify:mobile-localizatio
 `ORCA_ANDROID_KEY_ALIAS` and `ORCA_ANDROID_KEY_PASSWORD` at build time; nothing is written into the
 project. Without them, local release builds keep Expo's debug key.
 
-`.github/workflows/mobile-android-release.yml` turns release signing on once the
-`ORCA_ANDROID_RELEASE_CERT_SHA256` repository variable (or `ORCA_ANDROID_REQUIRE_RELEASE_SIGNING=true`)
-is set. Until then it signs with the debug key as before and adds a warning to the run. Once it is
-on, the workflow fails before building if any of these is missing:
+`.github/workflows/mobile-android-release.yml` always release-signs `dev.orca.app`, the package
+shared by Google Play and GitHub installs. It fails before building if any of these is missing:
 
 | Name                               | Kind     | Value                                                   |
 | ---------------------------------- | -------- | ------------------------------------------------------- |
@@ -213,7 +211,7 @@ the keystore must be backed up: losing it means no existing install can be updat
 
 ### Google Play
 
-A release-signed run also builds `app-release.aab` (artifact `orca-mobile-aab`) with
+Every run also builds `app-release.aab` (artifact `orca-mobile-aab`) with
 `ORCA_ANDROID_DISTRIBUTION=play`. `app.config.js` turns that into `extra.androidDistribution`, and
 a Play build never checks GitHub for updates or points people at GitHub Releases. Play App Signing
 uses the same key (uploaded with PEPK), so Play and GitHub installs can update each other.
