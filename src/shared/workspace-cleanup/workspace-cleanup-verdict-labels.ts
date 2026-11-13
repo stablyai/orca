@@ -34,11 +34,16 @@ export const WORKSPACE_CLEANUP_KEEP_CAUSE_LABELS: Record<WorkspaceCleanupKeepCau
   removing: 'already being removed'
 }
 
+// A newer host can send a value this build has no label for; show it raw rather than nothing.
+export function formatWorkspaceCleanupRuleReason(reason: WorkspaceCleanupRuleReason): string {
+  return WORKSPACE_CLEANUP_RULE_REASON_LABELS[reason] ?? reason
+}
+
 export function formatWorkspaceCleanupKeepCause(
   cause: WorkspaceCleanupKeepCause,
   waiting?: WorkspaceCleanupWaiting
 ): string {
   return cause === 'waiting' && waiting
     ? `waiting ${waiting.elapsedDays} of ${waiting.afterDays} days`
-    : WORKSPACE_CLEANUP_KEEP_CAUSE_LABELS[cause]
+    : (WORKSPACE_CLEANUP_KEEP_CAUSE_LABELS[cause] ?? cause)
 }

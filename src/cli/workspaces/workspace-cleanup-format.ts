@@ -1,4 +1,5 @@
 import { formatBytes } from '../../shared/format-bytes'
+import { terminalSafeLine } from '../../shared/terminal/output/terminal-safe-text'
 import type { WorkspaceCleanupEvaluation } from '../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import {
   WORKSPACE_CLEANUP_UNWATCHED_CAUSES,
@@ -10,12 +11,16 @@ import {
 } from '../../shared/workspace-cleanup/workspace-cleanup-run'
 import {
   formatWorkspaceCleanupKeepCause,
-  WORKSPACE_CLEANUP_RULE_REASON_LABELS
+  formatWorkspaceCleanupRuleReason
 } from '../../shared/workspace-cleanup/workspace-cleanup-verdict-labels'
 
-export const NO_WORKSPACE_CLEANUP_RULE_ON = 'No cleanup rule is on, so nothing was removed.'
+// The host reports no next run when no rule is on for any Git project it owns.
+const NO_RULE_APPLIES = 'No cleanup rule is on for any project here'
+export const NO_WORKSPACE_CLEANUP_RULE_ON = `${NO_RULE_APPLIES}, so nothing was removed.`
 
-function formatTable(header: string[], rows: string[][]): string {
+// Names and errors come from the host; strip terminal controls so a label can't rewrite the screen.
+function formatTable(header: string[], unsafeRows: string[][]): string {
+  const rows = unsafeRows.map((row) => row.map(terminalSafeLine))
   const widths = header.map((cell, column) =>
     Math.max(cell.length, ...rows.map((row) => row[column].length))
   )
@@ -34,11 +39,11 @@ function workspaceCells(ref: WorkspaceCleanupWorkspaceRef): string[] {
 
 function formatWhy(evaluation: WorkspaceCleanupEvaluation): string {
   if (evaluation.action !== 'keep') {
-    return WORKSPACE_CLEANUP_RULE_REASON_LABELS[evaluation.reason]
+    return formatWorkspaceCleanupRuleReason(evaluation.reason)
   }
   const cause = formatWorkspaceCleanupKeepCause(evaluation.cause, evaluation.waiting)
   return evaluation.reason
-    ? `${cause} (${WORKSPACE_CLEANUP_RULE_REASON_LABELS[evaluation.reason]})`
+    ? `${cause} (${formatWorkspaceCleanupRuleReason(evaluation.reason)})`
     : cause
 }
 
@@ -51,7 +56,7 @@ function formatRunRowWhy(row: WorkspaceCleanupRunRow): string {
       formatWhy({ action: 'keep', cause: row.keepCause, reason: row.reason, waiting: row.waiting })
     )
   } else if (row.reason) {
-    parts.push(WORKSPACE_CLEANUP_RULE_REASON_LABELS[row.reason])
+    parts.push(formatWorkspaceCleanupRuleReason(row.reason))
   }
   if (row.keptOnRecheck) {
     parts.push('found on re-check')
@@ -93,7 +98,7 @@ function formatRunSummary(run: WorkspaceCleanupRun): string {
 export function formatWorkspaceCleanupRun(run: WorkspaceCleanupRun): string {
   const lines = [formatRunSummary(run)]
   if (run.error) {
-    lines.push(`The run stopped early: ${run.error}`)
+    lines.push(`The run stopped early: ${terminalSafeLine(run.error)}`)
   }
   if (run.rows.length > 0) {
     lines.push(
@@ -110,7 +115,7 @@ export function formatWorkspaceCleanupRun(run: WorkspaceCleanupRun): string {
 export function formatWorkspaceCleanupReport(report: WorkspaceCleanupReport): string {
   const status = [
     report.nextRunAt === null
-      ? 'No cleanup rule is on, so no run is scheduled.'
+      ? `${NO_RULE_APPLIES}, so no run is scheduled.`
       : `Next run: ${new Date(report.nextRunAt).toISOString()}`
   ]
   if (report.running) {
@@ -132,7 +137,7 @@ export function formatWorkspaceCleanupReport(report: WorkspaceCleanupReport): st
       'Earlier runs:',
       ...earlier.map(
         (run) =>
-          `${new Date(run.startedAt).toISOString()}  ${run.trigger}  ${formatRunSummary(run)}${run.error ? ` ${run.error}` : ''}`
+          `${new Date(run.startedAt).toISOString()}  ${run.trigger}  ${formatRunSummary(run)}${run.error ? ` ${terminalSafeLine(run.error)}` : ''}`
       )
     )
   }

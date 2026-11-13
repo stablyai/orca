@@ -37,6 +37,16 @@ async function callWorkspaceCleanup<TResult>(
         'This Orca host does not support workspace cleanup commands yet. Update Orca on that host.'
       )
     }
+    if (
+      error instanceof RuntimeClientError &&
+      error.code === 'runtime_timeout' &&
+      method === 'workspaceCleanup.runNow'
+    ) {
+      throw new RuntimeClientError(
+        'runtime_timeout',
+        'Timed out waiting for the cleanup run. It may still be going on the host; check `orca workspace cleanup report`.'
+      )
+    }
     throw error
   }
 }
