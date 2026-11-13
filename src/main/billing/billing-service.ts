@@ -112,7 +112,16 @@ function prepare(userDataPath: string): Ready {
         auth.config,
         active,
         userDataPath,
-        async (session) => call(await mintBillingToken(endpoints, session.accessToken), endpoints)
+        async (session) =>
+          call(
+            // The team this device shows, read now: never auth's shared "active team" (EP-9).
+            await mintBillingToken(
+              endpoints,
+              session.accessToken,
+              ensureActiveOrcaProfile(userDataPath).profile.cloud?.activeOrgId ?? null
+            ),
+            endpoints
+          )
       )
       return result.status === 'ok' ? result.value : 'signed-out'
     }
