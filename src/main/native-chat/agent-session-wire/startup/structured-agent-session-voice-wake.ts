@@ -6,8 +6,9 @@ import { waitForStructuredAgentSessionStart } from './structured-agent-session-s
 const VOICE_WAKE_BUDGET_MS = 30_000
 
 /** Voice talks to a live agent, so a chat that idle stop put to rest starts it the way an operation
- *  does: one start however many callers wait, resumed on the chat's own thread. The caller then asks
- *  the adapter, which still refuses a chat that did not come back. */
+ *  does: one start however many callers wait, resumed on the chat's own thread, answered once the
+ *  agent is ready. The caller then asks the adapter, which still refuses a chat that did not come
+ *  back. */
 export async function wakeStructuredAgentSessionForVoice(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
@@ -17,18 +18,8 @@ export async function wakeStructuredAgentSessionForVoice(
   if (!agent || !context.deps.agents.registration(agent)?.adapter.startVoiceConversation) {
     return
   }
-  const deadline = Date.now() + budgetMs
-  const started = await waitForStructuredAgentSessionStart(
-    startStructuredAgentSessionAgentForOperation(context, sessionId).then((outcome) =>
-      outcome.ok ? 'ready' : 'ended'
-    ),
+  await waitForStructuredAgentSessionStart(
+    startStructuredAgentSessionAgentForOperation(context, sessionId).then(() => 'ready' as const),
     budgetMs
   )
-  const child = context.sessions.get(sessionId)?.child
-  if (started !== 'ready' || !child || child.close || child.phase === 'ready') {
-    return
-  }
-  await context.runtimeState.startupAttempts
-    .readiness(sessionId, { generation: child.generation, fence: child.fence })
-    ?.wait(deadline - Date.now())
 }
