@@ -261,6 +261,8 @@ private struct OtherSpaceLookups {
 private struct WindowInventory {
     let windows: [ObservableWindow]
     let unreadableOtherSpace: Set<CGWindowID>
+    /// Every window the app has, closed-but-kept ones included.
+    let windowIds: Set<CGWindowID>
 }
 
 final class Provider {
@@ -386,12 +388,13 @@ final class Provider {
         let byIndex = try requestedWindowIndex(params).flatMap { index in
             windows.filter { $0.candidate.layer == 0 }.dropFirst(index).first?.candidate.windowId
         }
-        let windowId = try requestedWindowId(params) ?? byIndex ?? cached?.windowId
+        // Why: the cached snapshot is the window the agent's element indexes were read from, even if the index now names another.
+        let windowId = try requestedWindowId(params) ?? cached?.windowId ?? byIndex
         let target = windowId.flatMap { id in windows.first { $0.candidate.windowId == id } }
         recoverWindow(app, windowId: windowId, windowBounds: target?.candidate.bounds ?? cached?.windowBounds, fallback: target?.element)
         guard let windowId, hasRequestedWindowSelector(params) else { return params }
+        // Why: the id wins over the index when both are set, and the index still keys the snapshot cache.
         var pinned = params
-        pinned.removeValue(forKey: "windowIndex")
         pinned["windowId"] = .number(Double(windowId))
         return pinned
     }
@@ -433,7 +436,7 @@ final class Provider {
             }
             return ObservableWindow(candidate: candidate, element: element, visibility: visibility)
         }
-        return WindowInventory(windows: windows, unreadableOtherSpace: unreadable)
+        return WindowInventory(windows: windows, unreadableOtherSpace: unreadable, windowIds: Set(all.map(\.windowId)))
     }
 
     private func otherSpaceWindows(pid: pid_t, windowIds: Set<CGWindowID>, live: Set<CGWindowID>) -> [CGWindowID: AXUIElement] {
@@ -889,7 +892,11 @@ final class Provider {
         }
         // Why: a window first read after a large tree walk gets a remote-token id past the lookup's range, so keep the element
         // for when the window moves to another Space.
-        otherSpaceLookups[app.pid, default: OtherSpaceLookups()].elements[capture.windowId] = window
+        otherSpaceLookups = otherSpaceLookups.filter { pidIsLive($0.key) }
+        var lookups = otherSpaceLookups[app.pid] ?? OtherSpaceLookups()
+        lookups.elements = lookups.elements.filter { inventory.windowIds.contains($0.key) }
+        lookups.elements[capture.windowId] = window
+        otherSpaceLookups[app.pid] = lookups
         let title = stringAttribute(window, kAXTitleAttribute as String) ?? capture.title ?? app.name
         let renderer = TreeRenderer(
             windowBounds: capture.bounds,
@@ -1544,11 +1551,13 @@ private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, inventor
         if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows) == .apiDisabled {
             throw ProviderError.coded("permission_denied", "app '\(app.name)' has visible windows but macOS refuses accessibility reads (AX reads stayed blocked for \(outcome.waitedMs)ms after retries). macOS Accessibility may need Orca Computer Use toggled off and on again in System Settings.")
         }
-        throw ProviderError.coded("window_not_found", "app '\(app.name)' has visible windows but exposes no accessibility window after \(outcome.waitedMs)ms; it may still be starting up. Run get-app-state again shortly.")
     }
     let offScreen = observable.filter { $0.element != nil }
     if let window = (offScreen.first { $0.visibility != .minimized } ?? offScreen.first)?.element {
         return window
+    }
+    if observable.contains(where: { $0.visibility == .onScreen }) {
+        throw ProviderError.coded("window_not_found", "app '\(app.name)' has visible windows but exposes no accessibility window; it may still be starting up. Run get-app-state again shortly.")
     }
     if !inventory.unreadableOtherSpace.isEmpty {
         throw unreadableOtherSpaceError(app)
@@ -1557,7 +1566,7 @@ private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, inventor
 }
 
 private func unreadableOtherSpaceError(_ app: AppDescriptor) -> ProviderError {
-    .coded("window_not_found", "app '\(app.name)' has a window on another Space that accessibility cannot read yet: macOS leaves other-Space windows (full-screen ones included) out of accessibility until something has read them once. Ask the user to switch to that Space once, or ask the user before retrying with --restore-window.")
+    .coded("window_not_found", "app '\(app.name)' has a window on another Space that accessibility cannot read yet: macOS leaves other-Space windows (full-screen ones included) out of accessibility until something has read them once. Ask the user to show that window (switch to its Space) and run get-app-state while it is showing, or ask the user before retrying with --restore-window.")
 }
 
 private func lookupUsableWindow(
@@ -3132,8 +3141,6 @@ private struct WindowCandidate {
         var value = Int(bounds.width * bounds.height)
         if layer == 0 { value += 1_000_000_000 }
         if title != nil && title?.isEmpty == false { value += 10_000_000 }
-        // Why: an on-screen window outranks any off-screen one, whatever its title or size.
-        if isOnScreen { value += 100_000_000 }
         if alpha >= 0.99 { value += 100_000 }
         return value
     }
