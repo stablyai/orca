@@ -20448,7 +20448,7 @@
         "scrollToLatestOnSendCopy": "Enviar con el chat desplazado hacia arriba salta al último mensaje y sigue la respuesta. Desactívalo para mantener tu posición.",
         "scrollToLatestOnSendSearchPosition": "posición",
         "markNewMessagesTitle": "Marcar los mensajes nuevos al volver a un chat",
-        "markNewMessagesCopy": "Cuando vuelves a un chat, una línea Nuevo marca lo que te perdiste si es largo o si otra persona escribió, y se desplaza hasta allí. Se desvanece en cuanto la ves.",
+        "markNewMessagesCopy": "Al volver a un chat aparece una línea Nuevo encima de lo que llegó mientras no estabas, y el chat se desplaza hasta ella si estabas leyendo lo más reciente.",
         "markNewMessagesSearchUnread": "no leído",
         "followUpBehaviorCopy": "Los mensajes enviados mientras el agente trabaja esperan como tarjetas hasta que termina el turno, en lugar de entrar en el turno en curso. Cmd/Ctrl+Intro hace lo contrario para un mensaje y, si no hay texto escrito, dirige la primera tarjeta en espera al turno en curso. Los mensajes con imágenes también esperan como tarjetas.",
         "inlineVisualsTitle": "Elementos visuales inline",

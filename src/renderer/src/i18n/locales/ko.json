@@ -19968,7 +19968,7 @@
         "scrollToLatestOnSendCopy": "위로 스크롤한 상태에서 보내면 최신 메시지로 이동하고 답장을 따라갑니다. 끄면 현재 위치가 유지됩니다.",
         "scrollToLatestOnSendSearchPosition": "위치",
         "markNewMessagesTitle": "채팅으로 돌아올 때 새 메시지 표시",
-        "markNewMessagesCopy": "채팅으로 돌아왔을 때 놓친 내용이 길거나 다른 사람이 글을 썼다면 '새 메시지' 선으로 그 위치를 표시하고 그곳으로 스크롤합니다. 한 번 보고 나면 서서히 흐려집니다.",
+        "markNewMessagesCopy": "채팅으로 돌아오면 자리를 비운 동안 도착한 내용 위에 '새 메시지' 선을 표시합니다. 최신 메시지를 보고 있었다면 그 위치로 스크롤합니다.",
         "markNewMessagesSearchUnread": "읽지 않음",
         "followUpBehaviorCopy": "Agent가 작업하는 동안 보낸 메시지는 진행 중인 턴에 들어가지 않고 턴이 끝날 때까지 카드로 대기합니다. Cmd/Ctrl+Enter를 누르면 메시지 하나에 대해 반대로 동작하며, 입력한 내용이 없으면 첫 대기 카드를 진행 중인 턴으로 보냅니다. 이미지가 포함된 메시지도 카드로 대기합니다.",
         "inlineVisualsTitle": "인라인 시각 자료",

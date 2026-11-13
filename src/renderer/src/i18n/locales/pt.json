@@ -22217,7 +22217,7 @@
         "scrollToLatestOnSendCopy": "Enviar com o chat rolado para cima leva à mensagem mais recente e acompanha a resposta. Desative para manter sua posição.",
         "scrollToLatestOnSendSearchPosition": "posição",
         "markNewMessagesTitle": "Marcar mensagens novas ao voltar para um chat",
-        "markNewMessagesCopy": "Quando você volta para um chat, uma linha Novas marca o que você perdeu se for longo ou se outra pessoa escreveu, e rola até lá. Ela esmaece depois que você a vê.",
+        "markNewMessagesCopy": "Ao voltar para um chat, uma linha Novas aparece acima do que chegou enquanto você estava fora, e o chat rola até ela se você estava lendo as mais recentes.",
         "markNewMessagesSearchUnread": "não lida",
         "inlineVisualsTitle": "Visualizações nas respostas",
         "inlineVisualsCopy": "Permitir que o agente mostre gráficos, diagramas e mockups nas respostas. Aplica-se a novos chats.",
