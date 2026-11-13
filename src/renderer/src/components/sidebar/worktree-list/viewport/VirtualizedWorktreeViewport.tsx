@@ -115,7 +115,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const reveal = useSidebarRevealHighlight()
   const scrollSuppression = useWorktreeSidebarScrollSuppression(scrollRef)
   const { markDirectScrollInput } = scrollSuppression
-  const programmaticScrollMarks = useMemo(createProgrammaticScrollMarks, [])
+  const programmaticScrollMarks = useMemo(() => createProgrammaticScrollMarks(), [])
 
   const { handleContainerKeyDown, keyboardPreview } = useWorktreeListKeyboardNavigation({
     rows,
