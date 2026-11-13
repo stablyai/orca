@@ -230,13 +230,19 @@ it('keeps an open picker subscribed after usable progress until late enrichment 
   onTestFinished(close)
   await vi.waitFor(() => expect(published[0]?.catalog).toMatchObject({ listingInProgress: true }))
   next = enriched.promise
-  inventory.resolve({ origin: 'probe', models: [model('listed')], listingInProgress: true })
+  inventory.resolve({
+    origin: 'probe',
+    fetchedAt: 1,
+    models: [model('listed')],
+    listingInProgress: true
+  })
   await vi.waitFor(() =>
     expect(published[0]?.catalog).toMatchObject({ models: [{ id: 'listed' }] })
   )
   expect(published[0]?.catalogRead).toBe('pending')
   enriched.resolve({
     origin: 'probe',
+    fetchedAt: 2,
     models: [
       { ...model('listed'), defaultEffort: 'high', efforts: [{ value: 'high', label: 'High' }] }
     ]

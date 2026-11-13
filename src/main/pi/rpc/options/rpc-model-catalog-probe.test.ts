@@ -4,7 +4,9 @@ import type { AgentModelCatalogSuccess } from '../../../native-chat/agent-model-
 
 it('publishes a slow inventory independently of state, then keeps the late default', async () => {
   vi.useFakeTimers()
-  onTestFinished(() => vi.useRealTimers())
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
   const inventory = Promise.withResolvers<unknown>()
   const state = Promise.withResolvers<unknown>()
   const requested = Promise.withResolvers<void>()

@@ -162,7 +162,9 @@ it.each([false, true])(
   'keeps a slow successful listing after its reader leaves (saved=%s)',
   async (saved) => {
     vi.useFakeTimers()
-    onTestFinished(() => vi.useRealTimers())
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     const h = sharedListingHarness()
     if (saved) {
       const initial = h.service.read({ agent: 'codex', waitForListing: true })
@@ -186,7 +188,12 @@ it.each([false, true])(
     const reader = h.service.read({ agent: 'codex', waitForListing: true })
     await vi.advanceTimersByTimeAsync(30_000)
     expect(await reader).toMatchObject({ listingInProgress: true, waitExpired: true })
-    expect(h.service.snapshot({ agent: 'codex' }).models?.[0]?.id).toBe(saved ? 'saved' : undefined)
+    const snapshot = h.service.snapshot({ agent: 'codex' })
+    if (saved) {
+      expect(snapshot).toMatchObject({ models: [{ id: 'saved' }] })
+    } else {
+      expect(snapshot.origin).toBe('unknown')
+    }
     await vi.advanceTimersByTimeAsync(15_000)
     answer.resolve({ ...listing('slow-success'), complete: true })
     await vi.advanceTimersByTimeAsync(0)
@@ -201,7 +208,9 @@ it.each([true, false])(
   'delivers progress and waits for a changed observation (progress=%s)',
   async (progress) => {
     vi.useFakeTimers()
-    onTestFinished(() => vi.useRealTimers())
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     const h = sharedListingHarness()
     const answer = Promise.withResolvers<AgentModelCatalogSuccess>()
     let publish: AgentModelCatalogProgress | undefined
@@ -324,7 +333,9 @@ it('fences obsolete progress and final results while retaining admission until c
 
 it('withdraws an abandoned queued scope while the two admitted listings continue', async () => {
   vi.useFakeTimers()
-  onTestFinished(() => vi.useRealTimers())
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
   const h = sharedListingHarness()
   void h.service.demand({ agent: 'codex', workspacePath: '/own-a' })
   void h.service.demand({ agent: 'codex', workspacePath: '/own-b' })

@@ -229,7 +229,9 @@ it("keeps the folder's defaults when they arrive after a shorter last reader lef
 
 it('delivers inventory before slow folder defaults, then delivers the proven default', async () => {
   vi.useFakeTimers()
-  onTestFinished(() => vi.useRealTimers())
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
   const h = harness(agent)
   const settings = Promise.withResolvers<void>()
   h.folder.settings = settings
@@ -336,7 +338,9 @@ it.each([10, 100])(
   'registers %i readers and unique targets once per shared flight',
   async (count) => {
     vi.useFakeTimers()
-    onTestFinished(() => vi.useRealTimers())
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     for (const delayedScope of [false, true]) {
       const h = harness('opencode2')
       const scope = Promise.withResolvers<void>()

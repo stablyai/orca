@@ -83,6 +83,9 @@ it('starts the first OMP listing on demand collected before admission, without a
     selectedModel: 'provider/selected',
     waitForListing: true
   })
+  if (result.origin === 'unknown') {
+    throw new Error('Expected the selected model inventory')
+  }
   expect(result.models?.find((row) => row.id === 'provider/selected')).toMatchObject({
     efforts: [{ value: 'high', label: 'High' }]
   })

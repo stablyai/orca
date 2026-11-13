@@ -24,7 +24,9 @@ const LEARNED_EFFORTS = [
 
 it('publishes inventory before a slow optional effort reply and retains its valid late result', async () => {
   vi.useFakeTimers()
-  onTestFinished(() => vi.useRealTimers())
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
   const late =
     Promise.withResolvers<
       Awaited<ReturnType<AcpModelCatalogSessionConnection['setConfigOption']>>
@@ -44,7 +46,10 @@ it('publishes inventory before a slow optional effort reply and retains its vali
     deleteSession: async () => ({}),
     close: async () => {}
   }
-  const run = runAgentModelCatalogSession(
+  const run = runAgentModelCatalogSession<
+    AcpModelCatalogSessionConnection,
+    Awaited<ReturnType<typeof readSessionModels>>
+  >(
     () => connection,
     (connection, ready) =>
       readSessionModels(
@@ -164,8 +169,18 @@ function accumulatedCatalogHarness(count: number) {
     serialize: async (_id, task) => task(),
     scopeOwned: async () => null
   }))
-  const read = (waitForListing = true, selectedModel?: string) =>
-    externalRead({ agent: 'opencode2', workspacePath: '/workspace', waitForListing, selectedModel })
+  const read = async (waitForListing = true, selectedModel?: string) => {
+    const result = await externalRead({
+      agent: 'opencode2',
+      workspacePath: '/workspace',
+      waitForListing,
+      selectedModel
+    })
+    if (result.origin === 'unknown') {
+      throw new Error('Expected the listing inventory')
+    }
+    return result
+  }
   onTestFinished(() => service.stop())
   const answer = (index: number) => {
     const request = requests[index]!
@@ -178,7 +193,9 @@ it.each([10, 100])(
   'accumulates %i untargeted menus without publishing the full catalog per reply',
   async (count) => {
     vi.useFakeTimers()
-    onTestFinished(() => vi.useRealTimers())
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     const h = accumulatedCatalogHarness(count)
     const first = h.read()
     await vi.advanceTimersByTimeAsync(0)
@@ -211,7 +228,9 @@ it.each(['snapshot', 'deadline', 'selected'])(
   'exposes accumulated menus at a %s boundary while the next switch is unanswered',
   async (boundary) => {
     vi.useFakeTimers()
-    onTestFinished(() => vi.useRealTimers())
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     const h = accumulatedCatalogHarness(5)
     const first = h.read()
     await first
@@ -259,7 +278,9 @@ it.each(['snapshot', 'deadline', 'selected'])(
 
 it('keeps a slow OpenCode 1.x version response and selects its command listing', async () => {
   vi.useFakeTimers()
-  onTestFinished(() => vi.useRealTimers())
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
   const version = Promise.withResolvers<{ version: string }>()
   const requested = Promise.withResolvers<void>()
   const base = acpLaunchSpecFor('opencode')!
