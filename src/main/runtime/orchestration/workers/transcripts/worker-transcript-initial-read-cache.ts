@@ -41,80 +41,91 @@ export async function readInitialWorkerTranscriptReusing(
   variant: readonly (number | string | NativeChatLineDecoder)[],
   read: () => Promise<WorkerTranscriptReadResult>
 ): Promise<WorkerTranscriptReadResult> {
+  const key = JSON.stringify([
+    filePath,
+    ...variant.map((part) => (typeof part === 'function' ? variantId(part) : part))
+  ])
   const resource = retain(filePath)
   try {
-    const stamp = await observe(filePath, resource)
-    if (!stamp) {
-      return await read()
-    }
-    const key = JSON.stringify([
-      filePath,
-      ...variant.map((part) => (typeof part === 'function' ? variantId(part) : part))
-    ])
-    const hit = settled.get(key)
-    if (hit?.stamp === stamp) {
-      settled.delete(key)
-      settled.set(key, hit)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only successful read results are serialized into the cache.
-      return JSON.parse(hit.json.toString('utf8')) as WorkerTranscriptReadResult
-    }
-    const operation = `${key}\0${stamp}`
-    const running = active.get(operation)
-    if (running?.generation === resource.generation) {
-      return await running.promise
-    }
-    const generation = resource.generation
-    const token = {}
-    const owned: Active = {
-      generation,
-      token,
-      promise: (async () => {
-        const result = await read()
-        const after = await versionStamp(filePath)
-        // Ownership and publication with no await between: an older generation never publishes.
-        if (resource.generation !== generation || active.get(operation)?.token !== token) {
-          return result
-        }
-        if (result.ok && after === stamp) {
-          settle(key, filePath, stamp, result)
-        } else if (after && after !== stamp) {
-          adopt(filePath, resource, after)
-        }
-        return result
-      })()
-    }
-    active.set(operation, owned)
-    try {
-      return await owned.promise
-    } finally {
-      if (active.get(operation) === owned) {
-        active.delete(operation)
+    for (;;) {
+      const observed = resource.generation
+      const stamp = await versionStamp(filePath)
+      // From here to the hit, join or start, nothing yields: a sample another observation
+      // overtook is retaken, and a fresh one is admitted under the generation it produced.
+      if (resource.generation !== observed) {
+        continue
       }
+      if (!stamp) {
+        return await read()
+      }
+      adopt(filePath, resource, stamp)
+      const admitted = admit(key, filePath, stamp, resource, read)
+      admissionObserver?.(admitted.kind)
+      return await admitted.result
     }
   } finally {
     release(filePath, resource)
   }
 }
 
-/** A fresh stamp under the resource's current generation. A sample taken while another
- *  observation moved the generation is discarded and taken again, so a delayed old stat never
- *  rolls the resource back. */
-async function observe(filePath: string, resource: Resource): Promise<string | null> {
-  for (;;) {
-    const generation = resource.generation
-    const stamp = await versionStamp(filePath)
-    if (resource.generation !== generation) {
-      continue
-    }
-    if (stamp && stamp !== resource.stamp) {
-      adopt(filePath, resource, stamp)
-    }
-    return stamp
+type Admission = { kind: 'hit' | 'join' | 'start'; result: Promise<WorkerTranscriptReadResult> }
+
+/** Synchronous: a settled hit, the exact operation in flight, or new owned work. */
+function admit(
+  key: string,
+  filePath: string,
+  stamp: string,
+  resource: Resource,
+  read: () => Promise<WorkerTranscriptReadResult>
+): Admission {
+  const hit = settled.get(key)
+  if (hit?.stamp === stamp) {
+    settled.delete(key)
+    settled.set(key, hit)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only successful read results are serialized into the cache.
+    const result = JSON.parse(hit.json.toString('utf8')) as WorkerTranscriptReadResult
+    return { kind: 'hit', result: Promise.resolve(result) }
   }
+  const operation = `${key}\0${stamp}`
+  const running = active.get(operation)
+  if (running?.generation === resource.generation) {
+    return { kind: 'join', result: running.promise }
+  }
+  const generation = resource.generation
+  const token = {}
+  const owned: Active = {
+    generation,
+    token,
+    promise: (async () => {
+      const result = await read()
+      const after = await versionStamp(filePath)
+      // Ownership and publication with no await between: an older generation never publishes.
+      if (resource.generation !== generation || active.get(operation)?.token !== token) {
+        return result
+      }
+      if (result.ok && after === stamp) {
+        settle(key, filePath, stamp, result)
+      } else if (after) {
+        adopt(filePath, resource, after)
+      }
+      return result
+    })()
+  }
+  active.set(operation, owned)
+  const result = owned.promise.finally(() => {
+    if (active.get(operation) === owned) {
+      active.delete(operation)
+    }
+  })
+  return { kind: 'start', result }
 }
 
-/** A newly observed version: a new generation, and the path's settled variants retire. */
+/** A newly observed version: a new generation, and the path's settled variants retire. The
+ *  version already current changes nothing. */
 function adopt(path: string, resource: Resource, stamp: string): void {
+  if (resource.stamp === stamp) {
+    return
+  }
   resource.stamp = stamp
   resource.generation = {}
   for (const [key, entry] of settled) {
@@ -184,6 +195,15 @@ function variantId(part: NativeChatLineDecoder): number {
     variantIds.set(part, id)
   }
   return id
+}
+
+let admissionObserver: ((kind: Admission['kind']) => void) | undefined
+
+/** Test seam: told each admission's decision as it is made. */
+export function observeTranscriptAdmissions(
+  observer: ((kind: Admission['kind']) => void) | undefined
+): void {
+  admissionObserver = observer
 }
 
 /** Test seam: the settled cache's footprint, how many entries one file holds, and how many

@@ -31,16 +31,17 @@ export function journalRowItemIds(
     row.kind === 'queue'
       ? (options.queueSourceIds?.(row.messageId) ?? []).map((id) => agentJournalSubmissionKey(id))
       : []
-  // A card's row naming its hand-off can change how that send reads (`foldQueuedHandOffInDoubt`).
-  const attempt =
-    row.kind === 'queue' && row.change.op === 'queued'
-      ? (row.change.attempt ?? row.change.recovers)
-      : undefined
-  const clientMessageId =
-    row.kind === 'submission' || row.kind === 'dispatch'
-      ? row.clientMessageId
-      : attempt !== undefined && options.hasSubmission(attempt)
-        ? attempt
-        : undefined
-  return clientMessageId === undefined ? ids : [...ids, agentJournalSubmissionKey(clientMessageId)]
+  if (row.kind === 'submission' || row.kind === 'dispatch') {
+    return [...ids, agentJournalSubmissionKey(row.clientMessageId)]
+  }
+  // A queued card's row settles both the send it recovers and its own hand-off, each of which
+  // can change how that send reads (`applyQueueRow`).
+  if (row.kind === 'queue' && row.change.op === 'queued') {
+    for (const id of new Set([row.change.recovers, row.change.attempt])) {
+      if (id !== undefined && id !== null && options.hasSubmission(id)) {
+        ids.push(agentJournalSubmissionKey(id))
+      }
+    }
+  }
+  return ids
 }

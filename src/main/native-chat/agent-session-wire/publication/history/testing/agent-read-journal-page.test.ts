@@ -5,7 +5,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-  type AgentJournalItemBody
+  type AgentJournalItemBody,
+  type AgentJournalMessageItem
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentJournalItemIdentity,
@@ -32,8 +33,14 @@ import { agentChatEntryOf } from '../../../../../../shared/agent-conversations/a
 import type { AgentReadEntry } from '../../../../../../shared/agent-conversations/agent-conversation-contracts'
 import { isMobileE2EETextPayloadWithinLimit } from '../../../../../runtime/rpc/mobile/e2ee/mobile-e2ee-outbound-admission'
 import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import { readAgentJournalPage, type AgentReadJournalPosition } from '../agent-read-journal-page'
+import {
+  readAgentJournalPage,
+  type AgentReadJournalPage,
+  type AgentReadJournalPosition
+} from '../agent-read-journal-page'
 import { agentJournalItemForWire } from '../agent-session-item-wire-form'
+import { agentSessionSendBodyFingerprint } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { buildJournalQueueRow } from '../../../../agent-session-journal/queued-messages/journal-queue-events'
 
 const identity: AgentSessionJournalIdentity = {
   sessionId: 'agent-read-page',
@@ -151,6 +158,21 @@ const HOST_RESTARTED = {
   reason: DISPATCH_REJECTED_HOST_RESTARTED,
   rejection: { kind: 'hostRestarted' }
 } as unknown as Parameters<AgentSessionJournal['rejectPendingSubmissions']>[1]
+
+/** A hand-off rejected with nothing known about delivery, as an earlier build saved it. */
+function rejectedUnconfirmed(
+  clientMessageId: string
+): Parameters<AgentSessionJournal['resolveDispatch']>[0] {
+  const input = {
+    clientMessageId,
+    state: 'rejected',
+    fence: 1,
+    reason: 'unconfirmed',
+    rejection: { kind: 'unconfirmed' }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the saved unconfirmed rejection shape the queue reviewers' probe writes; the reducer reads only these fields.
+  return input as unknown as Parameters<AgentSessionJournal['resolveDispatch']>[0]
+}
 
 // A tree of up to 10,000 entries is at most ~1.44·log2 deep; tails stay well under this per read.
 const NODES_PER_READ = 40
@@ -441,5 +463,258 @@ it.each([10_000, 100_000])(
       'big 2',
       'huge'
     ])
+  }
+)
+
+/** Pages forward from `after` until a page isn't limited. */
+function readForward(journal: AgentSessionJournal, limit: number, from: AgentReadJournalPosition) {
+  let after = from
+  const pages: Extract<AgentReadJournalPage, { ok: true }>[] = []
+  for (let page = 0; page < 20; page++) {
+    const next = readAgentJournalPage(journal, { limit, after }, waiting)
+    if (!next.ok) {
+      throw new Error('expected a page')
+    }
+    pages.push(next)
+    after = next.next
+    if (!next.limited) {
+      break
+    }
+  }
+  return { entries: pages.flatMap((page) => page.entries), pages, after }
+}
+
+it.each([1, 2])(
+  'continues a row naming two ids for one send at limit %i: once, in place',
+  async (limit) => {
+    const user = (text: string): AgentJournalMessageItem => ({
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    })
+    const accepted = key(1)
+    const echo = key(0)
+    const journal = await seed(
+      0,
+      () => null,
+      (seq) => [
+        {
+          ...base,
+          kind: 'submission',
+          seq,
+          clientMessageId: 'send-1',
+          payloadFingerprint: agentSessionSendBodyFingerprint(identity.sessionId, user('hi')),
+          providerHandle: { kind: 'codex', threadId: 'thread-1' },
+          body: user('hi')
+        },
+        {
+          ...base,
+          kind: 'dispatch',
+          seq: seq + 1,
+          clientMessageId: 'send-1',
+          state: 'accepted',
+          providerItemId: accepted,
+          reason: null
+        },
+        {
+          ...base,
+          kind: 'lifecycle-batch',
+          seq: seq + 2,
+          settlementId: 'echoes',
+          mutations: [
+            { kind: 'item', itemId: echo, revision: 1, body: user('hi') },
+            { kind: 'item', itemId: 'b', revision: 1, body: message('b') },
+            { kind: 'item', itemId: accepted, revision: 1, body: user('hi') },
+            { kind: 'item', itemId: 'c', revision: 1, body: message('c') }
+          ]
+        }
+      ]
+    )
+    expect([journal.canonicalItemId(echo), journal.canonicalItemId(accepted)]).toEqual([
+      'orca:send-1',
+      'orca:send-1'
+    ])
+
+    const read = readForward(journal, limit, {
+      cursor: { epoch: 'epoch-1', sequence: 3 },
+      within: 0
+    })
+
+    expect(texts(read)).toEqual(['hi', 'b', 'c'])
+    expect(read.after).toEqual({ cursor: { epoch: 'epoch-1', sequence: 4 }, within: 0 })
+  }
+)
+
+// The history page content budget: half the 4 MiB remote reply, less a 64 KiB envelope reserve.
+const HISTORY_CONTENT_BYTES = 2 * 1024 * 1024 - 64 * 1024
+const TOO_LARGE: AgentReadEntry = {
+  kind: 'message',
+  role: 'system',
+  text: 'This part of the chat was too large to show.'
+}
+
+it.each([1, 2, 50])(
+  'reads a reply no page can carry as the history too-large marker, at limit %i',
+  async (limit) => {
+    const journal = await seed(1, () => message('before'))
+    const start = { cursor: journal.cursor(), within: 0 }
+    // 70,000 blocks of 64 characters: past any page, and no block can be shortened further.
+    const blocks: AgentJournalItemBody = {
+      kind: 'message',
+      role: 'assistant',
+      blocks: Array.from({ length: 70_000 }, () => ({ type: 'text', text: 'x'.repeat(64) }))
+    }
+    const long = (name: string): AgentJournalItemBody =>
+      message(`${name}:${'y'.repeat(3 * 1024 * 1024)}`)
+    await journal.appendLifecycleBatch({
+      settlementId: 'oversized',
+      fence: 1,
+      mutations: [
+        {
+          kind: 'item',
+          itemId: 'long-1',
+          body: long('long 1'),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        },
+        {
+          kind: 'item',
+          itemId: 'long-2',
+          body: long('long 2'),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        },
+        { kind: 'item', itemId: 'blocks', body: blocks, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      ]
+    })
+    const carried = (page: AgentReadJournalPage) => {
+      expect(
+        isMobileE2EETextPayloadWithinLimit(JSON.stringify({ id: 'r', ok: true, result: page }))
+      ).toBe(true)
+      expect(Buffer.byteLength(JSON.stringify(page.ok ? page.entries : []))).toBeLessThanOrEqual(
+        HISTORY_CONTENT_BYTES + 1
+      )
+    }
+    const label = (entry: AgentReadEntry) =>
+      JSON.stringify(entry) === JSON.stringify(TOO_LARGE) ? 'marker' : textOf(entry).split(':')[0]
+
+    const oversizedLatest = tail(journal, limit)
+    carried(oversizedLatest)
+    expect(oversizedLatest.entries.at(-1)).toEqual(TOO_LARGE)
+    await append(journal, 9, message('after'))
+
+    const latest = tail(journal, limit)
+    carried(latest)
+    expect(latest.entries.at(-1)).toEqual({ kind: 'message', role: 'assistant', text: 'after' })
+    if (limit > 1) {
+      expect(latest.entries.at(-2)).toEqual(TOO_LARGE)
+    }
+
+    const forward = readForward(journal, limit, start)
+    forward.pages.forEach(carried)
+    expect(forward.entries.map(label)).toEqual(['long 1', 'long 2', 'marker', 'after'])
+    expect(forward.entries.filter((entry) => 'shortened' in entry)).toHaveLength(2)
+    expect(forward.after).toEqual({ cursor: journal.cursor(), within: 0 })
+  }
+)
+
+it.each([1_000, 10_000])(
+  'shows both sends a queued card settles, %i replies in, without a rebuild',
+  async (count) => {
+    const journal = await seed(count, (index) => message(`reply ${index}`))
+    const user = (text: string): AgentJournalMessageItem => ({
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    })
+    for (const id of ['old', 'new']) {
+      await journal.appendSubmission({
+        clientMessageId: id,
+        payloadFingerprint: id,
+        body: user(id),
+        fence: 1,
+        handoverRecorded: true,
+        queuedMessageId: 'card'
+      })
+      await journal.resolveDispatch({
+        clientMessageId: id,
+        state: 'pending',
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+      await journal.resolveDispatch(rejectedUnconfirmed(id))
+    }
+    const before = tail(journal, 3)
+    expect(texts(before)).toEqual([
+      `reply ${count - 3}`,
+      `reply ${count - 2}`,
+      `reply ${count - 1}`
+    ])
+    const work = resetWork(journal)
+
+    await journal['rowWriter'].enqueue((seq, ts) =>
+      buildJournalQueueRow(
+        journal.queuedMessages.inputState(),
+        'card',
+        {
+          op: 'queued',
+          body: user('new'),
+          position: 1,
+          queuedAt: null,
+          attempt: 'new',
+          recovers: 'old'
+        },
+        seq,
+        ts
+      )
+    )
+
+    expect(publicEntries(journal).slice(-2).map(textOf)).toEqual(['old', 'new'])
+    expect(texts(tail(journal, 3))).toEqual([`reply ${count - 1}`, 'old', 'new'])
+    expect(texts(tail(journal, 3))).toEqual([`reply ${count - 1}`, 'old', 'new'])
+    // An outcome row lists its ids by key, so forward order within it isn't presented order.
+    expect(texts(readForward(journal, 1, before.next)).toSorted()).toEqual(['new', 'old'])
+    expect(work.builds).toBe(0)
+    expect(work.upkeep).toBe(2)
+  }
+)
+
+it.each([1_000, 10_000])(
+  'keeps Stop-note dependencies to the live notes through %i deletions',
+  async (count) => {
+    const journal = await seed(1, () => message('reply'))
+    const index = journalAgentReadIndex(journal)
+    tail(journal, 1)
+    const turn = (turnId: string) =>
+      agentJournalItemKey({ provider: 'codex', threadId: 'thread-1', turnId, ordinal: 0 })
+    const note = (name: string, turnName: string, body = STOP_NOTE) => ({
+      kind: 'item' as const,
+      itemId: agentJournalSubmissionKey(`stop:${name}`),
+      body,
+      turnScope: { kind: 'turn' as const, turnItemId: turn(turnName) }
+    })
+    const batch = (
+      settlementId: string,
+      mutations: Parameters<AgentSessionJournal['appendLifecycleBatch']>[0]['mutations']
+    ) => journal.appendLifecycleBatch({ settlementId, fence: 1, mutations })
+    const many = Array.from({ length: count }, (_, i) => note(`n${i}`, `t${i}`))
+    await batch('make', [
+      ...many,
+      note('sibling-1', 'shared'),
+      note('sibling-2', 'shared'),
+      note('mover', 'from'),
+      note('shape', 'shaped')
+    ])
+    expect(index.noteDependencies()).toEqual({ turns: count + 3, notes: count + 4 })
+
+    await batch('retire', [
+      ...many.map(({ itemId }) => ({ kind: 'tombstone' as const, itemId })),
+      { kind: 'tombstone', itemId: agentJournalSubmissionKey('stop:sibling-1') },
+      note('mover', 'to'),
+      note('shape', 'shaped', status('stopped'))
+    ])
+    // Left: `shared` (sibling-2) and `to` (mover).
+    expect(index.noteDependencies()).toEqual({ turns: 2, notes: 2 })
+
+    await batch('restore', [note('shape', 'shaped')])
+    expect(index.noteDependencies()).toEqual({ turns: 3, notes: 3 })
   }
 )

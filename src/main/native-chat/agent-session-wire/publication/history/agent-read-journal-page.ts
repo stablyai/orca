@@ -7,7 +7,10 @@ import { journalRowItemIds } from '../../../agent-session-journal/replay/journal
 import { journalAgentReadIndex } from '../../../agent-session-journal/projection/journal-agent-read-index'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemForWire } from './agent-session-item-wire-form'
-import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from './agent-session-history-page-bounds'
+import {
+  HISTORY_PAGE_CONTENT_BUDGET_BYTES,
+  oversizedHistoryItem
+} from './agent-session-history-page-bounds'
 import { renderJournalStatusItem } from '../../../agent-session-journal/projection/journal-public-read'
 
 /** Where an agent read continues: rows through `sequence` are read, and the first `within`
@@ -21,8 +24,9 @@ export type AgentReadJournalPage =
 /** One `orca agent read` page from a chat's journal, with work bounded by the page: a tail walks
  *  back over the journal's live agent-read entries, and a cursor read takes at most `limit + 1`
  *  rows and renders only the items they name. Neither renders the timeline, builds a snapshot or
- *  scans for turns. Entries use the history wire form (visibly shortened when too large), and a
- *  page stops at `limit` entries or the history page byte budget, whichever comes first.
+ *  scans for turns. Entries use the history wire form (visibly shortened when too large, or the
+ *  history's too-large marker when even that can't fit a page), and a page stops at `limit`
+ *  entries or the history page byte budget, whichever comes first.
  *  `waiting`: the live answer for a pending prompt. */
 export function readAgentJournalPage(
   journal: AgentSessionJournal,
@@ -107,18 +111,36 @@ export function readAgentJournalPage(
   }
 }
 
-/** The entry an item reads as, from its history wire form. */
+/** The entry an item reads as, from its history wire form. One no page could carry reads as the
+ *  history's own too-large marker, said by Orca rather than the agent. */
 function entryOf(
   item: AgentJournalRenderItem,
   waiting: (itemId: string) => boolean
 ): AgentReadEntry | null {
-  const sent = agentJournalItemForWire(item).item
-  const entry = agentChatEntryOf(sent, waiting)
-  return entry && sent.shortened ? { ...entry, shortened: true } : entry
+  const sent = agentJournalItemForWire(item)
+  const entry = agentChatEntryOf(sent.item, waiting)
+  if (!entry) {
+    return null
+  }
+  const shown: AgentReadEntry = sent.item.shortened ? { ...entry, shortened: true } : entry
+  if (
+    sent.bytes <= HISTORY_PAGE_CONTENT_BUDGET_BYTES &&
+    entryBytes(shown) <= HISTORY_PAGE_CONTENT_BUDGET_BYTES
+  ) {
+    return shown
+  }
+  const marker = oversizedHistoryItem(item).body
+  return {
+    kind: 'message',
+    role: 'system',
+    text: marker.kind === 'status' ? String(marker.text) : ''
+  }
 }
 
-/** `limit` entries and the history page's byte budget; a first entry always fits, since wire
- *  forms are bounded well under the budget. */
+/** An entry's serialized size, with its separator in the page's entries array. */
+const entryBytes = (entry: AgentReadEntry) => Buffer.byteLength(JSON.stringify(entry)) + 1
+
+/** `limit` entries within the history page's byte budget. */
 class PageBudget {
   private count = 0
   private bytes = 0
@@ -126,11 +148,8 @@ class PageBudget {
   constructor(private readonly limit: number) {}
 
   admit(entry: AgentReadEntry): boolean {
-    const size = Buffer.byteLength(JSON.stringify(entry)) + 1
-    if (
-      this.count >= this.limit ||
-      (this.count > 0 && this.bytes + size > HISTORY_PAGE_CONTENT_BUDGET_BYTES)
-    ) {
+    const size = entryBytes(entry)
+    if (this.count >= this.limit || this.bytes + size > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
       return false
     }
     this.count++

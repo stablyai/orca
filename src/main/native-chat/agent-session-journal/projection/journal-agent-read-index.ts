@@ -96,6 +96,11 @@ export class JournalAgentReadIndex {
     }
   }
 
+  /** Test seam: turns with dependent Stop notes, and the notes. */
+  noteDependencies(): { turns: number; notes: number } {
+    return { turns: this.notesByTurn.size, notes: this.turnOfNote.size }
+  }
+
   committed(rows: readonly JournalRow[]): void {
     if (!this.current()) {
       return
@@ -194,7 +199,11 @@ export class JournalAgentReadIndex {
       return
     }
     if (prior) {
-      this.notesByTurn.get(prior)?.delete(id)
+      const siblings = this.notesByTurn.get(prior)
+      siblings?.delete(id)
+      if (siblings?.size === 0) {
+        this.notesByTurn.delete(prior)
+      }
       this.turnOfNote.delete(id)
     }
     if (turn) {
