@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ENVIRONMENT_BUILD_SCRIPT, VM_SCRIPTS_HASH } from '../image/vm-scripts.generated'
+import { VM_SCRIPTS } from '../image/golden-image'
+import { ENVIRONMENT_BUILD_SCRIPT } from '../image/vm-scripts.generated'
 
 const script = readFileSync(fileURLToPath(new URL('../image/env/environment-build.sh', import.meta.url).href), 'utf8')
 const autoInstall = /^auto_install\(\) \{\n[\s\S]*?\n\}\n/m.exec(script)?.[0]
@@ -64,8 +65,8 @@ describe('environment-build.sh auto_install (PARITY-AUTO-ENV-DEPS)', () => {
     expect(autoInstall).toBeDefined()
     expect(script).toMatch(/elif \[ "\$\{ORCA_AUTO_INSTALL:-\}" = 1 \] && \[ -n "\$first" \]; then\n {2}auto_install "\$first"\n/)
     expect(ENVIRONMENT_BUILD_SCRIPT).toBe(script)
-    // env/ scripts ride in the Worker; the golden's VM scripts (and their hash) are untouched.
-    expect(VM_SCRIPTS_HASH).toBe('f4d18985')
+    // env/ scripts ride in the Worker, not among the golden's VM scripts (so they never need a rotation).
+    expect(VM_SCRIPTS as readonly string[]).not.toContain('environment-build.sh')
   })
 
   it('picks the package manager from the lockfile, frozen, through corepack', () => {
