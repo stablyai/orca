@@ -136,6 +136,9 @@ async function gitExecFileAsyncUnlocked(
           ) {
             await terminationState.current
             const wasMissing = invalidateMissingDirectWslGit(error, resolved)
+            if (options.canStart?.() === false) {
+              throw createAbortError()
+            }
             const fallback = resolveGitCommand(args, effectiveOptions, true, true)
             result = await capture(fallback)
             // Why: matching failures can be normal Git control flow; only a successful login retry proves the direct environment was insufficient.

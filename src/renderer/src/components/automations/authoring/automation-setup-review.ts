@@ -93,12 +93,45 @@ export async function reviewAutomationSkippedSetup(
  * Saving an automation whose last run skipped changed setup re-confirms that setup: the skipped
  * content when the host recorded it, else the repo's current one. Returns the hash to store.
  */
-export async function reconfirmSkippedSetup(
+/**
+ * A save's setup approval: prompt when the target or setup choice changed, else re-review a skipped run.
+ * The hash is stored with `run` so later runs execute only this content.
+ */
+export async function confirmAutomationSaveSetup(
+  context: Pick<AutomationSaveContext, 'local' | 'list'>,
+  args: {
+    prompt: boolean
+    repoId: string
+    hostId: ExecutionHostId | undefined
+    /** The base this save persists, which an edit may have just changed. */
+    baseBranch: string | null | undefined
+    setupDecision: SetupDecision | undefined
+    automation: Automation | null
+  }
+): Promise<{ trust: HookTrustApproval | null; setupTrustHash: string | undefined }> {
+  const trust = args.prompt
+    ? await approveAutomationSetup(args.repoId, args.hostId, args.baseBranch)
+    : null
+  const setupTrustHash =
+    trust?.approvedContentHash ??
+    (await reconfirmSkippedSetup(
+      context,
+      trust,
+      args.setupDecision,
+      args.automation,
+      args.hostId,
+      args.baseBranch
+    ))
+  return { trust, setupTrustHash }
+}
+
+async function reconfirmSkippedSetup(
   context: Pick<AutomationSaveContext, 'local' | 'list'>,
   trust: HookTrustApproval | null,
   setupDecision: SetupDecision | undefined,
   automation: Automation | null,
-  hostId: ExecutionHostId | undefined
+  hostId: ExecutionHostId | undefined,
+  baseBranch: string | null | undefined
 ): Promise<string | undefined> {
   // A changed target or setup choice was just confirmed by the regular save prompt.
   if (trust || context.local.targetEdited || setupDecision !== 'run' || !automation) {
@@ -119,7 +152,7 @@ export async function reconfirmSkippedSetup(
         hostId,
         'automation'
       )
-    : await approveAutomationSetup(repoId, hostId, automation.baseBranch)
+    : await approveAutomationSetup(repoId, hostId, baseBranch)
   return approval.decision === 'run' && approval.approvedContentHash !== automation.setupTrustHash
     ? approval.approvedContentHash
     : undefined

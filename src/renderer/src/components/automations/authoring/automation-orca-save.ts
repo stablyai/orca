@@ -27,7 +27,7 @@ import {
 import { buildDraftPrecheck, buildDraftSchedule } from './automation-draft-model'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
 import { resolveAutomationSetupDecisionForSave } from './automation-setup-decision'
-import { approveAutomationSetup, reconfirmSkippedSetup } from './automation-setup-review'
+import { confirmAutomationSaveSetup } from './automation-setup-review'
 import {
   createAutomationOnDestination,
   moveAutomationToDestination,
@@ -134,15 +134,15 @@ export async function saveOrcaAutomation(
           draftSetupDecision: draft.setupDecision
         })
       : currentAutomation.setupDecision
-  const setupBase = edited('baseBranch') ? draft.baseBranch : currentAutomation?.baseBranch
-  const trust =
-    setupDecision === 'run' && ((targetEdited && !recordedContext) || edited('setupDecision'))
-      ? await approveAutomationSetup(draft.projectId, setupHostId, setupBase)
-      : null
-  // Stored with `run` so later runs execute only this content.
-  const setupTrustHash =
-    trust?.approvedContentHash ??
-    (await reconfirmSkippedSetup(context, trust, setupDecision, currentAutomation, setupHostId))
+  const { trust, setupTrustHash } = await confirmAutomationSaveSetup(context, {
+    prompt:
+      setupDecision === 'run' && ((targetEdited && !recordedContext) || edited('setupDecision')),
+    repoId: draft.projectId,
+    hostId: setupHostId,
+    baseBranch: edited('baseBranch') ? draft.baseBranch : currentAutomation?.baseBranch,
+    setupDecision,
+    automation: currentAutomation
+  })
   if (trust?.decision === 'skip') {
     setupDecision = 'skip'
   }
