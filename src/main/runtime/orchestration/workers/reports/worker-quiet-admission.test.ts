@@ -1,6 +1,8 @@
 import { expect, it, vi } from 'vitest'
 import { runtimeFixture } from './worker-quiet-runtime.test-fixture'
 import { startWorkerQuietWatch } from './worker-quiet-watch'
+import { TerminalIdentitySource } from '../../../terminal/identity/terminal-identity-source'
+import { PANE } from '../../../../agent-hooks/server/testing/server.test-fixtures'
 
 const fixture = runtimeFixture()
 
@@ -61,6 +63,63 @@ it.each([
     expect(inventory).not.toHaveBeenCalled()
     expect(local).not.toHaveBeenCalled()
     expect(remote).not.toHaveBeenCalled()
+  }
+)
+
+it.each([100, 1000])(
+  'leaves %i disconnected working workers idle until reconnect wakes discovery',
+  (population) => {
+    const { db, chat, changes } = fixture
+    const { run } = fixture.workers(population)
+    chat.handles.clear()
+    const terminals = new TerminalIdentitySource(changes.notify)
+    for (let n = 0; n < population; n++) {
+      const paneKey = n === 0 ? PANE : `offline-pane-${n}`
+      const pty = fixture.terminal(paneKey, `term_worker_${n}`)
+      terminals.createPty({ ...pty, ptyId: paneKey, connected: false })
+    }
+    fixture.store.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'codex',
+        hookEventName: 'UserPromptSubmit',
+        payload: { state: 'working', prompt: 'work', agentType: 'codex' }
+      },
+      'ssh-owner'
+    )
+    const inventory = vi.fn(() => terminals.ptys.keys())
+    const local = vi.spyOn(db, 'getActiveDispatchForTerminal')
+    fixture.start({
+      readPaneKeys: inventory,
+      readPty: (key) => terminals.ptys.get(key) ?? null
+    })
+    // One startup pass retains each episode; none can produce a notice while disconnected.
+    expect(inventory).toHaveBeenCalledTimes(1)
+    expect(local).toHaveBeenCalledTimes(population)
+    vi.advanceTimersByTime(3_600_000)
+    expect(inventory).toHaveBeenCalledTimes(1)
+    expect(local).toHaveBeenCalledTimes(population)
+    expect(db.getUnreadRunMailbox(run.id, 100, ['status'])).toHaveLength(0)
+    const paneKey = PANE
+    const pty = terminals.ptys.get(paneKey)!
+    terminals.setPtyConnected(pty, true)
+    vi.advanceTimersByTime(0)
+    expect(inventory).toHaveBeenCalledTimes(2)
+    expect(local).toHaveBeenCalledTimes(population * 2)
+    vi.advanceTimersByTime(840_000)
+    expect(db.getUnreadRunMailbox(run.id, 100, ['status'])).toHaveLength(0)
+    vi.advanceTimersByTime(60_000)
+    const notices = db.getUnreadRunMailbox(run.id, 100, ['status'])
+    expect(notices).toHaveLength(1)
+    expect(JSON.parse(notices[0]!.payload!).quietNotice.observedAt).toBe(4_500_000)
+    terminals.setPtyConnected(pty, false)
+    fixture.stop()
+    inventory.mockClear()
+    local.mockClear()
+    terminals.setPtyConnected(pty, true)
+    vi.advanceTimersByTime(3_600_000)
+    expect(inventory).not.toHaveBeenCalled()
+    expect(local).not.toHaveBeenCalled()
   }
 )
 

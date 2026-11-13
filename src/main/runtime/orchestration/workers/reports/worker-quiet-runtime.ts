@@ -63,7 +63,7 @@ export function startWorkerQuietSweep(
       Date.now(),
       [...candidates.keys()]
     )
-    return workers.length > 0
+    return workers.some(({ observation }) => observation.connected !== false)
   }
   return startWorkerQuietWatch({
     sweep: run,

@@ -102,46 +102,55 @@ it('recovers acknowledged remote notices only for the current live process after
   expect(rows[1]!.message_id).not.toBe(first.message_id)
 })
 
-it('preserves a disconnected worker episode, excluding offline time and retaining its notice budget', () => {
-  const { run, workers } = fixture.workers(2)
-  fixture.chat.handles.delete('term_worker_0')
-  const pty = fixture.terminal(PANE, 'term_worker_0')
-  fixture.store.ingestRemote(
-    {
-      paneKey: PANE,
-      source: 'codex',
-      hookEventName: 'UserPromptSubmit',
-      payload: { state: 'working', prompt: 'work', agentType: 'codex' }
-    },
-    'ssh-owner'
-  )
-  expect(fixture.store.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
-    state: 'working',
-    turnStartedAt: 0
-  })
-  const noticeTimes = () =>
-    fixture.db
-      .getUnreadRunMailbox(run.id, 100, ['status'])
-      .map((message) => JSON.parse(message.payload!).quietNotice)
-      .filter((notice) => notice.dispatchId === workers[0]!.id)
-      .map((notice) => notice.observedAt)
-  fixture.start()
-  vi.advanceTimersByTime(960_000)
-  expect(noticeTimes()).toEqual([900_000])
-  fixture.panes.set(PANE, { ...pty, connected: false })
-  fixture.changes.notify(new Set(['status']))
-  vi.advanceTimersByTime(1_200_000)
-  fixture.panes.set(PANE, { ...pty, connected: true })
-  fixture.changes.notify(new Set(['status']))
-  vi.advanceTimersByTime(840_000)
-  expect(noticeTimes()).toEqual([900_000])
-  vi.advanceTimersByTime(960_000)
-  expect(noticeTimes()).toEqual([900_000, 3_900_000])
-  fixture.panes.set(PANE, { ...pty, connected: false })
-  fixture.changes.notify(new Set(['status']))
-  vi.advanceTimersByTime(2_040_000)
-  fixture.panes.set(PANE, { ...pty, connected: true })
-  fixture.changes.notify(new Set(['status']))
-  vi.advanceTimersByTime(7_200_000)
-  expect(noticeTimes()).toEqual([900_000, 3_900_000])
-})
+it.each([
+  [0, 3_840_000],
+  [1, 3_900_000]
+])(
+  'preserves a disconnected episode and budget with %i other working chats',
+  (chats, reminderAt) => {
+    const { run, workers } = fixture.workers(1 + chats)
+    fixture.chat.handles.delete('term_worker_0')
+    const pty = fixture.terminal(PANE, 'term_worker_0')
+    fixture.store.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'codex',
+        hookEventName: 'UserPromptSubmit',
+        payload: { state: 'working', prompt: 'work', agentType: 'codex' }
+      },
+      'ssh-owner'
+    )
+    expect(fixture.store.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
+      state: 'working',
+      turnStartedAt: 0
+    })
+    const noticeTimes = () =>
+      fixture.db
+        .getUnreadRunMailbox(run.id, 100, ['status'])
+        .map((message) => JSON.parse(message.payload!).quietNotice)
+        .filter((notice) => notice.dispatchId === workers[0]!.id)
+        .map((notice) => notice.observedAt)
+    const inventory = vi.fn(() => fixture.panes.keys())
+    fixture.start({ readPaneKeys: inventory })
+    vi.advanceTimersByTime(960_000)
+    expect(noticeTimes()).toEqual([900_000])
+    fixture.panes.set(PANE, { ...pty, connected: false })
+    inventory.mockClear()
+    fixture.changes.notify(new Set(['status']))
+    vi.advanceTimersByTime(1_200_000)
+    expect(inventory).toHaveBeenCalledTimes(chats ? 20 : 1)
+    fixture.panes.set(PANE, { ...pty, connected: true })
+    fixture.changes.notify(new Set(['status']))
+    vi.advanceTimersByTime(840_000)
+    expect(noticeTimes()).toEqual([900_000])
+    vi.advanceTimersByTime(960_000)
+    expect(noticeTimes()).toEqual([900_000, reminderAt])
+    fixture.panes.set(PANE, { ...pty, connected: false })
+    fixture.changes.notify(new Set(['status']))
+    vi.advanceTimersByTime(2_040_000)
+    fixture.panes.set(PANE, { ...pty, connected: true })
+    fixture.changes.notify(new Set(['status']))
+    vi.advanceTimersByTime(7_200_000)
+    expect(noticeTimes()).toEqual([900_000, reminderAt])
+  }
+)
