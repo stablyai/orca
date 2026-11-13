@@ -1,4 +1,14 @@
 import type {
+  OrcaTeamMfaPendingResult,
+  OrcaTeamMfaPolicyArgs,
+  OrcaTeamMfaPolicyResult,
+  OrcaTeamMfaPolicySetArgs,
+  OrcaTeamMfaPolicySetResult,
+  OrcaTeamMfaRemindArgs,
+  OrcaTeamMfaRemindResult
+} from '../../shared/orca-team-mfa-policy'
+import type { OrcaAccountMfaResult } from '../../shared/orca-account-mfa'
+import type {
   CloudSetupGetResult,
   CloudSetupLinkResult,
   CloudSetupStartArgs,
@@ -84,6 +94,13 @@ export type OrcaProfileApi = {
   refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>
   signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>
   selectOrg: (args: SelectOrcaProfileOrgArgs) => Promise<SelectOrcaProfileOrgResult>
+  /** The signed-in person's own two-factor state and where to manage it. */
+  accountMfa: () => Promise<OrcaAccountMfaResult>
+  /** The team's "require MFA" policy and the person's own state in it. */
+  teamMfaPolicy: (args: OrcaTeamMfaPolicyArgs) => Promise<OrcaTeamMfaPolicyResult>
+  teamMfaPolicySet: (args: OrcaTeamMfaPolicySetArgs) => Promise<OrcaTeamMfaPolicySetResult>
+  teamMfaPending: (args: OrcaTeamMfaPolicyArgs) => Promise<OrcaTeamMfaPendingResult>
+  teamMfaRemind: (args: OrcaTeamMfaRemindArgs) => Promise<OrcaTeamMfaRemindResult>
   orgMembersList: (args: OrcaProfileOrgMembersListArgs) => Promise<OrcaProfileOrgMembersListResult>
   orgMemberInvite: (
     args: OrcaProfileOrgMemberInviteArgs
