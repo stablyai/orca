@@ -186,10 +186,11 @@ describe('Claude stream-json connection', () => {
           fence,
           spawnToken: `spawn-${sessionId}-${fence}`
         })
-      const dispatch = (sessionId: string, clientMessageId: string) =>
+      const dispatch = (sessionId: string, clientMessageId: string, fence = 1) =>
         adapter.dispatch({
           sessionId,
           clientMessageId,
+          fence,
           body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'first' }] }
         })
       try {
@@ -228,7 +229,9 @@ describe('Claude stream-json connection', () => {
         exitSpy.mockRestore()
         events.length = 0
         await acquire('active', 2)
-        await expect(dispatch('active', 'after-loss')).resolves.toMatchObject({ state: 'admitted' })
+        await expect(dispatch('active', 'after-loss', 2)).resolves.toMatchObject({
+          state: 'admitted'
+        })
         await vi.waitFor(
           () =>
             expect(events).toContainEqual(
