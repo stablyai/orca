@@ -4880,7 +4880,9 @@
         },
         {
           "file": "src/main/browser/client-pages/execution/browser-client-page-command-executor.test.ts",
-          "assertions": ["holds Session and route release for the exact destroyed acknowledgement"]
+          "assertions": [
+            "joins concurrent cleanup callers and holds resources until exact native destruction"
+          ]
         },
         {
           "file": "src/main/browser/client-pages/lifecycle/browser-client-page-reconciliation-adapters.test.ts",

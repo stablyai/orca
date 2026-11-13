@@ -14,7 +14,7 @@ import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-c
 
 /** Use journal positions for conversation rows, including folded-turn bars; terminal-backed rows have none and remain unmarked. */
 function rowPosition(slot: NativeChatTranscriptSlot): AgentJournalPosition | undefined {
-  return slot.kind === 'message' && slot.depth === 0 && (slot.drawsMessage || slot.statusAbove)
+  return slot.kind === 'message' && (slot.drawsMessage || slot.statusAbove)
     ? slot.message.journalPosition
     : undefined
 }

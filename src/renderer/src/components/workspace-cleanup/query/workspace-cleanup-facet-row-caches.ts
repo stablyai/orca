@@ -1,4 +1,4 @@
-import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list/workspace-activity-facts'
+import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import {

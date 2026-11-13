@@ -1,14 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fakes = vi.hoisted(() => ({
-  channelOptions: null as null | {
-    onAuthenticated(): void
-    onText(value: string): void
-  },
-  start: vi.fn(),
-  handleMessage: vi.fn(),
-  sendText: vi.fn((_frame: string) => true),
-  dispose: vi.fn()
+  start: vi.fn()
 }))
 
 vi.mock('../transport/encryption/mobile-e2ee-v2-client-session', () => ({
@@ -16,13 +9,10 @@ vi.mock('../transport/encryption/mobile-e2ee-v2-client-session', () => ({
 }))
 vi.mock('../transport/encryption/mobile-e2ee-v2-physical-channel', () => ({
   MobileE2EEV2PhysicalChannel: class {
-    constructor(options: NonNullable<typeof fakes.channelOptions>) {
-      fakes.channelOptions = options
-    }
     start = fakes.start
-    handleMessage = fakes.handleMessage
-    sendText = fakes.sendText
-    dispose = fakes.dispose
+    handleMessage = () => {}
+    sendText = () => true
+    dispose = () => {}
   }
 }))
 
@@ -65,8 +55,6 @@ describe('mobile relay physical pairing client', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
-    fakes.channelOptions = null
-    fakes.sendText.mockReturnValue(true)
   })
 
   afterEach(() => {
