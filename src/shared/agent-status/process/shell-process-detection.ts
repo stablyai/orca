@@ -21,6 +21,18 @@ export function isShellProcess(processName: string): boolean {
   )
 }
 
+const MSYS_EXEC_SHELL_NAMES = new Set(['bash', 'sh', 'zsh', 'dash'])
+
+/** MSYS/Cygwin shells exec by spawning a new Win32 process and letting the fork stub exit. */
+export function isMsysExecShellProcess(processName: string): boolean {
+  const normalized = processName
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .toLowerCase()
+  const basename = normalized.split(/[\\/]/).pop() ?? normalized
+  return MSYS_EXEC_SHELL_NAMES.has(basename.replace(/\.exe$/, ''))
+}
+
 // Git Bash has no command marks; MSYSTEM:PWD prompt repaint is its agent-to-shell signal.
 const MSYS_PROMPT_TITLE_RE = /^(?:MINGW(?:32|64)|MSYS|UCRT64|CLANG(?:32|64|ARM64)):\//
 

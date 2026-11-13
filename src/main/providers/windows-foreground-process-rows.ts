@@ -56,6 +56,23 @@ export type WindowsPaneProcessInventory = {
   candidates: WindowsProcessCandidate[]
   /** Full-table anchor catches recycled job-member PIDs orphaned outside the descendant walk. */
   anchorRow: WindowsProcessRow | null
+  /** Console members outside the descendant walk, e.g. MSYS exec children whose Win32 parent exited. */
+  collectConsoleOrphans: (consoleProcessIds: ReadonlySet<number>) => WindowsProcessCandidate[]
+}
+
+export function windowsCandidateIsAncestor(
+  candidate: WindowsProcessRow,
+  other: WindowsProcessRow,
+  candidatesByPid: ReadonlyMap<number, WindowsProcessRow>
+): boolean {
+  let current = candidatesByPid.get(other.ppid)
+  while (current) {
+    if (current.pid === candidate.pid) {
+      return true
+    }
+    current = candidatesByPid.get(current.ppid)
+  }
+  return false
 }
 
 export async function queryWindowsPaneProcessInventory(
@@ -78,9 +95,27 @@ export async function queryWindowsPaneProcessInventory(
   if (!index.byPid.has(rootPid)) {
     return null
   }
+  const candidates = collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth)
   return {
-    candidates: collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth),
-    anchorRow: options.anchorPid !== undefined ? (index.byPid.get(options.anchorPid) ?? null) : null
+    candidates,
+    anchorRow:
+      options.anchorPid !== undefined ? (index.byPid.get(options.anchorPid) ?? null) : null,
+    collectConsoleOrphans: (consoleProcessIds) => {
+      const linked = new Set([rootPid, ...candidates.map((candidate) => candidate.pid)])
+      const isOrphan = (pid: number): boolean => consoleProcessIds.has(pid) && !linked.has(pid)
+      return [...consoleProcessIds].flatMap((pid) => {
+        const row = index.byPid.get(pid)
+        // Each orphan subtree is collected once, from its topmost console member.
+        if (!row || !isOrphan(pid) || isOrphan(row.ppid)) {
+          return []
+        }
+        const subtree = collectDescendantsFromIndex(index, pid, (child) => !isOrphan(child.pid))
+        return [
+          { ...row, depth: 1 },
+          ...subtree.map((child) => ({ ...child, depth: child.depth + 1 }))
+        ]
+      })
+    }
   }
 }
 
