@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { resolve as resolvePath } from 'node:path'
 import type { ZcodeAppServerConnection } from '../../app-server/zcode-app-server-connection-types'
+import { ZcodeAppServerUnsupportedError } from '../../app-server/zcode-app-server-errors'
 import { zcodePlanProviderId, type ZcodeChatCredentials } from './zcode-chat-credentials'
 
 // Headless app-servers build their provider registry from the bundled builtin table, the personal
@@ -85,11 +86,18 @@ export async function pushZcodeAccountConfig(
 ): Promise<{
   pushed: boolean
   refusedStandaloneAccount: boolean
+  /** This runtime has no push method at all; retrying cannot change the verdict. */
+  refusedUnsupported: boolean
   declaredModels: readonly { providerId: string; modelId: string }[]
 }> {
   const providerId = credentials ? zcodePlanProviderId(credentials.site) : null
   if (!table || !providerId) {
-    return { pushed: false, refusedStandaloneAccount: false, declaredModels: [] }
+    return {
+      pushed: false,
+      refusedStandaloneAccount: false,
+      refusedUnsupported: false,
+      declaredModels: []
+    }
   }
   const models = zcodeBuiltinModelIds(table, providerId)
   const declaredModels = models.map((modelId) => ({ providerId, modelId }))
@@ -108,12 +116,35 @@ export async function pushZcodeAccountConfig(
   }
   try {
     await connection.request('provider/updateAccountConfig', payload, { timeoutMs })
-    return { pushed: true, refusedStandaloneAccount: false, declaredModels }
+    return {
+      pushed: true,
+      refusedStandaloneAccount: false,
+      refusedUnsupported: false,
+      declaredModels
+    }
   } catch (error) {
     if (isZcodeStandaloneAccountRefusal(error)) {
-      return { pushed: false, refusedStandaloneAccount: true, declaredModels }
+      return {
+        pushed: false,
+        refusedStandaloneAccount: true,
+        refusedUnsupported: false,
+        declaredModels
+      }
     }
-    // Unknown-method refusals and transient failures never block the chat.
-    return { pushed: false, refusedStandaloneAccount: false, declaredModels }
+    if (error instanceof ZcodeAppServerUnsupportedError) {
+      return {
+        pushed: false,
+        refusedStandaloneAccount: false,
+        refusedUnsupported: true,
+        declaredModels
+      }
+    }
+    // Transient failures never block the chat; callers decide whether to retry.
+    return {
+      pushed: false,
+      refusedStandaloneAccount: false,
+      refusedUnsupported: false,
+      declaredModels
+    }
   }
 }

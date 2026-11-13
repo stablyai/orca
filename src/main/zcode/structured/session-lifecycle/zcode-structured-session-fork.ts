@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { AgentConversationCopyError } from '../../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
@@ -53,6 +54,11 @@ export async function zcodeForkForRewind(
     credentials: deps.resolveChatCredentials(),
     providerSessionId: input.beforeMessage.sessionId,
     cutMessageId: input.beforeMessage.uuid,
+    // The fork replaces the session the chat holds — the chain head, even when the cut rides a
+    // retained ancestor row whose session differs from that head.
+    replacesSessionId:
+      agentSessionProviderHandleChainHead(input.record.providerHandleChain)?.handle.nativeId ??
+      input.beforeMessage.sessionId,
     workspaceCwd: input.record.launchDirectory ?? homedir()
   })
 }

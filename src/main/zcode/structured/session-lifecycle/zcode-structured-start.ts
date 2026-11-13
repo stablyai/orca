@@ -89,6 +89,9 @@ export async function startZcodeStructuredSession(input: {
       sessionId: acquire.identity.sessionId
     })
     child.session.markJournalClosed('replaced by the desktop runtime')
+    // Orca is requesting this close deliberately: without the flag the exit handler would file
+    // an unexpected-exit start failure against the retry's generation.
+    child.session.closeRequested = true
     await child.connection.close().catch(() => false)
     const fallback = input.launch.fallbackRuntime
     const retryLaunch: ZcodeStructuredLaunch = {
@@ -122,9 +125,16 @@ export async function startZcodeStructuredSession(input: {
   } else {
     child.session.accountPushed = probe.pushed
   }
+  // A rejected process identity (persist failure) must not orphan the running app-server: the
+  // adapter owns nothing until sessions.set, so this function closes the child like the
+  // readiness path does.
+  const process = await child.process.catch(async (error: unknown) => {
+    await child.connection.close().catch(() => undefined)
+    throw error
+  })
   return {
     session: child.session,
-    process: await child.process,
+    process,
     generation: input.generation
   }
 }
@@ -273,6 +283,7 @@ async function awaitStorageReady(
   const noProbe: ZcodeAccountPushProbe = {
     pushed: false,
     refusedStandaloneAccount: false,
+    refusedUnsupported: false,
     declaredModels: []
   }
   for (;;) {

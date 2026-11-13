@@ -36,8 +36,9 @@ export function zcodeStructuredLaunchArgs(tokens: readonly string[]): string[] {
     const token = tokens[index]!
     if (token === '--') {
       // A trailing positional after -- is the saved prompt this transport cannot deliver.
-      if (tokens.slice(index + 1).some((t) => t.trim().length > 0)) {
-        throw new Error('zcode launch arguments cannot carry a prompt after --')
+      const prompt = tokens.slice(index + 1).find((t) => t.trim().length > 0)
+      if (prompt !== undefined) {
+        throw new StructuredAgentArgumentsError('ZCode', prompt, 'positionalPrompt')
       }
       break
     }

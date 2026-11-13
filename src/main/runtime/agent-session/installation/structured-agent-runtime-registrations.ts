@@ -210,7 +210,8 @@ function createZcodeAdapter(context: StructuredAgentAdapterContext): StructuredA
   const { deps } = context
   return new ZcodeStructuredSessionAdapter({
     resolveCommandSettings: deps.resolveAgentCommandSettings,
-    resolveEnvironment: context.environment.resolveBaseEnvironment,
+    // Disposable fork/rewind backends need the same per-agent overlay a live chat launch gets.
+    resolveEnvironment: () => context.environment.resolveAgentEnvironment('zcode'),
     resolveLaunch: composeStructuredLaunch(
       ZCODE_STRUCTURED_AGENT,
       structuredAgentLaunchSources(context),

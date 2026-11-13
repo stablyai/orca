@@ -49,7 +49,7 @@ async function withZcodeHeadlessConnection<T>(input: {
   signal?: AbortSignal
   run: (headless: HeadlessRun) => Promise<T>
 }): Promise<T> {
-  const launch = zcodeHeadlessLaunch(input.environment, {
+  const launch = await zcodeHeadlessLaunch(input.environment, {
     commandSettings: input.commandSettings
   })
   const connection = await spawnZcodeAppServerConnection(
@@ -118,8 +118,8 @@ function answerHeadlessAsk(
 async function readZcodeMessages(
   headless: Pick<HeadlessRun, 'request'>,
   providerSessionId: string
-): Promise<{ role: string; messageId: string }[]> {
-  const messages: { role: string; messageId: string }[] = []
+): Promise<{ role: string; messageId: string; synthetic: boolean }[]> {
+  const messages: { role: string; messageId: string; synthetic: boolean }[] = []
   let afterMessageId: string | null = null
   for (;;) {
     const page = await headless.request<{ messages?: unknown }>('session/messages', {
@@ -136,7 +136,11 @@ async function readZcodeMessages(
       const role = readString(info?.role)
       const messageId = readString(info?.messageId)
       if (role && messageId) {
-        messages.push({ role, messageId })
+        // Injected context rows (environment, model, skills, reminders) are user-role rows with
+        // a semantics source; a person's prompt never carries one (probed on a live backend).
+        const synthetic =
+          role === 'user' && readString(readRecord(info?.semantics)?.source) !== null
+        messages.push({ role, messageId, synthetic })
       }
     }
     const last = messages.at(-1)?.messageId ?? null
@@ -164,6 +168,31 @@ async function forkZcodeSession(
     )
   }
   return { forkedSessionId, targetMessageId: readString(forked?.targetMessageId) }
+}
+
+/**
+ * Rewind-to-blank has no fork target zcode accepts (its fork cannot express an empty history),
+ * so a null target opens a fresh session instead; a non-null target forks at that message.
+ */
+async function forkZcodeForRewindHistory(
+  headless: Pick<HeadlessRun, 'request' | 'resumedSessionId'>,
+  target: Record<string, unknown> | null,
+  workspaceCwd: string
+): Promise<{ forkedSessionId: string; targetMessageId: string | null }> {
+  if (target === null) {
+    const created = await headless.request<{ session?: unknown }>('session/create', {
+      workspace: { workspacePath: workspaceCwd, workspaceKey: workspaceCwd }
+    })
+    const fresh = readString(readRecord(readRecord(created)?.session)?.sessionId)
+    if (!fresh) {
+      throw new ZcodeConversationCopyRefusedError(
+        'provider-refused',
+        'zcode opened no blank session for the rewind'
+      )
+    }
+    return { forkedSessionId: fresh, targetMessageId: null }
+  }
+  return forkZcodeSession(headless, headless.resumedSessionId, target)
 }
 
 /**
@@ -199,9 +228,13 @@ export async function copyZcodeConversation(input: {
               'zcode could not find the fork point in its own history'
             )
           }
-          // The turn's last message: walk forward until the next user row opens another turn.
+          // The turn's last message: walk forward past the reply and injected context rows
+          // (synthetic user rows) until the next person's prompt opens another turn.
           let last = at
-          while (last + 1 < messages.length && messages[last + 1]!.role !== 'user') {
+          while (
+            last + 1 < messages.length &&
+            !(messages[last + 1]!.role === 'user' && !messages[last + 1]!.synthetic)
+          ) {
             last += 1
           }
           target = { kind: 'message', messageId: messages[last]!.messageId }
@@ -224,9 +257,12 @@ export async function forkZcodeForRewind(input: {
   environment: NodeJS.ProcessEnv
   commandSettings?: StructuredAgentCommandSettings
   credentials: ZcodeChatCredentials | null
+  /** The session the cut rides; a retained ancestor keeps its rows under its own id. */
   providerSessionId: string
   /** The removed prompt's input message id (beforeMessage.uuid from the host's rewind cut). */
   cutMessageId: string | null
+  /** The session the chat resumes after the rewind: the provider handle chain's head. */
+  replacesSessionId: string
   /** The workspace a blank-session rewind creates in (the chat's launch directory). */
   workspaceCwd: string
   signal?: AbortSignal
@@ -251,38 +287,24 @@ export async function forkZcodeForRewind(input: {
             'zcode could not find the rewind point in its own history'
           )
         }
-        if (at === 0) {
-          const created = await headless.request<{ session?: unknown }>('session/create', {
-            workspace: { workspacePath: input.workspaceCwd, workspaceKey: input.workspaceCwd }
-          })
-          const fresh = readString(readRecord(readRecord(created)?.session)?.sessionId)
-          if (!fresh) {
-            throw new ZcodeConversationCopyRefusedError(
-              'provider-refused',
-              'zcode opened no blank session for the rewind'
-            )
-          }
-          return {
-            ok: true,
-            fork: {
-              sessionId: fresh,
-              sourceSessionId: input.providerSessionId,
-              replacesSessionId: input.providerSessionId
-            }
-          }
+        // The kept history ends at the last real message of the previous turn; injected
+        // context rows ahead of the removed prompt belong to that prompt's turn, not to it.
+        let beforeIndex = at - 1
+        while (beforeIndex >= 0 && messages[beforeIndex]!.synthetic) {
+          beforeIndex -= 1
         }
-        const before = messages[at - 1]!
-        const forked = await forkZcodeSession(headless, headless.resumedSessionId, {
-          kind: 'message',
-          messageId: before.messageId
-        })
+        const fork = await forkZcodeForRewindHistory(
+          headless,
+          beforeIndex < 0 ? null : { kind: 'message', messageId: messages[beforeIndex]!.messageId },
+          input.workspaceCwd
+        )
         return {
           ok: true,
           fork: {
-            sessionId: forked.forkedSessionId,
+            sessionId: fork.forkedSessionId,
             sourceSessionId: input.providerSessionId,
-            ...(forked.targetMessageId ? { throughEntryId: forked.targetMessageId } : {}),
-            replacesSessionId: input.providerSessionId
+            ...(fork.targetMessageId ? { throughEntryId: fork.targetMessageId } : {}),
+            replacesSessionId: input.replacesSessionId
           }
         }
       }

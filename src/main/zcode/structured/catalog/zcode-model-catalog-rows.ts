@@ -31,13 +31,7 @@ export function readZcodeCatalogModelRows(
     const reasoning = readRecord(record?.reasoning)
     const providerLabel = readString(record?.providerLabel)
     const defaultLevel = readString(reasoning?.defaultLevel)
-    const efforts = Array.isArray(reasoning?.levels)
-      ? reasoning.levels.flatMap((level) => {
-          const item = readRecord(level)
-          const value = readString(item?.value)
-          return value ? [{ value, label: readString(item?.label) ?? value }] : []
-        })
-      : []
+    const efforts = readZcodeLevelChoices(reasoning?.levels)
     return [
       {
         id,
@@ -63,6 +57,16 @@ export function readZcodeCatalogModelRows(
     })
   }
   return rows
+}
+
+/** The `{value, label}` effort menu a `reasoning.levels` or `thoughtLevel.available` block carries. */
+export function readZcodeLevelChoices(levels: unknown): { value: string; label: string }[] {
+  const rows = Array.isArray(levels) ? levels : []
+  return rows.flatMap((level) => {
+    const item = readRecord(level)
+    const value = readString(item?.value)
+    return value ? [{ value, label: readString(item?.label) ?? value }] : []
+  })
 }
 
 export function readRecord(value: unknown): Record<string, unknown> | null {

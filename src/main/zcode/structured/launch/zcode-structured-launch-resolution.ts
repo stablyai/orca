@@ -57,7 +57,11 @@ export function formatZcodeModelOption(model: { providerId: string; modelId: str
  * session/create schema differs and the push is refused — so a headless chat strips them all,
  * keeping only user-set overrides and the provider tables the launch adds itself.
  */
-const ZCODE_INHERITED_ENV_KEEP = new Set(['ZCODE_HOME', 'ZCODE_CREDENTIAL_SECRET'])
+/**
+ * The ZCODE_* variables a desktop parent may legitimately hand down (its own home and the
+ * credential seal); every other ZCODE_* key is stripped from the child environment.
+ */
+export const ZCODE_INHERITED_ENV_KEEP = new Set(['ZCODE_HOME', 'ZCODE_CREDENTIAL_SECRET'])
 
 /** Derive resume identity from the durable record; zcode pins its own account home. */
 export function zcodeStructuredLaunchPart(
@@ -74,7 +78,7 @@ export function zcodeStructuredLaunchPart(
     // The desktop bundle's runtime is the primary chat backend (it accepts the host's account
     // push); resolve the CLI only where no bundle is installed — a WSL host can lack the CLI
     // while the bundle still works, and CLI resolution throws cliMissing there.
-    const bundled = zcodeBundledLaunch(environment.PATH ?? environment.Path)
+    const bundled = await zcodeBundledLaunch(environment.PATH ?? environment.Path)
     const resolved = bundled
       ? null
       : deps.resolveCommand
@@ -90,10 +94,14 @@ export function zcodeStructuredLaunchPart(
     // sibling (which accepts host pushes the wrapper refuses) is one.
     const cliFallback = null
     // The provider tables follow the runtime that actually boots: the bundle's own table for a
-    // bundled launch, the CLI's for a CLI launch.
-    const providerEnv = zcodeProviderEnv(
-      bundled ? (bundled.args[0] ?? resolved?.command ?? 'zcode') : (resolved?.command ?? 'zcode')
-    )
+    // bundled launch, the CLI's for a CLI launch. The bundle's env (its app version) merges in
+    // first so a bundled chat keeps the gateway's User-Agent even when a builtin table exists.
+    const providerEnv = {
+      ...bundled?.env,
+      ...zcodeProviderEnv(
+        bundled ? (bundled.args[0] ?? resolved?.command ?? 'zcode') : (resolved?.command ?? 'zcode')
+      )
+    }
     if (providerEnv.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE === undefined) {
       // A .cjs runtime without a builtin table next to it still needs an app version for the
       // gateway's User-Agent check; the entry name itself is the identity here.

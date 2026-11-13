@@ -60,6 +60,9 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
         )
       }
       this.acknowledgeSessionRelease(sessionId)
+      // An in-flight retirement still holds the old session row; waiting keeps the ownership
+      // check honest instead of failing a re-acquire that arrives a moment too early.
+      await Promise.all(Array.from(this.retiring))
       if (this.sessions.has(sessionId)) {
         throw new AgentSessionPreSpawnError(new Error('zcode session already owns a child'))
       }

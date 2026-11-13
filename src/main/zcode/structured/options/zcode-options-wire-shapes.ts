@@ -1,4 +1,5 @@
 import { formatZcodeModelOption } from '../launch/zcode-structured-launch-resolution'
+import { readRecord, readString, readZcodeLevelChoices } from '../catalog/zcode-model-catalog-rows'
 import type { ZcodeModelAvailability } from './zcode-structured-options'
 
 /** Parse one `model.available` entry; rows without a resolvable id are skipped. */
@@ -11,13 +12,6 @@ export function readAvailabilityRow(entry: unknown): ZcodeModelAvailability[] {
     return []
   }
   const reasoning = readRecord(record?.reasoning)
-  const levels = Array.isArray(reasoning?.levels)
-    ? reasoning.levels.flatMap((level) => {
-        const item = readRecord(level)
-        const value = readString(item?.value)
-        return value ? [{ value, label: readString(item?.label) ?? value }] : []
-      })
-    : []
   return [
     {
       id: formatZcodeModelOption({ providerId, modelId }),
@@ -26,7 +20,7 @@ export function readAvailabilityRow(entry: unknown): ZcodeModelAvailability[] {
         ? { providerLabel: readString(record?.providerLabel)! }
         : {}),
       ...(typeof record?.contextWindow === 'number' ? { contextWindow: record.contextWindow } : {}),
-      reasoningLevels: levels,
+      reasoningLevels: readZcodeLevelChoices(reasoning?.levels),
       ...(readString(reasoning?.defaultLevel)
         ? { defaultLevel: readString(reasoning?.defaultLevel)! }
         : {})
@@ -60,15 +54,4 @@ export function contextUsageField(contextUsage: { used?: number; window?: number
         : {})
     }
   }
-}
-
-function readRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: zcode app-server frames and provider responses own these payload shapes.
-      (value as Record<string, unknown>)
-    : null
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null
 }

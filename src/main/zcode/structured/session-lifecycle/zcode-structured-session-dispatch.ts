@@ -70,6 +70,19 @@ export async function dispatchZcodeTurn(
       input.onExecutionSnapshot?.()
     }
     await input.beforeDispatch?.()
+    // The option writes and preparation checkpoints awaited above may outlive a Stop or a lost
+    // acquisition; the provider write must not ride a chat that is no longer current.
+    if (input.signal?.aborted || input.isCurrent?.() === false) {
+      return {
+        state: 'rejected' as const,
+        ...agentSessionFailureWords(
+          agentSessionFailureFact('providerRejected', {
+            detail: providerDiagnostic('the chat stopped before the message was sent', 'person')
+          }),
+          { surface: 'rejection', agentName: 'ZCode' }
+        )
+      }
+    }
     return session.turns.dispatch({ clientMessageId: input.clientMessageId, text })
   } finally {
     session.dispatchPending = false

@@ -3,6 +3,7 @@ import type { StructuredAgentSessionProviderOpenResult } from '../../../native-c
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { ZcodeAppServerConnection } from '../../app-server/zcode-app-server-connection-types'
+import { readRecord, readString } from '../catalog/zcode-model-catalog-rows'
 import { formatZcodeModelOption } from '../launch/zcode-structured-launch-resolution'
 import type { ZcodeStructuredLane } from '../timeline/zcode-structured-lane'
 import { ZcodeStructuredOptions } from '../options/zcode-structured-options'
@@ -58,6 +59,8 @@ export class ZcodeStructuredSession {
   exitObservedAt: number | null = null
   /** Compaction command awaiting its `session_compact_*` outcome. */
   private compactionTurnId: string | null = null
+  /** Undoes the journal-backpressure → provider-reader coupling installed at open. */
+  readingUnbind: (() => void) | null = null
   private readonly early: (() => void)[] = []
 
   constructor(
@@ -204,14 +207,18 @@ export class ZcodeStructuredSession {
       return
     }
     if (method === 'interaction/requestPermission' || method === 'interaction/requestUserInput') {
-      void this.prompts.handle(method, params, id).catch((error: unknown) => {
-        this.deps.logger?.warn('zcode interaction could not be answered', {
-          scope: 'zcode-interaction',
-          method,
-          error
+      // handle can throw synchronously (unsupported shape); deferring keeps that throw inside
+      // the promise so the provider still receives the error reply.
+      void Promise.resolve()
+        .then(() => this.prompts.handle(method, params, id))
+        .catch((error: unknown) => {
+          this.deps.logger?.warn('zcode interaction could not be answered', {
+            scope: 'zcode-interaction',
+            method,
+            error
+          })
+          this.connection.respondWithError(id, -32603, String(error))
         })
-        this.connection.respondWithError(id, -32603, String(error))
-      })
       return
     }
     this.deps.logger?.warn('zcode app-server sent an unknown request', {
@@ -336,17 +343,8 @@ export class ZcodeStructuredSession {
 
   async close(): Promise<boolean> {
     this.closeRequested = true
+    this.readingUnbind?.()
+    this.readingUnbind = null
     return this.connection.close()
   }
-}
-
-function readRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: zcode app-server frames and provider responses own these payload shapes.
-      (value as Record<string, unknown>)
-    : null
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null
 }

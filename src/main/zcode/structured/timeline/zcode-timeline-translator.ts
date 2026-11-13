@@ -239,15 +239,17 @@ export class ZcodeTimelineTranslator {
     const record = readRecord(payload)
     const drained = Array.isArray(record?.drainedInputs) ? record.drainedInputs : []
     const events: ProviderTimelineEvent[] = []
-    for (const entry of drained) {
+    for (const [index, entry] of drained.entries()) {
       const item = readRecord(entry)
       const text = readString(item?.text)
       if (!text) {
         continue
       }
       const settled = this.settleMatchingSend(text)
+      // The batch index keeps two message-less steering rows distinct within one drain.
       const itemId =
-        readString(item?.messageId) ?? `${this.openTurnKey ?? this.providerSessionId}:steer:${at}`
+        readString(item?.messageId) ??
+        `${this.openTurnKey ?? this.providerSessionId}:steer:${at}:${index}`
       events.push({
         type: 'item.open',
         item: itemId,

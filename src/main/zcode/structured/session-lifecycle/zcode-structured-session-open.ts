@@ -1,5 +1,6 @@
 import type { StructuredAgentSessionProviderOpenResult } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { providerTimelineSink } from '../../../native-chat/agent-session-timeline/provider-timeline-plan'
+import { readZcodeLevelChoices } from '../catalog/zcode-model-catalog-rows'
 import { ZcodeStructuredLane } from '../timeline/zcode-structured-lane'
 import {
   pushZcodeAccountConfig,
@@ -55,6 +56,7 @@ export async function openZcodeSession(
   if (session.deps.resumeSessionId) {
     providerSessionId = await resumeSession(session, session.deps.resumeSessionId, signal)
   }
+  const resumed = providerSessionId !== null
   if (!providerSessionId) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: zcode app-server frames and provider responses own these payload shapes.
     const created = (await session.connection.request(
@@ -71,6 +73,18 @@ export async function openZcodeSession(
     throw new Error('zcode app-server opened no session id')
   }
   session.providerSessionId = providerSessionId
+  // A resume keeps zcode's stored collaboration mode; the launch's permission choice outranks it
+  // (a chat opened with `ask` must never silently run in a stored `yolo`). Failing open here is
+  // deliberate — an unapplied broader mode is worse than a retried start.
+  if (resumed && session.deps.launch.permissionMode !== undefined) {
+    await session.options.write(
+      session.connection,
+      providerSessionId,
+      'permissionMode',
+      session.deps.launch.permissionMode,
+      timeout
+    )
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: zcode app-server frames and provider responses own these payload shapes.
   const subscription = (await session.connection.request(
     'session/subscribe',
@@ -107,6 +121,13 @@ export async function openZcodeSession(
         `Orca stopped ZCode after its chat journal refused a write (${reason})`
       )
   })
+  // Couple journal backpressure to the provider reader: when the durable queue saturates it
+  // pauses zcode's frames at the source instead of letting the lane's backlog grow unbounded.
+  session.readingUnbind =
+    session.sinkForOpen().bindReadingControl?.({
+      pauseReading: () => session.connection.pauseReading?.(),
+      resumeReading: () => session.connection.resumeReading?.()
+    }) ?? null
   adoptSnapshot(session, subscription?.snapshot)
   // Queued frames land before any live event can arrive during the model-write await.
   session.drainEarly()
@@ -189,14 +210,8 @@ function adoptSnapshot(session: ZcodeStructuredSession, snapshot: unknown): void
     // The push's declared list plus the snapshot's own level menu keep every plan model
     // selectable; the backend's `model.available` names only the live selection.
     const thought = readRecord(settings?.thoughtLevel)
-    const levels = Array.isArray(thought?.available)
-      ? thought.available.flatMap((level) => {
-          const item = readRecord(level)
-          const value = readString(item?.value)
-          return value ? [{ value, label: readString(item?.label) ?? value }] : []
-        })
-      : undefined
-    session.adoptDeclaredModelLevels(levels)
+    const levels = readZcodeLevelChoices(thought?.available)
+    session.adoptDeclaredModelLevels(levels.length > 0 ? levels : undefined)
   }
   const projection = readRecord(record?.projection)
   const window = typeof projection?.contextWindow === 'number' ? projection.contextWindow : null

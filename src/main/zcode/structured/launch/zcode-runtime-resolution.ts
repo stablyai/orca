@@ -1,7 +1,7 @@
 import { close as closeFd, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
-import { execFileSync } from 'node:child_process'
 import { dirname, join, delimiter, resolve as resolvePath } from 'node:path'
+import { runProcess } from '@orca/process-host'
 import type { StructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 
 // zcode's own app-server is the only official chat transport, but which binary to run matters:
@@ -82,9 +82,10 @@ function readAsarPackageVersion(asarPath: string): string | null {
     if (headerStringSize <= 0 || headerStringSize > 16 * 1024 * 1024) {
       return null
     }
+    // The header JSON lives at byte 16; file contents start after it, at 8 + headerPickleSize.
     const headerBuffer = Buffer.alloc(headerStringSize)
     const dataStart = 8 + headerPickleSize
-    if (readSyncTo(fd, headerBuffer, headerStringSize, dataStart) < headerStringSize) {
+    if (readSyncTo(fd, headerBuffer, headerStringSize, 16) < headerStringSize) {
       return null
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: zcode app-server frames and provider responses own these payload shapes.
@@ -183,12 +184,12 @@ function runtimeEntryPath(command: string): string | null {
  * light up; npm-wrapper CLIs manage standalone accounts, refuse the push, and answer with
  * wrapper-specific protocol dialects, so they only serve as the fallback when no bundle exists.
  */
-export function zcodeBundledLaunch(pathEnv: string | null | undefined): {
+export async function zcodeBundledLaunch(pathEnv: string | null | undefined): Promise<{
   command: string
   prefixArgs: string[]
   args: string[]
   env: Record<string, string>
-} | null {
+} | null> {
   const runtimePath = findBundledZcodeRuntime()
   if (!runtimePath) {
     return null
@@ -197,7 +198,7 @@ export function zcodeBundledLaunch(pathEnv: string | null | undefined): {
   // The bundle's runtime needs a real Node (>= 22, with node:sqlite); Electron-as-Node cannot
   // resolve its @zcode/tui import and exits at boot. Report no bundled launch rather than start
   // one that cannot boot; the caller falls back to the resolved CLI.
-  const node = resolveSystemNode(pathEnv)
+  const node = await resolveSystemNode(pathEnv)
   if (!node) {
     return null
   }
@@ -210,41 +211,52 @@ export function zcodeBundledLaunch(pathEnv: string | null | undefined): {
 }
 
 /** The newest-shaped Node a chat backend can run under, exactly as the wrapper resolves its own. */
-function resolveSystemNode(pathEnv: string | null | undefined): string | null {
+async function resolveSystemNode(pathEnv: string | null | undefined): Promise<string | null> {
   const override = process.env.ZCODE_NODE?.trim()
-  if (override && isRunnableNode22(override)) {
+  if (override && (await runnableNode22(override))) {
     return override
   }
   for (const candidate of ['/opt/homebrew/bin/node', '/usr/local/bin/node']) {
-    if (isRunnableNode22(candidate)) {
+    if (await runnableNode22(candidate)) {
       return candidate
     }
   }
+  const executable = platform() === 'win32' ? 'node.exe' : 'node'
   for (const dir of (pathEnv ?? '').split(delimiter)) {
     if (!dir) {
       continue
     }
-    const candidate = join(dir, 'node')
-    if (isRunnableNode22(candidate)) {
+    const candidate = join(dir, executable)
+    if (await runnableNode22(candidate)) {
       return candidate
     }
   }
   return null
 }
 
-/** The bundle needs >= 22 for node:sqlite; probe `-v` so stale installs never win the pick. */
-function isRunnableNode22(candidate: string): boolean {
-  if (!existsSync(candidate)) {
-    return false
+/**
+ * The bundle needs >= 22 for node:sqlite; probe `-v` once per candidate and cache the verdict so
+ * repeated launches never re-run the (possibly slow) shim probe.
+ */
+function runnableNode22(candidate: string): Promise<boolean> {
+  const cached = node22Verdicts.get(candidate)
+  if (cached) {
+    return cached
   }
-  try {
-    const reported = execFileSync(candidate, ['-v'], { timeout: 5000 }).toString().trim()
-    const major = Number.parseInt(reported.replace(/^v/u, ''), 10)
-    return Number.isSafeInteger(major) && major >= 22
-  } catch {
-    return false
-  }
+  const verdict = runProcess({ program: candidate, args: ['-v'], timeoutMs: 5000 })
+    .then((result) => {
+      if (result.code !== 0) {
+        return false
+      }
+      const major = Number.parseInt(result.stdout.trim().replace(/^v/u, ''), 10)
+      return Number.isSafeInteger(major) && major >= 22
+    })
+    .catch(() => false)
+  node22Verdicts.set(candidate, verdict)
+  return verdict
 }
+
+const node22Verdicts = new Map<string, Promise<boolean>>()
 
 /** The resolved-CLI launch, used when no desktop bundle is installed. */
 export function zcodeCliLaunch(resolved: StructuredAgentCommand): {

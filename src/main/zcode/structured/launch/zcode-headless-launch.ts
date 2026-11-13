@@ -7,7 +7,10 @@ import {
   zcodeBundledLaunch,
   zcodeProviderEnv
 } from './zcode-runtime-resolution'
-import { ZCODE_APP_SERVER_ARGS } from './zcode-structured-launch-resolution'
+import {
+  ZCODE_APP_SERVER_ARGS,
+  ZCODE_INHERITED_ENV_KEEP
+} from './zcode-structured-launch-resolution'
 import { zcodeStructuredLaunchArgs } from './zcode-structured-launch-args'
 
 // The zcode launch a headless operation (catalog probe, conversation fork) runs: the same
@@ -19,16 +22,16 @@ export type ZcodeHeadlessLaunch = {
   env: Record<string, string>
 }
 
-export function zcodeHeadlessLaunch(
+export async function zcodeHeadlessLaunch(
   environment: NodeJS.ProcessEnv,
   overrides?: {
     commandSettings?: StructuredAgentCommandSettings
     launchArgs?: string[]
   }
-): ZcodeHeadlessLaunch {
+): Promise<ZcodeHeadlessLaunch> {
   const pathEnv = environment.PATH ?? environment.Path ?? null
   // Bundle first: a WSL host without the CLI must still reach the desktop bundle.
-  const bundled = zcodeBundledLaunch(pathEnv)
+  const bundled = await zcodeBundledLaunch(pathEnv)
   const resolved = bundled
     ? null
     : resolveStructuredAgentCommand('zcode', overrides?.commandSettings ?? {}, {
@@ -44,10 +47,11 @@ export function zcodeHeadlessLaunch(
       providerEnv.ZCODE_APP_VERSION = version
     }
   }
-  // A desktop parent's ZCODE_* variables flip the backend out of the protocol this speaks.
+  // A desktop parent's ZCODE_* variables flip the backend out of the protocol this speaks;
+  // the keep list matches the chat launch's so every backend sees the same secrets.
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries(environment)) {
-    if (value !== undefined && !(key.startsWith('ZCODE_') && key !== 'ZCODE_HOME')) {
+    if (value !== undefined && !(key.startsWith('ZCODE_') && !ZCODE_INHERITED_ENV_KEEP.has(key))) {
       env[key] = value
     }
   }

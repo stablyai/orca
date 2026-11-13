@@ -61,8 +61,12 @@ export class ZcodeStructuredPrompts {
     }
     const lane = this.deps.lane()
     if (!lane || !this.deps.admits()) {
-      // Nobody can answer during Stop or teardown; decline at once.
-      return Promise.resolve(presentation.reply(null))
+      // Nobody can answer during Stop or teardown; decline at once so the provider's request
+      // never waits on a client that cannot respond. No entry is registered, so answer()
+      // cannot double-send this frame.
+      const reply = presentation.reply(null)
+      this.deps.respond(frameId, reply)
+      return Promise.resolve(reply)
     }
     const key = `${method}:${JSON.stringify(frameId)}`
     const events: ProviderTimelineEvent[] = [

@@ -6,6 +6,7 @@ import {
 } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { isMissingProviderExecutable } from '../../../provider-process/provider-executable-missing'
+import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS } from '../../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import type {
   AgentModelCatalogLookup,
@@ -24,7 +25,12 @@ import {
   readZcodeBuiltinTable
 } from '../credentials/zcode-account-config-push'
 import type { ZcodeChatCredentials } from '../credentials/zcode-chat-credentials'
-import { readRecord, readString, readZcodeCatalogModelRows } from './zcode-model-catalog-rows'
+import {
+  readRecord,
+  readString,
+  readZcodeCatalogModelRows,
+  readZcodeLevelChoices
+} from './zcode-model-catalog-rows'
 
 export type ZcodeModelCatalogProbeDeps = {
   resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
@@ -61,7 +67,14 @@ export function createZcodeModelCatalogProbe(
     const environment = await deps.resolveEnvironment()
     assertStructuredAgentResolutionCurrent(operation)
     const workspace = cwd ?? requireLegacyAgentSessionAccountHome(accountHome).path ?? homedir()
-    const launch = await zcodeCatalogLaunch(environment, deps)
+    // A launch that never resolves (no bundle, no CLI) must surface as "not installed", not as a
+    // generic probe failure — the resolution throws outside the run loop's own mapping.
+    const launch = await zcodeCatalogLaunch(environment, deps).catch((error: unknown) => {
+      if (isAgentSessionPreSpawnError(error) && error.reason === 'cliMissing') {
+        throw new AgentModelCatalogUnavailableError({ reason: 'cliMissing' })
+      }
+      throw error
+    })
     return {
       identity: { command: launch.command, args: launch.args, cwd: workspace },
       run: async (
@@ -90,8 +103,12 @@ export function createZcodeModelCatalogProbe(
           let lastError: unknown = new Error('zcode catalog probe gave up before opening a session')
           while (Date.now() < deadline) {
             signal?.throwIfAborted()
-            const left = deadline - Date.now()
-            const timeout = { timeoutMs: left, onReply: () => signal?.throwIfAborted() }
+            // Each request re-reads the remaining budget: a slow earlier step must not spend
+            // the next one's time on top of its own.
+            const timeout = () => ({
+              timeoutMs: Math.max(1, deadline - Date.now()),
+              onReply: () => signal?.throwIfAborted()
+            })
             try {
               const table = readZcodeBuiltinTable(
                 launch.env.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE ?? null
@@ -102,14 +119,25 @@ export function createZcodeModelCatalogProbe(
                 deps.resolveChatCredentials()
               )
               // A refused push leaves only third-party models; advertising account ids the
-              // backend cannot select would fake a complete catalog.
+              // backend cannot select would fake a complete catalog. An unsettled push (storage
+              // still booting, a timeout) must not end the loop: the session/create below would
+              // succeed and publish a model-less "complete" catalog.
+              const pushSettled =
+                push.pushed ||
+                push.refusedStandaloneAccount ||
+                push.refusedUnsupported ||
+                table === null ||
+                deps.resolveChatCredentials() === null
+              if (!pushSettled) {
+                throw new Error('zcode account push did not land yet')
+              }
               declaredModels = push.pushed ? push.declaredModels : []
               assertStructuredAgentResolutionCurrent(runOperation)
               // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: zcode app-server frames and provider responses own these payload shapes.
               const created = (await connection.request(
                 'session/create',
                 { workspace: { workspacePath: workspace, workspaceKey: workspace } },
-                timeout
+                timeout()
               )) as { session?: unknown } | null
               const providerSessionId = readString(
                 readRecord(readRecord(created)?.session)?.sessionId
@@ -126,7 +154,7 @@ export function createZcodeModelCatalogProbe(
                   includeSnapshot: true,
                   afterSeq: 0
                 },
-                timeout
+                timeout()
               )) as { snapshot?: unknown } | null
               break
             } catch (error) {
@@ -146,13 +174,7 @@ export function createZcodeModelCatalogProbe(
           // The backend's available names only the live selection; the push's declared ids are
           // the plan's real menu, and the snapshot's thought level menu covers their efforts.
           const thought = readRecord(settings?.thoughtLevel)
-          const levelChoices = Array.isArray(thought?.available)
-            ? thought.available.flatMap((level) => {
-                const item = readRecord(level)
-                const value = readString(item?.value)
-                return value ? [{ value, label: readString(item?.label) ?? value }] : []
-              })
-            : []
+          const levelChoices = readZcodeLevelChoices(thought?.available)
           const models = readZcodeCatalogModelRows(model?.available, model?.current, {
             declaredModels,
             fallbackLevels: levelChoices
