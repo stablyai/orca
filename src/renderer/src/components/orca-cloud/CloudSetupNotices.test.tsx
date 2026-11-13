@@ -12,8 +12,11 @@ const { pushAccess, copyRequest } = vi.hoisted(() => ({
   copyRequest: vi.fn(async () => true)
 }))
 vi.mock('@/lib/orca-cloud/cloud-push-access', () => ({
-  fetchCloudPushAccess: pushAccess,
-  copyOwnerPushRequest: copyRequest
+  fetchCloudPushAccess: pushAccess
+}))
+// The shared request (owner-request.ts) reads the install link from repo access, then copies.
+vi.mock('@/lib/orca-cloud/use-orca-cloud-repo-access', () => ({
+  fetchOrcaCloudRepoAccess: async () => null
 }))
 vi.mock('@/store', () => ({
   useAppStore: (select: (state: unknown) => unknown) =>
@@ -116,12 +119,19 @@ describe('CloudSetupNoticesDock (DS-o, DS-q)', () => {
       repoUrl: 'https://github.com/acme/web',
       notices: [PUSH]
     })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { ui: { writeClipboardText: copyRequest } }
+    })
     render(<CloudSetupNoticesDock workspaceId="w1" />)
     await act(async () => {})
     const [, shown] = stack.show.mock.calls.at(-1) ?? []
     expect(shown.lines[0].action).toMatchObject({ label: 'Copy request for an owner' })
     await act(async () => shown.lines[0].action.onClick())
-    expect(copyRequest).toHaveBeenCalledWith('https://github.com/acme/web')
+    expect(copyRequest).toHaveBeenCalledWith(
+      expect.stringContaining('push from workspaces on this repository')
+    )
+    expect(copyRequest).toHaveBeenCalledWith(expect.stringContaining('acme/web'))
     const [, copied] = stack.show.mock.calls.at(-1) ?? []
     expect(copied.lines[0].action).toMatchObject({ label: 'Copied' })
   })

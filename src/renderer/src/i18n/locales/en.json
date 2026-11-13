@@ -28510,16 +28510,19 @@
       "diskVeryLowMeaning": "Installs and builds may fail. Delete caches or build output you don’t need.",
       "diskLowMeaning": "Large dependency installs may run out of space.",
       "pushRequested": "Orca Cloud can read {{repo}} but can’t push yet. An owner of {{owner}} has been asked to approve the Orca GitHub App.",
-      "copied": "Copied",
-      "copyRequest": "Copy request for an owner",
       "pushCantInstall": "Orca Cloud can read {{repo}} but can’t push to it.",
       "pushCantInstallMeaning": "Pushing needs the Orca GitHub App on {{owner}}. Ask an owner of {{owner}} to install it.",
-      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet.",
-      "pushRequestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to push from workspaces on this repository.",
-      "pushRequestCopyFailed": "Couldn’t copy it."
+      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet."
     },
     "toast": {
       "dismiss": "Dismiss"
+    },
+    "ownerRequest": {
+      "messagePush": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to push from workspaces on this repository.",
+      "messageStart": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to start workspaces from this repository.",
+      "copyFailed": "Couldn’t copy it.",
+      "copied": "Copied",
+      "copy": "Copy request for an owner"
     }
   },
   "runActions": {
@@ -29527,12 +29530,8 @@
       "askOwnerBody": "Ask an owner of {{owner}} to give Orca access. Orca tries again once they do. The sandbox was deleted.",
       "body": "The Orca GitHub App on {{owner}} doesn’t include this repository. Give Orca access, and Orca tries again. The sandbox was deleted.",
       "chooseAnother": "Choose another repository",
-      "copyRequest": "Copy request for an owner",
       "waiting": "Waiting for GitHub…",
-      "giveAccess": "Give Orca access",
-      "requestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to start workspaces from this repository.",
-      "requestCopyFailed": "Couldn’t copy it.",
-      "copied": "Copied"
+      "giveAccess": "Give Orca access"
     }
   },
   "renderer": {

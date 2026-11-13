@@ -5,6 +5,7 @@ import { Check, Copy, GitPullRequestArrow, Loader2, RefreshCw } from 'lucide-rea
 import type { Translate } from '@/i18n/use-translate'
 import { repoOwner, repoSlug } from '@/lib/orca-cloud/cloud-setup-notice-actions'
 import type { CloudPushAccess } from '@/lib/orca-cloud/cloud-push-access'
+import { ownerRequestLabel } from '@/lib/orca-cloud/owner-request'
 import type { CloudSetupNoticeLine } from './CloudSetupNotices'
 
 export type CloudPushLineHandlers = {
@@ -17,15 +18,13 @@ export type CloudPushLineHandlers = {
   rechecking?: boolean
 }
 
-/** Copy a request for an owner (pushRequestMessage), reading "Copied" for a moment after. */
+/** Copy a request for an owner (owner-request.ts), reading "Copied" for a moment after. */
 function copyRequestAction(
   h: CloudPushLineHandlers,
   t: Translate
 ): NonNullable<CloudSetupNoticeLine['action']> {
   return {
-    label: h.copied
-      ? t('orcaCloud.setupNotices.copied', 'Copied')
-      : t('orcaCloud.setupNotices.copyRequest', 'Copy request for an owner'),
+    label: ownerRequestLabel(h.copied === true, t),
     icon: h.copied ? <Check /> : <Copy />,
     run: h.copyRequest
   }
