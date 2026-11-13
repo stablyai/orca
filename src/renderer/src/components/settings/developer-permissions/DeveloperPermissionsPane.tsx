@@ -29,6 +29,10 @@ import {
 import { showDeveloperPermissionRequestNotice } from './developer-permission-request-notice'
 import { TerminalTccAttributionNotice } from './TerminalTccAttributionNotice'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import {
+  DEVELOPER_PERMISSIONS_OVERVIEW_ID,
+  getDeveloperPermissionSettingId
+} from './developer-permissions-search'
 
 type PermissionDefinition = {
   id: DeveloperPermissionId
@@ -311,6 +315,7 @@ export function DeveloperPermissionsPane(): React.JSX.Element {
     <div className="space-y-8">
       <TerminalTccAttributionNotice />
       <SettingsGroup
+        id={DEVELOPER_PERMISSIONS_OVERVIEW_ID}
         title={
           <span className="flex items-center gap-2">
             <ShieldCheck className="size-4" />
@@ -335,7 +340,7 @@ export function DeveloperPermissionsPane(): React.JSX.Element {
           const state = stateById.get(permission.id)
           const status = state?.status
           const pending = pendingId === permission.id
-          const settingId = `developer-permissions-${permission.id}`
+          const settingId = getDeveloperPermissionSettingId(permission.id)
 
           return (
             <div key={permission.id} data-settings-row="">

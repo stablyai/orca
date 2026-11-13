@@ -25,6 +25,7 @@ import { formatTimeAgo } from '../../../status-bar/tooltip'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 
 function formatUsageReading(usage: ProviderRateLimits, t: Translate = translate): string {
   return t('accounts.antigravity.usageReading', 'Session: {{session}} · Weekly: {{weekly}}', {
@@ -179,7 +180,7 @@ export function AntigravityAccountsSection({
   }
 
   return (
-    <div id="accounts-antigravity" className="scroll-mt-6">
+    <div id={ACCOUNTS_SECTION_IDS.antigravity} className="scroll-mt-6">
       <SettingsGroup
         title={
           <span className="flex items-center gap-2">

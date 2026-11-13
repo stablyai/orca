@@ -3,6 +3,7 @@ import { ChevronDown, Loader2, QrCode, RefreshCw } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'
 import { useSettingsTargetReveal } from '../../section-layout/settings-target-highlight'
+import { MOBILE_SETTING_ANCHORS } from '../mobile-pane-search'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -68,7 +69,7 @@ export function MobilePairingSetupSection({
   )
 
   const addressControls = (
-    <div className="space-y-2">
+    <div id={MOBILE_SETTING_ANCHORS.networkInterface} className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <NetworkInterfacePicker
           networkInterfaces={networkInterfaces}

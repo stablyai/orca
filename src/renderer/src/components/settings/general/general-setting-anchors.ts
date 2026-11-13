@@ -6,6 +6,7 @@ export const GENERAL_SETTING_ANCHORS = {
   nesting: 'general-workspace-nesting',
   worktrees: 'general-global-worktree-visibility',
   openIn: 'general-open-in-apps',
+  cliSkill: 'general-cli-skill',
   autoSave: 'general-auto-save',
   autoSaveDelay: 'general-editor-auto-save-delay',
   formatOnSave: 'general-editor-format-on-save',

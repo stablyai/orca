@@ -24,6 +24,7 @@ import {
 } from '../../form-controls/SettingsFormControls'
 import { ThemePicker } from './TerminalThemePicker'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { TERMINAL_THEME_MODE_SETTING_ID } from './terminal-theme-search'
 import { TerminalSettingsPreview } from '../appearance/TerminalSettingsPreview'
 import { WarpThemeImportButton } from './WarpThemeImportButton'
 import { YamlThemeImportButton } from './YamlThemeImportButton'
@@ -195,6 +196,7 @@ export function TerminalThemeCatalogSection({
         <div className={advancedContent ? 'border-b border-border/40' : undefined}>
           <div className="space-y-3">
             <SearchableSetting
+              id={TERMINAL_THEME_MODE_SETTING_ID}
               title={t('auto.components.settings.TerminalThemeSections.2318e07c68', 'Theme mode')}
               keywords={['terminal', 'theme', 'dark', 'light']}
               forceVisible

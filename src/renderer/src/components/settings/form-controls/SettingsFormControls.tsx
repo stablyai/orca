@@ -17,6 +17,7 @@ type SettingsRowProps = {
   className?: string
   labelId?: string
   alignTop?: boolean
+  id?: string
 }
 
 export function SettingsRow({
@@ -25,10 +26,12 @@ export function SettingsRow({
   control,
   className,
   labelId,
-  alignTop
+  alignTop,
+  id
 }: SettingsRowProps): React.JSX.Element {
   return (
     <div
+      id={id}
       data-settings-row=""
       className={cn(
         'flex gap-4',

@@ -8,6 +8,8 @@ type SettingsGroupProps = {
   children?: React.ReactNode
   className?: string
   bodyClassName?: string
+  /** Anchors the card, the same element a search for the group title lands on. */
+  id?: string
   onHeaderClick?: (event: React.MouseEvent<HTMLDivElement>) => void
 }
 
@@ -19,6 +21,7 @@ export function SettingsGroup({
   children,
   className,
   bodyClassName,
+  id,
   onHeaderClick
 }: SettingsGroupProps): React.JSX.Element {
   return (
@@ -32,6 +35,7 @@ export function SettingsGroup({
         />
       ) : null}
       <div
+        id={id}
         className={cn(
           // Search can filter out every row; hide the empty card but keep the header and its action.
           'overflow-hidden rounded-xl border border-border bg-card/50 px-5 shadow-xs has-[>[data-settings-group-body]:empty]:hidden',

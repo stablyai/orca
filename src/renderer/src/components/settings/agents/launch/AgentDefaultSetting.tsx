@@ -6,6 +6,7 @@ import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { AGENT_PERMISSIONS_SECTION_ID } from '../agents-search'
 
 function DefaultAgentPill({
   active,
@@ -104,7 +105,7 @@ export function AgentDefaultSetting({
           )
         })}
       </div>
-      <div data-settings-row="" className="py-3">
+      <div id={AGENT_PERMISSIONS_SECTION_ID} data-settings-row="" className="py-3">
         {permissions}
       </div>
     </SettingsGroup>
