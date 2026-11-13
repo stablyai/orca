@@ -164,6 +164,8 @@ export type PublicKnownRuntimeEnvironment = Omit<KnownRuntimeEnvironment, 'endpo
   hostKeyFingerprint?: string
   /** This server is a paired Orca Cloud workspace's sandbox (PAIRED-AWARE). */
   orcaCloudPaired?: true
+  /** The Orca account its pairing was made under; absent on pairings saved before LC-1. */
+  orcaCloudPairedAccountId?: string
 }
 
 /** `serverStop` only for a host whose owning service stops a server (a WSL host, E11). */

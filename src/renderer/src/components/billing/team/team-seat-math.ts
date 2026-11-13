@@ -48,13 +48,17 @@ export function proratedSeatCents(
 }
 
 export type InviteSeatImpact =
+  /** Billing didn't answer (disabled in this build, signed out or failed): no seat facts to show. */
+  | { kind: 'unknown' }
   | { kind: 'no-plan' }
   /** Every new invite fits in seats already paid this period. */
   | { kind: 'covered'; freeSeats: number }
   /** Seats will be added but the price or period isn't known (older billing service). */
-  | { kind: 'adds-seats-unpriced'; addedSeats: number }
+  | { kind: 'adds-seats-unpriced'; addedSeats: number; freeSeats: number }
   | {
       kind: 'adds-seats'
+      /** Paid seats not taken by a member or a pending invite. */
+      freeSeats: number
       /** How many of the new invites would add a seat when accepted. */
       addedSeats: number
       /** Seats already paid but unused that the first acceptances take for free. */
@@ -76,7 +80,10 @@ export function inviteSeatImpact(args: {
   now: number
 }): InviteSeatImpact {
   const { entitlement } = args
-  if (!entitlement || !isActivePlan(entitlement)) {
+  if (!entitlement) {
+    return { kind: 'unknown' }
+  }
+  if (!isActivePlan(entitlement)) {
     return { kind: 'no-plan' }
   }
   const pricing = seatPricing(entitlement)
@@ -87,10 +94,11 @@ export function inviteSeatImpact(args: {
     return { kind: 'covered', freeSeats }
   }
   if (!pricing || !entitlement.period) {
-    return { kind: 'adds-seats-unpriced', addedSeats }
+    return { kind: 'adds-seats-unpriced', addedSeats, freeSeats }
   }
   return {
     kind: 'adds-seats',
+    freeSeats,
     addedSeats,
     coveredSeats: Math.min(freeSeats, args.newInvites),
     proratedCentsEach: proratedSeatCents(pricing, entitlement.period, args.now),

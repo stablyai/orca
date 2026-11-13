@@ -13,6 +13,7 @@ import { TeamPageView } from './TeamPageView'
 import { createTeamFailureCopy, mutationFailureCopy } from './team-copy'
 import { clearTeamPageArrival, closeTeamPage, useTeamPageState } from './team-page-store'
 import { useOrgRoster } from './use-org-roster'
+import { leaveTeamConfirmation } from './team-leave'
 import { useTeamActions } from './use-team-actions'
 import { useTeamDelete } from './use-team-delete'
 import { TeamDeleteSection } from './TeamDeleteSection'
@@ -131,17 +132,7 @@ export function TeamPageBody({
       return
     }
     const name = cloud?.activeOrgName ?? t('auto.components.billing.team.thisTeam', 'this team')
-    void confirm({
-      title: t('auto.components.billing.team.leaveConfirmTitle', 'Leave {{value0}}?', {
-        value0: name
-      }),
-      description: t(
-        'auto.components.billing.team.leaveConfirmBody',
-        'You lose access to the team’s cloud workspaces and secrets right away. An owner or admin can invite you back.'
-      ),
-      confirmLabel: t('auto.components.billing.team.leaveCta', 'Leave team'),
-      confirmVariant: 'destructive'
-    }).then((accepted) => {
+    void confirm(leaveTeamConfirmation(name, t)).then((accepted) => {
       if (!accepted) {
         return
       }

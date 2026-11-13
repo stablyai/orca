@@ -1,15 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { ArrowRight, Check, Cloud, ExternalLink, UserPlus, X } from 'lucide-react'
+import { ArrowRight, Check, Cloud, UserPlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { OrcaBillingEntitlement } from '../../../../../shared/orca-billing'
-import { PaymentIssueNotice } from '../PaymentIssueNotice'
-import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
-import { billingPortalLink } from '../billing-link'
-import { PlanStatusBadge } from '../PlanStatusBadge'
 import { formatCents, perSeatMonthlyCents } from '../plans/plans-pricing'
 import { seatCountLabel } from './team-copy'
-import { isActivePlan, nextInvoiceEstimate } from './team-seat-math'
+import { nextInvoiceEstimate } from './team-seat-math'
 
 /** One-time confirmation after Checkout: tasteful, dismissible, with the obvious next steps. */
 export function TeamCheckoutCelebration({
@@ -106,19 +102,17 @@ function Stat({
   )
 }
 
-/** Seats in use vs paid, the plan, and the next invoice (an estimate before tax and overage). */
-export function TeamSeatsCard({
+/**
+ * The seat facts in Plan & billing: seats paid and in use, the per-seat price, the next invoice (an
+ * estimate before tax and overage) and the seat rule. Billing's numbers only; no price is shown
+ * when billing didn't send one.
+ */
+export function PlanSeatFacts({
   entitlement,
-  members,
-  busy,
-  onManageBilling,
-  onSeePlans
+  members
 }: {
   entitlement: OrcaBillingEntitlement
   members: number
-  busy: boolean
-  onManageBilling: () => void
-  onSeePlans: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
@@ -142,30 +136,12 @@ export function TeamSeatsCard({
       : t('auto.components.billing.team.seatsInUse', '{{value0}} in use', {
           value0: String(members)
         })
+  const billedLabel =
+    entitlement.interval === 'year'
+      ? t('auto.components.billing.annual', 'Annual')
+      : t('auto.components.billing.monthly', 'Monthly')
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-xs">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-medium">{entitlement.planLabel}</p>
-        <PlanStatusBadge entitlement={entitlement} />
-        <span className="flex-1" />
-        {entitlement.canManageBilling ? (
-          <>
-            <Button type="button" variant="outline" size="sm" onClick={onSeePlans}>
-              {t('auto.components.billing.team.usage', 'Usage & plan')}
-            </Button>
-            <OpenExternalSplitButton
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              link={billingPortalLink}
-              onClick={onManageBilling}
-            >
-              {t('auto.components.billing.manageBilling', 'Manage billing')}
-              <ExternalLink />
-            </OpenExternalSplitButton>
-          </>
-        ) : null}
-      </div>
+    <div className="space-y-2 border-t border-border/60 pt-3">
       <dl className="grid grid-cols-3 gap-4">
         <Stat
           label={t('auto.components.billing.team.seatsPaid', 'Seats paid')}
@@ -173,19 +149,15 @@ export function TeamSeatsCard({
           detail={seatsDetail}
         />
         <Stat
-          label={t('auto.components.billing.team.billing', 'Billing')}
+          label={t('auto.components.billing.team.perSeat', 'Per seat')}
           value={
-            entitlement.interval === 'year'
-              ? t('auto.components.billing.annual', 'Annual')
-              : t('auto.components.billing.monthly', 'Monthly')
-          }
-          detail={
             seatMonthlyCents === null
-              ? null
-              : t('auto.components.billing.team.perSeatPerMonth', '{{value0}} per seat per month', {
+              ? billedLabel
+              : t('auto.components.billing.team.perSeatMonthValue', '{{value0}}/mo', {
                   value0: formatCents(seatMonthlyCents, locale)
                 })
           }
+          detail={seatMonthlyCents === null ? null : billedLabel}
         />
         {invoice ? (
           <Stat
@@ -205,8 +177,8 @@ export function TeamSeatsCard({
       </dl>
       <p className="text-xs text-muted-foreground text-pretty">
         {t(
-          'auto.components.billing.team.seatRules',
-          'New members above your paid seats are charged now, prorated. Removed seats stay paid until renewal, and re-adding someone this period is free.'
+          'auto.components.billing.team.seatRulesShort',
+          'New members above your paid seats are charged now, prorated. Removed seats stay paid until renewal.'
         )}
       </p>
     </div>
@@ -267,36 +239,5 @@ export function TeamUpgradeCard({
         ) : null}
       </div>
     </section>
-  )
-}
-
-export function TeamBillingBlock({
-  entitlement,
-  members,
-  busy,
-  onManageBilling,
-  onSeePlans
-}: {
-  entitlement: OrcaBillingEntitlement
-  members: number
-  busy: boolean
-  onManageBilling: () => void
-  onSeePlans: () => void
-}): React.JSX.Element {
-  return (
-    <div className="space-y-3">
-      <PaymentIssueNotice entitlement={entitlement} busy={busy} onUpdatePayment={onManageBilling} />
-      {isActivePlan(entitlement) ? (
-        <TeamSeatsCard
-          entitlement={entitlement}
-          members={members}
-          busy={busy}
-          onManageBilling={onManageBilling}
-          onSeePlans={onSeePlans}
-        />
-      ) : (
-        <TeamUpgradeCard entitlement={entitlement} onSeePlans={onSeePlans} />
-      )}
-    </div>
   )
 }

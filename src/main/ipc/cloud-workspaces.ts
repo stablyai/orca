@@ -23,6 +23,7 @@ import type { RemovedServerStore } from './runtime-environments/runtime-environm
 import {
   CloudEnvironmentId as EnvironmentId,
   createCloudWorkspacesPairings,
+  readActiveAccountBindings,
   STARTUP_PRUNE_DELAY_MS
 } from './cloud-workspaces-pairings'
 
@@ -148,7 +149,7 @@ const INVALID = { ok: false as const, error: 'invalid_request' }
 export function registerCloudWorkspacesHandlers(
   options: { removedServerStore?: RemovedServerStore } = {}
 ): void {
-  const { prune, readBindings, updateBindings, settleDeleted } = createCloudWorkspacesPairings(
+  const { prune, updateBindings, settleDeleted } = createCloudWorkspacesPairings(
     getService,
     options.removedServerStore
   )
@@ -254,7 +255,8 @@ export function registerCloudWorkspacesHandlers(
     'cloudWorkspaces:localWorkspaces',
     async () => (await getService())?.localWorkspaces() ?? []
   )
-  handle('cloudWorkspaces:environmentBindings', () => readBindings())
+  // A window resolves only the active account's pairings (PAIRED-ACCOUNT-FILTER).
+  handle('cloudWorkspaces:environmentBindings', () => readActiveAccountBindings())
   handle('cloudWorkspaces:bindEnvironment', async (args) => {
     const parsed = z
       .object({

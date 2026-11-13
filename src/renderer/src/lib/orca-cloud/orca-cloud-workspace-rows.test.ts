@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { CloudWorkspaceSnapshot } from './orca-cloud-workspace-store'
-import { isCloudStatusRow, isPairedCloudStatusRow } from './orca-cloud-workspace-rows'
+import {
+  isArchivedCloudStatus,
+  isCloudStatusRow,
+  isPairedCloudStatusRow
+} from './orca-cloud-workspace-rows'
 
 const snapshot = (ids: string[], paired: Record<string, string>): CloudWorkspaceSnapshot =>
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the checks read only ids and paired.
@@ -20,5 +24,19 @@ describe('PAIRED-CHROME row checks', () => {
     expect(isPairedCloudStatusRow(s, 'both')).toBe(false)
     expect(isPairedCloudStatusRow(s, 'toString')).toBe(false)
     expect(isCloudStatusRow(s, 'toString')).toBe(false)
+  })
+})
+
+describe('ARCHIVED-DEAD-ACTIONS archived status', () => {
+  it('archived by state or by an archive record; anything else is not', () => {
+    const status = (fields: { state: string; archive: { archivedAt: number } | null }) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only state and archive.
+      fields as never
+    expect(isArchivedCloudStatus(status({ state: 'archived', archive: null }))).toBe(true)
+    expect(isArchivedCloudStatus(status({ state: 'sleeping', archive: { archivedAt: 1 } }))).toBe(
+      true
+    )
+    expect(isArchivedCloudStatus(status({ state: 'ready', archive: null }))).toBe(false)
+    expect(isArchivedCloudStatus(null)).toBe(false)
   })
 })
