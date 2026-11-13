@@ -106,25 +106,12 @@ function layOutRunBox(): void {
   vi.spyOn(Element.prototype, 'scrollTop', 'get').mockImplementation(function (this: Element) {
     return scrollTops.get(this) ?? 0
   })
-  // A browser reports a changed offset with one scroll event on the next frame, as the window's observer expects.
-  const reporting = new WeakSet<Element>()
   vi.spyOn(Element.prototype, 'scrollTop', 'set').mockImplementation(function (
     this: Element,
     value: number
   ) {
     const max = this instanceof HTMLElement ? Math.max(0, this.scrollHeight - this.clientHeight) : 0
-    const next = Math.min(Math.max(0, value), max)
-    if (next === (scrollTops.get(this) ?? 0)) {
-      return
-    }
-    scrollTops.set(this, next)
-    if (!reporting.has(this)) {
-      reporting.add(this)
-      requestAnimationFrame(() => {
-        reporting.delete(this)
-        this.dispatchEvent(new Event('scroll'))
-      })
-    }
+    scrollTops.set(this, Math.min(Math.max(0, value), max))
   })
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const scroller = box(this)
