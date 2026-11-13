@@ -25,7 +25,7 @@ async function isStaleToken(response: Response): Promise<boolean> {
 
 export function createHostedSandboxDeviceEnroller(
   config: HostedSandboxConfig,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = config.fetch ?? fetch
 ): OrcaCloudDeviceEnroller {
   async function token(): Promise<string> {
     try {

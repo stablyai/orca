@@ -124,7 +124,8 @@ export function registerCloudShareHandlers(
     ? createHostedSandboxShareClient(
         createHostedSandboxRequest({
           baseUrl: config.controlPlaneUrl,
-          getAccessToken: config.getAccessToken
+          getAccessToken: config.getAccessToken,
+          fetch: config.fetch
         })
       )
     : null

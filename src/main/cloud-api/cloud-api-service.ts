@@ -49,6 +49,7 @@ function resolveClient(): { client: CloudApiClient; controlPlaneUrl: string } | 
     client: createCloudApiClient({
       controlPlaneUrl: config.controlPlaneUrl,
       getAccessToken: () => config.getAccessToken(),
+      fetchImpl: config.fetch,
       classifyTokenError
     })
   }
