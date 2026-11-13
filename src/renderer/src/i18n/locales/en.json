@@ -1702,7 +1702,6 @@
       "keywordScim": "scim",
       "keywordCompliance": "compliance",
       "description": "Single sign-on, sign-in policies and the audit log for your team.",
-      "bannerTitle": "Single sign-on and the audit log are part of {{plan}}",
       "bannerBody": "Talk to us about moving your team to {{plan}}.",
       "contactUs": "Contact us",
       "scim": {
