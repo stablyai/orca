@@ -251,6 +251,21 @@ export function githubPlaceholderHeaders(row: SandboxRow): string[] {
   return [`Bearer ${token}`, `token ${token}`]
 }
 
+/**
+ * The preset a policy write actually uses. Open egress needs EGRESS_PROXY_URL outside local/test: without it the
+ * git installation token would sit in a Vercel transform rule under "*" (E3 review F1), so a deployed env missing
+ * the proxy URL falls back to limited, loudly, on every policy write.
+ */
+export function effectiveEgressPreset(deps: Pick<LifecycleDeps, 'config'>, row: Pick<SandboxRow, 'id'>): EgressPreset {
+  const preset = deps.config.egressPreset ?? DEFAULT_EGRESS_PRESET
+  if (preset === 'open' && !deps.config.egressProxyUrl && !LOCAL_ENVIRONMENTS.has(deps.config.environment)) {
+    console.error(JSON.stringify({ event: 'egress_open_without_proxy', sandboxId: row.id, environment: deps.config.environment, applied: 'limited' }))
+    return 'limited'
+  }
+  return preset
+}
+const LOCAL_ENVIRONMENTS = new Set(['local', 'test'])
+
 export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: string, memberPlaceholders: readonly string[] = []) {
   const proxyUrl = deps.config.egressProxyUrl
   const gitPlaceholder = gitBasicAuthorization(githubPlaceholderToken(row))
@@ -314,7 +329,7 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
       ]
     : []
   const all = [...git, ...credentials]
-  if ((deps.config.egressPreset ?? DEFAULT_EGRESS_PRESET) === 'open') {
+  if (effectiveEgressPreset(deps, row) === 'open') {
     // Every host is reachable; the credential claims (and their trailing 403s) still apply.
     return compileNetworkPolicy({ mode: 'open', credentials: all })
   }
