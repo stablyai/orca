@@ -1,4 +1,4 @@
-import { showClientCreationActionError } from '@/lib/client-creation-action-error'
+import { showClientCreationActionError } from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/browser/creation/web-runtime-browser-creation'
 import { useAppStore } from '@/store/index'
