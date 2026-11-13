@@ -20,6 +20,7 @@ function cloudOnly(
     repos: [],
     showMore: null,
     retryRepos: null,
+    retryingRepos: false,
     ...overrides,
     picked: null,
     folderProject: false,
@@ -136,7 +137,44 @@ describe("GitHub's list couldn't be read (GH-LIST-MISSING)", () => {
     })
     await user.click(screen.getByRole('combobox', { name: 'Project' }))
     expect(await screen.findByText('Couldn’t load GitHub repositories.')).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await user.click(screen.getByRole('option', { name: 'Retry' }))
     expect(retry).toHaveBeenCalledOnce()
+  })
+
+  it('the arrow keys land on Retry like a row, and Enter runs it', async () => {
+    const user = userEvent.setup()
+    const retry = vi.fn()
+    renderSection(ORCA_CLOUD_RECIPE_ID, vi.fn(), 'idle', () => {}, {
+      repos: null,
+      retryRepos: retry
+    })
+    await user.click(screen.getByRole('combobox', { name: 'Project' }))
+    await screen.findByRole('option', { name: 'Retry' })
+    // No projects here: the first rows are Retry, then Add project.
+    for (
+      let i = 0;
+      i < 3 &&
+      screen.getByRole('option', { name: 'Retry' }).getAttribute('aria-selected') !== 'true';
+      i++
+    ) {
+      await user.keyboard('{ArrowDown}')
+    }
+    expect(screen.getByRole('option', { name: 'Retry' }).getAttribute('aria-selected')).toBe('true')
+    await user.keyboard('{Enter}')
+    expect(retry).toHaveBeenCalledOnce()
+  })
+
+  it("while it reads again, Loading… replaces Retry and can't be pressed twice", async () => {
+    const user = userEvent.setup()
+    const retry = vi.fn()
+    renderSection(ORCA_CLOUD_RECIPE_ID, vi.fn(), 'idle', () => {}, {
+      repos: null,
+      retryRepos: retry,
+      retryingRepos: true
+    })
+    await user.click(screen.getByRole('combobox', { name: 'Project' }))
+    await user.click(await screen.findByRole('option', { name: 'Loading…' }))
+    expect(screen.queryByRole('option', { name: 'Retry' })).toBeNull()
+    expect(retry).not.toHaveBeenCalled()
   })
 })

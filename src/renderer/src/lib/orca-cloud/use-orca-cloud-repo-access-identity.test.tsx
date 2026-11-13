@@ -63,6 +63,12 @@ afterEach(() => {
 
 it('keys identity by account and team, and is empty while signed out', () => {
   expect(orcaCloudIdentityKey(connected('o1'))).not.toBe(orcaCloudIdentityKey(connected('o2')))
+  // GH-LIST-MISSING: an owner → member → owner switch on the same team reads team answers again.
+  const asRole = (role: string): OrcaProfileAuthStatus => ({
+    ...connected('o1'),
+    organizations: [{ orgId: 'o1', name: 'Team', role }]
+  })
+  expect(orcaCloudIdentityKey(asRole('owner'))).not.toBe(orcaCloudIdentityKey(asRole('member')))
   expect(orcaCloudIdentityKey(signedOut)).toBe('')
   expect(orcaCloudIdentityKey(null)).toBe('')
 })

@@ -124,6 +124,8 @@ export function useOrcaCloudGitHubRepositories(
   showMore: (() => void) | null
   /** GitHub's list couldn't be read: the picker says so with Retry instead of hiding the section. */
   unavailable: boolean
+  /** A Retry is reading the list now: the picker shows Loading… instead of a second Retry. */
+  retrying: boolean
   retry: () => void
 } {
   const repos = useAppStore((s) => s.repos)
@@ -134,6 +136,8 @@ export function useOrcaCloudGitHubRepositories(
   } | null>(null)
   const [moreRequests, setMoreRequests] = useState(0)
   const [retries, setRetries] = useState(0)
+  // The retry count the last answer settled; behind `retries` while a Retry reads.
+  const [settledRetries, setSettledRetries] = useState(0)
   const current = answer?.identity === identity ? answer.listing : null
   const listing = current === 'unavailable' ? null : current
   useEffect(() => {
@@ -144,6 +148,7 @@ export function useOrcaCloudGitHubRepositories(
     void loadRepositories(identity, moreRequests > 0).then((value) => {
       if (!cancelled) {
         setAnswer({ identity, listing: value })
+        setSettledRetries(retries)
       }
     })
     return () => {
@@ -166,6 +171,7 @@ export function useOrcaCloudGitHubRepositories(
     repos: visible,
     showMore: enabled && listing?.nextCursor ? showMore : null,
     unavailable: enabled && current === 'unavailable',
+    retrying: enabled && retries !== settledRetries,
     retry
   }
 }

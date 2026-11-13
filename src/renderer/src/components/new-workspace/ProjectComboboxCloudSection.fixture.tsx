@@ -12,7 +12,9 @@ const repos = [
   { fullName: 'octocat/Hello-World', private: false }
 ] as OrcaCloudGitHubRepository[]
 
-function section(options: { tooltip?: boolean; current?: string; unavailable?: boolean } = {}) {
+function section(
+  options: { tooltip?: boolean; current?: string; unavailable?: boolean; retrying?: boolean } = {}
+) {
   return defineFixture({
     width: 640,
     render: () => (
@@ -27,7 +29,7 @@ function section(options: { tooltip?: boolean; current?: string; unavailable?: b
             onArm={noop}
             onCommit={noop}
             showMoreAccess
-            onRetry={noop}
+            retry={{ retry: noop, retrying: options.retrying === true }}
           />
         </div>
       </div>
@@ -52,3 +54,4 @@ export const mixed = section({ current: 'stablyai/orca' })
 export const badgeTooltip = section({ tooltip: true })
 /** GH-LIST-MISSING: GitHub's list couldn't be read; the section stays, with Retry. */
 export const unavailable = section({ unavailable: true })
+export const unavailableRetrying = section({ unavailable: true, retrying: true })

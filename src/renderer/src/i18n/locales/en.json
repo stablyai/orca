@@ -23933,7 +23933,8 @@
         "noNewRepositoryYet": "No new repository yet.",
         "checkAgain": "Check again",
         "reposUnavailable": "Couldn’t load GitHub repositories.",
-        "retryRepos": "Retry"
+        "retryRepos": "Retry",
+        "reposLoading": "Loading…"
       },
       "agentLabel": "Agent"
     },

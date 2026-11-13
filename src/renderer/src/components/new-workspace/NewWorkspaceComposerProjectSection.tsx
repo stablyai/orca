@@ -225,7 +225,11 @@ export function NewWorkspaceComposerProjectSection({
               }}
               onMoreCloudAccess={cloudOnly?.moreAccess}
               onShowMoreCloudRepos={cloudOnly?.showMore ?? null}
-              onRetryCloudRepos={cloudOnly?.retryRepos ?? null}
+              cloudReposRetry={
+                cloudOnly?.retryRepos
+                  ? { retry: cloudOnly.retryRepos, retrying: cloudOnly.retryingRepos }
+                  : null
+              }
               placeholder={
                 projectPlaceholder ??
                 t('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')

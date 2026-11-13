@@ -1,3 +1,4 @@
+import type { CloudReposRetry } from './ProjectComboboxCloudUnavailable'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
 import type { ProjectComboboxAddProjectMenu } from './ProjectComboboxAddProjectOption'
@@ -22,7 +23,7 @@ export type ProjectComboboxProps = {
   /** Present while GitHub has more repositories than are listed. */
   onShowMoreCloudRepos?: (() => void) | null
   /** GH-LIST-MISSING: GitHub's list couldn't be read; the section says so with Retry. */
-  onRetryCloudRepos?: (() => void) | null
+  cloudReposRetry?: CloudReposRetry | null
   /** Bumped to open the list at its cloud-only section ("Choose a GitHub repository"). */
   openSignal?: number
   /**
