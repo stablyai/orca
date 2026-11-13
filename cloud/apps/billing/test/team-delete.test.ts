@@ -96,6 +96,20 @@ describe('EP-10: deleting a team whose plan is already set to end', () => {
     expect(await cancelNow(h)).toEqual({ status: 200, body: { canceled: true } })
   })
 
+  it('refuses (409) a plan resumed after the delete check, even before its webhook lands', async () => {
+    const h = await createHarness({ MEMBERSHIP_SYNC_TOKEN: MEMBERSHIP_TOKEN })
+    const { subscription } = await team(h)
+    subscription.cancel_at_period_end = true
+    await h.webhook(stripeEvent('customer.subscription.updated', subscription))
+    const view = await h.call('GET', '/v1/internal/accounts/org:o1/subscription', { headers: { authorization: `Bearer ${MEMBERSHIP_TOKEN}` } })
+    expect(view.body.cancelling).toBe(true)
+    // The owner resumes in the portal; no webhook delivered yet.
+    subscription.cancel_at_period_end = false
+    expect(await cancelNow(h)).toEqual({ status: 409, body: { error: 'not_cancelling' } })
+    expect(h.stripe.cancelParams).toEqual([])
+    expect(h.stripe.subscriptions.get(subscription.id)!.status).toBe('active')
+  })
+
   it('refuses (502) and changes nothing when Stripe fails', async () => {
     const h = await createHarness({ MEMBERSHIP_SYNC_TOKEN: MEMBERSHIP_TOKEN })
     const { subscription } = await team(h)

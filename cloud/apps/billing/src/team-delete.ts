@@ -48,10 +48,18 @@ export async function cancelTeamSubscriptionNow(
   accountId: string,
   now: number
 ): Promise<CancelNowOutcome> {
-  const subscription = await currentSubscription(env.BILLING_DB, accountId)
-  if (!subscription) {
+  const stored = await currentSubscription(env.BILLING_DB, accountId)
+  if (!stored) {
     return { ok: false, status: 404, error: 'no_subscription' }
   }
+  // Decide on Stripe's live state, not the mirror: the owner may have resumed the plan after auth's
+  // delete check, and that webhook may not have landed yet. A resumed plan is never canceled here.
+  try {
+    await resyncSubscription(env, stripe, stored, now)
+  } catch {
+    return { ok: false, status: 502, error: 'stripe_unavailable' }
+  }
+  const subscription = (await currentSubscription(env.BILLING_DB, accountId)) ?? stored
   if (!OPEN_STATUSES.has(subscription.status)) {
     return { ok: true, canceled: true }
   }
