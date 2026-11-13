@@ -8,7 +8,7 @@ import {
 import { readJournalSqlPoint } from './journal-sql-point-read'
 import { journalSqlReads } from './journal-sql-reads'
 import { insertJournalDomainQueueRow } from './journal-domain-queue-rows'
-import { resolveChatAutomationRun } from '../../automations/automation-chat-run-observation'
+import { resolveChatAutomationRun } from '../../automations/observation/automation-chat-run-observation'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const cleanup: (() => void)[] = []

@@ -1,7 +1,7 @@
 import { hostQualifiedRepoSelector } from '../../workspaces/catalog/runtime-repo-selector'
 import { RUNTIME_AUTOMATION_PATCH_KEYS } from './runtime-automation-patch-keys'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import type { AutomationService } from '../../../automations/service'
+import type { AutomationService } from '../../../automations/automation-service'
 import type {
   Automation,
   AutomationUpdateInput
@@ -18,7 +18,7 @@ import type {
   AutomationOwnerPrecondition,
   AutomationDestination
 } from '../../../../shared/automations/ownership/automation-owner-precondition'
-import { runAutomationNowFenced } from '../../../automations/refused-manual-run'
+import { runAutomationNowFenced } from '../../../automations/dispatch/refused-manual-run'
 import { paginateAutomationRuns } from '../../../../shared/automations/history/automation-run-cursor'
 import { hasRuntimeAutomationUpdateValue } from './runtime-automation-update-value'
 import {

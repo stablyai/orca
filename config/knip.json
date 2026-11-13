@@ -13,6 +13,7 @@
     "src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts",
     "src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts",
     "src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts",
+    "src/main/agent-hooks/identity/agent-identity-worker-entry.ts",
     "src/main/ports/port-scan-command-worker-entry.ts",
     "src/main/plugins/panels/plugin-source-transpile-worker-entry.ts",
     "src/main/worker-thread-child-process/worker-thread-child-process-entry.ts",

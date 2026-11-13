@@ -5,7 +5,7 @@ import { isGeneratedId } from '../../../../orchestration/db/generated-id'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { FederationRelayItemRow } from '../../../../orchestration/db/orchestration-records'
 import { resolveBareOrchestrationRecipient } from '../messaging/recipient-routing'
-import { mayNameSession } from '../messaging/session-recipient'
+import { prepareSessionRecipient } from '../messaging/session-recipient'
 import { waitForPeerMail } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
 import {
   PeerMailAckParams,
@@ -97,11 +97,14 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         )
       }
       // A retry after a lost answer is acknowledged even if the recipient has since gone.
-      const delivered = db.getPeerMailMessage(params.messageId)
-      if (delivered) {
-        const conversation = db.getPeerMailConversation(delivered.conversation_id)
+      const delivered = (): { message: { id: string; to: string } } | null => {
+        const message = db.getPeerMailMessage(params.messageId)
+        if (!message) {
+          return null
+        }
+        const conversation = db.getPeerMailConversation(message.conversation_id)
         if (
-          delivered.conversation_id !== params.conversationId ||
+          message.conversation_id !== params.conversationId ||
           conversation?.peer_fingerprint !== peerFingerprint
         ) {
           throw new OrchestrationError(
@@ -112,11 +115,23 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         }
         return { message: { id: params.messageId, to } }
       }
-      if (mayNameSession(to)) {
-        // Recipient routing reads the session record store, which the host opens lazily.
-        await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+      // A replay needs no routing, so it never waits on the recipient's preparation.
+      const replayed = delivered()
+      if (replayed) {
+        return replayed
       }
-      const recipient = resolveBareOrchestrationRecipient({ runtime, db, handle: to })
+      const terminalRecipient = await prepareSessionRecipient(runtime, to)
+      // Read again after the wait: a copy of this delivery may have landed meanwhile.
+      const landed = delivered()
+      if (landed) {
+        return landed
+      }
+      const recipient = resolveBareOrchestrationRecipient({
+        runtime,
+        db,
+        handle: to,
+        terminalRecipient
+      })
       if (!recipient.ok) {
         throw new OrchestrationError(
           recipient.code,

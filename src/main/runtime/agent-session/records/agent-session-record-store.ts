@@ -135,6 +135,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     return [...(this.clearedFrom.predecessors.get(sessionId) ?? [])]
   }
   lineageRevision = (): object => this.transactions.lineageRevision()
+  providerAliasOwner = (nativeId: string) => this.transactions.providerAliasOwner(nativeId)
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
   requireWritableRecord = (sessionId: string) =>

@@ -26,7 +26,11 @@ const GIT_DERIVED_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'unknown-base'
 ])
 
-const GIT_DERIVED_REASONS: ReadonlySet<WorkspaceCleanupReason> = new Set(['merged', 'unchanged'])
+const GIT_DERIVED_REASONS: ReadonlySet<WorkspaceCleanupReason> = new Set([
+  'merged',
+  'unchanged',
+  'orchestration-worker'
+])
 
 export function needsWorkspaceCleanupGitEvidence(
   filters: WorkspaceCleanupFilterState,

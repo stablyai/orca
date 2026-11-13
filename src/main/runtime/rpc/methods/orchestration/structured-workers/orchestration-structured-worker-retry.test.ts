@@ -19,8 +19,8 @@ import {
   createStructuredWorkerSession,
   releaseStructuredWorkerSession
 } from './orchestration-structured-worker-session'
-import { deliverWorkerDispatchPreamble } from '../worker/deliver-worker-dispatch-preamble'
-import { tearDownFailedWorkerStart } from '../worker/failed-worker-start-teardown'
+import { deliverWorkerDispatchPreamble } from '../worker/start/readiness/deliver-worker-dispatch-preamble'
+import { tearDownFailedWorkerStart } from '../worker/start/readiness/failed-worker-start-teardown'
 import { structuredWorkerIdentities } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { rpcContext, runtimeStub } from '../../agent-launch/agent-launch.test-fixture'
 

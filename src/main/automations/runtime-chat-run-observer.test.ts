@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
-import { observeAutomationChatRun } from './runtime-chat-run-observer'
+import { observeAutomationChatRun } from './observation/runtime-chat-run-observer'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createQueuedMessageTestRig } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import { eventually } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
@@ -12,7 +12,7 @@ import {
   hostTestMessage
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { automationRunOperationId } from './automation-run-operation'
+import { automationRunOperationId } from './launch/automation-run-operation'
 
 const mocks = vi.hoisted(() => {
   const hostState: { actualHost: StructuredAgentSessionHost | null } = { actualHost: null }

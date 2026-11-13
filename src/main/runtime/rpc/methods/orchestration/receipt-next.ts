@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { projectWorkerListFleet } from './worker/worker-list-projection'
+import { projectWorkerListFleet } from './worker/fleet/worker-list-projection'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 
 // Only an empty check sees the whole mailbox, so only it says to stop.

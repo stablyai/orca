@@ -1292,6 +1292,7 @@ def handshake_response():
             "actions": {
                 "click": True,
                 "typeText": True,
+                "typeTextElement": True,
                 "pressKey": True,
                 "hotkey": has_hotkey,
                 "pasteText": has_clipboard,
@@ -1752,8 +1753,12 @@ def text_selection(text):
 
 
 def insert_focused_text(window, value):
-    # Why: EditableText needs no window focus and still works on Wayland, where key synthesis is a no-op.
     node = first_descendant(window, lambda candidate: has_state(candidate, Atspi.StateType.FOCUSED))
+    return insert_text(node, value, "focusedText")
+
+
+def insert_text(node, value, verified_property):
+    # Why: EditableText needs no window focus and still works on Wayland, where key synthesis is a no-op.
     if node is None or not has_state(node, Atspi.StateType.EDITABLE):
         return None
     editable = attempt(node.get_editable_text_iface)
@@ -1786,8 +1791,23 @@ def insert_focused_text(window, value):
                 or attempt(lambda: Atspi.Text.get_caret_offset(text)) != caret):
             raise RuntimeError("text_caret_unconfirmed: text was inserted but caret movement did not confirm success; inspect state before retrying")
     action = {"path": "accessibility", "actionName": "insertText", "fallbackReason": None}
-    if attempt(lambda: Atspi.Text.get_text(text, start, caret)) == value:
-        action["verification"] = {"state": "verified", "property": "focusedText"}
+    readback = attempt(lambda: Atspi.Text.get_text(text, start, caret))
+    if readback == value:
+        action["verification"] = {"state": "verified", "property": verified_property}
+    else:
+        reason = "readback_unsupported" if readback is None else "accessibility_action_unasserted"
+        action["verification"] = {"state": "unverified", "reason": reason}
+    return action
+
+
+def insert_element_text(node, saved, value):
+    index = saved.get("index")
+    if node is None:
+        raise RuntimeError(f"element {index} changed since the last snapshot; run get-app-state again and use a fresh element index")
+    action = insert_text(node, value, "elementText")
+    # Why: typing at focus instead would put the text in whatever field has focus, not the requested one.
+    if action is None:
+        raise RuntimeError(f"element {index} text is not settable; click it, then run type-text without --element-index")
     return action
 
 
@@ -1950,7 +1970,10 @@ def run_operation(operation):
         action = {"path": "synthetic", "actionName": "drag", "fallbackReason": None}
     elif tool == "type_text":
         text = require_non_empty_string(operation.get("text"), "text")
-        action = insert_focused_text(window, text)
+        if saved:
+            action = insert_element_text(node, saved, text)
+        else:
+            action = insert_focused_text(window, text)
         if action is None:
             require_keyboard_focus(window, operation)
             type_text(text, window)

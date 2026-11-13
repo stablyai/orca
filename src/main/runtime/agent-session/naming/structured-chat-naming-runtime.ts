@@ -71,8 +71,8 @@ export function structuredChatNamingDeps(
       })
       const useChatAgent = !recipe.agentId && !recipe.agentArgs?.trim()
       const log = { scope: 'conversation-name', sessionId: record.sessionId }
-      // Copilot saves every run, so a naming run would sit in the user's Copilot history.
-      if (useChatAgent && record.provider === 'copilot') {
+      // These save every CLI run, so a naming run would sit in the user's own history.
+      if (useChatAgent && (record.provider === 'copilot' || record.provider === 'kimi')) {
         return null
       }
       if (useChatAgent && (record.provider === 'grok' || record.provider === 'antigravity')) {

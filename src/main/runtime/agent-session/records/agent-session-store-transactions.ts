@@ -1,3 +1,4 @@
+import { AgentSessionProviderAliasIndex } from './agent-session-provider-alias-index'
 import {
   applyAgentSessionStoreCommand,
   type AgentSessionStoreCommand,
@@ -10,8 +11,7 @@ import type {
   JournalReceiptStage,
   JournalStagedReceipt
 } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
-import { journalOpenRefusalError } from '../../../native-chat/agent-session-journal/replay/journal-open-failure'
-import { AgentSessionJournalError } from '../../../native-chat/agent-session-journal/writing/journal-write-guards'
+import { assertJournalChatReadable } from '../../../native-chat/agent-session-journal/replay/journal-open-failure'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { CommandReceiptScope } from '../../../native-chat/agent-session-journal/writing/command-receipt-schema'
 import {
@@ -43,15 +43,6 @@ import {
   notifyAgentSessionStoreCacheChanges
 } from './agent-session-store-cache'
 
-function readOnlyStoreRefusal(): Error {
-  return journalOpenRefusalError(
-    new AgentSessionJournalError(
-      'journal_read_only',
-      'the chat records were saved by a newer Orca; this host reads them and never writes'
-    )
-  )
-}
-
 export class AgentSessionStoreTransactions {
   private queue: Promise<unknown> = Promise.resolve()
   // Reads/reopens do not admit work; a count survives handle eviction without replaying history.
@@ -64,6 +55,7 @@ export class AgentSessionStoreTransactions {
   senderIdentityRevision = 0
   /** Lineage survives admission and lease writes; membership and committed clear invalidate it. */
   private lineage: object = {}
+  private providerAliases: AgentSessionProviderAliasIndex | null = null
   private readonly receiptCommits = new WeakMap<
     JournalReceiptStage,
     { remaining: number; results: (readonly JournalWriterEffectResult[])[]; failed: boolean }
@@ -98,6 +90,11 @@ export class AgentSessionStoreTransactions {
 
   lineageRevision(): object {
     return this.lineage
+  }
+
+  providerAliasOwner(nativeId: string): string | null {
+    this.providerAliases ??= new AgentSessionProviderAliasIndex(this.published)
+    return this.providerAliases.owner(nativeId)
   }
 
   get readOnly(): boolean {
@@ -141,9 +138,7 @@ export class AgentSessionStoreTransactions {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: executeMutation preserves the command/result correlation enforced by its typed public entry points.
         return result as T
       }
-      if (this.readOnly) {
-        throw readOnlyStoreRefusal()
-      }
+      assertJournalChatReadable(this.readOnly)
       const [result] = await this.journalDatabase.effects([
         {
           kind: 'store',
@@ -170,9 +165,7 @@ export class AgentSessionStoreTransactions {
   ): JournalOperationReceipt & Required<Pick<JournalOperationReceipt, 'stage'>> {
     return {
       stage: async (context): Promise<JournalStagedReceipt> => {
-        if (this.readOnly) {
-          throw readOnlyStoreRefusal()
-        }
+        assertJournalChatReadable(this.readOnly)
         const input = typeof mutation === 'function' ? mutation() : mutation
         const admitted = context.row === 'submission' ? submissionSessionId : undefined
         const effective =
@@ -304,6 +297,11 @@ export class AgentSessionStoreTransactions {
         adopt()
       } else {
         this.published = draft
+      }
+      if (published.unreadableRecords !== draft.unreadableRecords) {
+        this.providerAliases = null
+      } else {
+        this.providerAliases?.applyCommitted(this.published, writes.records)
       }
       notifyAgentSessionStoreCacheChanges(published, draft, writes)
       for (const id of changes.deaths) {

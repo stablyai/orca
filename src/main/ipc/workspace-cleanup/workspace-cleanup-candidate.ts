@@ -6,9 +6,12 @@ import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-t
 import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
 import {
   createWorkspaceCleanupFingerprint,
+  getWorkspaceCleanupAutomationRunReasons,
   getWorkspaceCleanupInactivityReasons,
   getWorkspaceCleanupMergeReasons,
+  getWorkspaceCleanupOrchestrationWorkerReasons,
   isWorkspaceOldForCleanup,
+  type WorkspaceCleanupAutomationRunLookup,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupReason
@@ -23,6 +26,8 @@ import {
   shortWorkspaceCleanupBranchName
 } from '../../../shared/workspace-cleanup/workspace-cleanup-candidate-fields'
 import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
+import type { WorkspaceCleanupReleasedWorker } from './workspace-cleanup-orchestration-workers'
 
 export async function buildWorkspaceCleanupCandidate(args: {
   repo: Repo
@@ -32,11 +37,23 @@ export async function buildWorkspaceCleanupCandidate(args: {
   prCache: PRCacheView<PRInfo>
   skipGit: boolean
   forceGitCheck: boolean
+  findAutomationRun: WorkspaceCleanupAutomationRunLookup
+  releasedWorker?: WorkspaceCleanupReleasedWorker
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupCandidate> {
-  const { repo, worktree, scannedAt, route, prCache, skipGit, forceGitCheck, signal } = args
+  const {
+    repo,
+    worktree,
+    scannedAt,
+    route,
+    prCache,
+    skipGit,
+    forceGitCheck,
+    releasedWorker,
+    signal
+  } = args
   const blockers: WorkspaceCleanupBlocker[] = []
-  const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt)
+  const reasons = getWorkspaceCleanupWorkspaceReasons(worktree, scannedAt, args.findAutomationRun)
   const repoIsFolder = isFolderRepo(repo)
 
   if (worktree.isMainWorktree) {
@@ -60,9 +77,20 @@ export async function buildWorkspaceCleanupCandidate(args: {
 
   const gitEvidence = !shouldReadGit
     ? createEmptyWorkspaceCleanupGitEvidence()
-    : await readWorkspaceCleanupGitEvidence(worktree, repo, route, prCache, signal)
+    : await readWorkspaceCleanupGitEvidence(
+        worktree,
+        repo,
+        route,
+        prCache,
+        signal,
+        releasedWorker?.coordinatorBranch
+      )
   appendWorkspaceCleanupItems(blockers, gitEvidence.blockers)
   appendWorkspaceCleanupItems(reasons, getWorkspaceCleanupMergeReasons(gitEvidence.merge))
+  appendWorkspaceCleanupItems(
+    reasons,
+    getWorkspaceCleanupOrchestrationWorkerReasons(releasedWorker !== undefined, gitEvidence.merge)
+  )
 
   const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {
     worktreeId: worktree.id,
@@ -163,6 +191,25 @@ export function getWorkspaceCleanupInactivityReasonsForWorkspace(
   scannedAt: number
 ): WorkspaceCleanupReason[] {
   return getWorkspaceCleanupInactivityReasons(workspace, scannedAt)
+}
+
+/** One run snapshot per scan; a store that keeps no automations finds no runs. */
+export function createWorkspaceCleanupAutomationRunLookup(
+  store: Pick<RuntimeStore, 'listAutomationRuns'>
+): WorkspaceCleanupAutomationRunLookup {
+  const runsById = new Map((store.listAutomationRuns?.() ?? []).map((run) => [run.id, run]))
+  return (runId) => runsById.get(runId)
+}
+
+function getWorkspaceCleanupWorkspaceReasons(
+  worktree: Worktree,
+  scannedAt: number,
+  findAutomationRun: WorkspaceCleanupAutomationRunLookup
+): WorkspaceCleanupReason[] {
+  return [
+    ...getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt),
+    ...getWorkspaceCleanupAutomationRunReasons(worktree.automationProvenance, findAutomationRun)
+  ]
 }
 
 function shouldReadWorkspaceCleanupGitEvidence(args: {

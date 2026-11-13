@@ -1,5 +1,5 @@
 import {
-  cleanGeneratedCommitMessage,
+  cleanGeneratedText,
   excerptAgentFailureOutput,
   sanitizeAgentFailureDetail
 } from '../../shared/source-control/ai/generation/commit-message-agent-output'
@@ -24,6 +24,18 @@ import {
   textGenerationFailure,
   type TextGenerationFailureFields
 } from '../../shared/text-generation-failure-copy'
+
+// Their stdout is a name or the user's own dictated words, not a diagnostic worth keeping in the error.
+const OPERATIONS_WITHOUT_STDOUT_DETAIL: ReadonlySet<TextGenerationOperation> = new Set([
+  'branch-name',
+  'conversation-name',
+  'dictation-cleanup'
+])
+
+/** The agent's answer without CLI framing; dictated text keeps the lines and markers Git text drops. */
+export function cleanAgentAnswer(raw: string, operation: TextGenerationOperation): string {
+  return cleanGeneratedText(raw, operation === 'dictation-cleanup' ? 'prose' : 'git')
+}
 
 type AgentCliFailureOptions = {
   includeLocalMacDnsHint?: boolean
@@ -82,7 +94,8 @@ const EMPTY_RESULT_FAILURES = {
 
 const UNCODED_EMPTY_RESULT_NAMES = {
   'branch-name': 'branch name',
-  'conversation-name': 'chat name'
+  'conversation-name': 'chat name',
+  'dictation-cleanup': 'cleanup'
 } as const
 
 export function emptyResultFailure(
@@ -90,7 +103,11 @@ export function emptyResultFailure(
   label: string,
   detail?: string | null
 ): TextGenerationFailureFields {
-  if (operation === 'branch-name' || operation === 'conversation-name') {
+  if (
+    operation === 'branch-name' ||
+    operation === 'conversation-name' ||
+    operation === 'dictation-cleanup'
+  ) {
     // Background rename failures are stored as English rename errors, outside the coded result path.
     const name = UNCODED_EMPTY_RESULT_NAMES[operation]
     return {
@@ -116,6 +133,11 @@ export function finalizeFromAgentOutput(args: {
   outputFormat?: CommitMessagePlan['outputFormat']
 }): InternalTextGenerationResult {
   const { code, stdout, stderr, label } = args
+  const options = {
+    ...args,
+    includeStdoutDetail:
+      args.includeStdoutDetail ?? !OPERATIONS_WITHOUT_STDOUT_DETAIL.has(args.operation)
+  }
   const parsed =
     args.outputFormat === 'opencode-json'
       ? parseOpenCodeGenerationOutput(stdout)
@@ -134,14 +156,14 @@ export function finalizeFromAgentOutput(args: {
     return {
       success: false,
       ...(args.outputFormat === 'kimi-stream-json'
-        ? formatKimiGenerationFailure(findKimiGenerationFailure(stdout), stderr, code, args)
+        ? formatKimiGenerationFailure(findKimiGenerationFailure(stdout), stderr, code, options)
         : agentCliFailure(
             label,
             stdout,
             // Orca's own parse failures (coded) say nothing about why the agent exited.
             parsed && !parsed.ok && parsed.errorCode === undefined ? parsed.error : stderr,
             code,
-            args
+            options
           )),
       failureOutput: captureFailureOutput(label, code, stdout, stderr)
     }
@@ -158,7 +180,7 @@ export function finalizeFromAgentOutput(args: {
       failureOutput: captureFailureOutput(label, code, stdout, stderr)
     }
   }
-  const cleaned = cleanGeneratedCommitMessage(parsed?.ok ? parsed.text : stdout)
+  const cleaned = cleanAgentAnswer(parsed?.ok ? parsed.text : stdout, args.operation)
   if (cleaned) {
     return { success: true, rawOutput: cleaned, agentLabel: label }
   }
