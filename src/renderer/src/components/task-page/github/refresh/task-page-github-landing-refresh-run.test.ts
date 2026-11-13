@@ -34,7 +34,7 @@ function landAfterFilterChange(cache: Record<string, GitHubWorkItem[] | null>) {
   const selectedRepos = Object.keys(cache).map(repo)
   const fetches: Deferred[] = []
   const pending = () => new Promise<never>(() => {})
-  const pagesRef = { current: [] as (GitHubWorkItem[] | null)[] }
+  const pagesRef: { current: (GitHubWorkItem[] | null)[] } = { current: [] }
   const model = {
     fetchWorkItemsAcrossRepos: vi.fn(
       () =>
@@ -97,9 +97,8 @@ function landAfterFilterChange(cache: Record<string, GitHubWorkItem[] | null>) {
     setLandingRequestKey: vi.fn()
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies every field the landing run reads.
-  const cancel = runTaskPageGitHubLandingRefresh(
-    model as unknown as TaskPageGitHubLandingRefreshModel
-  )
+  const landingModel = model as unknown as TaskPageGitHubLandingRefreshModel
+  const cancel = runTaskPageGitHubLandingRefresh(landingModel)
   const rows = () => pagesRef.current[0]?.map((row) => row.number)
   const answer = async (items: GitHubWorkItem[]) => {
     fetches[0]?.resolve({ items, failedCount: 0, githubUnavailable: false })
