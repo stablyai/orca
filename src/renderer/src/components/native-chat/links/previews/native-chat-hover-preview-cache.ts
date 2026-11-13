@@ -5,6 +5,7 @@ type Entry<T> = {
   bytes: number
   /** Started before an `expire`, so its answer may predate the change. */
   expired?: boolean
+  accepts?: () => boolean
 }
 
 /** One request per key at a time; answers stay fresh for `freshMs`, and empty answers retry on the next open.
@@ -53,6 +54,7 @@ export function createHoverPreviewCache<T>({
       if (
         cached &&
         !cached.expired &&
+        (cached.settledAt !== null || cached.accepts?.() !== false) &&
         (cached.settledAt === null || Date.now() - cached.settledAt < freshMs)
       ) {
         return cached.promise
@@ -62,6 +64,7 @@ export function createHoverPreviewCache<T>({
       const entry: Entry<T> = {
         promise: Promise.resolve(null),
         settledAt: null,
+        accepts,
         value: cached?.value,
         bytes: cached?.value === undefined ? 0 : cached.bytes
       }

@@ -2,6 +2,45 @@ import { describe, expect, it } from 'vitest'
 import { createHoverPreviewCache } from './native-chat-hover-preview-cache'
 
 describe('createHoverPreviewCache', () => {
+  it('starts a fresh request after the pending binding retires and preserves its replacement', async () => {
+    const cache = createHoverPreviewCache<string>({ freshMs: 60_000, maxEntries: 100 })
+    let live = true
+    let finish: (value: string) => void = () => {}
+    const old = cache.load(
+      'a',
+      () => new Promise((resolve) => (finish = resolve)),
+      () => live
+    )
+    live = false
+    let finishNew: (value: string) => void = () => {}
+    const current = cache.load('a', () => new Promise((resolve) => (finishNew = resolve)))
+    finish('old')
+    expect(await old).toBeNull()
+    const joined = cache.load('a', async () => 'unexpected')
+    finishNew('new')
+    expect(await current).toBe('new')
+    expect(await joined).toBe('new')
+    expect(cache.read('a')).toBe('new')
+  })
+
+  it('coalesces pending requests while their binding remains live', async () => {
+    const cache = createHoverPreviewCache<string>({ freshMs: 60_000, maxEntries: 100 })
+    let finish: (value: string) => void = () => {}
+    const first = cache.load(
+      'a',
+      () => new Promise((resolve) => (finish = resolve)),
+      () => true
+    )
+    const second = cache.load(
+      'a',
+      async () => 'unexpected',
+      () => true
+    )
+    finish('result')
+    expect(await first).toBe('result')
+    expect(await second).toBe('result')
+  })
+
   it('does not publish a response whose owner rejects it at cache commit', async () => {
     const cache = createHoverPreviewCache<string>({ freshMs: 60_000, maxEntries: 100 })
     const response = Promise.withResolvers<string>()
