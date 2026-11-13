@@ -60,6 +60,8 @@ export function settleFreshPaneSpawn(
         session.transport.getPtyId() === spawnedPtyId
       ) {
         session.deps.invalidateRetainedInlineScrollback(session.pane.leafId)
+        session.deps.accountRestartToken = undefined
+        session.deps.accountRestart = undefined
         useAppStore.getState().updateCodexAccountRestart(accountToken, null)
       }
     } else {

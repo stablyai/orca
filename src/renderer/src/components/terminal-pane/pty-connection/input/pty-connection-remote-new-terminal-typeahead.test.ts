@@ -1,6 +1,9 @@
 import type * as React from 'react'
+import type * as AppStoreModule from '@/store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectPanePty } from '../connect-pane-pty'
+import type { CodexAccountRestart } from '@/store/terminals/terminal-contracts'
+import { codexAccountRestartToken } from '@/store/terminals/codex-account-restart-continuation'
 import { restoreScrollbackBuffers } from '../../snapshots/saved-terminal-output-replay'
 import { createDeferred } from '../test-fixtures/pty-connection-test-async'
 import {
@@ -43,6 +46,7 @@ const {
 let mockStoreState: StoreState
 let storeSubscribers: ((state: StoreState) => void)[] = []
 let callbacks: MultiplexSubscriptionCallbacks = null
+let disposeTransports: (() => void)[] = []
 let resolvedHandle = 'terminal-1'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: false }))
@@ -113,7 +117,7 @@ type CreatedTerminal = {
   coldRestore?: { scrollback: string; cwd: string }
 }
 
-async function connectNewRemotePane() {
+async function connectNewRemotePane(overrides: Record<string, unknown> = {}) {
   const created = createDeferred<CreatedTerminal | Error>()
   const call = runtimeCall.getMockImplementation()
   runtimeCall.mockImplementation(async (request: { method: string }) => {
@@ -138,7 +142,8 @@ async function connectNewRemotePane() {
       }
     }
   })
-  const connectArgs = [pane, createManager(1), buildPaneConnectionDeps(() => mockStoreState)]
+  const deps = buildPaneConnectionDeps(() => mockStoreState, overrides)
+  const connectArgs = [pane, createManager(1), deps]
   const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
     '@/lib/agent-status/aggregation/worktree-agent-status'
   )
@@ -147,6 +152,18 @@ async function connectNewRemotePane() {
 
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared pane fixtures implement the members connectPanePty touches.
   const binding = connectPanePty(...(connectArgs as unknown as Parameters<typeof connectPanePty>))
+  const transport = deps.paneTransportsRef.current.get(1)
+  const disposeTransport = () => {
+    if (
+      transport &&
+      typeof transport === 'object' &&
+      'destroy' in transport &&
+      typeof transport.destroy === 'function'
+    ) {
+      transport.destroy()
+    }
+  }
+  disposeTransports.push(disposeTransport)
   await vi.waitFor(() =>
     expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.create' }))
   )
@@ -154,6 +171,7 @@ async function connectNewRemotePane() {
     pane,
     created,
     binding,
+    disposeTransport,
     type: (data: string) => {
       for (const listener of userInputListeners) {
         listener()
@@ -170,6 +188,71 @@ async function completeAttach(): Promise<void> {
   const { streamId } = latestSubscribePayload()
   callbacks?.onResponse({ ok: true, result: { type: 'subscribed', streamId } })
   emitSnapshot(streamId, 'prompt$ ')
+}
+
+async function connectAccountRestart() {
+  const { useAppStore } = await vi.importActual<typeof AppStoreModule>('@/store/index')
+  const initial = useAppStore.getInitialState()
+  const request: CodexAccountRestart = {
+    agent: 'codex',
+    requestId: 'account-request',
+    attemptId: 'account-attempt',
+    executorId: 'mounted-owner',
+    worktreeId: 'wt-1',
+    tabId: 'tab-1',
+    tabCreatedAt: 1,
+    leafId: leafIdForPane(1),
+    oldPtyId: 'remote:env-1@@terminal-old',
+    environmentId: 'env-1',
+    hostId: 'runtime:env-1',
+    phase: 'dispatched',
+    startupInput: null,
+    startup: { command: 'codex', startupCommandDelivery: 'shell-ready', launchAgent: 'codex' },
+    condition: {
+      requestId: 'account-request',
+      attemptId: 'account-attempt',
+      hostEpoch: 'host-epoch',
+      pane: { worktreeId: 'wt-1', tabId: 'tab-1', leafId: leafIdForPane(1), tabCreatedAt: 1 },
+      expected: { kind: 'empty', bindingGeneration: 1 }
+    }
+  }
+  const tab = { id: 'tab-1', ptyId: null, createdAt: 1 }
+  const data = Object.fromEntries(
+    Object.entries(mockStoreState).filter(([, value]) => typeof value !== 'function')
+  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture data seeds the existing store fields; its action implementations stay real.
+  const nextState = {
+    ...initial,
+    ...data,
+    settings: { ...initial.settings, ...mockStoreState.settings },
+    tabsByWorktree: { 'wt-1': [tab] },
+    paneAccountRestarts: { [`tab-1:${leafIdForPane(1)}`]: request }
+  } as unknown as Parameters<typeof useAppStore.setState>[0]
+  useAppStore.setState(nextState, true)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: connection fixtures read a subset of the real store contract.
+  mockStoreState = useAppStore.getState() as unknown as StoreState
+  const unsubscribe = useAppStore.subscribe((state) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture facade follows the real store after every transition.
+    mockStoreState = state as unknown as StoreState
+  })
+  const pane = await connectNewRemotePane({
+    startup: { command: 'codex' },
+    accountRestart: request.condition,
+    accountRestartToken: codexAccountRestartToken(request),
+    invalidateRetainedInlineScrollback: vi.fn(),
+    updateTabPtyId: useAppStore.getState().updateTabPtyId
+  })
+  pane.created.resolve({ handle: 'terminal-new' })
+  await completeAttach()
+  await vi.waitFor(() => expect(useAppStore.getState().paneAccountRestarts).toEqual({}))
+  return {
+    ...pane,
+    store: useAppStore,
+    unsubscribe: () => {
+      useAppStore.setState(initial, true)
+      unsubscribe()
+    }
+  }
 }
 
 describe('a brand-new remote pane through connectPanePty', () => {
@@ -193,7 +276,118 @@ describe('a brand-new remote pane through connectPanePty', () => {
   })
 
   afterEach(async () => {
+    for (const dispose of disposeTransports) {
+      dispose()
+    }
+    disposeTransports = []
     await restoreTerminalTestGlobals()
+  })
+
+  it('keeps a completed account restart recoverable through the real remote transport', async () => {
+    const pane = await connectAccountRestart()
+    try {
+      const oldStream = latestSubscribePayload().streamId
+      const originalCall = runtimeCall.getMockImplementation()
+      runtimeCall.mockImplementation(async (request: { method: string }) =>
+        request.method === 'terminal.recoverPane'
+          ? {
+              ok: true,
+              result: {
+                terminal: {
+                  handle: 'terminal-recovered',
+                  tabId: 'tab-1',
+                  leafId: leafIdForPane(1),
+                  worktreeId: 'wt-1'
+                }
+              }
+            }
+          : originalCall?.(request)
+      )
+      callbacks?.onResponse({
+        ok: true,
+        result: { type: 'error', streamId: oldStream, message: 'SSH_SESSION_EXPIRED' }
+      })
+      await vi.waitFor(() => expect(latestSubscribePayload().terminal).toBe('terminal-recovered'))
+      await completeAttach()
+      expect(pane.store.getState().tabsByWorktree['wt-1'][0].ptyId).toBe(
+        'remote:env-1@@terminal-recovered'
+      )
+      expect(
+        pane.store.getState().terminalLayoutsByTabId['tab-1'].ptyIdsByLeafId?.[leafIdForPane(1)]
+      ).toBe('remote:env-1@@terminal-recovered')
+      pane.type('after recovery\r')
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('after recovery\r'))
+      callbacks?.onResponse({
+        ok: true,
+        result: { type: 'error', streamId: oldStream, message: 'terminal_handle_stale' }
+      })
+      expect(pane.store.getState().tabsByWorktree['wt-1'][0].ptyId).toBe(
+        'remote:env-1@@terminal-recovered'
+      )
+    } finally {
+      vi.useRealTimers()
+      pane.disposeTransport()
+      pane.binding.dispose()
+      pane.unsubscribe()
+    }
+  })
+
+  it('ignores an obsolete remote recovery after the completed restart pane is replaced', async () => {
+    const pane = await connectAccountRestart()
+    try {
+      const recovery = createDeferred<unknown>()
+      const originalCall = runtimeCall.getMockImplementation()
+      runtimeCall.mockImplementation(async (request: { method: string }) =>
+        request.method === 'terminal.recoverPane' ? recovery.promise : originalCall?.(request)
+      )
+      callbacks?.onResponse({
+        ok: true,
+        result: {
+          type: 'error',
+          streamId: latestSubscribePayload().streamId,
+          message: 'SSH_SESSION_EXPIRED'
+        }
+      })
+      await vi.waitFor(() =>
+        expect(runtimeCall).toHaveBeenCalledWith(
+          expect.objectContaining({ method: 'terminal.recoverPane' })
+        )
+      )
+      pane.binding.dispose()
+      pane.store
+        .getState()
+        .updateTabPtyId('tab-1', 'remote:env-1@@terminal-successor', 'remote:env-1@@terminal-new')
+      const layout = pane.store.getState().terminalLayoutsByTabId['tab-1']
+      pane.store.getState().setTabLayout('tab-1', {
+        ...layout,
+        ptyIdsByLeafId: { [leafIdForPane(1)]: 'remote:env-1@@terminal-successor' }
+      })
+      vi.useFakeTimers()
+      recovery.resolve({
+        ok: true,
+        result: {
+          terminal: {
+            handle: 'terminal-obsolete',
+            tabId: 'tab-1',
+            leafId: leafIdForPane(1),
+            worktreeId: 'wt-1'
+          }
+        }
+      })
+      await recovery.promise
+      await vi.advanceTimersByTimeAsync(0)
+      expect(pane.store.getState().tabsByWorktree['wt-1'][0].ptyId).toBe(
+        'remote:env-1@@terminal-successor'
+      )
+      expect(
+        pane.store.getState().terminalLayoutsByTabId['tab-1'].ptyIdsByLeafId?.[leafIdForPane(1)]
+      ).toBe('remote:env-1@@terminal-successor')
+    } finally {
+      vi.useRealTimers()
+      pane.disposeTransport()
+      pane.binding.dispose()
+      pane.unsubscribe()
+    }
   })
 
   it('sends typing from before the create to the terminal the create makes', async () => {
