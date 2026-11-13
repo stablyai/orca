@@ -29,11 +29,14 @@ export type CloudOnlyRepo = {
 
 export function useCloudOnlyRepo({
   repoId,
+  initialPicked = null,
   cloudSelected,
   cloudOffered,
   signedIn
 }: {
   repoId: string
+  /** `owner/repo` picked when the composer opens (Back to draft from its build sheet). */
+  initialPicked?: string | null
   /** Orca Cloud is the Run on target. */
   cloudSelected: boolean
   /** This build offers Orca Cloud (the Run on segment is enabled). */
@@ -45,7 +48,7 @@ export function useCloudOnlyRepo({
   // D4 rows show while Orca Cloud is picked, or for a folder, which can only start from GitHub.
   const enabled = (cloudSelected || folderProject) && cloudOffered
   const { repos, showMore } = useOrcaCloudGitHubRepositories(enabled && signedIn)
-  const [pickedName, setPickedName] = useState<string | null>(null)
+  const [pickedName, setPickedName] = useState<string | null>(initialPicked)
   const picked = useMemo(
     () => (enabled ? (repos?.find((repo) => repo.fullName === pickedName) ?? null) : null),
     [enabled, pickedName, repos]
@@ -73,10 +76,11 @@ export function useCloudOnlyRepo({
         ? startCloudWorkspaceFromGitHub({
             repoUrl: picked.url,
             fullName: picked.fullName,
+            composerRepoId: repoId,
             ...request
           })
         : Promise.resolve(false),
-    [picked]
+    [picked, repoId]
   )
   return {
     repos,

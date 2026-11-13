@@ -40,6 +40,7 @@ export function useCloudStartComposer({
   selectedRecipeId,
   setRecipeId,
   repoId,
+  initialGitHubRepo = null,
   prompt,
   agent,
   initialTargetFixed,
@@ -55,6 +56,8 @@ export function useCloudStartComposer({
   selectedRecipeId: string | null
   setRecipeId: ((recipeId: string | null) => void) | undefined
   repoId: string
+  /** A GitHub-only repository to start with picked (`owner/repo`). */
+  initialGitHubRepo?: string | null
   prompt: string
   agent: string | null
   /** The composer was opened on an explicit target (Landing card, a recovery). */
@@ -88,6 +91,7 @@ export function useCloudStartComposer({
   const githubProjectCount = useAppStore((s) => s.repos.filter(isGitHubBackedProject).length)
   const cloudOnly = useCloudOnlyRepo({
     repoId,
+    initialPicked: initialGitHubRepo,
     cloudSelected,
     cloudOffered: segment === 'enabled',
     signedIn: availability !== 'needs-sign-in' && access.state !== 'signed-out'

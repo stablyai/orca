@@ -25,6 +25,8 @@ export type ComposerModalData = {
   prefilledName?: string
   initialRepoId?: string
   initialEphemeralVmRecipeId?: string
+  /** Orca Cloud: a GitHub repository with no clone here, picked again (GH-CREATE-SHEET's Back to draft). */
+  initialCloudGitHubRepo?: string
   initialProjectGroupId?: string
   linkedWorkItem?: LinkedWorkItemSummary | null
   initialGitHubWorkItem?: GitHubWorkItem | null
