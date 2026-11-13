@@ -3,9 +3,9 @@ import { DICTATION_CLEANUP_TIMEOUT_MS } from '../../shared/dictation-cleanup'
 import {
   createMockDiscoveryChild,
   type MockDiscoveryChild
-} from '../text-generation/commit-message-text-generation-test-harness'
+} from '../text-generation/execution/commit-message-text-generation-test-harness'
 import type * as DictationCleanup from '../../shared/dictation-cleanup'
-import type * as GenerationLanes from '../text-generation/source-control-generation-lanes'
+import type * as GenerationLanes from '../text-generation/execution/source-control-generation-lanes'
 import { cancelDictationCleanup, cleanUpDictatedText } from './dictation-cleanup-service'
 
 const children: MockDiscoveryChild[] = []
@@ -17,12 +17,12 @@ vi.mock('../../shared/dictation-cleanup', async (importOriginal) => ({
   isDictationCleanupOn: () => true
 }))
 vi.mock('../text-generation/commit-message-text-generation', () => ({
-  resolveTextGenerationParams: () => ({ ok: true, params: { agentId, model: 'default' } })
+  resolveCommitMessageSettings: () => ({ ok: true, params: { agentId, model: 'default' } })
 }))
-vi.mock('../text-generation/commit-message-agent-environment', () => ({
+vi.mock('../text-generation/execution/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: async () => ({ ok: true })
 }))
-vi.mock('../text-generation/source-control-generation-lanes', async (importOriginal) => {
+vi.mock('../text-generation/execution/source-control-generation-lanes', async (importOriginal) => {
   const actual = await importOriginal<typeof GenerationLanes>()
   return {
     ...actual,
@@ -32,7 +32,7 @@ vi.mock('../text-generation/source-control-generation-lanes', async (importOrigi
     }
   }
 })
-vi.mock('../text-generation/source-control-agent-launch', () => ({
+vi.mock('../text-generation/execution/source-control-agent-launch', () => ({
   spawnSourceControlAgent: ({ args }: { args: string[] }) => {
     const child = createMockDiscoveryChild()
     if (args.includes('mcp')) {
