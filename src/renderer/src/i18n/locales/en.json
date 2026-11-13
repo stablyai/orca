@@ -21266,6 +21266,9 @@
       "antigravitySignIn": {
         "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
       },
+      "signIn": {
+        "title": "Sign in to {{agent}} to start chatting"
+      },
       "claudeSignIn": {
         "signingIn": "Signing in…"
       },
@@ -23435,6 +23438,7 @@
       "location": "Location",
       "enterpriseFieldsShort": "Enter a project and location.",
       "chatUseMethod": "Sign in again to use {{method}}",
+      "signInEllipsis": "Sign in…",
       "terminalInfoWindows": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Selecting applies to the host default agy credential.",
       "terminalInfo": "Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Applies to new agy sessions.",
       "loadFailed": "Couldn't load agy accounts",
