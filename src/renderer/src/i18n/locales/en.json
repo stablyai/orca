@@ -21588,7 +21588,7 @@
           "featureIdleSleep": "Sandboxes sleep when idle, so you only use hours while they work",
           "featureOverageNoRate": "Optional overage up to a monthly spend cap you set",
           "vpSecretsTitleEdge": "Agent keys stay out of the sandbox",
-          "vpSecretsBodyEdge": "Orca swaps model API keys and agent sign-ins in at the network edge, so the sandbox never sees them. Other secrets reach workspaces as environment variables."
+          "vpSecretsBodyEdge": "Model API keys and agent sign-ins are swapped in at the network edge. Other secrets are environment variables."
         },
         "capLabel2": "Monthly spend cap",
         "capNotSaved": "Couldn’t save",

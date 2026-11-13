@@ -29,7 +29,7 @@ export function ValueProps(): React.JSX.Element {
       title: t('auto.components.billing.plans.vpSecretsTitleEdge', 'Agent keys stay out of the sandbox'),
       body: t(
         'auto.components.billing.plans.vpSecretsBodyEdge',
-        'Orca swaps model API keys and agent sign-ins in at the network edge, so the sandbox never sees them. Other secrets reach workspaces as environment variables.'
+        'Model API keys and agent sign-ins are swapped in at the network edge. Other secrets are environment variables.'
       )
     }
   ]
