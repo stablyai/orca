@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/class-names'
 import TaskProjectSourceCombobox from '@/components/task-page/source-selection/task-project-source-combobox'
@@ -10,6 +11,9 @@ import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { getGitLabMRInvolvementFilters } from '@/components/task-page/task-page-localized-options'
+import { TaskFilterMenu } from '@/components/task-page/TaskFilterMenu'
+import { parseTaskQuery } from '../../../../../shared/work-items/task-query'
+import { useGitLabLabelFilterOptions } from './use-gitlab-label-filter-options'
 
 function FilterChip({
   label,
@@ -64,8 +68,13 @@ export function TaskPageGitLabFilters({
     setGitlabMRInvolvement,
     gitlabSearchInput,
     setGitlabSearchInput,
-    setAppliedGitlabSearch
+    setAppliedGitlabSearch,
+    gitlabLabelScopeRepo,
+    gitlabLabels,
+    setGitlabLabels
   } = model
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false)
+  const labelOptions = useGitLabLabelFilterOptions(filterMenuOpen ? gitlabLabelScopeRepo : null)
   const gitlabSearchLabel =
     gitlabView === 'issues'
       ? t('auto.components.TaskPage.gitlabSearchIssues', 'Search GitLab issues or #123...')
@@ -129,6 +138,28 @@ export function TaskPageGitLabFilters({
             triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
           />
         </div>
+        {gitlabView === 'todos' ? null : (
+          <TaskFilterMenu
+            parsed={{ ...parseTaskQuery(''), labels: gitlabLabels }}
+            kind={gitlabView === 'issues' ? 'issues' : 'prs'}
+            heading={
+              gitlabView === 'mrs'
+                ? t('auto.components.TaskPage.gitlabFilterMergeRequests', 'Filter merge requests')
+                : undefined
+            }
+            sections={['label']}
+            open={filterMenuOpen}
+            onOpenChange={setFilterMenuOpen}
+            labelOpts={labelOptions.options}
+            labelsLoading={labelOptions.loading}
+            labelsError={labelOptions.error}
+            onChange={(change) => {
+              if (change.labels) {
+                setGitlabLabels(change.labels)
+              }
+            }}
+          />
+        )}
         {gitlabView === 'todos' ? null : (
           <div className="flex h-8 min-w-0 flex-1 basis-64 items-center gap-2 rounded-md border border-border/50 bg-background px-2.5 transition-[box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
             <Search className="size-3.5 shrink-0 text-muted-foreground" />

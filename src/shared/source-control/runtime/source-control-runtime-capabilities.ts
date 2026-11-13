@@ -25,6 +25,10 @@ export const GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE =
 export const GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY = 'gitlab.listMRs.involvement.v1' as const
 export const GITLAB_MR_INVOLVEMENT_UPDATE_REQUIRED_MESSAGE =
   'Filtering merge requests by you requires a newer Orca server. Update the server and try again.'
+// Older servers drop `labels` from gitlab.listMRs and gitlab.listIssues and would list unlabelled items.
+export const GITLAB_LIST_LABELS_RUNTIME_CAPABILITY = 'gitlab.list.labels.v1' as const
+export const GITLAB_LIST_LABELS_UPDATE_REQUIRED_MESSAGE =
+  'Filtering by label requires a newer Orca server. Update the server and try again.'
 // Commit-message generation: the host plans Antigravity with the model the user configured.
 export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
   'git.antigravity-configured-model.v1' as const
@@ -41,5 +45,6 @@ export const SOURCE_CONTROL_RUNTIME_CAPABILITIES = [
   MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
   MOBILE_GITHUB_MARK_PR_DRAFT_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
-  GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY
+  GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY,
+  GITLAB_LIST_LABELS_RUNTIME_CAPABILITY
 ] as const

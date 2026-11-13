@@ -1,5 +1,7 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import {
+  GITLAB_LIST_LABELS_RUNTIME_CAPABILITY,
+  GITLAB_LIST_LABELS_UPDATE_REQUIRED_MESSAGE,
   GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY,
   GITLAB_MR_INVOLVEMENT_UPDATE_REQUIRED_MESSAGE,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
@@ -34,6 +36,22 @@ export type RuntimeGitLabTransport = {
 export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLabApi {
   const route = <Result>(method: WebGitLabRuntimeMethod, args?: unknown): Promise<Result> =>
     transport.call<Result>(method, mapRepoPathArg(args))
+  // Why: a server without the capability drops the filter and would answer with an unfiltered list.
+  const routeRequiring = async <Result>(
+    method: WebGitLabRuntimeMethod,
+    args: unknown,
+    requiredCapability: RuntimeCapability,
+    refusal: Result
+  ): Promise<Result> => {
+    try {
+      return await transport.call<Result>(method, mapRepoPathArg(args), { requiredCapability })
+    } catch (error) {
+      if (error instanceof RuntimeCapabilityMissingError) {
+        return refusal
+      }
+      throw error
+    }
+  }
 
   return {
     viewer: () => Promise.resolve(null),
@@ -43,35 +61,51 @@ export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLa
     projectSlug: () => Promise.resolve(null),
     mrForBranch: () => Promise.resolve(null),
     mr: () => Promise.resolve(null),
-    listMRs: async (args) => {
-      if (!args.involvement) {
-        return route<GitLabApiResult<'listMRs'>>(GITLAB_WEB_RPC_METHODS.listMRs, args)
-      }
-      try {
-        return await transport.call<GitLabApiResult<'listMRs'>>(
-          GITLAB_WEB_RPC_METHODS.listMRs,
-          mapRepoPathArg(args),
-          { requiredCapability: GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY }
+    listMRs: (args) => {
+      const method = GITLAB_WEB_RPC_METHODS.listMRs
+      const refusal = (message: string): GitLabApiResult<'listMRs'> => ({
+        items: [],
+        page: args.page ?? 1,
+        perPage: args.perPage ?? 20,
+        totalCount: 0,
+        totalPages: 0,
+        error: { type: 'unknown', message }
+      })
+      // Why labels alone: a server with the labels capability also has the older involvement one.
+      if (args.labels?.length) {
+        return routeRequiring(
+          method,
+          args,
+          GITLAB_LIST_LABELS_RUNTIME_CAPABILITY,
+          refusal(GITLAB_LIST_LABELS_UPDATE_REQUIRED_MESSAGE)
         )
-      } catch (error) {
-        if (!(error instanceof RuntimeCapabilityMissingError)) {
-          throw error
-        }
-        return {
-          items: [],
-          page: args.page ?? 1,
-          perPage: args.perPage ?? 20,
-          totalCount: 0,
-          totalPages: 0,
-          error: { type: 'unknown', message: GITLAB_MR_INVOLVEMENT_UPDATE_REQUIRED_MESSAGE }
-        }
       }
+      if (args.involvement) {
+        return routeRequiring(
+          method,
+          args,
+          GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY,
+          refusal(GITLAB_MR_INVOLVEMENT_UPDATE_REQUIRED_MESSAGE)
+        )
+      }
+      return route<GitLabApiResult<'listMRs'>>(method, args)
     },
     listWorkItems: (args) =>
       route<GitLabApiResult<'listWorkItems'>>(GITLAB_WEB_RPC_METHODS.listWorkItems, args),
     issue: () => Promise.resolve(null),
     listIssues: (args) =>
-      route<GitLabApiResult<'listIssues'>>(GITLAB_WEB_RPC_METHODS.listIssues, args),
+      args.labels?.length
+        ? routeRequiring<GitLabApiResult<'listIssues'>>(
+            GITLAB_WEB_RPC_METHODS.listIssues,
+            args,
+            GITLAB_LIST_LABELS_RUNTIME_CAPABILITY,
+            {
+              items: [],
+              totalPages: 0,
+              error: { type: 'unknown', message: GITLAB_LIST_LABELS_UPDATE_REQUIRED_MESSAGE }
+            }
+          )
+        : route<GitLabApiResult<'listIssues'>>(GITLAB_WEB_RPC_METHODS.listIssues, args),
     createIssue: (args) =>
       route<GitLabApiResult<'createIssue'>>(GITLAB_WEB_RPC_METHODS.createIssue, args),
     updateIssue: (args) =>

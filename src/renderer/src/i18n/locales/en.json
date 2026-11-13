@@ -3967,7 +3967,9 @@
         },
         "shownCount_one": "{{count}} shown",
         "gitlabSearchIssues": "Search GitLab issues or #123...",
-        "gitlabSearchMrs": "Search GitLab merge requests..."
+        "gitlabSearchMrs": "Search GitLab merge requests...",
+        "gitlabFilterMergeRequests": "Filter merge requests",
+        "gitlabLabelsLoadFailed": "Could not load labels."
       },
       "Terminal": {
         "73768427cf": "Close",

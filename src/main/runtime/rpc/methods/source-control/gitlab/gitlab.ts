@@ -36,7 +36,8 @@ export const GITLAB_METHODS = [
         params.page,
         params.perPage,
         params.query,
-        params.involvement
+        params.involvement,
+        params.labels
       )
   }),
   defineMethod({
@@ -64,7 +65,8 @@ export const GITLAB_METHODS = [
         normalized.assignee,
         normalized.limit,
         normalized.page,
-        normalized.query
+        normalized.query,
+        normalized.labels
       )
     }
   }),

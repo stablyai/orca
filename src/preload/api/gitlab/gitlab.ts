@@ -32,6 +32,7 @@ export const glApi = {
       perPage?: number
       query?: string
       involvement?: GitLabMRInvolvement
+      labels?: string[]
     }
   ) => ipcRenderer.invoke('gitlab:listMRs', args),
 
@@ -54,6 +55,7 @@ export const glApi = {
       limit?: number
       page?: number
       query?: string
+      labels?: string[]
     }
   ) => ipcRenderer.invoke('gitlab:listIssues', args),
 

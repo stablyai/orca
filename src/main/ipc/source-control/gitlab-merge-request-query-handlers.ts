@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
 import type { GitLabMRInvolvement } from '../../../shared/gitlab/gitlab-types'
+import { normalizeGitLabLabelNames } from '../../../shared/gitlab/gitlab-label-names'
 import {
   normalizeGitLabMRInvolvement,
   normalizeGitLabMRListState,
@@ -63,6 +64,7 @@ export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
         perPage?: number
         query?: string
         involvement?: GitLabMRInvolvement
+        labels?: string[]
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
@@ -78,7 +80,10 @@ export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
         normalizeGitLabSearchQuery(args.query),
         repoConnectionId(repo),
         localGitOptionArgs(store, repo)[0] ?? {},
-        { involvement: normalizeGitLabMRInvolvement(args.involvement) }
+        {
+          involvement: normalizeGitLabMRInvolvement(args.involvement),
+          labels: normalizeGitLabLabelNames(args.labels)
+        }
       )
     }
   )

@@ -51,6 +51,7 @@ export type GitLabApi = {
       perPage?: number
       query?: string
       involvement?: GitLabMRInvolvement
+      labels?: string[]
     }
   ) => Promise<ListMergeRequestsResult>
   /** The merged filter excludes issues. */
@@ -70,6 +71,7 @@ export type GitLabApi = {
       limit?: number
       page?: number
       query?: string
+      labels?: string[]
     }
   ) => Promise<{
     items: GitLabWorkItem[]

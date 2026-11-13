@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import type { GitLabIssueUpdate, GitLabWorkItem } from '../../../shared/gitlab/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
+import { normalizeGitLabLabelNames } from '../../../shared/gitlab/gitlab-label-names'
 import {
   normalizeGitLabIssueAssignee,
   normalizeGitLabIssueListState,
@@ -54,6 +55,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
         limit?: number
         page?: number
         query?: string
+        labels?: string[]
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
@@ -70,7 +72,8 @@ export function registerGitLabIssueHandlers(store: Store): void {
         repoConnectionId(repo),
         localGitOptionArgs(store, repo)[0] ?? {},
         page,
-        normalizeGitLabSearchQuery(args.query)
+        normalizeGitLabSearchQuery(args.query),
+        normalizeGitLabLabelNames(args.labels)
       )
       // Tasks shares MR/issue row rendering through the WorkItem shape.
       const workItems: GitLabWorkItem[] = result.items.map((issue) => ({

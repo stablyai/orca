@@ -16,6 +16,7 @@ import { glabRepoExecOptions, glabHostnameArgs } from '../projects/gitlab-projec
 import { parseGlabJsonList, parseGlabPaginationHeader } from '../requests/glab-api-response'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
+import { gitLabLabelsParam } from '../requests/gitlab-preload-args'
 import { isTaskRepositoryIneligible } from '../../git/remotes/task-repository-eligibility'
 import {
   codeHostFailure,
@@ -84,7 +85,8 @@ export async function listIssues(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
   page = 1,
-  query?: string
+  query?: string,
+  labels?: string[]
 ): Promise<IssueListResult> {
   const currentPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1
   const perPage = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 20
@@ -118,7 +120,7 @@ export async function listIssues(
     const { body, headers } = await glabApiWithHeaders(
       [
         ...glabHostnameArgs(projectRef, connectionId),
-        `projects/${encodedProject(projectRef.path)}/issues?page=${currentPage}&per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${scopeParam}${searchParam}`
+        `projects/${encodedProject(projectRef.path)}/issues?page=${currentPage}&per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${scopeParam}${searchParam}${gitLabLabelsParam(labels)}`
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
