@@ -58,54 +58,89 @@ const deps = { getSettings: () => ({}), getAgentEnvResolvers: () => undefined }
 afterEach(() => {
   children.length = 0
   cancelRegistrations.length = 0
+  agentId = 'claude'
   vi.useRealTimers()
 })
 
-describe('overlapping dictation cleanups', () => {
-  it.each([
-    ['claude', 'skip'],
-    ['claude', 'timeout'],
-    // Codex runs one at a time under its home lock, so the second cleanup waits queued.
-    ['codex', 'skip'],
-    ['codex', 'timeout']
-  ] as const)(
-    '%s: a %s stops only its own agent and leaves the other cleanup running',
-    async (agent, stopKind) => {
-      agentId = agent
-      if (stopKind === 'timeout') {
-        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-      }
-      const first = cleanUpDictatedText({ text: 'first', terms: [], requestId: 'a' }, deps)
-      await vi.waitFor(() => expect(children).toHaveLength(1))
-      if (stopKind === 'timeout') {
-        // The second cleanup starts halfway through the first one's budget.
-        await vi.advanceTimersByTimeAsync(DICTATION_CLEANUP_TIMEOUT_MS / 2)
-      }
-      const registeredBeforeSecond = cancelRegistrations.length
-      const second = cleanUpDictatedText({ text: 'second', terms: [], requestId: 'b' }, deps)
-      // Stop the first only once the second can be canceled: running, or queued behind Codex's lock.
-      await vi.waitFor(() =>
-        expect(cancelRegistrations.length).toBeGreaterThan(registeredBeforeSecond)
-      )
-      expect(children).toHaveLength(agent === 'codex' ? 1 : 2)
+function startCleanup(requestId: string): ReturnType<typeof cleanUpDictatedText> {
+  return cleanUpDictatedText({ text: requestId, terms: [], requestId }, deps)
+}
 
-      if (stopKind === 'skip') {
-        cancelDictationCleanup('a')
-      } else {
-        await vi.advanceTimersByTimeAsync(DICTATION_CLEANUP_TIMEOUT_MS / 2)
-      }
+/** Starts a cleanup and returns once it can be canceled: its agent running, or queued for one. */
+async function startCancelableCleanup(
+  requestId: string
+): Promise<{ cleanup: ReturnType<typeof cleanUpDictatedText> }> {
+  const registeredBefore = cancelRegistrations.length
+  const cleanup = startCleanup(requestId)
+  await vi.waitFor(() => expect(cancelRegistrations.length).toBeGreaterThan(registeredBefore))
+  return { cleanup }
+}
 
-      await expect(first).resolves.toEqual({
-        status: stopKind === 'skip' ? 'canceled' : 'timed-out'
-      })
-      await vi.waitFor(() => expect(children).toHaveLength(2))
-      const [firstChild, secondChild] = children
-      expect(firstChild.kill).toHaveBeenCalled()
-      expect(secondChild.kill).not.toHaveBeenCalled()
+async function expectSecondAgentToFinish(
+  second: ReturnType<typeof cleanUpDictatedText>
+): Promise<void> {
+  await vi.waitFor(() => expect(children).toHaveLength(2))
+  const [firstAgent, secondAgent] = children
+  expect(firstAgent.kill).toHaveBeenCalled()
+  expect(secondAgent.kill).not.toHaveBeenCalled()
+  secondAgent.stdout.emit('data', Buffer.from('Second.'))
+  secondAgent.emit('close', 0)
+  await expect(second).resolves.toMatchObject({ status: 'cleaned', text: 'Second.' })
+}
 
-      secondChild.stdout.emit('data', Buffer.from('Second.'))
-      secondChild.emit('close', 0)
-      await expect(second).resolves.toMatchObject({ status: 'cleaned', text: 'Second.' })
-    }
-  )
+describe('overlapping dictation cleanups share a folder but stop independently', () => {
+  it('skipping the first stops only its agent while the second keeps running', async () => {
+    const first = startCleanup('a')
+    await vi.waitFor(() => expect(children).toHaveLength(1))
+    const { cleanup: second } = await startCancelableCleanup('b')
+    expect(children).toHaveLength(2)
+
+    cancelDictationCleanup('a')
+
+    await expect(first).resolves.toEqual({ status: 'canceled' })
+    await expectSecondAgentToFinish(second)
+  })
+
+  it('the first timing out stops only its agent while the second keeps running', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const first = startCleanup('a')
+    await vi.waitFor(() => expect(children).toHaveLength(1))
+    await vi.advanceTimersByTimeAsync(DICTATION_CLEANUP_TIMEOUT_MS / 2)
+    const { cleanup: second } = await startCancelableCleanup('b')
+    expect(children).toHaveLength(2)
+
+    await vi.advanceTimersByTimeAsync(DICTATION_CLEANUP_TIMEOUT_MS / 2)
+
+    await expect(first).resolves.toEqual({ status: 'timed-out' })
+    await expectSecondAgentToFinish(second)
+  })
+
+  // Codex runs one at a time under its home lock, so the second cleanup waits queued.
+  it('skipping a running Codex cleanup lets the queued one start and finish', async () => {
+    agentId = 'codex'
+    const first = startCleanup('a')
+    await vi.waitFor(() => expect(children).toHaveLength(1))
+    const { cleanup: second } = await startCancelableCleanup('b')
+    expect(children).toHaveLength(1)
+
+    cancelDictationCleanup('a')
+
+    await expect(first).resolves.toEqual({ status: 'canceled' })
+    await expectSecondAgentToFinish(second)
+  })
+
+  it('a running Codex cleanup timing out lets the queued one start and finish', async () => {
+    agentId = 'codex'
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const first = startCleanup('a')
+    await vi.waitFor(() => expect(children).toHaveLength(1))
+    await vi.advanceTimersByTimeAsync(DICTATION_CLEANUP_TIMEOUT_MS / 2)
+    const { cleanup: second } = await startCancelableCleanup('b')
+    expect(children).toHaveLength(1)
+
+    await vi.advanceTimersByTimeAsync(DICTATION_CLEANUP_TIMEOUT_MS / 2)
+
+    await expect(first).resolves.toEqual({ status: 'timed-out' })
+    await expectSecondAgentToFinish(second)
+  })
 })
