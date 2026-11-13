@@ -1,4 +1,4 @@
-from contextlib import ExitStack, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 import importlib.util
 import json
 import shutil
@@ -481,6 +481,8 @@ class RuntimeRenderTest(unittest.TestCase):
                 button.get_action_name = lambda index, actions=actions: actions[index]
                 button.do_action = lambda index: effects.append(index) or True
                 with self.subTest(case=name, restore=restore), SnapshotFixture(FakeAccessible("frame", "Editor", children=[button])) as fixture:
+                    restored = []
+                    fixture.restore = lambda: restored.append(True)
                     fixture.app.get_toolkit_name = lambda toolkit=toolkit: toolkit
                     fixture.app.get_toolkit_version = lambda version=version: version
                     element = runtime.make_snapshot("Fixture", False)["elements"][1]
@@ -493,6 +495,7 @@ class RuntimeRenderTest(unittest.TestCase):
                         result = runtime.run_operation(request)
                         self.assertEqual(effects, [0])
                         self.assertEqual(result["action"]["delivery"], "background")
+                    self.assertEqual(restored, [True] if refused and restore else [])
 
     def test_restoration_requires_selected_window_focus_before_keyboard_input(self):
         restore_window = runtime.restore_window
@@ -504,6 +507,7 @@ class RuntimeRenderTest(unittest.TestCase):
             {"name": "two native windows", "ids": "72\n71\n"},
             {"name": "failed managed window identity", "managed": [71, None]},
             {"name": "window on another workspace", "desktops": ("0", "2"), "error": "another workspace"},
+            {"name": "unmapped window on another workspace", "windows": 2, "ack": True, "desktops": ("0", "2"), "error": "another workspace"},
             {"name": "window on every workspace", "desktops": ("0", "-1"), "expected": True, "native": True},
             {"name": "Wayland", "session": "wayland", "error": "unsupported capability"},
             {"name": "search timeout", "timeout": "search"},
@@ -602,10 +606,20 @@ class RuntimeRenderTest(unittest.TestCase):
                 def run(command, input=None, **_):
                     commands.append(command)
                     chunks.append(len(input))
+                exits = []
+                @contextmanager
+                def keymap(*_):
+                    # Why: an exception exit releases newly held keys, which would release the user's modifier.
+                    try:
+                        yield None
+                        exits.append("clean")
+                    except BaseException:
+                        exits.append("exception")
+                        raise
                 with patch.object(runtime, "x11_pointer_state", pointer), \
                      patch.object(runtime.Atspi, "set_timeout", lambda *_: None, create=True), \
                      patch.object(runtime.shutil, "which", lambda _: "/usr/bin/xdotool"), \
-                     patch.object(runtime, "temporary_x11_keymap", lambda *_: nullcontext(None)), \
+                     patch.object(runtime, "temporary_x11_keymap", keymap), \
                      patch.object(runtime.subprocess, "run", run):
                     if "error" in case:
                         with self.assertRaisesRegex(RuntimeError, case["error"]):
@@ -613,7 +627,23 @@ class RuntimeRenderTest(unittest.TestCase):
                     else:
                         runtime.type_text(text, window)
                 self.assertEqual(chunks, case["typed"])
+                self.assertEqual(exits, ["clean"])
                 self.assertEqual(any("--clearmodifiers" in command for command in commands), bool(case.get("clear")))
+
+    def test_interrupted_pointer_input_releases_the_button_before_the_pointer_is_put_back(self):
+        for name, send in (("drag", lambda: runtime.drag_between((10, 10), (50, 50))),
+                           ("click", lambda: runtime.click_at(10, 10, "left", 1))):
+            events = []
+            def sleep(_):
+                raise SystemExit(143)
+            with self.subTest(tool=name), \
+                 patch.object(runtime, "x11_pointer_state", lambda: (700, 800, 0)), \
+                 patch.object(runtime.time, "sleep", sleep), \
+                 patch.object(runtime.Atspi, "generate_mouse_event", lambda *args: events.append(args[2]), create=True):
+                with self.assertRaises(SystemExit), runtime.pointer_put_back():
+                    send()
+            self.assertEqual(events[-2:], ["b1r", "abs"])
+            self.assertEqual(events.count("b1p"), 1)
 
     def test_return_in_a_background_gtk_entry_activates_it_without_keys(self):
         for toolkit, multi_line, activates_window in (("gtk", False, False), ("gtk", False, True), ("Qt", False, False), ("gtk", True, False)):

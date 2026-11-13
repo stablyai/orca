@@ -217,55 +217,67 @@ def restore_window(app, window=None):
     target = window if window is not None else choose_window(app)[1]
     if has_state(target, Atspi.StateType.ACTIVE):
         return
-    if not wayland_session() and activate_x11_window(app, target) and wait_window_focused(target):
-        return
+    xdotool = None if wayland_session() else shutil.which("xdotool")
+    ids = x11_window_ids(app, xdotool) if xdotool else None
+    if ids:
+        windows = windows_for(app)
+        single = len(ids) == 1 and len(windows) == 1 and windows[0][1] == target
+        # Why every id when the target can't be told apart: GrabFocus would also switch to its workspace.
+        refuse_other_desktop(xdotool, ids)
+        if single:
+            attempt(lambda: subprocess.run([xdotool, "windowactivate", "--sync", ids[0]], check=False,
+                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2))
+            if wait_window_focused(target):
+                return
     # Why last: GrabFocus is unsupported on GTK4 and only sometimes activates GTK3 windows (agent-desktop L4-16).
     component = attempt(target.get_component_iface)
     if component is not None:
         attempt(lambda: Atspi.Component.grab_focus(component), False)
+    wait_window_focused(target)
 
 
-def activate_x11_window(app, target):
-    windows = windows_for(app)
-    if len(windows) != 1 or windows[0][1] != target:
-        return False
+def x11_window_ids(app, xdotool):
+    """The managed X11 windows the app's process owns, or None when they can't be read."""
     pid = pid_of(app)
-    xdotool = shutil.which("xdotool")
-    if not pid or not xdotool:
-        return False
+    if not pid:
+        return None
     try:
         result = subprocess.run([xdotool, "search", "--pid", str(pid)],
                                 check=False, capture_output=True, text=True, timeout=2)
-        ids = result.stdout.split()
-        if result.returncode != 0 or any(not value.isdigit() or int(value) <= 0 for value in ids):
-            return False
-        managed_ids = attempt(lambda: {str(GdkX11.X11Window.get_xid(item))
-                                      for item in Gdk.Screen.get_default().get_window_stack()})
-        if managed_ids is None or any(not value.isdigit() or int(value) <= 0 for value in managed_ids):
-            return False
-        ids = [value for value in ids if value in managed_ids]
-        if len(ids) != 1:
-            return False
-        refuse_other_desktop(xdotool, ids[0])
-        subprocess.run([xdotool, "windowactivate", "--sync", ids[0]], check=False,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
-        return True
     except (OSError, subprocess.TimeoutExpired):
-        return False
+        return None
+    ids = result.stdout.split()
+    if result.returncode != 0 or any(not value.isdigit() or int(value) <= 0 for value in ids):
+        return None
+    managed_ids = attempt(lambda: {str(GdkX11.X11Window.get_xid(item))
+                                  for item in Gdk.Screen.get_default().get_window_stack()})
+    if managed_ids is None or any(not value.isdigit() or int(value) <= 0 for value in managed_ids):
+        return None
+    return [value for value in ids if value in managed_ids]
 
 
-def refuse_other_desktop(xdotool, window_id):
+def refuse_other_desktop(xdotool, window_ids):
     def desktop(*command):
-        result = subprocess.run([xdotool, *command], check=False, capture_output=True, text=True, timeout=2)
+        try:
+            result = subprocess.run([xdotool, *command], check=False, capture_output=True, text=True, timeout=2)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
         value = result.stdout.strip()
         return int(value) if result.returncode == 0 and re.fullmatch(r"-?\d+", value) else None
 
-    current, target = desktop("get_desktop"), desktop("get_desktop_for_window", window_id)
-    # Why: windowactivate switches the user's whole view to the window's desktop.
-    if current is not None and target is not None and target not in ALL_DESKTOPS and target != current:
-        raise RuntimeError("background_unavailable: the target window is on another workspace, and raising it would "
-                           "switch the user's view there; nothing was sent. Ask the user to move it to the current "
-                           "workspace or switch there themselves")
+    current = desktop("get_desktop")
+    if current is None:
+        return
+    # Why: activating a window on another desktop switches the user's whole view there.
+    if any(target is not None and target not in ALL_DESKTOPS and target != current
+           for target in (desktop("get_desktop_for_window", window_id) for window_id in window_ids)):
+        raise RuntimeError("background_unavailable: a window of this app is on another workspace, and raising the "
+                           "target could switch the user's view there; nothing was sent. Ask the user to move it to "
+                           "the current workspace or switch there themselves")
+
+
+def any_window_active(app):
+    return any(has_state(window, Atspi.StateType.ACTIVE) for _, window in windows_for(app))
 
 
 def wait_window_focused(window):
@@ -1517,11 +1529,12 @@ def foreground_effect(app, node, action, activates):
     return None
 
 
-def refuse_foreground_effect(app, node, action, activates, operation):
-    if operation.get("restoreWindow"):
-        return
+def refuse_foreground_effect(app, node, window, action, activates, operation):
     effect = foreground_effect(app, node, action, activates)
-    if effect is not None:
+    if effect is not None and operation.get("restoreWindow"):
+        # Why: the user allowed the takeover, so the menu or dialog opens over its own window, not behind the user's.
+        restore_window(app, window)
+    elif effect is not None:
         role, name = role_of(node), sanitize_text(name_of(node))
         raise RuntimeError(f'background_unavailable: the {role} "{name}" {effect}; nothing was sent. {RESTORE_HINT}')
 
@@ -1600,9 +1613,16 @@ def click_at(x, y, button, count, modifiers=None):
     down, up = buttons[button]
     for _ in range(parsed_count):
         Atspi.generate_mouse_event(round(x), round(y), "abs")
-        Atspi.generate_mouse_event(round(x), round(y), down)
+        press_and_release(round(x), round(y), down, up)
+
+
+def press_and_release(x, y, down, up):
+    Atspi.generate_mouse_event(x, y, down)
+    try:
         time.sleep(0.03)
-        Atspi.generate_mouse_event(round(x), round(y), up)
+    finally:
+        # Why: an interrupted press must not leave the button held while the pointer is put back.
+        Atspi.generate_mouse_event(x, y, up)
 
 
 def click_modifier_keys(raw):
@@ -1657,20 +1677,21 @@ def scroll_at(x, y, direction, pages):
     page_count = max(1, math.ceil(require_positive_number(1 if pages is None else pages, "pages")))
     for _ in range(page_count):
         Atspi.generate_mouse_event(round(x), round(y), "abs")
-        Atspi.generate_mouse_event(round(x), round(y), down)
-        time.sleep(0.03)
-        Atspi.generate_mouse_event(round(x), round(y), up)
+        press_and_release(round(x), round(y), down, up)
 
 
 def drag_between(start, end):
     Atspi.generate_mouse_event(round(start[0]), round(start[1]), "abs")
     Atspi.generate_mouse_event(round(start[0]), round(start[1]), "b1p")
-    for step in range(1, 13):
-        x = start[0] + (end[0] - start[0]) * step / 12
-        y = start[1] + (end[1] - start[1]) * step / 12
-        Atspi.generate_mouse_event(round(x), round(y), "abs")
-        time.sleep(0.02)
-    Atspi.generate_mouse_event(round(end[0]), round(end[1]), "b1r")
+    x, y = start
+    try:
+        for step in range(1, 13):
+            x = start[0] + (end[0] - start[0]) * step / 12
+            y = start[1] + (end[1] - start[1]) * step / 12
+            Atspi.generate_mouse_event(round(x), round(y), "abs")
+            time.sleep(0.02)
+    finally:
+        Atspi.generate_mouse_event(round(x), round(y), "b1r")
 
 
 def is_enter_key(raw):
@@ -1912,19 +1933,21 @@ def type_text(value, window=None):
     if len(text) > 600:
         raise RuntimeError("unsupported capability: synthetic text is limited to 600 characters; split the text or use paste_text")
     Atspi.set_timeout(ATSPI_METHOD_TIMEOUT_MS, ATSPI_STARTUP_TIMEOUT_MS)
+    stopped = None
     with temporary_x11_keymap(text, lambda: synthetic_text_receipt(window, text)) as receipt:
         typed = 0
         for start in range(0, len(text), TYPE_CHUNK_CHARACTERS):
             chunk = text[start:start + TYPE_CHUNK_CHARACTERS]
             # Why per chunk: the user can switch windows or hold a key while a long text is typed.
             if window is not None and not has_state(window, Atspi.StateType.ACTIVE):
-                raise RuntimeError(f"text_input_incomplete: the target window lost focus after {typed} of {len(text)} characters; the rest was not typed; inspect state before retrying")
+                stopped = RuntimeError(f"text_input_incomplete: the target window lost focus after {typed} of {len(text)} characters; the rest was not typed; inspect state before retrying")
+                break
             try:
                 mask = require_idle_keyboard()
             except RuntimeError as error:
-                if typed == 0:
-                    raise
-                raise RuntimeError(f"text_input_incomplete: a modifier key was pressed after {typed} of {len(text)} characters; the rest was not typed; inspect state before retrying") from error
+                # Why break, not raise: an exception exit releases newly held keys, which here are the user's.
+                stopped = error if typed == 0 else RuntimeError(f"text_input_incomplete: a modifier key was pressed after {typed} of {len(text)} characters; the rest was not typed; inspect state before retrying")
+                break
             # Why: --clearmodifiers would release keys the user holds; with none held it only lifts Caps Lock.
             clear = ["--clearmodifiers"] if mask is not None and mask & LOCK_MASK else []
             try:
@@ -1937,8 +1960,10 @@ def type_text(value, window=None):
             except (subprocess.SubprocessError, OSError) as error:
                 raise RuntimeError("text_input_incomplete: text may be partially typed and keyboard modifiers may have changed; inspect state before retrying") from error
             typed += len(chunk)
-        if receipt is not None:
+        if receipt is not None and stopped is None:
             wait_for_typed_text(receipt)
+    if stopped is not None:
+        raise stopped
 
 
 def text_selection(text):
@@ -2118,14 +2143,14 @@ def run_operation(operation):
 
     app = find_app(operation.get("app", ""))
     _, window = choose_window(app, operation.get("windowId"), operation.get("windowIndex"))
-    was_active = has_state(window, Atspi.StateType.ACTIVE)
+    was_active = (has_state(window, Atspi.StateType.ACTIVE), any_window_active(app))
     saved = operation.get("element")
     node = find_element(app, saved)
     action = None
 
     def pointer_input(what, hint, points, send):
+        points(screen_rect(window))  # Why first: a stale or off-window target is not a reason to ask for a raise.
         require_pointer_route(operation, what, hint)
-        points(screen_rect(window))  # Why first: a stale or off-window target must not raise the window.
         restored = restore_pointer_window(app, window)
         with pointer_put_back():
             send(*points(restored))
@@ -2142,7 +2167,7 @@ def run_operation(operation):
         if semantic:
             names = action_names(node)
             name = (names[preferred] if preferred < len(names) else "") or "action"
-            refuse_foreground_effect(app, node, name, True, operation)
+            refuse_foreground_effect(app, node, window, name, True, operation)
         if semantic and perform_action(node, preferred):
             action = {"path": "accessibility", "actionName": name, "fallbackReason": None}
         else:
@@ -2161,7 +2186,7 @@ def run_operation(operation):
         if index is None:
             raise RuntimeError(f'{operation.get("action", "")} is not a valid secondary action')
         label = names[index] or wanted
-        refuse_foreground_effect(app, node, label, compact_action(label) in {"click", "press", "activate", "toggle", "open"}, operation)
+        refuse_foreground_effect(app, node, window, label, compact_action(label) in {"click", "press", "activate", "toggle", "open"}, operation)
         if not perform_action(node, index):
             raise RuntimeError(f'{operation.get("action", "")} is not a valid secondary action')
         action = {"path": "accessibility", "actionName": label, "fallbackReason": None}
@@ -2234,7 +2259,8 @@ def run_operation(operation):
         snapshot = make_snapshot(operation.get("app", ""), include_screenshot, None, None)
 
     # Why measured: synthetic input needs the window in front, and an app can activate itself after an AT-SPI action.
-    took_foreground = not was_active and has_state(window, Atspi.StateType.ACTIVE)
+    took_foreground = ((not was_active[0] and has_state(window, Atspi.StateType.ACTIVE))
+                       or (not was_active[1] and any_window_active(app)))
     action["delivery"] = "background" if action["path"] == "accessibility" and not took_foreground else "foreground"
     return {"ok": True, "action": action, "snapshot": snapshot}
 
