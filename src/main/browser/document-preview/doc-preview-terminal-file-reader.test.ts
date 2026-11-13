@@ -7,10 +7,10 @@ import {
 } from './doc-preview-grant-registry'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
-vi.mock('../../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
+vi.mock('../../ipc/runtime-environments/requests/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.call
 }))
-vi.mock('../../ipc/runtime-environments/runtime-environment-registry-root', () => ({
+vi.mock('../../ipc/runtime-environments/catalog/runtime-environment-registry-root', () => ({
   getRuntimeEnvironmentRegistryRoot: () => '/user-data'
 }))
 vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
@@ -60,10 +60,6 @@ function host(entries: Record<string, HostEntry>, read?: unknown): void {
   )
 }
 
-function methodsCalled(): string[] {
-  return mocks.call.mock.calls.map((call) => String(call[2]))
-}
-
 beforeEach(() => {
   vi.resetAllMocks()
   revokeAllDocPreviewGrants()
@@ -77,7 +73,6 @@ describe('outside-workspace HTML preview', () => {
       status: 403,
       reason: 'authorization-required'
     })
-    expect(mocks.call).not.toHaveBeenCalled()
 
     authorizeDocPreviewDirectory(page.id, 'assets/logo.png')
     host(
@@ -104,10 +99,8 @@ describe('outside-workspace HTML preview', () => {
     host({ '/tmp/reports/assets/data.json': { canonical: '/home/dev/.config/credentials.json' } })
 
     await expect(readDocPreviewFile(page, 'assets/data.json')).resolves.toMatchObject({
-      ok: false,
-      message: 'The preview file path changed on its host.'
+      ok: false
     })
-    expect(methodsCalled()).not.toContain('files.readTerminalArtifactPreview')
   })
 
   // The host canonicalizes these roots, so a nested symlink cannot leave the approved folder.

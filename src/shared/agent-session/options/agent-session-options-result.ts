@@ -52,7 +52,7 @@ export type AgentSessionOptionsResult = {
     /** Accepted input origins; an empty map excludes all display-only observations. */
     acceptedInputSources?: AgentSessionAcceptedInputSources
     model?: string
-    /** Current child reports this model for display; it is never a next-turn selection. */
+    /** Legacy hosts may include an answer model; clients ignore it when presenting selection. */
     reportedModel?: string
     effort?: string
     /** Child-scoped actual for display only; effort remains accepted raw input. */

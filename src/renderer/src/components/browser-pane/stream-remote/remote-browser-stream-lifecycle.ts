@@ -1,5 +1,6 @@
 import type { RuntimeStatus } from '../../../../../shared/runtime-types'
 import { RemoteBrowserPageSession } from './remote-browser-page-session'
+import { RemoteBrowserJavaScriptDialog } from './remote-browser-javascript-dialog'
 import { openRemoteBrowserScreencastStream } from './remote-browser-screencast-subscription'
 import { RemoteBrowserStreamRestartScheduler } from './remote-browser-stream-restart-scheduler'
 import { RemoteBrowserStreamLiveness } from './remote-browser-stream-liveness'
@@ -219,10 +220,8 @@ export class RemoteBrowserStreamLifecycle {
     if (!operationToken || !tokens.isCurrent(operationToken)) {
       return null
     }
-    const target = {
-      kind: 'environment' as const,
-      environmentId: operationToken.environmentId
-    }
+    const { environmentId } = operationToken
+    const target = { kind: 'environment' as const, environmentId }
     const status = await deps.callRpc<RuntimeStatus>(target, 'status.get', undefined, {
       timeoutMs: 15_000
     })
@@ -278,7 +277,8 @@ export class RemoteBrowserStreamLifecycle {
           },
           onPageMissing: () => deps.closeMissingRemotePage(pageId),
           onFrame: (bytes) => deps.handleFrameBytes(token, bytes),
-          onClosed: () => this.handleStreamClosed(token, true)
+          onClosed: () => this.handleStreamClosed(token, true),
+          javaScriptDialog: new RemoteBrowserJavaScriptDialog(deps)
         }
       )
       return { token, unsubscribe: subscription.unsubscribe }

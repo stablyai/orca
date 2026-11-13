@@ -30,6 +30,7 @@ export type FetchAllCyclePrepared = {
   codexFetchGated: boolean
   codexStateBeforeFetch: ProviderRateLimits | null
   codexProvenance: string | null
+  codexHomePath: string | null
   codexGeneration: number
   opencodeConfigChanged: boolean
   opencodeGeneration: number
@@ -152,7 +153,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
 
     this.updateState({
       ...previousState,
-      claude: this.withFetchingStatus(previousState.claude, 'claude'),
+      claude: this.claudeStateAtCycleStart(previousState.claude),
       // A gated slot makes no attempt and cannot settle a fetching chip.
       codex: codexFetchGated
         ? codexStateBeforeFetch
@@ -219,7 +220,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
 
     // Live display does not waive automated Retry-After gates.
     const claudeFetchGated =
-      !options?.force && this.shouldSkipAutomatedFetch('claude', previousState.claude)
+      !this.isClaudeOAuthUsageEnabled() ||
+      claudeGeneration !== this.claudeFetchGeneration ||
+      (!options?.force && this.shouldSkipAutomatedFetch('claude', previousState.claude))
 
     const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
       await Promise.allSettled([
@@ -230,7 +233,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
               allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
               allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
               networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
+              signal: this.claudeUsageFetchSignal(signal)
             }),
         codexFetchGated
           ? Promise.resolve(previousState.codex as ProviderRateLimits)
@@ -297,6 +300,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       codexFetchGated,
       codexStateBeforeFetch,
       codexProvenance,
+      codexHomePath,
       codexGeneration,
       opencodeConfigChanged,
       opencodeGeneration,

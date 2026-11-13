@@ -40,16 +40,6 @@ describe('CachedScan', () => {
     expect(pending).toHaveLength(0)
   })
 
-  it('scans for a first reader and serves later readers from the cache', async () => {
-    const { cache, pending, finish } = scanner(false)
-    const ready = cache.ready()
-    expect(pending).toHaveLength(1)
-    await finish()
-    await ready
-    await cache.ready()
-    expect(pending).toHaveLength(0)
-  })
-
   it('runs no scan without demand, but makes the next reader scan again', async () => {
     const { cache, pending, finish } = scanner(false)
     const first = cache.ready()

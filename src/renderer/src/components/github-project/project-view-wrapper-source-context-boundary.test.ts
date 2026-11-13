@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GitHubProjectRow } from '../../../../shared/github/project-types'
+import type { GitHubProjectRow } from '../../../../shared/github/projects/project-types'
 
 describe('ProjectViewWrapper GitHub source context boundary', () => {
   it('builds project work items with a host-pinned repository identity', async () => {

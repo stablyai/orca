@@ -26,6 +26,8 @@ import {
   readRemoteBrowserPage,
   readRemoteBrowserPageObservation
 } from './remote-browser-page-observation'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { javaScriptDialogPrompt } from '../browser-javascript-dialog-prompt'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -72,6 +74,8 @@ export function useRemoteBrowserPageLifecycle({
   const lifecycleRef = useRef<RemoteBrowserStreamLifecycle | null>(null)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
+  // Stable for the provider's life, so the once-built lifecycle may hold it.
+  const confirm = useConfirmationDialog()
 
   useLayoutEffect(() => {
     currentWorkspaceIdRef.current = browserTab.workspaceId
@@ -134,7 +138,8 @@ export function useRemoteBrowserPageLifecycle({
         streamBridgeRef.current.closeMissingRemotePage(remotePageId),
       waitForViewportSize: () => streamBridgeRef.current.waitForViewportSize(),
       readViewportSize: () => remoteViewportSizeRef.current,
-      syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId)
+      syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId),
+      askJavaScriptDialog: (dialog, signal) => javaScriptDialogPrompt.ask(confirm, dialog, signal)
     })
   }
   const lifecycle = lifecycleRef.current

@@ -1,5 +1,5 @@
 import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { isValidTerminalTabId } from '../../../shared/workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import { makePaneSpawnReservationKey } from './pane/spawn-reservation'
 
 type PtySpawnPaneCoordinates = {

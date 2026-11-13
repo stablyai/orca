@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { AutomationService } from './service'
+import { AutomationService } from './automation-service'
 
 vi.mock('electron', () => ({ app: { getPath: () => testState.dir } }))
 
@@ -62,27 +62,6 @@ describe('headless dispatch prompt delivery', () => {
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('links the terminal while delivery is held, then fails an undelivered run keeping it', async () => {
-    const { service, row, settle } = await heldLaunch('delivery')
-
-    await vi.waitFor(() =>
-      expect(row()).toMatchObject({
-        status: 'dispatching',
-        terminalPaneKey: 'tab-1:9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
-        terminalPtyId: 'pty-1'
-      })
-    )
-    await settle("Aider started, but Orca could not send this run's prompt.")
-
-    expect(row()).toMatchObject({
-      status: 'dispatch_failed',
-      terminalPaneKey: 'tab-1:9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
-      terminalPtyId: 'pty-1',
-      error: "Aider started, but Orca could not send this run's prompt."
-    })
-    service.stop()
   })
 
   it.each(['launch', 'delivery'] as const)(

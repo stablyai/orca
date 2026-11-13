@@ -1,3 +1,4 @@
+import { isGlobalAiTextAction } from './recipes/source-control-ai-actions'
 import {
   CUSTOM_AGENT_ID,
   getCommitMessageAgentSpec,
@@ -86,14 +87,34 @@ const COMMAND_TEMPLATE_EMPTY = {
   commitMessage: 'commandTemplateEmptyCommitMessage',
   pullRequest: 'commandTemplateEmptyPullRequest',
   branchName: 'commandTemplateEmptyBranchName',
-  conversationName: 'commandTemplateEmptyChatName'
+  conversationName: 'commandTemplateEmptyChatName',
+  dictationCleanup: 'commandTemplateEmptyDictationCleanup'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
 const AGENT_CANNOT_GENERATE = {
   commitMessage: 'agentCannotGenerateCommitMessage',
   pullRequest: 'agentCannotGeneratePullRequest',
   branchName: 'agentCannotGenerateBranchName',
-  conversationName: 'agentCannotGenerateChatName'
+  conversationName: 'agentCannotGenerateChatName',
+  dictationCleanup: 'agentCannotGenerateDictationCleanup'
+} as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
+
+// Each failure names the settings page where the action's agent is chosen.
+const AGENT_UNSUPPORTED = {
+  commitMessage: 'sourceControlAgentUnsupported',
+  pullRequest: 'sourceControlAgentUnsupported',
+  branchName: 'sourceControlAgentUnsupported',
+  conversationName: 'chatNameAgentUnsupported',
+  dictationCleanup: 'dictationCleanupAgentUnsupported'
+} as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
+
+const CUSTOM_COMMAND_EMPTY = {
+  commitMessage: 'sourceControlCustomCommandEmpty',
+  pullRequest: 'sourceControlCustomCommandEmpty',
+  branchName: 'sourceControlCustomCommandEmpty',
+  conversationName: 'chatNameCustomCommandEmpty',
+  // The custom command is set under Source Control AI for every action that isn't a chat name.
+  dictationCleanup: 'sourceControlCustomCommandEmpty'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
 function supportedAgentLabels(): string {
@@ -113,17 +134,12 @@ export function resolveSourceControlAiForOperation(
 ): ResolveSourceControlAiResult {
   const legacy = input.settings.commitMessageAi
   const source = normalizeSettings(input.settings.sourceControlAi, legacy)
-  const repoOverrides =
-    input.operation === 'conversationName'
-      ? null
-      : normalizeRepoOverrides(input.repo?.sourceControlAi)
-  const forChatNames = input.operation === 'conversationName'
+  const repoOverrides = isGlobalAiTextAction(input.operation)
+    ? null
+    : normalizeRepoOverrides(input.repo?.sourceControlAi)
   const agentUnsupported = (): { ok: false } & TextGenerationFailureFields =>
     resolveFailure(
-      textGenerationFailure(
-        forChatNames ? 'chatNameAgentUnsupported' : 'sourceControlAgentUnsupported',
-        { agents: supportedAgentLabels() }
-      )
+      textGenerationFailure(AGENT_UNSUPPORTED[input.operation], { agents: supportedAgentLabels() })
     )
   const prCreationDefaults = resolvePrCreationDefaults(
     source,
@@ -158,11 +174,7 @@ export function resolveSourceControlAiForOperation(
   }
   if (isCustomAgentId(agentChoice)) {
     if (!customAgentCommand) {
-      return resolveFailure(
-        textGenerationFailure(
-          forChatNames ? 'chatNameCustomCommandEmpty' : 'sourceControlCustomCommandEmpty'
-        )
-      )
+      return resolveFailure(textGenerationFailure(CUSTOM_COMMAND_EMPTY[input.operation]))
     }
     return {
       ok: true,
@@ -265,7 +277,7 @@ export function resolveSourceControlAiActionModelDefault(
     )
   }
   const repoOverrides = { ...input.repo?.sourceControlAi?.modelOverridesByOperation }
-  if (input.operation !== 'conversationName') {
+  if (!isGlobalAiTextAction(input.operation)) {
     repoOverrides[input.operation] =
       scope === 'repo' ? withoutModelPick(repoOverrides[input.operation]) : undefined
   }

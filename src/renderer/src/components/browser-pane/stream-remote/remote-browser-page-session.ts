@@ -15,7 +15,7 @@ export type RemoteBrowserRpcCall = <TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown,
-  options?: { timeoutMs?: number; suppressFeatureInteraction?: boolean }
+  options?: { timeoutMs?: number; suppressFeatureInteraction?: boolean; signal?: AbortSignal }
 ) => Promise<TResult>
 
 export type RemoteBrowserPageHandle = {

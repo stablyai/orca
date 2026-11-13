@@ -10,7 +10,7 @@ import type {
   ManagedDataAccountsState
 } from '../../../../shared/managed-account-types'
 import type { CodexAccountService } from '../../../codex-accounts/service'
-import type { CodexResetCreditRejectedBeforeProviderReason } from '../../../codex-accounts/codex-account-service-types'
+import type { CodexResetCreditRejectedBeforeProviderReason } from '../../../codex-accounts/account-management/codex-account-service-types'
 import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
 import type { RateLimitService } from '../../../rate-limits/service/rate-limit-service'
 import type {
@@ -23,7 +23,7 @@ import type {
   RateLimitState
 } from '../../../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../../../shared/codex-reset-credit-scope'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/execution/commit-message-agent-environment'
 import {
   getClaudeSelectionTargetForAccount,
   getSelectedClaudeAccountIdForTarget,

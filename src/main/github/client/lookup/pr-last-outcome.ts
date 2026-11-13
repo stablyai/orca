@@ -1,4 +1,4 @@
-import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
+import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 // A phone's re-read right after the desktop's own lookup reuses it instead of asking GitHub again.
 const PHONE_REUSE_MAX_AGE_MS = 30_000

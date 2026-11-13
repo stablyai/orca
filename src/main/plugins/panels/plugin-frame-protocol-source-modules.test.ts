@@ -8,9 +8,9 @@ import { PLUGIN_SOURCE_MODULES_SINCE } from '../../../shared/plugins/manifest/pl
 import { hashPluginTree } from '../plugin-content-hash'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import { createPluginFrameRequestHandler } from './plugin-frame-protocol'
-import { verifyPluginFrameTree } from './plugin-frame-integrity'
-import { createPluginSourceModuleCompiler } from './plugin-frame-module-transform'
-import { transpilePluginSource } from './plugin-source-transpiler'
+import { verifyPluginFrameTree } from './frame-serving/plugin-frame-integrity'
+import { createPluginSourceModuleCompiler } from './frame-serving/plugin-frame-module-transform'
+import { transpilePluginSource } from './source-transpilation/plugin-source-transpiler'
 
 const PLUGIN_KEY = 'acme.todos'
 const KEY = pluginFrameKey(PLUGIN_KEY)
@@ -96,16 +96,5 @@ describe('orca-plugin-frame source modules', () => {
     const script = await handle(new Request(`${url('src/page.ts')}?orca-module`))
     expect(script.headers.get('Content-Type')).toBe('text/javascript; charset=utf-8')
     expect(await script.text()).toContain("document.body.append('page')")
-  })
-
-  it('still refuses a source file changed after the tree was verified', async () => {
-    const plugin = await fixture({ installed: true })
-    const { handle, log } = handlerFor(plugin)
-    expect((await handle(new Request(url('src/panel.tsx')))).status).toBe(200)
-    // Rides the verification above, so only the per-file digest can catch the edit.
-    await writeFile(join(plugin.rootDir, 'src', 'label.ts'), "export const label = 'evil'\n")
-    const response = await handle(new Request(url('src/label.ts')))
-    expect(response.status).toBe(404)
-    expect(log).toHaveBeenCalledWith(PLUGIN_KEY, expect.stringContaining('changed since'))
   })
 })

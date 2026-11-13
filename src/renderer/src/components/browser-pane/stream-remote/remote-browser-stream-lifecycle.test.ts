@@ -44,6 +44,48 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.currentStatusKind).toBe('live')
   })
 
+  it("asks once about the streamed page's dialog and answers it on the host", async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+    const stream = harness.streams[0]
+
+    stream.emitDialog('confirm', 'Proceed?')
+    // The host repeats the dialog it still holds when a turned-away nested one closes.
+    stream.emitDialog('confirm', 'Proceed?')
+    expect(harness.dialogAsks).toHaveLength(1)
+    expect(harness.dialogAsks[0].dialog).toEqual({
+      type: 'confirm',
+      message: 'Proceed?',
+      defaultPromptText: '',
+      origin: null
+    })
+
+    harness.dialogAsks[0].answer({ accept: true, promptText: '' })
+    await settle()
+    expect(harness.rpcParams('browser.dialogAccept')).toEqual({
+      worktree: 'worktree:wt-1',
+      page: 'page-1',
+      text: ''
+    })
+  })
+
+  it('drops the ask when the host closes the dialog some other way', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+    const stream = harness.streams[0]
+
+    stream.emitDialog('alert', 'Saved')
+    stream.emitDialogClosed()
+    expect(harness.dialogAsks[0].signal.aborted).toBe(true)
+
+    // The next dialog gets its own ask.
+    stream.emitDialog('alert', 'Again')
+    expect(harness.dialogAsks).toHaveLength(2)
+    harness.dialogAsks[1].answer(null)
+    await settle()
+    expect(harness.rpcLog).toContain('browser.dialogDismiss')
+  })
+
   // Parked unmount has no effect cleanup left; parking must already have unsubscribed.
   it('leaves nothing subscribed when the pane unmounts while its stream is parked', async () => {
     const harness = createHarness()

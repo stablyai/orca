@@ -146,6 +146,17 @@
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\",\"params\":{\"worktreeId\":\"repo-9::/w\"}}"
     },
+    "8ea2eb0159dd": {
+      "launched": {
+        "kind": "sent",
+        "opens": {
+          "paneKey": {
+            "$rpc": "null"
+          },
+          "worktreeId": "repo-9::/w"
+        }
+      }
+    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
@@ -255,11 +266,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "eb8d47f90956": {
-      "launched": {
-        "kind": "sent"
-      }
     }
   },
   "recording": {
@@ -285,7 +291,7 @@
           "settlements": {
             "launch": "eb79a9b3682a"
           },
-          "state": "eb8d47f90956",
+          "state": "8ea2eb0159dd",
           "effects": []
         }
       }

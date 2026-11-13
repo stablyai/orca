@@ -1,6 +1,7 @@
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import { isWorktreeRetiredByRemoval } from '../worktree/removal/removal-visibility'
 import {
   filterWorkspaceRows,
   type WorkspaceRowFactReader,
@@ -32,7 +33,7 @@ export type VisibleSidebarWorktreeInputs = {
 /** The sidebar's visible worktrees, in display order, before grouping. */
 export function selectVisibleSidebarWorktrees({
   rows,
-  ancestorByIdentity,
+  ancestorByIdentity: everyAncestorByIdentity,
   rankOf,
   filters,
   facts,
@@ -44,9 +45,15 @@ export function selectVisibleSidebarWorktrees({
   forcedVisibleWorktreeIds
 }: VisibleSidebarWorktreeInputs): Worktree[] {
   // Keep valid nonarchived ancestors despite ordinary filters so children retain their hierarchy.
-  const selectedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
+  const listedFilterIds = filterRepoIds.filter((id) => !facts.isProjectHidden(id))
+  const selectedRepoIds = listedFilterIds.length > 0 ? new Set(listedFilterIds) : null
+  // Hidden projects are no filter: neither a reveal nor a child's lineage brings their rows back.
+  const ancestorByIdentity = withoutHiddenProjectRows(everyAncestorByIdentity, facts)
 
-  let all = filterWorkspaceRows(rows, filters, facts)
+  let all = filterWorkspaceRows(rows, filters, {
+    ...facts,
+    isArchived: (row) => facts.isArchived(row) || isWorktreeRetiredByRemoval(row)
+  })
 
   if (forcedVisibleWorktreeIds && forcedVisibleWorktreeIds.length > 0) {
     const includedIds = new Set(all.map((worktree) => worktree.id))
@@ -54,7 +61,7 @@ export function selectVisibleSidebarWorktrees({
       const worktree = includedIds.has(worktreeId)
         ? undefined
         : [...ancestorByIdentity.values()].find((candidate) => candidate.id === worktreeId)
-      if (worktree) {
+      if (worktree && !isWorktreeRetiredByRemoval(worktree)) {
         includedIds.add(worktreeId)
         all.push(worktree)
       }
@@ -87,6 +94,20 @@ export function selectVisibleSidebarWorktrees({
       )
 }
 
+function withoutHiddenProjectRows(
+  rows: ReadonlyMap<string, Worktree>,
+  facts: WorkspaceRowFactReader<Worktree>
+): ReadonlyMap<string, Worktree> {
+  let kept: Map<string, Worktree> | null = null
+  for (const [identity, worktree] of rows) {
+    if (facts.isInHiddenProject(worktree)) {
+      kept ??= new Map(rows)
+      kept.delete(identity)
+    }
+  }
+  return kept ?? rows
+}
+
 function addVisibleLineageAncestors(
   worktrees: Worktree[],
   ancestorByIdentity: ReadonlyMap<string, Worktree>,
@@ -106,6 +127,9 @@ function addVisibleLineageAncestors(
   // An older peer's loop reaches a row again before it is included.
   const visiting = new Set<string>()
   const addWithAncestors = (worktree: Worktree): void => {
+    if (isWorktreeRetiredByRemoval(worktree)) {
+      return
+    }
     const identity = getWorktreeHostIdentity(worktree)
     if (included.has(identity) || visiting.has(identity)) {
       return

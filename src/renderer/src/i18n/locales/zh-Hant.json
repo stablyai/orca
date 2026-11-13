@@ -377,7 +377,8 @@
       "remove": "移除…",
       "empty": "此設定檔未啟用任何擴充功能",
       "visitWebStore": "前往 Chrome Web Store",
-      "manage": "管理擴充功能"
+      "manage": "管理擴充功能",
+      "openWebStoreFailed": "無法開啟 Chrome Web Store。"
     },
     "history": {
       "clear": "清除瀏覽記錄",
@@ -809,8 +810,6 @@
       "rowPermissionsLabel": "{{agent}} 權限",
       "customPermissions": "自訂參數",
       "replaceWithPermissionMode": "替換為 {{mode}}",
-      "expandAgentSettings": "展開代理程式設定",
-      "collapseAgentSettings": "收合代理程式設定",
       "permissionArgsTerminalOnly": "這些參數可能會控制 {{agent}} 的終端機權限，因此 Orca 不會加入旗標。聊天則使用上方的「權限」設定。",
       "localSaveFailed": "無法儲存代理程式設定。請再試一次。",
       "localSaveFailedAgent": "無法儲存 {{agent}} 的設定。請再試一次。",
@@ -2062,9 +2061,6 @@
         "unreadableSkillSource": "技能資料夾沒有回應，因此此狀態可能不完整。"
       },
       "useMacosTccPromptNotice": {
-        "title": "看到「Orca 想要存取…」提示？",
-        "description": "當 Orca 中執行的代理程式或終端機工具嘗試存取受保護的檔案時，macOS 可能會顯示權限訊息。請在「設定」中授予「完整磁碟存取權」，以減少此類提示。",
-        "openSettings": "開啟設定",
         "dismiss": "不再顯示"
       },
       "useMacTccAttributionSeveredNotice": {
@@ -3742,7 +3738,6 @@
             "7eee951968": "掃描工作區",
             "191f0bc98e": "關閉",
             "7ae2ad30f4": "重新整理",
-            "b2c1331844": "刪除閒置工作區",
             "7f451a3e2c": "無法忽略清理建議",
             "662b8ec3f8": "工作區清理掃描失敗",
             "9cc26c019d": "移除",
@@ -3752,7 +3747,6 @@
             "1d3503357d": "刪除作業會繼續進行，您可以先關閉此視窗，稍後再回來。",
             "4c2990886e": "已刪除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 個失敗",
-            "deleteButtonCount": "刪除 {{value0}}",
             "archivedStatus": "已封存",
             "74f6c16279": "返回"
           },
@@ -3790,7 +3784,6 @@
             "runningTerminalBlocker": "正在執行的終端機行程",
             "terminalLivenessUnknownBlocker": "無法確認終端機是否仍在執行",
             "dirtyEditorBufferBlocker": "未儲存的編輯器緩衝區",
-            "volatileLocalContextBlocker": "易變本機上下文",
             "recentVisibleContextBlocker": "最近存取的分頁",
             "liveAgentBlocker": "執行中的代理程式",
             "sshDisconnectedBlocker": "遠端不可用",
@@ -3952,6 +3945,8 @@
             "15dd899676": "新增至 {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "終端機問題",
+            "errorTitle": "終端機錯誤",
             "e4aa243f8c": "重新啟動守護行程",
             "retry": "重試",
             "retrying": "正在重試...",
@@ -4334,7 +4329,6 @@
             "1d411fb6a5": "為此存放庫儲存快速命令",
             "8f1e971966": "新增快速命令",
             "3220e2da27": "該快速命令將從您儲存的清單中刪除。",
-            "e8e1a52edb": "刪除「{{value0}}」？",
             "37e1bb90ce": "執行：{{value0}}",
             "77ac113df0": "啟動 {{value0}}: {{value1}}",
             "7b1c9d6ae1": "執行",
@@ -5670,7 +5664,6 @@
           "loading": "正在載入內容...",
           "deleteFailed": "Orca 無法從雲端刪除此內容。",
           "deleted": "已從雲端刪除",
-          "confirmDelete": "確認刪除",
           "moreActions": "{{name}} 的更多操作",
           "deletePackage": "從雲端刪除"
         },
@@ -5933,8 +5926,6 @@
           "5cc1a6701c": "開啟設定",
           "2b56b35f53": "您可以在「設定」中變更此設定。",
           "dd3a45bbbd": "下次我們將跳過此確認。",
-          "fc23c4cbdf": "刪除工作區",
-          "86f0ae1257": "刪除工作區",
           "removeFolderProjectInstead": "請移除資料夾專案，而非刪除此工作區。",
           "gitBlocksMainWorktree": "Git 不允許移除主工作樹。",
           "removeBatchFolder_other": "從 Orca 移除 <target>{{count}} 個工作區</target>。磁碟上的專案資料夾不會被刪除。",
@@ -6030,11 +6021,9 @@
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "取消",
-          "591f330288": "刪除專案群組",
           "2c14ce677a": "正在刪除...",
           "0e0e6764af": "包含的專案",
           "55f75628c0": "不會刪除磁碟上的專案資料夾。",
-          "fec7e9c8ae": "刪除群組",
           "removeContainedProjects_other": "移除內含的 {{count}} 個專案",
           "deleteGroupDescription": "刪除 <name>{{name}}</name>。",
           "moreProjects_other": "另有 {{count}} 個"
@@ -6747,9 +6736,7 @@
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "取消",
           "cf95e3b5bb": "關閉",
-          "deleteWorkspace": "刪除工作區",
           "deleting": "正在刪除...",
-          "forceDelete": "強制刪除",
           "forceDeleting": "正在強制刪除..."
         },
         "HostRemoveDialog": {
@@ -7009,15 +6996,12 @@
           }
         },
         "PreservedBranchBatchReviewDialog": {
-          "c4bf8e7eaf": "審查保留的分支",
           "f21976c9a8": "選擇要強制刪除的本機分支。未選擇的分支保留在其存放庫中。",
           "38c947f7c5": "選擇全部",
           "9602129d38": "已選擇 {{value0}} 個，共 {{value1}} 個",
           "ee39e872d5": "可能尚未合併",
           "676db406fd": "無法取得分支頂端提交",
-          "285e1e4882": "取消",
-          "a0f9863597_one": "強制刪除 {{count}} 個分支",
-          "a0f9863597_other": "強制刪除 {{count}} 個分支"
+          "285e1e4882": "取消"
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "跳到頂部"
@@ -7483,14 +7467,11 @@
           "remoteDetectionFailed": "無法偵測已安裝的代理程式。請檢查主機連線後重試。",
           "retryDetection": "重試",
           "02e0143be5": "已安裝",
-          "92033495ff": "自動",
           "f9f127d664": "覆寫執行檔路徑或名稱，並編輯此代理程式的預設啟動參數或環境。",
           "f95b5c79b8": "安裝",
           "fe4d630c94": "文件",
-          "8dc0192e48": "已停用",
           "5200dac9da": "重設",
           "2e45ca29b6": "命令",
-          "d4d2a45d63": "啟用",
           "1c9a9679ec": "{{value0}} 可用性",
           "0d9e293a02": "重新整理",
           "c9b33eb5c0": "重新整理中…",
@@ -7505,10 +7486,8 @@
           "codexSessionSource": "要匯入的 Codex 主目錄",
           "codexSessionSourceInfo": "關於匯入 Codex 歷史記錄",
           "codexSessionSourceTooltip": "Orca 在隔離的主目錄中執行 Codex。將此項指向您現有的 Codex 主目錄以匯入工作階段歷史記錄。留空則使用 ~/.codex。",
-          "storedDefaultUndetected": "已儲存為預設值，但目前未偵測到",
           "noAgentsDetected": "未偵測到代理程式。若已安裝代理程式，可能是偵測作業逾時。",
-          "9f30095d49": "代理程式權限",
-          "3bddd54c9e": "預設代理程式"
+          "9f30095d49": "代理程式權限"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一個圖示",
@@ -7535,8 +7514,6 @@
             "df205a675e": "色調強度",
             "ba1d9a0607": "側邊欄色調"
           },
-          "interfaceDefaultFont": "預設字型",
-          "terminalDefaultFont": "預設字型",
           "interfaceTitle": "介面",
           "terminalTitle": "終端機",
           "windowSidebarSummary": "側邊欄、狀態列和檔案瀏覽器",
@@ -8403,7 +8380,6 @@
           "c6b155911b": "所有命令",
           "c36912efd5": "從分頁欄中的「快速命令」按鈕執行它們，或者在任何終端機內按一下滑鼠右鍵。",
           "3d9dc558e8": "該快速命令將從您儲存的清單中刪除。",
-          "3edf3deaf8": "刪除「{{value0}}」？",
           "9fcfc29519": "插入",
           "9b3e338d62": "Enter 鍵",
           "4ccc63da87": "代理程式",
@@ -8456,16 +8432,12 @@
           "5426ecbdcb": "本機指令碼將不會執行",
           "95a0411b3e": "範本",
           "175daba180": "例子",
-          "b20c5df6ca": "新增 `orca.yaml` 檔案以啟用此存放庫的共用設定、封存或議題自動化預設值。範例範本：",
-          "56f9a4a1d0": "正在使用 `orca.yaml`",
           "623e0c9f31": "無法解析 `orca.yaml`",
-          "5a67e4793d": "未偵測到 `orca.yaml`",
           "07ba35bc68": "檢查 `scripts:` 下的縮排。掛鉤鍵應使用兩個空格，命令列應使用四個空格。",
           "787ca433ef": "僅定義支援的鍵：`scripts`、`setup`、`archive` 和 `issueCommand`。",
           "ecc73d9125": "將你的檔案與下面可用的範本進行比較，並在需要時複製該結構。",
           "0cc712b823": "核心設定檔存在於存放庫根目錄中，但 Orca 尚無法解析支援的掛鉤定義。",
           "aba825233f": "該檔案包含此版本的 Orca 無法辨識的設定鍵。您可能需要更新 Orca，或檢查檔案是否有拼字錯誤。",
-          "ca424ff135": "共用掛鉤和議題自動化預設值在存放庫中定義，可供所有使用它的人使用。",
           "8bfe65fc60": "使用本機命令",
           "8d6c56bff8": "執行兩者",
           "0fa21e19ec": "工作區的名稱，通常基於分支名稱。",
@@ -8861,8 +8833,7 @@
           "60f8a673a7": "返回應用程式",
           "6503182299": "入門清單",
           "82db1b7de4": "入門清單，已完成 {{value0}}/{{value1}}。顯示設定指南。",
-          "df38d612b7": "尚未新增專案。",
-          "3e483e256b": "沒有符合的專案設定。"
+          "df38d612b7": "尚未新增專案。"
         },
         "ShortcutFilterRail": {
           "28b63545bf": "狀態",
@@ -13330,7 +13301,6 @@
             "abf59262fb": "啟動代理程式前，請檢視並編輯完整的命令輸入內容。",
             "4ede779461": "使用 AI 解決審查衝突",
             "3b203c62f8": "這將從 PR 中永久刪除該評論。",
-            "ea9b649ce3": "刪除評論？",
             "5788d1059d": "無法更新審查討論串。請檢查 GitHub API 配額。",
             "07871c0589": "連結另一個 PR",
             "7f4489f370": "重新整理",
@@ -14198,8 +14168,7 @@
                   "5ddd8cac7f": "放棄所有已暫存的變更？",
                   "d4df3a61df": "放棄對「{{value0}}」的變更？",
                   "5c0bdbc4cb": "恢復「{{value0}}」？",
-                  "d97bf697c9": "這將永久刪除該檔案。此操作無法復原。",
-                  "96c772bee9": "刪除「{{value0}}」？"
+                  "d97bf697c9": "這將永久刪除該檔案。此操作無法復原。"
                 },
                 "dialog": {
                   "3bc61dc989": "取消",
@@ -14435,7 +14404,6 @@
             "unresolved": "無法確定哪個主機擁有此工作區。請檢查連線後重試。"
           },
           "useFileDeletion": {
-            "d979a4fbb5": "永久刪除「{{value0}}」？",
             "92276aceb7": "刪除",
             "7fb9435c86": "這會永久刪除遠端主機上的目錄及其內容。此操作無法復原。",
             "23e98f192f": "這會永久刪除遠端主機上的檔案。此操作無法復原。",
@@ -14616,7 +14584,6 @@
             "resumeInNewCliTooltipChat": "此聊天會維持不變。"
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "要刪除此工作階段嗎？",
             "description": "「{{value0}}」將被刪除。刪除後，也將無法透過 {{value1}} 自身的命令列恢復。",
             "remoteDescription": "「{{value0}}」將從 {{value2}} 刪除。刪除後，也將無法透過 {{value1}} 自身的命令列恢復。",
             "confirm": "刪除"
@@ -16297,7 +16264,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "刪除連結",
           "cdfe166f6f": "編輯連結",
-          "bfc813e909": "開啟連結",
           "7b0b945fdc": "貼上或輸入連結...",
           "copyLink": "複製連結"
         },
@@ -16983,6 +16949,14 @@
                     "logins": {
                       "title": "保持登入狀態",
                       "body": "將現有的登入資訊匯入 Orca，即可直接保持登入狀態。"
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 擴充功能",
+                        "body": "從 Chrome Web Store 安裝擴充功能，並將其釘選在網址列旁。",
+                        "action": "開啟 Chrome Web Store",
+                        "secondaryAction": "知道了"
+                      }
                     }
                   },
                   "tasks": {
@@ -17342,7 +17316,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "顯示較少",
-          "showMore": "顯示更多"
+          "showMore": "顯示更多",
+          "copied": "已複製",
+          "copyFailed": "複製失敗",
+          "copyPrompt": "複製提示詞"
         },
         "AutomationDetail": {
           "host": "主機",
@@ -17377,7 +17354,12 @@
           "precheckNone": "無",
           "migrate": "遷移",
           "migrateNotice": "{{host}} 已升級為新的遠端主機。請遷移此自動化以繼續執行。",
-          "needsMigration": "需要遷移"
+          "needsMigration": "需要遷移",
+          "repeats": "重複",
+          "missedRunGrace": "錯過執行寬限期",
+          "execution": "執行",
+          "notRunYet": "尚未執行",
+          "usageDetail_other": "{{tokens}} token · 已回報 {{known}}/{{count}} 次執行"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -17481,9 +17463,7 @@
           "2faecab10b": "立即執行",
           "13118faadf": "未知專案",
           "73f630b49d": "取消",
-          "9adfab2596": "刪除外部自動化",
           "1e2e41392f": "不要再問",
-          "080dcb5fbb": "刪除自動化",
           "19a6e30eae": "重新整理自動化",
           "77c2778945": "自動化",
           "e1bf9b1512": "工作區不可用。",
@@ -18381,7 +18361,6 @@
         "ArtifactsPage": {
           "signInAgain": "請重新登入 Orca 以載入成品。",
           "loadFailed": "無法載入成品。",
-          "deleteTitle": "刪除成品？",
           "deleteDescription": "刪除後，將無法再透過公開連結存取「{{name}}」。",
           "delete": "刪除",
           "deleteFailed": "無法刪除成品。",
@@ -20223,11 +20202,8 @@
           "candidateName": "{{value0}} 在 {{value1}} 上"
         },
         "stopAgents": {
-          "titleMany": "要停止這些代理程式嗎？",
           "descriptionOne": "刪除時會停止代理程式目前的工作。",
-          "descriptionMany": "刪除時會停止這些代理程式目前的工作。",
-          "confirm": "停止代理程式並刪除",
-          "confirmOne": "停止代理程式並刪除"
+          "descriptionMany": "刪除時會停止這些代理程式目前的工作。"
         },
         "candidateRow": {
           "gitChip": {
@@ -20451,6 +20427,7 @@
           "about": {
             "parakeetV3": "速度快。支援 {{languages}} 種歐洲語言。",
             "parakeetV2": "速度快。僅支援英語，英語最準確。",
+            "parakeetUnifiedEn": "僅限英語。說話時即時顯示文字。",
             "whisperTiny": "下載最小。適合試用聽寫。",
             "whisperTurbo": "語言最多，約 100 種。沒有 GPU 時較慢。",
             "senseVoice": "速度快。適用於中文、日語和韓語。",
@@ -20496,11 +20473,11 @@
           "label": "靜音後停止",
           "short": "你停止說話時結束聽寫。"
         },
-        "pageDescription": "在任何面板中用說話取代打字。",
+        "pageDescription": "在任何窗格中用說話取代打字。",
         "dictation": {
           "label": "聽寫",
-          "ready": "在任何面板中按 {{shortcut}}。",
-          "off": "開啟後，可在任何面板中按 {{shortcut}} 聽寫。",
+          "ready": "在任何窗格中按 {{shortcut}}。",
+          "off": "開啟後，可在任何窗格中按 {{shortcut}} 聽寫。",
           "noModel": "在下方下載一個語音模型即可開始。它在這台電腦上執行，音訊不會離開這裡。",
           "downloading": "{{model}} 下載完成後即可使用。",
           "needsUpdate": "在下方更新 {{model}} 以繼續聽寫。"
@@ -20914,9 +20891,6 @@
       "unstagedSelectionIncludingUntrackedDescription": "這將捨棄尚未暫存的變更，並永久刪除所選內容中所有未追蹤的檔案。此操作無法復原。",
       "unstagedFilesIncludingUntrackedDescription_other": "這將捨棄這 {{count}} 個檔案中尚未暫存的變更，並永久刪除其中所有未追蹤的檔案。此操作無法復原。",
       "delete": "刪除",
-      "deleteCount": "刪除 {{count}} 個",
-      "deleteUntrackedTitle_one": "刪除 {{count}} 個未追蹤的檔案？",
-      "deleteUntrackedTitle_other": "刪除 {{count}} 個未追蹤的檔案？",
       "discard": "捨棄",
       "discardAll": "全部捨棄",
       "restore": "還原"
@@ -21387,7 +21361,8 @@
   },
   "common": {
     "retry": "重試",
-    "cancel": "取消"
+    "cancel": "取消",
+    "delete": "刪除"
   },
   "terminal": {
     "sessionSaveFailure": {
@@ -21512,8 +21487,7 @@
     "trashFailed": {
       "titleRecycleBin": "無法將「{{name}}」移至資源回收筒。要永久刪除嗎？",
       "titleTrash": "無法將「{{name}}」移至垃圾桶。要永久刪除嗎？",
-      "description": "此操作無法復原。",
-      "confirm": "永久刪除"
+      "description": "此操作無法復原。"
     }
   },
   "sparsePreset": {
@@ -21557,7 +21531,6 @@
       "description": "在 WSL 中的 Orca 更新之前，那裡的代理程式將使用該發行版預設的 Claude 和 Codex 帳戶。"
     },
     "antigravity": {
-      "chatTitle": "Antigravity 聊天",
       "chatSignIn": "登入",
       "chatChangeAccount": "變更帳戶",
       "chatRetry": "重試登入",
@@ -21575,23 +21548,13 @@
       "chatFailed": "登入失敗。請再試一次。",
       "chatOtherClient": "另一個應用程式正在登入。",
       "chatReadFailed": "無法檢查 {{host}} 上的登入狀態。",
-      "signIn": "在此主機上啟動 agy 並完成其瀏覽器登入，然後儲存目前的帳戶。要新增其他帳戶，請在 agy 中使用 /logout 並再次登入。",
-      "docs": "登入說明",
       "retry": "重試",
-      "identityUnknown": "無法取得登入身分",
-      "signedOut": "目前未登入任何 agy 原生帳戶。",
       "changed": "原生帳戶已變更。請在啟動 agy 前重新選擇已儲存的帳戶。",
-      "save": "儲存目前的帳戶",
       "refresh": "重新整理帳戶",
       "usage": "重新整理用量",
-      "working": "正在更新帳戶",
       "usageReading": "工作階段：{{session}} · 每週：{{weekly}}",
       "saved": "已儲存的 Google 帳戶",
-      "nativeActive": "原生帳戶",
-      "selected": "已選擇",
-      "select": "選擇",
       "remove": "移除",
-      "sessions": "選擇適用於該主機上的新 agy 工作階段。現有工作階段可能會保留其以前的帳戶。",
       "searchDescription": "在執行主機上儲存並選擇 agy 的原生 Google 帳戶。",
       "title": "Antigravity",
       "keyword": {
@@ -21603,7 +21566,6 @@
       "authMethod": "登入方式",
       "personal": "Google 帳戶",
       "gcpProject": "Google Cloud 專案",
-      "gcpLocation": "Google Cloud 位置",
       "settingsIncomplete": "請選擇 Antigravity 帳戶類型並輸入其 Google Cloud 專案和位置。",
       "settingsLoadFailed": "Orca 無法載入 Antigravity 登入設定。請再試一次。",
       "settingsSaveFailed": "Orca 無法儲存 Antigravity 登入設定。請再試一次。",
@@ -21669,6 +21631,11 @@
         "reasonSharedSession": "在另一個窗格中也已開啟",
         "sharedOne": "由於另一個窗格開啟了相同對話，1 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。",
         "sharedOther": "由於另一個窗格開啟了相同對話，{{count}} 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。"
+      },
+      "oauthUsage": {
+        "title": "Claude 用量輪詢",
+        "description": "使用 Claude Code 登入憑證查詢用量、額度和非使用中帳戶。關閉後，僅顯示執行中終端機工作階段提供的即時用量。",
+        "about": "關於 Claude 用量輪詢"
       }
     },
     "managedData": {
@@ -21734,7 +21701,6 @@
     "nestedRemoval": {
       "refreshFailed": "無法重新整理工作區清單",
       "review": "連同巢狀工作樹一起刪除…",
-      "title": "刪除工作區和巢狀工作樹？",
       "description": "這將永久刪除「{{name}}」、下面列出的每個巢狀工作樹及其中的所有檔案（包括未提交的更改）。它們的終端機和代理程式將被停止。",
       "detached": "分離 HEAD",
       "loading": "正在檢查巢狀工作樹…",
@@ -21742,7 +21708,6 @@
       "cancel": "取消",
       "retry": "重新檢查",
       "deleting": "正在刪除…",
-      "confirm": "刪除所有列出的工作樹",
       "preservedBranches": "部分巢狀工作樹分支已保留"
     },
     "setupTerminalTitle": "初始設定"
@@ -23310,11 +23275,10 @@
     "setByArguments": "由引數設定",
     "searchModels": "搜尋模型",
     "noModels": "沒有符合搜尋條件的模型。",
-    "legacyModels": "舊版模型",
     "toggleArguments": "切換引數顯示",
     "argumentsTerminalHint": "僅適用於終端機（CLI）啟動",
     "searchAgentModels": "搜尋 {{agent}} 模型…",
-    "legacyModelCount": "{{total}} 個模型",
+    "moreModelsWithCount": "更多模型 ({{total}})",
     "search": "搜尋，例如 Opus 5.5…",
     "configure": "設定 {{agent}}",
     "arguments": "引數",
@@ -23425,14 +23389,14 @@
     "update": "更新",
     "cancel": "取消",
     "pill": {
-      "updateNotice": "更快的語音輸入已可安裝",
-      "retiredNotice": "語音輸入已改用更快的語音模型",
+      "updateNotice": "更快的聽寫功能已可安裝",
+      "retiredNotice": "聽寫已改用更快的語音模型",
       "install": "安裝",
       "installTooltip": "一次性下載 · {{size}} MB",
-      "downloading": "正在設定語音輸入",
+      "downloading": "正在設定聽寫",
       "downloadingTooltip": "{{done}} / {{size}} MB",
-      "ready": "語音輸入已就緒。按下 <kbd></kbd>",
-      "readyNoShortcut": "語音輸入已就緒。",
+      "ready": "聽寫已就緒。按下 <kbd></kbd>",
+      "readyNoShortcut": "聽寫已就緒。",
       "failed": "下載已中斷。請檢查網路連線。",
       "tryAgain": "重試",
       "deleteOld": "刪除舊模型",

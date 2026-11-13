@@ -7,7 +7,7 @@ import type {
 } from '../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SetupDecision } from '../../shared/worktree/create-types'
-import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/launch-types'
+import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/creation/launch-types'
 
 function getEffectiveHookScript(
   yamlScript: string | undefined,

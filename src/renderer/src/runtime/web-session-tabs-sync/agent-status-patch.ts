@@ -1,4 +1,5 @@
 import { resolveAgentSessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { agentEntryCompletionAt } from '../../../../shared/agent-status/lifecycle/agent-completion-time'
@@ -139,10 +140,15 @@ export function buildMirroredAgentStatusPatch(
     const accepted =
       nextEntry === entry
         ? entry
-        : {
-            ...withHostProgramStatus(nextEntry, entry.programStatus),
-            ...(entry.launchAttested !== undefined ? { launchAttested: entry.launchAttested } : {})
-          }
+        : withHostOrcaSessionId(
+            {
+              ...withHostProgramStatus(nextEntry, entry.programStatus),
+              ...(entry.launchAttested !== undefined
+                ? { launchAttested: entry.launchAttested }
+                : {})
+            },
+            entry
+          )
     const retained = existing ? undefined : state.retainedAgentsByPaneKey?.[entry.paneKey]
     nextByPaneKey.set(entry.paneKey, {
       ...accepted,
@@ -261,4 +267,17 @@ function withHostProgramStatus(
 ): AgentStatusEntry {
   const { programStatus: _clientFacet, ...rest } = entry
   return programStatus ? { ...rest, programStatus } : rest
+}
+
+/** Only the host names its agents: for the same conversation its stamp wins, including no stamp
+ *  (a settled miss clearing a pending null); the client never mints or keeps one across keys. */
+function withHostOrcaSessionId(next: AgentStatusEntry, host: AgentStatusEntry): AgentStatusEntry {
+  if (
+    !host.providerSession ||
+    !agentProviderSessionsEqual(host.agentType, host.providerSession, next.providerSession)
+  ) {
+    return next
+  }
+  const { orcaSessionId: _client, ...rest } = next
+  return host.orcaSessionId !== undefined ? { ...rest, orcaSessionId: host.orcaSessionId } : rest
 }

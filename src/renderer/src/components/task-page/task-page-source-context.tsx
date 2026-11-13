@@ -8,7 +8,7 @@ import type {
   GitLabTaskFilter,
   GitLabIssueFilter
 } from '@/components/task-page/task-page-localized-options'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repo-types'

@@ -10,7 +10,7 @@ import type { PrimaryAction } from '../review/source-control-primary-action-type
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import {
   HostedReviewToolbarLink,
   CreatePrHeaderButton,

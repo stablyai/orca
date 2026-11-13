@@ -1,34 +1,37 @@
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
 import {
-  ghExecFileAsync,
-  acquire,
-  release,
   getRemoteUrlForRepo,
-  githubRepoContext,
+  githubRepoContext
+} from '../../repositories/github-repository-identity'
+import {
   parseGitHubRemoteIdentity,
-  type OwnerRepo
-} from '../../gh-utils'
+  gitHubSshConfigHostAlias,
+  effectiveGitHubRemoteHost
+} from '../../repositories/github-remote-identity-parsing'
+import type {
+  GitHubRepositoryIdentity as OwnerRepo,
+  GitHubRepositoryIdentity as GitHubApiRepository
+} from '../../../../shared/github/repositories/repository-identity'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../../../source-control/hosted-review-git-options'
 import {
   getGitHubApiRepositoryForRemote,
-  getOriginGitHubApiRepository,
-  githubRepositorySlugArg,
-  resolveGitHubRepoExecution,
-  type GitHubApiRepository
-} from '../../github-api-repository'
+  getOriginGitHubApiRepository
+} from '../../repositories/github-api-repository-remote-probe'
+import { githubRepositorySlugArg } from '../../repositories/github-repository-host'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+
 import { withSharedRemoteUrlReads } from '../../../git/remotes/remote-url-probe'
 import { isStableMissingGitRemoteError } from '../../../git/remotes/stable-missing-git-remote-error'
 import {
   normalizeForgeWebHost,
   foldWwwHostAlias
 } from '../../../../shared/git/remotes/git-remote-host-alias'
-import {
-  gitHubSshConfigHostAlias,
-  effectiveGitHubRemoteHost
-} from '../../github-remote-identity-parsing'
-import { resolveSshConfigHostname } from '../../github-ssh-host-alias-resolution'
+
+import { resolveSshConfigHostname } from '../../repositories/github-ssh-host-alias-resolution'
 import { hostedReviewLocalGitOptionArgs, sameOwnerRepo } from './../github-exec-scope'
 export async function getRepoSlug(
   repoPath: string,

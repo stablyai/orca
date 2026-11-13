@@ -1,4 +1,4 @@
-import { ensureAgentSessionFeatureRequirement } from '../../agent-launch-feature-requirement'
+import { ensureAgentSessionFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import {
   type RuntimeAgentSessionRpcCaller,
@@ -9,7 +9,7 @@ import { defineMethod, type RpcContext } from '../../core'
 import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
-} from '../../../../../shared/rpc-contract/agent-session-params'
+} from '../../../../../shared/rpc-contract/terminal/agent-session-params'
 
 function callerContext(context: RpcContext): RuntimeAgentSessionRpcCaller {
   const { pairedDeviceId, clientId, clientKind, signal } = context

@@ -1,7 +1,6 @@
 import {
   hasModifier,
   isLatinShortcutKey,
-  keybindingMatchesAction,
   keybindingRunsInTextField,
   type KeybindingActionId,
   type KeybindingInput
@@ -57,9 +56,6 @@ export function nativeChatPromptClaimsShortcut(
     return true
   }
   if (actionId && keybindingRunsInTextField(actionId, input, platform)) {
-    return false
-  }
-  if (actionId === 'workspace.delete' && keybindingMatchesAction(actionId, input, platform)) {
     return false
   }
   if (

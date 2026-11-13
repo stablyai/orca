@@ -1,15 +1,15 @@
-import type { MobileQuickCommandLaunch } from '../../terminal/quick-commands'
+import type { MobileQuickCommandLaunch } from '../../terminal/quick-commands/quick-commands'
 import type { MobileSessionTab } from '../tabs/mobile-session-tabs'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import {
   launchAgentInExistingWorkspace,
   reserveMobileAgentLaunch
 } from './mobile-existing-agent-launch'
 import { agentPromptNotSentMessage } from '../../source-control/review/pr-ai-triage-launch'
-import { readAgentLaunchNotice } from '../../tasks/agent-launch-request'
+import { readAgentLaunchNotice } from './agent-launch-request'
 import { translate } from '../../i18n/mobile-i18n'
 import {
   isLaunchedSurfaceListed,

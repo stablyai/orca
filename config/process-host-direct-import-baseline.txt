@@ -1,18 +1,17 @@
 
 # Existing production source files importing child_process at runtime outside @orca/process-host.
 # Migration debt: this list may only shrink; new callers use the package public API.
-src/cli/handlers/core.ts
-src/cli/handlers/interactive-login-interruption.ts
+src/cli/runtime/cli-lifecycle-handlers.ts
+src/cli/accounts/interactive-login-interruption.ts
 src/cli/runtime/launch.ts
 src/main/agent-hooks/installation/locking/managed-hook-owner-identity.ts
 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
 src/main/window/desktop-integration/app-icon.ts
-src/main/automations/precheck-runner.ts
+src/main/automations/dispatch/precheck-runner.ts
 src/main/browser/agent-browser/helper-process/agent-browser-bridge-execution.ts
 src/main/browser/agent-browser/helper-process/agent-browser-bridge-raw-process.ts
 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
-src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
-src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
+src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 src/main/codex-accounts/service.ts
 src/main/computer/desktop-script/desktop-script-provider-bridge.ts
 src/main/computer/macos-permissions/macos-computer-use-permission-status.ts
@@ -28,15 +27,15 @@ src/main/emulator/serve-sim-runtime-materializer.ts
 src/main/emulator/simctl-simulator-devices.ts
 src/main/emulator/simulator-app-visibility.ts
 src/main/external-editors/external-editor-launch.ts
-src/main/git/command-runner/exec-file-capture.ts
+src/main/git/command-runner/process-capture/exec-file-capture.ts
 src/main/git/command-runner/git-exec-file-sync.ts
 src/main/git/command-runner/git-spawn.ts
 src/main/git/command-runner/git-stream-stdout.ts
-src/main/git/command-runner/spawn-command-capture.ts
-src/main/git/command-runner/spawned-command-tree-kill.ts
-src/main/git/command-runner/wsl-aware-spawn.ts
-src/main/git/wsl-git-read-environment.ts
-src/main/github/gh-utils.ts
+src/main/git/command-runner/process-capture/spawn-command-capture.ts
+src/main/git/command-runner/process-capture/spawned-command-tree-kill.ts
+src/main/git/command-runner/host-routing/wsl-aware-spawn.ts
+src/main/git/command-runner/host-routing/wsl-git-read-environment.ts
+src/main/github/execution/github-legacy-command.ts
 src/main/workspace-hooks/hooks.ts
 src/main/ipc/developer-permissions.ts
 src/main/ipc/filesystem/watcher-process/child-lifecycle/parcel-watcher-child-launch.ts
@@ -51,14 +50,13 @@ src/main/macos-keychain/generic-password.ts
 src/main/power/macos-system-sleep-assertion.ts
 src/main/macos-permissions/macos-tcc-prompt-watch.ts
 src/main/memory/collector.ts
-src/main/native-chat/wsl-transcript-fs-process-spawn.ts
+src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 src/main/network/macos-system-resolver-health.ts
 src/main/network/macos-tailscale-dns-diagnostic.ts
-src/main/plugins/workers/plugin-host-process.ts
+src/main/plugins/workers/parent-process/plugin-host-process.ts
 src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
 src/main/ports/port-scan-command-execution.ts
-src/main/providers/macos-login-session-pty-probe.ts
-src/main/providers/process-cwd.ts
+src/main/providers/working-directory/process-cwd.ts
 src/main/pty/process-retirement/pty-descendant-fresh-table.ts
 src/main/rate-limits/providers/gemini/gemini-cli-oauth-extractor.ts
 src/main/runtime/rpc/server/pairing/network/windows-default-route-interfaces.ts
@@ -67,7 +65,7 @@ src/main/ssh/system-transport/ssh-proxy-command.ts
 src/main/ssh/system-transport/system-ssh-command.ts
 src/main/ssh/system-transport/forwarding/system-ssh-dynamic-forward-process.ts
 src/main/ssh/system-transport/file-transfer/system-ssh-file-transfer.ts
-src/main/startup/ensure-virtual-display.ts
+src/main/startup/linux-display/ensure-virtual-display.ts
 src/main/pty/process-retirement/windows-process-tree-kill.ts
 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
 src/shared/ephemeral-vm-recipe-process.ts
@@ -75,4 +73,4 @@ src/shared/fish-binary-requirement.ts
 src/shared/process-table-ps-capture.ts
 src/shared/terminal/pty/native-process/pty-slave-line-discipline-echo.ts
 src/shared/terminal/pty/native-process/shell-process-readiness.ts
-src/wsl-guest/preflight-handler.ts
+src/wsl-guest/commands/preflight-handler.ts

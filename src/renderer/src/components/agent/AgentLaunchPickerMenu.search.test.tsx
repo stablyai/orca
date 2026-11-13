@@ -47,6 +47,13 @@ it('includes blank terminal in keyboard results and filters it for agent and mod
       models: [{ id: 'astra', label: 'Astra', isDefault: true, efforts: [] }]
     }
   }
+  const antigravity: AgentPickerEntry = {
+    ...entry,
+    agent: 'antigravity',
+    label: 'Antigravity',
+    rows: [{ agent: 'antigravity', kind: 'cli' }],
+    catalog: { origin: 'probe', fetchedAt: 1, models: [] }
+  }
   function Picker({ showLeadingItem = false }: { showLeadingItem?: boolean }) {
     const [selection, setSelection] = useState('')
     return (
@@ -56,7 +63,7 @@ it('includes blank terminal in keyboard results and filters it for agent and mod
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
           <DropdownMenuContent>
             <AgentLaunchPickerMenu
-              entries={[entry]}
+              entries={[entry, antigravity]}
               leadingItems={
                 showLeadingItem ? <DropdownMenuItem>Custom command</DropdownMenuItem> : undefined
               }
@@ -88,6 +95,12 @@ it('includes blank terminal in keyboard results and filters it for agent and mod
   expect(screen.queryByRole('menuitem', { name: 'Blank Terminal' })).toBeNull()
   await user.keyboard('{Enter}')
   expect(screen.getByLabelText('Selection').textContent).toBe('codex:')
+
+  await user.click(screen.getByRole('button', { name: 'Open' }))
+  await user.type(screen.getByRole('textbox'), 'anti')
+  expect(screen.queryByRole('menuitem', { name: 'Blank Terminal' })).toBeNull()
+  await user.keyboard('{Enter}')
+  expect(screen.getByLabelText('Selection').textContent).toBe('antigravity:')
 
   await user.click(screen.getByRole('button', { name: 'Open' }))
   await user.type(screen.getByRole('textbox'), 'astra{Enter}')

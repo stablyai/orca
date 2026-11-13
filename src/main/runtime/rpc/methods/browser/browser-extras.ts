@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { assertRpcClipboardTextWriteWithinLimit } from '../../rpc-clipboard-text-validation'
+import { assertRpcClipboardTextWriteWithinLimit } from '../../clipboard/rpc-clipboard-text-validation'
 import {
   BrowserTarget,
   ExpectUrlBrowserTarget
@@ -23,8 +23,8 @@ import {
   StorageKey,
   StorageKeyValue,
   Viewport
-} from '../../../../../shared/rpc-contract/browser-params'
-import { MouseClick } from '../../../../../shared/rpc-contract/browser-extras-params'
+} from '../../../../../shared/rpc-contract/browser/browser-params'
+import { MouseClick } from '../../../../../shared/rpc-contract/browser/browser-extras-params'
 
 export const BROWSER_EXTRA_METHODS = [
   defineMethod({

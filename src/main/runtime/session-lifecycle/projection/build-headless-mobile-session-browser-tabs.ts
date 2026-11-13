@@ -22,7 +22,7 @@ import {
 import type {
   TerminalPaneCloseTarget,
   TerminalSurfaceCloseTarget
-} from '../../../../shared/workspace-layout/terminal-surface-close-target'
+} from '../../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -51,6 +51,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
           ].filter((tab) => !rendererPageIds.has(tab.browserPageId))
         : []
     const publishedServerTabs = serverTabs.map((tab) => {
+      const navigation = this.agentBrowserBridge?.getPageNavigationState(tab.browserPageId)
       const persistedProps = this.getPersistedUnifiedSessionTabProps(
         worktreeId,
         this.serveBrowserTabs.unifiedTabId(worktreeId, tab.browserPageId)
@@ -64,9 +65,9 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         browserPageId: tab.browserPageId,
         browserProfileId: tab.profileId ?? undefined,
         url: tab.url || 'about:blank',
-        loading: false,
-        canGoBack: false,
-        canGoForward: false,
+        loading: navigation?.loading ?? false,
+        canGoBack: navigation?.canGoBack ?? false,
+        canGoForward: navigation?.canGoForward ?? false,
         faviconUrl: this.agentBrowserBridge?.getRemoteTabFaviconUrl(tab.browserPageId) ?? null,
         loadError: tab.loadError ?? undefined,
         certificateFailure: tab.certificateFailure ?? undefined,

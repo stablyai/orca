@@ -94,10 +94,7 @@ export function useAiVaultSessionDeleteAction({
         return
       }
       const confirmed = await confirm({
-        title: translate(
-          'auto.components.right.sidebar.AiVaultSessionDeleteDialog.title',
-          'Delete this session?'
-        ),
+        title: translate('common.delete', 'Delete'),
         description: environmentId
           ? translate(
               'auto.components.right.sidebar.AiVaultSessionDeleteDialog.remoteDescription',

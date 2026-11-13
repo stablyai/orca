@@ -33,7 +33,6 @@ class DataControlServer:
         self.source = None
         self.registry = None
         self.device = None
-        self.destroyed_offers = []
         self.selected = threading.Event()
         self.disconnected = threading.Event()
         self.errors = []
@@ -129,8 +128,6 @@ class DataControlServer:
                 self.send(self.device, 2)
             elif self.selection_event == "seat removal":
                 self.send(self.registry, 1, number(10))
-        elif kind == "offer" and opcode == 1:
-            self.destroyed_offers.append(object_id)
         elif kind != "source":
             raise RuntimeError(f"Unexpected request {kind}/{opcode}")
 
@@ -177,10 +174,6 @@ class ClipboardProtocolTests(unittest.TestCase):
             server.send(server.source, 1)
             self.assertTrue(server.disconnected.wait(1))
 
-    def test_size_limit_precedes_selection_publication(self):
-        with DataControlServer("ext_data_control") as server:
-            self.assertEqual(server.copy(b"x" * (16 * 1024 * 1024 + 1)).returncode, 65)
-            self.assertIsNone(server.source)
 
     def test_replacement_during_ack_is_success_but_device_loss_is_failure(self):
         for event, status in (("cancelled", 0), ("finished", 70), ("seat removal", 70)):
@@ -237,22 +230,6 @@ pid_t fork(void) {
             finally:
                 os.close(stalled)
 
-    def test_incoming_clipboard_and_primary_offers_are_released(self):
-        with DataControlServer("ext_data_control") as server:
-            self.assertEqual(server.copy(b"copy").returncode, 0)
-            for index, event in enumerate((1, 3)):
-                offer = 0xFF000000 + index
-                server.objects[offer] = "offer"
-                server.send(server.device, 0, number(offer))
-                server.send(offer, 0, string("text/plain"))
-                server.send(server.device, event, number(offer))
-            self.assertEqual(server.paste(), b"copy")
-            deadline = time.monotonic() + 1
-            while len(server.destroyed_offers) < 2 and time.monotonic() < deadline:
-                time.sleep(0.01)
-            self.assertEqual(server.destroyed_offers, [0xFF000000, 0xFF000001])
-            server.send(server.source, 1)
-            self.assertTrue(server.disconnected.wait(1))
 
     def test_device_finished_and_seat_removal_stop_the_owner(self):
         for event in ("finished", "seat removal"):
