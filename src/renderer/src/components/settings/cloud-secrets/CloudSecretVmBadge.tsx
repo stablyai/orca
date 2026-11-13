@@ -1,9 +1,10 @@
 import { KeyRound, TriangleAlert } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cloudSecretStoredOnVm } from '../../../../../shared/cloud-secrets/cloud-secret-rules'
-import type { CloudSecretKind } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
+import {
+  cloudSecretStoredOnVm,
+  cloudSecretSwapped
+} from '../../../../../shared/cloud-secrets/cloud-secret-rules'
 import { Badge } from '../../ui/badge'
-import { cloudSecretKindLabel } from './cloud-secrets-copy'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 
 /**
@@ -50,29 +51,24 @@ export function cloudSecretVmWarning(t: ReturnType<typeof useTranslate>, name: s
       )
 }
 
-/** The chips on a secret's row, on their own line under the name: Agent key, or Real value in sandbox. */
-export function CloudSecretChips({
-  name,
-  kind
-}: {
-  name: string
-  kind: CloudSecretKind
-}): React.JSX.Element | null {
+/**
+ * The chip on a saved secret's row: only keys Orca really swaps at the network edge get one, from the
+ * same rule the control plane uses (cloudSecretSwapped mirrors SWAPPED_CREDENTIALS; a control-plane
+ * test keeps them in step). Every other row carries no chip: the page description states that other
+ * secrets reach the sandbox as real values, so no badge on some rows can imply the rest are protected.
+ * The "can't swap" warning stays where it is actionable: Add, Replace and the .env paste preview.
+ */
+export function CloudSecretChips({ name }: { name: string }): React.JSX.Element | null {
   const t = useTranslate()
-  const inFull = cloudSecretStoredOnVm(name)
-  if (kind !== 'agent_key' && !inFull) {
+  if (!cloudSecretSwapped(name)) {
     return null
   }
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      {inFull ? (
-        <CloudSecretVmBadge name={name} />
-      ) : (
-        <Badge variant="referenceLabel">
-          <KeyRound />
-          {cloudSecretKindLabel(name, t)}
-        </Badge>
-      )}
+      <Badge variant="referenceLabel">
+        <KeyRound />
+        {t('cloudSecrets.list.keptOutOfSandbox', 'Kept out of sandbox')}
+      </Badge>
     </span>
   )
 }

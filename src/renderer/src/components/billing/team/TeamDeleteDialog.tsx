@@ -10,10 +10,13 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useTranslate } from '@/i18n/use-translate'
-import type { OrcaOrgDeleteBlocker } from '../../../../../shared/orca-org-delete'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import type {
+  OrcaOrgDeleteBlocker,
+  OrcaOrgDeleteCancelsSubscription
+} from '../../../../../shared/orca-org-delete'
 import { TeamDeleteBlockers } from './TeamDeleteSection'
-import type { TeamDeleteDialogError } from './team-delete-copy'
+import { teamDeleteCancelsPlanText, type TeamDeleteDialogError } from './team-delete-copy'
 
 export type TeamDeleteDialogViewProps = {
   teamName: string
@@ -22,6 +25,8 @@ export type TeamDeleteDialogViewProps = {
   error: TeamDeleteDialogError | null
   /** 429: [Delete team] stays disabled until the wait is over. */
   waiting: boolean
+  /** EP-10: the plan is set to end; this delete ends it now, with no refund for the rest. */
+  cancelsSubscription?: OrcaOrgDeleteCancelsSubscription
   onTypedChange: (value: string) => void
   onCancel: () => void
   onSubmit: () => void
@@ -31,7 +36,9 @@ export type TeamDeleteDialogViewProps = {
 /** "Delete <team>?": type the exact name (case-sensitive, paste allowed) to enable the delete. */
 export function TeamDeleteDialogView(props: TeamDeleteDialogViewProps): React.JSX.Element {
   const t = useTranslate()
+  const locale = useIntlLocale()
   const fieldId = useId()
+  const planEnded = props.error?.kind === 'planEnded'
   const mismatchId = useId()
   const matches = props.typed === props.teamName
   const canSubmit = matches && !props.submitting && !props.waiting
@@ -58,6 +65,11 @@ export function TeamDeleteDialogView(props: TeamDeleteDialogViewProps): React.JS
             'Everyone loses access to the team. Pending invites are cancelled. Its settings and team cloud secrets are deleted. Billing history is kept. This can’t be undone.'
           )}
         </DialogDescription>
+        {props.cancelsSubscription && !planEnded ? (
+          <p data-team-delete-cancels-plan="" className="text-sm font-medium text-pretty">
+            {teamDeleteCancelsPlanText(props.cancelsSubscription.periodEnd, t, locale)}
+          </p>
+        ) : null}
       </DialogHeader>
       <form
         className="space-y-2"
@@ -93,7 +105,7 @@ export function TeamDeleteDialogView(props: TeamDeleteDialogViewProps): React.JS
         <div role="alert">
           <TeamDeleteBlockers blockers={props.error.blockers} onAction={props.onBlockerAction} />
         </div>
-      ) : props.error?.kind === 'message' ? (
+      ) : props.error?.kind === 'message' || props.error?.kind === 'planEnded' ? (
         <p role="alert" className="text-xs text-destructive-text text-pretty">
           {props.error.text}
         </p>
@@ -115,7 +127,9 @@ export function TeamDeleteDialogView(props: TeamDeleteDialogViewProps): React.JS
           onClick={props.onSubmit}
         >
           {props.submitting ? <LoaderCircle className="motion-safe:animate-spin" /> : null}
-          {t('auto.components.billing.team.delete.cta', 'Delete team')}
+          {planEnded
+            ? t('auto.components.billing.team.delete.retry', 'Try deleting again')
+            : t('auto.components.billing.team.delete.cta', 'Delete team')}
         </Button>
       </DialogFooter>
     </DialogContent>

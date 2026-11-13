@@ -76,3 +76,29 @@ export const blockedAtSubmit = defineFixture({
     />
   )
 })
+
+/** EP-10: the plan is set to end; the dialog says deleting ends it now, with no refund. */
+export const cancelsPlan = defineFixture({
+  width: 720,
+  render: () => (
+    <View
+      typed="Acme Engineering"
+      cancelsSubscription={{ periodEnd: '2026-12-01T12:00:00.000Z' }}
+    />
+  )
+})
+
+/** EP-10: the plan already ended, but the team wasn't deleted: say so, offer to try again. */
+export const planEndedRetry = defineFixture({
+  width: 720,
+  render: () => (
+    <View
+      typed="Acme Engineering"
+      cancelsSubscription={{ periodEnd: '2026-12-01T12:00:00.000Z' }}
+      error={{
+        kind: 'planEnded',
+        text: 'Your team wasn’t deleted, but its plan has already ended, with no refund for the rest of the period.'
+      }}
+    />
+  )
+})

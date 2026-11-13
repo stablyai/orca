@@ -20,6 +20,8 @@ export type SubscriptionRow = {
   member_count: number | null
   /** The seat price the subscription is on (maps it to its plan version); null on rows from before 0008. */
   seat_price_id?: string | null
+  /** When Stripe will end it (portal cancel, or cancel at period end), epoch ms; null when not cancelling. */
+  cancel_at?: number | null
 }
 
 export type AccountSettings = { overage_opt_in: number; spend_cap_cents: number | null }
@@ -92,8 +94,8 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
     .prepare(
       `INSERT INTO subscriptions (stripe_subscription_id, account_id, stripe_customer_id, status, plan, seats,
          overage_enabled, current_period_start, current_period_end, cancel_at_period_end, updated_at,
-         billing_interval, overage_item_id, past_due_since, member_count, seat_price_id)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+         billing_interval, overage_item_id, past_due_since, member_count, seat_price_id, cancel_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
        ON CONFLICT (stripe_subscription_id) DO UPDATE SET
          status = excluded.status, plan = excluded.plan, seats = excluded.seats,
          overage_enabled = excluded.overage_enabled, current_period_start = excluded.current_period_start,
@@ -104,7 +106,8 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
          past_due_since = CASE WHEN excluded.past_due_since IS NULL THEN NULL
                                ELSE COALESCE(subscriptions.past_due_since, excluded.past_due_since) END,
          member_count = COALESCE(excluded.member_count, subscriptions.member_count),
-         seat_price_id = COALESCE(excluded.seat_price_id, subscriptions.seat_price_id)
+         seat_price_id = COALESCE(excluded.seat_price_id, subscriptions.seat_price_id),
+         cancel_at = excluded.cancel_at
        -- updated_at is the time of the Stripe read (or local change): an older read never wins.
        WHERE subscriptions.updated_at <= excluded.updated_at`
     )
@@ -124,7 +127,8 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
       row.overage_item_id,
       row.past_due_since,
       row.member_count,
-      row.seat_price_id ?? null
+      row.seat_price_id ?? null,
+      row.cancel_at ?? null
     )
     .run()
 }

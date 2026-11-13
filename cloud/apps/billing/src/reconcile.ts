@@ -113,15 +113,17 @@ export async function resyncStaleSubscriptions(
     try {
       const outcome = await resyncSubscription(env, stripe, row, now)
       const after = await db
-        .prepare('SELECT status, seats, cancel_at_period_end, current_period_end FROM subscriptions WHERE stripe_subscription_id = ?1')
+        .prepare('SELECT status, seats, cancel_at_period_end, cancel_at, current_period_end FROM subscriptions WHERE stripe_subscription_id = ?1')
         .bind(row.stripe_subscription_id)
-        .first<Pick<SubscriptionRow, 'status' | 'seats' | 'cancel_at_period_end' | 'current_period_end'>>()
+        .first<Pick<SubscriptionRow, 'status' | 'seats' | 'cancel_at_period_end' | 'cancel_at' | 'current_period_end'>>()
       if (outcome === 'canceled_missing') {
         canceledMissing++
       }
       if (
         after &&
-        (after.status !== row.status || after.seats !== row.seats || after.cancel_at_period_end !== row.cancel_at_period_end || after.current_period_end !== row.current_period_end)
+        (after.status !== row.status || after.seats !== row.seats || after.cancel_at_period_end !== row.cancel_at_period_end ||
+          (after.cancel_at ?? null) !== (row.cancel_at ?? null) ||
+          after.current_period_end !== row.current_period_end)
       ) {
         changed++
         console.log(JSON.stringify({ event: 'reconcile_fixed', source: 'resync', subscription: row.stripe_subscription_id, from: row.status, to: after.status }))

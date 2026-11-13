@@ -123,7 +123,7 @@ export function CloudSecretsEffectiveView({
                   <td className="px-3 py-2">
                     <span className="flex min-w-0 flex-col items-start gap-1">
                       <code className="font-mono break-all">{secret.name}</code>
-                      <CloudSecretChips name={secret.name} kind={secret.kind} />
+                      <CloudSecretChips name={secret.name} />
                     </span>
                   </td>
                   <td className="px-3 py-2">

@@ -99,8 +99,8 @@ export function buildOrcaCloudSettingsSections(
       id: 'cloud-secrets',
       title: t('cloudSecrets.title', 'Cloud secrets'),
       description: t(
-        'cloudSecrets.description',
-        'API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.'
+        'cloudSecrets.descriptionEdge',
+        'Orca swaps model API keys and agent sign-ins in at the network edge, so the sandbox never sees them. Other secrets reach cloud workspaces as environment variables that anything in the sandbox can read.'
       ),
       icon: LockKeyhole,
       searchEntries: getOrcaCloudSecretsSearchEntries(),

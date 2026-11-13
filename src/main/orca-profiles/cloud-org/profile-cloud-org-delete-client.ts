@@ -3,17 +3,28 @@
 import {
   isPlainRecord,
   normalizeOrgDeleteBlockers,
-  type OrcaOrgDeleteBlocker
+  normalizeOrgDeleteCancelsSubscription,
+  ORCA_ORG_DELETE_SUPPORTS,
+  type OrcaOrgDeleteBlocker,
+  type OrcaOrgDeleteCancelsSubscription
 } from '../../../shared/orca-org-delete'
 import type { OrcaCloudAuthConfig } from '../cloud-auth/profile-cloud-auth-config'
 import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import { OrcaCloudRequestError } from '../cloud-auth/profile-cloud-client'
 import { extractErrorCode, orgMembersUrl, requestInit } from './profile-cloud-org-members-client'
 
-export type OrgDeleteCheck = { deletable: boolean; blockers: OrcaOrgDeleteBlocker[] }
+export type OrgDeleteCheck = {
+  deletable: boolean
+  blockers: OrcaOrgDeleteBlocker[]
+  cancelsSubscription?: OrcaOrgDeleteCancelsSubscription
+}
 export type OrgDeleteOutcome =
   | { kind: 'deleted' }
   | { kind: 'blocked'; blockers: OrcaOrgDeleteBlocker[] }
+  | { kind: 'failed-after-cancel'; cause: string }
+
+/** EP-10: both routes, so auth may offer (and report) ending a cancelling plan on delete. */
+const SUPPORTS_QUERY = `?supports=${ORCA_ORG_DELETE_SUPPORTS}`
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
   try {
@@ -26,8 +37,13 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 
 export function parseOrgDeleteCheck(body: Record<string, unknown>): OrgDeleteCheck {
   const blockers = normalizeOrgDeleteBlockers(body.blockers)
+  const cancelsSubscription = normalizeOrgDeleteCancelsSubscription(body.cancelsSubscription)
   // Never call a team deletable while auth lists a blocker this desktop understands.
-  return { deletable: body.deletable === true && blockers.length === 0, blockers }
+  return {
+    deletable: body.deletable === true && blockers.length === 0,
+    blockers,
+    ...(cancelsSubscription ? { cancelsSubscription } : {})
+  }
 }
 
 export async function checkOrcaCloudOrgDelete(
@@ -36,7 +52,7 @@ export async function checkOrcaCloudOrgDelete(
   orgId: string
 ): Promise<OrgDeleteCheck> {
   const response = await fetch(
-    orgMembersUrl(config, orgId, '/delete-check'),
+    orgMembersUrl(config, orgId, `/delete-check${SUPPORTS_QUERY}`),
     requestInit('GET', session.accessToken)
   )
   if (!response.ok) {
@@ -52,18 +68,23 @@ export async function deleteOrcaCloudOrg(
   args: { orgId: string; confirmName: string }
 ): Promise<OrgDeleteOutcome> {
   const response = await fetch(
-    orgMembersUrl(config, args.orgId, '/delete'),
+    orgMembersUrl(config, args.orgId, `/delete${SUPPORTS_QUERY}`),
     requestInit('POST', session.accessToken, { confirmName: args.confirmName })
   )
-  if (response.status === 409) {
-    const body = await readJson(response)
-    if (body.error === 'not_deletable') {
-      return { kind: 'blocked', blockers: normalizeOrgDeleteBlockers(body.blockers) }
+  if (response.ok) {
+    return { kind: 'deleted' }
+  }
+  const body = await readJson(response)
+  const error = typeof body.error === 'string' ? body.error : undefined
+  // EP-10: the plan already ended (whatever status the rest failed with): say so, never "nothing happened".
+  if (error === 'delete_failed_after_cancel') {
+    return {
+      kind: 'failed-after-cancel',
+      cause: typeof body.cause === 'string' ? body.cause : 'unknown'
     }
-    throw new OrcaCloudRequestError(409, typeof body.error === 'string' ? body.error : undefined)
   }
-  if (!response.ok) {
-    throw new OrcaCloudRequestError(response.status, await extractErrorCode(response))
+  if (response.status === 409 && error === 'not_deletable') {
+    return { kind: 'blocked', blockers: normalizeOrgDeleteBlockers(body.blockers) }
   }
-  return { kind: 'deleted' }
+  throw new OrcaCloudRequestError(response.status, error)
 }

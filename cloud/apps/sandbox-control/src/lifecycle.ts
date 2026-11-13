@@ -890,9 +890,14 @@ export async function createSandbox(
       console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', pooled: true, ms: timer.timings }))
       return { ...ready, ...(cloning ? { cloning } : {}), ...(environmentHeld ? { environmentHeld } : {}) }
     } catch (error) {
+      // EP-5: deleted by its owner mid-create (a cancel): free it, never make another.
+      const cancelled = await deletedMeanwhile(deps, row)
       // A pooled VM that will not take the session is discarded; the caller still gets a workspace.
       console.log(JSON.stringify({ event: 'pool_adopt_failed', error: String(error).slice(0, 200) }))
       await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row, createFailureReason(error, timer))
+      if (cancelled) {
+        throw new LifecycleError('conflict', CREATE_CANCELLED)
+      }
       // A boot that ran long (the start command timed out) would only time out again on a fresh VM,
       // doubling the wait the user sees: only a quick failure, which points at the pooled VM, retries.
       if (deps.now() - claimedAt > POOL_RETRY_WITHIN_MS) {
@@ -939,7 +944,11 @@ export async function createSandbox(
       }
     })
   } catch (error) {
-    await failAndRelease(deps, row, createFailureReason(error))
+    const cancelled = await deletedMeanwhile(deps, row)
+    await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row, createFailureReason(error))
+    if (cancelled) {
+      throw new LifecycleError('conflict', CREATE_CANCELLED)
+    }
     // Only a create nothing pinned to a region moves on: no explicit region, no environment build.
     const fallback =
       options.fallback !== false && !request.region && !source && isRegionalFailure(error)
@@ -1287,4 +1296,15 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   await flushUsage(deps.db, deps.entitlements, deps.now(), row.id)
   await deps.hooks?.afterStop?.(destroyed).catch(() => undefined)
   return destroyed
+}
+
+/**
+ * EP-5: a create whose row its owner deleted mid-way (a cancelled create; the create outlives its
+ * request). It frees what it made and stops: no pooled retry, no region fallback, no new row.
+ */
+export const CREATE_CANCELLED = 'create_cancelled'
+
+async function deletedMeanwhile(deps: LifecycleDeps, row: SandboxRow): Promise<boolean> {
+  const current = await getSandbox(deps.db, row.id)
+  return current?.status === 'destroying' || current?.status === 'destroyed'
 }

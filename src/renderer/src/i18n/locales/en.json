@@ -21516,7 +21516,10 @@
             "rateLimited": "Too many attempts. Wait a minute, then try again.",
             "forbidden": "Only owners can delete the team.",
             "failed": "Couldn’t delete the team. Try again.",
-            "deletedToast2": "{{value0}} was deleted"
+            "deletedToast2": "{{value0}} was deleted",
+            "retry": "Try deleting again",
+            "planEnded": "Your team wasn’t deleted, but its plan has already ended, with no refund for the rest of the period.",
+            "cancelsPlan": "Your plan is set to end on {{date}}. Deleting the team ends it now, with no refund for the rest of the period."
           },
           "leaveLastOwnerOrDelete": "You’re the only owner. Make someone else an owner first, or delete the team.",
           "perSeat": "Per seat",
@@ -21569,8 +21572,6 @@
           "featureSpec": "Every sandbox gets {{value0}} vCPU · {{value1}} GB",
           "featureOverage7": "Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set ({{cap}} by default)",
           "lockedBody2": "Only an owner or admin of your team can choose a plan. Ask one of them to open Plan & billing in Orca.",
-          "vpSecretsBody4": "API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.",
-          "vpSecretsTitle3": "API keys stay out of the sandbox",
           "billedYearlyAmount2": "{{value0}} per seat, billed yearly",
           "entPriced2": "Priced for your team",
           "footHours3": "Hours reset every month, including on annual plans.",
@@ -21588,7 +21589,9 @@
           "checkoutUnavailable": "This plan isn’t available right now. Try again later.",
           "featureKeepRunning": "Agents keep running when you close your laptop",
           "featureIdleSleep": "Sandboxes sleep when idle, so you only use hours while they work",
-          "featureOverageNoRate": "Optional overage up to a monthly spend cap you set"
+          "featureOverageNoRate": "Optional overage up to a monthly spend cap you set",
+          "vpSecretsTitleEdge": "Agent keys stay out of the sandbox",
+          "vpSecretsBodyEdge": "Model API keys and agent sign-ins are swapped in at the network edge. Other secrets are environment variables."
         },
         "capLabel2": "Monthly spend cap",
         "capNotSaved": "Couldn’t save",
@@ -27884,13 +27887,13 @@
       "addSuggestion": "Add {{repo}}",
       "scriptPlaceholder": "corepack enable\npnpm install --frozen-lockfile",
       "scriptRuntimeStops": "Runs once per build in the first repository and stops at the first failing command. Passwordless sudo (Ubuntu, apt-get).",
-      "variablesHint": "Names only. Values come from Cloud secrets (Shared scope) with the same names and reach the install script at build time. They’re never stored in the environment.",
       "variables": "Variables",
       "removeEnvVar": "Remove {{name}}",
       "noEnvVars": "None",
       "envVarPlaceholder": "NPM_TOKEN, DATABASE_URL…",
       "envVarInvalid": "Skipped {{names}}: names use A–Z, 0–9 and _, and cannot start with a digit.",
-      "scriptTabHintVisible": "Tab indents · Esc then Tab to leave"
+      "scriptTabHintVisible": "Tab indents · Esc then Tab to leave",
+      "variablesHintDisk": "Names only. Values come from Cloud secrets (Shared scope) with the same names and reach the install script at build time. Orca doesn’t save them in the environment, but anything the install script writes to disk is kept."
     },
     "import": {
       "failed": "Couldn’t read that project’s setup.",
@@ -28350,7 +28353,8 @@
       "paste": "Paste .env",
       "savedAnnounce": "Saved {{names}}",
       "agentSetting": "Agent setting",
-      "agentKey": "Agent key"
+      "agentKey": "Agent key",
+      "keptOutOfSandbox": "Kept out of sandbox"
     },
     "precedence": {
       "envSentence": "Variables set in more than one place: {{first}} wins over {{second}}, which wins over {{third}}.",
@@ -28386,7 +28390,6 @@
       "shared": "Ask an owner or admin to change shared secrets.",
       "repo": "Ask an owner or admin to change this repository’s secrets."
     },
-    "description": "API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.",
     "tab": {
       "effective": "What workspaces get"
     },
@@ -28470,7 +28473,8 @@
       "warningKey": "Orca can’t swap this key at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it."
     },
     "loading": "Loading cloud secrets…",
-    "unavailable": "Cloud secrets aren’t available for this account yet."
+    "unavailable": "Cloud secrets aren’t available for this account yet.",
+    "descriptionEdge": "Orca swaps model API keys and agent sign-ins in at the network edge, so the sandbox never sees them. Other secrets reach cloud workspaces as environment variables that anything in the sandbox can read."
   },
   "cloudMcpSync": {
     "appliesEverywhere": "Applies to every cloud workspace",
@@ -28809,8 +28813,8 @@
       "agentsWsl": "Sign-ins inside the distro. Windows sign-ins don’t carry over.",
       "envWsl": "Agents get the distro’s own environment. Orca doesn’t add variables in WSL.",
       "envPaired": "Agents on {{host}} use its own environment. Orca doesn’t add variables on paired hosts.",
-      "agentsCloud": "Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same.",
-      "cloudEnvShared": "From Cloud secrets: Repository, then Shared. Shared workspaces don’t get personal values, including the owner’s."
+      "cloudEnvShared": "From Cloud secrets: Repository, then Shared. Shared workspaces don’t get personal values, including the owner’s.",
+      "agentsCloudSignIns": "Agent sign-ins aren’t stored in the sandbox, so new, cloned and restarted sandboxes work the same."
     },
     "retry": "Try again",
     "asleepFooter": "Changes reach the sandbox when it wakes.",

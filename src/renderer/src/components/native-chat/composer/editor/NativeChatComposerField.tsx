@@ -42,6 +42,7 @@ export type NativeChatComposerFieldProps = {
   hasPty: boolean
   canSend: boolean
   unavailableHint?: string | undefined
+  heldHint?: string | undefined
   autocomplete: ComposerAutocomplete
   mentionFiles: NativeChatMentionFiles
   activeSuggestion: number
@@ -124,6 +125,7 @@ export function NativeChatComposerField({
   hasPty,
   canSend,
   unavailableHint,
+  heldHint,
   autocomplete,
   mentionFiles,
   activeSuggestion,
@@ -365,6 +367,7 @@ export function NativeChatComposerField({
                           'Describe your goal, define measurable outcomes for best results'
                         )
                       : (unavailableHint ??
+                        heldHint ??
                         nativeChatComposerPlaceholder(hasPty, canSend, afterStop, t))
               }
               // Let layout handle wrapping and touch targets; scroll after eight lines (a launch prompt: one line growing to six) without JavaScript measurement.

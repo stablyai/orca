@@ -60,7 +60,9 @@ describe('team delete client (TEAM-DELETE)', () => {
         { code: 'workspaces_exist', count: 3 }
       ]
     })
-    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe(`${base}/v1/desktop/orgs/org_1/delete-check`)
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe(
+      `${base}/v1/desktop/orgs/org_1/delete-check?supports=cancel_on_delete`
+    )
   })
 
   it('never calls a team deletable while a known blocker is listed', () => {
@@ -99,6 +101,57 @@ describe('team delete client (TEAM-DELETE)', () => {
     // No JSON code on a 404: this auth predates team delete.
     expect(mapOrgDeleteRequestError(new OrcaCloudRequestError(404))).toEqual({
       status: 'unsupported'
+    })
+  })
+
+  it('EP-10: reads a cancelling plan the delete ends now, and ignores a malformed one', async () => {
+    respond(200, {
+      deletable: true,
+      blockers: [],
+      cancelsSubscription: { periodEnd: '2026-12-01T00:00:00.000Z' }
+    })
+    await expect(checkOrcaCloudOrgDelete(config, session, 'org_1')).resolves.toEqual({
+      deletable: true,
+      blockers: [],
+      cancelsSubscription: { periodEnd: '2026-12-01T00:00:00.000Z' }
+    })
+    expect(
+      parseOrgDeleteCheck({
+        deletable: true,
+        blockers: [],
+        cancelsSubscription: { periodEnd: 'soon' }
+      })
+    ).toEqual({ deletable: true, blockers: [] })
+  })
+
+  it('EP-10: a delete that failed after the plan ended says so, whatever its status', async () => {
+    respond(503, { error: 'delete_failed_after_cancel', cause: 'sandbox_control_unavailable' })
+    await expect(
+      deleteOrcaCloudOrg(config, session, { orgId: 'org_1', confirmName: 'Acme' })
+    ).resolves.toEqual({ kind: 'failed-after-cancel', cause: 'sandbox_control_unavailable' })
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe(
+      `${base}/v1/desktop/orgs/org_1/delete?supports=cancel_on_delete`
+    )
+    respond(409, {
+      error: 'delete_failed_after_cancel',
+      cause: 'not_deletable',
+      blockers: [{ code: 'workspaces_exist', count: 1 }]
+    })
+    await expect(
+      deleteOrcaCloudOrg(config, session, { orgId: 'org_1', confirmName: 'Acme' })
+    ).resolves.toEqual({ kind: 'failed-after-cancel', cause: 'not_deletable' })
+  })
+
+  it('EP-10: billing could not end the plan: blocked, team and plan untouched', async () => {
+    respond(409, {
+      error: 'not_deletable',
+      blockers: [{ code: 'subscription_active', status: 'cancelling' }]
+    })
+    await expect(
+      deleteOrcaCloudOrg(config, session, { orgId: 'org_1', confirmName: 'Acme' })
+    ).resolves.toEqual({
+      kind: 'blocked',
+      blockers: [{ code: 'subscription_active', status: 'cancelling' }]
     })
   })
 })

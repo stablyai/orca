@@ -59,6 +59,8 @@ export type Entitlement = {
   /** Monthly allowance window the hours below count against. */
   usageWindow: { start: number; end: number } | null
   cancelAtPeriodEnd: boolean
+  /** When a cancelling subscription ends (Stripe's cancel_at; the period end for cancel-at-period-end). */
+  cancelAt: number | null
   /**
    * The one-time trial while it is the account's plan (no subscription ever). Null otherwise: a
    * subscription ends the trial for good. includedSeconds/usedSeconds below mirror it during a trial.
@@ -333,6 +335,7 @@ async function buildEntitlement(db: D1Database, state: AccountState, terms: Acco
       period: null,
       usageWindow: null,
       cancelAtPeriodEnd: false,
+      cancelAt: null,
       trial: null,
       includedSeconds: 0,
       usedSeconds: 0,
@@ -395,6 +398,8 @@ async function buildEntitlement(db: D1Database, state: AccountState, terms: Acco
     period: { start: subscription.current_period_start, end: subscription.current_period_end },
     usageWindow: window,
     cancelAtPeriodEnd: subscription.cancel_at_period_end === 1,
+    cancelAt:
+      subscription.cancel_at_period_end === 1 ? (subscription.cancel_at ?? subscription.current_period_end) : null,
     trial: null,
     includedSeconds: included,
     usedSeconds: usage.usedSeconds,
@@ -442,6 +447,7 @@ function trialEntitlement(
     period: null,
     usageWindow: null,
     cancelAtPeriodEnd: false,
+    cancelAt: null,
     trial,
     includedSeconds: trial.includedSeconds,
     usedSeconds: trial.usedSeconds,

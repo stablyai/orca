@@ -45,6 +45,8 @@ export function useNativeChatInstallSlot(
   slot: NativeChatInstallSlotState
   sendBlockedReason: string | null
   unavailableHint: string | undefined
+  /** END-PASS CHAT-RENEW: typing stays open; the empty field says why Send is held. */
+  heldHint: string | undefined
 } {
   const t = useTranslate()
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
@@ -72,7 +74,8 @@ export function useNativeChatInstallSlot(
     slot,
     sendBlockedReason:
       unavailableHint ?? cloudSendBlock ?? installSlotSendBlockedReason(slot, agentLabel, t),
-    unavailableHint
+    unavailableHint,
+    heldHint: unavailableHint === undefined ? cloudSendBlock : undefined
   }
 }
 

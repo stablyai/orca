@@ -85,7 +85,8 @@ import {
   rolloverSandbox,
   suspendSandbox,
   type LifecycleDeps,
-  type Ready
+  type Ready,
+  CREATE_CANCELLED
 } from './lifecycle'
 import { createGitHubAppMinter, parseGitHubRepo, type GitHubAppMinter } from './github-app'
 import {
@@ -1847,11 +1848,21 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
           async () => {
             // Desktops that show the clone as its own step ask for it in the background (GET .../clone).
             // Member identities install after the response; the VM's git holds commits and pushes until then.
-            const ready = await createSandbox(life, caller, {
-              ...body.data,
-              cloneInBackground: features.includes('clone-progress'),
-              deferMemberGit: true
-            })
+            let ready: Ready
+            try {
+              ready = await createSandbox(life, caller, {
+                ...body.data,
+                cloneInBackground: features.includes('clone-progress'),
+                deferMemberGit: true
+              })
+            } catch (error) {
+              // EP-5: cancelled (its owner deleted it mid-create). Kept under the key: a replay of the
+              // cancelled create answers this instead of making a new sandbox.
+              if (error instanceof LifecycleError && error.reason === CREATE_CANCELLED) {
+                return { status: 409, body: { error: 'conflict', reason: CREATE_CANCELLED } }
+              }
+              throw error
+            }
             await recordOwnerDeviceForCreate(life, ready)
             await auditSession(life.db, caller, { action: 'workspace.create', targetType: 'workspace', targetId: ready.row.id, detail: { origin: 'desktop', visibility: ready.row.visibility } }, life.now())
             timings = ready.timings

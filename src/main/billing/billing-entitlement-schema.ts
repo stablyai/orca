@@ -66,6 +66,8 @@ const EntitlementSchema = z.object({
   period: window,
   usageWindow: window,
   cancelAtPeriodEnd: z.boolean().catch(false),
+  // When a cancelling plan ends (Stripe's cancel_at); older services omit it: the period end.
+  cancelAt: z.number().nullable().optional().catch(null).transform((value) => value ?? null),
   trial: z
     .object({
       includedSeconds: z.number().nonnegative(),

@@ -120,6 +120,12 @@ export type AgentLaunchRouteArgs = {
   prompt?: string
   promptDelivery?: NativeChatLaunchPromptDelivery
   tuiCustomization?: { cwd?: string | null }
+  /**
+   * CLOUD-HELD-SURFACE: a host that does not exist yet (an Orca Cloud VM being created) has no
+   * verified capabilities. These are what its image ships with, used only while none are verified;
+   * if the VM refuses the chat after all, the launch falls back to its (held) terminal.
+   */
+  pendingHostCapabilities?: readonly string[]
 }
 
 export const worktreeLaunchWorkspace = (worktreeId: string): ProspectiveWorkspace => ({
@@ -214,7 +220,7 @@ export function buildAgentLaunchRouteInput(
     settings: store.settings,
     preferredSurface: args.preferredSurface,
     executionHostId,
-    hostCapabilities,
+    hostCapabilities: hostCapabilities ?? args.pendingHostCapabilities ?? null,
     ...(parseExecutionHostId(executionHostId)?.kind === 'runtime'
       ? { clientCapabilities: pairedHostClientCapabilities() }
       : {}),

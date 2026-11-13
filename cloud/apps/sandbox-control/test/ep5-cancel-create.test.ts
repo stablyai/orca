@@ -6,7 +6,9 @@
 // off anyway is swept (create-speed.test.ts covers the 5 min sweep).
 import { describe, expect, it } from 'vitest'
 import { HostedSandboxReadyResponseSchema } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
-import { createHarness } from './harness'
+import { maintainPool, poolConfigFromEnv } from '../src/pool'
+import { START_COMMAND } from '../src/sandbox-vm-commands'
+import { GOLDEN, createHarness } from './harness'
 
 const create = { workspaceId: 'ws-cancel', machineSize: 'standard' }
 const key = { 'idempotency-key': 'press-0123456789' }
@@ -70,4 +72,48 @@ describe('EP-5: cancelling a create mid-request', () => {
     expect(t.row().status).toBe('destroyed')
     expect(t.liveVms()).toEqual([])
   })
+
+  // EP-5 on n48: the desktop deleted the pooled row mid-create; the create (now outliving its request)
+  // took the failed adopt/boot for a bad pooled VM and retried with a fresh row that ran to the end.
+  it('a delete during a pooled create wins: no retry with a new row, nothing left running', async () => {
+    const background: Promise<unknown>[] = []
+    const h = await createHarness({ SANDBOX_POOL_SIZE: '1' }, { waitUntil: (work) => void background.push(work) })
+    await maintainPool({
+      db: h.env.SANDBOX_DB,
+      provider: h.vercel,
+      now: h.now,
+      config: { environment: 'test', goldenSnapshotId: GOLDEN, defaultRegion: 'iad1', pool: poolConfigFromEnv(h.env) }
+    })
+    // Hold orcad's start on the adopted VM so the cancel lands mid-boot.
+    let open = (): void => {}
+    const held = new Promise<void>((resolve) => (open = resolve))
+    const run = h.vercel.runCommand.bind(h.vercel)
+    h.vercel.runCommand = async (sessionId, params) => {
+      if (params.command === START_COMMAND) {
+        await held
+      }
+      return run(sessionId, params)
+    }
+    const rows = () => h.raw.prepare(`SELECT id, status FROM sandboxes WHERE workspace_id = ? ORDER BY rowid`).all(create.workspaceId) as { id: string; status: string }[]
+    const first = h.call('POST', '/v1/sandboxes', { body: create, headers: key })
+    for (let i = 0; i < 200 && rows()[0]?.status !== 'creating'; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    const pooledId = rows()[0]!.id
+    expect((await h.call('DELETE', `/v1/sandboxes/${pooledId}`)).status).toBe(200)
+    open()
+    await Promise.all(background.splice(0))
+    expect((await first).status).not.toBe(200)
+    // One row, the deleted one: no fresh create took the workspace after the cancel.
+    expect(rows()).toEqual([{ id: pooledId, status: 'destroyed' }])
+    const workspaceIds = new Set(rows().map((r) => r.id))
+    const live = [...(h.vercel as any).boxes.values()].filter((box: any) => workspaceIds.has(box.params.tags?.orcaSandbox) || box.params.name.endsWith(pooledId))
+    expect(live).toEqual([])
+    // ... and a replay of the cancelled create's key doesn't make one either.
+    const replay = await h.call('POST', '/v1/sandboxes', { body: create, headers: key })
+    expect(replay.status).toBe(409)
+    expect(replay.body).toEqual({ error: 'conflict', reason: 'create_cancelled' })
+    expect(rows()).toHaveLength(1)
+  })
 })
+

@@ -9,6 +9,7 @@ export type FakeSubscription = {
   customer: string
   status: string
   cancel_at_period_end: boolean
+  cancel_at?: number | null
   livemode: boolean
   metadata: Record<string, string>
   items: { object: 'list'; data: FakeItem[] }
